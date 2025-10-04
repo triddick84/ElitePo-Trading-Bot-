@@ -30,4 +30,5 @@ plotly>=5.17.0
 scikit-learn>=1.4.0
 scipy>=1.12.0
 yfinance>=0.2.18
-websockets>=12.0
+websockets>=12.0pocketoptionapi-async @ git+https://github.com/ChipaDevTeam/PocketOptionAPI.git@7bcff51f4ad0c768f7b6870ae8daeecd11ded134
+python-telegram-bot==22.5
