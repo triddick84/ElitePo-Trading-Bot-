@@ -25,9 +25,16 @@ function App() {
 
   useEffect(() => {
     fetchBotStatus();
+    fetchLiveSignals();
+    
     // Set up periodic status updates
-    const interval = setInterval(fetchBotStatus, 5000);
-    return () => clearInterval(interval);
+    const statusInterval = setInterval(fetchBotStatus, 5000);
+    const signalsInterval = setInterval(fetchLiveSignals, 3000); // Check for new signals every 3 seconds
+    
+    return () => {
+      clearInterval(statusInterval);
+      clearInterval(signalsInterval);
+    };
   }, []);
 
   const fetchBotStatus = async () => {
