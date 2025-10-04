@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, HTTPException, BackgroundTasks
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -6,10 +6,17 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Dict, Any, Optional
 import uuid
 from datetime import datetime
 
+# Import our trading bot components
+from models import (
+    TradingSignal, MarketData, TechnicalIndicators, TradingConfiguration,
+    PerformanceMetrics, BacktestResult, TradingStrategy, TradingMode, AssetType
+)
+from trading_bot_service import TradingBotService
+from market_data_service import MarketDataService
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -19,38 +26,261 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
+# Initialize trading bot service
+trading_bot = TradingBotService(db)
+
 # Create the main app without a prefix
-app = FastAPI()
+app = FastAPI(
+    title="GPT Signal Bot API",
+    description="Advanced AI-powered trading signal bot for Pocket Option",
+    version="1.0.0"
+)
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
+# Request/Response Models
+class BotStartRequest(BaseModel):
+    trading_mode: TradingMode = TradingMode.DEMO
+    active_strategies: List[TradingStrategy] = [TradingStrategy.HYBRID]
+    target_assets: List[AssetType] = [AssetType.FOREX, AssetType.CRYPTO]
+    risk_tolerance: str = "medium"
+    max_stake_per_trade: float = 10.0
+    max_daily_trades: int = 50
+    min_probability_threshold: float = 95.0
+    auto_trading_enabled: bool = False
 
-# Define Models
-class StatusCheck(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    client_name: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+class BotStatusResponse(BaseModel):
+    is_running: bool
+    current_mode: str
+    active_strategies: List[str]
+    signals_today: int
+    performance: Dict[str, Any]
 
-class StatusCheckCreate(BaseModel):
-    client_name: str
+class BacktestRequest(BaseModel):
+    strategy: TradingStrategy
+    symbol: str
+    days: int = 30
 
-# Add your routes to the router instead of directly to app
+# Bot Control Endpoints
+@api_router.post("/bot/start")
+async def start_bot(config: BotStartRequest):
+    """Start the trading bot with specified configuration"""
+    try:
+        trading_config = TradingConfiguration(
+            trading_mode=config.trading_mode,
+            active_strategies=config.active_strategies,
+            target_assets=config.target_assets,
+            risk_tolerance=config.risk_tolerance,
+            max_stake_per_trade=config.max_stake_per_trade,
+            max_daily_trades=config.max_daily_trades,
+            min_probability_threshold=config.min_probability_threshold,
+            auto_trading_enabled=config.auto_trading_enabled
+        )
+        
+        await trading_bot.start_bot(trading_config)
+        
+        return {
+            "status": "success",
+            "message": f"Trading bot started in {config.trading_mode} mode",
+            "config": trading_config.dict()
+        }
+        
+    except Exception as e:
+        logging.error(f"Error starting bot: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/bot/stop")
+async def stop_bot():
+    """Stop the trading bot"""
+    try:
+        await trading_bot.stop_bot()
+        return {"status": "success", "message": "Trading bot stopped"}
+        
+    except Exception as e:
+        logging.error(f"Error stopping bot: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/bot/status", response_model=BotStatusResponse)
+async def get_bot_status():
+    """Get current bot status and performance"""
+    try:
+        performance = await trading_bot.get_performance_metrics()
+        
+        return BotStatusResponse(
+            is_running=trading_bot.is_running,
+            current_mode=trading_bot.config.trading_mode.value,
+            active_strategies=[s.value for s in trading_bot.config.active_strategies],
+            signals_today=performance.get("total_signals", 0),
+            performance=performance
+        )
+        
+    except Exception as e:
+        logging.error(f"Error getting bot status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Signal Endpoints
+@api_router.get("/signals/active", response_model=List[TradingSignal])
+async def get_active_signals():
+    """Get currently active trading signals"""
+    try:
+        signals = await trading_bot.get_active_signals()
+        return signals
+        
+    except Exception as e:
+        logging.error(f"Error getting active signals: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/signals/history")
+async def get_signal_history(limit: int = 100):
+    """Get historical trading signals"""
+    try:
+        signals = await db.trading_signals.find().sort("timestamp", -1).limit(limit).to_list(length=None)
+        
+        # Convert timestamps for JSON serialization
+        for signal in signals:
+            if 'timestamp' in signal:
+                signal['timestamp'] = signal['timestamp']
+            if 'closed_at' in signal and signal['closed_at']:
+                signal['closed_at'] = signal['closed_at']
+        
+        return {"signals": signals}
+        
+    except Exception as e:
+        logging.error(f"Error getting signal history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Market Data Endpoints
+@api_router.get("/market/data")
+async def get_market_data():
+    """Get current market data for all tracked assets"""
+    try:
+        market_service = MarketDataService()
+        all_data = await market_service.get_all_market_data()
+        return all_data
+        
+    except Exception as e:
+        logging.error(f"Error getting market data: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/market/data/{symbol}")
+async def get_symbol_data(symbol: str, asset_type: AssetType):
+    """Get market data for a specific symbol"""
+    try:
+        market_service = MarketDataService()
+        data = await market_service.get_market_data(symbol, asset_type)
+        return data.dict() if data else {"error": "No data found"}
+        
+    except Exception as e:
+        logging.error(f"Error getting data for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Performance & Analytics
+@api_router.get("/performance/metrics")
+async def get_performance_metrics():
+    """Get current performance metrics"""
+    try:
+        metrics = await trading_bot.get_performance_metrics()
+        return metrics
+        
+    except Exception as e:
+        logging.error(f"Error getting performance metrics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/performance/history")
+async def get_performance_history(days: int = 30):
+    """Get historical performance metrics"""
+    try:
+        from datetime import timedelta
+        start_date = (datetime.utcnow() - timedelta(days=days)).isoformat()
+        
+        metrics = await db.performance_metrics.find({
+            "date": {"$gte": start_date}
+        }).sort("date", -1).to_list(length=None)
+        
+        return {"metrics": metrics}
+        
+    except Exception as e:
+        logging.error(f"Error getting performance history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Backtesting
+@api_router.post("/backtest/run", response_model=BacktestResult)
+async def run_backtest(request: BacktestRequest):
+    """Run backtesting for a specific strategy"""
+    try:
+        result = await trading_bot.run_backtest(
+            request.strategy, 
+            request.symbol, 
+            request.days
+        )
+        return result
+        
+    except Exception as e:
+        logging.error(f"Error running backtest: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/backtest/history")
+async def get_backtest_history():
+    """Get historical backtest results"""
+    try:
+        results = await db.backtest_results.find().sort("created_at", -1).limit(20).to_list(length=None)
+        return {"results": results}
+        
+    except Exception as e:
+        logging.error(f"Error getting backtest history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Configuration
+@api_router.get("/config")
+async def get_config():
+    """Get current bot configuration"""
+    try:
+        config = trading_bot.config.dict()
+        return config
+        
+    except Exception as e:
+        logging.error(f"Error getting config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.put("/config")
+async def update_config(config: BotStartRequest):
+    """Update bot configuration"""
+    try:
+        new_config = TradingConfiguration(
+            trading_mode=config.trading_mode,
+            active_strategies=config.active_strategies,
+            target_assets=config.target_assets,
+            risk_tolerance=config.risk_tolerance,
+            max_stake_per_trade=config.max_stake_per_trade,
+            max_daily_trades=config.max_daily_trades,
+            min_probability_threshold=config.min_probability_threshold,
+            auto_trading_enabled=config.auto_trading_enabled
+        )
+        
+        trading_bot.config = new_config
+        await trading_bot._save_config()
+        
+        return {"status": "success", "message": "Configuration updated"}
+        
+    except Exception as e:
+        logging.error(f"Error updating config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Health Check
+@api_router.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {
+        "status": "healthy",
+        "bot_running": trading_bot.is_running,
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+# Legacy endpoints for compatibility
 @api_router.get("/")
 async def root():
-    return {"message": "Hello World"}
-
-@api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    status_dict = input.dict()
-    status_obj = StatusCheck(**status_dict)
-    _ = await db.status_checks.insert_one(status_obj.dict())
-    return status_obj
-
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    status_checks = await db.status_checks.find().to_list(1000)
-    return [StatusCheck(**status_check) for status_check in status_checks]
+    return {"message": "GPT Signal Bot API - Advanced AI Trading System"}
 
 # Include the router in the main app
 app.include_router(api_router)
@@ -72,4 +302,7 @@ logger = logging.getLogger(__name__)
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
+    # Stop trading bot
+    await trading_bot.stop_bot()
+    # Close database connection
     client.close()
