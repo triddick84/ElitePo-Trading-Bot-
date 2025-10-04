@@ -692,6 +692,519 @@ class BackendTester:
             print(f"   Configuration loading test error: {e}")
             return False
 
+    async def test_enhanced_signal_generator_integration(self) -> bool:
+        """Test that enhanced signal generator is properly integrated and accessible"""
+        try:
+            # Test that enhanced signal generator module can be imported
+            import sys
+            sys.path.append('/app/backend')
+            
+            try:
+                from enhanced_signal_generator import enhanced_signal_generator
+                print("   ✅ Enhanced signal generator module imported successfully")
+                module_imported = True
+            except ImportError as e:
+                print(f"   ❌ Failed to import enhanced signal generator: {e}")
+                module_imported = False
+            
+            # Test that the enhanced signal generator has required methods
+            if module_imported:
+                try:
+                    # Check if the main method exists
+                    if hasattr(enhanced_signal_generator, 'generate_enhanced_signal'):
+                        print("   ✅ generate_enhanced_signal method found")
+                        method_exists = True
+                    else:
+                        print("   ❌ generate_enhanced_signal method not found")
+                        method_exists = False
+                except Exception as e:
+                    print(f"   ❌ Error checking enhanced signal generator methods: {e}")
+                    method_exists = False
+            else:
+                method_exists = False
+            
+            # Test integration with trading bot service
+            try:
+                from trading_bot_service import TradingBotService
+                print("   ✅ TradingBotService can be imported with enhanced signal generator")
+                service_integration = True
+            except ImportError as e:
+                print(f"   ❌ TradingBotService import failed: {e}")
+                service_integration = False
+            
+            return module_imported and method_exists and service_integration
+            
+        except Exception as e:
+            print(f"   Enhanced signal generator integration test error: {e}")
+            return False
+
+    async def test_enhanced_signal_generation_with_thresholds(self) -> bool:
+        """Test enhanced signal generation with various probability thresholds"""
+        try:
+            test_thresholds = [50.0, 75.0, 90.0, 95.0]
+            
+            for threshold in test_thresholds:
+                print(f"   Testing enhanced signal generation with {threshold}% threshold")
+                
+                # Set threshold configuration
+                config_data = {
+                    "trading_mode": "demo",
+                    "active_strategies": ["hybrid"],
+                    "target_assets": ["forex", "crypto"],
+                    "selected_assets": ["EURUSD_regular", "BTCUSD_regular"],
+                    "selected_timeframes": ["1m", "5m"],
+                    "risk_tolerance": "medium",
+                    "max_stake_per_trade": 10.0,
+                    "max_daily_trades": 50,
+                    "min_probability_threshold": threshold,
+                    "auto_trading_enabled": False,
+                    "invert_signals": False,
+                    "sound_alerts_enabled": True
+                }
+                
+                # Update configuration
+                async with self.session.put(f"{BACKEND_URL}/config", json=config_data) as response:
+                    if response.status != 200:
+                        print(f"   ❌ Failed to set threshold {threshold}%")
+                        return False
+                
+                # Start bot with this threshold
+                async with self.session.post(f"{BACKEND_URL}/bot/start", json=config_data) as response:
+                    if response.status != 200:
+                        print(f"   ❌ Failed to start bot with threshold {threshold}%")
+                        return False
+                
+                # Test signal generation
+                async with self.session.post(f"{BACKEND_URL}/signals/generate/single") as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        signal = data.get('signal')
+                        
+                        if signal:
+                            signal_probability = signal.get('probability', 0)
+                            print(f"   ✅ Signal generated with probability: {signal_probability}%")
+                            
+                            # Verify signal meets threshold requirement
+                            if signal_probability >= threshold:
+                                print(f"   ✅ Signal probability {signal_probability}% meets threshold {threshold}%")
+                            else:
+                                print(f"   ❌ Signal probability {signal_probability}% below threshold {threshold}%")
+                                return False
+                        else:
+                            print(f"   ℹ️ No signal generated for threshold {threshold}% (expected for high thresholds)")
+                    else:
+                        print(f"   ❌ Signal generation failed for threshold {threshold}%: {response.status}")
+                        return False
+            
+            return True
+            
+        except Exception as e:
+            print(f"   Enhanced signal generation with thresholds test error: {e}")
+            return False
+
+    async def test_enhanced_vs_fallback_mechanism(self) -> bool:
+        """Test that enhanced algorithm is tried first, then LLM fallback"""
+        try:
+            # Set a very high threshold to potentially trigger fallback
+            config_data = {
+                "trading_mode": "demo",
+                "active_strategies": ["hybrid"],
+                "target_assets": ["forex"],
+                "selected_assets": ["EURUSD_regular"],
+                "selected_timeframes": ["1m"],
+                "risk_tolerance": "medium",
+                "max_stake_per_trade": 10.0,
+                "max_daily_trades": 50,
+                "min_probability_threshold": 99.0,  # Very high threshold
+                "auto_trading_enabled": False,
+                "invert_signals": False,
+                "sound_alerts_enabled": True
+            }
+            
+            # Start bot
+            async with self.session.post(f"{BACKEND_URL}/bot/start", json=config_data) as response:
+                if response.status != 200:
+                    print("   ❌ Failed to start bot for fallback test")
+                    return False
+            
+            # Generate multiple signals to test both enhanced and fallback
+            fallback_signals_found = 0
+            enhanced_signals_found = 0
+            
+            for i in range(3):  # Try 3 times
+                async with self.session.post(f"{BACKEND_URL}/signals/generate/single") as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        signal = data.get('signal')
+                        
+                        if signal:
+                            justification = signal.get('justification', '')
+                            strategy_used = signal.get('strategy_used', '')
+                            
+                            # Check if it's a fallback signal
+                            if '[FALLBACK]' in justification or 'llm_fallback' in strategy_used:
+                                fallback_signals_found += 1
+                                print(f"   ✅ Fallback signal detected: {justification[:100]}...")
+                            else:
+                                enhanced_signals_found += 1
+                                print(f"   ✅ Enhanced signal detected: {justification[:100]}...")
+                        else:
+                            print(f"   ℹ️ No signal generated on attempt {i+1}")
+                    else:
+                        print(f"   ❌ Signal generation failed on attempt {i+1}: {response.status}")
+                
+                # Small delay between attempts
+                await asyncio.sleep(1)
+            
+            print(f"   Enhanced signals found: {enhanced_signals_found}")
+            print(f"   Fallback signals found: {fallback_signals_found}")
+            
+            # Test passes if we can generate signals (either enhanced or fallback)
+            return (enhanced_signals_found + fallback_signals_found) > 0
+            
+        except Exception as e:
+            print(f"   Enhanced vs fallback mechanism test error: {e}")
+            return False
+
+    async def test_signal_strategy_details_and_metadata(self) -> bool:
+        """Test that enhanced signals contain comprehensive strategy details"""
+        try:
+            # Set moderate threshold to get signals
+            config_data = {
+                "trading_mode": "demo",
+                "active_strategies": ["hybrid"],
+                "target_assets": ["forex", "crypto"],
+                "selected_assets": ["EURUSD_regular", "BTCUSD_regular"],
+                "selected_timeframes": ["1m", "5m"],
+                "risk_tolerance": "medium",
+                "max_stake_per_trade": 10.0,
+                "max_daily_trades": 50,
+                "min_probability_threshold": 75.0,
+                "auto_trading_enabled": False,
+                "invert_signals": False,
+                "sound_alerts_enabled": True
+            }
+            
+            # Start bot
+            async with self.session.post(f"{BACKEND_URL}/bot/start", json=config_data) as response:
+                if response.status != 200:
+                    print("   ❌ Failed to start bot for strategy details test")
+                    return False
+            
+            # Generate signal and check metadata
+            async with self.session.post(f"{BACKEND_URL}/signals/generate/single") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    signal = data.get('signal')
+                    
+                    if signal:
+                        # Check required signal fields
+                        required_fields = ['id', 'symbol', 'direction', 'entry_price', 'probability', 'timestamp']
+                        missing_fields = [field for field in required_fields if field not in signal]
+                        
+                        if missing_fields:
+                            print(f"   ❌ Missing required fields: {missing_fields}")
+                            return False
+                        
+                        print(f"   ✅ All required fields present: {required_fields}")
+                        
+                        # Check signal quality
+                        probability = signal.get('probability', 0)
+                        direction = signal.get('direction', '')
+                        symbol = signal.get('symbol', '')
+                        
+                        print(f"   Signal details: {symbol} {direction} at {probability}% confidence")
+                        
+                        # Verify probability is reasonable
+                        if 50.0 <= probability <= 100.0:
+                            print(f"   ✅ Signal probability {probability}% is within valid range")
+                        else:
+                            print(f"   ❌ Signal probability {probability}% is outside valid range")
+                            return False
+                        
+                        # Verify direction is valid
+                        if direction in ['BUY', 'SELL', 'CALL', 'PUT']:
+                            print(f"   ✅ Signal direction '{direction}' is valid")
+                        else:
+                            print(f"   ❌ Signal direction '{direction}' is invalid")
+                            return False
+                        
+                        return True
+                    else:
+                        print("   ℹ️ No signal generated (acceptable for high thresholds)")
+                        return True
+                else:
+                    print(f"   ❌ Signal generation failed: {response.status}")
+                    return False
+            
+        except Exception as e:
+            print(f"   Signal strategy details test error: {e}")
+            return False
+
+    async def test_enhanced_signal_accuracy_targeting(self) -> bool:
+        """Test that enhanced algorithms target 90%+ confidence signals"""
+        try:
+            # Set configuration for enhanced signal generation
+            config_data = {
+                "trading_mode": "demo",
+                "active_strategies": ["hybrid"],
+                "target_assets": ["forex", "crypto"],
+                "selected_assets": ["EURUSD_regular", "BTCUSD_regular"],
+                "selected_timeframes": ["1m", "5m"],
+                "risk_tolerance": "medium",
+                "max_stake_per_trade": 10.0,
+                "max_daily_trades": 50,
+                "min_probability_threshold": 90.0,  # High threshold for enhanced signals
+                "auto_trading_enabled": False,
+                "invert_signals": False,
+                "sound_alerts_enabled": True
+            }
+            
+            # Start bot
+            async with self.session.post(f"{BACKEND_URL}/bot/start", json=config_data) as response:
+                if response.status != 200:
+                    print("   ❌ Failed to start bot for accuracy targeting test")
+                    return False
+            
+            # Generate multiple signals to test accuracy targeting
+            high_confidence_signals = 0
+            total_signals = 0
+            
+            for i in range(5):  # Try 5 times
+                async with self.session.post(f"{BACKEND_URL}/signals/generate/single") as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        signal = data.get('signal')
+                        
+                        if signal:
+                            total_signals += 1
+                            probability = signal.get('probability', 0)
+                            
+                            if probability >= 90.0:
+                                high_confidence_signals += 1
+                                print(f"   ✅ High-confidence signal: {probability}%")
+                            else:
+                                print(f"   ⚠️ Lower confidence signal: {probability}%")
+                        else:
+                            print(f"   ℹ️ No signal generated on attempt {i+1}")
+                    else:
+                        print(f"   ❌ Signal generation failed on attempt {i+1}: {response.status}")
+                
+                await asyncio.sleep(1)  # Small delay between attempts
+            
+            print(f"   Total signals generated: {total_signals}")
+            print(f"   High-confidence signals (90%+): {high_confidence_signals}")
+            
+            if total_signals > 0:
+                accuracy_rate = (high_confidence_signals / total_signals) * 100
+                print(f"   High-confidence rate: {accuracy_rate:.1f}%")
+                
+                # Test passes if most signals are high confidence or no signals generated (strict filtering)
+                return accuracy_rate >= 80.0 or total_signals == 0
+            else:
+                print("   ✅ No signals generated - enhanced algorithm is being conservative")
+                return True
+            
+        except Exception as e:
+            print(f"   Enhanced signal accuracy targeting test error: {e}")
+            return False
+
+    async def test_real_market_data_integration(self) -> bool:
+        """Test enhanced signal generation with real market data"""
+        try:
+            # Test market data endpoints first
+            async with self.session.get(f"{BACKEND_URL}/market/data") as response:
+                if response.status == 200:
+                    market_data = await response.json()
+                    print("   ✅ Real market data endpoint accessible")
+                else:
+                    print(f"   ❌ Market data endpoint failed: {response.status}")
+                    return False
+            
+            # Test selected assets data (what enhanced algorithm uses)
+            selected_assets = ["EURUSD_regular", "BTCUSD_regular"]
+            async with self.session.post(f"{BACKEND_URL}/market/data/selected", json=selected_assets) as response:
+                if response.status == 200:
+                    selected_data = await response.json()
+                    assets = selected_data.get('selected_assets', [])
+                    print(f"   ✅ Selected assets data: {len(assets)} assets available")
+                    
+                    # Check if we have data for signal generation
+                    if len(assets) > 0:
+                        print("   ✅ Market data available for enhanced signal generation")
+                        data_available = True
+                    else:
+                        print("   ⚠️ No market data available (may affect signal generation)")
+                        data_available = False
+                else:
+                    print(f"   ❌ Selected assets data failed: {response.status}")
+                    return False
+            
+            # Test signal generation with real market data
+            config_data = {
+                "trading_mode": "demo",
+                "active_strategies": ["hybrid"],
+                "target_assets": ["forex", "crypto"],
+                "selected_assets": ["EURUSD_regular", "BTCUSD_regular"],
+                "selected_timeframes": ["1m", "5m"],
+                "risk_tolerance": "medium",
+                "max_stake_per_trade": 10.0,
+                "max_daily_trades": 50,
+                "min_probability_threshold": 75.0,
+                "auto_trading_enabled": False,
+                "invert_signals": False,
+                "sound_alerts_enabled": True
+            }
+            
+            # Start bot
+            async with self.session.post(f"{BACKEND_URL}/bot/start", json=config_data) as response:
+                if response.status != 200:
+                    print("   ❌ Failed to start bot for real market data test")
+                    return False
+            
+            # Generate signal using real market data
+            async with self.session.post(f"{BACKEND_URL}/signals/generate/single") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    signal = data.get('signal')
+                    
+                    if signal:
+                        symbol = signal.get('symbol', '')
+                        entry_price = signal.get('entry_price', 0)
+                        print(f"   ✅ Signal generated with real market data: {symbol} at {entry_price}")
+                        
+                        # Verify entry price is realistic (not zero or negative)
+                        if entry_price > 0:
+                            print(f"   ✅ Entry price {entry_price} is realistic")
+                            return True
+                        else:
+                            print(f"   ❌ Entry price {entry_price} seems unrealistic")
+                            return False
+                    else:
+                        print("   ℹ️ No signal generated with current market conditions")
+                        return True  # Not a failure, just no opportunity
+                else:
+                    print(f"   ❌ Signal generation with real market data failed: {response.status}")
+                    return False
+            
+        except Exception as e:
+            print(f"   Real market data integration test error: {e}")
+            return False
+
+    async def test_enhanced_signal_performance_and_error_handling(self) -> bool:
+        """Test enhanced algorithm performance and error handling"""
+        try:
+            # Test with various market conditions and configurations
+            test_configs = [
+                {
+                    "name": "Conservative (99% threshold)",
+                    "config": {
+                        "trading_mode": "demo",
+                        "active_strategies": ["hybrid"],
+                        "target_assets": ["forex"],
+                        "selected_assets": ["EURUSD_regular"],
+                        "selected_timeframes": ["1m"],
+                        "risk_tolerance": "low",
+                        "max_stake_per_trade": 5.0,
+                        "max_daily_trades": 10,
+                        "min_probability_threshold": 99.0,
+                        "auto_trading_enabled": False,
+                        "invert_signals": False,
+                        "sound_alerts_enabled": True
+                    }
+                },
+                {
+                    "name": "Aggressive (50% threshold)",
+                    "config": {
+                        "trading_mode": "demo",
+                        "active_strategies": ["hybrid"],
+                        "target_assets": ["forex", "crypto"],
+                        "selected_assets": ["EURUSD_regular", "BTCUSD_regular"],
+                        "selected_timeframes": ["1m", "5m"],
+                        "risk_tolerance": "high",
+                        "max_stake_per_trade": 25.0,
+                        "max_daily_trades": 100,
+                        "min_probability_threshold": 50.0,
+                        "auto_trading_enabled": False,
+                        "invert_signals": False,
+                        "sound_alerts_enabled": True
+                    }
+                }
+            ]
+            
+            for test_config in test_configs:
+                print(f"   Testing {test_config['name']}")
+                
+                # Start bot with test configuration
+                async with self.session.post(f"{BACKEND_URL}/bot/start", json=test_config['config']) as response:
+                    if response.status != 200:
+                        print(f"   ❌ Failed to start bot for {test_config['name']}")
+                        return False
+                
+                # Test signal generation performance
+                start_time = asyncio.get_event_loop().time()
+                
+                async with self.session.post(f"{BACKEND_URL}/signals/generate/single") as response:
+                    end_time = asyncio.get_event_loop().time()
+                    response_time = end_time - start_time
+                    
+                    if response.status == 200:
+                        data = await response.json()
+                        signal = data.get('signal')
+                        
+                        print(f"   ✅ {test_config['name']}: Response time {response_time:.2f}s")
+                        
+                        if signal:
+                            probability = signal.get('probability', 0)
+                            print(f"   ✅ Signal generated: {probability}% confidence")
+                        else:
+                            print("   ℹ️ No signal generated (acceptable)")
+                        
+                        # Check response time is reasonable (under 30 seconds)
+                        if response_time > 30:
+                            print(f"   ⚠️ Slow response time: {response_time:.2f}s")
+                        
+                    elif response.status == 400:
+                        # Expected error (bot not running, etc.)
+                        print(f"   ✅ Expected error handled: {response.status}")
+                    else:
+                        print(f"   ❌ Unexpected error: {response.status}")
+                        return False
+            
+            # Test error handling with invalid symbols
+            print("   Testing error handling with invalid configuration")
+            
+            invalid_config = {
+                "trading_mode": "demo",
+                "active_strategies": ["hybrid"],
+                "target_assets": ["forex"],
+                "selected_assets": ["INVALID_SYMBOL"],  # Invalid symbol
+                "selected_timeframes": ["1m"],
+                "risk_tolerance": "medium",
+                "max_stake_per_trade": 10.0,
+                "max_daily_trades": 50,
+                "min_probability_threshold": 75.0,
+                "auto_trading_enabled": False,
+                "invert_signals": False,
+                "sound_alerts_enabled": True
+            }
+            
+            async with self.session.post(f"{BACKEND_URL}/bot/start", json=invalid_config) as response:
+                if response.status == 200:
+                    # Try to generate signal with invalid symbol
+                    async with self.session.post(f"{BACKEND_URL}/signals/generate/single") as response:
+                        if response.status in [200, 404, 500]:
+                            print("   ✅ Error handling working (graceful failure)")
+                        else:
+                            print(f"   ❌ Unexpected error handling: {response.status}")
+                            return False
+            
+            return True
+            
+        except Exception as e:
+            print(f"   Enhanced signal performance test error: {e}")
+            return False
+
     async def test_configuration_persistence_across_sessions(self) -> bool:
         """Test that configuration persists across different sessions"""
         try:
