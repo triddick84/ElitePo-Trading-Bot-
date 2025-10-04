@@ -155,7 +155,7 @@ async def get_signal_history(limit: int = 100):
 async def get_market_data():
     """Get current market data for all tracked assets"""
     try:
-        market_service = MarketDataService()
+        market_service = RealMarketDataService()
         all_data = await market_service.get_all_market_data()
         return all_data
         
@@ -167,7 +167,7 @@ async def get_market_data():
 async def get_symbol_data(symbol: str, asset_type: AssetType):
     """Get market data for a specific symbol"""
     try:
-        market_service = MarketDataService()
+        market_service = RealMarketDataService()
         data = await market_service.get_market_data(symbol, asset_type)
         return data.dict() if data else {"error": "No data found"}
         
