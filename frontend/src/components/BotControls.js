@@ -317,9 +317,18 @@ const BotControls = ({ onStatusUpdate }) => {
         </div>
       </Card>
 
-      {/* Target Assets */}
+      {/* Advanced Asset & Timeframe Selection */}
       <Card className="p-6 glass-dark border-slate-700/50">
-        <h3 className="text-xl font-semibold text-white mb-6">Target Assets</h3>
+        <AssetSelector 
+          selectedAssets={config.selected_assets}
+          selectedTimeframes={config.selected_timeframes}
+          onSelectionChange={handleAssetSelectionChange}
+        />
+      </Card>
+
+      {/* Quick Asset Categories (Legacy) */}
+      <Card className="p-6 glass-dark border-slate-700/50">
+        <h3 className="text-xl font-semibold text-white mb-6">Quick Asset Categories</h3>
         
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4" data-testid="asset-selection">
           {assetTypes.map((asset) => (
