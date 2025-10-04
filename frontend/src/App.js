@@ -62,6 +62,8 @@ function App() {
         return <BotControls onStatusUpdate={fetchBotStatus} />;
       case "backtest":
         return <BacktestPanel />;
+      case "api":
+        return <ApiConfiguration />;
       default:
         return <Dashboard botStatus={botStatus} />;
     }
