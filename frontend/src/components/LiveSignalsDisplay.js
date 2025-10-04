@@ -22,6 +22,7 @@ const LiveSignalsDisplay = ({ botStatus, onSignalExecute }) => {
   const [isGeneratingSignal, setIsGeneratingSignal] = useState(false);
   const [autoGenerationActive, setAutoGenerationActive] = useState(false);
   const [currentThreshold, setCurrentThreshold] = useState(85);
+  const [isForceGenerating, setIsForceGenerating] = useState(false);
 
   // Sound notification function
   const playNotificationSound = () => {
