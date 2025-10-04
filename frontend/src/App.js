@@ -98,7 +98,15 @@ function App() {
   const renderActiveView = () => {
     switch (activeView) {
       case "dashboard":
-        return <Dashboard botStatus={botStatus} />;
+        return (
+          <Dashboard 
+            botStatus={botStatus} 
+            liveSignals={liveSignals} 
+            setLiveSignals={setLiveSignals}
+            notificationSettings={globalNotificationSettings}
+            setNotificationSettings={setGlobalNotificationSettings}
+          />
+        );
       case "signals":
         return <SignalsPanel />;
       case "market":
