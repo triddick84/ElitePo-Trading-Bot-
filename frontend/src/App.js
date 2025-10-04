@@ -198,6 +198,14 @@ function App() {
           onSignalExecute={handleSignalExecute}
           onSignalDismiss={handleSignalDismiss}
         />
+
+        {/* Toast Notifications */}
+        <Toaster 
+          position="top-right" 
+          theme="dark" 
+          richColors 
+          closeButton
+        />
       </div>
     </BrowserRouter>
   );
