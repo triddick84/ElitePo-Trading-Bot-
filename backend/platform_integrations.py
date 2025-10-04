@@ -101,14 +101,13 @@ class PlatformIntegrationService:
     async def _test_pocket_option_connection(self):
         """Test Pocket Option API connection using SSID"""
         try:
-            from pocketoptionapi import PocketOptionAPI
+            from pocketoptionapi_async import AsyncPocketOptionClient
             
             # Initialize the Pocket Option API with credentials
-            self.pocket_option_api = PocketOptionAPI(
-                email=self.pocket_option_email,
-                password=self.pocket_option_password,
+            self.pocket_option_api = AsyncPocketOptionClient(
                 ssid=self.pocket_option_ssid,
-                is_demo=True  # Start with demo mode for testing
+                is_demo=True,  # Start with demo mode for testing
+                enable_logging=True
             )
             
             # Test connection
