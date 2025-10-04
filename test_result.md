@@ -152,15 +152,18 @@
 
   - task: "Trading Configuration Models"
     implemented: true
-    working: false  # Needs testing
+    working: true
     file: "/app/backend/models.py"
     stuck_count: 0
     priority: "medium"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: true
         - agent: "main"
         - comment: "Added invert_signals and sound_alerts_enabled fields to TradingConfiguration model"
+        - working: true
+        - agent: "testing"
+        - comment: "✅ VERIFIED: New fields properly added to TradingConfiguration model. Both invert_signals (bool, default=False) and sound_alerts_enabled (bool, default=True) fields working correctly. Tested through bot start endpoint with new fields, config GET/PUT endpoints handle fields properly, values persist correctly in configuration updates."
 
 ## frontend:
   - task: "Sound Alerts Implementation"
