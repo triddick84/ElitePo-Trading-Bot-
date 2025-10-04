@@ -785,22 +785,30 @@ class ForceSignalGenerator:
             
         except Exception as e:
             logger.error(f"Error generating emergency signal: {e}")
-            # Ultimate fallback
+            # Ultimate fallback with market type support
+            symbol_suffix = "_OTC" if market_type == "otc" else "_regular"
+            timeframe = "3m" if market_type == "otc" else "5m"
+            expiration = 8 if market_type == "otc" else 10
+            
             return TradingSignal(
-                id=f"ULTIMATE_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-                symbol=symbol,
+                id=f"ULTIMATE_{market_type.upper()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                symbol=f"{symbol}{symbol_suffix}",
                 asset_type=market_data.asset_type,
                 direction=SignalDirection.BUY,
                 entry_price=market_data.price,
-                expiration_minutes=10,
-                timeframe="5m",
-                market_type="regular",
+                expiration_minutes=expiration,
+                timeframe=timeframe,
+                market_type=market_type,
                 probability=75.0,
                 confidence_level="LOW",
                 strategy_used=TradingStrategy.HYBRID,
-                technical_analysis={'ultimate_fallback': True, 'forced_generation': True},
-                market_analysis_summary="Ultimate fallback signal when all other analysis methods fail.",
-                justification="🆘 ULTIMATE FALLBACK SIGNAL - System forced to generate signal",
+                technical_analysis={
+                    'ultimate_fallback': True, 
+                    'forced_generation': True,
+                    'market_type': market_type
+                },
+                market_analysis_summary=f"Ultimate fallback signal for {market_type.upper()} market when all other analysis methods fail.",
+                justification=f"🆘 ULTIMATE {market_type.upper()} FALLBACK SIGNAL - System forced to generate signal",
                 risk_assessment="EXTREME RISK - Ultimate fallback with no analysis. Use only minimal stake.",
                 suggested_stake=1.0,
                 precision_entry_time=datetime.now(timezone.utc) + timedelta(seconds=10),
