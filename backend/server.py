@@ -687,9 +687,19 @@ async def force_generate_signal_for_asset(asset_symbol: str):
         
         logger.info(f"🚀 FORCE GENERATING SIGNAL for specific asset: {asset_symbol}")
         
+        # Get user's selected timeframes from current configuration
+        try:
+            config_doc = await db.trading_configurations.find_one({"user_id": "default_user"})
+            user_timeframes = config_doc.get('selected_timeframes', ['5m']) if config_doc else ['5m']
+        except Exception as e:
+            logger.warning(f"Could not get user timeframes, using default: {e}")
+            user_timeframes = ['5m']
+        
+        logger.info(f"Using user selected timeframes for {asset_symbol}: {user_timeframes}")
+        
         # Force generate signals (both regular and OTC)
         forced_signals = await force_signal_generator.force_generate_signal(
-            target_data.symbol, target_data
+            target_data.symbol, target_data, user_timeframes
         )
         
         if forced_signals:
