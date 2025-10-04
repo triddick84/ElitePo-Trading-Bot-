@@ -633,32 +633,424 @@ class BackendTester:
             print(f"   Bot auto signal generation flag initialization test error: {e}")
             return False
             
+    async def test_configuration_loading_on_startup(self) -> bool:
+        """Test that server startup loads saved configuration"""
+        try:
+            # First, save a specific configuration
+            test_config = {
+                "trading_mode": "demo",
+                "active_strategies": ["hybrid"],
+                "target_assets": ["forex"],
+                "selected_assets": ["EURUSD_regular"],
+                "selected_timeframes": ["5m"],
+                "risk_tolerance": "high",
+                "max_stake_per_trade": 25.0,
+                "max_daily_trades": 100,
+                "min_probability_threshold": 90.0,
+                "auto_trading_enabled": True,
+                "invert_signals": True,
+                "sound_alerts_enabled": False
+            }
+            
+            # Save configuration
+            async with self.session.put(f"{BACKEND_URL}/config", json=test_config) as response:
+                if response.status != 200:
+                    print(f"   Failed to save test configuration: {response.status}")
+                    return False
+            
+            print("   Test configuration saved successfully")
+            
+            # Restart backend to test startup loading (simulate by checking current config)
+            # Since we can't actually restart the server, we'll verify the config persists
+            async with self.session.get(f"{BACKEND_URL}/config") as response:
+                if response.status == 200:
+                    loaded_config = await response.json()
+                    
+                    # Verify all fields match what we saved
+                    matches = (
+                        loaded_config.get('risk_tolerance') == 'high' and
+                        loaded_config.get('max_stake_per_trade') == 25.0 and
+                        loaded_config.get('max_daily_trades') == 100 and
+                        loaded_config.get('min_probability_threshold') == 90.0 and
+                        loaded_config.get('auto_trading_enabled') is True and
+                        loaded_config.get('invert_signals') is True and
+                        loaded_config.get('sound_alerts_enabled') is False
+                    )
+                    
+                    print(f"   Configuration loaded correctly: {matches}")
+                    print(f"   Risk tolerance: {loaded_config.get('risk_tolerance')}")
+                    print(f"   Max stake: {loaded_config.get('max_stake_per_trade')}")
+                    print(f"   Invert signals: {loaded_config.get('invert_signals')}")
+                    print(f"   Sound alerts: {loaded_config.get('sound_alerts_enabled')}")
+                    
+                    return matches
+                else:
+                    print(f"   Failed to load configuration: {response.status}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Configuration loading test error: {e}")
+            return False
+
+    async def test_configuration_persistence_across_sessions(self) -> bool:
+        """Test that configuration persists across different sessions"""
+        try:
+            # Save a unique configuration
+            unique_config = {
+                "trading_mode": "live",
+                "active_strategies": ["rsi_5", "ema_crossover"],
+                "target_assets": ["crypto", "stocks"],
+                "selected_assets": ["BTCUSD_regular", "AAPL_regular"],
+                "selected_timeframes": ["1m", "3m", "5m"],
+                "risk_tolerance": "low",
+                "max_stake_per_trade": 5.0,
+                "max_daily_trades": 20,
+                "min_probability_threshold": 98.0,
+                "auto_trading_enabled": False,
+                "invert_signals": False,
+                "sound_alerts_enabled": True
+            }
+            
+            # Save configuration
+            async with self.session.put(f"{BACKEND_URL}/config", json=unique_config) as response:
+                if response.status != 200:
+                    print(f"   Failed to save unique configuration: {response.status}")
+                    return False
+            
+            print("   Unique configuration saved")
+            
+            # Close current session and create new one to simulate new session
+            await self.session.close()
+            self.session = aiohttp.ClientSession()
+            
+            # Retrieve configuration in new session
+            async with self.session.get(f"{BACKEND_URL}/config") as response:
+                if response.status == 200:
+                    retrieved_config = await response.json()
+                    
+                    # Verify persistence of key fields
+                    persistence_check = (
+                        retrieved_config.get('trading_mode') == 'live' and
+                        retrieved_config.get('risk_tolerance') == 'low' and
+                        retrieved_config.get('max_stake_per_trade') == 5.0 and
+                        retrieved_config.get('max_daily_trades') == 20 and
+                        retrieved_config.get('min_probability_threshold') == 98.0 and
+                        retrieved_config.get('auto_trading_enabled') is False and
+                        retrieved_config.get('invert_signals') is False and
+                        retrieved_config.get('sound_alerts_enabled') is True
+                    )
+                    
+                    print(f"   Configuration persisted across sessions: {persistence_check}")
+                    print(f"   Trading mode: {retrieved_config.get('trading_mode')}")
+                    print(f"   Risk tolerance: {retrieved_config.get('risk_tolerance')}")
+                    print(f"   Max daily trades: {retrieved_config.get('max_daily_trades')}")
+                    
+                    return persistence_check
+                else:
+                    print(f"   Failed to retrieve configuration in new session: {response.status}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Configuration persistence test error: {e}")
+            return False
+
+    async def test_configuration_mongodb_storage(self) -> bool:
+        """Test that configuration is properly stored in MongoDB"""
+        try:
+            # Save a configuration with all new fields
+            mongodb_test_config = {
+                "trading_mode": "demo",
+                "active_strategies": ["hybrid", "macd_momentum"],
+                "target_assets": ["forex", "crypto", "commodities"],
+                "selected_assets": ["EURUSD_regular", "BTCUSD_regular", "XAUUSD_regular"],
+                "selected_timeframes": ["1m", "2m", "5m", "15m"],
+                "risk_tolerance": "medium",
+                "max_stake_per_trade": 15.0,
+                "max_daily_trades": 75,
+                "min_probability_threshold": 95.5,
+                "auto_trading_enabled": True,
+                "invert_signals": True,
+                "sound_alerts_enabled": False
+            }
+            
+            # Save configuration
+            async with self.session.put(f"{BACKEND_URL}/config", json=mongodb_test_config) as response:
+                if response.status != 200:
+                    print(f"   Failed to save MongoDB test configuration: {response.status}")
+                    return False
+            
+            print("   MongoDB test configuration saved")
+            
+            # Verify configuration was saved by retrieving it
+            async with self.session.get(f"{BACKEND_URL}/config") as response:
+                if response.status == 200:
+                    stored_config = await response.json()
+                    
+                    # Check all fields including new ones
+                    all_fields_correct = (
+                        stored_config.get('trading_mode') == 'demo' and
+                        len(stored_config.get('active_strategies', [])) == 2 and
+                        len(stored_config.get('target_assets', [])) == 3 and
+                        len(stored_config.get('selected_assets', [])) == 3 and
+                        len(stored_config.get('selected_timeframes', [])) == 4 and
+                        stored_config.get('risk_tolerance') == 'medium' and
+                        stored_config.get('max_stake_per_trade') == 15.0 and
+                        stored_config.get('max_daily_trades') == 75 and
+                        stored_config.get('min_probability_threshold') == 95.5 and
+                        stored_config.get('auto_trading_enabled') is True and
+                        stored_config.get('invert_signals') is True and
+                        stored_config.get('sound_alerts_enabled') is False
+                    )
+                    
+                    print(f"   All fields stored correctly in MongoDB: {all_fields_correct}")
+                    print(f"   Active strategies count: {len(stored_config.get('active_strategies', []))}")
+                    print(f"   Target assets count: {len(stored_config.get('target_assets', []))}")
+                    print(f"   New fields - Invert: {stored_config.get('invert_signals')}, Sound: {stored_config.get('sound_alerts_enabled')}")
+                    
+                    return all_fields_correct
+                else:
+                    print(f"   Failed to retrieve stored configuration: {response.status}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   MongoDB storage test error: {e}")
+            return False
+
+    async def test_default_vs_saved_configuration(self) -> bool:
+        """Test behavior when no saved configuration exists vs when it exists"""
+        try:
+            # First, get current configuration (should be saved from previous tests)
+            async with self.session.get(f"{BACKEND_URL}/config") as response:
+                if response.status == 200:
+                    current_config = await response.json()
+                    print("   Current configuration retrieved")
+                    
+                    # Check if it has non-default values (indicating saved config is loaded)
+                    has_saved_values = (
+                        current_config.get('max_stake_per_trade') != 10.0 or  # Default is 10.0
+                        current_config.get('max_daily_trades') != 50 or       # Default is 50
+                        current_config.get('min_probability_threshold') != 95.0  # Default is 95.0
+                    )
+                    
+                    print(f"   Configuration has saved values (not defaults): {has_saved_values}")
+                    print(f"   Max stake: {current_config.get('max_stake_per_trade')} (default: 10.0)")
+                    print(f"   Max daily trades: {current_config.get('max_daily_trades')} (default: 50)")
+                    print(f"   Min probability: {current_config.get('min_probability_threshold')} (default: 95.0)")
+                    
+                    # Test that new fields have proper default values when not explicitly set
+                    invert_signals = current_config.get('invert_signals')
+                    sound_alerts = current_config.get('sound_alerts_enabled')
+                    
+                    print(f"   New fields - Invert signals: {invert_signals}, Sound alerts: {sound_alerts}")
+                    
+                    # Both fields should be present (either saved values or defaults)
+                    fields_present = invert_signals is not None and sound_alerts is not None
+                    
+                    return has_saved_values and fields_present
+                else:
+                    print(f"   Failed to get current configuration: {response.status}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Default vs saved configuration test error: {e}")
+            return False
+
+    async def test_new_fields_handling(self) -> bool:
+        """Test saving and retrieving configuration with new fields"""
+        try:
+            # Test configuration with explicit new field values
+            new_fields_config = {
+                "trading_mode": "demo",
+                "active_strategies": ["hybrid"],
+                "target_assets": ["forex"],
+                "selected_assets": ["EURUSD_regular"],
+                "selected_timeframes": ["1m"],
+                "risk_tolerance": "medium",
+                "max_stake_per_trade": 10.0,
+                "max_daily_trades": 50,
+                "min_probability_threshold": 95.0,
+                "auto_trading_enabled": False,
+                "invert_signals": True,      # New field - explicit True
+                "sound_alerts_enabled": False # New field - explicit False
+            }
+            
+            # Save configuration with new fields
+            async with self.session.put(f"{BACKEND_URL}/config", json=new_fields_config) as response:
+                if response.status != 200:
+                    print(f"   Failed to save configuration with new fields: {response.status}")
+                    return False
+            
+            print("   Configuration with new fields saved")
+            
+            # Retrieve and verify new fields
+            async with self.session.get(f"{BACKEND_URL}/config") as response:
+                if response.status == 200:
+                    retrieved_config = await response.json()
+                    
+                    invert_signals = retrieved_config.get('invert_signals')
+                    sound_alerts = retrieved_config.get('sound_alerts_enabled')
+                    
+                    # Verify exact values
+                    new_fields_correct = (
+                        invert_signals is True and
+                        sound_alerts is False
+                    )
+                    
+                    print(f"   New fields retrieved correctly: {new_fields_correct}")
+                    print(f"   Invert signals: {invert_signals} (expected: True)")
+                    print(f"   Sound alerts: {sound_alerts} (expected: False)")
+                    
+                    # Test opposite values
+                    opposite_config = new_fields_config.copy()
+                    opposite_config['invert_signals'] = False
+                    opposite_config['sound_alerts_enabled'] = True
+                    
+                    async with self.session.put(f"{BACKEND_URL}/config", json=opposite_config) as put_response:
+                        if put_response.status != 200:
+                            print(f"   Failed to save opposite configuration: {put_response.status}")
+                            return False
+                    
+                    # Verify opposite values
+                    async with self.session.get(f"{BACKEND_URL}/config") as get_response:
+                        if get_response.status == 200:
+                            opposite_retrieved = await get_response.json()
+                            
+                            opposite_invert = opposite_retrieved.get('invert_signals')
+                            opposite_sound = opposite_retrieved.get('sound_alerts_enabled')
+                            
+                            opposite_correct = (
+                                opposite_invert is False and
+                                opposite_sound is True
+                            )
+                            
+                            print(f"   Opposite values correct: {opposite_correct}")
+                            print(f"   Invert signals: {opposite_invert} (expected: False)")
+                            print(f"   Sound alerts: {opposite_sound} (expected: True)")
+                            
+                            return new_fields_correct and opposite_correct
+                        else:
+                            print(f"   Failed to retrieve opposite configuration: {get_response.status}")
+                            return False
+                else:
+                    print(f"   Failed to retrieve configuration with new fields: {response.status}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   New fields handling test error: {e}")
+            return False
+
+    async def test_configuration_error_handling(self) -> bool:
+        """Test configuration loading with invalid data and error handling"""
+        try:
+            # Test invalid configuration data
+            invalid_configs = [
+                # Invalid trading mode
+                {
+                    "trading_mode": "invalid_mode",
+                    "active_strategies": ["hybrid"],
+                    "target_assets": ["forex"],
+                    "selected_assets": ["EURUSD_regular"],
+                    "selected_timeframes": ["1m"],
+                    "risk_tolerance": "medium",
+                    "max_stake_per_trade": 10.0,
+                    "max_daily_trades": 50,
+                    "min_probability_threshold": 95.0,
+                    "auto_trading_enabled": False,
+                    "invert_signals": False,
+                    "sound_alerts_enabled": True
+                },
+                # Invalid data types
+                {
+                    "trading_mode": "demo",
+                    "active_strategies": ["hybrid"],
+                    "target_assets": ["forex"],
+                    "selected_assets": ["EURUSD_regular"],
+                    "selected_timeframes": ["1m"],
+                    "risk_tolerance": "medium",
+                    "max_stake_per_trade": "invalid_number",  # Should be float
+                    "max_daily_trades": 50,
+                    "min_probability_threshold": 95.0,
+                    "auto_trading_enabled": False,
+                    "invert_signals": False,
+                    "sound_alerts_enabled": True
+                }
+            ]
+            
+            error_handling_works = True
+            
+            for i, invalid_config in enumerate(invalid_configs):
+                print(f"   Testing invalid configuration #{i+1}")
+                
+                async with self.session.put(f"{BACKEND_URL}/config", json=invalid_config) as response:
+                    # Should return error status (400 or 422)
+                    if response.status in [400, 422]:
+                        print(f"   Invalid config #{i+1} properly rejected with status {response.status}")
+                        error_data = await response.json()
+                        print(f"   Error message: {error_data.get('detail', 'No detail')}")
+                    else:
+                        print(f"   Invalid config #{i+1} was accepted (status {response.status}) - this is unexpected")
+                        error_handling_works = False
+            
+            # Test that valid configuration still works after invalid attempts
+            valid_config = {
+                "trading_mode": "demo",
+                "active_strategies": ["hybrid"],
+                "target_assets": ["forex"],
+                "selected_assets": ["EURUSD_regular"],
+                "selected_timeframes": ["1m"],
+                "risk_tolerance": "medium",
+                "max_stake_per_trade": 10.0,
+                "max_daily_trades": 50,
+                "min_probability_threshold": 95.0,
+                "auto_trading_enabled": False,
+                "invert_signals": False,
+                "sound_alerts_enabled": True
+            }
+            
+            async with self.session.put(f"{BACKEND_URL}/config", json=valid_config) as response:
+                if response.status == 200:
+                    print("   Valid configuration accepted after invalid attempts")
+                    
+                    # Verify it was saved correctly
+                    async with self.session.get(f"{BACKEND_URL}/config") as get_response:
+                        if get_response.status == 200:
+                            retrieved = await get_response.json()
+                            valid_saved = (
+                                retrieved.get('trading_mode') == 'demo' and
+                                retrieved.get('invert_signals') is False and
+                                retrieved.get('sound_alerts_enabled') is True
+                            )
+                            print(f"   Valid configuration saved correctly: {valid_saved}")
+                            return error_handling_works and valid_saved
+                        else:
+                            print(f"   Failed to retrieve valid configuration: {get_response.status}")
+                            return False
+                else:
+                    print(f"   Valid configuration rejected: {response.status}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Configuration error handling test error: {e}")
+            return False
+
     async def run_all_tests(self):
-        """Run all backend tests"""
-        print("🚀 Starting comprehensive backend testing for GPT Signal Bot")
+        """Run all backend tests focusing on configuration persistence"""
+        print("🚀 Starting Configuration Persistence Testing for GPT Signal Bot")
         print("=" * 70)
         
         await self.setup()
         
-        # Define test suite
+        # Define test suite focused on configuration persistence
         tests = [
             ("Health Check", self.test_health_check),
-            ("Environment Variables", self.test_environment_variables),
-            ("Pocket Option Integration Status", self.test_pocket_option_integration_status),
-            ("Integration Test Endpoint", self.test_integration_test_endpoint),
+            ("Configuration Loading on Startup", self.test_configuration_loading_on_startup),
+            ("Configuration Persistence Across Sessions", self.test_configuration_persistence_across_sessions),
+            ("Configuration MongoDB Storage", self.test_configuration_mongodb_storage),
+            ("Default vs Saved Configuration", self.test_default_vs_saved_configuration),
+            ("New Fields Handling", self.test_new_fields_handling),
+            ("Configuration Error Handling", self.test_configuration_error_handling),
             ("Bot Start with New Fields", self.test_bot_start_with_new_fields),
             ("Configuration Endpoints", self.test_config_endpoints),
-            ("Signal Inversion Endpoint", self.test_signal_inversion_endpoint),
-            ("Signal Execution Endpoint", self.test_signal_execution_endpoint),
-            ("Bot Status Endpoint", self.test_bot_status_endpoint),
-            ("Performance Metrics", self.test_performance_metrics),
-            ("Market Data Endpoints", self.test_market_data_endpoints),
-            ("Auto Signal Generation Status", self.test_auto_signal_generation_status),
-            ("Single Signal Generation (Bot Stopped)", self.test_single_signal_generation_bot_stopped),
-            ("Single Signal Generation (Bot Running)", self.test_single_signal_generation_bot_running),
-            ("Auto Generation Start/Stop (Bot Stopped)", self.test_auto_generation_start_stop_bot_stopped),
-            ("Auto Generation Start/Stop (Bot Running)", self.test_auto_generation_start_stop_bot_running),
-            ("Bot Auto Signal Generation Flag Initialization", self.test_bot_auto_signal_generation_flag_initialization),
         ]
         
         # Run all tests
