@@ -151,6 +151,9 @@ class TradingBotService:
             # Add to current signals list
             self.current_signals.append(signal)
             
+            # Send signal to all integrated platforms (Telegram, AutobotSignal, etc.)
+            await self.platform_integration.send_signal_to_all_platforms(signal)
+            
             # If auto-trading is enabled and in demo mode, simulate trade execution
             if self.config.auto_trading_enabled and self.config.trading_mode == TradingMode.DEMO:
                 await self._execute_demo_trade(signal)
