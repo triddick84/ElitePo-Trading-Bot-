@@ -101,14 +101,28 @@ class PlatformIntegrationService:
     async def _test_pocket_option_connection(self):
         """Test Pocket Option API connection using SSID"""
         try:
-            # This would require the pocketoptionapi library
-            # For now, we'll mark as ready for integration
-            self.integration_status['pocket_option']['connected'] = True
-            logger.info("Pocket Option SSID authentication ready")
+            from pocketoptionapi import PocketOptionAPI
+            
+            # Initialize the Pocket Option API with credentials
+            self.pocket_option_api = PocketOptionAPI(
+                email=self.pocket_option_email,
+                password=self.pocket_option_password,
+                ssid=self.pocket_option_ssid,
+                is_demo=True  # Start with demo mode for testing
+            )
+            
+            # Test connection
+            connection_result = await self._connect_pocket_option()
+            if connection_result:
+                self.integration_status['pocket_option']['connected'] = True
+                logger.info("Pocket Option API connection successful")
+            else:
+                raise Exception("Failed to establish connection")
             
         except Exception as e:
             self.integration_status['pocket_option']['last_error'] = str(e)
             logger.error(f"Pocket Option connection failed: {e}")
+            self.integration_status['pocket_option']['connected'] = False
 
     async def send_signal_to_all_platforms(self, signal: TradingSignal):
         """Send trading signal to all configured platforms"""
