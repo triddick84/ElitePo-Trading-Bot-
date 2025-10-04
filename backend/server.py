@@ -442,6 +442,8 @@ async def generate_single_signal():
                 "signal": None
             }
         
+    except HTTPException:
+        raise  # Re-raise HTTPExceptions as-is
     except Exception as e:
         logging.error(f"Error generating single signal: {e}")
         raise HTTPException(status_code=500, detail=str(e))
