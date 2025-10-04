@@ -598,22 +598,15 @@ async def force_generate_signal_for_asset(asset_symbol: str):
             logger.warning(f"Could not get real-time data for {asset_symbol}: {e}")
             target_data = None
         
-        if market_data_list:
-            target_data = market_data_list[0]
-        else:
-            # Create fallback market data
+        if not target_data:
+            # Create fallback market data using yfinance
             import yfinance as yf
             ticker = yf.Ticker(asset_symbol)
             hist = ticker.history(period="1d", interval="1m")
             
             if not hist.empty:
-                from models import MarketData, AssetType
+                from models import MarketData
                 current_price = float(hist['Close'].iloc[-1])
-                
-                # Determine asset type
-                asset_type = AssetType.FOREX
-                if any(crypto in asset_symbol.upper() for crypto in ['BTC', 'ETH', 'XRP', 'ADA']):
-                    asset_type = AssetType.CRYPTO
                 
                 target_data = MarketData(
                     symbol=asset_symbol,
