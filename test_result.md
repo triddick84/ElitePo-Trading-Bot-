@@ -317,14 +317,13 @@
 
 ## test_plan:
   current_focus:
-    - "Force Signal Generation API Endpoints"
-    - "Maximum Analysis Depth Testing"
-    - "Signal Quality and Confidence Testing"
-    - "Override and Bypass Functionality"
-    - "Advanced Technical Analysis Testing"
-    - "Error Handling and Fallback Testing"
-    - "Signal Storage and Platform Integration"
-    - "Performance and Response Testing"
+    - "OTC Market Signal Generation"
+    - "OTC Signal Quality and Confidence"
+    - "OTC Database Storage"
+    - "OTC Asset Symbol Handling"
+    - "OTC Platform Integration"
+    - "OTC Emergency Fallback"
+    - "Force Signal Generation with OTC Support"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
