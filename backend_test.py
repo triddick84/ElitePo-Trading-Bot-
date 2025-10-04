@@ -406,6 +406,232 @@ class BackendTester:
         except Exception as e:
             print(f"   Market data test error: {e}")
             return False
+
+    async def test_auto_signal_generation_status(self) -> bool:
+        """Test auto signal generation status endpoint"""
+        try:
+            async with self.session.get(f"{BACKEND_URL}/signals/auto-generate/status") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   Auto generation active: {data.get('auto_generation_active')}")
+                    print(f"   Bot running: {data.get('bot_running')}")
+                    print(f"   Status: {data.get('status')}")
+                    
+                    # Verify required fields are present
+                    required_fields = ['auto_generation_active', 'bot_running', 'status']
+                    return all(field in data for field in required_fields)
+                else:
+                    print(f"   Auto signal generation status failed: {response.status}")
+                    return False
+        except Exception as e:
+            print(f"   Auto signal generation status test error: {e}")
+            return False
+
+    async def test_single_signal_generation_bot_stopped(self) -> bool:
+        """Test single signal generation when bot is stopped (should fail)"""
+        try:
+            # First ensure bot is stopped
+            await self.session.post(f"{BACKEND_URL}/bot/stop")
+            
+            # Try to generate single signal
+            async with self.session.post(f"{BACKEND_URL}/signals/generate/single") as response:
+                if response.status == 400:
+                    data = await response.json()
+                    print(f"   Expected error message: {data.get('detail')}")
+                    return "bot is not running" in data.get('detail', '').lower()
+                else:
+                    print(f"   Expected 400 error but got: {response.status}")
+                    return False
+        except Exception as e:
+            print(f"   Single signal generation (bot stopped) test error: {e}")
+            return False
+
+    async def test_single_signal_generation_bot_running(self) -> bool:
+        """Test single signal generation when bot is running"""
+        try:
+            # First ensure bot is running
+            config_data = {
+                "trading_mode": "demo",
+                "active_strategies": ["hybrid"],
+                "target_assets": ["forex", "crypto"],
+                "selected_assets": ["EURUSD_regular", "BTCUSD_regular"],
+                "selected_timeframes": ["1m", "5m"],
+                "risk_tolerance": "medium",
+                "max_stake_per_trade": 10.0,
+                "max_daily_trades": 50,
+                "min_probability_threshold": 95.0,
+                "auto_trading_enabled": False,
+                "invert_signals": False,
+                "sound_alerts_enabled": True
+            }
+            
+            await self.session.post(f"{BACKEND_URL}/bot/start", json=config_data)
+            
+            # Try to generate single signal
+            async with self.session.post(f"{BACKEND_URL}/signals/generate/single") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   Success: {data.get('success')}")
+                    print(f"   Message: {data.get('message')}")
+                    
+                    signal = data.get('signal')
+                    if signal:
+                        print(f"   Signal ID: {signal.get('id')}")
+                        print(f"   Symbol: {signal.get('symbol')}")
+                        print(f"   Direction: {signal.get('direction')}")
+                        print(f"   Probability: {signal.get('probability')}")
+                    
+                    # Verify response format
+                    required_fields = ['success', 'message', 'signal']
+                    return all(field in data for field in required_fields)
+                else:
+                    print(f"   Single signal generation failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+        except Exception as e:
+            print(f"   Single signal generation (bot running) test error: {e}")
+            return False
+
+    async def test_auto_generation_start_stop_bot_stopped(self) -> bool:
+        """Test auto generation start/stop when bot is stopped (should fail)"""
+        try:
+            # Ensure bot is stopped
+            await self.session.post(f"{BACKEND_URL}/bot/stop")
+            
+            # Try to start auto generation
+            async with self.session.post(f"{BACKEND_URL}/signals/auto-generate/start") as response:
+                if response.status == 400:
+                    data = await response.json()
+                    print(f"   Expected error for start: {data.get('detail')}")
+                    start_error_valid = "bot is not running" in data.get('detail', '').lower()
+                else:
+                    print(f"   Expected 400 error for start but got: {response.status}")
+                    start_error_valid = False
+            
+            # Stop should work regardless of bot status
+            async with self.session.post(f"{BACKEND_URL}/signals/auto-generate/stop") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   Stop success: {data.get('success')}")
+                    print(f"   Stop message: {data.get('message')}")
+                    stop_works = data.get('success') is True
+                else:
+                    print(f"   Auto generation stop failed: {response.status}")
+                    stop_works = False
+            
+            return start_error_valid and stop_works
+        except Exception as e:
+            print(f"   Auto generation start/stop (bot stopped) test error: {e}")
+            return False
+
+    async def test_auto_generation_start_stop_bot_running(self) -> bool:
+        """Test auto generation start/stop when bot is running"""
+        try:
+            # Ensure bot is running
+            config_data = {
+                "trading_mode": "demo",
+                "active_strategies": ["hybrid"],
+                "target_assets": ["forex", "crypto"],
+                "selected_assets": ["EURUSD_regular", "BTCUSD_regular"],
+                "selected_timeframes": ["1m", "5m"],
+                "risk_tolerance": "medium",
+                "max_stake_per_trade": 10.0,
+                "max_daily_trades": 50,
+                "min_probability_threshold": 95.0,
+                "auto_trading_enabled": False,
+                "invert_signals": False,
+                "sound_alerts_enabled": True
+            }
+            
+            await self.session.post(f"{BACKEND_URL}/bot/start", json=config_data)
+            
+            # Test start auto generation
+            async with self.session.post(f"{BACKEND_URL}/signals/auto-generate/start") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   Start success: {data.get('success')}")
+                    print(f"   Start message: {data.get('message')}")
+                    print(f"   Start status: {data.get('status')}")
+                    start_success = data.get('success') is True and data.get('status') == 'active'
+                else:
+                    print(f"   Auto generation start failed: {response.status}")
+                    start_success = False
+            
+            # Check status after start
+            async with self.session.get(f"{BACKEND_URL}/signals/auto-generate/status") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   Status after start - Active: {data.get('auto_generation_active')}")
+                    status_active = data.get('auto_generation_active') is True
+                else:
+                    status_active = False
+            
+            # Test stop auto generation
+            async with self.session.post(f"{BACKEND_URL}/signals/auto-generate/stop") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   Stop success: {data.get('success')}")
+                    print(f"   Stop message: {data.get('message')}")
+                    print(f"   Stop status: {data.get('status')}")
+                    stop_success = data.get('success') is True and data.get('status') == 'stopped'
+                else:
+                    print(f"   Auto generation stop failed: {response.status}")
+                    stop_success = False
+            
+            # Check status after stop
+            async with self.session.get(f"{BACKEND_URL}/signals/auto-generate/status") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   Status after stop - Active: {data.get('auto_generation_active')}")
+                    status_stopped = data.get('auto_generation_active') is False
+                else:
+                    status_stopped = False
+            
+            return start_success and status_active and stop_success and status_stopped
+        except Exception as e:
+            print(f"   Auto generation start/stop (bot running) test error: {e}")
+            return False
+
+    async def test_bot_auto_signal_generation_flag_initialization(self) -> bool:
+        """Test that bot properly initializes auto_signal_generation flag"""
+        try:
+            # Start bot and check initial auto generation status
+            config_data = {
+                "trading_mode": "demo",
+                "active_strategies": ["hybrid"],
+                "target_assets": ["forex", "crypto"],
+                "selected_assets": ["EURUSD_regular", "BTCUSD_regular"],
+                "selected_timeframes": ["1m", "5m"],
+                "risk_tolerance": "medium",
+                "max_stake_per_trade": 10.0,
+                "max_daily_trades": 50,
+                "min_probability_threshold": 95.0,
+                "auto_trading_enabled": False,
+                "invert_signals": False,
+                "sound_alerts_enabled": True
+            }
+            
+            await self.session.post(f"{BACKEND_URL}/bot/start", json=config_data)
+            
+            # Check initial auto generation status (should be False by default)
+            async with self.session.get(f"{BACKEND_URL}/signals/auto-generate/status") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   Initial auto generation active: {data.get('auto_generation_active')}")
+                    print(f"   Bot running: {data.get('bot_running')}")
+                    print(f"   Status: {data.get('status')}")
+                    
+                    # Should be False initially and bot should be running
+                    return (data.get('auto_generation_active') is False and 
+                            data.get('bot_running') is True and
+                            data.get('status') == 'stopped')
+                else:
+                    print(f"   Auto generation status check failed: {response.status}")
+                    return False
+        except Exception as e:
+            print(f"   Bot auto signal generation flag initialization test error: {e}")
+            return False
             
     async def run_all_tests(self):
         """Run all backend tests"""
