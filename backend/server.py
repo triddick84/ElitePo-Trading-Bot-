@@ -502,6 +502,161 @@ async def get_auto_signal_generation_status():
         logging.error(f"Error getting auto signal generation status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@api_router.post("/signals/force-generate")
+async def force_generate_signal():
+    """
+    Force generate a trading signal using maximum analysis depth
+    Bypasses all thresholds and uses advanced multi-strategy analysis
+    """
+    try:
+        # Get current market data for configured assets
+        market_data = await trading_bot._get_relevant_market_data()
+        
+        if not market_data:
+            raise HTTPException(status_code=404, detail="No market data available for configured assets")
+        
+        # Use the first available asset for force generation
+        target_asset = market_data[0]
+        
+        logger.info(f"🚀 FORCE GENERATING SIGNAL for {target_asset.symbol} using maximum analysis depth")
+        
+        # Force generate signal using advanced algorithms
+        forced_signal = await force_signal_generator.force_generate_signal(
+            target_asset.symbol, target_asset
+        )
+        
+        if forced_signal:
+            # Store the forced signal in database
+            signal_dict = forced_signal.dict()
+            signal_dict['timestamp'] = signal_dict['timestamp'].isoformat()
+            await db.trading_signals.insert_one(signal_dict)
+            
+            # Send to platforms if enabled
+            try:
+                await platform_integration.send_signal_to_all_platforms(forced_signal)
+            except Exception as e:
+                logger.warning(f"Could not send forced signal to platforms: {e}")
+            
+            return {
+                "success": True,
+                "message": "🚀 Force signal generated with maximum analysis depth",
+                "signal": {
+                    "id": forced_signal.id,
+                    "symbol": forced_signal.symbol,
+                    "direction": forced_signal.direction,
+                    "entry_price": forced_signal.entry_price,
+                    "probability": forced_signal.probability,
+                    "expiration_minutes": forced_signal.expiration_minutes,
+                    "suggested_stake": forced_signal.suggested_stake,
+                    "justification": forced_signal.justification,
+                    "strategy_used": forced_signal.strategy_used,
+                    "forced_generation": True,
+                    "timestamp": forced_signal.timestamp.isoformat()
+                },
+                "analysis_details": forced_signal.additional_data
+            }
+        else:
+            return {
+                "success": False,
+                "message": "Unable to force generate signal - system error occurred",
+                "signal": None
+            }
+        
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Error in force signal generation: {e}")
+        raise HTTPException(status_code=500, detail=f"Force signal generation failed: {str(e)}")
+
+@api_router.post("/signals/force-generate/asset/{asset_symbol}")
+async def force_generate_signal_for_asset(asset_symbol: str):
+    """
+    Force generate a signal for a specific asset
+    Uses maximum analysis depth and bypasses all thresholds
+    """
+    try:
+        # Get market data for the specific asset
+        market_data_service = RealMarketDataService()
+        
+        # Try to get real-time data for the asset
+        target_data = None
+        market_data_list = await market_data_service.get_real_time_data([asset_symbol])
+        
+        if market_data_list:
+            target_data = market_data_list[0]
+        else:
+            # Create fallback market data
+            import yfinance as yf
+            ticker = yf.Ticker(asset_symbol)
+            hist = ticker.history(period="1d", interval="1m")
+            
+            if not hist.empty:
+                from models import MarketData, AssetType
+                current_price = float(hist['Close'].iloc[-1])
+                
+                # Determine asset type
+                asset_type = AssetType.FOREX
+                if any(crypto in asset_symbol.upper() for crypto in ['BTC', 'ETH', 'XRP', 'ADA']):
+                    asset_type = AssetType.CRYPTO
+                
+                target_data = MarketData(
+                    symbol=asset_symbol,
+                    price=current_price,
+                    timestamp=datetime.now(timezone.utc),
+                    asset_type=asset_type,
+                    volume=float(hist['Volume'].iloc[-1]) if 'Volume' in hist else 0
+                )
+        
+        if not target_data:
+            raise HTTPException(status_code=404, detail=f"Could not get market data for asset: {asset_symbol}")
+        
+        logger.info(f"🚀 FORCE GENERATING SIGNAL for specific asset: {asset_symbol}")
+        
+        # Force generate signal
+        forced_signal = await force_signal_generator.force_generate_signal(
+            target_data.symbol, target_data
+        )
+        
+        if forced_signal:
+            # Store the forced signal
+            signal_dict = forced_signal.dict()
+            signal_dict['timestamp'] = signal_dict['timestamp'].isoformat()
+            await db.trading_signals.insert_one(signal_dict)
+            
+            # Send to platforms
+            try:
+                await platform_integration.send_signal_to_all_platforms(forced_signal)
+            except Exception as e:
+                logger.warning(f"Could not send forced signal to platforms: {e}")
+            
+            return {
+                "success": True,
+                "message": f"🚀 Force signal generated for {asset_symbol} with maximum analysis",
+                "asset": asset_symbol,
+                "signal": {
+                    "id": forced_signal.id,
+                    "symbol": forced_signal.symbol,
+                    "direction": forced_signal.direction,
+                    "entry_price": forced_signal.entry_price,
+                    "probability": forced_signal.probability,
+                    "expiration_minutes": forced_signal.expiration_minutes,
+                    "suggested_stake": forced_signal.suggested_stake,
+                    "justification": forced_signal.justification,
+                    "strategy_used": forced_signal.strategy_used,
+                    "forced_generation": True,
+                    "timestamp": forced_signal.timestamp.isoformat()
+                },
+                "analysis_details": forced_signal.additional_data
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Force signal generation failed")
+        
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Error in force signal generation for {asset_symbol}: {e}")
+        raise HTTPException(status_code=500, detail=f"Force signal generation failed: {str(e)}")
+
 # Legacy endpoints for compatibility
 @api_router.get("/")
 async def root():
