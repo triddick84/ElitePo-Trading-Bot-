@@ -263,10 +263,11 @@ const LiveSignalsDisplay = ({
         
         if (regularSignal && otcSignal) {
           toast.success(
-            `🚀 FORCE SIGNALS GENERATED WITH COUNTDOWN TIMERS: 
-            📊 Regular: ${regularSignal.direction} ${regularSignal.symbol} (${regularSignal.probability}%)
-            📈 OTC: ${otcSignal.direction} ${otcSignal.symbol} (${otcSignal.probability}%)`,
-            { duration: 10000 }
+            `🚀 POCKET OPTION SYNCHRONIZED SIGNALS: 
+            📊 Regular: ${regularSignal.direction} ${regularSignal.symbol} (${regularSignal.probability}%) - ${regularSignal.timeframe} 
+            📈 OTC: ${otcSignal.direction} ${otcSignal.symbol} (${otcSignal.probability}%) - ${otcSignal.timeframe}
+            🕐 Chicago Timezone Synchronized for Candle Formation Timing!`,
+            { duration: 12000 }
           );
         } else if (regularSignal) {
           toast.success(
