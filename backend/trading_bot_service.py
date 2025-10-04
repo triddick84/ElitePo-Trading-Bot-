@@ -12,6 +12,7 @@ from models import (
 )
 from real_market_data_service import RealMarketDataService
 from advanced_technical_analysis import AdvancedTechnicalAnalysis
+from enhanced_signal_generator import enhanced_signal_generator
 from llm_service import LLMTradingService
 from platform_integrations import PlatformIntegrationService
 
