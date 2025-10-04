@@ -317,10 +317,14 @@
 
 ## test_plan:
   current_focus:
-    - "Enhanced Signal Generation Integration"
-    - "Multi-Strategy Algorithm Testing"
-    - "Fallback Mechanism Testing"
-    - "Signal Quality and Accuracy Verification"
+    - "Force Signal Generation API Endpoints"
+    - "Maximum Analysis Depth Testing"
+    - "Signal Quality and Confidence Testing"
+    - "Override and Bypass Functionality"
+    - "Advanced Technical Analysis Testing"
+    - "Error Handling and Fallback Testing"
+    - "Signal Storage and Platform Integration"
+    - "Performance and Response Testing"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
