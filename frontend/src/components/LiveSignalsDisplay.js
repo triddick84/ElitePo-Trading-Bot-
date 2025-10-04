@@ -431,6 +431,13 @@ const LiveSignalsDisplay = ({ botStatus, onSignalExecute }) => {
             <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
               {liveSignals.length} Active
             </Badge>
+            <Badge className={`border ${
+              currentThreshold >= 90 ? 'bg-green-500/20 text-green-400 border-green-500/30' :
+              currentThreshold >= 75 ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' :
+              'bg-red-500/20 text-red-400 border-red-500/30'
+            }`}>
+              {currentThreshold}%+ Only
+            </Badge>
           </div>
           <Button 
             onClick={fetchLiveSignals}
