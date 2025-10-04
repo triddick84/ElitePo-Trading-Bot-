@@ -61,25 +61,40 @@ TRADING MODES:
 
 Be precise, analytical, and conservative. Only generate signals when conditions strongly favor a specific direction."""
     
-    async def analyze_sentiment(self, symbol: str, market_data: MarketData) -> SentimentAnalysis:
-        """Analyze market sentiment using LLM"""
+    async def analyze_sentiment(self, symbol: str, market_data: MarketData, technical_indicators: TechnicalIndicators) -> SentimentAnalysis:
+        """Analyze market sentiment using LLM with real market data"""
         try:
+            # Calculate trend direction
+            trend = "bullish" if market_data.change_percent > 0 else "bearish" if market_data.change_percent < 0 else "neutral"
+            
+            # Volume analysis
+            volume_analysis = "high" if market_data.volume > 0 else "normal"
+            
             prompt = f"""
-Analyze market sentiment for {symbol} ({market_data.asset_type.value}):
+Analyze market sentiment for {symbol} ({market_data.asset_type.value}) using REAL market data:
 
-Current Market Data:
-- Price: {market_data.price}
-- Change: {market_data.change} ({market_data.change_percent}%)
-- Volume: {market_data.volume}
+CURRENT MARKET CONDITIONS:
+- Current Price: ${market_data.price}
+- 24h Change: {market_data.change_percent:.2f}% ({trend} trend)
+- Volume: {market_data.volume:,} ({volume_analysis} volume)
+- Bid/Ask Spread: ${market_data.bid} / ${market_data.ask}
 
-Please provide sentiment analysis considering:
-1. Current price action and momentum
-2. Volume patterns
-3. General market conditions for {market_data.asset_type.value}
-4. Recent market trends
+TECHNICAL INDICATORS (Real Data):
+- RSI (14): {technical_indicators.rsi_14:.1f} - {"Overbought" if technical_indicators.rsi_14 > 70 else "Oversold" if technical_indicators.rsi_14 < 30 else "Normal"}
+- MACD: {technical_indicators.macd_line:.6f} (Signal: {technical_indicators.macd_signal:.6f})
+- EMA Trend: {"Bullish" if technical_indicators.ema_3 > technical_indicators.ema_8 else "Bearish"} (EMA3: {technical_indicators.ema_3:.4f}, EMA8: {technical_indicators.ema_8:.4f})
+- CCI (20): {technical_indicators.cci_20:.1f} - {"Overbought" if technical_indicators.cci_20 > 100 else "Oversold" if technical_indicators.cci_20 < -100 else "Normal"}
+- Bollinger Position: Price vs Upper: ${technical_indicators.bollinger_upper:.4f}, Lower: ${technical_indicators.bollinger_lower:.4f}
 
-Return sentiment score (-1 to 1, where -1 is extremely bearish, 1 is extremely bullish) and confidence (0 to 1).
-Format: {{"sentiment_score": X.XX, "confidence": X.XX, "analysis": "detailed explanation"}}
+MARKET ANALYSIS REQUIREMENTS:
+1. Assess current momentum based on price action and technical confluence
+2. Evaluate volume confirmation of price movements  
+3. Consider overbought/oversold conditions from multiple indicators
+4. Factor in trend strength and potential reversal signals
+5. Provide probability assessment for next 1-5 minute price direction
+
+Provide detailed analysis with sentiment score (-1.0 to 1.0) and confidence (0.0 to 1.0).
+Format: {{"sentiment_score": X.XX, "confidence": X.XX, "analysis": "detailed technical and fundamental reasoning based on real data"}}
 """
 
             user_message = UserMessage(text=prompt)
@@ -93,17 +108,41 @@ Format: {{"sentiment_score": X.XX, "confidence": X.XX, "analysis": "detailed exp
                     timestamp=datetime.now(timezone.utc),
                     sentiment_score=sentiment_data.get("sentiment_score", 0.0),
                     confidence=sentiment_data.get("confidence", 0.5),
-                    key_factors=[sentiment_data.get("analysis", "LLM sentiment analysis")]
+                    key_factors=[sentiment_data.get("analysis", "LLM market sentiment analysis based on real data")]
                 )
             except json.JSONDecodeError:
-                # Fallback: parse response manually
-                sentiment_score = 0.1 if "bullish" in response.lower() else -0.1 if "bearish" in response.lower() else 0.0
+                # Advanced fallback parsing using market data
+                sentiment_score = 0.0
+                confidence = 0.6
+                
+                # Analyze based on actual market conditions
+                bullish_factors = 0
+                bearish_factors = 0
+                
+                if market_data.change_percent > 1.0:
+                    bullish_factors += 1
+                elif market_data.change_percent < -1.0:
+                    bearish_factors += 1
+                    
+                if technical_indicators.rsi_14 < 30:
+                    bullish_factors += 1
+                elif technical_indicators.rsi_14 > 70:
+                    bearish_factors += 1
+                    
+                if technical_indicators.ema_3 > technical_indicators.ema_8:
+                    bullish_factors += 1
+                else:
+                    bearish_factors += 1
+                
+                sentiment_score = (bullish_factors - bearish_factors) * 0.3
+                sentiment_score = max(-1.0, min(1.0, sentiment_score))
+                
                 return SentimentAnalysis(
                     symbol=symbol,
                     timestamp=datetime.now(timezone.utc),
                     sentiment_score=sentiment_score,
-                    confidence=0.6,
-                    key_factors=[response[:200]]
+                    confidence=confidence,
+                    key_factors=[f"Real market analysis: {bullish_factors} bullish vs {bearish_factors} bearish factors"]
                 )
                 
         except Exception as e:
