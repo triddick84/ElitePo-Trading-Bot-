@@ -23,6 +23,12 @@ function App() {
   const [activeView, setActiveView] = useState("dashboard");
   const [isLoading, setIsLoading] = useState(true);
   const [liveSignals, setLiveSignals] = useState([]);
+  const [globalNotificationSettings, setGlobalNotificationSettings] = useState({
+    popupEnabled: true,
+    soundEnabled: true,
+    autoRefresh: true,
+    signalInversion: false
+  });
 
   useEffect(() => {
     fetchBotStatus();
