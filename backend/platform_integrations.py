@@ -223,26 +223,45 @@ class PlatformIntegrationService:
         except Exception as e:
             logger.error(f"Error sending AutobotSignal: {e}")
 
+    async def _connect_pocket_option(self):
+        """Connect to Pocket Option API"""
+        try:
+            if hasattr(self, 'pocket_option_api'):
+                # Attempt to connect and authenticate
+                await self.pocket_option_api.connect()
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Pocket Option connection error: {e}")
+            return False
+
     async def send_pocket_option_signal(self, signal: TradingSignal):
         """Send signal to Pocket Option for automated trading"""
         try:
-            # This would require the pocketoptionapi library integration
-            # For now, we'll log the signal and prepare for integration
+            if not hasattr(self, 'pocket_option_api'):
+                logger.warning("Pocket Option API not initialized")
+                return
             
-            logger.info(f"Pocket Option signal prepared: {signal.symbol} {signal.direction} at {signal.entry_price}")
+            # Clean symbol name for Pocket Option
+            clean_symbol = signal.symbol.replace('_OTC', '').replace('_regular', '')
             
-            # Future implementation would use:
-            # from pocketoptionapi.stable_api import PocketOption
-            # account = PocketOption(self.pocket_option_session)
-            # connected, message = account.connect()
-            # if connected:
-            #     buy_info = account.buy(
-            #         asset=signal.symbol,
-            #         amount=signal.suggested_stake,
-            #         direction=signal.direction.lower(),
-            #         duration=signal.expiration_minutes * 60
-            #     )
-            #     account.close()
+            # Convert signal direction
+            direction = "call" if signal.direction in ['BUY', 'CALL'] else "put"
+            
+            # Execute trade
+            trade_result = await self.pocket_option_api.buy(
+                asset=clean_symbol,
+                amount=float(signal.suggested_stake),
+                direction=direction,
+                duration=signal.expiration_minutes * 60  # Convert to seconds
+            )
+            
+            if trade_result and trade_result.get('success', False):
+                logger.info(f"Pocket Option trade executed successfully: {signal.id}")
+                logger.info(f"Trade ID: {trade_result.get('trade_id')}")
+            else:
+                error_msg = trade_result.get('message', 'Unknown error') if trade_result else 'No response from API'
+                logger.error(f"Pocket Option trade failed: {error_msg}")
             
         except Exception as e:
             logger.error(f"Error sending Pocket Option signal: {e}")
