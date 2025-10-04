@@ -11,7 +11,7 @@ from models import (
     TradingStrategy, TradingMode, AssetType, SignalDirection
 )
 from real_market_data_service import RealMarketDataService
-from technical_analysis import TechnicalAnalysisEngine
+from advanced_technical_analysis import AdvancedTechnicalAnalysis
 from llm_service import LLMTradingService
 
 logger = logging.getLogger(__name__)
