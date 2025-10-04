@@ -4,6 +4,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Tuple, Any
 import logging
 from models import TechnicalIndicators, MarketData, TradingSignal, SignalDirection, TradingStrategy
+from pocket_option_timing_sync import pocket_option_sync
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import yfinance as yf
