@@ -14,6 +14,7 @@ from real_market_data_service import RealMarketDataService
 from advanced_technical_analysis import AdvancedTechnicalAnalysis
 from enhanced_signal_generator import enhanced_signal_generator
 from force_signal_generator import force_signal_generator
+from pocket_option_timing_sync import pocket_option_sync
 from llm_service import LLMTradingService
 from platform_integrations import PlatformIntegrationService
 
