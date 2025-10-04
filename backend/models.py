@@ -82,6 +82,8 @@ class TradingSignal(BaseModel):
     direction: SignalDirection
     entry_price: float
     expiration_minutes: int
+    timeframe: str = "1m"  # Pocket Option timeframe (5s, 15s, 30s, 1m, 2m, 3m, 5m, 10m, 15m, 30m)
+    market_type: str = "regular"  # "regular" or "otc"
     probability: float  # 0 to 100
     confidence_level: str  # "HIGH", "MEDIUM", "LOW"
     strategy_used: TradingStrategy
@@ -91,6 +93,7 @@ class TradingSignal(BaseModel):
     justification: str
     risk_assessment: str
     suggested_stake: float
+    precision_entry_time: Optional[datetime] = None  # Optimal entry timing
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     
     # Quality check fields
