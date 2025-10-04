@@ -2856,12 +2856,20 @@ class BackendTester:
         
         await self.setup()
         
-        # Define test suite focused on Force Signal Generation functionality
+        # Define test suite focused on Force Signal Generation with OTC Market Support
         tests = [
             ("Health Check", self.test_health_check),
             ("Environment Variables", self.test_environment_variables),
             
-            # Force Signal Generation Tests (Primary Focus)
+            # OTC Market Signal Generation Tests (PRIMARY FOCUS)
+            ("OTC Market Signal Generation", self.test_otc_market_signal_generation),
+            ("OTC Signal Quality and Confidence", self.test_otc_signal_quality_and_confidence),
+            ("OTC Database Storage", self.test_otc_database_storage),
+            ("OTC Asset Symbol Handling", self.test_otc_asset_symbol_handling),
+            ("OTC Platform Integration", self.test_otc_platform_integration),
+            ("OTC Emergency Fallback", self.test_otc_emergency_fallback),
+            
+            # Force Signal Generation Tests (Updated with OTC Support)
             ("Force Signal Generation - General Endpoint", self.test_force_signal_generation_general_endpoint),
             ("Force Signal Generation - Specific Asset", self.test_force_signal_generation_specific_asset),
             ("Force Signal - Bypass Thresholds", self.test_force_signal_bypass_thresholds),
