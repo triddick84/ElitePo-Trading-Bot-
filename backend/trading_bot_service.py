@@ -122,6 +122,12 @@ class TradingBotService:
                 market_data.symbol, market_data, technical_indicators
             )
             
+            # Apply Pocket Option timing synchronization if signal was generated
+            if enhanced_signal:
+                enhanced_signal = pocket_option_sync.sync_signal_with_pocket_option_timing(
+                    enhanced_signal, self.config.selected_timeframes
+                )
+            
             if enhanced_signal and enhanced_signal.probability >= self.config.min_probability_threshold:
                 logger.info(f"Enhanced algorithm generated high-confidence signal: {enhanced_signal.symbol} "
                            f"{enhanced_signal.direction} at {enhanced_signal.probability}%")
