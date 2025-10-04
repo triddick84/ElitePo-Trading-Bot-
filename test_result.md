@@ -317,7 +317,10 @@
 
 ## test_plan:
   current_focus:
-    - "Threshold Slider Functionality"
+    - "Enhanced Signal Generation Integration"
+    - "Multi-Strategy Algorithm Testing"
+    - "Fallback Mechanism Testing"
+    - "Signal Quality and Accuracy Verification"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
