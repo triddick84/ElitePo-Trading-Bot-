@@ -711,6 +711,12 @@ async def force_generate_signal_for_asset(asset_symbol: str):
                 except Exception as e:
                     logger.warning(f"Could not send forced signal to platforms: {e}")
             
+            # Extract analysis details with OTC boost information
+            analysis_details = forced_signals[0].technical_analysis if forced_signals else {}
+            otc_signal = next((s for s in forced_signals if s.market_type == 'otc'), None)
+            if otc_signal:
+                analysis_details["otc_boost_applied"] = otc_signal.technical_analysis.get('otc_boost_applied', 0)
+            
             return {
                 "success": True,
                 "message": f"🚀 {len(forced_signals)} Force signals generated for {asset_symbol} (Regular + OTC)",
@@ -718,7 +724,7 @@ async def force_generate_signal_for_asset(asset_symbol: str):
                 "signals": stored_signals,
                 "regular_signal": next((s for s in stored_signals if "regular" in s["symbol"]), None),
                 "otc_signal": next((s for s in stored_signals if "OTC" in s["symbol"]), None),
-                "analysis_details": forced_signals[0].technical_analysis if forced_signals else {}
+                "analysis_details": analysis_details
             }
         else:
             raise HTTPException(status_code=500, detail="Force signal generation failed")
