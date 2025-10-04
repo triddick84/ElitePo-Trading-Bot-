@@ -2494,19 +2494,24 @@ class BackendTester:
         
         await self.setup()
         
-        # Define test suite focused on enhanced signal generation functionality
+        # Define test suite focused on Force Signal Generation functionality
         tests = [
             ("Health Check", self.test_health_check),
+            ("Environment Variables", self.test_environment_variables),
+            
+            # Force Signal Generation Tests (Primary Focus)
+            ("Force Signal Generation - General Endpoint", self.test_force_signal_generation_general_endpoint),
+            ("Force Signal Generation - Specific Asset", self.test_force_signal_generation_specific_asset),
+            ("Force Signal - Bypass Thresholds", self.test_force_signal_bypass_thresholds),
+            ("Force Signal - Maximum Analysis Depth", self.test_force_signal_maximum_analysis_depth),
+            ("Force Signal - Advanced Technical Analysis", self.test_force_signal_advanced_technical_analysis),
+            ("Force Signal - Error Handling and Fallback", self.test_force_signal_error_handling_and_fallback),
+            ("Force Signal - Storage and Platform Integration", self.test_force_signal_storage_and_platform_integration),
+            ("Force Signal - Performance and Response Time", self.test_force_signal_performance_and_response_time),
+            
+            # Supporting Backend Tests
             ("Enhanced Signal Generator Integration", self.test_enhanced_signal_generator_integration),
-            ("Enhanced Signal Generation with Thresholds", self.test_enhanced_signal_generation_with_thresholds),
-            ("Enhanced vs Fallback Mechanism", self.test_enhanced_vs_fallback_mechanism),
-            ("Signal Strategy Details and Metadata", self.test_signal_strategy_details_and_metadata),
-            ("Enhanced Signal Accuracy Targeting", self.test_enhanced_signal_accuracy_targeting),
             ("Real Market Data Integration", self.test_real_market_data_integration),
-            ("Enhanced Signal Performance and Error Handling", self.test_enhanced_signal_performance_and_error_handling),
-            ("Threshold Default Value (85%)", self.test_threshold_default_value),
-            ("Threshold Range Validation (50%-99%)", self.test_threshold_range_validation),
-            ("Bot Start with Custom Thresholds", self.test_bot_start_with_custom_thresholds),
             ("Configuration Endpoints", self.test_config_endpoints),
         ]
         
