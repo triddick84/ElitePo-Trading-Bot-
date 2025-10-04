@@ -23,7 +23,9 @@ const BotControls = ({ onStatusUpdate }) => {
     max_stake_per_trade: 10.0,
     max_daily_trades: 50,
     min_probability_threshold: 95.0,
-    auto_trading_enabled: false
+    auto_trading_enabled: false,
+    invert_signals: false,
+    sound_alerts_enabled: true
   });
   
   const [botStatus, setBotStatus] = useState({ is_running: false });
