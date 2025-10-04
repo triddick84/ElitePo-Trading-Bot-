@@ -694,6 +694,8 @@ class ForceSignalGenerator:
                 direction=direction,
                 entry_price=market_data.price,
                 expiration_minutes=15,
+                timeframe="5m",
+                market_type="regular",
                 probability=confidence,
                 confidence_level="LOW",
                 strategy_used=TradingStrategy.HYBRID,
@@ -703,12 +705,13 @@ class ForceSignalGenerator:
                     'limited_data': True,
                     'basic_trend_analysis': True
                 },
-                market_analysis_summary="Emergency signal generated under adverse conditions with limited data availability.",
+                market_analysis_summary="Emergency signal generated under adverse conditions with limited data availability. Basic trend analysis applied.",
                 justification=f"⚠️ EMERGENCY SIGNAL - Generated under adverse conditions. "
                             f"Limited data available. Use with extreme caution. "
                             f"This is a forced emergency signal when normal analysis fails.",
-                risk_assessment="HIGH RISK - Emergency fallback signal with limited analysis data.",
+                risk_assessment="HIGH RISK - Emergency fallback signal with limited analysis data. Use minimum stake.",
                 suggested_stake=5.0,
+                precision_entry_time=datetime.now(timezone.utc) + timedelta(seconds=15),
                 timestamp=datetime.now(timezone.utc)
             )
             
