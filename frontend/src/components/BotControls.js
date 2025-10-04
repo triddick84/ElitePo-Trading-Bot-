@@ -227,6 +227,30 @@ const BotControls = ({ onStatusUpdate }) => {
                 onCheckedChange={(checked) => handleConfigChange('auto_trading_enabled', checked)}
               />
             </div>
+
+            {/* Invert Signals */}
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-slate-300 font-medium">Invert Signals</Label>
+                <p className="text-slate-500 text-sm">Convert BUY signals to SELL and vice versa</p>
+              </div>
+              <Switch 
+                checked={config.invert_signals}
+                onCheckedChange={(checked) => handleConfigChange('invert_signals', checked)}
+              />
+            </div>
+
+            {/* Sound Alerts */}
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-slate-300 font-medium">Sound Alerts</Label>
+                <p className="text-slate-500 text-sm">Play audio notification for new signals</p>
+              </div>
+              <Switch 
+                checked={config.sound_alerts_enabled}
+                onCheckedChange={(checked) => handleConfigChange('sound_alerts_enabled', checked)}
+              />
+            </div>
           </div>
         </Card>
 
