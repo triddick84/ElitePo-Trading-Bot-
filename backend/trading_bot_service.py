@@ -94,8 +94,8 @@ class TradingBotService:
     async def _generate_signal_for_asset(self, market_data: MarketData) -> Optional[TradingSignal]:
         """Generate trading signal for a specific asset"""
         try:
-            # Perform technical analysis
-            technical_indicators = self.technical_engine.analyze_market_data(market_data)
+            # Perform comprehensive technical analysis using real data
+            technical_indicators = await self.technical_engine.analyze_symbol_comprehensive(market_data.symbol, market_data)
             
             # Analyze sentiment
             sentiment = await self.llm_service.analyze_sentiment(market_data.symbol, market_data)
