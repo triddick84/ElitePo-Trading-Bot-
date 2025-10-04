@@ -653,6 +653,12 @@ class BackendTester:
             ("Bot Status Endpoint", self.test_bot_status_endpoint),
             ("Performance Metrics", self.test_performance_metrics),
             ("Market Data Endpoints", self.test_market_data_endpoints),
+            ("Auto Signal Generation Status", self.test_auto_signal_generation_status),
+            ("Single Signal Generation (Bot Stopped)", self.test_single_signal_generation_bot_stopped),
+            ("Single Signal Generation (Bot Running)", self.test_single_signal_generation_bot_running),
+            ("Auto Generation Start/Stop (Bot Stopped)", self.test_auto_generation_start_stop_bot_stopped),
+            ("Auto Generation Start/Stop (Bot Running)", self.test_auto_generation_start_stop_bot_running),
+            ("Bot Auto Signal Generation Flag Initialization", self.test_bot_auto_signal_generation_flag_initialization),
         ]
         
         # Run all tests
