@@ -464,6 +464,8 @@ async def start_auto_signal_generation():
             "status": "active"
         }
         
+    except HTTPException:
+        raise  # Re-raise HTTPExceptions as-is
     except Exception as e:
         logging.error(f"Error starting auto signal generation: {e}")
         raise HTTPException(status_code=500, detail=str(e))
