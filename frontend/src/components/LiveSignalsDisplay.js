@@ -151,6 +151,70 @@ const LiveSignalsDisplay = ({ botStatus, onSignalExecute }) => {
     }
   };
 
+  const handleSingleSignalGeneration = async () => {
+    setIsGeneratingSignal(true);
+    try {
+      const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+      const response = await fetch(`${BACKEND_URL}/api/signals/generate/single`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      const result = await response.json();
+      
+      if (result.success && result.signal) {
+        toast.success(`🎯 Signal generated: ${result.signal.direction} ${result.signal.symbol} (${result.signal.probability}%)`);
+        // Refresh signals to show the new one
+        await fetchLiveSignals();
+      } else {
+        toast.warning(result.message || 'No high-probability signal found for current market conditions');
+      }
+    } catch (error) {
+      console.error('Error generating single signal:', error);
+      toast.error('Failed to generate signal. Please try again.');
+    } finally {
+      setIsGeneratingSignal(false);
+    }
+  };
+
+  const toggleAutoGeneration = async () => {
+    try {
+      const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+      const endpoint = autoGenerationActive 
+        ? `${BACKEND_URL}/api/signals/auto-generate/stop`
+        : `${BACKEND_URL}/api/signals/auto-generate/start`;
+      
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        setAutoGenerationActive(!autoGenerationActive);
+        toast.success(result.message);
+      } else {
+        toast.error(result.message || 'Failed to toggle auto generation');
+      }
+    } catch (error) {
+      console.error('Error toggling auto generation:', error);
+      toast.error('Failed to toggle auto generation. Please try again.');
+    }
+  };
+
+  // Fetch auto generation status on component mount
+  const fetchAutoGenerationStatus = async () => {
+    try {
+      const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+      const response = await fetch(`${BACKEND_URL}/api/signals/auto-generate/status`);
+      const result = await response.json();
+      setAutoGenerationActive(result.auto_generation_active);
+    } catch (error) {
+      console.error('Error fetching auto generation status:', error);
+    }
+  };
+
   const getSignalColor = (direction) => {
     const isInverted = notificationSettings.signalInversion;
     const displayDirection = direction;
