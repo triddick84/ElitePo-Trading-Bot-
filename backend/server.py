@@ -561,6 +561,9 @@ async def force_generate_signal():
                     "suggested_stake": signal.suggested_stake,
                     "justification": signal.justification,
                     "strategy_used": signal.strategy_used,
+                    "confidence_level": signal.confidence_level,
+                    "precision_entry_time": signal.precision_entry_time.isoformat() if signal.precision_entry_time else None,
+                    "technical_analysis": signal.technical_analysis,
                     "forced_generation": True,
                     "timestamp": signal.timestamp.isoformat()
                 })
@@ -701,6 +704,9 @@ async def force_generate_signal_for_asset(asset_symbol: str):
                     "suggested_stake": signal.suggested_stake,
                     "justification": signal.justification,
                     "strategy_used": signal.strategy_used,
+                    "confidence_level": signal.confidence_level,
+                    "precision_entry_time": signal.precision_entry_time.isoformat() if signal.precision_entry_time else None,
+                    "technical_analysis": signal.technical_analysis,
                     "forced_generation": True,
                     "timestamp": signal.timestamp.isoformat()
                 })
