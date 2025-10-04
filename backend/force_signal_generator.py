@@ -608,30 +608,44 @@ class ForceSignalGenerator:
             # Risk-adjusted stake for forced signals
             suggested_stake = min(15.0, max(2.0, 8.0 * (final_confidence - 70) / 30))
             
+            # Determine confidence level
+            if final_confidence >= 95.0:
+                confidence_level = "HIGH"
+            elif final_confidence >= 85.0:
+                confidence_level = "MEDIUM"
+            else:
+                confidence_level = "LOW"
+            
+            # Create comprehensive technical analysis summary
+            technical_analysis = {
+                'strategies_analyzed': len(analysis_results),
+                'buy_score': buy_score,
+                'sell_score': sell_score,
+                'final_confidence': final_confidence,
+                'strategy_details': strategy_details,
+                'forced_generation': True,
+                'override_mode': True
+            }
+            
             return TradingSignal(
                 id=f"FORCE_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{symbol}",
                 symbol=symbol,
+                asset_type=market_data.asset_type,
                 direction=direction,
                 entry_price=current_price,
                 expiration_minutes=expiration_minutes,
                 probability=min(final_confidence, 98.5),  # Cap at 98.5% for forced signals
-                suggested_stake=suggested_stake,
+                confidence_level=confidence_level,
+                strategy_used=TradingStrategy.HYBRID,  # Use valid enum value
+                technical_analysis=technical_analysis,
+                market_analysis_summary=f"Force signal generated using {len(analysis_results)} advanced strategies with maximum analysis depth. Override mode bypassed normal thresholds.",
                 justification=f"🚀 FORCED SIGNAL - Maximum analysis depth applied. "
                             f"{len(analysis_results)} advanced strategies combined. "
                             f"Confidence: {final_confidence:.1f}%. "
                             f"⚠️ OVERRIDE MODE - Normal thresholds bypassed for maximum signal generation.",
-                timestamp=datetime.now(timezone.utc),
-                strategy_used=f"FORCE_OVERRIDE_{len(analysis_results)}_STRATEGIES",
-                market_type=market_data.asset_type.value,
-                additional_data={
-                    'forced_generation': True,
-                    'strategy_details': strategy_details,
-                    'buy_score': buy_score,
-                    'sell_score': sell_score,
-                    'analysis_count': len(analysis_results),
-                    'override_mode': True,
-                    'emergency_boost_applied': final_confidence < 85.0
-                }
+                risk_assessment=f"Risk Level: {'LOW' if final_confidence >= 90 else 'MEDIUM' if final_confidence >= 80 else 'HIGH'}. Forced generation with {final_confidence:.1f}% confidence.",
+                suggested_stake=suggested_stake,
+                timestamp=datetime.now(timezone.utc)
             )
             
         except Exception as e:
