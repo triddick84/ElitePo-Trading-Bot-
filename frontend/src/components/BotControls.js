@@ -117,6 +117,14 @@ const BotControls = ({ onStatusUpdate }) => {
     handleConfigChange('target_assets', updated);
   };
 
+  const handleAssetSelectionChange = (selectedAssets, selectedTimeframes) => {
+    setConfig(prev => ({
+      ...prev,
+      selected_assets: selectedAssets,
+      selected_timeframes: selectedTimeframes
+    }));
+  };
+
   const strategies = [
     { id: 'hybrid', name: 'Hybrid Strategy', description: 'Combines multiple indicators for highest accuracy' },
     { id: 'cci_20', name: 'CCI 20', description: 'Commodity Channel Index overbought/oversold signals' },
