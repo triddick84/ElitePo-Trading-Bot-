@@ -39,7 +39,15 @@ const BotControls = ({ onStatusUpdate }) => {
   const fetchCurrentConfig = async () => {
     try {
       const response = await axios.get(`${API}/config`);
-      setConfig(response.data);
+      const fetchedConfig = response.data;
+      
+      // Ensure new fields have default values if not present
+      setConfig(prev => ({
+        ...prev,
+        ...fetchedConfig,
+        invert_signals: fetchedConfig.invert_signals ?? false,
+        sound_alerts_enabled: fetchedConfig.sound_alerts_enabled ?? true
+      }));
     } catch (error) {
       console.error('Error fetching config:', error);
     }
