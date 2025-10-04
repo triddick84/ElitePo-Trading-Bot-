@@ -393,10 +393,11 @@ const BotControls = ({ onStatusUpdate }) => {
       <div className="flex justify-end">
         <Button 
           onClick={updateConfig}
-          className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 btn-glow"
+          disabled={isSaving}
+          className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 btn-glow disabled:opacity-50"
           data-testid="save-config-btn"
         >
-          💾 Save Configuration
+          {isSaving ? '⏳ Saving...' : '💾 Save Configuration'}
         </Button>
       </div>
     </div>
