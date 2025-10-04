@@ -21,7 +21,7 @@ class TradingBotService:
     
     def __init__(self, db: AsyncIOMotorDatabase):
         self.db = db
-        self.market_service = MarketDataService()
+        self.market_service = RealMarketDataService()
         self.technical_engine = TechnicalAnalysisEngine()
         self.llm_service = LLMTradingService()
         
