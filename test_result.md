@@ -211,6 +211,54 @@
         - agent: "testing"
         - comment: "✅ VERIFIED: Configuration state management working correctly. Save Configuration button functional, configuration persistence tested across page navigation. New fields (invert_signals, sound_alerts_enabled) properly integrated into state management. Bot start/stop functionality working with updated configuration."
 
+  - task: "Auto Signal Generation Status Endpoint"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+        - agent: "testing"
+        - comment: "✅ VERIFIED: GET /api/signals/auto-generate/status endpoint working correctly. Returns auto_generation_active, bot_running, and status fields as expected. Default state is false initially. All required fields present in response."
+
+  - task: "Single Signal Generation Endpoint"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+        - agent: "testing"
+        - comment: "✅ VERIFIED: POST /api/signals/generate/single endpoint working correctly. Properly requires bot to be running first (returns 400 error when bot stopped). When bot is running, returns proper response format with success, message, and signal fields. Fixed HTTPException handling to return correct status codes."
+
+  - task: "Auto Generation Start/Stop Endpoints"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+        - agent: "testing"
+        - comment: "✅ VERIFIED: POST /api/signals/auto-generate/start and /api/signals/auto-generate/stop endpoints working correctly. Start endpoint properly requires bot to be running (returns 400 error when bot stopped). Stop endpoint works regardless of bot status. Status changes correctly between active/stopped. Fixed HTTPException handling to return correct status codes."
+
+  - task: "Bot Auto Signal Generation Flag Integration"
+    implemented: true
+    working: true
+    file: "/app/backend/trading_bot_service.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+        - agent: "testing"
+        - comment: "✅ VERIFIED: Bot properly initializes auto_signal_generation flag to False by default. Flag is properly managed by start/stop endpoints. Status endpoint correctly reflects the current state of the flag. Integration with trading loop confirmed through endpoint testing."
+
 ## metadata:
   created_by: "main_agent"
   version: "1.0"
