@@ -102,7 +102,7 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-## user_problem_statement: Complete Pocket Option API integration, implement invert signals logic, add sound alerts functionality, and thoroughly test end-to-end flow of signal generation and dispatch to all three integrated platforms
+## user_problem_statement: Test the new threshold slider functionality with comprehensive coverage including configuration API with new threshold range (50% to 99%), default threshold of 85%, signal generation with dynamic threshold, bot start with custom thresholds, signal filtering logic, configuration persistence, live signal generation, and threshold validation
 
 ## backend:
   - task: "Configuration Persistence and Loading"
