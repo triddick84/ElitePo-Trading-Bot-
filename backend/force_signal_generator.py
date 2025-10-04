@@ -684,22 +684,26 @@ class ForceSignalGenerator:
             return TradingSignal(
                 id=f"EMERGENCY_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{symbol}",
                 symbol=symbol,
+                asset_type=market_data.asset_type,
                 direction=direction,
                 entry_price=market_data.price,
                 expiration_minutes=15,
                 probability=confidence,
-                suggested_stake=5.0,
+                confidence_level="LOW",
+                strategy_used=TradingStrategy.HYBRID,
+                technical_analysis={
+                    'emergency_generation': True,
+                    'forced_generation': True,
+                    'limited_data': True,
+                    'basic_trend_analysis': True
+                },
+                market_analysis_summary="Emergency signal generated under adverse conditions with limited data availability.",
                 justification=f"⚠️ EMERGENCY SIGNAL - Generated under adverse conditions. "
                             f"Limited data available. Use with extreme caution. "
                             f"This is a forced emergency signal when normal analysis fails.",
-                timestamp=datetime.now(timezone.utc),
-                strategy_used="EMERGENCY_FALLBACK",
-                market_type=market_data.asset_type.value,
-                additional_data={
-                    'emergency_generation': True,
-                    'forced_generation': True,
-                    'limited_data': True
-                }
+                risk_assessment="HIGH RISK - Emergency fallback signal with limited analysis data.",
+                suggested_stake=5.0,
+                timestamp=datetime.now(timezone.utc)
             )
             
         except Exception as e:
