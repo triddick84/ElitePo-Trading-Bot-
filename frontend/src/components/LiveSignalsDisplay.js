@@ -68,7 +68,26 @@ const LiveSignalsDisplay = ({ botStatus, onSignalExecute }) => {
           }))
         : signals;
 
-      setLiveSignals(processedSignals.filter(s => s.probability >= 95));
+      const highProbabilitySignals = processedSignals.filter(s => s.probability >= 95);
+      setLiveSignals(highProbabilitySignals);
+      
+      // Check for new signals and trigger notifications
+      if (highProbabilitySignals.length > previousSignalsCount) {
+        const newSignalsCount = highProbabilitySignals.length - previousSignalsCount;
+        
+        // Play sound notification for new signals
+        if (newSignalsCount > 0 && notificationSettings.soundEnabled) {
+          playNotificationSound();
+        }
+        
+        // Show popup notification if enabled
+        if (newSignalsCount > 0 && notificationSettings.popupEnabled) {
+          const latestSignal = highProbabilitySignals[0];
+          toast.success(`🚀 New ${latestSignal.direction} signal for ${latestSignal.symbol} (${latestSignal.probability}%)`);
+        }
+      }
+      
+      setPreviousSignalsCount(highProbabilitySignals.length);
       
       // Update recent signals (last 10)
       if (processedSignals.length > 0) {
