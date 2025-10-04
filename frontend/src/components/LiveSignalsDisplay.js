@@ -77,7 +77,7 @@ const LiveSignalsDisplay = ({ botStatus, onSignalExecute }) => {
           }))
         : signals;
 
-      const highProbabilitySignals = processedSignals.filter(s => s.probability >= 95);
+      const highProbabilitySignals = processedSignals.filter(s => s.probability >= currentThreshold);
       setLiveSignals(highProbabilitySignals);
       
       // Check for new signals and trigger notifications
