@@ -21,7 +21,60 @@ class RealMarketDataService:
         self.alpha_vantage_key = os.environ.get('ALPHA_VANTAGE_API_KEY', '')
         self.finnhub_api_key = os.environ.get('FINNHUB_API_KEY', '')
         
-        # Define real trading symbols
+        # Define real trading symbols (Yahoo Finance format)
+        self.symbol_mapping = {
+            # Forex Regular
+            'EURUSD': 'EURUSD=X',
+            'GBPUSD': 'GBPUSD=X',
+            'USDJPY': 'USDJPY=X',
+            'USDCHF': 'USDCHF=X',
+            'AUDUSD': 'AUDUSD=X',
+            'USDCAD': 'USDCAD=X',
+            'NZDUSD': 'NZDUSD=X',
+            
+            # Forex OTC (use same data source)
+            'EURUSD_OTC': 'EURUSD=X',
+            'GBPUSD_OTC': 'GBPUSD=X',
+            'USDJPY_OTC': 'USDJPY=X',
+            
+            # Crypto Regular
+            'BTCUSD': 'BTC-USD',
+            'ETHUSD': 'ETH-USD',
+            'LTCUSD': 'LTC-USD',
+            'XRPUSD': 'XRP-USD',
+            'ADAUSD': 'ADA-USD',
+            'BNBUSD': 'BNB-USD',
+            
+            # Crypto OTC
+            'BTCUSD_OTC': 'BTC-USD',
+            'ETHUSD_OTC': 'ETH-USD',
+            
+            # Stocks Regular
+            'AAPL': 'AAPL',
+            'GOOGL': 'GOOGL',
+            'MSFT': 'MSFT',
+            'TSLA': 'TSLA',
+            'AMZN': 'AMZN',
+            'META': 'META',
+            'NVDA': 'NVDA',
+            
+            # Stocks OTC
+            'AAPL_OTC': 'AAPL',
+            'GOOGL_OTC': 'GOOGL',
+            'MSFT_OTC': 'MSFT',
+            
+            # Commodities
+            'XAUUSD': 'GC=F',  # Gold
+            'XAGUSD': 'SI=F',  # Silver
+            'USOIL': 'CL=F',   # Crude Oil
+            'UKOIL': 'BZ=F',   # Brent Oil
+            
+            # Indices
+            'SPX500': '^GSPC',  # S&P 500
+            'NAS100': '^IXIC',  # NASDAQ
+            'DJ30': '^DJI',     # Dow Jones
+        }
+        
         self.forex_symbols = {
             'EURUSD=X': 'EUR/USD',
             'GBPUSD=X': 'GBP/USD', 
