@@ -89,12 +89,25 @@ class ForceSignalGenerator:
                 if pattern_signal:
                     analysis_results.append(('patterns', pattern_signal, 0.05))
             
-            # Force combine all available analysis
-            forced_signal = await self._force_combine_analysis(
-                analysis_results, market_data, symbol, data_1m or data_5m or [market_data.dict()]
-            )
+            # Force combine all available analysis for both market types
+            signals = []
             
-            return forced_signal
+            # Generate signal for regular market
+            regular_signal = await self._force_combine_analysis(
+                analysis_results, market_data, symbol, data_1m or data_5m or [market_data.dict()], "regular"
+            )
+            if regular_signal:
+                signals.append(regular_signal)
+            
+            # Generate signal for OTC market with slight variation in analysis
+            otc_signal = await self._force_combine_analysis(
+                analysis_results, market_data, symbol, data_1m or data_5m or [market_data.dict()], "otc"
+            )
+            if otc_signal:
+                signals.append(otc_signal)
+            
+            # Return all signals (both regular and OTC)
+            return signals if signals else [self._generate_emergency_signal(symbol, market_data)]
             
         except Exception as e:
             logger.error(f"Error in force signal generation for {symbol}: {e}")
