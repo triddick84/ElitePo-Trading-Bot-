@@ -118,8 +118,11 @@ class ForceSignalGenerator:
             
         except Exception as e:
             logger.error(f"Error in force signal generation for {symbol}: {e}")
-            # Generate emergency fallback signal
-            return self._generate_emergency_signal(symbol, market_data)
+            # Generate emergency fallback signals for both market types
+            emergency_signals = []
+            emergency_signals.append(self._generate_emergency_signal(symbol, market_data, None, "regular"))
+            emergency_signals.append(self._generate_emergency_signal(symbol, market_data, None, "otc"))
+            return emergency_signals
     
     async def _ultra_precision_scalping_analysis(self, data: List[Dict], symbol: str) -> Optional[Dict]:
         """
