@@ -271,13 +271,15 @@ const LiveSignalsDisplay = ({
           );
         } else if (regularSignal) {
           toast.success(
-            `🚀 FORCE SIGNAL GENERATED WITH COUNTDOWN TIMER: ${regularSignal.direction} ${regularSignal.symbol} (${regularSignal.probability}%)`,
-            { duration: 8000 }
+            `🚀 POCKET OPTION SYNCHRONIZED SIGNAL: ${regularSignal.direction} ${regularSignal.symbol} (${regularSignal.probability}%)
+            🕐 ${regularSignal.timeframe} Candle Formation Timing - Chicago Timezone`,
+            { duration: 10000 }
           );
         } else if (otcSignal) {
           toast.success(
-            `🚀 FORCE SIGNAL GENERATED WITH COUNTDOWN TIMER: ${otcSignal.direction} ${otcSignal.symbol} (${otcSignal.probability}%)`,
-            { duration: 8000 }
+            `🚀 POCKET OPTION SYNCHRONIZED SIGNAL: ${otcSignal.direction} ${otcSignal.symbol} (${otcSignal.probability}%)
+            🕐 ${otcSignal.timeframe} Candle Formation Timing - Chicago Timezone`,
+            { duration: 10000 }
           );
         }
         
