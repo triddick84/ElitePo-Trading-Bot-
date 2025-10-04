@@ -122,15 +122,18 @@
 
   - task: "Invert Signals Logic"
     implemented: true
-    working: false  # Needs testing
+    working: true
     file: "/app/backend/trading_bot_service.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: true
         - agent: "main"
         - comment: "Added invert_signals logic to _process_new_signal method that reverses BUY/SELL signals when config.invert_signals is True"
+        - working: true
+        - agent: "testing"
+        - comment: "✅ VERIFIED: Invert signals logic working correctly. Bot start endpoint accepts invert_signals=true/false, config GET/PUT endpoints handle field properly, individual signal inversion endpoint /api/signals/invert/{signal_id} functional. Configuration updates properly stored and retrieved. Logic implemented in _process_new_signal method to reverse signal directions when enabled."
 
   - task: "Environment Variables Configuration"
     implemented: true
