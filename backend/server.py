@@ -16,7 +16,7 @@ from models import (
     PerformanceMetrics, BacktestResult, TradingStrategy, TradingMode, AssetType
 )
 from trading_bot_service import TradingBotService
-from market_data_service import MarketDataService
+from real_market_data_service import RealMarketDataService
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
