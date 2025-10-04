@@ -739,31 +739,47 @@ class ForceSignalGenerator:
                 direction = SignalDirection.BUY if random.random() > 0.5 else SignalDirection.SELL
                 confidence = 75.0
             
+            # Market type specific adjustments
+            if market_type == "otc":
+                expiration_minutes = 10  # Shorter for OTC
+                timeframe = "3m"
+                symbol_suffix = "_OTC"
+                market_description = "📈 OTC Market - 24/7 availability"
+                confidence += 1.0  # Small OTC boost
+            else:
+                expiration_minutes = 15
+                timeframe = "5m"
+                symbol_suffix = "_regular"
+                market_description = "📊 Regular Market - Exchange hours"
+            
             return TradingSignal(
-                id=f"EMERGENCY_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{symbol}",
-                symbol=symbol,
+                id=f"EMERGENCY_{market_type.upper()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{symbol}",
+                symbol=f"{symbol}{symbol_suffix}",
                 asset_type=market_data.asset_type,
                 direction=direction,
                 entry_price=market_data.price,
-                expiration_minutes=15,
-                timeframe="5m",
-                market_type="regular",
-                probability=confidence,
+                expiration_minutes=expiration_minutes,
+                timeframe=timeframe,
+                market_type=market_type,
+                probability=min(confidence, 98.5),
                 confidence_level="LOW",
                 strategy_used=TradingStrategy.HYBRID,
                 technical_analysis={
                     'emergency_generation': True,
                     'forced_generation': True,
                     'limited_data': True,
-                    'basic_trend_analysis': True
+                    'basic_trend_analysis': True,
+                    'market_type': market_type,
+                    'otc_boost_applied': 1.0 if market_type == "otc" else 0.0
                 },
-                market_analysis_summary="Emergency signal generated under adverse conditions with limited data availability. Basic trend analysis applied.",
-                justification=f"⚠️ EMERGENCY SIGNAL - Generated under adverse conditions. "
+                market_analysis_summary=f"Emergency signal generated for {market_type.upper()} market under adverse conditions with limited data availability. Basic trend analysis applied.",
+                justification=f"⚠️ EMERGENCY {market_type.upper()} SIGNAL - Generated under adverse conditions. "
                             f"Limited data available. Use with extreme caution. "
+                            f"{market_description}. "
                             f"This is a forced emergency signal when normal analysis fails.",
                 risk_assessment="HIGH RISK - Emergency fallback signal with limited analysis data. Use minimum stake.",
                 suggested_stake=5.0,
-                precision_entry_time=datetime.now(timezone.utc) + timedelta(seconds=15),
+                precision_entry_time=datetime.now(timezone.utc) + timedelta(seconds=20 if market_type == "otc" else 30),
                 timestamp=datetime.now(timezone.utc)
             )
             
