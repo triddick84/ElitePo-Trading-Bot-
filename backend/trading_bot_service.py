@@ -384,14 +384,45 @@ class TradingBotService:
     
     async def _save_config(self):
         """Save current configuration to database"""
-        config_dict = self.config.dict()
-        config_dict['updated_at'] = config_dict['updated_at'].isoformat()
-        
-        await self.db.trading_configurations.replace_one(
-            {"user_id": self.config.user_id},
-            config_dict,
-            upsert=True
-        )
+        try:
+            config_dict = self.config.dict()
+            config_dict['updated_at'] = config_dict['updated_at'].isoformat()
+            
+            await self.db.trading_configurations.replace_one(
+                {"user_id": self.config.user_id},
+                config_dict,
+                upsert=True
+            )
+            logger.info("Configuration saved successfully to database")
+            
+        except Exception as e:
+            logger.error(f"Error saving configuration: {e}")
+    
+    async def _load_config(self):
+        """Load saved configuration from database"""
+        try:
+            # Try to load existing configuration for the user
+            saved_config = await self.db.trading_configurations.find_one(
+                {"user_id": self.config.user_id}
+            )
+            
+            if saved_config:
+                # Remove MongoDB _id field
+                saved_config.pop('_id', None)
+                
+                # Convert updated_at back to datetime
+                if 'updated_at' in saved_config:
+                    saved_config['updated_at'] = datetime.fromisoformat(saved_config['updated_at'])
+                
+                # Create new configuration from saved data
+                self.config = TradingConfiguration(**saved_config)
+                logger.info("Configuration loaded successfully from database")
+            else:
+                logger.info("No saved configuration found, using defaults")
+                
+        except Exception as e:
+            logger.error(f"Error loading configuration: {e}")
+            # Keep using default configuration on error
     
     async def _update_performance_metrics(self):
         """Update performance metrics in database"""
