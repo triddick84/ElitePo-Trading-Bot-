@@ -304,7 +304,9 @@ async def update_config(config: BotStartRequest):
             max_stake_per_trade=config.max_stake_per_trade,
             max_daily_trades=config.max_daily_trades,
             min_probability_threshold=config.min_probability_threshold,
-            auto_trading_enabled=config.auto_trading_enabled
+            auto_trading_enabled=config.auto_trading_enabled,
+            invert_signals=config.invert_signals,
+            sound_alerts_enabled=config.sound_alerts_enabled
         )
         
         trading_bot.config = new_config
