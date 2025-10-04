@@ -379,6 +379,17 @@ const LiveSignalsDisplay = ({ botStatus, onSignalExecute }) => {
         </div>
 
         {/* Force Generate Signal Button */}
+        <div className="mb-6">
+          <Button
+            onClick={handleForceGenerateSignal}
+            disabled={isForceGenerating}
+            className="w-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-300 border border-purple-500/30 hover:from-purple-500/30 hover:to-pink-500/30 disabled:opacity-50 font-semibold py-3"
+          >
+            {isForceGenerating ? '⚡ Maximum Analysis in Progress...' : '🚀 FORCE GENERATE SIGNAL'}
+          </Button>
+        </div>
+
+        {/* Force Generate Signal Button */}
         <div className="grid grid-cols-1 gap-4 mt-4">
           <Button
             onClick={handleForceGenerateSignal}
