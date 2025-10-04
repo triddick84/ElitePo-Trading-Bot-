@@ -88,6 +88,10 @@ const Dashboard = ({ botStatus, liveSignals, setLiveSignals, notificationSetting
       {/* Live Signals Display - New Primary Section */}
       <LiveSignalsDisplay 
         botStatus={botStatus} 
+        liveSignals={liveSignals}
+        setLiveSignals={setLiveSignals}
+        notificationSettings={notificationSettings}
+        setNotificationSettings={setNotificationSettings}
         onSignalExecute={handleSignalExecute}
       />
 
