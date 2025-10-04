@@ -222,6 +222,57 @@ const LiveSignalsDisplay = ({ botStatus, onSignalExecute }) => {
 
   return (
     <div className="space-y-6" data-testid="live-signals-display">
+      {/* Manual Signal Generation Controls */}
+      <Card className="p-6 glass-dark border-emerald-500/30">
+        <h3 className="text-xl font-semibold text-white mb-6">Manual Signal Generation</h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <Button
+            onClick={handleSingleSignalGeneration}
+            disabled={!botStatus?.is_running || isGeneratingSignal}
+            className="bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:bg-blue-500/30 disabled:opacity-50"
+          >
+            {isGeneratingSignal ? '⏳ Generating...' : '🎯 Generate Single Signal'}
+          </Button>
+          
+          <Button
+            onClick={toggleAutoGeneration}
+            disabled={!botStatus?.is_running}
+            className={`border ${
+              autoGenerationActive 
+                ? 'bg-red-500/20 text-red-400 border-red-500/30 hover:bg-red-500/30' 
+                : 'bg-green-500/20 text-green-400 border-green-500/30 hover:bg-green-500/30'
+            } disabled:opacity-50`}
+          >
+            {autoGenerationActive ? '⏹️ Stop Auto Generation' : '🔄 Start Auto Generation'}
+          </Button>
+        </div>
+
+        {!botStatus?.is_running && (
+          <div className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+            <div className="flex items-center space-x-2">
+              <span className="text-yellow-400">⚠️</span>
+              <span className="text-yellow-400 font-medium">Bot Not Running</span>
+            </div>
+            <p className="text-slate-300 text-sm mt-1">
+              Start the trading bot first to enable manual signal generation.
+            </p>
+          </div>
+        )}
+
+        {autoGenerationActive && (
+          <div className="p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
+            <div className="flex items-center space-x-2">
+              <span className="text-green-400">🤖</span>
+              <span className="text-green-400 font-medium">Auto Generation Active</span>
+            </div>
+            <p className="text-slate-300 text-sm mt-1">
+              The bot is continuously scanning for high-probability trading opportunities.
+            </p>
+          </div>
+        )}
+      </Card>
+
       {/* Notification Controls */}
       <Card className="p-6 glass-dark border-slate-700/50">
         <h3 className="text-xl font-semibold text-white mb-6">Signal Controls & Settings</h3>
