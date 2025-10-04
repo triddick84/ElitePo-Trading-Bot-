@@ -10,7 +10,7 @@ from models import (
     TradingConfiguration, PerformanceMetrics, BacktestResult, 
     TradingStrategy, TradingMode, AssetType, SignalDirection
 )
-from market_data_service import MarketDataService
+from real_market_data_service import RealMarketDataService
 from technical_analysis import TechnicalAnalysisEngine
 from llm_service import LLMTradingService
 
