@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
+import LiveSignalsDisplay from './LiveSignalsDisplay';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
