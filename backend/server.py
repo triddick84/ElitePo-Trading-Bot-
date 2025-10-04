@@ -405,6 +405,99 @@ async def invert_signal(signal_id: str):
         logging.error(f"Error inverting signal {signal_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@api_router.post("/signals/generate/single")
+async def generate_single_signal():
+    """Generate a single trading signal on-demand"""
+    try:
+        if not trading_bot.is_running:
+            raise HTTPException(status_code=400, detail="Trading bot is not running. Please start the bot first.")
+        
+        # Get current market data for configured assets
+        market_data = await trading_bot._get_relevant_market_data()
+        
+        if not market_data:
+            raise HTTPException(status_code=404, detail="No market data available for configured assets")
+        
+        # Generate signal for the first available asset
+        signal = await trading_bot._generate_signal_for_asset(market_data[0])
+        
+        if signal:
+            await trading_bot._process_new_signal(signal)
+            return {
+                "success": True,
+                "message": "Signal generated successfully",
+                "signal": {
+                    "id": signal.id,
+                    "symbol": signal.symbol,
+                    "direction": signal.direction,
+                    "entry_price": signal.entry_price,
+                    "probability": signal.probability,
+                    "timestamp": signal.timestamp.isoformat()
+                }
+            }
+        else:
+            return {
+                "success": False,
+                "message": "No high-probability signal found for current market conditions",
+                "signal": None
+            }
+        
+    except Exception as e:
+        logging.error(f"Error generating single signal: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/signals/auto-generate/start")
+async def start_auto_signal_generation():
+    """Start automated signal generation mode"""
+    try:
+        if not trading_bot.is_running:
+            raise HTTPException(status_code=400, detail="Trading bot is not running. Please start the bot first.")
+        
+        # Set auto signal generation flag
+        trading_bot.auto_signal_generation = True
+        
+        return {
+            "success": True,
+            "message": "Automated signal generation started",
+            "status": "active"
+        }
+        
+    except Exception as e:
+        logging.error(f"Error starting auto signal generation: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/signals/auto-generate/stop")
+async def stop_auto_signal_generation():
+    """Stop automated signal generation mode"""
+    try:
+        # Set auto signal generation flag to False
+        trading_bot.auto_signal_generation = False
+        
+        return {
+            "success": True,
+            "message": "Automated signal generation stopped",
+            "status": "stopped"
+        }
+        
+    except Exception as e:
+        logging.error(f"Error stopping auto signal generation: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/signals/auto-generate/status")
+async def get_auto_signal_generation_status():
+    """Get current automated signal generation status"""
+    try:
+        status = getattr(trading_bot, 'auto_signal_generation', False)
+        return {
+            "auto_generation_active": status,
+            "bot_running": trading_bot.is_running,
+            "status": "active" if status and trading_bot.is_running else "stopped"
+        }
+        
+    except Exception as e:
+        logging.error(f"Error getting auto signal generation status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Legacy endpoints for compatibility
 @api_router.get("/")
 async def root():
