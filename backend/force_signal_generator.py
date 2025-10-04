@@ -620,27 +620,22 @@ class ForceSignalGenerator:
             # Calculate signal parameters
             current_price = market_data.price
             
-            # Dynamic expiration for force signals (OTC markets need different timings)
-            if market_type == "otc":
-                # OTC markets are available 24/7, can use shorter expiration times
-                if final_confidence >= 95.0:
-                    expiration_minutes = 3  # Very short for OTC high confidence
-                elif final_confidence >= 90.0:
-                    expiration_minutes = 5
-                elif final_confidence >= 85.0:
-                    expiration_minutes = 10
-                else:
-                    expiration_minutes = 15
-            else:
-                # Regular market timings
-                if final_confidence >= 95.0:
-                    expiration_minutes = 5  # Ultra-short for high confidence
-                elif final_confidence >= 90.0:
-                    expiration_minutes = 10
-                elif final_confidence >= 85.0:
-                    expiration_minutes = 15
-                else:
-                    expiration_minutes = 20
+            # Use Pocket Option timing synchronization instead of hardcoded values
+            if not user_timeframes:
+                user_timeframes = ['5m']  # Default timeframe if none selected
+            
+            # Get Chicago time for Pocket Option synchronization
+            chicago_time = pocket_option_sync.get_chicago_time()
+            
+            # Calculate next candle formation time for precise entry
+            optimal_entry_time = pocket_option_sync.get_next_candle_formation_time(
+                user_timeframes[0], market_type
+            )
+            
+            # Calculate Pocket Option optimized expiration time
+            expiration_minutes = pocket_option_sync.calculate_optimal_expiration_time(
+                user_timeframes[0], optimal_entry_time, market_type
+            )
             
             # Risk-adjusted stake for forced signals
             suggested_stake = min(15.0, max(2.0, 8.0 * (final_confidence - 70) / 30))
