@@ -579,9 +579,24 @@ async def force_generate_signal_for_asset(asset_symbol: str):
         # Get market data for the specific asset
         market_data_service = RealMarketDataService()
         
+        # Determine asset type from symbol
+        asset_type = AssetType.FOREX  # Default
+        if any(crypto in asset_symbol.upper() for crypto in ['BTC', 'ETH', 'LTC', 'XRP', 'ADA', 'BNB']):
+            asset_type = AssetType.CRYPTO
+        elif asset_symbol.upper() in ['AAPL', 'GOOGL', 'MSFT', 'TSLA', 'AMZN', 'META', 'NVDA']:
+            asset_type = AssetType.STOCKS
+        elif any(commodity in asset_symbol.upper() for commodity in ['XAU', 'XAG', 'OIL', 'GOLD', 'SILVER']):
+            asset_type = AssetType.COMMODITIES
+        elif any(index in asset_symbol.upper() for index in ['SPX', 'NAS', 'DJ', 'FTSE', 'DAX']):
+            asset_type = AssetType.INDICES
+        
         # Try to get real-time data for the asset
         target_data = None
-        market_data_list = await market_data_service.get_real_time_data([asset_symbol])
+        try:
+            target_data = market_data_service.get_real_time_data(asset_symbol, asset_type.value)
+        except Exception as e:
+            logger.warning(f"Could not get real-time data for {asset_symbol}: {e}")
+            target_data = None
         
         if market_data_list:
             target_data = market_data_list[0]
