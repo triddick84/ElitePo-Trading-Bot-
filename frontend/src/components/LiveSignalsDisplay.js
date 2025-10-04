@@ -246,26 +246,44 @@ const LiveSignalsDisplay = ({ botStatus, onSignalExecute }) => {
       
       const result = await response.json();
       
-      if (result.success && result.signal) {
-        toast.success(
-          `🚀 FORCE SIGNAL GENERATED: ${result.signal.direction} ${result.signal.symbol} (${result.signal.probability}%)`,
-          { duration: 8000 }
-        );
+      if (result.success && result.signals && result.signals.length > 0) {
+        // Show success message for both signals
+        const regularSignal = result.regular_signal;
+        const otcSignal = result.otc_signal;
+        
+        if (regularSignal && otcSignal) {
+          toast.success(
+            `🚀 FORCE SIGNALS GENERATED: 
+            📊 Regular: ${regularSignal.direction} ${regularSignal.symbol} (${regularSignal.probability}%)
+            📈 OTC: ${otcSignal.direction} ${otcSignal.symbol} (${otcSignal.probability}%)`,
+            { duration: 10000 }
+          );
+        } else if (regularSignal) {
+          toast.success(
+            `🚀 FORCE SIGNAL GENERATED: ${regularSignal.direction} ${regularSignal.symbol} (${regularSignal.probability}%)`,
+            { duration: 8000 }
+          );
+        } else if (otcSignal) {
+          toast.success(
+            `🚀 FORCE SIGNAL GENERATED: ${otcSignal.direction} ${otcSignal.symbol} (${otcSignal.probability}%)`,
+            { duration: 8000 }
+          );
+        }
         
         // Show detailed analysis info
-        if (result.analysis_details && result.analysis_details.analysis_count > 0) {
+        if (result.analysis_details && result.analysis_details.strategies_analyzed > 0) {
           setTimeout(() => {
             toast.info(
-              `📊 Analysis: ${result.analysis_details.analysis_count} strategies combined. Override mode activated.`,
+              `📊 Analysis: ${result.analysis_details.strategies_analyzed} strategies combined. ${result.signals.length} markets analyzed. Override mode activated.`,
               { duration: 6000 }
             );
           }, 1000);
         }
         
-        // Refresh signals to show the new one
+        // Refresh signals to show the new ones
         await fetchLiveSignals();
       } else {
-        toast.warning(result.message || 'Force signal generation completed but no signal produced');
+        toast.warning(result.message || 'Force signal generation completed but no signals produced');
       }
     } catch (error) {
       console.error('Error force generating signal:', error);
