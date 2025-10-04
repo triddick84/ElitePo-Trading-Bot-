@@ -110,6 +110,10 @@ function App() {
                 <div className="text-slate-400 text-sm">
                   Mode: {botStatus?.current_mode || 'Unknown'}
                 </div>
+                <div className="flex items-center space-x-1 text-emerald-400 text-sm">
+                  <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                  <span>Live Data</span>
+                </div>
               </div>
             </div>
           </div>
