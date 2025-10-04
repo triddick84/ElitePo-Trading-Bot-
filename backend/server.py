@@ -17,6 +17,7 @@ from models import (
 )
 from trading_bot_service import TradingBotService
 from real_market_data_service import RealMarketDataService
+from platform_integrations import platform_integration
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
