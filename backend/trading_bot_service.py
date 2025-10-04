@@ -143,6 +143,18 @@ class TradingBotService:
     async def _process_new_signal(self, signal: TradingSignal):
         """Process and store new trading signal"""
         try:
+            # Apply signal inversion if enabled in configuration
+            if self.config.invert_signals:
+                original_direction = signal.direction
+                if signal.direction in [SignalDirection.BUY, SignalDirection.CALL]:
+                    signal.direction = SignalDirection.SELL
+                else:
+                    signal.direction = SignalDirection.BUY
+                
+                # Add inversion note to justification
+                signal.justification = f"[INVERTED SIGNAL - Original: {original_direction}] " + signal.justification
+                logger.info(f"Signal inverted: {original_direction} -> {signal.direction} for {signal.symbol}")
+            
             # Store signal in database
             signal_dict = signal.dict()
             signal_dict['timestamp'] = signal_dict['timestamp'].isoformat()
