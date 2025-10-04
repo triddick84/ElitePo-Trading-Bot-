@@ -55,6 +55,11 @@ const LiveSignalsDisplay = ({ botStatus, onSignalExecute }) => {
     }
   }, [botStatus?.is_running, notificationSettings.autoRefresh]);
 
+  useEffect(() => {
+    // Fetch auto generation status on component mount
+    fetchAutoGenerationStatus();
+  }, []);
+
   const fetchLiveSignals = async () => {
     try {
       const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
