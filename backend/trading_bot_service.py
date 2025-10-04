@@ -30,6 +30,7 @@ class TradingBotService:
         self.is_running = False
         self.current_signals = []
         self.performance_metrics = {}
+        self.auto_signal_generation = False  # Flag for automated signal generation
         
         # Default configuration
         self.config = TradingConfiguration()
