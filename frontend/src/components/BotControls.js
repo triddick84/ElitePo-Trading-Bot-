@@ -17,6 +17,8 @@ const BotControls = ({ onStatusUpdate }) => {
     trading_mode: 'demo',
     active_strategies: ['hybrid'],
     target_assets: ['forex', 'crypto'],
+    selected_assets: ['EURUSD_regular', 'BTCUSD_regular'],
+    selected_timeframes: ['1m', '5m'],
     risk_tolerance: 'medium',
     max_stake_per_trade: 10.0,
     max_daily_trades: 50,
