@@ -311,20 +311,69 @@ const BotControls = ({ onStatusUpdate }) => {
               />
             </div>
 
-            {/* Probability Threshold */}
-            <div>
-              <Label className="text-slate-300 font-medium mb-2 block">
-                Min Probability Threshold (%)
-              </Label>
-              <Input
-                type="number"
-                value={config.min_probability_threshold}
-                onChange={(e) => handleConfigChange('min_probability_threshold', parseFloat(e.target.value))}
-                className="bg-slate-800/50 border-slate-600 text-white"
-                min="90"
-                max="99.9"
-                step="0.1"
-              />
+            {/* Signal Probability Threshold Slider */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label className="text-slate-300 font-medium">
+                  Signal Probability Threshold
+                </Label>
+                <div className="flex items-center space-x-2">
+                  <span className={`text-lg font-bold px-3 py-1 rounded-lg ${
+                    config.min_probability_threshold >= 90 ? 'text-green-400 bg-green-500/20' :
+                    config.min_probability_threshold >= 75 ? 'text-yellow-400 bg-yellow-500/20' :
+                    'text-red-400 bg-red-500/20'
+                  }`}>
+                    {config.min_probability_threshold}%
+                  </span>
+                </div>
+              </div>
+              
+              <div className="space-y-3">
+                <Slider
+                  value={[config.min_probability_threshold]}
+                  onValueChange={(value) => handleConfigChange('min_probability_threshold', value[0])}
+                  min={50}
+                  max={99}
+                  step={1}
+                  className="w-full"
+                />
+                
+                {/* Threshold Scale */}
+                <div className="flex justify-between text-xs text-slate-400">
+                  <span>50%</span>
+                  <span>60%</span>
+                  <span>70%</span>
+                  <span>80%</span>
+                  <span>90%</span>
+                  <span>99%</span>
+                </div>
+                
+                {/* Threshold Description */}
+                <div className="p-3 rounded-lg border border-slate-600/30 bg-slate-800/30">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <div className={`w-2 h-2 rounded-full ${
+                      config.min_probability_threshold >= 90 ? 'bg-green-500' :
+                      config.min_probability_threshold >= 75 ? 'bg-yellow-500' :
+                      'bg-red-500'
+                    }`}></div>
+                    <span className="text-slate-300 font-medium">
+                      {config.min_probability_threshold >= 90 ? 'Conservative' :
+                       config.min_probability_threshold >= 75 ? 'Balanced' :
+                       'Aggressive'} Strategy
+                    </span>
+                  </div>
+                  <p className="text-slate-400 text-sm">
+                    {config.min_probability_threshold >= 90 ? 
+                      'High accuracy signals with fewer opportunities. Recommended for consistent profits.' :
+                     config.min_probability_threshold >= 75 ? 
+                      'Balanced approach with good accuracy and moderate signal frequency.' :
+                      'More signals with higher risk. Only use if you understand the increased risk.'}
+                  </p>
+                  <div className="mt-2 text-xs text-slate-500">
+                    Only signals above {config.min_probability_threshold}% probability will be generated
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </Card>
