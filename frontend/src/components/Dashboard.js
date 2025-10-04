@@ -74,7 +74,7 @@ const Dashboard = ({ botStatus }) => {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-bold text-white mb-2">Trading Dashboard</h2>
-          <p className="text-slate-400">Real-time overview of your AI trading bot performance</p>
+          <p className="text-slate-400">Real-time overview with live signals and platform integrations</p>
         </div>
         <Button 
           onClick={fetchDashboardData}
@@ -84,6 +84,12 @@ const Dashboard = ({ botStatus }) => {
           🔄 Refresh
         </Button>
       </div>
+
+      {/* Live Signals Display - New Primary Section */}
+      <LiveSignalsDisplay 
+        botStatus={botStatus} 
+        onSignalExecute={handleSignalExecute}
+      />
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
