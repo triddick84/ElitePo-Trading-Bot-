@@ -7,15 +7,15 @@ import { Label } from './ui/label';
 import { toast } from 'sonner';
 import AssetSelector from './AssetSelector';
 
-const LiveSignalsDisplay = ({ botStatus, onSignalExecute }) => {
-  const [liveSignals, setLiveSignals] = useState([]);
+const LiveSignalsDisplay = ({ 
+  botStatus, 
+  onSignalExecute, 
+  liveSignals, 
+  setLiveSignals, 
+  notificationSettings, 
+  setNotificationSettings 
+}) => {
   const [recentSignals, setRecentSignals] = useState([]);
-  const [notificationSettings, setNotificationSettings] = useState({
-    popupEnabled: true,
-    soundEnabled: true,
-    autoRefresh: true,
-    signalInversion: false
-  });
   const [selectedAssets, setSelectedAssets] = useState(['EURUSD_regular', 'BTCUSD_regular']);
   const [selectedTimeframes, setSelectedTimeframes] = useState(['1m', '5m']);
   const [previousSignalsCount, setPreviousSignalsCount] = useState(0);
