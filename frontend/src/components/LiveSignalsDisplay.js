@@ -389,19 +389,8 @@ const LiveSignalsDisplay = ({ botStatus, onSignalExecute }) => {
           </Button>
         </div>
 
-        {/* Force Generate Signal Button */}
-        <div className="grid grid-cols-1 gap-4 mt-4">
-          <Button
-            onClick={handleForceGenerateSignal}
-            disabled={isForceGenerating}
-            className="bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-300 border border-purple-500/30 hover:from-purple-500/30 hover:to-pink-500/30 disabled:opacity-50 font-semibold"
-          >
-            {isForceGenerating ? '⚡ Generating Maximum Analysis...' : '🚀 FORCE GENERATE SIGNAL'}
-          </Button>
-        </div>
-
         {isForceGenerating && (
-          <div className="mt-4 p-4 bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/30 rounded-lg">
+          <div className="mb-4 p-4 bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/30 rounded-lg">
             <div className="flex items-center space-x-3">
               <div className="animate-spin w-5 h-5 border-2 border-purple-400 border-t-transparent rounded-full"></div>
               <div>
@@ -414,7 +403,7 @@ const LiveSignalsDisplay = ({ botStatus, onSignalExecute }) => {
           </div>
         )}
         
-        <div className="mt-4 p-4 bg-gradient-to-r from-orange-500/10 to-red-500/10 border border-orange-500/30 rounded-lg">
+        <div className="p-4 bg-gradient-to-r from-orange-500/10 to-red-500/10 border border-orange-500/30 rounded-lg">
           <div className="flex items-center space-x-2 mb-2">
             <span className="text-orange-400">⚠️</span>
             <span className="text-orange-400 font-medium">Force Signal Warning</span>
