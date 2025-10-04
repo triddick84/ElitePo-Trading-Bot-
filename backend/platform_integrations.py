@@ -13,20 +13,20 @@ class PlatformIntegrationService:
     """Service for integrating with external trading platforms and notification services"""
     
     def __init__(self):
-        # Pocket Option credentials (provided by user)
-        self.pocket_option_ssid = 'ALAtqhJkRG4FAQwt4'
-        self.pocket_option_session = '42["auth",{"session":"ALAtqhJkRG4FAQwt4","isDemo":1,"uid":53953294,"platform":1}]'
-        self.pocket_option_account_id = '53953294'
-        self.pocket_option_email = 'thomas.riddick84@gmail.com'
+        # Load credentials from environment variables
+        self.pocket_option_ssid = os.getenv('POCKET_OPTION_SSID')
+        self.pocket_option_account_id = os.getenv('POCKET_OPTION_ACCOUNT_ID')
+        self.pocket_option_email = os.getenv('POCKET_OPTION_EMAIL')
+        self.pocket_option_password = os.getenv('POCKET_OPTION_PASSWORD')
         
         # Telegram Bot credentials
-        self.telegram_bot_token = '8342619832:AAEdHnS_HKKariaDQaKHH6OT_pnLfp9dfIQ'
-        self.telegram_chat_id = '6434316177'
-        self.telegram_bot_username = '@ElitePocket_bot'
+        self.telegram_bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
+        self.telegram_chat_id = os.getenv('TELEGRAM_CHAT_ID')
+        self.telegram_bot_username = os.getenv('TELEGRAM_BOT_USERNAME')
         
         # AutobotSignal.io webhook credentials
-        self.autobot_webhook_url = 'http://34.81.61.52/index.php'
-        self.autobot_signal_key = 'RSPP'
+        self.autobot_webhook_url = os.getenv('AUTOBOT_WEBHOOK_URL')
+        self.autobot_signal_key = os.getenv('AUTOBOT_SIGNAL_KEY')
         
         # Integration status tracking
         self.integration_status = {
