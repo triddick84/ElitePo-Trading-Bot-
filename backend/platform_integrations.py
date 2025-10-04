@@ -248,7 +248,7 @@ class PlatformIntegrationService:
             direction = "call" if signal.direction in ['BUY', 'CALL'] else "put"
             
             # Execute trade
-            trade_result = await self.pocket_option_api.buy(
+            trade_result = await self.pocket_option_api.buy_binary_option(
                 asset=clean_symbol,
                 amount=float(signal.suggested_stake),
                 direction=direction,
