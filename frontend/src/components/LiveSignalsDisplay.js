@@ -18,6 +18,33 @@ const LiveSignalsDisplay = ({ botStatus, onSignalExecute }) => {
   });
   const [selectedAssets, setSelectedAssets] = useState(['EURUSD_regular', 'BTCUSD_regular']);
   const [selectedTimeframes, setSelectedTimeframes] = useState(['1m', '5m']);
+  const [previousSignalsCount, setPreviousSignalsCount] = useState(0);
+
+  // Sound notification function
+  const playNotificationSound = () => {
+    if (!notificationSettings.soundEnabled) return;
+    
+    // Create an audio context and play a notification sound
+    try {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      // Configure the tone (notification beep)
+      oscillator.frequency.setValueAtTime(800, audioContext.currentTime); // High pitch
+      oscillator.frequency.setValueAtTime(600, audioContext.currentTime + 0.1); // Lower pitch
+      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+      
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.5);
+    } catch (error) {
+      console.warn('Could not play notification sound:', error);
+    }
+  };
 
   useEffect(() => {
     if (botStatus?.is_running && notificationSettings.autoRefresh) {
