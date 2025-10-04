@@ -21,6 +21,7 @@ function App() {
   const [botStatus, setBotStatus] = useState(null);
   const [activeView, setActiveView] = useState("dashboard");
   const [isLoading, setIsLoading] = useState(true);
+  const [liveSignals, setLiveSignals] = useState([]);
 
   useEffect(() => {
     fetchBotStatus();
