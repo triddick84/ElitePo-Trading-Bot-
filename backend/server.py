@@ -44,6 +44,8 @@ class BotStartRequest(BaseModel):
     trading_mode: TradingMode = TradingMode.DEMO
     active_strategies: List[TradingStrategy] = [TradingStrategy.HYBRID]
     target_assets: List[AssetType] = [AssetType.FOREX, AssetType.CRYPTO]
+    selected_assets: List[str] = ['EURUSD_regular', 'BTCUSD_regular']
+    selected_timeframes: List[str] = ['1m', '5m']
     risk_tolerance: str = "medium"
     max_stake_per_trade: float = 10.0
     max_daily_trades: int = 50
