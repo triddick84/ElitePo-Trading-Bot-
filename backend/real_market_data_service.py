@@ -279,12 +279,15 @@ class RealMarketDataService:
     async def get_market_data(self, symbol: str, asset_type: AssetType) -> Optional[MarketData]:
         """Get comprehensive market data for a symbol"""
         try:
+            # Map Pocket Option symbol to Yahoo Finance symbol
+            yahoo_symbol = self.symbol_mapping.get(symbol, symbol)
+            
             # Use ThreadPoolExecutor to run synchronous Yahoo Finance calls
             loop = asyncio.get_event_loop()
             data = await loop.run_in_executor(
                 self.executor, 
                 self.get_real_time_data, 
-                symbol, 
+                yahoo_symbol, 
                 asset_type.value
             )
             
