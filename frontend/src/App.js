@@ -190,6 +190,13 @@ function App() {
             </Routes>
           </main>
         </div>
+
+        {/* Live Signal Notifications */}
+        <SignalNotificationManager
+          signals={liveSignals}
+          onSignalExecute={handleSignalExecute}
+          onSignalDismiss={handleSignalDismiss}
+        />
       </div>
     </BrowserRouter>
   );
