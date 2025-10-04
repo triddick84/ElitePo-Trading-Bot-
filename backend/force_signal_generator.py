@@ -721,16 +721,22 @@ class ForceSignalGenerator:
             return TradingSignal(
                 id=f"ULTIMATE_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
                 symbol=symbol,
+                asset_type=market_data.asset_type,
                 direction=SignalDirection.BUY,
                 entry_price=market_data.price,
                 expiration_minutes=10,
+                timeframe="5m",
+                market_type="regular",
                 probability=75.0,
-                suggested_stake=1.0,
+                confidence_level="LOW",
+                strategy_used=TradingStrategy.HYBRID,
+                technical_analysis={'ultimate_fallback': True, 'forced_generation': True},
+                market_analysis_summary="Ultimate fallback signal when all other analysis methods fail.",
                 justification="🆘 ULTIMATE FALLBACK SIGNAL - System forced to generate signal",
-                timestamp=datetime.now(timezone.utc),
-                strategy_used="ULTIMATE_FALLBACK",
-                market_type=market_data.asset_type.value,
-                additional_data={'ultimate_fallback': True}
+                risk_assessment="EXTREME RISK - Ultimate fallback with no analysis. Use only minimal stake.",
+                suggested_stake=1.0,
+                precision_entry_time=datetime.now(timezone.utc) + timedelta(seconds=10),
+                timestamp=datetime.now(timezone.utc)
             )
     
     # Helper methods for technical calculations
