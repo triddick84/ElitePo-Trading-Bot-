@@ -556,6 +556,7 @@ async def force_generate_signal():
                     "entry_price": signal.entry_price,
                     "probability": signal.probability,
                     "expiration_minutes": signal.expiration_minutes,
+                    "timeframe": signal.timeframe,
                     "market_type": signal.market_type,
                     "suggested_stake": signal.suggested_stake,
                     "justification": signal.justification,
