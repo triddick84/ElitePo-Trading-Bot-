@@ -97,8 +97,8 @@ class TradingBotService:
             # Perform comprehensive technical analysis using real data
             technical_indicators = await self.technical_engine.analyze_symbol_comprehensive(market_data.symbol, market_data)
             
-            # Analyze sentiment
-            sentiment = await self.llm_service.analyze_sentiment(market_data.symbol, market_data)
+            # Analyze sentiment with technical indicators
+            sentiment = await self.llm_service.analyze_sentiment(market_data.symbol, market_data, technical_indicators)
             
             # Generate signal for each configured strategy
             best_signal = None
