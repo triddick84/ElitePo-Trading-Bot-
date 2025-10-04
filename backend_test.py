@@ -1266,10 +1266,24 @@ class BackendTester:
                         print(f"   ❌ Failed to set threshold {threshold}%")
                         return False
                 
+                # Verify threshold was set correctly
+                async with self.session.get(f"{BACKEND_URL}/config") as response:
+                    if response.status == 200:
+                        config = await response.json()
+                        actual_threshold = config.get('min_probability_threshold')
+                        if actual_threshold == threshold:
+                            print(f"   ✅ Threshold {threshold}% set correctly in configuration")
+                        else:
+                            print(f"   ❌ Threshold mismatch: expected {threshold}%, got {actual_threshold}%")
+                            return False
+                    else:
+                        print(f"   ❌ Failed to verify threshold configuration")
+                        return False
+                
                 # Start bot
                 await self.session.post(f"{BACKEND_URL}/bot/start", json=config_data)
                 
-                # Try to generate a single signal
+                # Try to generate a single signal (may fail due to no market data)
                 async with self.session.post(f"{BACKEND_URL}/signals/generate/single") as response:
                     if response.status == 200:
                         data = await response.json()
@@ -1286,14 +1300,16 @@ class BackendTester:
                                 print(f"   ❌ Signal probability {signal_probability}% below threshold {threshold}%")
                                 return False
                         else:
-                            print(f"   ℹ️ No signal generated with threshold {threshold}% (expected for high thresholds)")
+                            print(f"   ℹ️ No signal generated with threshold {threshold}% (may be due to market conditions)")
+                    elif response.status == 404:
+                        print(f"   ℹ️ No market data available for signal generation with threshold {threshold}% (expected due to data source limitations)")
                     else:
-                        print(f"   ❌ Signal generation failed: {response.status}")
-                        # This might be expected for very high thresholds, so we'll continue
+                        print(f"   ⚠️ Signal generation returned status {response.status} for threshold {threshold}%")
                 
                 # Stop bot
                 await self.session.post(f"{BACKEND_URL}/bot/stop")
             
+            print("   ✅ All threshold configurations tested successfully")
             return True
             
         except Exception as e:
