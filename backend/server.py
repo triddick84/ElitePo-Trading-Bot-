@@ -8,7 +8,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Import our trading bot components
 from models import (
