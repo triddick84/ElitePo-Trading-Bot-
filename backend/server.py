@@ -534,40 +534,49 @@ async def force_generate_signal():
         
         logger.info(f"🚀 FORCE GENERATING SIGNAL for {target_asset.symbol} using maximum analysis depth")
         
-        # Force generate signal using advanced algorithms
-        forced_signal = await force_signal_generator.force_generate_signal(
+        # Force generate signals using advanced algorithms (both regular and OTC)
+        forced_signals = await force_signal_generator.force_generate_signal(
             target_asset.symbol, target_asset
         )
         
-        if forced_signal:
-            # Store the forced signal in database
-            signal_dict = forced_signal.dict()
-            signal_dict['timestamp'] = signal_dict['timestamp'].isoformat()
-            await db.trading_signals.insert_one(signal_dict)
+        if forced_signals:
+            stored_signals = []
             
-            # Send to platforms if enabled
-            try:
-                await platform_integration.send_signal_to_all_platforms(forced_signal)
-            except Exception as e:
-                logger.warning(f"Could not send forced signal to platforms: {e}")
+            # Store all forced signals in database
+            for signal in forced_signals:
+                signal_dict = signal.dict()
+                signal_dict['timestamp'] = signal_dict['timestamp'].isoformat()
+                signal_dict['precision_entry_time'] = signal_dict['precision_entry_time'].isoformat() if signal_dict['precision_entry_time'] else None
+                await db.trading_signals.insert_one(signal_dict)
+                
+                stored_signals.append({
+                    "id": signal.id,
+                    "symbol": signal.symbol,
+                    "direction": signal.direction,
+                    "entry_price": signal.entry_price,
+                    "probability": signal.probability,
+                    "expiration_minutes": signal.expiration_minutes,
+                    "market_type": signal.market_type,
+                    "suggested_stake": signal.suggested_stake,
+                    "justification": signal.justification,
+                    "strategy_used": signal.strategy_used,
+                    "forced_generation": True,
+                    "timestamp": signal.timestamp.isoformat()
+                })
+                
+                # Send to platforms if enabled
+                try:
+                    await platform_integration.send_signal_to_all_platforms(signal)
+                except Exception as e:
+                    logger.warning(f"Could not send forced signal to platforms: {e}")
             
             return {
                 "success": True,
-                "message": "🚀 Force signal generated with maximum analysis depth",
-                "signal": {
-                    "id": forced_signal.id,
-                    "symbol": forced_signal.symbol,
-                    "direction": forced_signal.direction,
-                    "entry_price": forced_signal.entry_price,
-                    "probability": forced_signal.probability,
-                    "expiration_minutes": forced_signal.expiration_minutes,
-                    "suggested_stake": forced_signal.suggested_stake,
-                    "justification": forced_signal.justification,
-                    "strategy_used": forced_signal.strategy_used,
-                    "forced_generation": True,
-                    "timestamp": forced_signal.timestamp.isoformat()
-                },
-                "analysis_details": forced_signal.technical_analysis
+                "message": f"🚀 {len(forced_signals)} Force signals generated with maximum analysis depth",
+                "signals": stored_signals,
+                "regular_signal": next((s for s in stored_signals if "regular" in s["symbol"]), None),
+                "otc_signal": next((s for s in stored_signals if "OTC" in s["symbol"]), None),
+                "analysis_details": forced_signals[0].technical_analysis if forced_signals else {}
             }
         else:
             return {
