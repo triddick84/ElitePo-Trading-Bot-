@@ -93,7 +93,7 @@ function App() {
                 </div>
                 <div>
                   <h1 className="text-2xl font-bold text-white">GPT Signal Bot</h1>
-                  <p className="text-slate-400 text-sm">AI-Powered Trading System</p>
+                  <p className="text-slate-400 text-sm">AI-Powered Trading System • Real Market Data</p>
                 </div>
               </div>
               
