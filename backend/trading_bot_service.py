@@ -25,6 +25,7 @@ class TradingBotService:
         self.market_service = RealMarketDataService()
         self.technical_engine = AdvancedTechnicalAnalysis()
         self.llm_service = LLMTradingService()
+        self.platform_integration = PlatformIntegrationService()
         
         self.is_running = False
         self.current_signals = []
