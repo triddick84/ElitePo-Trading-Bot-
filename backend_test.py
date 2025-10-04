@@ -1969,22 +1969,25 @@ class BackendTester:
             return False
 
     async def run_all_tests(self):
-        """Run all backend tests focusing on threshold slider functionality"""
-        print("🚀 Starting Threshold Slider Functionality Testing for GPT Signal Bot")
-        print("=" * 70)
+        """Run all backend tests focusing on enhanced signal generation algorithms"""
+        print("🚀 Starting Enhanced Signal Generation Algorithm Testing for GPT Signal Bot")
+        print("=" * 80)
         
         await self.setup()
         
-        # Define test suite focused on threshold functionality
+        # Define test suite focused on enhanced signal generation functionality
         tests = [
             ("Health Check", self.test_health_check),
+            ("Enhanced Signal Generator Integration", self.test_enhanced_signal_generator_integration),
+            ("Enhanced Signal Generation with Thresholds", self.test_enhanced_signal_generation_with_thresholds),
+            ("Enhanced vs Fallback Mechanism", self.test_enhanced_vs_fallback_mechanism),
+            ("Signal Strategy Details and Metadata", self.test_signal_strategy_details_and_metadata),
+            ("Enhanced Signal Accuracy Targeting", self.test_enhanced_signal_accuracy_targeting),
+            ("Real Market Data Integration", self.test_real_market_data_integration),
+            ("Enhanced Signal Performance and Error Handling", self.test_enhanced_signal_performance_and_error_handling),
             ("Threshold Default Value (85%)", self.test_threshold_default_value),
             ("Threshold Range Validation (50%-99%)", self.test_threshold_range_validation),
-            ("Threshold Edge Cases (50% and 99%)", self.test_threshold_edge_cases),
             ("Bot Start with Custom Thresholds", self.test_bot_start_with_custom_thresholds),
-            ("Signal Generation with Different Thresholds", self.test_signal_generation_with_different_thresholds),
-            ("Threshold Persistence Across Restarts", self.test_threshold_persistence_across_restarts),
-            ("Live Signal Generation with Thresholds", self.test_live_signal_generation_with_thresholds),
             ("Configuration Endpoints", self.test_config_endpoints),
         ]
         
