@@ -3,6 +3,8 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import axios from "axios";
 import "./App.css";
 
+import SignalNotificationManager from "./components/SignalNotification";
+
 // Components
 import Dashboard from "./components/Dashboard";
 import SignalsPanel from "./components/SignalsPanel";
