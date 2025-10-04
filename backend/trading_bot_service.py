@@ -47,6 +47,9 @@ class TradingBotService:
         self.is_running = True
         logger.info(f"Starting trading bot in {self.config.trading_mode} mode")
         
+        # Initialize platform integrations
+        await self.platform_integration.initialize_integrations()
+        
         # Start main trading loop in background
         asyncio.create_task(self._trading_loop())
     
