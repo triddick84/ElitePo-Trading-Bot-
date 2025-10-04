@@ -203,6 +203,7 @@ function App() {
           signals={liveSignals}
           onSignalExecute={handleSignalExecute}
           onSignalDismiss={handleSignalDismiss}
+          notificationSettings={globalNotificationSettings}
         />
 
         {/* Toast Notifications */}
