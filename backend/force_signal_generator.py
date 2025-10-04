@@ -634,17 +634,22 @@ class ForceSignalGenerator:
                 direction=direction,
                 entry_price=current_price,
                 expiration_minutes=expiration_minutes,
+                timeframe="5m",  # Standard timeframe for forced signals
+                market_type="regular",
                 probability=min(final_confidence, 98.5),  # Cap at 98.5% for forced signals
                 confidence_level=confidence_level,
                 strategy_used=TradingStrategy.HYBRID,  # Use valid enum value
                 technical_analysis=technical_analysis,
-                market_analysis_summary=f"Force signal generated using {len(analysis_results)} advanced strategies with maximum analysis depth. Override mode bypassed normal thresholds.",
+                market_analysis_summary=f"Force signal generated using {len(analysis_results)} advanced strategies with maximum analysis depth. "
+                                      f"Buy score: {buy_score:.1f}, Sell score: {sell_score:.1f}. Override mode bypassed normal thresholds.",
                 justification=f"🚀 FORCED SIGNAL - Maximum analysis depth applied. "
                             f"{len(analysis_results)} advanced strategies combined. "
                             f"Confidence: {final_confidence:.1f}%. "
                             f"⚠️ OVERRIDE MODE - Normal thresholds bypassed for maximum signal generation.",
-                risk_assessment=f"Risk Level: {'LOW' if final_confidence >= 90 else 'MEDIUM' if final_confidence >= 80 else 'HIGH'}. Forced generation with {final_confidence:.1f}% confidence.",
+                risk_assessment=f"Risk Level: {'LOW' if final_confidence >= 90 else 'MEDIUM' if final_confidence >= 80 else 'HIGH'}. "
+                              f"Forced generation with {final_confidence:.1f}% confidence. Use proper risk management.",
                 suggested_stake=suggested_stake,
+                precision_entry_time=datetime.now(timezone.utc) + timedelta(seconds=30),  # 30 seconds from now
                 timestamp=datetime.now(timezone.utc)
             )
             
