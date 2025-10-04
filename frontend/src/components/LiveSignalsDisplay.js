@@ -235,6 +235,50 @@ const LiveSignalsDisplay = ({ botStatus, onSignalExecute }) => {
     }
   };
 
+  const handleForceGenerateSignal = async () => {
+    setIsForceGenerating(true);
+    try {
+      const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+      const response = await fetch(`${BACKEND_URL}/api/signals/force-generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      const result = await response.json();
+      
+      if (result.success && result.signal) {
+        toast.success(
+          `🚀 FORCE SIGNAL GENERATED: ${result.signal.direction} ${result.signal.symbol} (${result.signal.probability}%)`,
+          { duration: 8000 }
+        );
+        
+        // Show detailed analysis info
+        if (result.analysis_details && result.analysis_details.analysis_count > 0) {
+          setTimeout(() => {
+            toast.info(
+              `📊 Analysis: ${result.analysis_details.analysis_count} strategies combined. Override mode activated.`,
+              { duration: 6000 }
+            );
+          }, 1000);
+        }
+        
+        // Refresh signals to show the new one
+        await fetchLiveSignals();
+      } else {
+        toast.warning(result.message || 'Force signal generation completed but no signal produced');
+      }
+    } catch (error) {
+      console.error('Error force generating signal:', error);
+      if (error.message.includes('404')) {
+        toast.error('No market data available for force generation');
+      } else {
+        toast.error('Failed to force generate signal. Please try again.');
+      }
+    } finally {
+      setIsForceGenerating(false);
+    }
+  };
+
   const getSignalColor = (direction) => {
     const isInverted = notificationSettings.signalInversion;
     const displayDirection = direction;
