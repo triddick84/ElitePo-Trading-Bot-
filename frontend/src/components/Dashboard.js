@@ -7,7 +7,7 @@ import LiveSignalsDisplay from './LiveSignalsDisplay';
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
-const Dashboard = ({ botStatus }) => {
+const Dashboard = ({ botStatus, liveSignals, setLiveSignals, notificationSettings, setNotificationSettings }) => {
   const [marketData, setMarketData] = useState(null);
   const [recentSignals, setRecentSignals] = useState([]);
   const [performanceData, setPerformanceData] = useState(null);
