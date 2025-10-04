@@ -135,7 +135,7 @@ const LiveSignalsDisplay = ({ botStatus, onSignalExecute }) => {
           risk_tolerance: 'medium',
           max_stake_per_trade: 10.0,
           max_daily_trades: 50,
-          min_probability_threshold: 95.0,
+          min_probability_threshold: currentThreshold,
           auto_trading_enabled: false
         })
       });
