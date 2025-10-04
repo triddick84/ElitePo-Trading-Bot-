@@ -13,6 +13,7 @@ from models import (
 from real_market_data_service import RealMarketDataService
 from advanced_technical_analysis import AdvancedTechnicalAnalysis
 from llm_service import LLMTradingService
+from platform_integrations import PlatformIntegrationService
 
 logger = logging.getLogger(__name__)
 
