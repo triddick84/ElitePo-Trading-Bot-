@@ -641,12 +641,21 @@ class ForceSignalGenerator:
             else:
                 confidence_level = "LOW"
             
+            # OTC market adjustments
+            otc_boost = 0.0
+            if market_type == "otc":
+                # OTC markets have different volatility patterns - slight confidence boost
+                otc_boost = 2.0 if final_confidence >= 85.0 else 1.0
+                final_confidence = min(final_confidence + otc_boost, 98.5)
+            
             # Create comprehensive technical analysis summary
             technical_analysis = {
                 'strategies_analyzed': len(analysis_results),
                 'buy_score': float(buy_score),
                 'sell_score': float(sell_score),
                 'final_confidence': float(final_confidence),
+                'market_type': market_type,
+                'otc_boost_applied': otc_boost if market_type == "otc" else 0.0,
                 'strategy_details': strategy_details,
                 'forced_generation': True,
                 'override_mode': True,
