@@ -52,6 +52,8 @@ class BotStartRequest(BaseModel):
     max_daily_trades: int = 50
     min_probability_threshold: float = 95.0
     auto_trading_enabled: bool = False
+    invert_signals: bool = False
+    sound_alerts_enabled: bool = True
 
 class BotStatusResponse(BaseModel):
     is_running: bool
