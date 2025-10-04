@@ -95,14 +95,14 @@ class ForceSignalGenerator:
             
             # Generate signal for regular market
             regular_signal = await self._force_combine_analysis(
-                analysis_results, market_data, symbol, data_1m or data_5m or [market_data.dict()], "regular"
+                analysis_results, market_data, symbol, data_1m or data_5m or [market_data.dict()], "regular", user_timeframes
             )
             if regular_signal:
                 signals.append(regular_signal)
             
             # Generate signal for OTC market with slight variation in analysis
             otc_signal = await self._force_combine_analysis(
-                analysis_results, market_data, symbol, data_1m or data_5m or [market_data.dict()], "otc"
+                analysis_results, market_data, symbol, data_1m or data_5m or [market_data.dict()], "otc", user_timeframes
             )
             if otc_signal:
                 signals.append(otc_signal)
