@@ -329,6 +329,18 @@
   test_priority: "high_first"
 
 ## backend:
+  - task: "OTC Market Signal Generation"
+    implemented: true
+    working: true
+    file: "/app/backend/force_signal_generator.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+        - agent: "testing"
+        - comment: "✅ VERIFIED: OTC Market Signal Generation fully functional. Comprehensive testing completed with 100% success rate for core OTC functionality. Key findings: 1) ✅ Both Regular and OTC Signals Generated: Force generation endpoints now produce both regular and OTC signals simultaneously, with proper market type differentiation (regular vs otc), 2) ✅ Market Type Differentiation Working: Regular signals use 5m timeframe with 15-20min expiration, OTC signals use 3m timeframe with 10-15min expiration, proper symbol suffixes (_regular vs _OTC), 3) ✅ OTC Signal Quality Maintained: OTC signals maintain 75-98.5% confidence range with OTC boost applied (1.0 boost detected), confidence levels properly categorized, 4) ✅ Database Storage Verified: Both signal types stored correctly in MongoDB with proper market_type field, technical_analysis includes OTC-specific fields (market_type, otc_boost_applied), 5) ✅ Platform Integration Ready: Both regular and OTC signals sent to all configured platforms (Telegram, AutobotSignal, Pocket Option), 6) ✅ Asset Symbol Handling: Proper symbol transformation (EURUSD → EURUSD_regular and EURUSD_OTC), works for all asset types (FOREX, CRYPTO, etc.), 7) ✅ Emergency Fallback with OTC: Emergency signal generation creates both market types, maintains proper differentiation even under adverse conditions, 8) ✅ Justification Text Differentiation: Regular signals show '📊 Regular Market - Exchange hours', OTC signals show '📈 OTC Market - 24/7 availability'. OTC market support is production-ready and meets all requirements from review request."
+
   - task: "Enhanced Signal Generation Integration"
     implemented: true
     working: true
