@@ -135,6 +135,8 @@ class TradingConfiguration(BaseModel):
     max_daily_trades: int = 50
     min_probability_threshold: float = 95.0
     auto_trading_enabled: bool = False
+    invert_signals: bool = False  # Global invert signals setting
+    sound_alerts_enabled: bool = True  # Sound alerts for new signals
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 class PerformanceMetrics(BaseModel):
