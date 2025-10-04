@@ -255,6 +255,8 @@ async def update_config(config: BotStartRequest):
             trading_mode=config.trading_mode,
             active_strategies=config.active_strategies,
             target_assets=config.target_assets,
+            selected_assets=config.selected_assets,
+            selected_timeframes=config.selected_timeframes,
             risk_tolerance=config.risk_tolerance,
             max_stake_per_trade=config.max_stake_per_trade,
             max_daily_trades=config.max_daily_trades,
