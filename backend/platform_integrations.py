@@ -293,49 +293,54 @@ class PlatformIntegrationService:
     async def execute_pocket_option_trade(self, signal: TradingSignal) -> Dict[str, Any]:
         """Execute trade directly on Pocket Option platform"""
         try:
-            # This is where we would implement the actual Pocket Option API call
-            # using the pocketoptionapi library with the provided SSID
+            if not hasattr(self, 'pocket_option_api'):
+                return {
+                    "success": False,
+                    "message": "Pocket Option API not initialized",
+                    "trade_id": None,
+                    "signal_id": signal.id
+                }
             
-            result = {
-                "success": False,
-                "message": "Pocket Option API integration pending - pocketoptionapi library required",
-                "trade_id": None,
-                "signal_id": signal.id
-            }
+            # Connect if not already connected
+            if not await self._connect_pocket_option():
+                return {
+                    "success": False,
+                    "message": "Failed to connect to Pocket Option",
+                    "trade_id": None,
+                    "signal_id": signal.id
+                }
             
-            # Future implementation:
-            # from pocketoptionapi.stable_api import PocketOption
-            # 
-            # account = PocketOption(self.pocket_option_session)
-            # connected, message = account.connect()
-            # 
-            # if connected:
-            #     # Switch to demo or real account based on configuration
-            #     account.change_balance("PRACTICE" if signal.market_type == "demo" else "REAL")
-            #     
-            #     # Execute the trade
-            #     buy_info = account.buy(
-            #         asset=signal.symbol.replace('_OTC', '').replace('_regular', ''),
-            #         amount=signal.suggested_stake,
-            #         direction="call" if signal.direction in ['BUY', 'CALL'] else "put",
-            #         duration=signal.expiration_minutes * 60  # Convert to seconds
-            #     )
-            #     
-            #     if buy_info:
-            #         result = {
-            #             "success": True,
-            #             "message": "Trade executed successfully on Pocket Option",
-            #             "trade_id": buy_info.get("id"),
-            #             "signal_id": signal.id,
-            #             "balance_before": buy_info.get("balance_before"),
-            #             "balance_after": buy_info.get("balance_after")
-            #         }
-            #     
-            #     account.close()
-            # else:
-            #     result["message"] = f"Failed to connect to Pocket Option: {message}"
+            # Clean symbol name for Pocket Option
+            clean_symbol = signal.symbol.replace('_OTC', '').replace('_regular', '')
             
-            return result
+            # Convert signal direction
+            direction = "call" if signal.direction in ['BUY', 'CALL'] else "put"
+            
+            # Execute the trade
+            trade_result = await self.pocket_option_api.buy(
+                asset=clean_symbol,
+                amount=float(signal.suggested_stake),
+                direction=direction,
+                duration=signal.expiration_minutes * 60  # Convert to seconds
+            )
+            
+            if trade_result and trade_result.get('success', False):
+                return {
+                    "success": True,
+                    "message": "Trade executed successfully on Pocket Option",
+                    "trade_id": trade_result.get('trade_id'),
+                    "signal_id": signal.id,
+                    "balance_before": trade_result.get("balance_before"),
+                    "balance_after": trade_result.get("balance_after")
+                }
+            else:
+                error_msg = trade_result.get('message', 'Unknown error') if trade_result else 'No response from API'
+                return {
+                    "success": False,
+                    "message": f"Trade execution failed: {error_msg}",
+                    "trade_id": None,
+                    "signal_id": signal.id
+                }
             
         except Exception as e:
             logger.error(f"Error executing Pocket Option trade: {e}")
