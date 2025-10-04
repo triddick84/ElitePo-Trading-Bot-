@@ -601,7 +601,22 @@ async def force_generate_signal_for_asset(asset_symbol: str):
         if not target_data:
             # Create fallback market data using yfinance
             import yfinance as yf
-            ticker = yf.Ticker(asset_symbol)
+            
+            # Convert symbol to yfinance format
+            yf_symbol = asset_symbol
+            if asset_symbol == 'BTCUSD':
+                yf_symbol = 'BTC-USD'
+            elif asset_symbol == 'ETHUSD':
+                yf_symbol = 'ETH-USD'
+            elif asset_symbol == 'EURUSD':
+                yf_symbol = 'EURUSD=X'
+            elif asset_symbol == 'GBPUSD':
+                yf_symbol = 'GBPUSD=X'
+            elif '/' in asset_symbol:
+                # Handle format like EUR/USD
+                yf_symbol = asset_symbol.replace('/', '') + '=X'
+            
+            ticker = yf.Ticker(yf_symbol)
             hist = ticker.history(period="1d", interval="1m")
             
             if not hist.empty:
