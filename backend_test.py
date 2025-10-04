@@ -1268,9 +1268,9 @@ class BackendTester:
             return False
 
     async def test_force_signal_generation_general_endpoint(self) -> bool:
-        """Test POST /api/signals/force-generate endpoint"""
+        """Test POST /api/signals/force-generate endpoint with OTC market support"""
         try:
-            print("   Testing general force signal generation endpoint")
+            print("   Testing general force signal generation endpoint with OTC support")
             
             # Test force signal generation
             async with self.session.post(f"{BACKEND_URL}/signals/force-generate") as response:
@@ -1280,61 +1280,69 @@ class BackendTester:
                     print(f"   Success: {data.get('success')}")
                     print(f"   Message: {data.get('message')}")
                     
-                    signal = data.get('signal')
-                    if signal:
-                        print(f"   Signal ID: {signal.get('id')}")
-                        print(f"   Symbol: {signal.get('symbol')}")
-                        print(f"   Direction: {signal.get('direction')}")
-                        print(f"   Probability: {signal.get('probability')}%")
-                        print(f"   Forced Generation: {signal.get('forced_generation')}")
-                        print(f"   Strategy Used: {signal.get('strategy_used')}")
+                    # Check for both regular and OTC signals in response
+                    signals = data.get('signals', [])
+                    regular_signal = data.get('regular_signal')
+                    otc_signal = data.get('otc_signal')
+                    
+                    print(f"   Total signals generated: {len(signals)}")
+                    print(f"   Regular signal present: {regular_signal is not None}")
+                    print(f"   OTC signal present: {otc_signal is not None}")
+                    
+                    # Verify we have both signal types
+                    if len(signals) >= 2 and regular_signal and otc_signal:
+                        # Test regular signal characteristics
+                        print(f"   Regular Signal - Symbol: {regular_signal.get('symbol')}")
+                        print(f"   Regular Signal - Market Type: {regular_signal.get('market_type')}")
+                        print(f"   Regular Signal - Probability: {regular_signal.get('probability')}%")
+                        print(f"   Regular Signal - Expiration: {regular_signal.get('expiration_minutes')} min")
                         
-                        # Verify forced signal characteristics
-                        probability = signal.get('probability', 0)
-                        forced_generation = signal.get('forced_generation', False)
+                        # Test OTC signal characteristics
+                        print(f"   OTC Signal - Symbol: {otc_signal.get('symbol')}")
+                        print(f"   OTC Signal - Market Type: {otc_signal.get('market_type')}")
+                        print(f"   OTC Signal - Probability: {otc_signal.get('probability')}%")
+                        print(f"   OTC Signal - Expiration: {otc_signal.get('expiration_minutes')} min")
                         
-                        # Check minimum confidence for forced signals (75%+)
-                        if probability >= 75.0:
-                            print(f"   ✅ Signal meets minimum forced confidence: {probability}%")
+                        # Verify signal requirements
+                        regular_valid = (
+                            regular_signal.get('probability', 0) >= 75.0 and
+                            regular_signal.get('forced_generation') is True and
+                            'regular' in regular_signal.get('symbol', '') and
+                            regular_signal.get('market_type') == 'regular' and
+                            regular_signal.get('expiration_minutes', 0) >= 5
+                        )
+                        
+                        otc_valid = (
+                            otc_signal.get('probability', 0) >= 75.0 and
+                            otc_signal.get('forced_generation') is True and
+                            'OTC' in otc_signal.get('symbol', '') and
+                            otc_signal.get('market_type') == 'otc' and
+                            otc_signal.get('expiration_minutes', 0) >= 3 and
+                            otc_signal.get('expiration_minutes', 0) <= 15
+                        )
+                        
+                        if regular_valid and otc_valid:
+                            print("   ✅ Both regular and OTC signals meet requirements")
+                            
+                            # Check analysis details for OTC boost
+                            analysis_details = data.get('analysis_details', {})
+                            if analysis_details.get('otc_boost_applied', 0) > 0:
+                                print("   ✅ OTC boost applied to OTC signal")
+                            else:
+                                print("   ⚠️ OTC boost not detected in analysis details")
+                            
+                            return True
                         else:
-                            print(f"   ❌ Signal below minimum forced confidence: {probability}%")
+                            print(f"   ❌ Signal validation failed - Regular: {regular_valid}, OTC: {otc_valid}")
                             return False
-                        
-                        # Check maximum confidence cap (98.5%)
-                        if probability <= 98.5:
-                            print(f"   ✅ Signal within maximum confidence cap: {probability}%")
-                        else:
-                            print(f"   ❌ Signal exceeds maximum confidence cap: {probability}%")
-                            return False
-                        
-                        # Verify forced generation flag
-                        if forced_generation:
-                            print("   ✅ Signal properly marked as forced generation")
-                        else:
-                            print("   ❌ Signal not marked as forced generation")
-                            return False
-                        
-                        # Check analysis details
-                        analysis_details = data.get('analysis_details', {})
-                        if analysis_details.get('forced_generation'):
-                            print("   ✅ Analysis details confirm forced generation")
-                        else:
-                            print("   ⚠️ Analysis details missing forced generation flag")
-                        
-                        return True
                     else:
-                        print("   ❌ No signal returned from force generation")
+                        print("   ❌ Expected both regular and OTC signals")
                         return False
-                        
-                elif response.status == 404:
-                    print("   ❌ No market data available for force generation")
-                    return False
                 else:
-                    print(f"   ❌ Force signal generation failed: {response.status}")
+                    print(f"   Force signal generation failed: {response.status}")
                     error_text = await response.text()
                     print(f"   Error details: {error_text}")
                     return False
-                    
         except Exception as e:
             print(f"   Force signal generation test error: {e}")
             return False
