@@ -294,7 +294,7 @@
 
 ## test_plan:
   current_focus:
-    - "Manual Signal Generation Frontend Implementation"
+    - "Configuration Persistence and Loading"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
