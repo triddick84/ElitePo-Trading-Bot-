@@ -107,10 +107,27 @@ class TradingBotService:
                 await asyncio.sleep(30)  # Wait before retrying
     
     async def _generate_signal_for_asset(self, market_data: MarketData) -> Optional[TradingSignal]:
-        """Generate trading signal for a specific asset"""
+        """Generate trading signal for a specific asset using enhanced algorithms"""
         try:
-            # Perform comprehensive technical analysis using real data
+            logger.info(f"Analyzing {market_data.symbol} at {market_data.price} using enhanced algorithms")
+            
+            # Step 1: Technical Analysis
             technical_indicators = await self.technical_engine.analyze_symbol_comprehensive(market_data.symbol, market_data)
+            
+            # Step 2: Enhanced Signal Generation (Primary)
+            # Use advanced multi-strategy algorithm for high accuracy
+            enhanced_signal = await enhanced_signal_generator.generate_enhanced_signal(
+                market_data.symbol, market_data, technical_indicators
+            )
+            
+            if enhanced_signal and enhanced_signal.probability >= self.config.min_probability_threshold:
+                logger.info(f"Enhanced algorithm generated high-confidence signal: {enhanced_signal.symbol} "
+                           f"{enhanced_signal.direction} at {enhanced_signal.probability}%")
+                return enhanced_signal
+            
+            # Step 3: Fallback to LLM-assisted analysis if enhanced algorithm doesn't find high-confidence signal
+            logger.info(f"Enhanced algorithm didn't generate signal above threshold ({self.config.min_probability_threshold}%), "
+                       f"trying LLM-assisted analysis")
             
             # Analyze sentiment with technical indicators
             sentiment = await self.llm_service.analyze_sentiment(market_data.symbol, market_data, technical_indicators)
@@ -128,10 +145,16 @@ class TradingBotService:
                     best_signal = signal
                     highest_probability = signal.probability
             
-            # Only return signal if it meets minimum threshold
+            # Step 4: Generate signal based on combined analysis (fallback)
             if best_signal and best_signal.probability >= self.config.min_probability_threshold:
+                # Mark as fallback signal
+                best_signal.strategy_used = f"llm_fallback_{best_signal.strategy_used}"
+                best_signal.justification = f"[FALLBACK] {best_signal.justification}"
+                logger.info(f"Fallback LLM signal generated: {best_signal.symbol} "
+                           f"{best_signal.direction} at {best_signal.probability}%")
                 return best_signal
             
+            logger.info(f"No signals above threshold for {market_data.symbol}")
             return None
             
         except Exception as e:
