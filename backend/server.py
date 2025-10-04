@@ -147,12 +147,16 @@ async def get_signal_history(limit: int = 100):
     try:
         signals = await db.trading_signals.find().sort("timestamp", -1).limit(limit).to_list(length=None)
         
-        # Convert timestamps for JSON serialization
+        # Convert MongoDB ObjectIds and timestamps for JSON serialization
         for signal in signals:
-            if 'timestamp' in signal:
-                signal['timestamp'] = signal['timestamp']
-            if 'closed_at' in signal and signal['closed_at']:
-                signal['closed_at'] = signal['closed_at']
+            if '_id' in signal:
+                del signal['_id']  # Remove MongoDB ObjectId
+            if 'timestamp' in signal and hasattr(signal['timestamp'], 'isoformat'):
+                signal['timestamp'] = signal['timestamp'].isoformat()
+            if 'closed_at' in signal and signal['closed_at'] and hasattr(signal['closed_at'], 'isoformat'):
+                signal['closed_at'] = signal['closed_at'].isoformat()
+            if 'precision_entry_time' in signal and signal['precision_entry_time'] and hasattr(signal['precision_entry_time'], 'isoformat'):
+                signal['precision_entry_time'] = signal['precision_entry_time'].isoformat()
         
         return {"signals": signals}
         
