@@ -212,61 +212,90 @@ Sentiment Analysis:
 """
         
         return f"""
-TRADING SIGNAL ANALYSIS REQUEST
+REAL-TIME TRADING SIGNAL ANALYSIS - POCKET OPTION
 
 Asset: {market_data.symbol} ({market_data.asset_type.value})
 Strategy: {strategy.value}
-Timestamp: {datetime.now(timezone.utc).isoformat()}
+Analysis Time: {datetime.now(timezone.utc).isoformat()}
 
-CURRENT MARKET DATA:
-- Price: {market_data.price}
-- Bid/Ask: {market_data.bid}/{market_data.ask}
-- Change: {market_data.change} ({market_data.change_percent}%)
-- Volume: {market_data.volume}
+LIVE MARKET DATA (Real-Time):
+- Current Price: ${market_data.price}
+- Real-Time Spread: ${market_data.bid} (Bid) / ${market_data.ask} (Ask)
+- 24h Change: {market_data.change_percent:.2f}% (${market_data.change})
+- Volume: {market_data.volume:,}
+- Market Status: {"Trending Up" if market_data.change_percent > 0 else "Trending Down" if market_data.change_percent < 0 else "Sideways"}
 
-TECHNICAL INDICATORS:
-- RSI (5): {indicators.rsi_5:.1f}
-- RSI (14): {indicators.rsi_14:.1f}
-- MACD Line: {indicators.macd_line:.6f}
-- MACD Signal: {indicators.macd_signal:.6f}
-- MACD Histogram: {indicators.macd_histogram:.6f}
-- EMA 3: {indicators.ema_3:.6f}
-- EMA 8: {indicators.ema_8:.6f}
-- EMA 50: {indicators.ema_50:.6f}
-- EMA 200: {indicators.ema_200:.6f}
-- CCI (20): {indicators.cci_20:.2f}
-- Bollinger Upper: {indicators.bollinger_upper:.6f}
-- Bollinger Middle: {indicators.bollinger_middle:.6f}
-- Bollinger Lower: {indicators.bollinger_lower:.6f}
-- Stochastic K: {indicators.stoch_k:.2f}
-- Stochastic D: {indicators.stoch_d:.2f}
-- ATR: {indicators.atr:.6f}
+COMPREHENSIVE TECHNICAL ANALYSIS (Based on Real Historical Data):
+╭─ MOMENTUM INDICATORS ─╮
+│ RSI (5):  {indicators.rsi_5:.1f} - {"OVERSOLD" if indicators.rsi_5 < 30 else "OVERBOUGHT" if indicators.rsi_5 > 70 else "NEUTRAL"}
+│ RSI (14): {indicators.rsi_14:.1f} - {"OVERSOLD" if indicators.rsi_14 < 30 else "OVERBOUGHT" if indicators.rsi_14 > 70 else "NEUTRAL"}
+│ CCI (20): {indicators.cci_20:.1f} - {"EXTREME OVERSOLD" if indicators.cci_20 < -100 else "EXTREME OVERBOUGHT" if indicators.cci_20 > 100 else "NORMAL"}
+╰─────────────────────────╯
+
+╭─ TREND ANALYSIS ─╮
+│ EMA 3:   ${indicators.ema_3:.4f}
+│ EMA 8:   ${indicators.ema_8:.4f}
+│ EMA 50:  ${indicators.ema_50:.4f}
+│ EMA 200: ${indicators.ema_200:.4f}
+│ Trend:   {"BULLISH" if indicators.ema_3 > indicators.ema_8 > indicators.ema_50 else "BEARISH" if indicators.ema_3 < indicators.ema_8 < indicators.ema_50 else "MIXED"}
+╰───────────────────╯
+
+╭─ VOLATILITY & MOMENTUM ─╮
+│ MACD Line:   {indicators.macd_line:.6f}
+│ MACD Signal: {indicators.macd_signal:.6f}
+│ Histogram:   {indicators.macd_histogram:.6f} - {"BULLISH MOMENTUM" if indicators.macd_histogram > 0 else "BEARISH MOMENTUM"}
+│ ATR:         {indicators.atr:.6f} (Volatility measure)
+╰──────────────────────────╯
+
+╭─ BOLLINGER BANDS ANALYSIS ─╮
+│ Upper:  ${indicators.bollinger_upper:.4f}
+│ Middle: ${indicators.bollinger_middle:.4f} 
+│ Lower:  ${indicators.bollinger_lower:.4f}
+│ Position: {"ABOVE UPPER BAND" if market_data.price > indicators.bollinger_upper else "BELOW LOWER BAND" if market_data.price < indicators.bollinger_lower else "WITHIN BANDS"}
+╰─────────────────────────────╯
+
+╭─ STOCHASTIC OSCILLATOR ─╮
+│ %K: {indicators.stoch_k:.1f}
+│ %D: {indicators.stoch_d:.1f}
+│ Status: {"OVERBOUGHT ZONE" if indicators.stoch_k > 80 else "OVERSOLD ZONE" if indicators.stoch_k < 20 else "NEUTRAL ZONE"}
+╰─────────────────────────╯
 {sentiment_text}
 
-ANALYSIS REQUIREMENTS:
-1. Perform multi-step technical analysis
-2. Identify confluence of signals
-3. Assess market volatility and trend strength
-4. Calculate probability of success (must be ≥95% for signal generation)
-5. Provide specific entry price and expiration time
-6. Include risk assessment and position sizing
+BINARY OPTIONS ANALYSIS FRAMEWORK:
+1. **Multi-Timeframe Confluence**: Analyze alignment across 1m, 5m, 15m trends
+2. **Momentum Confirmation**: Verify RSI, MACD, and Stochastic alignment  
+3. **Support/Resistance**: Check Bollinger Bands and EMA levels
+4. **Volume Validation**: Confirm price moves with volume
+5. **Risk/Reward Assessment**: Calculate win probability for 1-5 minute expiry
+6. **Market Volatility Check**: Ensure sufficient movement for profit
 
-RESPONSE FORMAT (JSON):
+CRITICAL REQUIREMENTS FOR SIGNAL GENERATION:
+- Minimum 95% confidence based on real market confluence
+- Clear directional bias from multiple indicators
+- Appropriate volatility for binary options timeframe
+- Volume confirmation of price direction
+- No major economic news conflicts
+
+RESPONSE FORMAT (Strict JSON):
 {{
-    "market_summary": "Brief market analysis",
-    "signal_direction": "BUY" or "SELL" or "NONE",
-    "entry_price": price_number,
-    "expiration_minutes": integer_1_to_5,
-    "probability": percentage_95_to_100,
-    "confidence_level": "HIGH" or "MEDIUM" or "LOW",
-    "justification": "Detailed reasoning",
-    "risk_assessment": "Risk factors and mitigation",
-    "suggested_stake": dollar_amount,
-    "quality_passed": true_or_false,
-    "quality_notes": "Quality check details"
+    "market_summary": "Comprehensive analysis of current market state",
+    "signal_direction": "BUY" | "SELL" | "NONE",
+    "entry_price": {market_data.price},
+    "expiration_minutes": 1-5,
+    "probability": 95.0-99.9,
+    "confidence_level": "HIGH" | "MEDIUM" | "LOW",
+    "justification": "Detailed multi-indicator confluence analysis",
+    "risk_assessment": "Specific risk factors and mitigation strategies",
+    "suggested_stake": 5.0-50.0,
+    "quality_passed": true | false,
+    "quality_notes": "Technical quality validation details"
 }}
 
-Only generate BUY or SELL signals with ≥95% probability. Return "NONE" if conditions don't meet threshold.
+⚠️  STRICT RULES:
+- Only generate BUY/SELL if probability ≥ 95%
+- Must have confluence from at least 3 different indicators
+- Return "NONE" if market conditions are unclear or risky
+- Consider real market volatility and spreads
 """
 
     async def _parse_signal_response(self, response: str, market_data: MarketData, 
