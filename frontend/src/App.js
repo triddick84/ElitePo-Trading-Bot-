@@ -10,6 +10,7 @@ import MarketData from "./components/MarketData";
 import PerformanceMetrics from "./components/PerformanceMetrics";
 import BotControls from "./components/BotControls";
 import BacktestPanel from "./components/BacktestPanel";
+import ApiConfiguration from "./components/ApiConfiguration";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
