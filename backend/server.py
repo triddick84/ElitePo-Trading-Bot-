@@ -179,6 +179,44 @@ async def get_symbol_data(symbol: str, asset_type: AssetType):
         logging.error(f"Error getting data for {symbol}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@api_router.post("/market/data/selected")
+async def get_selected_assets_data(selected_assets: List[str]):
+    """Get market data for selected Pocket Option assets"""
+    try:
+        market_service = RealMarketDataService()
+        results = []
+        
+        for asset_id in selected_assets:
+            # Parse asset_id (format: SYMBOL_market)
+            if '_' in asset_id:
+                symbol, market_type = asset_id.rsplit('_', 1)
+            else:
+                symbol, market_type = asset_id, 'regular'
+            
+            # Determine asset type from symbol
+            asset_type = AssetType.FOREX  # Default
+            if any(crypto in symbol.upper() for crypto in ['BTC', 'ETH', 'LTC', 'XRP', 'ADA', 'BNB']):
+                asset_type = AssetType.CRYPTO
+            elif symbol.upper() in ['AAPL', 'GOOGL', 'MSFT', 'TSLA', 'AMZN', 'META', 'NVDA']:
+                asset_type = AssetType.STOCKS
+            elif any(commodity in symbol.upper() for commodity in ['XAU', 'XAG', 'OIL', 'GOLD', 'SILVER']):
+                asset_type = AssetType.COMMODITIES
+            elif any(index in symbol.upper() for index in ['SPX', 'NAS', 'DJ', 'FTSE', 'DAX']):
+                asset_type = AssetType.INDICES
+            
+            data = await market_service.get_market_data(symbol, asset_type)
+            if data:
+                result = data.dict()
+                result['market_type'] = market_type
+                result['asset_id'] = asset_id
+                results.append(result)
+        
+        return {"selected_assets": results}
+        
+    except Exception as e:
+        logging.error(f"Error getting selected assets data: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Performance & Analytics
 @api_router.get("/performance/metrics")
 async def get_performance_metrics():
