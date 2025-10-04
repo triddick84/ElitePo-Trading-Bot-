@@ -221,6 +221,18 @@ const LiveSignalsDisplay = ({ botStatus, onSignalExecute }) => {
     }
   };
 
+  // Fetch current configuration to get threshold
+  const fetchCurrentConfig = async () => {
+    try {
+      const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+      const response = await fetch(`${BACKEND_URL}/api/config`);
+      const config = await response.json();
+      setCurrentThreshold(config.min_probability_threshold || 85);
+    } catch (error) {
+      console.error('Error fetching config:', error);
+    }
+  };
+
   const getSignalColor = (direction) => {
     const isInverted = notificationSettings.signalInversion;
     const displayDirection = direction;
