@@ -94,12 +94,18 @@ const BotControls = ({ onStatusUpdate }) => {
   };
 
   const updateConfig = async () => {
+    setIsSaving(true);
     try {
       await axios.put(`${API}/config`, config);
-      toast.success('Configuration updated successfully!');
+      toast.success('✅ Configuration saved successfully! Settings will be used as defaults.');
+      
+      // Refresh the config to ensure it's loaded correctly
+      await fetchCurrentConfig();
     } catch (error) {
       console.error('Error updating config:', error);
-      toast.error('Failed to update configuration');
+      toast.error('❌ Failed to save configuration. Please try again.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
