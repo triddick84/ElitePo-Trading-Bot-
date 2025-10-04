@@ -44,7 +44,8 @@ function App() {
     { id: "market", label: "Market Data", icon: "💹" },
     { id: "performance", label: "Performance", icon: "🎯" },
     { id: "controls", label: "Bot Controls", icon: "⚙️" },
-    { id: "backtest", label: "Backtesting", icon: "🧪" }
+    { id: "backtest", label: "Backtesting", icon: "🧪" },
+    { id: "api", label: "API Config", icon: "🔑" }
   ];
 
   const renderActiveView = () => {
