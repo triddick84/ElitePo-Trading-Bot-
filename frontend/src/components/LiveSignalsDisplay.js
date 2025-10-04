@@ -247,25 +247,35 @@ const LiveSignalsDisplay = ({
       const result = await response.json();
       
       if (result.success && result.signals && result.signals.length > 0) {
-        // Show success message for both signals
+        // Add the new forced signals to live signals for popup notifications
+        const newSignals = result.signals.map(signal => ({
+          ...signal,
+          forced_generation: true,
+          timestamp: new Date().toISOString()
+        }));
+        
+        // Update live signals with new force-generated signals
+        setLiveSignals(prev => [...newSignals, ...prev].slice(0, 20)); // Keep last 20 signals
+        
+        // Show success toast message
         const regularSignal = result.regular_signal;
         const otcSignal = result.otc_signal;
         
         if (regularSignal && otcSignal) {
           toast.success(
-            `🚀 FORCE SIGNALS GENERATED: 
+            `🚀 FORCE SIGNALS GENERATED WITH COUNTDOWN TIMERS: 
             📊 Regular: ${regularSignal.direction} ${regularSignal.symbol} (${regularSignal.probability}%)
             📈 OTC: ${otcSignal.direction} ${otcSignal.symbol} (${otcSignal.probability}%)`,
             { duration: 10000 }
           );
         } else if (regularSignal) {
           toast.success(
-            `🚀 FORCE SIGNAL GENERATED: ${regularSignal.direction} ${regularSignal.symbol} (${regularSignal.probability}%)`,
+            `🚀 FORCE SIGNAL GENERATED WITH COUNTDOWN TIMER: ${regularSignal.direction} ${regularSignal.symbol} (${regularSignal.probability}%)`,
             { duration: 8000 }
           );
         } else if (otcSignal) {
           toast.success(
-            `🚀 FORCE SIGNAL GENERATED: ${otcSignal.direction} ${otcSignal.symbol} (${otcSignal.probability}%)`,
+            `🚀 FORCE SIGNAL GENERATED WITH COUNTDOWN TIMER: ${otcSignal.direction} ${otcSignal.symbol} (${otcSignal.probability}%)`,
             { duration: 8000 }
           );
         }
@@ -274,14 +284,11 @@ const LiveSignalsDisplay = ({
         if (result.analysis_details && result.analysis_details.strategies_analyzed > 0) {
           setTimeout(() => {
             toast.info(
-              `📊 Analysis: ${result.analysis_details.strategies_analyzed} strategies combined. ${result.signals.length} markets analyzed. Override mode activated.`,
+              `📊 Analysis: ${result.analysis_details.strategies_analyzed} strategies combined. ${result.signals.length} markets analyzed. Enhanced popups with countdown timers activated!`,
               { duration: 6000 }
             );
           }, 1000);
         }
-        
-        // Refresh signals to show the new ones
-        await fetchLiveSignals();
       } else {
         toast.warning(result.message || 'Force signal generation completed but no signals produced');
       }
