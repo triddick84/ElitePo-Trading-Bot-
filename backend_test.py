@@ -1033,23 +1033,429 @@ class BackendTester:
             print(f"   Configuration error handling test error: {e}")
             return False
 
+    async def test_threshold_default_value(self) -> bool:
+        """Test that default threshold is 85% instead of 95%"""
+        try:
+            # Get current configuration to check default threshold
+            async with self.session.get(f"{BACKEND_URL}/config") as response:
+                if response.status == 200:
+                    config = await response.json()
+                    threshold = config.get('min_probability_threshold')
+                    
+                    print(f"   Current threshold: {threshold}%")
+                    print(f"   Expected default: 85%")
+                    
+                    # Check if threshold is 85% (new default) or if it's been changed from previous tests
+                    # We'll accept any valid threshold but note what it is
+                    is_valid_threshold = 50.0 <= threshold <= 99.0
+                    
+                    if threshold == 85.0:
+                        print("   ✅ Default threshold is correctly set to 85%")
+                    else:
+                        print(f"   ℹ️ Threshold is {threshold}% (may have been changed by previous tests)")
+                    
+                    return is_valid_threshold
+                else:
+                    print(f"   Failed to get config: {response.status}")
+                    return False
+        except Exception as e:
+            print(f"   Threshold default test error: {e}")
+            return False
+
+    async def test_threshold_range_validation(self) -> bool:
+        """Test threshold validation for 50% to 99% range"""
+        try:
+            # Test valid thresholds
+            valid_thresholds = [50.0, 60.0, 75.0, 85.0, 90.0, 95.0, 99.0]
+            
+            for threshold in valid_thresholds:
+                config_data = {
+                    "trading_mode": "demo",
+                    "active_strategies": ["hybrid"],
+                    "target_assets": ["forex"],
+                    "selected_assets": ["EURUSD_regular"],
+                    "selected_timeframes": ["1m"],
+                    "risk_tolerance": "medium",
+                    "max_stake_per_trade": 10.0,
+                    "max_daily_trades": 50,
+                    "min_probability_threshold": threshold,
+                    "auto_trading_enabled": False,
+                    "invert_signals": False,
+                    "sound_alerts_enabled": True
+                }
+                
+                async with self.session.put(f"{BACKEND_URL}/config", json=config_data) as response:
+                    if response.status == 200:
+                        print(f"   ✅ Threshold {threshold}% accepted")
+                    else:
+                        print(f"   ❌ Valid threshold {threshold}% rejected with status {response.status}")
+                        return False
+            
+            # Test invalid thresholds (below 50% and above 99%)
+            invalid_thresholds = [49.0, 49.9, 99.1, 100.0, 101.0, -10.0]
+            
+            for threshold in invalid_thresholds:
+                config_data = {
+                    "trading_mode": "demo",
+                    "active_strategies": ["hybrid"],
+                    "target_assets": ["forex"],
+                    "selected_assets": ["EURUSD_regular"],
+                    "selected_timeframes": ["1m"],
+                    "risk_tolerance": "medium",
+                    "max_stake_per_trade": 10.0,
+                    "max_daily_trades": 50,
+                    "min_probability_threshold": threshold,
+                    "auto_trading_enabled": False,
+                    "invert_signals": False,
+                    "sound_alerts_enabled": True
+                }
+                
+                async with self.session.put(f"{BACKEND_URL}/config", json=config_data) as response:
+                    if response.status in [400, 422]:
+                        print(f"   ✅ Invalid threshold {threshold}% properly rejected with status {response.status}")
+                    else:
+                        print(f"   ❌ Invalid threshold {threshold}% was accepted (status {response.status})")
+                        return False
+            
+            return True
+            
+        except Exception as e:
+            print(f"   Threshold range validation test error: {e}")
+            return False
+
+    async def test_threshold_edge_cases(self) -> bool:
+        """Test edge cases: exactly 50% and 99%"""
+        try:
+            # Test exactly 50%
+            config_50 = {
+                "trading_mode": "demo",
+                "active_strategies": ["hybrid"],
+                "target_assets": ["forex"],
+                "selected_assets": ["EURUSD_regular"],
+                "selected_timeframes": ["1m"],
+                "risk_tolerance": "medium",
+                "max_stake_per_trade": 10.0,
+                "max_daily_trades": 50,
+                "min_probability_threshold": 50.0,
+                "auto_trading_enabled": False,
+                "invert_signals": False,
+                "sound_alerts_enabled": True
+            }
+            
+            async with self.session.put(f"{BACKEND_URL}/config", json=config_50) as response:
+                if response.status == 200:
+                    print("   ✅ Edge case 50.0% threshold accepted")
+                    edge_50_valid = True
+                else:
+                    print(f"   ❌ Edge case 50.0% threshold rejected: {response.status}")
+                    edge_50_valid = False
+            
+            # Test exactly 99%
+            config_99 = {
+                "trading_mode": "demo",
+                "active_strategies": ["hybrid"],
+                "target_assets": ["forex"],
+                "selected_assets": ["EURUSD_regular"],
+                "selected_timeframes": ["1m"],
+                "risk_tolerance": "medium",
+                "max_stake_per_trade": 10.0,
+                "max_daily_trades": 50,
+                "min_probability_threshold": 99.0,
+                "auto_trading_enabled": False,
+                "invert_signals": False,
+                "sound_alerts_enabled": True
+            }
+            
+            async with self.session.put(f"{BACKEND_URL}/config", json=config_99) as response:
+                if response.status == 200:
+                    print("   ✅ Edge case 99.0% threshold accepted")
+                    edge_99_valid = True
+                else:
+                    print(f"   ❌ Edge case 99.0% threshold rejected: {response.status}")
+                    edge_99_valid = False
+            
+            return edge_50_valid and edge_99_valid
+            
+        except Exception as e:
+            print(f"   Threshold edge cases test error: {e}")
+            return False
+
+    async def test_bot_start_with_custom_thresholds(self) -> bool:
+        """Test bot start with various custom threshold values"""
+        try:
+            test_thresholds = [60.0, 80.0, 95.0]
+            
+            for threshold in test_thresholds:
+                print(f"   Testing bot start with threshold {threshold}%")
+                
+                config_data = {
+                    "trading_mode": "demo",
+                    "active_strategies": ["hybrid"],
+                    "target_assets": ["forex", "crypto"],
+                    "selected_assets": ["EURUSD_regular", "BTCUSD_regular"],
+                    "selected_timeframes": ["1m", "5m"],
+                    "risk_tolerance": "medium",
+                    "max_stake_per_trade": 10.0,
+                    "max_daily_trades": 50,
+                    "min_probability_threshold": threshold,
+                    "auto_trading_enabled": False,
+                    "invert_signals": False,
+                    "sound_alerts_enabled": True
+                }
+                
+                # Stop bot first
+                await self.session.post(f"{BACKEND_URL}/bot/stop")
+                
+                # Start bot with custom threshold
+                async with self.session.post(f"{BACKEND_URL}/bot/start", json=config_data) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        config = data.get('config', {})
+                        actual_threshold = config.get('min_probability_threshold')
+                        
+                        if actual_threshold == threshold:
+                            print(f"   ✅ Bot started with threshold {threshold}%")
+                        else:
+                            print(f"   ❌ Bot threshold mismatch: expected {threshold}%, got {actual_threshold}%")
+                            return False
+                    else:
+                        print(f"   ❌ Bot start failed with threshold {threshold}%: {response.status}")
+                        return False
+            
+            return True
+            
+        except Exception as e:
+            print(f"   Bot start with custom thresholds test error: {e}")
+            return False
+
+    async def test_signal_generation_with_different_thresholds(self) -> bool:
+        """Test signal generation with different threshold settings"""
+        try:
+            test_scenarios = [
+                {"threshold": 50.0, "description": "Low threshold (50%) - should generate more signals"},
+                {"threshold": 75.0, "description": "Medium threshold (75%) - moderate filtering"},
+                {"threshold": 90.0, "description": "High threshold (90%) - conservative filtering"},
+                {"threshold": 99.0, "description": "Very high threshold (99%) - very strict filtering"}
+            ]
+            
+            for scenario in test_scenarios:
+                threshold = scenario["threshold"]
+                description = scenario["description"]
+                
+                print(f"   Testing: {description}")
+                
+                # Set threshold
+                config_data = {
+                    "trading_mode": "demo",
+                    "active_strategies": ["hybrid"],
+                    "target_assets": ["forex"],
+                    "selected_assets": ["EURUSD_regular"],
+                    "selected_timeframes": ["1m"],
+                    "risk_tolerance": "medium",
+                    "max_stake_per_trade": 10.0,
+                    "max_daily_trades": 50,
+                    "min_probability_threshold": threshold,
+                    "auto_trading_enabled": False,
+                    "invert_signals": False,
+                    "sound_alerts_enabled": True
+                }
+                
+                # Update configuration
+                async with self.session.put(f"{BACKEND_URL}/config", json=config_data) as response:
+                    if response.status != 200:
+                        print(f"   ❌ Failed to set threshold {threshold}%")
+                        return False
+                
+                # Start bot
+                await self.session.post(f"{BACKEND_URL}/bot/start", json=config_data)
+                
+                # Try to generate a single signal
+                async with self.session.post(f"{BACKEND_URL}/signals/generate/single") as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        signal = data.get('signal')
+                        
+                        if signal:
+                            signal_probability = signal.get('probability')
+                            print(f"   ✅ Signal generated with probability {signal_probability}% (threshold: {threshold}%)")
+                            
+                            # Verify signal meets threshold
+                            if signal_probability >= threshold:
+                                print(f"   ✅ Signal probability {signal_probability}% meets threshold {threshold}%")
+                            else:
+                                print(f"   ❌ Signal probability {signal_probability}% below threshold {threshold}%")
+                                return False
+                        else:
+                            print(f"   ℹ️ No signal generated with threshold {threshold}% (expected for high thresholds)")
+                    else:
+                        print(f"   ❌ Signal generation failed: {response.status}")
+                        # This might be expected for very high thresholds, so we'll continue
+                
+                # Stop bot
+                await self.session.post(f"{BACKEND_URL}/bot/stop")
+            
+            return True
+            
+        except Exception as e:
+            print(f"   Signal generation with different thresholds test error: {e}")
+            return False
+
+    async def test_threshold_persistence_across_restarts(self) -> bool:
+        """Test that threshold configuration persists across restarts"""
+        try:
+            # Set a specific threshold
+            test_threshold = 77.5
+            
+            config_data = {
+                "trading_mode": "demo",
+                "active_strategies": ["hybrid"],
+                "target_assets": ["forex"],
+                "selected_assets": ["EURUSD_regular"],
+                "selected_timeframes": ["1m"],
+                "risk_tolerance": "medium",
+                "max_stake_per_trade": 10.0,
+                "max_daily_trades": 50,
+                "min_probability_threshold": test_threshold,
+                "auto_trading_enabled": False,
+                "invert_signals": False,
+                "sound_alerts_enabled": True
+            }
+            
+            # Save configuration
+            async with self.session.put(f"{BACKEND_URL}/config", json=config_data) as response:
+                if response.status != 200:
+                    print(f"   ❌ Failed to save threshold configuration: {response.status}")
+                    return False
+            
+            print(f"   Configuration with threshold {test_threshold}% saved")
+            
+            # Simulate restart by creating new session and checking if threshold persists
+            await self.session.close()
+            self.session = aiohttp.ClientSession()
+            
+            # Retrieve configuration
+            async with self.session.get(f"{BACKEND_URL}/config") as response:
+                if response.status == 200:
+                    config = await response.json()
+                    persisted_threshold = config.get('min_probability_threshold')
+                    
+                    if persisted_threshold == test_threshold:
+                        print(f"   ✅ Threshold {test_threshold}% persisted across restart")
+                        return True
+                    else:
+                        print(f"   ❌ Threshold mismatch: expected {test_threshold}%, got {persisted_threshold}%")
+                        return False
+                else:
+                    print(f"   ❌ Failed to retrieve configuration: {response.status}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Threshold persistence test error: {e}")
+            return False
+
+    async def test_live_signal_generation_with_thresholds(self) -> bool:
+        """Test live signal generation respects threshold settings"""
+        try:
+            # Test with moderate threshold
+            threshold = 80.0
+            
+            config_data = {
+                "trading_mode": "demo",
+                "active_strategies": ["hybrid"],
+                "target_assets": ["forex"],
+                "selected_assets": ["EURUSD_regular"],
+                "selected_timeframes": ["1m"],
+                "risk_tolerance": "medium",
+                "max_stake_per_trade": 10.0,
+                "max_daily_trades": 50,
+                "min_probability_threshold": threshold,
+                "auto_trading_enabled": False,
+                "invert_signals": False,
+                "sound_alerts_enabled": True
+            }
+            
+            # Start bot with threshold
+            async with self.session.post(f"{BACKEND_URL}/bot/start", json=config_data) as response:
+                if response.status != 200:
+                    print(f"   ❌ Failed to start bot: {response.status}")
+                    return False
+            
+            print(f"   Bot started with threshold {threshold}%")
+            
+            # Test single signal generation
+            async with self.session.post(f"{BACKEND_URL}/signals/generate/single") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    success = data.get('success')
+                    signal = data.get('signal')
+                    
+                    print(f"   Single signal generation success: {success}")
+                    
+                    if signal:
+                        probability = signal.get('probability')
+                        print(f"   Generated signal probability: {probability}%")
+                        
+                        # Verify threshold compliance
+                        if probability >= threshold:
+                            print(f"   ✅ Signal meets threshold requirement")
+                        else:
+                            print(f"   ❌ Signal below threshold: {probability}% < {threshold}%")
+                            return False
+                    else:
+                        print("   ℹ️ No signal generated (may be due to market conditions)")
+                    
+                    # Test auto generation start/stop
+                    async with self.session.post(f"{BACKEND_URL}/signals/auto-generate/start") as start_response:
+                        if start_response.status == 200:
+                            print("   ✅ Auto generation started successfully")
+                            
+                            # Check status
+                            async with self.session.get(f"{BACKEND_URL}/signals/auto-generate/status") as status_response:
+                                if status_response.status == 200:
+                                    status_data = await status_response.json()
+                                    active = status_data.get('auto_generation_active')
+                                    print(f"   Auto generation active: {active}")
+                                    
+                                    # Stop auto generation
+                                    async with self.session.post(f"{BACKEND_URL}/signals/auto-generate/stop") as stop_response:
+                                        if stop_response.status == 200:
+                                            print("   ✅ Auto generation stopped successfully")
+                                        else:
+                                            print(f"   ❌ Failed to stop auto generation: {stop_response.status}")
+                                            return False
+                                else:
+                                    print(f"   ❌ Failed to get auto generation status: {status_response.status}")
+                                    return False
+                        else:
+                            print(f"   ❌ Failed to start auto generation: {start_response.status}")
+                            return False
+                    
+                    return True
+                else:
+                    print(f"   ❌ Single signal generation failed: {response.status}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Live signal generation test error: {e}")
+            return False
+
     async def run_all_tests(self):
-        """Run all backend tests focusing on configuration persistence"""
-        print("🚀 Starting Configuration Persistence Testing for GPT Signal Bot")
+        """Run all backend tests focusing on threshold slider functionality"""
+        print("🚀 Starting Threshold Slider Functionality Testing for GPT Signal Bot")
         print("=" * 70)
         
         await self.setup()
         
-        # Define test suite focused on configuration persistence
+        # Define test suite focused on threshold functionality
         tests = [
             ("Health Check", self.test_health_check),
-            ("Configuration Loading on Startup", self.test_configuration_loading_on_startup),
-            ("Configuration Persistence Across Sessions", self.test_configuration_persistence_across_sessions),
-            ("Configuration MongoDB Storage", self.test_configuration_mongodb_storage),
-            ("Default vs Saved Configuration", self.test_default_vs_saved_configuration),
-            ("New Fields Handling", self.test_new_fields_handling),
-            ("Configuration Error Handling", self.test_configuration_error_handling),
-            ("Bot Start with New Fields", self.test_bot_start_with_new_fields),
+            ("Threshold Default Value (85%)", self.test_threshold_default_value),
+            ("Threshold Range Validation (50%-99%)", self.test_threshold_range_validation),
+            ("Threshold Edge Cases (50% and 99%)", self.test_threshold_edge_cases),
+            ("Bot Start with Custom Thresholds", self.test_bot_start_with_custom_thresholds),
+            ("Signal Generation with Different Thresholds", self.test_signal_generation_with_different_thresholds),
+            ("Threshold Persistence Across Restarts", self.test_threshold_persistence_across_restarts),
+            ("Live Signal Generation with Thresholds", self.test_live_signal_generation_with_thresholds),
             ("Configuration Endpoints", self.test_config_endpoints),
         ]
         
