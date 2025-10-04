@@ -13,6 +13,11 @@ const Dashboard = ({ botStatus }) => {
   const [performanceData, setPerformanceData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const handleSignalExecute = (signal) => {
+    console.log("Executing signal from dashboard:", signal);
+    // Here you could integrate with platform trading APIs
+  };
+
   useEffect(() => {
     fetchDashboardData();
     const interval = setInterval(fetchDashboardData, 10000); // Update every 10 seconds
