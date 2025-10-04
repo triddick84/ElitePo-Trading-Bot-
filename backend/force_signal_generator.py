@@ -672,14 +672,18 @@ class ForceSignalGenerator:
             # Create OTC-specific symbol if needed
             display_symbol = f"{symbol}_OTC" if market_type == "otc" else f"{symbol}_regular"
             
-            return TradingSignal(
-                id=f"FORCE_{market_type.upper()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{symbol}",
+            # Calculate seconds until optimal entry
+            seconds_to_entry = (optimal_entry_time - chicago_time).total_seconds()
+            
+            # Create initial signal
+            signal = TradingSignal(
+                id=f"FORCE_{market_type.upper()}_{chicago_time.strftime('%Y%m%d_%H%M%S')}_{symbol}",
                 symbol=display_symbol,
                 asset_type=market_data.asset_type,
                 direction=direction,
                 entry_price=current_price,
                 expiration_minutes=expiration_minutes,
-                timeframe="5m" if market_type == "regular" else "3m",  # Shorter timeframes for OTC
+                timeframe=user_timeframes[0],  # Use user's selected timeframe
                 market_type=market_type,
                 probability=min(final_confidence, 98.5),  # Cap at 98.5% for forced signals
                 confidence_level=confidence_level,
@@ -688,20 +692,26 @@ class ForceSignalGenerator:
                 market_analysis_summary=f"Force signal generated for {market_type.upper()} market using {len(analysis_results)} advanced strategies. "
                                       f"Buy score: {buy_score:.1f}, Sell score: {sell_score:.1f}. "
                                       f"{'OTC boost applied. ' if market_type == 'otc' else ''}"
-                                      f"Override mode bypassed normal thresholds.",
+                                      f"Pocket Option synchronized timing for {user_timeframes[0]} timeframe.",
                 justification=f"🚀 FORCED {market_type.upper()} SIGNAL - Maximum analysis depth applied. "
                             f"{len(analysis_results)} advanced strategies combined. "
                             f"Confidence: {final_confidence:.1f}%. "
                             f"{'📈 OTC Market - 24/7 availability. ' if market_type == 'otc' else '📊 Regular Market - Exchange hours. '}"
-                            f"⚠️ OVERRIDE MODE - Normal thresholds bypassed for maximum signal generation.",
+                            f"⚠️ OVERRIDE MODE - Normal thresholds bypassed for maximum signal generation. "
+                            f"🕐 ENTRY: {user_timeframes[0]} candle formation in {int(seconds_to_entry)}s (Chicago timezone).",
                 risk_assessment=f"Risk Level: {'LOW' if final_confidence >= 90 else 'MEDIUM' if final_confidence >= 80 else 'HIGH'}. "
                               f"Forced generation with {final_confidence:.1f}% confidence. "
                               f"{'OTC market volatility considered. ' if market_type == 'otc' else 'Regular market conditions. '}"
-                              f"Use proper risk management.",
+                              f"Timed for {user_timeframes[0]} Pocket Option candle formation. Use proper risk management.",
                 suggested_stake=suggested_stake,
-                precision_entry_time=datetime.now(timezone.utc) + timedelta(seconds=30 if market_type == "regular" else 20),
-                timestamp=datetime.now(timezone.utc)
+                precision_entry_time=optimal_entry_time,  # Pocket Option synchronized time
+                timestamp=chicago_time  # Use Chicago time for consistency
             )
+            
+            # Apply Pocket Option timing synchronization
+            synchronized_signal = pocket_option_sync.sync_signal_with_pocket_option_timing(signal, user_timeframes)
+            
+            return synchronized_signal
             
         except Exception as e:
             logger.error(f"Error in force combine analysis: {e}")
