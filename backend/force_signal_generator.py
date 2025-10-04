@@ -619,12 +619,13 @@ class ForceSignalGenerator:
             # Create comprehensive technical analysis summary
             technical_analysis = {
                 'strategies_analyzed': len(analysis_results),
-                'buy_score': buy_score,
-                'sell_score': sell_score,
-                'final_confidence': final_confidence,
+                'buy_score': float(buy_score),
+                'sell_score': float(sell_score),
+                'final_confidence': float(final_confidence),
                 'strategy_details': strategy_details,
                 'forced_generation': True,
-                'override_mode': True
+                'override_mode': True,
+                'emergency_boost_applied': final_confidence < 85.0
             }
             
             return TradingSignal(
