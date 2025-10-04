@@ -322,6 +322,83 @@ async def health_check():
         "timestamp": datetime.utcnow().isoformat()
     }
 
+# Platform Integration Endpoints
+@api_router.get("/integrations/status")
+async def get_integration_status():
+    """Get status of all platform integrations"""
+    try:
+        status = platform_integration.get_integration_status()
+        return {"integrations": status}
+    except Exception as e:
+        logging.error(f"Error getting integration status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/integrations/test")
+async def test_integrations():
+    """Test all platform integrations"""
+    try:
+        await platform_integration.initialize_integrations()
+        status = platform_integration.get_integration_status()
+        return {"message": "Integration tests completed", "results": status}
+    except Exception as e:
+        logging.error(f"Error testing integrations: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/signals/{signal_id}/execute")
+async def execute_signal_on_platform(signal_id: str):
+    """Execute a specific signal on Pocket Option platform"""
+    try:
+        # Get signal from database
+        signal_doc = await db.trading_signals.find_one({"id": signal_id})
+        if not signal_doc:
+            raise HTTPException(status_code=404, detail="Signal not found")
+        
+        # Convert to TradingSignal object
+        signal_doc['timestamp'] = datetime.fromisoformat(signal_doc['timestamp'].replace('Z', '+00:00'))
+        signal = TradingSignal(**signal_doc)
+        
+        # Execute trade on Pocket Option
+        result = await platform_integration.execute_pocket_option_trade(signal)
+        
+        return {"execution_result": result}
+        
+    except Exception as e:
+        logging.error(f"Error executing signal {signal_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/signals/invert/{signal_id}")
+async def invert_signal(signal_id: str):
+    """Invert a signal (BUY becomes SELL and vice versa)"""
+    try:
+        # Get signal from database
+        signal_doc = await db.trading_signals.find_one({"id": signal_id})
+        if not signal_doc:
+            raise HTTPException(status_code=404, detail="Signal not found")
+        
+        # Invert the signal direction
+        original_direction = signal_doc['direction']
+        inverted_direction = 'SELL' if original_direction == 'BUY' else 'BUY'
+        
+        # Update signal in database
+        await db.trading_signals.update_one(
+            {"id": signal_id},
+            {"$set": {
+                "direction": inverted_direction,
+                "original_direction": original_direction,
+                "inverted": True
+            }}
+        )
+        
+        return {
+            "message": "Signal inverted successfully",
+            "original_direction": original_direction,
+            "new_direction": inverted_direction
+        }
+        
+    except Exception as e:
+        logging.error(f"Error inverting signal {signal_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Legacy endpoints for compatibility
 @api_router.get("/")
 async def root():
