@@ -554,7 +554,7 @@ async def force_generate_signal():
                     "forced_generation": True,
                     "timestamp": forced_signal.timestamp.isoformat()
                 },
-                "analysis_details": forced_signal.additional_data
+                "analysis_details": forced_signal.technical_analysis
             }
         else:
             return {
@@ -647,7 +647,7 @@ async def force_generate_signal_for_asset(asset_symbol: str):
                     "forced_generation": True,
                     "timestamp": forced_signal.timestamp.isoformat()
                 },
-                "analysis_details": forced_signal.additional_data
+                "analysis_details": forced_signal.technical_analysis
             }
         else:
             raise HTTPException(status_code=500, detail="Force signal generation failed")
