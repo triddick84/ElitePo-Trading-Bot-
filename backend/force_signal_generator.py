@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Tuple, Any
 import logging
-from models import TechnicalIndicators, MarketData, TradingSignal, SignalDirection
+from models import TechnicalIndicators, MarketData, TradingSignal, SignalDirection, TradingStrategy
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import yfinance as yf
