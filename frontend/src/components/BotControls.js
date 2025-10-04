@@ -30,6 +30,7 @@ const BotControls = ({ onStatusUpdate }) => {
   
   const [botStatus, setBotStatus] = useState({ is_running: false });
   const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     fetchCurrentConfig();
