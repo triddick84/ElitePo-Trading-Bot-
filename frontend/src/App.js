@@ -48,6 +48,36 @@ function App() {
     }
   };
 
+  const fetchLiveSignals = async () => {
+    try {
+      const response = await axios.get(`${API}/signals/active`);
+      const newSignals = response.data || [];
+      
+      // Filter for truly new signals (not already in our state)
+      const existingIds = liveSignals.map(s => s.id);
+      const freshSignals = newSignals.filter(signal => 
+        !existingIds.includes(signal.id) && 
+        signal.quality_check_passed && 
+        signal.probability >= 95
+      );
+      
+      if (freshSignals.length > 0) {
+        setLiveSignals(prev => [...freshSignals, ...prev.slice(0, 9)]); // Keep last 10
+      }
+    } catch (error) {
+      console.error("Error fetching live signals:", error);
+    }
+  };
+
+  const handleSignalExecute = (signal) => {
+    console.log("Executing trade signal:", signal);
+    // Here you would integrate with Pocket Option API or manual execution
+  };
+
+  const handleSignalDismiss = (signalId) => {
+    setLiveSignals(prev => prev.filter(s => s.id !== signalId));
+  };
+
   const navigation = [
     { id: "dashboard", label: "Dashboard", icon: "📊" },
     { id: "signals", label: "Trading Signals", icon: "📈" },
