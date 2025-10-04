@@ -107,7 +107,14 @@ class ForceSignalGenerator:
                 signals.append(otc_signal)
             
             # Return all signals (both regular and OTC)
-            return signals if signals else [self._generate_emergency_signal(symbol, market_data)]
+            if signals:
+                return signals
+            else:
+                # Generate emergency signals for both market types
+                emergency_signals = []
+                emergency_signals.append(self._generate_emergency_signal(symbol, market_data, data_1m or data_5m or [market_data.dict()], "regular"))
+                emergency_signals.append(self._generate_emergency_signal(symbol, market_data, data_1m or data_5m or [market_data.dict()], "otc"))
+                return emergency_signals
             
         except Exception as e:
             logger.error(f"Error in force signal generation for {symbol}: {e}")
