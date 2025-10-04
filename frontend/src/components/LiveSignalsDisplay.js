@@ -19,6 +19,8 @@ const LiveSignalsDisplay = ({ botStatus, onSignalExecute }) => {
   const [selectedAssets, setSelectedAssets] = useState(['EURUSD_regular', 'BTCUSD_regular']);
   const [selectedTimeframes, setSelectedTimeframes] = useState(['1m', '5m']);
   const [previousSignalsCount, setPreviousSignalsCount] = useState(0);
+  const [isGeneratingSignal, setIsGeneratingSignal] = useState(false);
+  const [autoGenerationActive, setAutoGenerationActive] = useState(false);
 
   // Sound notification function
   const playNotificationSound = () => {
