@@ -32,8 +32,11 @@ class TradingBotService:
         self.performance_metrics = {}
         self.auto_signal_generation = False  # Flag for automated signal generation
         
-        # Default configuration
+        # Default configuration - will be loaded from database if available
         self.config = TradingConfiguration()
+        
+        # Load saved configuration on initialization
+        asyncio.create_task(self._load_config())
     
     async def start_bot(self, config: Optional[TradingConfiguration] = None):
         """Start the trading bot with given configuration"""
