@@ -165,6 +165,10 @@ const BotControls = ({ onStatusUpdate }) => {
         <div>
           <h2 className="text-3xl font-bold text-white mb-2">Bot Controls</h2>
           <p className="text-slate-400">Configure and control your AI trading bot</p>
+          <div className="flex items-center space-x-2 mt-2">
+            <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
+            <span className="text-emerald-400 text-sm">Settings loaded from saved configuration</span>
+          </div>
         </div>
         
         {/* Quick Actions */}
