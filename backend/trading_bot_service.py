@@ -158,6 +158,12 @@ class TradingBotService:
                 # Mark as fallback signal
                 best_signal.strategy_used = f"llm_fallback_{best_signal.strategy_used}"
                 best_signal.justification = f"[FALLBACK] {best_signal.justification}"
+                
+                # Apply Pocket Option timing synchronization to fallback signal
+                best_signal = pocket_option_sync.sync_signal_with_pocket_option_timing(
+                    best_signal, self.config.selected_timeframes
+                )
+                
                 logger.info(f"Fallback LLM signal generated: {best_signal.symbol} "
                            f"{best_signal.direction} at {best_signal.probability}%")
                 return best_signal
