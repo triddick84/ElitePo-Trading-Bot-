@@ -57,8 +57,9 @@ const LiveSignalsDisplay = ({ botStatus, onSignalExecute }) => {
   }, [botStatus?.is_running, notificationSettings.autoRefresh]);
 
   useEffect(() => {
-    // Fetch auto generation status on component mount
+    // Fetch auto generation status and current config on component mount
     fetchAutoGenerationStatus();
+    fetchCurrentConfig();
   }, []);
 
   const fetchLiveSignals = async () => {
