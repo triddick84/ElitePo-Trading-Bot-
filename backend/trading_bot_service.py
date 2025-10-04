@@ -65,6 +65,11 @@ class TradingBotService:
         
         while self.is_running:
             try:
+                # Only generate signals automatically if auto_signal_generation is enabled
+                if not self.auto_signal_generation:
+                    await asyncio.sleep(5)  # Check every 5 seconds if auto generation should start
+                    continue
+                
                 # Check daily trading limits
                 today_signals = await self._get_today_signals_count()
                 if today_signals >= self.config.max_daily_trades:
