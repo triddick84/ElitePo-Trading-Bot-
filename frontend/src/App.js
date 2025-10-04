@@ -4,7 +4,7 @@ import axios from "axios";
 import { Toaster } from "sonner";
 import "./App.css";
 
-import SignalNotificationManager from "./components/SignalNotification";
+import SignalNotificationManager from "./components/SignalNotificationManager";
 
 // Components
 import Dashboard from "./components/Dashboard";
