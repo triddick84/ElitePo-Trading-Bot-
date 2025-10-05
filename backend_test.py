@@ -3997,12 +3997,24 @@ class BackendTester:
         
         await self.setup()
         
-        # Define test suite focused on Force Signal Generation with OTC Market Support
+        # Define test suite focused on Pocket Option Timing Synchronization
         tests = [
             ("Health Check", self.test_health_check),
             ("Environment Variables", self.test_environment_variables),
             
-            # OTC Market Signal Generation Tests (PRIMARY FOCUS)
+            # POCKET OPTION TIMING SYNCHRONIZATION TESTS (PRIMARY FOCUS)
+            ("Pocket Option Timing Sync - Module Import", self.test_pocket_option_timing_sync_module_import),
+            ("Pocket Option Timing Sync - Chicago Timezone Functions", self.test_chicago_timezone_functions),
+            ("Pocket Option Timing Sync - Candle Formation Timing", self.test_candle_formation_timing),
+            ("Pocket Option Timing Sync - Expiration Time Calculation", self.test_expiration_time_calculation),
+            ("Pocket Option Timing Sync - Force Signal Generation", self.test_force_signal_generation_with_timing),
+            ("Pocket Option Timing Sync - Signal Synchronization Function", self.test_signal_synchronization_function),
+            ("Pocket Option Timing Sync - Configuration Integration", self.test_configuration_integration_with_timeframes),
+            ("Pocket Option Timing Sync - Market Schedule Awareness", self.test_market_schedule_awareness),
+            ("Pocket Option Timing Sync - Compatible Timeframes", self.test_pocket_option_compatible_timeframes),
+            ("Pocket Option Timing Sync - Timing Accuracy", self.test_timing_accuracy_and_precision),
+            
+            # OTC Market Signal Generation Tests (SECONDARY)
             ("OTC Market Signal Generation", self.test_otc_market_signal_generation),
             ("OTC Signal Quality and Confidence", self.test_otc_signal_quality_and_confidence),
             ("OTC Database Storage", self.test_otc_database_storage),
