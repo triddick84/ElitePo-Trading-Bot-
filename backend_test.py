@@ -3991,8 +3991,8 @@ class BackendTester:
             return False
 
     async def run_all_tests(self):
-        """Run all backend tests focusing on OTC market signal generation support"""
-        print("🚀 Starting OTC Market Signal Generation Testing for GPT Signal Bot")
+        """Run all backend tests focusing on Pocket Option timing synchronization system"""
+        print("🚀 Starting Pocket Option Timing Synchronization Testing for GPT Signal Bot")
         print("=" * 80)
         
         await self.setup()
