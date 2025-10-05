@@ -1269,22 +1269,649 @@ class BackendTester:
 
     # ========== POCKET OPTION TIMING SYNCHRONIZATION TESTS ==========
     
-    async def test_pocket_option_timing_sync_module(self) -> bool:
-        """Test that Pocket Option timing synchronization module is accessible"""
+    async def test_pocket_option_timing_sync_module_import(self) -> bool:
+        """Test that Pocket Option timing synchronization module imports successfully"""
         try:
             import sys
             sys.path.append('/app/backend')
             
             try:
-                from pocket_option_timing_sync import pocket_option_sync
+                from pocket_option_timing_sync import pocket_option_sync, PocketOptionTimingSync
                 print("   ✅ Pocket Option timing sync module imported successfully")
                 
-                # Test basic methods
-                chicago_time = pocket_option_sync.get_chicago_time()
-                print(f"   ✅ Chicago time: {chicago_time}")
+                # Test class initialization
+                sync_instance = PocketOptionTimingSync()
+                print("   ✅ PocketOptionTimingSync class initializes correctly")
                 
-                # Test timeframe support
-                supported_timeframes = pocket_option_sync.get_pocket_option_compatible_timeframes()
+                # Test Chicago timezone configuration
+                chicago_tz = sync_instance.pocket_option_tz
+                print(f"   ✅ Chicago timezone configured: {chicago_tz}")
+                
+                # Test timeframe mappings
+                timeframes = sync_instance.timeframe_seconds
+                expected_timeframes = ['30s', '1m', '2m', '3m', '5m', '10m', '15m', '30m', '1h']
+                
+                for tf in expected_timeframes:
+                    if tf in timeframes:
+                        print(f"   ✅ Timeframe {tf}: {timeframes[tf]}s")
+                    else:
+                        print(f"   ❌ Missing timeframe: {tf}")
+                        return False
+                
+                return len(timeframes) == len(expected_timeframes)
+                
+            except ImportError as e:
+                print(f"   ❌ Failed to import Pocket Option timing sync: {e}")
+                return False
+                
+        except Exception as e:
+            print(f"   Pocket Option timing sync module test error: {e}")
+            return False
+
+    async def test_chicago_timezone_functions(self) -> bool:
+        """Test Chicago timezone functions and UTC comparison"""
+        try:
+            import sys
+            sys.path.append('/app/backend')
+            from pocket_option_timing_sync import pocket_option_sync
+            from datetime import datetime, timezone
+            
+            # Test get_chicago_time()
+            chicago_time = pocket_option_sync.get_chicago_time()
+            utc_time = datetime.now(timezone.utc)
+            
+            print(f"   Chicago time: {chicago_time}")
+            print(f"   UTC time: {utc_time}")
+            
+            # Calculate time difference
+            time_diff = abs((chicago_time.replace(tzinfo=None) - utc_time.replace(tzinfo=None)).total_seconds())
+            
+            # Chicago is UTC-6 (CST) or UTC-5 (CDT), so difference should be 5-6 hours
+            expected_diff_hours = [5, 6]  # Account for daylight savings
+            actual_diff_hours = time_diff / 3600
+            
+            print(f"   Time difference: {actual_diff_hours:.1f} hours")
+            
+            # Test timezone awareness
+            if chicago_time.tzinfo is not None:
+                print(f"   ✅ Chicago time is timezone-aware: {chicago_time.tzinfo}")
+                timezone_aware = True
+            else:
+                print("   ❌ Chicago time is not timezone-aware")
+                timezone_aware = False
+            
+            # Test daylight savings handling
+            timezone_name = str(chicago_time.tzinfo)
+            dst_handling = 'CDT' in timezone_name or 'CST' in timezone_name or 'America/Chicago' in timezone_name
+            print(f"   ✅ Timezone info: {timezone_name}")
+            
+            return (timezone_aware and dst_handling and 
+                   (int(actual_diff_hours) in expected_diff_hours or actual_diff_hours < 1))
+            
+        except Exception as e:
+            print(f"   Chicago timezone functions test error: {e}")
+            return False
+
+    async def test_candle_formation_timing(self) -> bool:
+        """Test get_next_candle_formation_time for different timeframes"""
+        try:
+            import sys
+            sys.path.append('/app/backend')
+            from pocket_option_timing_sync import pocket_option_sync
+            from datetime import datetime, timedelta
+            
+            test_timeframes = ['1m', '5m', '15m', '30m']
+            
+            for timeframe in test_timeframes:
+                print(f"   Testing {timeframe} timeframe:")
+                
+                # Test regular market
+                regular_time = pocket_option_sync.get_next_candle_formation_time(timeframe, "regular")
+                current_time = pocket_option_sync.get_chicago_time()
+                
+                # Calculate time until next candle
+                time_to_candle = (regular_time - current_time).total_seconds()
+                
+                print(f"     Regular market - Next candle in: {time_to_candle:.1f}s")
+                print(f"     Regular market - Entry time: {regular_time}")
+                
+                # Test OTC market
+                otc_time = pocket_option_sync.get_next_candle_formation_time(timeframe, "otc")
+                otc_time_to_candle = (otc_time - current_time).total_seconds()
+                
+                print(f"     OTC market - Next candle in: {otc_time_to_candle:.1f}s")
+                print(f"     OTC market - Entry time: {otc_time}")
+                
+                # Verify timing logic
+                # OTC should be 1s buffer, regular should be 2s buffer
+                buffer_diff = time_to_candle - otc_time_to_candle
+                expected_buffer_diff = 1.0  # 1 second difference
+                
+                if abs(buffer_diff - expected_buffer_diff) < 0.1:
+                    print(f"     ✅ Buffer difference correct: {buffer_diff:.1f}s")
+                else:
+                    print(f"     ⚠️ Buffer difference: {buffer_diff:.1f}s (expected ~1s)")
+                
+                # Verify times are in the future
+                if time_to_candle > 0 and otc_time_to_candle > 0:
+                    print(f"     ✅ Both times are in the future")
+                else:
+                    print(f"     ❌ Times should be in the future")
+                    return False
+            
+            # Test edge case - invalid timeframe
+            fallback_time = pocket_option_sync.get_next_candle_formation_time("invalid", "regular")
+            if fallback_time > current_time:
+                print("   ✅ Invalid timeframe handled with fallback")
+            else:
+                print("   ❌ Invalid timeframe not handled properly")
+                return False
+            
+            return True
+            
+        except Exception as e:
+            print(f"   Candle formation timing test error: {e}")
+            return False
+
+    async def test_expiration_time_calculation(self) -> bool:
+        """Test calculate_optimal_expiration_time for various scenarios"""
+        try:
+            import sys
+            sys.path.append('/app/backend')
+            from pocket_option_timing_sync import pocket_option_sync
+            from datetime import datetime
+            
+            test_scenarios = [
+                {'timeframe': '1m', 'market_type': 'otc', 'expected_range': (3, 3)},
+                {'timeframe': '5m', 'market_type': 'regular', 'expected_range': (15, 15)},
+                {'timeframe': '15m', 'market_type': 'otc', 'expected_range': (15, 15)},
+                {'timeframe': '30m', 'market_type': 'regular', 'expected_range': (30, 30)},
+                {'timeframe': '1m', 'market_type': 'regular', 'expected_range': (5, 5)},
+                {'timeframe': '5m', 'market_type': 'otc', 'expected_range': (10, 10)}
+            ]
+            
+            entry_time = pocket_option_sync.get_chicago_time()
+            
+            for scenario in test_scenarios:
+                timeframe = scenario['timeframe']
+                market_type = scenario['market_type']
+                expected_min, expected_max = scenario['expected_range']
+                
+                expiration = pocket_option_sync.calculate_optimal_expiration_time(
+                    timeframe, entry_time, market_type
+                )
+                
+                print(f"   {market_type.upper()} + {timeframe}: {expiration} minutes")
+                
+                if expected_min <= expiration <= expected_max:
+                    print(f"     ✅ Expiration {expiration}min within expected range {expected_min}-{expected_max}min")
+                else:
+                    print(f"     ❌ Expiration {expiration}min outside expected range {expected_min}-{expected_max}min")
+                    return False
+            
+            # Test invalid timeframe fallback
+            fallback_expiration = pocket_option_sync.calculate_optimal_expiration_time(
+                "invalid", entry_time, "regular"
+            )
+            
+            if fallback_expiration == 15:  # Default fallback
+                print("   ✅ Invalid timeframe returns default 15min expiration")
+            else:
+                print(f"   ❌ Invalid timeframe returned {fallback_expiration}min (expected 15min)")
+                return False
+            
+            return True
+            
+        except Exception as e:
+            print(f"   Expiration time calculation test error: {e}")
+            return False
+
+    async def test_force_signal_generation_with_timing(self) -> bool:
+        """Test POST /api/signals/force-generate with timing synchronization"""
+        try:
+            # Test force signal generation
+            async with self.session.post(f"{BACKEND_URL}/signals/force-generate") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    signals = data.get('signals', [])
+                    
+                    if not signals:
+                        print("   ❌ No signals generated")
+                        return False
+                    
+                    print(f"   ✅ Generated {len(signals)} signals")
+                    
+                    # Test each signal for timing synchronization
+                    timing_verified = True
+                    
+                    for i, signal in enumerate(signals):
+                        print(f"   Signal {i+1}: {signal.get('symbol')} {signal.get('direction')}")
+                        
+                        # Check for precision_entry_time
+                        precision_entry_time = signal.get('precision_entry_time')
+                        if precision_entry_time:
+                            print(f"     ✅ Precision entry time: {precision_entry_time}")
+                        else:
+                            print("     ❌ Missing precision_entry_time")
+                            timing_verified = False
+                        
+                        # Check for timeframe
+                        timeframe = signal.get('timeframe')
+                        if timeframe:
+                            print(f"     ✅ Timeframe: {timeframe}")
+                        else:
+                            print("     ❌ Missing timeframe")
+                            timing_verified = False
+                        
+                        # Check for expiration_minutes
+                        expiration_minutes = signal.get('expiration_minutes')
+                        if expiration_minutes:
+                            print(f"     ✅ Expiration: {expiration_minutes} minutes")
+                        else:
+                            print("     ❌ Missing expiration_minutes")
+                            timing_verified = False
+                        
+                        # Check for market_type
+                        market_type = signal.get('market_type')
+                        if market_type:
+                            print(f"     ✅ Market type: {market_type}")
+                        else:
+                            print("     ❌ Missing market_type")
+                            timing_verified = False
+                        
+                        # Check technical_analysis for timing metadata
+                        technical_analysis = signal.get('technical_analysis', {})
+                        timing_fields = ['pocket_option_sync', 'chicago_timezone', 'target_timeframe']
+                        
+                        for field in timing_fields:
+                            if field in technical_analysis:
+                                print(f"     ✅ Technical analysis has {field}: {technical_analysis[field]}")
+                            else:
+                                print(f"     ⚠️ Missing {field} in technical_analysis")
+                        
+                        # Check justification for timing information
+                        justification = signal.get('justification', '')
+                        if 'POCKET OPTION SYNC' in justification:
+                            print("     ✅ Justification includes Pocket Option sync info")
+                        else:
+                            print("     ⚠️ Justification missing Pocket Option sync info")
+                    
+                    return timing_verified
+                    
+                else:
+                    print(f"   ❌ Force signal generation failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Force signal generation with timing test error: {e}")
+            return False
+
+    async def test_signal_synchronization_function(self) -> bool:
+        """Test sync_signal_with_pocket_option_timing function directly"""
+        try:
+            import sys
+            sys.path.append('/app/backend')
+            from pocket_option_timing_sync import pocket_option_sync
+            from models import TradingSignal, SignalDirection, TradingStrategy, ConfidenceLevel
+            from datetime import datetime, timezone
+            
+            # Create a test signal
+            test_signal = TradingSignal(
+                id="TEST_SYNC_001",
+                symbol="EURUSD_regular",
+                direction=SignalDirection.BUY,
+                entry_price=1.0500,
+                probability=85.0,
+                confidence_level=ConfidenceLevel.HIGH,
+                strategy_used=TradingStrategy.HYBRID,
+                justification="Test signal for timing synchronization",
+                suggested_stake=10.0,
+                timestamp=datetime.now(timezone.utc)
+            )
+            
+            # Test synchronization with different timeframes
+            test_timeframes = [['1m'], ['5m'], ['15m'], ['1m', '5m']]
+            
+            for user_timeframes in test_timeframes:
+                print(f"   Testing with timeframes: {user_timeframes}")
+                
+                # Synchronize the signal
+                synced_signal = pocket_option_sync.sync_signal_with_pocket_option_timing(
+                    test_signal, user_timeframes
+                )
+                
+                # Verify synchronization results
+                if synced_signal.timeframe:
+                    print(f"     ✅ Timeframe set: {synced_signal.timeframe}")
+                else:
+                    print("     ❌ Timeframe not set")
+                    return False
+                
+                if synced_signal.precision_entry_time:
+                    print(f"     ✅ Precision entry time: {synced_signal.precision_entry_time}")
+                else:
+                    print("     ❌ Precision entry time not set")
+                    return False
+                
+                if synced_signal.expiration_minutes:
+                    print(f"     ✅ Expiration minutes: {synced_signal.expiration_minutes}")
+                else:
+                    print("     ❌ Expiration minutes not set")
+                    return False
+                
+                # Check technical_analysis updates
+                if hasattr(synced_signal, 'technical_analysis') and synced_signal.technical_analysis:
+                    ta = synced_signal.technical_analysis
+                    
+                    required_fields = ['pocket_option_sync', 'chicago_timezone', 'target_timeframe', 'market_type']
+                    for field in required_fields:
+                        if field in ta:
+                            print(f"     ✅ Technical analysis has {field}: {ta[field]}")
+                        else:
+                            print(f"     ❌ Missing {field} in technical_analysis")
+                            return False
+                else:
+                    print("     ❌ Technical analysis not updated")
+                    return False
+                
+                # Check justification update
+                if 'POCKET OPTION SYNC' in synced_signal.justification:
+                    print("     ✅ Justification updated with timing info")
+                else:
+                    print("     ❌ Justification not updated with timing info")
+                    return False
+            
+            # Test OTC signal synchronization
+            otc_signal = TradingSignal(
+                id="TEST_SYNC_OTC_001",
+                symbol="EURUSD_OTC",
+                direction=SignalDirection.SELL,
+                entry_price=1.0500,
+                probability=90.0,
+                confidence_level=ConfidenceLevel.HIGH,
+                strategy_used=TradingStrategy.HYBRID,
+                justification="Test OTC signal for timing synchronization",
+                suggested_stake=10.0,
+                timestamp=datetime.now(timezone.utc)
+            )
+            
+            synced_otc = pocket_option_sync.sync_signal_with_pocket_option_timing(
+                otc_signal, ['3m']
+            )
+            
+            # Verify OTC-specific timing
+            if synced_otc.technical_analysis and synced_otc.technical_analysis.get('market_type') == 'otc':
+                print("     ✅ OTC signal correctly identified and synchronized")
+            else:
+                print("     ❌ OTC signal not properly synchronized")
+                return False
+            
+            return True
+            
+        except Exception as e:
+            print(f"   Signal synchronization function test error: {e}")
+            return False
+
+    async def test_configuration_integration_with_timeframes(self) -> bool:
+        """Test that user's selected_timeframes are used in signal generation"""
+        try:
+            # Test configuration with specific timeframes
+            test_config = {
+                "trading_mode": "demo",
+                "active_strategies": ["hybrid"],
+                "target_assets": ["forex"],
+                "selected_assets": ["EURUSD_regular"],
+                "selected_timeframes": ["1m", "3m", "5m"],  # Specific timeframes
+                "risk_tolerance": "medium",
+                "max_stake_per_trade": 10.0,
+                "max_daily_trades": 50,
+                "min_probability_threshold": 75.0,
+                "auto_trading_enabled": False,
+                "invert_signals": False,
+                "sound_alerts_enabled": True
+            }
+            
+            # Save configuration
+            async with self.session.put(f"{BACKEND_URL}/config", json=test_config) as response:
+                if response.status != 200:
+                    print("   ❌ Failed to save test configuration")
+                    return False
+            
+            print("   ✅ Configuration saved with timeframes: ['1m', '3m', '5m']")
+            
+            # Verify configuration retrieval
+            async with self.session.get(f"{BACKEND_URL}/config") as response:
+                if response.status == 200:
+                    config = await response.json()
+                    selected_timeframes = config.get('selected_timeframes', [])
+                    
+                    if selected_timeframes == ["1m", "3m", "5m"]:
+                        print(f"   ✅ Configuration timeframes retrieved: {selected_timeframes}")
+                    else:
+                        print(f"   ❌ Configuration timeframes mismatch: {selected_timeframes}")
+                        return False
+                else:
+                    print("   ❌ Failed to retrieve configuration")
+                    return False
+            
+            # Test force generation uses first timeframe
+            async with self.session.post(f"{BACKEND_URL}/signals/force-generate") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    signals = data.get('signals', [])
+                    
+                    if signals:
+                        first_signal = signals[0]
+                        signal_timeframe = first_signal.get('timeframe')
+                        
+                        if signal_timeframe == '1m':  # Should use first timeframe
+                            print(f"   ✅ Force generation uses first timeframe: {signal_timeframe}")
+                        else:
+                            print(f"   ⚠️ Force generation timeframe: {signal_timeframe} (expected '1m')")
+                    else:
+                        print("   ⚠️ No signals generated to test timeframe usage")
+                else:
+                    print("   ❌ Force generation failed")
+                    return False
+            
+            # Test fallback to '5m' when no timeframes configured
+            empty_config = test_config.copy()
+            empty_config['selected_timeframes'] = []
+            
+            async with self.session.put(f"{BACKEND_URL}/config", json=empty_config) as response:
+                if response.status == 200:
+                    print("   ✅ Configuration updated with empty timeframes")
+                    
+                    # Test force generation fallback
+                    async with self.session.post(f"{BACKEND_URL}/signals/force-generate") as response:
+                        if response.status == 200:
+                            data = await response.json()
+                            signals = data.get('signals', [])
+                            
+                            if signals:
+                                first_signal = signals[0]
+                                signal_timeframe = first_signal.get('timeframe')
+                                
+                                if signal_timeframe == '5m':  # Should fallback to 5m
+                                    print(f"   ✅ Fallback to default timeframe: {signal_timeframe}")
+                                else:
+                                    print(f"   ⚠️ Fallback timeframe: {signal_timeframe} (expected '5m')")
+                        else:
+                            print("   ❌ Fallback test failed")
+                            return False
+            
+            return True
+            
+        except Exception as e:
+            print(f"   Configuration integration test error: {e}")
+            return False
+
+    async def test_market_schedule_awareness(self) -> bool:
+        """Test is_market_open for different asset types and times"""
+        try:
+            import sys
+            sys.path.append('/app/backend')
+            from pocket_option_timing_sync import pocket_option_sync
+            from datetime import datetime
+            
+            current_chicago_time = pocket_option_sync.get_chicago_time()
+            print(f"   Current Chicago time: {current_chicago_time}")
+            
+            # Test different asset types
+            asset_types = ['forex', 'crypto', 'otc', 'stocks']
+            
+            for asset_type in asset_types:
+                is_open = pocket_option_sync.is_market_open(asset_type)
+                print(f"   {asset_type.upper()} market open: {is_open}")
+                
+                # Verify expected behavior
+                if asset_type in ['crypto', 'otc']:
+                    if is_open:
+                        print(f"     ✅ {asset_type.upper()} correctly shows as open (24/7)")
+                    else:
+                        print(f"     ❌ {asset_type.upper()} should always be open")
+                        return False
+                elif asset_type == 'forex':
+                    # Forex has specific hours - just verify we get a boolean
+                    if isinstance(is_open, bool):
+                        print(f"     ✅ Forex market status determined: {is_open}")
+                    else:
+                        print(f"     ❌ Forex market status should be boolean")
+                        return False
+                else:
+                    # Other asset types default to open
+                    if is_open:
+                        print(f"     ✅ {asset_type.upper()} defaults to open")
+                    else:
+                        print(f"     ⚠️ {asset_type.upper()} shows as closed")
+            
+            # Test forex market hours logic with specific times
+            # Create test times for different scenarios
+            test_times = [
+                # Friday 5 PM CT (should be closed)
+                current_chicago_time.replace(hour=17, minute=0, second=0, microsecond=0),
+                # Sunday 4 PM CT (should be closed)
+                current_chicago_time.replace(hour=16, minute=0, second=0, microsecond=0),
+                # Monday 10 AM CT (should be open)
+                current_chicago_time.replace(hour=10, minute=0, second=0, microsecond=0)
+            ]
+            
+            for test_time in test_times:
+                forex_status = pocket_option_sync.is_market_open('forex', test_time)
+                weekday = test_time.weekday()  # 0=Monday, 6=Sunday
+                hour = test_time.hour
+                
+                print(f"     Test time: {test_time.strftime('%A %H:%M')} - Forex open: {forex_status}")
+                
+                # Basic validation that we get boolean responses
+                if not isinstance(forex_status, bool):
+                    print(f"     ❌ Forex status should be boolean, got {type(forex_status)}")
+                    return False
+            
+            return True
+            
+        except Exception as e:
+            print(f"   Market schedule awareness test error: {e}")
+            return False
+
+    async def test_pocket_option_compatible_timeframes(self) -> bool:
+        """Test get_pocket_option_compatible_timeframes method"""
+        try:
+            import sys
+            sys.path.append('/app/backend')
+            from pocket_option_timing_sync import pocket_option_sync
+            
+            # Get supported timeframes
+            supported_timeframes = pocket_option_sync.get_pocket_option_compatible_timeframes()
+            
+            print(f"   Supported timeframes: {supported_timeframes}")
+            
+            # Expected timeframes based on Pocket Option
+            expected_timeframes = ['30s', '1m', '2m', '3m', '5m', '10m', '15m', '30m', '1h']
+            
+            # Verify all expected timeframes are present
+            missing_timeframes = []
+            for tf in expected_timeframes:
+                if tf not in supported_timeframes:
+                    missing_timeframes.append(tf)
+            
+            if missing_timeframes:
+                print(f"   ❌ Missing timeframes: {missing_timeframes}")
+                return False
+            else:
+                print("   ✅ All expected timeframes are supported")
+            
+            # Verify no unexpected timeframes
+            extra_timeframes = []
+            for tf in supported_timeframes:
+                if tf not in expected_timeframes:
+                    extra_timeframes.append(tf)
+            
+            if extra_timeframes:
+                print(f"   ⚠️ Extra timeframes found: {extra_timeframes}")
+            
+            return len(supported_timeframes) >= len(expected_timeframes)
+            
+        except Exception as e:
+            print(f"   Pocket Option compatible timeframes test error: {e}")
+            return False
+
+    async def test_timing_accuracy_and_precision(self) -> bool:
+        """Test timing calculations are accurate to seconds"""
+        try:
+            import sys
+            sys.path.append('/app/backend')
+            from pocket_option_timing_sync import pocket_option_sync
+            from datetime import datetime, timedelta
+            
+            current_time = pocket_option_sync.get_chicago_time()
+            print(f"   Current Chicago time: {current_time}")
+            
+            # Test precision for different timeframes
+            test_timeframes = ['1m', '5m', '15m']
+            
+            for timeframe in test_timeframes:
+                # Get next candle formation time
+                next_candle = pocket_option_sync.get_next_candle_formation_time(timeframe, "regular")
+                time_diff = (next_candle - current_time).total_seconds()
+                
+                print(f"   {timeframe} - Next candle in: {time_diff:.1f} seconds")
+                
+                # Verify timing is reasonable (should be within the timeframe interval)
+                timeframe_seconds = pocket_option_sync.timeframe_seconds[timeframe]
+                
+                if 0 < time_diff <= timeframe_seconds:
+                    print(f"     ✅ Timing within expected range (0-{timeframe_seconds}s)")
+                else:
+                    print(f"     ❌ Timing outside expected range: {time_diff}s")
+                    return False
+                
+                # Test accuracy window calculation
+                accuracy_window = pocket_option_sync.calculate_signal_accuracy_window(timeframe, "regular")
+                
+                required_fields = ['pre_entry_buffer', 'optimal_window', 'late_entry_buffer', 'max_accuracy_period']
+                for field in required_fields:
+                    if field in accuracy_window:
+                        print(f"     ✅ Accuracy window has {field}: {accuracy_window[field]}")
+                    else:
+                        print(f"     ❌ Missing {field} in accuracy window")
+                        return False
+                
+                # Verify buffer values are reasonable
+                pre_buffer = accuracy_window['pre_entry_buffer']
+                if 1 <= pre_buffer <= 5:
+                    print(f"     ✅ Pre-entry buffer reasonable: {pre_buffer}s")
+                else:
+                    print(f"     ❌ Pre-entry buffer unreasonable: {pre_buffer}s")
+                    return False
+            
+            return True
+            
+        except Exception as e:
+            print(f"   Timing accuracy and precision test error: {e}")
+            return Falsepocket_option_compatible_timeframes()
                 print(f"   ✅ Supported timeframes: {supported_timeframes}")
                 
                 return True
