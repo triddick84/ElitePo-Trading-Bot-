@@ -1911,17 +1911,6 @@ class BackendTester:
             
         except Exception as e:
             print(f"   Timing accuracy and precision test error: {e}")
-            return Falsepocket_option_compatible_timeframes()
-                print(f"   ✅ Supported timeframes: {supported_timeframes}")
-                
-                return True
-                
-            except ImportError as e:
-                print(f"   ❌ Failed to import Pocket Option timing sync: {e}")
-                return False
-                
-        except Exception as e:
-            print(f"   Pocket Option timing sync module test error: {e}")
             return False
 
     async def test_user_timeframe_configuration_loading(self) -> bool:
