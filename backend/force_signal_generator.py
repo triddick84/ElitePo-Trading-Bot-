@@ -656,14 +656,24 @@ class ForceSignalGenerator:
                 otc_boost = 2.0 if final_confidence >= 85.0 else 1.0
                 final_confidence = min(final_confidence + otc_boost, 98.5)
             
-            # Create comprehensive technical analysis summary
+            # Create comprehensive technical analysis summary with safe float conversion
+            def safe_float(value):
+                """Convert to float and handle NaN/infinity values"""
+                try:
+                    f_val = float(value)
+                    if math.isnan(f_val) or math.isinf(f_val):
+                        return 0.0
+                    return f_val
+                except (ValueError, TypeError):
+                    return 0.0
+            
             technical_analysis = {
                 'strategies_analyzed': len(analysis_results),
-                'buy_score': float(buy_score),
-                'sell_score': float(sell_score),
-                'final_confidence': float(final_confidence),
+                'buy_score': safe_float(buy_score),
+                'sell_score': safe_float(sell_score),
+                'final_confidence': safe_float(final_confidence),
                 'market_type': market_type,
-                'otc_boost_applied': otc_boost if market_type == "otc" else 0.0,
+                'otc_boost_applied': safe_float(otc_boost if market_type == "otc" else 0.0),
                 'strategy_details': strategy_details,
                 'forced_generation': True,
                 'override_mode': True,
