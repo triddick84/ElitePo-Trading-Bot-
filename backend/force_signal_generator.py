@@ -726,7 +726,8 @@ class ForceSignalGenerator:
             
         except Exception as e:
             logger.error(f"Error in force combine analysis: {e}")
-            return self._generate_emergency_signal(symbol, market_data, recent_data)
+            # Return emergency signal with correct market type
+            return self._generate_emergency_signal(symbol, market_data, recent_data, market_type)
     
     def _generate_emergency_signal(self, symbol: str, market_data: MarketData, 
                                  recent_data: Optional[List[Dict]] = None, market_type: str = "regular") -> TradingSignal:
