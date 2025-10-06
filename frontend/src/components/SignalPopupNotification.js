@@ -7,28 +7,64 @@ const SignalPopupNotification = ({ signal, onClose, onExecute }) => {
   const [isExpired, setIsExpired] = useState(false);
 
   useEffect(() => {
-    if (!signal?.precision_entry_time) return;
+    if (!signal?.precision_entry_time) {
+      // If no precision entry time, create one based on signal timestamp
+      const signalTime = signal?.timestamp ? new Date(signal.timestamp) : new Date();
+      const fallbackEntryTime = new Date(signalTime.getTime() + 30000); // 30 seconds from signal creation
+      
+      const calculateFallbackTimeLeft = () => {
+        const now = new Date();
+        const diffMs = fallbackEntryTime.getTime() - now.getTime();
+        const diffSeconds = Math.ceil(diffMs / 1000);
+        
+        setTimeLeft(diffSeconds);
+        setIsOptimalTime(diffSeconds <= 5 && diffSeconds >= -2);
+        setIsExpired(diffSeconds < -30);
+      };
+
+      calculateFallbackTimeLeft();
+      const interval = setInterval(calculateFallbackTimeLeft, 1000);
+      return () => clearInterval(interval);
+    }
 
     const calculateTimeLeft = () => {
       const now = new Date();
       const entryTime = new Date(signal.precision_entry_time);
+      
+      // Debug logging
+      console.log('Countdown Debug:', {
+        now: now.toISOString(),
+        entryTime: entryTime.toISOString(),
+        signal_timeframe: signal.timeframe,
+        precision_entry_time: signal.precision_entry_time
+      });
+      
       const diffMs = entryTime.getTime() - now.getTime();
-      const diffSeconds = Math.ceil(diffMs / 1000);
+      const diffSeconds = Math.floor(diffMs / 1000);
       
       setTimeLeft(diffSeconds);
       
-      // Optimal entry window: 5 seconds before to 10 seconds after precision time
-      setIsOptimalTime(diffSeconds <= 5 && diffSeconds >= -10);
+      // For ultra-short timeframes (5s, 15s, 30s), use tighter windows
+      const isUltraShort = ['5s', '15s', '30s'].includes(signal.timeframe);
       
-      // Signal expires after 2 minutes from precision time
-      setIsExpired(diffSeconds < -120);
+      if (isUltraShort) {
+        // Ultra-short optimal window: 3 seconds before to 2 seconds after
+        setIsOptimalTime(diffSeconds <= 3 && diffSeconds >= -2);
+        // Expires quickly after 30 seconds
+        setIsExpired(diffSeconds < -30);
+      } else {
+        // Standard timeframes: 5 seconds before to 10 seconds after
+        setIsOptimalTime(diffSeconds <= 5 && diffSeconds >= -10);
+        // Expires after 2 minutes
+        setIsExpired(diffSeconds < -120);
+      }
     };
 
     calculateTimeLeft();
-    const interval = setInterval(calculateTimeLeft, 1000);
+    const interval = setInterval(calculateTimeLeft, 100); // Update every 100ms for precision
 
     return () => clearInterval(interval);
-  }, [signal?.precision_entry_time]);
+  }, [signal?.precision_entry_time, signal?.timestamp, signal?.timeframe]);
 
   useEffect(() => {
     if (isExpired) {
