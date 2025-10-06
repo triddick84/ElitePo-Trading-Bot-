@@ -19,7 +19,9 @@ class PocketOptionTimingSync:
         
         # Pocket Option timeframe mappings (in seconds)
         self.timeframe_seconds = {
-            '30s': 30,
+            '5s': 5,      # 5 seconds
+            '15s': 15,    # 15 seconds
+            '30s': 30,    # 30 seconds
             '1m': 60,
             '2m': 120,
             '3m': 180,
