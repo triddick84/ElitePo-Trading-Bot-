@@ -5140,19 +5140,67 @@ class BackendTester:
             
         return len(self.failed_tests) == 0
 
+    async def run_ultra_short_timeframe_tests(self):
+        """Run focused ultra-short timeframe tests"""
+        print("🚀 Starting Ultra-Short Timeframe Testing for GPT Signal Bot")
+        print("=" * 80)
+        print("Testing 5s, 15s, and 30s timeframe functionality with force signal generation")
+        print("=" * 80)
+        
+        await self.setup()
+        
+        # Define ultra-short timeframe focused test suite
+        tests = [
+            ("Health Check", self.test_health_check),
+            ("Ultra-Short Timeframe Verification", self.test_ultra_short_timeframe_verification),
+            ("Force Signal Generation with Ultra-Short Timeframes", self.test_force_signal_generation_with_ultra_short_timeframes),
+            ("Signal Output Verification Ultra-Short", self.test_signal_output_verification_ultra_short),
+            ("Chicago Timezone Candle Formation", self.test_chicago_timezone_candle_formation),
+            ("Configuration Update Ultra-Short Timeframes", self.test_configuration_update_ultra_short_timeframes),
+            ("Signal Response Structure Ultra-Short", self.test_signal_response_structure_ultra_short),
+        ]
+        
+        # Run all tests
+        for test_name, test_func in tests:
+            await self.run_test(test_name, test_func)
+            
+        await self.cleanup()
+        
+        # Print summary
+        print("\n" + "=" * 70)
+        print("🏁 ULTRA-SHORT TIMEFRAME TESTING SUMMARY")
+        print("=" * 70)
+        
+        total_tests = len(tests)
+        passed_tests = total_tests - len(self.failed_tests)
+        
+        print(f"Total Tests: {total_tests}")
+        print(f"Passed: {passed_tests}")
+        print(f"Failed: {len(self.failed_tests)}")
+        print(f"Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+        
+        if self.failed_tests:
+            print(f"\n❌ Failed Tests:")
+            for test in self.failed_tests:
+                print(f"   - {test}")
+        else:
+            print(f"\n🎉 All ultra-short timeframe tests passed!")
+            
+        return len(self.failed_tests) == 0
+
 async def main():
-    """Main test runner - focused on force signal generation debug"""
+    """Main test runner - focused on ultra-short timeframe testing"""
     tester = BackendTester()
     
-    # Run focused debug tests for force signal generation issue
-    success = await tester.run_force_signal_debug_tests()
+    # Run focused ultra-short timeframe tests
+    success = await tester.run_ultra_short_timeframe_tests()
     
     if success:
-        print("\n✅ Force signal generation debug testing completed successfully!")
-        print("   All endpoints are working correctly - issue may be in frontend")
+        print("\n✅ Ultra-short timeframe testing completed successfully!")
+        print("   All 5s, 15s, and 30s timeframe functionality is working correctly")
         return 0
     else:
-        print("\n❌ Force signal generation debug testing found issues!")
+        print("\n❌ Ultra-short timeframe testing found issues!")
         print("   Check the failed tests above for root cause analysis")
         return 1
 
