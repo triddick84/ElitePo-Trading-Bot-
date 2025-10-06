@@ -828,11 +828,15 @@ class ForceSignalGenerator:
             timeframe = "3m" if market_type == "otc" else "5m"
             expiration = 8 if market_type == "otc" else 10
             
+            # Balanced ultimate fallback - not biased towards BUY
+            import random
+            ultimate_direction = SignalDirection.BUY if random.random() > 0.5 else SignalDirection.SELL
+            
             return TradingSignal(
                 id=f"ULTIMATE_{market_type.upper()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
                 symbol=f"{symbol}{symbol_suffix}",
                 asset_type=market_data.asset_type,
-                direction=SignalDirection.BUY,
+                direction=ultimate_direction,
                 entry_price=market_data.price,
                 expiration_minutes=expiration,
                 timeframe=timeframe,
