@@ -612,7 +612,7 @@ async def force_generate_signal():
                 stored_signals.append({
                     "id": str(signal.id),
                     "symbol": str(signal.symbol),
-                    "direction": str(signal.direction),
+                    "direction": signal.direction.value if hasattr(signal.direction, 'value') else str(signal.direction),
                     "entry_price": float(signal.entry_price),
                     "probability": float(signal.probability),
                     "expiration_minutes": int(signal.expiration_minutes),
@@ -773,7 +773,7 @@ async def force_generate_signal_for_asset(asset_symbol: str):
                 stored_signals.append({
                     "id": str(signal.id),
                     "symbol": str(signal.symbol),
-                    "direction": str(signal.direction),
+                    "direction": signal.direction.value if hasattr(signal.direction, 'value') else str(signal.direction),
                     "entry_price": float(signal.entry_price),
                     "probability": float(signal.probability),
                     "expiration_minutes": int(signal.expiration_minutes),
