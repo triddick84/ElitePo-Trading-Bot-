@@ -32,6 +32,17 @@ db = client[os.environ['DB_NAME']]
 def _convert_numpy_types(obj):
     """Convert numpy types to native Python types for JSON serialization"""
     import numpy as np
+    import math
+    
+    def safe_float(value):
+        """Convert to float and handle NaN/infinity values"""
+        try:
+            f_val = float(value)
+            if math.isnan(f_val) or math.isinf(f_val):
+                return 0.0
+            return f_val
+        except (ValueError, TypeError):
+            return 0.0
     
     if obj is None:
         return None
@@ -42,13 +53,21 @@ def _convert_numpy_types(obj):
     elif isinstance(obj, np.integer):
         return int(obj)
     elif isinstance(obj, np.floating):
-        return float(obj)
+        return safe_float(obj)
     elif isinstance(obj, np.ndarray):
-        return obj.tolist()
+        return [_convert_numpy_types(item) for item in obj.tolist()]
     elif isinstance(obj, np.bool_):
         return bool(obj)
+    elif isinstance(obj, float):
+        return safe_float(obj)
     elif hasattr(obj, 'item'):  # Handle numpy scalars
-        return obj.item()
+        try:
+            item_val = obj.item()
+            if isinstance(item_val, float):
+                return safe_float(item_val)
+            return item_val
+        except:
+            return 0.0
     else:
         return obj
 
