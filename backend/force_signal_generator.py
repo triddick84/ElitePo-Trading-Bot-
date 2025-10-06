@@ -592,16 +592,27 @@ class ForceSignalGenerator:
             strategy_details = {}
             
             for strategy_name, signal, weight in analysis_results:
-                confidence = signal['confidence']
-                
-                if signal['direction'] == 'BUY':
-                    buy_score += weight * confidence
-                else:
-                    sell_score += weight * confidence
-                
-                total_weight += weight
-                max_confidence = max(max_confidence, confidence)
-                strategy_details[strategy_name] = signal
+                try:
+                    confidence = float(signal.get('confidence', 75.0))
+                    direction = signal.get('direction', 'BUY')
+                    
+                    # Ensure confidence is valid
+                    if math.isnan(confidence) or math.isinf(confidence):
+                        confidence = 75.0
+                    
+                    confidence = max(50.0, min(98.5, confidence))  # Clamp to valid range
+                    
+                    if direction == 'BUY':
+                        buy_score += weight * confidence
+                    else:
+                        sell_score += weight * confidence
+                    
+                    total_weight += weight
+                    max_confidence = max(max_confidence, confidence)
+                    strategy_details[strategy_name] = signal
+                except Exception as e:
+                    logger.warning(f"Error processing strategy {strategy_name}: {e}")
+                    continue
             
             # Normalize scores
             if total_weight > 0:
