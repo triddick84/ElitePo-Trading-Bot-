@@ -614,17 +614,25 @@ class ForceSignalGenerator:
                     logger.warning(f"Error processing strategy {strategy_name}: {e}")
                     continue
             
-            # Normalize scores
+            # Normalize scores with safe handling
             if total_weight > 0:
                 buy_score = buy_score / total_weight
                 sell_score = sell_score / total_weight
+            else:
+                # Fallback if no valid strategies
+                buy_score = 75.0
+                sell_score = 75.0
+            
+            # Ensure scores are valid
+            buy_score = 75.0 if (math.isnan(buy_score) or math.isinf(buy_score)) else buy_score
+            sell_score = 75.0 if (math.isnan(sell_score) or math.isinf(sell_score)) else sell_score
             
             final_confidence = max(buy_score, sell_score)
             
             # Force signal generation - minimum 75% confidence
-            if final_confidence < 75.0:
+            if final_confidence < 75.0 or math.isnan(final_confidence) or math.isinf(final_confidence):
                 # Emergency boost for forced signals
-                final_confidence = max(75.0, final_confidence * 1.2)
+                final_confidence = max(75.0, final_confidence * 1.2 if not (math.isnan(final_confidence) or math.isinf(final_confidence)) else 75.0)
             
             direction_enum = SignalDirection.BUY if buy_score > sell_score else SignalDirection.SELL
             direction = direction_enum  # Keep enum for TradingSignal model
