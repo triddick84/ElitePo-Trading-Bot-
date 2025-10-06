@@ -4519,6 +4519,67 @@ class BackendTester:
             print(f"   Emergency fallback test error: {e}")
             return False
 
+    async def run_force_signal_debug_tests(self):
+        """Run focused debug tests for force signal generation issue"""
+        print("🔍 FORCE SIGNAL GENERATION DEBUG TESTING")
+        print("=" * 80)
+        print("Debugging the force signal generation button issue as requested")
+        print("Testing endpoints directly to identify the root cause")
+        print("=" * 80)
+        
+        await self.setup()
+        
+        # Define focused debug test suite for force signal generation
+        debug_tests = [
+            ("Health Check", self.test_health_check),
+            
+            # IMMEDIATE DEBUG TESTING (as requested in review)
+            ("1. Force Generate Endpoint - Basic Test", self.test_force_generate_endpoint_basic),
+            ("2. Force Generate Endpoint - Specific Asset", self.test_force_generate_specific_asset),
+            ("3. Configuration Loading Test", self.test_configuration_loading_for_force_generation),
+            ("4. Market Data Availability Test", self.test_market_data_availability_for_force_generation),
+            ("5. Signal Creation Process Test", self.test_signal_creation_process_detailed),
+            ("6. Platform Integration Test", self.test_platform_integration_during_force_generation),
+            ("7. Database Storage Test", self.test_database_storage_during_force_generation),
+            ("8. Response Format & JSON Test", self.test_response_format_and_json_serialization),
+        ]
+        
+        # Run debug tests
+        for test_name, test_func in debug_tests:
+            await self.run_test(test_name, test_func)
+            
+        await self.cleanup()
+        
+        # Print debug summary
+        print("\n" + "=" * 70)
+        print("🔍 FORCE SIGNAL GENERATION DEBUG SUMMARY")
+        print("=" * 70)
+        
+        total_tests = len(debug_tests)
+        passed_tests = total_tests - len(self.failed_tests)
+        
+        print(f"Total Debug Tests: {total_tests}")
+        print(f"Passed: {passed_tests}")
+        print(f"Failed: {len(self.failed_tests)}")
+        print(f"Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+        
+        if self.failed_tests:
+            print(f"\n❌ FAILED DEBUG TESTS (Root Cause Analysis):")
+            for test in self.failed_tests:
+                print(f"   - {test}")
+            print(f"\n🔧 DEBUGGING RECOMMENDATIONS:")
+            print("   1. Check backend logs for detailed error messages")
+            print("   2. Verify force_signal_generator module is working")
+            print("   3. Test configuration loading and timeframe handling")
+            print("   4. Check JSON serialization and numpy type conversion")
+            print("   5. Verify database connectivity and signal storage")
+        else:
+            print(f"\n✅ ALL DEBUG TESTS PASSED!")
+            print("   Force signal generation endpoints are working correctly")
+            print("   The issue may be in the frontend integration")
+            
+        return len(self.failed_tests) == 0
+
     async def run_all_tests(self):
         """Run all backend tests focusing on Pocket Option timing synchronization system"""
         print("🚀 Starting Pocket Option Timing Synchronization Testing for GPT Signal Bot")
