@@ -615,7 +615,8 @@ class ForceSignalGenerator:
                 # Emergency boost for forced signals
                 final_confidence = max(75.0, final_confidence * 1.2)
             
-            direction = SignalDirection.BUY if buy_score > sell_score else SignalDirection.SELL
+            direction_enum = SignalDirection.BUY if buy_score > sell_score else SignalDirection.SELL
+            direction = direction_enum  # Keep enum for TradingSignal model
             
             # Calculate signal parameters
             current_price = market_data.price
