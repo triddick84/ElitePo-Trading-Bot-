@@ -772,7 +772,7 @@ async def force_generate_signal_for_asset(asset_symbol: str):
             if otc_signal:
                 analysis_details["otc_boost_applied"] = otc_signal.technical_analysis.get('otc_boost_applied', 0)
             
-            return {
+            response = {
                 "success": True,
                 "message": f"🚀 {len(forced_signals)} Force signals generated for {asset_symbol} (Regular + OTC)",
                 "asset": asset_symbol,
@@ -781,6 +781,7 @@ async def force_generate_signal_for_asset(asset_symbol: str):
                 "otc_signal": next((s for s in stored_signals if "OTC" in s["symbol"]), None),
                 "analysis_details": analysis_details
             }
+            return _convert_numpy_types(response)
         else:
             raise HTTPException(status_code=500, detail="Force signal generation failed")
         
