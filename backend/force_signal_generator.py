@@ -835,38 +835,57 @@ class ForceSignalGenerator:
     
     # Helper methods for technical calculations
     def _fetch_deep_market_data(self, symbol: str, interval: str) -> List[Dict]:
-        """Fetch deep market data for specified interval"""
+        """Fetch deep market data for specified interval with fallback logic"""
         try:
-            ticker = yf.Ticker(symbol)
+            # Try different symbol formats for yfinance
+            symbol_variants = [symbol]
             
-            # Get appropriate period based on interval
-            period_map = {
-                '1m': '1d',     # 1 day of 1-minute data
-                '5m': '5d',     # 5 days of 5-minute data
-                '15m': '1mo',   # 1 month of 15-minute data
-                '1h': '3mo',    # 3 months of hourly data
-                '4h': '1y',     # 1 year of 4-hour data (if available)
-                '1d': '2y'      # 2 years of daily data
-            }
+            # Add common yfinance symbol formats
+            if '=' not in symbol:
+                if any(pair in symbol.upper() for pair in ['EUR', 'GBP', 'USD', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD']):
+                    symbol_variants.append(f"{symbol}=X")
+                if any(crypto in symbol.upper() for crypto in ['BTC', 'ETH', 'LTC', 'XRP']):
+                    symbol_variants.append(f"{symbol}-USD")
             
-            period = period_map.get(interval, '1mo')
-            hist = ticker.history(period=period, interval=interval)
+            for variant in symbol_variants:
+                try:
+                    ticker = yf.Ticker(variant)
+                    
+                    # Get appropriate period based on interval
+                    period_map = {
+                        '1m': '1d',     # 1 day of 1-minute data
+                        '5m': '5d',     # 5 days of 5-minute data
+                        '15m': '1mo',   # 1 month of 15-minute data
+                        '1h': '3mo',    # 3 months of hourly data
+                        '4h': '1y',     # 1 year of 4-hour data (if available)
+                        '1d': '2y'      # 2 years of daily data
+                    }
+                    
+                    period = period_map.get(interval, '1mo')
+                    hist = ticker.history(period=period, interval=interval)
+                    
+                    if not hist.empty:
+                        data = []
+                        for timestamp, row in hist.iterrows():
+                            data.append({
+                                'timestamp': timestamp,
+                                'open': float(row['Open']),
+                                'high': float(row['High']),
+                                'low': float(row['Low']),
+                                'close': float(row['Close']),
+                                'volume': float(row['Volume']) if 'Volume' in row else 0
+                            })
+                        
+                        logger.debug(f"Successfully fetched {len(data)} data points for {variant} ({interval})")
+                        return data
+                        
+                except Exception as e:
+                    logger.debug(f"Failed to fetch data for {variant}: {e}")
+                    continue
             
-            if hist.empty:
-                return []
-            
-            data = []
-            for timestamp, row in hist.iterrows():
-                data.append({
-                    'timestamp': timestamp,
-                    'open': float(row['Open']),
-                    'high': float(row['High']),
-                    'low': float(row['Low']),
-                    'close': float(row['Close']),
-                    'volume': float(row['Volume']) if 'Volume' in row else 0
-                })
-            
-            return data
+            # If all variants fail, return empty list instead of raising exception
+            logger.warning(f"Could not fetch market data for {symbol} ({interval}) - using fallback analysis")
+            return []
             
         except Exception as e:
             logger.error(f"Error fetching deep market data for {symbol} {interval}: {e}")
