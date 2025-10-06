@@ -602,12 +602,19 @@ async def force_generate_signal():
             
             # Store all forced signals in database
             for signal in forced_signals:
-                signal_dict = signal.dict()
-                signal_dict['timestamp'] = signal_dict['timestamp'].isoformat()
-                signal_dict['precision_entry_time'] = signal_dict['precision_entry_time'].isoformat() if signal_dict['precision_entry_time'] else None
-                # Convert numpy types for JSON serialization
-                signal_dict = _convert_numpy_types(signal_dict)
-                await db.trading_signals.insert_one(signal_dict)
+                try:
+                    signal_dict = signal.dict()
+                    signal_dict['timestamp'] = signal_dict['timestamp'].isoformat()
+                    signal_dict['precision_entry_time'] = signal_dict['precision_entry_time'].isoformat() if signal_dict['precision_entry_time'] else None
+                    # Convert numpy types for JSON serialization
+                    signal_dict = _convert_numpy_types(signal_dict)
+                    
+                    logger.info(f"Storing signal in database: {signal_dict.get('id')}")
+                    result = await db.trading_signals.insert_one(signal_dict)
+                    logger.info(f"Signal stored successfully with MongoDB ID: {result.inserted_id}")
+                except Exception as e:
+                    logger.error(f"Error storing signal {signal.id} in database: {e}")
+                    # Continue with other signals even if one fails
                 
                 stored_signals.append({
                     "id": str(signal.id),
