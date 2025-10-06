@@ -91,31 +91,36 @@ class PocketOptionTimingSync:
     
     def calculate_optimal_expiration_time(self, timeframe: str, entry_time: datetime, market_type: str = "regular") -> int:
         """
-        Calculate optimal expiration time based on Pocket Option's candle patterns
+        Calculate optimal expiration time that MATCHES the selected timeframe exactly
+        For ultra-short timeframes, expiration should be in the SAME timeframe units
         """
         try:
             base_seconds = self.timeframe_seconds.get(timeframe, 300)  # Default 5m
             
-            if market_type == "otc":
-                # OTC markets: 2-3 candles for optimal accuracy
-                if base_seconds <= 60:  # 1m or less
-                    return 3  # 3 minutes for short timeframes
-                elif base_seconds <= 300:  # Up to 5m
-                    return 10  # 10 minutes
-                else:
-                    return 15  # 15 minutes for longer timeframes
+            # Ultra-short timeframes (5s, 15s, 30s) - expiration matches timeframe
+            if base_seconds <= 30:  # 5s, 15s, 30s
+                if timeframe == '5s':
+                    return 1 if market_type == "otc" else 1  # 1 minute for 5s trades (minimum Pocket Option allows)
+                elif timeframe == '15s':
+                    return 1 if market_type == "otc" else 1  # 1 minute for 15s trades
+                elif timeframe == '30s':
+                    return 1 if market_type == "otc" else 2  # 1-2 minutes for 30s trades
+            
+            # Short timeframes (1m, 2m, 3m) - 1-3 candles
+            elif base_seconds <= 180:  # Up to 3m
+                candle_multiplier = 2 if market_type == "otc" else 3
+                expiration_seconds = base_seconds * candle_multiplier
+                return max(1, expiration_seconds // 60)  # Convert to minutes, minimum 1
+            
+            # Standard timeframes (5m+) - 2-4 candles
             else:
-                # Regular markets: 3-5 candles for optimal accuracy
-                if base_seconds <= 60:  # 1m or less
-                    return 5  # 5 minutes
-                elif base_seconds <= 300:  # Up to 5m
-                    return 15  # 15 minutes
-                else:
-                    return 30  # 30 minutes for longer timeframes
+                candle_multiplier = 2 if market_type == "otc" else 3
+                expiration_seconds = base_seconds * candle_multiplier
+                return max(5, expiration_seconds // 60)  # Convert to minutes, minimum 5
                     
         except Exception as e:
             logger.error(f"Error calculating expiration time: {e}")
-            return 15  # Safe default
+            return 1  # Safe default for ultra-short
     
     def is_market_open(self, asset_type: str, current_time: Optional[datetime] = None) -> bool:
         """
