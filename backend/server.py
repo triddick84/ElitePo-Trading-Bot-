@@ -33,9 +33,11 @@ def _convert_numpy_types(obj):
     """Convert numpy types to native Python types for JSON serialization"""
     import numpy as np
     
-    if isinstance(obj, dict):
+    if obj is None:
+        return None
+    elif isinstance(obj, dict):
         return {key: _convert_numpy_types(value) for key, value in obj.items()}
-    elif isinstance(obj, list):
+    elif isinstance(obj, (list, tuple)):
         return [_convert_numpy_types(item) for item in obj]
     elif isinstance(obj, np.integer):
         return int(obj)
@@ -43,6 +45,10 @@ def _convert_numpy_types(obj):
         return float(obj)
     elif isinstance(obj, np.ndarray):
         return obj.tolist()
+    elif isinstance(obj, np.bool_):
+        return bool(obj)
+    elif hasattr(obj, 'item'):  # Handle numpy scalars
+        return obj.item()
     else:
         return obj
 
