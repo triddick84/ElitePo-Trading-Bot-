@@ -730,6 +730,8 @@ async def force_generate_signal_for_asset(asset_symbol: str):
                 signal_dict = signal.dict()
                 signal_dict['timestamp'] = signal_dict['timestamp'].isoformat()
                 signal_dict['precision_entry_time'] = signal_dict['precision_entry_time'].isoformat() if signal_dict['precision_entry_time'] else None
+                # Convert numpy types for JSON serialization
+                signal_dict = _convert_numpy_types(signal_dict)
                 await db.trading_signals.insert_one(signal_dict)
                 
                 stored_signals.append({
