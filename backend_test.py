@@ -1205,6 +1205,461 @@ class BackendTester:
             print(f"   Enhanced signal performance test error: {e}")
             return False
 
+    # ========== ULTRA-SHORT TIMEFRAME TESTING ==========
+    
+    async def test_ultra_short_timeframe_verification(self) -> bool:
+        """Test that ultra-short timeframes (5s, 15s, 30s) are properly recognized"""
+        try:
+            print("   Testing ultra-short timeframe recognition in timeframe_seconds dictionary")
+            
+            # Import the timing sync module to check timeframe_seconds
+            import sys
+            sys.path.append('/app/backend')
+            from pocket_option_timing_sync import pocket_option_sync
+            
+            # Check if ultra-short timeframes are in the dictionary
+            required_timeframes = ['5s', '15s', '30s']
+            timeframe_seconds = pocket_option_sync.timeframe_seconds
+            
+            print(f"   Available timeframes: {list(timeframe_seconds.keys())}")
+            
+            for tf in required_timeframes:
+                if tf in timeframe_seconds:
+                    seconds = timeframe_seconds[tf]
+                    expected_seconds = {'5s': 5, '15s': 15, '30s': 30}[tf]
+                    if seconds == expected_seconds:
+                        print(f"   ✅ {tf} timeframe correctly mapped to {seconds} seconds")
+                    else:
+                        print(f"   ❌ {tf} timeframe incorrectly mapped to {seconds} seconds (expected {expected_seconds})")
+                        return False
+                else:
+                    print(f"   ❌ {tf} timeframe not found in timeframe_seconds dictionary")
+                    return False
+            
+            # Test fallback behavior - empty selected_timeframes should default to 5s
+            print("   Testing fallback behavior for empty selected_timeframes")
+            
+            # This would be tested in the force generation endpoint
+            return True
+            
+        except Exception as e:
+            print(f"   Ultra-short timeframe verification test error: {e}")
+            return False
+
+    async def test_force_signal_generation_with_ultra_short_timeframes(self) -> bool:
+        """Test force signal generation with ultra-short timeframes"""
+        try:
+            print("   Testing force signal generation with ultra-short timeframes")
+            
+            # Test different ultra-short timeframe configurations
+            test_timeframes = [
+                {'timeframes': [], 'expected_default': '5s'},  # Empty should default to 5s
+                {'timeframes': ['5s'], 'expected': '5s'},
+                {'timeframes': ['15s'], 'expected': '15s'},
+                {'timeframes': ['30s'], 'expected': '30s'},
+                {'timeframes': ['15s', '30s'], 'expected': '15s'}  # Should use first
+            ]
+            
+            for test_case in test_timeframes:
+                timeframes = test_case['timeframes']
+                expected = test_case.get('expected', test_case.get('expected_default'))
+                
+                print(f"   Testing with timeframes: {timeframes} (expecting {expected})")
+                
+                # Update configuration with selected timeframes
+                config_data = {
+                    "trading_mode": "demo",
+                    "active_strategies": ["hybrid"],
+                    "target_assets": ["forex"],
+                    "selected_assets": ["EURUSD_regular"],
+                    "selected_timeframes": timeframes,
+                    "risk_tolerance": "medium",
+                    "max_stake_per_trade": 10.0,
+                    "max_daily_trades": 50,
+                    "min_probability_threshold": 75.0,
+                    "auto_trading_enabled": False,
+                    "invert_signals": False,
+                    "sound_alerts_enabled": True
+                }
+                
+                # Save configuration
+                async with self.session.put(f"{BACKEND_URL}/config", json=config_data) as response:
+                    if response.status != 200:
+                        print(f"   ❌ Failed to save configuration with timeframes {timeframes}")
+                        return False
+                
+                # Test force signal generation
+                async with self.session.post(f"{BACKEND_URL}/signals/force-generate") as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        signals = data.get('signals', [])
+                        
+                        if signals:
+                            # Check both regular and OTC signals
+                            for signal in signals:
+                                signal_timeframe = signal.get('timeframe')
+                                print(f"   Generated signal timeframe: {signal_timeframe} (expected: {expected})")
+                                
+                                if signal_timeframe == expected:
+                                    print(f"   ✅ Signal generated with correct timeframe: {signal_timeframe}")
+                                else:
+                                    print(f"   ❌ Signal generated with wrong timeframe: {signal_timeframe} (expected: {expected})")
+                                    return False
+                        else:
+                            print(f"   ❌ No signals generated for timeframes: {timeframes}")
+                            return False
+                    else:
+                        print(f"   ❌ Force signal generation failed: {response.status}")
+                        return False
+            
+            return True
+            
+        except Exception as e:
+            print(f"   Force signal generation with ultra-short timeframes test error: {e}")
+            return False
+
+    async def test_signal_output_verification_ultra_short(self) -> bool:
+        """Test that generated signals have correct ultra-short timeframe fields"""
+        try:
+            print("   Testing signal output verification for ultra-short timeframes")
+            
+            # Test with 5s timeframe
+            config_data = {
+                "trading_mode": "demo",
+                "active_strategies": ["hybrid"],
+                "target_assets": ["forex"],
+                "selected_assets": ["EURUSD_regular"],
+                "selected_timeframes": ["5s"],
+                "risk_tolerance": "medium",
+                "max_stake_per_trade": 10.0,
+                "max_daily_trades": 50,
+                "min_probability_threshold": 75.0,
+                "auto_trading_enabled": False,
+                "invert_signals": False,
+                "sound_alerts_enabled": True
+            }
+            
+            # Save configuration
+            async with self.session.put(f"{BACKEND_URL}/config", json=config_data) as response:
+                if response.status != 200:
+                    print("   ❌ Failed to save 5s timeframe configuration")
+                    return False
+            
+            # Generate force signal
+            async with self.session.post(f"{BACKEND_URL}/signals/force-generate") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    signals = data.get('signals', [])
+                    regular_signal = data.get('regular_signal')
+                    otc_signal = data.get('otc_signal')
+                    
+                    print(f"   Generated {len(signals)} signals")
+                    
+                    # Verify regular signal
+                    if regular_signal:
+                        timeframe = regular_signal.get('timeframe')
+                        expiration = regular_signal.get('expiration_minutes')
+                        market_type = regular_signal.get('market_type')
+                        
+                        print(f"   Regular signal - Timeframe: {timeframe}, Expiration: {expiration}min, Market: {market_type}")
+                        
+                        if timeframe != '5s':
+                            print(f"   ❌ Regular signal has wrong timeframe: {timeframe} (expected: 5s)")
+                            return False
+                        
+                        if expiration < 1 or expiration > 2:
+                            print(f"   ❌ Regular signal has inappropriate expiration: {expiration}min (expected: 1-2min)")
+                            return False
+                        
+                        if market_type != 'regular':
+                            print(f"   ❌ Regular signal has wrong market type: {market_type}")
+                            return False
+                        
+                        print("   ✅ Regular signal has correct ultra-short timeframe properties")
+                    
+                    # Verify OTC signal
+                    if otc_signal:
+                        timeframe = otc_signal.get('timeframe')
+                        expiration = otc_signal.get('expiration_minutes')
+                        market_type = otc_signal.get('market_type')
+                        
+                        print(f"   OTC signal - Timeframe: {timeframe}, Expiration: {expiration}min, Market: {market_type}")
+                        
+                        if timeframe != '5s':
+                            print(f"   ❌ OTC signal has wrong timeframe: {timeframe} (expected: 5s)")
+                            return False
+                        
+                        if expiration < 1 or expiration > 2:
+                            print(f"   ❌ OTC signal has inappropriate expiration: {expiration}min (expected: 1-2min)")
+                            return False
+                        
+                        if market_type != 'otc':
+                            print(f"   ❌ OTC signal has wrong market type: {market_type}")
+                            return False
+                        
+                        print("   ✅ OTC signal has correct ultra-short timeframe properties")
+                    
+                    # Verify precision_entry_time is calculated correctly
+                    for signal in [regular_signal, otc_signal]:
+                        if signal and signal.get('precision_entry_time'):
+                            print(f"   ✅ Signal has precision_entry_time: {signal.get('precision_entry_time')}")
+                        else:
+                            print("   ⚠️ Signal missing precision_entry_time")
+                    
+                    return True
+                else:
+                    print(f"   ❌ Force signal generation failed: {response.status}")
+                    return False
+            
+        except Exception as e:
+            print(f"   Signal output verification test error: {e}")
+            return False
+
+    async def test_chicago_timezone_candle_formation(self) -> bool:
+        """Test Chicago timezone candle formation timing for ultra-short timeframes"""
+        try:
+            print("   Testing Chicago timezone candle formation for ultra-short timeframes")
+            
+            # Import timing sync module
+            import sys
+            sys.path.append('/app/backend')
+            from pocket_option_timing_sync import pocket_option_sync
+            
+            # Test candle formation timing for different ultra-short timeframes
+            test_timeframes = ['5s', '15s', '30s']
+            
+            for timeframe in test_timeframes:
+                print(f"   Testing candle formation timing for {timeframe}")
+                
+                # Test regular market
+                regular_time = pocket_option_sync.get_next_candle_formation_time(timeframe, "regular")
+                print(f"   Regular market {timeframe} next candle: {regular_time}")
+                
+                # Test OTC market
+                otc_time = pocket_option_sync.get_next_candle_formation_time(timeframe, "otc")
+                print(f"   OTC market {timeframe} next candle: {otc_time}")
+                
+                # Verify timing is in the future
+                current_time = pocket_option_sync.get_chicago_time()
+                if regular_time <= current_time:
+                    print(f"   ❌ Regular market candle time is not in the future")
+                    return False
+                
+                if otc_time <= current_time:
+                    print(f"   ❌ OTC market candle time is not in the future")
+                    return False
+                
+                # Verify timing difference is reasonable for ultra-short timeframes
+                time_diff_regular = (regular_time - current_time).total_seconds()
+                time_diff_otc = (otc_time - current_time).total_seconds()
+                
+                expected_max = {'5s': 5, '15s': 15, '30s': 30}[timeframe]
+                
+                if time_diff_regular > expected_max:
+                    print(f"   ❌ Regular market timing too far in future: {time_diff_regular}s (max: {expected_max}s)")
+                    return False
+                
+                if time_diff_otc > expected_max:
+                    print(f"   ❌ OTC market timing too far in future: {time_diff_otc}s (max: {expected_max}s)")
+                    return False
+                
+                print(f"   ✅ {timeframe} candle formation timing is correct")
+            
+            return True
+            
+        except Exception as e:
+            print(f"   Chicago timezone candle formation test error: {e}")
+            return False
+
+    async def test_configuration_update_ultra_short_timeframes(self) -> bool:
+        """Test configuration updates with ultra-short timeframes"""
+        try:
+            print("   Testing configuration updates with ultra-short timeframes")
+            
+            # Test different ultra-short timeframe configurations
+            test_configs = [
+                {
+                    "name": "5s only",
+                    "timeframes": ["5s"],
+                    "expected_first": "5s"
+                },
+                {
+                    "name": "15s only", 
+                    "timeframes": ["15s"],
+                    "expected_first": "15s"
+                },
+                {
+                    "name": "30s only",
+                    "timeframes": ["30s"], 
+                    "expected_first": "30s"
+                },
+                {
+                    "name": "Mixed ultra-short",
+                    "timeframes": ["15s", "30s"],
+                    "expected_first": "15s"
+                }
+            ]
+            
+            for test_config in test_configs:
+                print(f"   Testing {test_config['name']}: {test_config['timeframes']}")
+                
+                # Update configuration
+                config_data = {
+                    "trading_mode": "demo",
+                    "active_strategies": ["hybrid"],
+                    "target_assets": ["forex"],
+                    "selected_assets": ["EURUSD_regular"],
+                    "selected_timeframes": test_config['timeframes'],
+                    "risk_tolerance": "medium",
+                    "max_stake_per_trade": 10.0,
+                    "max_daily_trades": 50,
+                    "min_probability_threshold": 75.0,
+                    "auto_trading_enabled": False,
+                    "invert_signals": False,
+                    "sound_alerts_enabled": True
+                }
+                
+                # Save configuration
+                async with self.session.put(f"{BACKEND_URL}/config", json=config_data) as response:
+                    if response.status != 200:
+                        print(f"   ❌ Failed to save configuration: {response.status}")
+                        return False
+                
+                # Verify configuration was saved
+                async with self.session.get(f"{BACKEND_URL}/config") as response:
+                    if response.status == 200:
+                        saved_config = await response.json()
+                        saved_timeframes = saved_config.get('selected_timeframes', [])
+                        
+                        if saved_timeframes == test_config['timeframes']:
+                            print(f"   ✅ Configuration saved correctly: {saved_timeframes}")
+                        else:
+                            print(f"   ❌ Configuration not saved correctly: {saved_timeframes} (expected: {test_config['timeframes']})")
+                            return False
+                    else:
+                        print(f"   ❌ Failed to retrieve configuration: {response.status}")
+                        return False
+                
+                # Test force generation uses the first selected timeframe
+                async with self.session.post(f"{BACKEND_URL}/signals/force-generate") as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        signals = data.get('signals', [])
+                        
+                        if signals:
+                            first_signal = signals[0]
+                            signal_timeframe = first_signal.get('timeframe')
+                            
+                            if signal_timeframe == test_config['expected_first']:
+                                print(f"   ✅ Force generation uses first timeframe: {signal_timeframe}")
+                            else:
+                                print(f"   ❌ Force generation uses wrong timeframe: {signal_timeframe} (expected: {test_config['expected_first']})")
+                                return False
+                        else:
+                            print("   ❌ No signals generated")
+                            return False
+                    else:
+                        print(f"   ❌ Force generation failed: {response.status}")
+                        return False
+            
+            return True
+            
+        except Exception as e:
+            print(f"   Configuration update ultra-short timeframes test error: {e}")
+            return False
+
+    async def test_signal_response_structure_ultra_short(self) -> bool:
+        """Test signal response structure for ultra-short timeframes"""
+        try:
+            print("   Testing signal response structure for ultra-short timeframes")
+            
+            # Configure with 5s timeframe
+            config_data = {
+                "trading_mode": "demo",
+                "active_strategies": ["hybrid"],
+                "target_assets": ["forex"],
+                "selected_assets": ["EURUSD_regular"],
+                "selected_timeframes": ["5s"],
+                "risk_tolerance": "medium",
+                "max_stake_per_trade": 10.0,
+                "max_daily_trades": 50,
+                "min_probability_threshold": 75.0,
+                "auto_trading_enabled": False,
+                "invert_signals": False,
+                "sound_alerts_enabled": True
+            }
+            
+            async with self.session.put(f"{BACKEND_URL}/config", json=config_data) as response:
+                if response.status != 200:
+                    print("   ❌ Failed to save configuration")
+                    return False
+            
+            # Generate force signal
+            async with self.session.post(f"{BACKEND_URL}/signals/force-generate") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    
+                    # Check top-level response structure
+                    required_fields = ['success', 'message', 'signals', 'regular_signal', 'otc_signal', 'analysis_details']
+                    for field in required_fields:
+                        if field not in data:
+                            print(f"   ❌ Missing required field in response: {field}")
+                            return False
+                    
+                    print("   ✅ Response has all required top-level fields")
+                    
+                    # Check signal structure
+                    signals = data.get('signals', [])
+                    if not signals:
+                        print("   ❌ No signals in response")
+                        return False
+                    
+                    for i, signal in enumerate(signals):
+                        print(f"   Checking signal {i+1} structure")
+                        
+                        # Required signal fields
+                        signal_fields = [
+                            'id', 'symbol', 'direction', 'entry_price', 'probability',
+                            'expiration_minutes', 'timeframe', 'market_type', 'suggested_stake',
+                            'justification', 'strategy_used', 'confidence_level',
+                            'precision_entry_time', 'technical_analysis', 'timestamp'
+                        ]
+                        
+                        for field in signal_fields:
+                            if field not in signal:
+                                print(f"   ❌ Missing required signal field: {field}")
+                                return False
+                        
+                        # Verify ultra-short specific values
+                        timeframe = signal.get('timeframe')
+                        if timeframe != '5s':
+                            print(f"   ❌ Wrong timeframe in signal: {timeframe} (expected: 5s)")
+                            return False
+                        
+                        # Check technical_analysis contains ultra-short specific info
+                        tech_analysis = signal.get('technical_analysis', {})
+                        if 'target_timeframe' in tech_analysis:
+                            target_tf = tech_analysis['target_timeframe']
+                            if target_tf != '5s':
+                                print(f"   ❌ Wrong target_timeframe in technical_analysis: {target_tf}")
+                                return False
+                        
+                        # Check justification mentions correct timeframe
+                        justification = signal.get('justification', '')
+                        if '5s' not in justification and '5 second' not in justification.lower():
+                            print(f"   ⚠️ Justification doesn't mention 5s timeframe")
+                        
+                        print(f"   ✅ Signal {i+1} has correct structure and ultra-short timeframe data")
+                    
+                    return True
+                else:
+                    print(f"   ❌ Force signal generation failed: {response.status}")
+                    return False
+            
+        except Exception as e:
+            print(f"   Signal response structure test error: {e}")
+            return False
+
     async def test_configuration_persistence_across_sessions(self) -> bool:
         """Test that configuration persists across different sessions"""
         try:
