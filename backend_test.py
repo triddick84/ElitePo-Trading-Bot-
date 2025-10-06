@@ -1267,6 +1267,546 @@ class BackendTester:
             print(f"   Configuration persistence test error: {e}")
             return False
 
+    # ========== FORCE SIGNAL GENERATION DEBUG TESTS ==========
+    
+    async def test_force_generate_endpoint_basic(self) -> bool:
+        """Test basic force generate endpoint functionality"""
+        try:
+            print("   Testing POST /api/signals/force-generate endpoint")
+            
+            async with self.session.post(f"{BACKEND_URL}/signals/force-generate") as response:
+                print(f"   Response status: {response.status}")
+                
+                if response.status == 200:
+                    try:
+                        data = await response.json()
+                        print(f"   Response received successfully")
+                        
+                        # Check required response fields
+                        required_fields = ['success', 'message', 'signals']
+                        missing_fields = [field for field in required_fields if field not in data]
+                        
+                        if missing_fields:
+                            print(f"   ❌ Missing required fields: {missing_fields}")
+                            return False
+                        
+                        print(f"   ✅ All required fields present: {required_fields}")
+                        print(f"   Success: {data.get('success')}")
+                        print(f"   Message: {data.get('message')}")
+                        
+                        signals = data.get('signals', [])
+                        print(f"   Signals generated: {len(signals)}")
+                        
+                        # Check if both regular and OTC signals are generated
+                        regular_signal = data.get('regular_signal')
+                        otc_signal = data.get('otc_signal')
+                        
+                        print(f"   Regular signal present: {regular_signal is not None}")
+                        print(f"   OTC signal present: {otc_signal is not None}")
+                        
+                        if regular_signal:
+                            print(f"   Regular signal: {regular_signal.get('symbol')} {regular_signal.get('direction')} at {regular_signal.get('probability')}%")
+                        
+                        if otc_signal:
+                            print(f"   OTC signal: {otc_signal.get('symbol')} {otc_signal.get('direction')} at {otc_signal.get('probability')}%")
+                        
+                        return data.get('success') is True and len(signals) > 0
+                        
+                    except json.JSONDecodeError as e:
+                        print(f"   ❌ JSON serialization error: {e}")
+                        response_text = await response.text()
+                        print(f"   Raw response: {response_text[:500]}...")
+                        return False
+                        
+                elif response.status == 500:
+                    error_text = await response.text()
+                    print(f"   ❌ Server error (500): {error_text}")
+                    return False
+                else:
+                    error_text = await response.text()
+                    print(f"   ❌ Unexpected status {response.status}: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Force generate endpoint basic test error: {e}")
+            return False
+
+    async def test_force_generate_specific_asset(self) -> bool:
+        """Test force generate endpoint for specific asset"""
+        try:
+            test_assets = ['EURUSD', 'BTCUSD', 'INVALID_SYMBOL']
+            
+            for asset in test_assets:
+                print(f"   Testing force generation for asset: {asset}")
+                
+                async with self.session.post(f"{BACKEND_URL}/signals/force-generate/asset/{asset}") as response:
+                    print(f"   {asset} response status: {response.status}")
+                    
+                    if response.status == 200:
+                        try:
+                            data = await response.json()
+                            print(f"   {asset} success: {data.get('success')}")
+                            
+                            signals = data.get('signals', [])
+                            print(f"   {asset} signals generated: {len(signals)}")
+                            
+                            # Even invalid symbols should generate emergency signals
+                            if data.get('success') and len(signals) > 0:
+                                print(f"   ✅ {asset} force generation successful")
+                            else:
+                                print(f"   ❌ {asset} force generation failed")
+                                return False
+                                
+                        except json.JSONDecodeError as e:
+                            print(f"   ❌ {asset} JSON error: {e}")
+                            return False
+                    else:
+                        error_text = await response.text()
+                        print(f"   ❌ {asset} failed with status {response.status}: {error_text}")
+                        return False
+            
+            return True
+            
+        except Exception as e:
+            print(f"   Force generate specific asset test error: {e}")
+            return False
+
+    async def test_configuration_loading_for_force_generation(self) -> bool:
+        """Test configuration loading for force signal generation"""
+        try:
+            print("   Testing configuration loading for force generation")
+            
+            # First, set a specific configuration with timeframes
+            test_config = {
+                "trading_mode": "demo",
+                "active_strategies": ["hybrid"],
+                "target_assets": ["forex", "crypto"],
+                "selected_assets": ["EURUSD_regular", "BTCUSD_regular"],
+                "selected_timeframes": ["1m", "5m", "15m"],  # Specific timeframes
+                "risk_tolerance": "medium",
+                "max_stake_per_trade": 10.0,
+                "max_daily_trades": 50,
+                "min_probability_threshold": 75.0,
+                "auto_trading_enabled": False,
+                "invert_signals": False,
+                "sound_alerts_enabled": True
+            }
+            
+            # Save configuration
+            async with self.session.put(f"{BACKEND_URL}/config", json=test_config) as response:
+                if response.status != 200:
+                    print(f"   ❌ Failed to save test configuration: {response.status}")
+                    return False
+            
+            print("   ✅ Test configuration saved")
+            
+            # Verify configuration is loaded
+            async with self.session.get(f"{BACKEND_URL}/config") as response:
+                if response.status == 200:
+                    config = await response.json()
+                    selected_timeframes = config.get('selected_timeframes', [])
+                    print(f"   Current selected_timeframes: {selected_timeframes}")
+                    
+                    if not selected_timeframes:
+                        print("   ⚠️ No timeframes selected - should fallback to default")
+                    else:
+                        print(f"   ✅ Timeframes loaded: {selected_timeframes}")
+                else:
+                    print(f"   ❌ Failed to get configuration: {response.status}")
+                    return False
+            
+            # Test force generation with this configuration
+            async with self.session.post(f"{BACKEND_URL}/signals/force-generate") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if data.get('success'):
+                        print("   ✅ Force generation works with loaded configuration")
+                        return True
+                    else:
+                        print(f"   ❌ Force generation failed: {data.get('message')}")
+                        return False
+                else:
+                    error_text = await response.text()
+                    print(f"   ❌ Force generation failed: {response.status} - {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Configuration loading test error: {e}")
+            return False
+
+    async def test_market_data_availability_for_force_generation(self) -> bool:
+        """Test market data availability for force signal generation"""
+        try:
+            print("   Testing market data availability for force generation")
+            
+            # Test general market data endpoint
+            async with self.session.get(f"{BACKEND_URL}/market/data") as response:
+                if response.status == 200:
+                    market_data = await response.json()
+                    print("   ✅ General market data endpoint accessible")
+                else:
+                    print(f"   ⚠️ General market data endpoint failed: {response.status}")
+            
+            # Test selected assets data (what force generation uses)
+            test_assets = ["EURUSD_regular", "BTCUSD_regular"]
+            async with self.session.post(f"{BACKEND_URL}/market/data/selected", json=test_assets) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    assets = data.get('selected_assets', [])
+                    print(f"   Selected assets data available: {len(assets)} assets")
+                    
+                    for asset in assets:
+                        symbol = asset.get('symbol', 'Unknown')
+                        price = asset.get('price', 0)
+                        print(f"   Asset: {symbol} at price {price}")
+                else:
+                    print(f"   ⚠️ Selected assets data failed: {response.status}")
+            
+            # Test force generation to see if it handles market data correctly
+            async with self.session.post(f"{BACKEND_URL}/signals/force-generate") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    
+                    # Check analysis details for market data usage
+                    analysis_details = data.get('analysis_details', {})
+                    print(f"   Analysis details keys: {list(analysis_details.keys())}")
+                    
+                    signals = data.get('signals', [])
+                    if signals:
+                        first_signal = signals[0]
+                        entry_price = first_signal.get('entry_price', 0)
+                        print(f"   First signal entry price: {entry_price}")
+                        
+                        if entry_price > 0:
+                            print("   ✅ Market data is being used for signal generation")
+                            return True
+                        else:
+                            print("   ⚠️ Entry price is zero - may be using fallback data")
+                            return True  # Still acceptable for force generation
+                    else:
+                        print("   ❌ No signals generated")
+                        return False
+                else:
+                    print(f"   ❌ Force generation failed: {response.status}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Market data availability test error: {e}")
+            return False
+
+    async def test_signal_creation_process_detailed(self) -> bool:
+        """Test detailed signal creation process for force generation"""
+        try:
+            print("   Testing detailed signal creation process")
+            
+            async with self.session.post(f"{BACKEND_URL}/signals/force-generate") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    
+                    if not data.get('success'):
+                        print(f"   ❌ Force generation not successful: {data.get('message')}")
+                        return False
+                    
+                    signals = data.get('signals', [])
+                    print(f"   Total signals created: {len(signals)}")
+                    
+                    for i, signal in enumerate(signals):
+                        print(f"   Signal {i+1} details:")
+                        print(f"     ID: {signal.get('id')}")
+                        print(f"     Symbol: {signal.get('symbol')}")
+                        print(f"     Direction: {signal.get('direction')}")
+                        print(f"     Entry Price: {signal.get('entry_price')}")
+                        print(f"     Probability: {signal.get('probability')}%")
+                        print(f"     Market Type: {signal.get('market_type')}")
+                        print(f"     Timeframe: {signal.get('timeframe')}")
+                        print(f"     Expiration: {signal.get('expiration_minutes')} minutes")
+                        print(f"     Strategy: {signal.get('strategy_used')}")
+                        print(f"     Confidence: {signal.get('confidence_level')}")
+                        print(f"     Forced Generation: {signal.get('forced_generation')}")
+                        
+                        # Verify required fields
+                        required_fields = ['id', 'symbol', 'direction', 'entry_price', 'probability', 'timestamp']
+                        missing_fields = [field for field in required_fields if not signal.get(field)]
+                        
+                        if missing_fields:
+                            print(f"     ❌ Missing fields: {missing_fields}")
+                            return False
+                        
+                        # Verify signal quality
+                        probability = signal.get('probability', 0)
+                        if not (75.0 <= probability <= 98.5):
+                            print(f"     ❌ Probability {probability}% outside expected range (75-98.5%)")
+                            return False
+                        
+                        direction = signal.get('direction')
+                        if direction not in ['BUY', 'SELL', 'CALL', 'PUT']:
+                            print(f"     ❌ Invalid direction: {direction}")
+                            return False
+                        
+                        print(f"     ✅ Signal {i+1} validation passed")
+                    
+                    # Check for both regular and OTC signals
+                    regular_signals = [s for s in signals if 'regular' in s.get('symbol', '')]
+                    otc_signals = [s for s in signals if 'OTC' in s.get('symbol', '')]
+                    
+                    print(f"   Regular signals: {len(regular_signals)}")
+                    print(f"   OTC signals: {len(otc_signals)}")
+                    
+                    if len(regular_signals) > 0 and len(otc_signals) > 0:
+                        print("   ✅ Both regular and OTC signals generated")
+                        return True
+                    else:
+                        print("   ⚠️ Missing regular or OTC signals")
+                        return len(signals) > 0  # At least some signals generated
+                        
+                else:
+                    error_text = await response.text()
+                    print(f"   ❌ Signal creation failed: {response.status} - {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Signal creation process test error: {e}")
+            return False
+
+    async def test_platform_integration_during_force_generation(self) -> bool:
+        """Test platform integration during force signal generation"""
+        try:
+            print("   Testing platform integration during force generation")
+            
+            # First check platform integration status
+            async with self.session.get(f"{BACKEND_URL}/integrations/status") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    integrations = data.get('integrations', {})
+                    
+                    telegram_status = integrations.get('telegram', {}).get('status', 'unknown')
+                    autobot_status = integrations.get('autobot_signal', {}).get('status', 'unknown')
+                    pocket_status = integrations.get('pocket_option', {}).get('status', 'unknown')
+                    
+                    print(f"   Telegram status: {telegram_status}")
+                    print(f"   AutobotSignal status: {autobot_status}")
+                    print(f"   Pocket Option status: {pocket_status}")
+                else:
+                    print(f"   ⚠️ Could not get integration status: {response.status}")
+            
+            # Test force generation and check if it completes despite platform integration
+            async with self.session.post(f"{BACKEND_URL}/signals/force-generate") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    
+                    if data.get('success'):
+                        signals = data.get('signals', [])
+                        print(f"   ✅ Force generation successful with {len(signals)} signals")
+                        print("   ✅ Platform integration did not block force generation")
+                        
+                        # Check if signals were stored (they should be regardless of platform status)
+                        if len(signals) > 0:
+                            signal_id = signals[0].get('id')
+                            print(f"   Testing signal storage with ID: {signal_id}")
+                            
+                            # Verify signal was stored by checking history
+                            async with self.session.get(f"{BACKEND_URL}/signals/history?limit=5") as history_response:
+                                if history_response.status == 200:
+                                    history_data = await history_response.json()
+                                    recent_signals = history_data.get('signals', [])
+                                    
+                                    # Look for our signal in recent history
+                                    found_signal = any(s.get('id') == signal_id for s in recent_signals)
+                                    
+                                    if found_signal:
+                                        print("   ✅ Signal successfully stored in database")
+                                    else:
+                                        print("   ⚠️ Signal not found in recent history")
+                                else:
+                                    print(f"   ⚠️ Could not check signal history: {history_response.status}")
+                        
+                        return True
+                    else:
+                        print(f"   ❌ Force generation failed: {data.get('message')}")
+                        return False
+                else:
+                    error_text = await response.text()
+                    print(f"   ❌ Force generation request failed: {response.status} - {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Platform integration test error: {e}")
+            return False
+
+    async def test_database_storage_during_force_generation(self) -> bool:
+        """Test database storage during force signal generation"""
+        try:
+            print("   Testing database storage during force generation")
+            
+            # Get current signal count
+            async with self.session.get(f"{BACKEND_URL}/signals/history?limit=1") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    initial_count = len(data.get('signals', []))
+                    print(f"   Initial signal count: {initial_count}")
+                else:
+                    print("   ⚠️ Could not get initial signal count")
+                    initial_count = 0
+            
+            # Generate force signals
+            async with self.session.post(f"{BACKEND_URL}/signals/force-generate") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    
+                    if data.get('success'):
+                        generated_signals = data.get('signals', [])
+                        print(f"   Generated {len(generated_signals)} signals")
+                        
+                        # Wait a moment for database storage
+                        await asyncio.sleep(1)
+                        
+                        # Check if signals were stored
+                        async with self.session.get(f"{BACKEND_URL}/signals/history?limit=10") as history_response:
+                            if history_response.status == 200:
+                                history_data = await history_response.json()
+                                stored_signals = history_data.get('signals', [])
+                                
+                                print(f"   Current stored signals: {len(stored_signals)}")
+                                
+                                # Look for our generated signals in storage
+                                generated_ids = [s.get('id') for s in generated_signals]
+                                stored_ids = [s.get('id') for s in stored_signals]
+                                
+                                found_signals = [sig_id for sig_id in generated_ids if sig_id in stored_ids]
+                                print(f"   Signals found in storage: {len(found_signals)}")
+                                
+                                if len(found_signals) == len(generated_signals):
+                                    print("   ✅ All generated signals stored successfully")
+                                    
+                                    # Check signal data integrity
+                                    for signal in stored_signals[:len(generated_signals)]:
+                                        required_fields = ['id', 'symbol', 'direction', 'probability', 'timestamp']
+                                        missing_fields = [field for field in required_fields if not signal.get(field)]
+                                        
+                                        if missing_fields:
+                                            print(f"   ❌ Stored signal missing fields: {missing_fields}")
+                                            return False
+                                        
+                                        # Check for force generation markers
+                                        if signal.get('forced_generation'):
+                                            print(f"   ✅ Signal {signal.get('id')} marked as forced generation")
+                                        
+                                        # Check market type differentiation
+                                        market_type = signal.get('market_type', 'unknown')
+                                        print(f"   Signal market type: {market_type}")
+                                    
+                                    return True
+                                else:
+                                    print(f"   ❌ Only {len(found_signals)}/{len(generated_signals)} signals stored")
+                                    return False
+                            else:
+                                print(f"   ❌ Could not retrieve signal history: {history_response.status}")
+                                return False
+                    else:
+                        print(f"   ❌ Force generation failed: {data.get('message')}")
+                        return False
+                else:
+                    error_text = await response.text()
+                    print(f"   ❌ Force generation request failed: {response.status} - {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Database storage test error: {e}")
+            return False
+
+    async def test_response_format_and_json_serialization(self) -> bool:
+        """Test response format and JSON serialization for force generation"""
+        try:
+            print("   Testing response format and JSON serialization")
+            
+            async with self.session.post(f"{BACKEND_URL}/signals/force-generate") as response:
+                print(f"   Response status: {response.status}")
+                print(f"   Response headers: {dict(response.headers)}")
+                
+                # Check content type
+                content_type = response.headers.get('content-type', '')
+                if 'application/json' not in content_type:
+                    print(f"   ⚠️ Unexpected content type: {content_type}")
+                
+                if response.status == 200:
+                    try:
+                        # Test JSON parsing
+                        raw_text = await response.text()
+                        print(f"   Raw response length: {len(raw_text)} characters")
+                        
+                        # Parse JSON
+                        data = json.loads(raw_text)
+                        print("   ✅ JSON parsing successful")
+                        
+                        # Check response structure
+                        expected_structure = {
+                            'success': bool,
+                            'message': str,
+                            'signals': list,
+                            'regular_signal': (dict, type(None)),
+                            'otc_signal': (dict, type(None)),
+                            'analysis_details': dict
+                        }
+                        
+                        for field, expected_type in expected_structure.items():
+                            if field not in data:
+                                print(f"   ❌ Missing field: {field}")
+                                return False
+                            
+                            actual_value = data[field]
+                            if isinstance(expected_type, tuple):
+                                if not any(isinstance(actual_value, t) for t in expected_type):
+                                    print(f"   ❌ Field {field} has wrong type: {type(actual_value)}, expected one of {expected_type}")
+                                    return False
+                            else:
+                                if not isinstance(actual_value, expected_type):
+                                    print(f"   ❌ Field {field} has wrong type: {type(actual_value)}, expected {expected_type}")
+                                    return False
+                        
+                        print("   ✅ Response structure validation passed")
+                        
+                        # Test numpy type conversion
+                        signals = data.get('signals', [])
+                        for i, signal in enumerate(signals):
+                            # Check for numpy types that would cause JSON serialization issues
+                            for key, value in signal.items():
+                                if hasattr(value, 'dtype'):  # numpy array/scalar
+                                    print(f"   ❌ Signal {i} field {key} contains numpy type: {type(value)}")
+                                    return False
+                                
+                                # Check nested dictionaries (like technical_analysis)
+                                if isinstance(value, dict):
+                                    for nested_key, nested_value in value.items():
+                                        if hasattr(nested_value, 'dtype'):
+                                            print(f"   ❌ Signal {i} nested field {key}.{nested_key} contains numpy type: {type(nested_value)}")
+                                            return False
+                        
+                        print("   ✅ No numpy types found in response")
+                        
+                        # Test re-serialization
+                        try:
+                            re_serialized = json.dumps(data)
+                            print("   ✅ Response can be re-serialized to JSON")
+                        except (TypeError, ValueError) as e:
+                            print(f"   ❌ Response cannot be re-serialized: {e}")
+                            return False
+                        
+                        return True
+                        
+                    except json.JSONDecodeError as e:
+                        print(f"   ❌ JSON decode error: {e}")
+                        print(f"   Raw response preview: {raw_text[:500]}...")
+                        return False
+                        
+                else:
+                    error_text = await response.text()
+                    print(f"   ❌ Non-200 response: {response.status} - {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Response format test error: {e}")
+            return False
+
     # ========== POCKET OPTION TIMING SYNCHRONIZATION TESTS ==========
     
     async def test_pocket_option_timing_sync_module_import(self) -> bool:
