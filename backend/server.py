@@ -616,7 +616,7 @@ async def force_generate_signal():
             if otc_signal:
                 analysis_details["otc_boost_applied"] = otc_signal.technical_analysis.get('otc_boost_applied', 0)
             
-            return {
+            response = {
                 "success": True,
                 "message": f"🚀 {len(forced_signals)} Force signals generated with maximum analysis depth",
                 "signals": stored_signals,
@@ -624,6 +624,7 @@ async def force_generate_signal():
                 "otc_signal": next((s for s in stored_signals if "OTC" in s["symbol"]), None),
                 "analysis_details": analysis_details
             }
+            return _convert_numpy_types(response)
         else:
             return {
                 "success": False,
