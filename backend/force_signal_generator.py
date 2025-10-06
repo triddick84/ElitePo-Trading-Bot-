@@ -619,9 +619,14 @@ class ForceSignalGenerator:
                 buy_score = buy_score / total_weight
                 sell_score = sell_score / total_weight
             else:
-                # Fallback if no valid strategies
-                buy_score = 75.0
-                sell_score = 75.0
+                # Fallback if no valid strategies - balanced approach
+                import random
+                if random.random() > 0.5:
+                    buy_score = 75.5
+                    sell_score = 75.0
+                else:
+                    buy_score = 75.0
+                    sell_score = 75.5
             
             # Ensure scores are valid
             buy_score = 75.0 if (math.isnan(buy_score) or math.isinf(buy_score)) else buy_score
