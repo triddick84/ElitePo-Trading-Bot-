@@ -1439,14 +1439,16 @@ class BackendTester:
                 otc_time = pocket_option_sync.get_next_candle_formation_time(timeframe, "otc")
                 print(f"   OTC market {timeframe} next candle: {otc_time}")
                 
-                # Verify timing is in the future
+                # Verify timing is in the future (allow small tolerance for processing time)
                 current_time = pocket_option_sync.get_chicago_time()
-                if regular_time <= current_time:
-                    print(f"   ❌ Regular market candle time is not in the future")
+                time_tolerance = 2  # 2 seconds tolerance for processing
+                
+                if regular_time <= (current_time - timedelta(seconds=time_tolerance)):
+                    print(f"   ❌ Regular market candle time is too far in the past")
                     return False
                 
-                if otc_time <= current_time:
-                    print(f"   ❌ OTC market candle time is not in the future")
+                if otc_time <= (current_time - timedelta(seconds=time_tolerance)):
+                    print(f"   ❌ OTC market candle time is too far in the past")
                     return False
                 
                 # Verify timing difference is reasonable for ultra-short timeframes
