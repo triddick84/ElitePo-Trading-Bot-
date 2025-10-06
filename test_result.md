@@ -317,6 +317,9 @@
 
 ## test_plan:
   current_focus:
+    - "Ultra-Short Timeframe Signal Generation"
+    - "Ultra-Short Timeframe Configuration"
+    - "Ultra-Short Timeframe Timing Synchronization"
     - "OTC Market Signal Generation"
     - "OTC Signal Quality and Confidence"
     - "OTC Database Storage"
