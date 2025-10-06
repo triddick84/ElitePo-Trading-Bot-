@@ -562,9 +562,14 @@ async def force_generate_signal():
         try:
             config_doc = await db.trading_configurations.find_one({"user_id": "default_user"})
             user_timeframes = config_doc.get('selected_timeframes', ['5m']) if config_doc else ['5m']
+            
+            # If no timeframes are selected, use ultra-short default
+            if not user_timeframes or len(user_timeframes) == 0:
+                user_timeframes = ['5s']  # Default to ultra-short 5 second timeframe
+                logger.info("No timeframes selected, using ultra-short 5s default")
         except Exception as e:
             logger.warning(f"Could not get user timeframes, using default: {e}")
-            user_timeframes = ['5m']
+            user_timeframes = ['5s']
         
         logger.info(f"Using user selected timeframes: {user_timeframes}")
         
@@ -718,9 +723,14 @@ async def force_generate_signal_for_asset(asset_symbol: str):
         try:
             config_doc = await db.trading_configurations.find_one({"user_id": "default_user"})
             user_timeframes = config_doc.get('selected_timeframes', ['5m']) if config_doc else ['5m']
+            
+            # If no timeframes are selected, use ultra-short default
+            if not user_timeframes or len(user_timeframes) == 0:
+                user_timeframes = ['5s']  # Default to ultra-short 5 second timeframe
+                logger.info("No timeframes selected, using ultra-short 5s default")
         except Exception as e:
             logger.warning(f"Could not get user timeframes, using default: {e}")
-            user_timeframes = ['5m']
+            user_timeframes = ['5s']
         
         logger.info(f"Using user selected timeframes for {asset_symbol}: {user_timeframes}")
         
