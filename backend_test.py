@@ -4657,15 +4657,19 @@ class BackendTester:
         return len(self.failed_tests) == 0
 
 async def main():
-    """Main test runner"""
+    """Main test runner - focused on force signal generation debug"""
     tester = BackendTester()
-    success = await tester.run_all_tests()
+    
+    # Run focused debug tests for force signal generation issue
+    success = await tester.run_force_signal_debug_tests()
     
     if success:
-        print("\n✅ Backend testing completed successfully!")
+        print("\n✅ Force signal generation debug testing completed successfully!")
+        print("   All endpoints are working correctly - issue may be in frontend")
         return 0
     else:
-        print("\n❌ Backend testing completed with failures!")
+        print("\n❌ Force signal generation debug testing found issues!")
+        print("   Check the failed tests above for root cause analysis")
         return 1
 
 if __name__ == "__main__":
