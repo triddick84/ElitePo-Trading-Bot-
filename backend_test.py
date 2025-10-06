@@ -5063,12 +5063,20 @@ class BackendTester:
         
         await self.setup()
         
-        # Define test suite focused on Pocket Option Timing Synchronization
+        # Define test suite focused on Ultra-Short Timeframe Testing
         tests = [
             ("Health Check", self.test_health_check),
             ("Environment Variables", self.test_environment_variables),
             
-            # POCKET OPTION TIMING SYNCHRONIZATION TESTS (PRIMARY FOCUS)
+            # ULTRA-SHORT TIMEFRAME TESTING (PRIMARY FOCUS)
+            ("Ultra-Short Timeframe Verification", self.test_ultra_short_timeframe_verification),
+            ("Force Signal Generation with Ultra-Short Timeframes", self.test_force_signal_generation_with_ultra_short_timeframes),
+            ("Signal Output Verification Ultra-Short", self.test_signal_output_verification_ultra_short),
+            ("Chicago Timezone Candle Formation", self.test_chicago_timezone_candle_formation),
+            ("Configuration Update Ultra-Short Timeframes", self.test_configuration_update_ultra_short_timeframes),
+            ("Signal Response Structure Ultra-Short", self.test_signal_response_structure_ultra_short),
+            
+            # POCKET OPTION TIMING SYNCHRONIZATION TESTS (SECONDARY)
             ("Pocket Option Timing Sync - Module Import", self.test_pocket_option_timing_sync_module_import),
             ("Pocket Option Timing Sync - Chicago Timezone Functions", self.test_chicago_timezone_functions),
             ("Pocket Option Timing Sync - Candle Formation Timing", self.test_candle_formation_timing),
@@ -5080,7 +5088,7 @@ class BackendTester:
             ("Pocket Option Timing Sync - Compatible Timeframes", self.test_pocket_option_compatible_timeframes),
             ("Pocket Option Timing Sync - Timing Accuracy", self.test_timing_accuracy_and_precision),
             
-            # OTC Market Signal Generation Tests (SECONDARY)
+            # OTC Market Signal Generation Tests (TERTIARY)
             ("OTC Market Signal Generation", self.test_otc_market_signal_generation),
             ("OTC Signal Quality and Confidence", self.test_otc_signal_quality_and_confidence),
             ("OTC Database Storage", self.test_otc_database_storage),
