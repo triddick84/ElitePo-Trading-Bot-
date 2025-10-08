@@ -242,14 +242,14 @@ const SignalPopupNotification = ({ signal, onClose, onExecute }) => {
       }
     }
     
-    // Dynamic thresholds based on timeframe
+    // Enhanced status messages for ultra-short timeframes
     const timeframeData = {
-      '5s': { warning: 8, label: '5-second' },
-      '15s': { warning: 10, label: '15-second' },
-      '30s': { warning: 15, label: '30-second' },
-      '1m': { warning: 20, label: '1-minute' },
-      '3m': { warning: 30, label: '3-minute' },
-      '5m': { warning: 45, label: '5-minute' }
+      '5s': { warning: 8, label: 'Ultra-Fast 5s' },
+      '15s': { warning: 10, label: 'Quick 15s' },
+      '30s': { warning: 12, label: 'Fast 30s' },
+      '1m': { warning: 15, label: '1-minute' },
+      '3m': { warning: 20, label: '3-minute' },
+      '5m': { warning: 30, label: '5-minute' }
     };
     
     const timeframeInfo = timeframeData[signal?.timeframe] || { warning: 20, label: 'standard' };
@@ -264,7 +264,7 @@ const SignalPopupNotification = ({ signal, onClose, onExecute }) => {
     }
     
     if (timeLeft > timeframeInfo.warning) {
-      return `⏳ Preparing ${timeframeInfo.label} entry (${timeLeft}s)`;
+      return `⏳ Preparing ${timeframeInfo.label} entry`;
     }
     
     return '⏳ Preparing entry...';
