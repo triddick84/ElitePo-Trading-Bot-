@@ -267,7 +267,7 @@ const SignalPopupNotification = ({ signal, onClose, onExecute }) => {
             </div>
           </div>
           <button 
-            onClick={onClose}
+            onClick={handleClose}
             className="text-slate-400 hover:text-white transition-colors"
           >
             <X className="w-5 h-5" />
