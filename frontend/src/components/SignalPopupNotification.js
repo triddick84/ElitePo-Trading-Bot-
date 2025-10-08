@@ -8,13 +8,12 @@ const SignalPopupNotification = ({ signal, onClose, onExecute }) => {
 
   useEffect(() => {
     let intervalId = null;
+    let correctedEntryTime = null; // Store corrected time to prevent recalculation
     
-    // Stable calculation function that prevents jumping
-    const calculateTimeLeft = () => {
+    // Calculate the entry time once and store it
+    const initializeEntryTime = () => {
       try {
         let entryTime;
-        
-        // Determine entry time with proper future timing for ultra-short timeframes
         let needsCorrection = false;
         
         if (signal?.precision_entry_time) {
@@ -70,12 +69,27 @@ const SignalPopupNotification = ({ signal, onClose, onExecute }) => {
         if (isNaN(entryTime.getTime())) {
           console.error('Invalid entry time calculation');
           setIsExpired(true);
-          return;
+          return null;
         }
         
-        // Use performance.now() for more stable timing
+        return entryTime;
+      } catch (error) {
+        console.error('Entry time initialization error:', error);
+        setIsExpired(true);
+        return null;
+      }
+    };
+
+    // Initialize the corrected entry time once
+    correctedEntryTime = initializeEntryTime();
+    if (!correctedEntryTime) return;
+    
+    // Timer calculation function that uses the fixed entry time
+    const calculateTimeLeft = () => {
+      try {
+        // Use the pre-calculated corrected entry time
         const now = Date.now();
-        const entryTimeMs = entryTime.getTime();
+        const entryTimeMs = correctedEntryTime.getTime();
         const diffMs = entryTimeMs - now;
         
         // Prevent timer jumping by using consistent rounding
