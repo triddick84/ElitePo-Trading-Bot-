@@ -141,21 +141,42 @@ const SignalPopupNotification = ({ signal, onClose, onExecute }) => {
     return isNegative ? `-${timeString}` : timeString;
   };
 
+  // Memoized functions to prevent unnecessary re-calculations
   const getTimerColor = () => {
-    if (isExpired) return 'text-red-500 bg-red-500/20 border-red-500';
-    if (isOptimalTime) return 'text-green-400 bg-green-500/20 border-green-400 animate-pulse';
+    if (isExpired) {
+      return 'text-red-500 bg-red-500/20 border-red-500';
+    }
     
-    // Dynamic warning threshold based on timeframe
-    const isUltraShort = ['5s', '15s', '30s'].includes(signal?.timeframe);
-    const warningThreshold = isUltraShort ? 5 : 15;
+    if (isOptimalTime) {
+      return 'text-green-400 bg-green-500/20 border-green-400 animate-pulse';
+    }
     
-    if (timeLeft <= warningThreshold && timeLeft > 0) return 'text-yellow-400 bg-yellow-500/20 border-yellow-400';
-    if (timeLeft < 0 && !isOptimalTime) return 'text-orange-400 bg-orange-500/20 border-orange-400';
+    // Determine warning thresholds based on timeframe
+    const timeframeThresholds = {
+      '5s': 8,    // 8 second warning for 5s timeframe
+      '15s': 10,  // 10 second warning for 15s timeframe
+      '30s': 15,  // 15 second warning for 30s timeframe
+      '1m': 20,   // 20 second warning for 1m timeframe
+      '3m': 30,   // 30 second warning for 3m timeframe
+      '5m': 45    // 45 second warning for 5m timeframe
+    };
+    
+    const warningThreshold = timeframeThresholds[signal?.timeframe] || 20;
+    
+    if (timeLeft <= warningThreshold && timeLeft > 0) {
+      return 'text-yellow-400 bg-yellow-500/20 border-yellow-400';
+    }
+    
+    if (timeLeft < 0 && !isOptimalTime) {
+      return 'text-orange-400 bg-orange-500/20 border-orange-400';
+    }
+    
     return 'text-blue-400 bg-blue-500/20 border-blue-400';
   };
 
   const getSignalIcon = () => {
-    return signal.direction === 'BUY' || signal.direction === 'CALL' ? (
+    const isBuySignal = signal?.direction === 'BUY' || signal?.direction === 'CALL';
+    return isBuySignal ? (
       <TrendingUp className="w-8 h-8 text-green-400" />
     ) : (
       <TrendingDown className="w-8 h-8 text-red-400" />
@@ -163,21 +184,46 @@ const SignalPopupNotification = ({ signal, onClose, onExecute }) => {
   };
 
   const getStatusMessage = () => {
-    if (isExpired) return '⏰ Signal Expired';
+    if (isExpired) {
+      return '⏰ Signal Expired';
+    }
+    
     if (isOptimalTime) {
-      return timeLeft >= 0 ? '🎯 ENTRY WINDOW OPEN!' : '🚀 OPTIMAL ENTRY TIME!';
+      if (timeLeft > 0) {
+        return '🎯 ENTRY WINDOW OPENS SOON!';
+      } else if (timeLeft >= -2) {
+        return '🚀 OPTIMAL ENTRY NOW!';
+      } else {
+        return '⚡ FINAL MOMENTS TO ENTER!';
+      }
     }
     
-    const isUltraShort = ['5s', '15s', '30s'].includes(signal?.timeframe);
-    const warningThreshold = isUltraShort ? 5 : 15;
+    // Dynamic thresholds based on timeframe
+    const timeframeData = {
+      '5s': { warning: 8, label: '5-second' },
+      '15s': { warning: 10, label: '15-second' },
+      '30s': { warning: 15, label: '30-second' },
+      '1m': { warning: 20, label: '1-minute' },
+      '3m': { warning: 30, label: '3-minute' },
+      '5m': { warning: 45, label: '5-minute' }
+    };
     
-    if (timeLeft <= warningThreshold && timeLeft > 0) {
-      return `⚠️ Entry in ${timeLeft}s - Get Ready!`;
+    const timeframeInfo = timeframeData[signal?.timeframe] || { warning: 20, label: 'standard' };
+    
+    if (timeLeft <= timeframeInfo.warning && timeLeft > 0) {
+      return `⚠️ ${timeframeInfo.label} entry in ${timeLeft}s`;
     }
+    
     if (timeLeft < 0 && !isExpired) {
-      return '⏳ Entry Window Closing...';
+      const remainingWindow = Math.abs(timeLeft);
+      return `⏳ Window closing (${remainingWindow}s past)`;
     }
-    return `⏳ Preparing Entry... (${timeLeft}s)`;
+    
+    if (timeLeft > timeframeInfo.warning) {
+      return `⏳ Preparing ${timeframeInfo.label} entry (${timeLeft}s)`;
+    }
+    
+    return '⏳ Preparing entry...';
   };
 
   return (
