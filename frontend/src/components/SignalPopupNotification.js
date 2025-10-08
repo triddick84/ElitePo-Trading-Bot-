@@ -172,7 +172,7 @@ const SignalPopupNotification = ({ signal, onClose, onExecute }) => {
     }
     
     return 'text-blue-400 bg-blue-500/20 border-blue-400';
-  };
+  }, [isExpired, isOptimalTime, timeLeft, signal?.timeframe]);
 
   const getSignalIcon = () => {
     const isBuySignal = signal?.direction === 'BUY' || signal?.direction === 'CALL';
