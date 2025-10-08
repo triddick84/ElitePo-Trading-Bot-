@@ -266,7 +266,7 @@ const SignalPopupNotification = ({ signal, onClose, onExecute }) => {
           {/* Asset and Direction */}
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              {getSignalIcon()}
+              {signalIcon}
               <div>
                 <div className="text-xl font-bold text-white">
                   {signal.direction} {signal.symbol}
