@@ -142,12 +142,18 @@ const SignalPopupNotification = ({ signal, onClose, onExecute }) => {
   const getTimerColor = () => {
     if (isExpired) return 'text-red-500 bg-red-500/20 border-red-500';
     if (isOptimalTime) return 'text-green-400 bg-green-500/20 border-green-400 animate-pulse';
-    if (timeLeft <= 15) return 'text-yellow-400 bg-yellow-500/20 border-yellow-400';
+    
+    // Dynamic warning threshold based on timeframe
+    const isUltraShort = ['5s', '15s', '30s'].includes(signal?.timeframe);
+    const warningThreshold = isUltraShort ? 5 : 15;
+    
+    if (timeLeft <= warningThreshold && timeLeft > 0) return 'text-yellow-400 bg-yellow-500/20 border-yellow-400';
+    if (timeLeft < 0 && !isOptimalTime) return 'text-orange-400 bg-orange-500/20 border-orange-400';
     return 'text-blue-400 bg-blue-500/20 border-blue-400';
   };
 
   const getSignalIcon = () => {
-    return signal.direction === 'BUY' ? (
+    return signal.direction === 'BUY' || signal.direction === 'CALL' ? (
       <TrendingUp className="w-8 h-8 text-green-400" />
     ) : (
       <TrendingDown className="w-8 h-8 text-red-400" />
@@ -156,9 +162,20 @@ const SignalPopupNotification = ({ signal, onClose, onExecute }) => {
 
   const getStatusMessage = () => {
     if (isExpired) return '⏰ Signal Expired';
-    if (isOptimalTime) return '🎯 OPTIMAL ENTRY TIME!';
-    if (timeLeft <= 15) return '⚠️ Entry Window Approaching';
-    return '⏳ Preparing Entry...';
+    if (isOptimalTime) {
+      return timeLeft >= 0 ? '🎯 ENTRY WINDOW OPEN!' : '🚀 OPTIMAL ENTRY TIME!';
+    }
+    
+    const isUltraShort = ['5s', '15s', '30s'].includes(signal?.timeframe);
+    const warningThreshold = isUltraShort ? 5 : 15;
+    
+    if (timeLeft <= warningThreshold && timeLeft > 0) {
+      return `⚠️ Entry in ${timeLeft}s - Get Ready!`;
+    }
+    if (timeLeft < 0 && !isExpired) {
+      return '⏳ Entry Window Closing...';
+    }
+    return `⏳ Preparing Entry... (${timeLeft}s)`;
   };
 
   return (
