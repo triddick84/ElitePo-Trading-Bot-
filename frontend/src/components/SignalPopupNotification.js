@@ -174,14 +174,14 @@ const SignalPopupNotification = ({ signal, onClose, onExecute }) => {
     return 'text-blue-400 bg-blue-500/20 border-blue-400';
   }, [isExpired, isOptimalTime, timeLeft, signal?.timeframe]);
 
-  const getSignalIcon = () => {
+  const signalIcon = useMemo(() => {
     const isBuySignal = signal?.direction === 'BUY' || signal?.direction === 'CALL';
     return isBuySignal ? (
       <TrendingUp className="w-8 h-8 text-green-400" />
     ) : (
       <TrendingDown className="w-8 h-8 text-red-400" />
     );
-  };
+  }, [signal?.direction]);
 
   const getStatusMessage = () => {
     if (isExpired) {
