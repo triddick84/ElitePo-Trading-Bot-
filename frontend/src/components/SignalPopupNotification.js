@@ -14,25 +14,56 @@ const SignalPopupNotification = ({ signal, onClose, onExecute }) => {
       try {
         let entryTime;
         
-        // Determine entry time - prefer precision_entry_time, fallback to calculated time
+        // Determine entry time with proper future timing for ultra-short timeframes
+        let needsCorrection = false;
+        
         if (signal?.precision_entry_time) {
           entryTime = new Date(signal.precision_entry_time);
-        } else {
-          // Create stable fallback time based on signal creation
-          const signalTime = signal?.timestamp ? new Date(signal.timestamp) : new Date();
           
-          // Consistent entry delay based on timeframe
+          // Check if precision_entry_time is already in the past (common with force signals)
+          const now = Date.now();
+          const timeDiff = entryTime.getTime() - now;
+          
+          // If time is in the past or too close (less than 5 seconds), we need to correct it
+          if (timeDiff < 5000) {
+            needsCorrection = true;
+            console.log('Correcting past precision_entry_time for ultra-short timeframe:', {
+              originalTime: entryTime.toISOString(),
+              timeframe: signal.timeframe,
+              diffMs: timeDiff
+            });
+          }
+        } else {
+          needsCorrection = true;
+        }
+        
+        if (needsCorrection) {
+          // Create proper future entry time based on signal creation + appropriate delay
+          const signalTime = signal?.timestamp ? new Date(signal.timestamp) : new Date();
+          const currentTime = Date.now();
+          
+          // Use current time if signal time is also in the past
+          const baseTime = Math.max(signalTime.getTime(), currentTime);
+          
+          // Enhanced entry delays for ultra-short timeframes to ensure positive countdown
           const entryDelays = {
-            '5s': 15000,   // 15 seconds for 5s timeframe
-            '15s': 20000,  // 20 seconds for 15s timeframe
-            '30s': 30000,  // 30 seconds for 30s timeframe
+            '5s': 25000,   // 25 seconds for 5s timeframe - more time to prepare
+            '15s': 30000,  // 30 seconds for 15s timeframe
+            '30s': 35000,  // 35 seconds for 30s timeframe
             '1m': 45000,   // 45 seconds for 1m timeframe
             '3m': 60000,   // 60 seconds for 3m timeframe
             '5m': 90000    // 90 seconds for 5m timeframe
           };
           
           const delay = entryDelays[signal?.timeframe] || 30000;
-          entryTime = new Date(signalTime.getTime() + delay);
+          entryTime = new Date(baseTime + delay);
+          
+          console.log('Created corrected entry time:', {
+            timeframe: signal.timeframe,
+            baseTime: new Date(baseTime).toISOString(),
+            delay: delay / 1000 + 's',
+            newEntryTime: entryTime.toISOString()
+          });
         }
         
         // Validate timestamps to prevent errors
