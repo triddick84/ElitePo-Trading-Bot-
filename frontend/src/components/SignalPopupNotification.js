@@ -124,15 +124,19 @@ const SignalPopupNotification = ({ signal, onClose, onExecute }) => {
   if (!signal) return null;
 
   const formatTime = (seconds) => {
-    if (seconds <= 0) {
-      const absSeconds = Math.abs(seconds);
-      const mins = Math.floor(absSeconds / 60);
-      const secs = absSeconds % 60;
-      return mins > 0 ? `-${mins}:${secs.toString().padStart(2, '0')}` : `-${secs}s`;
+    const isNegative = seconds < 0;
+    const absSeconds = Math.abs(seconds);
+    const mins = Math.floor(absSeconds / 60);
+    const secs = Math.floor(absSeconds % 60); // Use Math.floor for consistency
+    
+    let timeString;
+    if (mins > 0) {
+      timeString = `${mins}:${secs.toString().padStart(2, '0')}`;
+    } else {
+      timeString = `${secs}s`;
     }
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return mins > 0 ? `${mins}:${secs.toString().padStart(2, '0')}` : `${secs}s`;
+    
+    return isNegative ? `-${timeString}` : timeString;
   };
 
   const getTimerColor = () => {
