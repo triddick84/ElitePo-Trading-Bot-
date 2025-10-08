@@ -141,8 +141,8 @@ const SignalPopupNotification = ({ signal, onClose, onExecute }) => {
     return isNegative ? `-${timeString}` : timeString;
   };
 
-  // Memoized functions to prevent unnecessary re-calculations
-  const getTimerColor = () => {
+  // Memoized calculations to prevent unnecessary re-renders and improve performance
+  const timerColor = useMemo(() => {
     if (isExpired) {
       return 'text-red-500 bg-red-500/20 border-red-500';
     }
