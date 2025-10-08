@@ -96,20 +96,20 @@ const SignalPopupNotification = ({ signal, onClose, onExecute }) => {
         let optimalStart, optimalEnd, expireAfter;
         
         if (isUltraShort) {
-          // Ultra-short: tight entry window
-          optimalStart = 5;   // 5 seconds before
-          optimalEnd = -3;    // 3 seconds after
-          expireAfter = -20;  // Expire 20 seconds after
+          // Ultra-short: precise but not too tight entry window
+          optimalStart = 8;   // 8 seconds before entry time
+          optimalEnd = -2;    // 2 seconds after entry time
+          expireAfter = -15;  // Expire 15 seconds after entry
         } else if (isShort) {
           // Short: moderate entry window
           optimalStart = 10;  // 10 seconds before
           optimalEnd = -5;    // 5 seconds after
-          expireAfter = -45;  // Expire 45 seconds after
+          expireAfter = -30;  // Expire 30 seconds after
         } else {
           // Standard: generous entry window
           optimalStart = 15;  // 15 seconds before
           optimalEnd = -10;   // 10 seconds after
-          expireAfter = -90;  // Expire 90 seconds after
+          expireAfter = -60;  // Expire 60 seconds after
         }
         
         // Update states only when necessary to prevent jumping
