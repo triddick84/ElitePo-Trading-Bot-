@@ -117,6 +117,19 @@ const SignalPopupNotification = ({ signal, onClose, onExecute }) => {
     }
   }, [isExpired, onClose]);
 
+  // Optimized callbacks to prevent unnecessary re-renders
+  const handleClose = useCallback(() => {
+    if (onClose) {
+      onClose();
+    }
+  }, [onClose]);
+
+  const handleExecute = useCallback(() => {
+    if (onExecute) {
+      onExecute(signal);
+    }
+  }, [onExecute, signal]);
+
   if (!signal) return null;
 
   const formatTime = (seconds) => {
