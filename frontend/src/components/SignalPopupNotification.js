@@ -120,11 +120,17 @@ const SignalPopupNotification = ({ signal, onClose, onExecute }) => {
   if (!signal) return null;
 
   const formatTime = (seconds) => {
+    // Handle invalid input
+    if (typeof seconds !== 'number' || isNaN(seconds)) {
+      return '0s';
+    }
+    
     const isNegative = seconds < 0;
     const absSeconds = Math.abs(seconds);
     const mins = Math.floor(absSeconds / 60);
-    const secs = Math.floor(absSeconds % 60); // Use Math.floor for consistency
+    const secs = Math.floor(absSeconds % 60);
     
+    // Consistent formatting to prevent jumping
     let timeString;
     if (mins > 0) {
       timeString = `${mins}:${secs.toString().padStart(2, '0')}`;
