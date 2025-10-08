@@ -352,7 +352,7 @@ const SignalPopupNotification = ({ signal, onClose, onExecute }) => {
               </button>
               
               <button
-                onClick={onClose}
+                onClick={handleClose}
                 className="px-4 py-3 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-colors"
               >
                 Dismiss
