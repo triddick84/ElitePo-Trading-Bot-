@@ -339,7 +339,7 @@ const SignalPopupNotification = ({ signal, onClose, onExecute }) => {
           {!isExpired && (
             <div className="flex space-x-2">
               <button
-                onClick={() => onExecute && onExecute(signal)}
+                onClick={handleExecute}
                 disabled={!isOptimalTime}
                 className={`
                   flex-1 py-3 px-4 rounded-lg font-semibold transition-all
