@@ -239,33 +239,49 @@ const SignalPopupNotification = ({ signal, onClose, onExecute }) => {
     return '⏳ Preparing entry...';
   }, [isExpired, isOptimalTime, timeLeft, signal?.timeframe]);
 
+  // Get direction display with emoji and color
+  const getDirectionDisplay = () => {
+    const isBuy = signal.direction === 'BUY' || signal.direction === 'CALL';
+    return isBuy ? '🟢⬆️ UP' : '🔴⬇️ DOWN';
+  };
+
+  // Get asset display with appropriate emoji
+  const getAssetDisplay = () => {
+    const marketEmoji = signal.market_type === 'otc' ? '📈' : '📊';
+    const assetName = signal.symbol?.replace('_regular', '')?.replace('_OTC', '') || 'Unknown';
+    const marketType = signal.market_type === 'otc' ? ' OTC' : '';
+    return `${marketEmoji} Asset: ${assetName}${marketType}`;
+  };
+
+  // Get duration display
+  const getDurationDisplay = () => {
+    const timeframe = signal.timeframe || '1m';
+    const expiration = signal.expiration_minutes || 5;
+    
+    // Convert timeframe to readable format
+    let durationText;
+    if (timeframe.includes('s')) {
+      durationText = `${timeframe.replace('s', '')} Second${timeframe === '1s' ? '' : 's'}`;
+    } else if (timeframe.includes('m')) {
+      durationText = `${timeframe.replace('m', '')} Minute${timeframe === '1m' ? '' : 's'}`;
+    } else {
+      durationText = `${expiration} Minute${expiration === 1 ? '' : 's'}`;
+    }
+    
+    return `⏳ Duration: ${durationText}`;
+  };
+
   return (
     <div className="fixed top-4 right-4 z-50 animate-in slide-in-from-top-2 duration-500">
       <div className={`
-        w-96 max-w-[90vw] bg-gradient-to-br from-slate-800/95 to-slate-900/95 
+        w-80 max-w-[90vw] bg-gradient-to-br from-slate-800/95 to-slate-900/95 
         backdrop-blur-xl border-2 rounded-xl shadow-2xl
         ${signal.market_type === 'otc' ? 'border-purple-500/50' : 'border-emerald-500/50'}
         ${isOptimalTime ? 'animate-pulse shadow-green-400/50' : ''}
       `}>
         {/* Header */}
-        <div className={`
-          flex items-center justify-between p-4 border-b
-          ${signal.market_type === 'otc' ? 'border-purple-500/30 bg-purple-500/10' : 'border-emerald-500/30 bg-emerald-500/10'}
-        `}>
-          <div className="flex items-center space-x-3">
-            {signal.forced_generation && <Zap className="w-5 h-5 text-yellow-400" />}
-            <h3 className="font-bold text-white">
-              🚀 {signal.market_type?.toUpperCase()} SIGNAL
-            </h3>
-            <div className={`
-              px-2 py-1 rounded-full text-xs font-semibold
-              ${signal.probability >= 90 ? 'bg-green-500/20 text-green-400' :
-                signal.probability >= 80 ? 'bg-yellow-500/20 text-yellow-400' :
-                'bg-red-500/20 text-red-400'}
-            `}>
-              {signal.probability}%
-            </div>
-          </div>
+        <div className="flex items-center justify-between p-4 border-b border-slate-700/50">
+          <h2 className="text-lg font-bold text-white">🚀 Trading Alert:</h2>
           <button 
             onClick={handleClose}
             className="text-slate-400 hover:text-white transition-colors"
@@ -274,86 +290,81 @@ const SignalPopupNotification = ({ signal, onClose, onExecute }) => {
           </button>
         </div>
 
-        {/* Signal Details */}
-        <div className="p-4 space-y-4">
-          {/* Asset and Direction */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              {signalIcon}
-              <div>
-                <div className="text-xl font-bold text-white">
-                  {signal.direction} {signal.symbol}
-                </div>
-                <div className="text-sm text-slate-400">
-                  Entry: ${signal.entry_price} • {signal.expiration_minutes}min • {signal.timeframe}
-                </div>
-              </div>
+        {/* Main Content */}
+        <div className="p-4 space-y-3">
+          {/* Asset */}
+          <div className="text-white font-medium">
+            {getAssetDisplay()}
+          </div>
+
+          {/* Direction */}
+          <div className="text-lg font-bold">
+            {getDirectionDisplay()}
+          </div>
+
+          {/* Duration */}
+          <div className="text-white font-medium">
+            {getDurationDisplay()}
+          </div>
+
+          {/* Accuracy */}
+          <div className="text-white font-medium">
+            🏆 Accuracy: {signal.probability}%
+          </div>
+
+          {/* Trading Tips Section */}
+          <div className="mt-4 p-3 bg-slate-700/30 rounded-lg border border-slate-600/50">
+            <div className="text-white font-bold mb-2">🚦 Trading Tips:</div>
+            <div className="text-sm text-slate-300 space-y-1">
+              <div>👁‍🗨 Wait for the Start! signal,</div>
+              <div>Have countdown timer to countdown to the precise entry time for maximum accuracy</div>
             </div>
           </div>
 
           {/* Countdown Timer */}
           <div className={`
-            flex items-center justify-between p-3 rounded-lg border
+            p-3 rounded-lg border text-center
             ${timerColor}
           `}>
-            <div className="flex items-center space-x-2">
-              <Clock className="w-5 h-5" />
-              <span className="font-medium">{statusMessage}</span>
+            <div className="flex items-center justify-center space-x-2 mb-1">
+              <Clock className="w-4 h-4" />
+              <span className="text-sm font-medium">{statusMessage}</span>
             </div>
-            <div className="text-2xl font-bold font-mono">
+            <div className="text-3xl font-bold font-mono">
               {formatTime(timeLeft)}
             </div>
+            {isOptimalTime && (
+              <div className="text-sm mt-1 text-green-300 animate-pulse">
+                🎯 START! OPTIMAL ENTRY NOW!
+              </div>
+            )}
           </div>
 
-          {/* Optimal Entry Indicator */}
-          {isOptimalTime && (
-            <div className="p-3 bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-400/50 rounded-lg animate-pulse">
-              <div className="flex items-center space-x-2">
-                <Target className="w-5 h-5 text-green-400" />
-                <span className="text-green-400 font-semibold">EXECUTE NOW FOR MAXIMUM ACCURACY!</span>
-              </div>
-              <div className="text-xs text-green-300 mt-1">
-                {timeLeft > 0 
-                  ? `Perfect timing in ${timeLeft}s!` 
-                  : Math.abs(timeLeft) <= 5 
-                    ? '🎯 PERFECT TIMING NOW!' 
-                    : `Window closing in ${Math.max(0, (signal?.timeframe === '5s' || signal?.timeframe === '15s' || signal?.timeframe === '30s' ? 2 : 5) + timeLeft)}s`
-                }
-              </div>
-            </div>
-          )}
-
-          {/* Signal Quality Indicators */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-slate-800/50 rounded-lg p-3">
-              <div className="text-xs text-slate-400">Confidence</div>
-              <div className="text-lg font-bold text-white">{signal.confidence_level}</div>
-            </div>
-            <div className="bg-slate-800/50 rounded-lg p-3">
-              <div className="text-xs text-slate-400">Stake</div>
-              <div className="text-lg font-bold text-white">${signal.suggested_stake}</div>
-            </div>
+          {/* Entry Price and Stake Info */}
+          <div className="flex justify-between text-sm text-slate-400">
+            <span>Entry: ${signal.entry_price}</span>
+            <span>Stake: ${signal.suggested_stake}</span>
           </div>
 
           {/* Action Buttons */}
           {!isExpired && (
-            <div className="flex space-x-2">
+            <div className="flex space-x-2 mt-4">
               <button
                 onClick={handleExecute}
                 disabled={!isOptimalTime}
                 className={`
-                  flex-1 py-3 px-4 rounded-lg font-semibold transition-all
+                  flex-1 py-3 px-4 rounded-lg font-semibold transition-all text-sm
                   ${isOptimalTime 
                     ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-600 hover:to-emerald-600 animate-pulse' 
                     : 'bg-slate-700 text-slate-400 cursor-not-allowed'}
                 `}
               >
-                {isOptimalTime ? '🎯 EXECUTE TRADE' : '⏳ Wait for Optimal Time'}
+                {isOptimalTime ? '🚀 EXECUTE NOW' : '⏳ Wait for Start!'}
               </button>
               
               <button
                 onClick={handleClose}
-                className="px-4 py-3 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-colors"
+                className="px-4 py-3 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-colors text-sm"
               >
                 Dismiss
               </button>
@@ -361,21 +372,21 @@ const SignalPopupNotification = ({ signal, onClose, onExecute }) => {
           )}
 
           {isExpired && (
-            <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg">
+            <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-center">
               <div className="text-red-400 font-semibold">⏰ Signal Expired</div>
-              <div className="text-xs text-red-300">This signal is no longer valid for trading.</div>
+              <div className="text-xs text-red-300 mt-1">This signal is no longer valid for trading.</div>
             </div>
           )}
         </div>
 
-        {/* Footer with Strategy Info */}
-        <div className="px-4 pb-3">
-          <div className="text-xs text-slate-500 break-words">
-            {signal.forced_generation && '🚀 Force Generated • '}
-            Strategy: {signal.strategy_used} • 
-            {signal.technical_analysis?.strategies_analyzed && ` ${signal.technical_analysis.strategies_analyzed} indicators`}
+        {/* Footer */}
+        {signal.forced_generation && (
+          <div className="px-4 pb-3">
+            <div className="text-xs text-slate-500 text-center">
+              🚀 Force Generated • Maximum Analysis Applied
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
