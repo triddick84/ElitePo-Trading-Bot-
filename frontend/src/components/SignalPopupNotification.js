@@ -183,7 +183,7 @@ const SignalPopupNotification = ({ signal, onClose, onExecute }) => {
     );
   }, [signal?.direction]);
 
-  const getStatusMessage = () => {
+  const statusMessage = useMemo(() => {
     if (isExpired) {
       return '⏰ Signal Expired';
     }
@@ -224,7 +224,7 @@ const SignalPopupNotification = ({ signal, onClose, onExecute }) => {
     }
     
     return '⏳ Preparing entry...';
-  };
+  }, [isExpired, isOptimalTime, timeLeft, signal?.timeframe]);
 
   return (
     <div className="fixed top-4 right-4 z-50 animate-in slide-in-from-top-2 duration-500">
