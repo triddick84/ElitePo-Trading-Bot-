@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { X, Clock, TrendingUp, TrendingDown, Target, Zap } from 'lucide-react';
 
 const SignalPopupNotification = ({ signal, onClose, onExecute }) => {
