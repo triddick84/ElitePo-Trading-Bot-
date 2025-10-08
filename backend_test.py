@@ -5180,6 +5180,9 @@ class BackendTester:
             ("Health Check", self.test_health_check),
             ("Environment Variables", self.test_environment_variables),
             
+            # FORCE SIGNAL GENERATION WITH TIMING VERIFICATION (PRIMARY FOCUS)
+            ("Force Signal Generation with Timing Verification", self.test_force_signal_generation_with_timing_verification),
+            
             # ULTRA-SHORT TIMEFRAME TESTING (PRIMARY FOCUS)
             ("Ultra-Short Timeframe Verification", self.test_ultra_short_timeframe_verification),
             ("Force Signal Generation with Ultra-Short Timeframes", self.test_force_signal_generation_with_ultra_short_timeframes),
