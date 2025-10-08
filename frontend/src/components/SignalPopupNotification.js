@@ -8,60 +8,106 @@ const SignalPopupNotification = ({ signal, onClose, onExecute }) => {
 
   useEffect(() => {
     if (!signal?.precision_entry_time) {
-      // If no precision entry time, create one based on signal timestamp
+      // If no precision entry time, create one based on signal timestamp and timeframe
       const signalTime = signal?.timestamp ? new Date(signal.timestamp) : new Date();
-      const fallbackEntryTime = new Date(signalTime.getTime() + 30000); // 30 seconds from signal creation
+      
+      // Calculate entry window based on timeframe
+      let entryDelayMs = 30000; // Default 30 seconds
+      
+      if (signal?.timeframe) {
+        switch (signal.timeframe) {
+          case '5s':
+            entryDelayMs = 10000; // 10 seconds for 5s timeframe
+            break;
+          case '15s':
+            entryDelayMs = 15000; // 15 seconds for 15s timeframe
+            break;
+          case '30s':
+            entryDelayMs = 25000; // 25 seconds for 30s timeframe
+            break;
+          case '1m':
+            entryDelayMs = 45000; // 45 seconds for 1m timeframe
+            break;
+          default:
+            entryDelayMs = 30000; // Default for other timeframes
+        }
+      }
+      
+      const fallbackEntryTime = new Date(signalTime.getTime() + entryDelayMs);
       
       const calculateFallbackTimeLeft = () => {
         const now = new Date();
         const diffMs = fallbackEntryTime.getTime() - now.getTime();
-        const diffSeconds = Math.ceil(diffMs / 1000);
+        const diffSeconds = Math.round(diffMs / 1000); // Use Math.round for better precision
         
         setTimeLeft(diffSeconds);
-        setIsOptimalTime(diffSeconds <= 5 && diffSeconds >= -2);
-        setIsExpired(diffSeconds < -30);
+        
+        const isUltraShort = ['5s', '15s', '30s'].includes(signal?.timeframe);
+        
+        if (isUltraShort) {
+          setIsOptimalTime(diffSeconds <= 3 && diffSeconds >= -2);
+          setIsExpired(diffSeconds < -30);
+        } else {
+          setIsOptimalTime(diffSeconds <= 5 && diffSeconds >= -5);
+          setIsExpired(diffSeconds < -60);
+        }
       };
 
       calculateFallbackTimeLeft();
-      const interval = setInterval(calculateFallbackTimeLeft, 1000);
+      const interval = setInterval(calculateFallbackTimeLeft, 500); // Update every 500ms for balance
       return () => clearInterval(interval);
     }
 
     const calculateTimeLeft = () => {
-      const now = new Date();
-      const entryTime = new Date(signal.precision_entry_time);
-      
-      // Debug logging
-      console.log('Countdown Debug:', {
-        now: now.toISOString(),
-        entryTime: entryTime.toISOString(),
-        signal_timeframe: signal.timeframe,
-        precision_entry_time: signal.precision_entry_time
-      });
-      
-      const diffMs = entryTime.getTime() - now.getTime();
-      const diffSeconds = Math.floor(diffMs / 1000);
-      
-      setTimeLeft(diffSeconds);
-      
-      // For ultra-short timeframes (5s, 15s, 30s), use tighter windows
-      const isUltraShort = ['5s', '15s', '30s'].includes(signal.timeframe);
-      
-      if (isUltraShort) {
-        // Ultra-short optimal window: 3 seconds before to 2 seconds after
-        setIsOptimalTime(diffSeconds <= 3 && diffSeconds >= -2);
-        // Expires quickly after 30 seconds
-        setIsExpired(diffSeconds < -30);
-      } else {
-        // Standard timeframes: 5 seconds before to 10 seconds after
-        setIsOptimalTime(diffSeconds <= 5 && diffSeconds >= -10);
-        // Expires after 2 minutes
-        setIsExpired(diffSeconds < -120);
+      try {
+        const now = new Date();
+        const entryTime = new Date(signal.precision_entry_time);
+        
+        // Validate timestamps
+        if (isNaN(entryTime.getTime()) || isNaN(now.getTime())) {
+          console.error('Invalid timestamp in countdown calculation');
+          setIsExpired(true);
+          return;
+        }
+        
+        const diffMs = entryTime.getTime() - now.getTime();
+        const diffSeconds = Math.round(diffMs / 1000); // Use Math.round for better precision
+        
+        setTimeLeft(diffSeconds);
+        
+        // For ultra-short timeframes (5s, 15s, 30s), use tighter windows
+        const isUltraShort = ['5s', '15s', '30s'].includes(signal.timeframe);
+        
+        if (isUltraShort) {
+          // Ultra-short optimal window: 3 seconds before to 2 seconds after
+          setIsOptimalTime(diffSeconds <= 3 && diffSeconds >= -2);
+          // Expires quickly after 30 seconds
+          setIsExpired(diffSeconds < -30);
+        } else {
+          // Standard timeframes: 5 seconds before to 5 seconds after (more forgiving)
+          setIsOptimalTime(diffSeconds <= 5 && diffSeconds >= -5);
+          // Expires after 90 seconds
+          setIsExpired(diffSeconds < -90);
+        }
+        
+        // Debug logging only when needed
+        if (diffSeconds <= 10 && diffSeconds >= -10) {
+          console.log('Countdown Debug:', {
+            now: now.toISOString(),
+            entryTime: entryTime.toISOString(),
+            diffSeconds,
+            isOptimal: diffSeconds <= (isUltraShort ? 3 : 5) && diffSeconds >= (isUltraShort ? -2 : -5),
+            timeframe: signal.timeframe
+          });
+        }
+      } catch (error) {
+        console.error('Error in countdown calculation:', error);
+        setIsExpired(true);
       }
     };
 
     calculateTimeLeft();
-    const interval = setInterval(calculateTimeLeft, 100); // Update every 100ms for precision
+    const interval = setInterval(calculateTimeLeft, 500); // Update every 500ms for balance
 
     return () => clearInterval(interval);
   }, [signal?.precision_entry_time, signal?.timestamp, signal?.timeframe]);
