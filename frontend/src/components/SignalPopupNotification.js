@@ -235,7 +235,12 @@ const SignalPopupNotification = ({ signal, onClose, onExecute }) => {
                 <span className="text-green-400 font-semibold">EXECUTE NOW FOR MAXIMUM ACCURACY!</span>
               </div>
               <div className="text-xs text-green-300 mt-1">
-                Optimal entry window: {Math.abs(timeLeft) <= 5 ? 'Perfect timing!' : `${15 + timeLeft}s remaining`}
+                {timeLeft > 0 
+                  ? `Perfect timing in ${timeLeft}s!` 
+                  : Math.abs(timeLeft) <= 5 
+                    ? '🎯 PERFECT TIMING NOW!' 
+                    : `Window closing in ${Math.max(0, (signal?.timeframe === '5s' || signal?.timeframe === '15s' || signal?.timeframe === '30s' ? 2 : 5) + timeLeft)}s`
+                }
               </div>
             </div>
           )}
