@@ -67,6 +67,15 @@ const BotControls = ({ onStatusUpdate }) => {
     }
   };
 
+  const fetchAutoSignalStatus = async () => {
+    try {
+      const response = await axios.get(`${API}/signals/auto-generate/status`);
+      setAutoSignalStatus(response.data);
+    } catch (error) {
+      console.error('Error fetching auto signal status:', error);
+    }
+  };
+
   const startBot = async () => {
     setIsLoading(true);
     try {
