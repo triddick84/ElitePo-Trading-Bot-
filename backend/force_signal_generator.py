@@ -12,6 +12,7 @@ from scipy import stats
 import math
 import requests
 from textblob import TextBlob
+from ema_rsi_5s_strategy import ema_rsi_5s_strategy
 
 logger = logging.getLogger(__name__)
 
