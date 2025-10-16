@@ -88,6 +88,45 @@ class EnhancedSignalGenerator:
             logger.error(f"Error generating enhanced signal for {symbol}: {e}")
             return None
     
+    async def _ema_rsi_5s_otc_strategy(self, symbol: str) -> Optional[Dict]:
+        """
+        EMA 20 + RSI 5-Second OTC Strategy
+        
+        Strategy Rules:
+        - HIGHER: Price breaks above EMA 20 AND RSI 50-70
+        - LOWER: Price breaks below EMA 20 AND RSI 30-50
+        - Target: 5-second expiration OTC assets
+        """
+        try:
+            # Use the dedicated 5-second strategy analyzer
+            result = ema_rsi_5s_strategy.generate_5s_otc_signal(symbol)
+            
+            if not result:
+                logger.debug(f"No EMA RSI 5S signal for {symbol}")
+                return None
+            
+            # Convert to internal format for strategy combination
+            signal_data = {
+                'direction': result['direction'],
+                'confidence': result['probability'],
+                'probability': result['probability'],
+                'reasoning': result['justification'],
+                'strategy': 'ema_rsi_5s_otc',
+                'timeframe': '5s',
+                'market_type': 'otc',
+                'technical_details': result['technical_analysis'],
+                'entry_timing': result.get('precision_entry_time'),
+                'ultra_short': True,
+                'specialized_otc': True
+            }
+            
+            logger.info(f"✅ EMA RSI 5S OTC signal generated for {symbol}: {result['direction']} ({result['probability']:.1f}%)")
+            return signal_data
+            
+        except Exception as e:
+            logger.error(f"Error in EMA RSI 5S OTC strategy for {symbol}: {e}")
+            return None
+    
     def _trend_momentum_strategy(self, df: pd.DataFrame, indicators: TechnicalIndicators) -> Optional[Dict]:
         """
         Trend-Momentum strategy using EMA200 + MACD + RSI divergence
