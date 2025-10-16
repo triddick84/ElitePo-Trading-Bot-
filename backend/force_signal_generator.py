@@ -302,15 +302,46 @@ class ForceSignalGenerator:
     
     async def _ema_rsi_5s_force_analysis(self, symbol: str) -> Optional[Dict]:
         """
-        EMA RSI 5-Second OTC Force Analysis - Ultra-Short Timeframe Specialist
+        Enhanced 5-Second Multi-Indicator Force Analysis - Ultra-High Accuracy
         
-        This method uses the dedicated 5-second strategy for OTC assets with 
-        enhanced force generation capabilities that bypass normal thresholds
+        Uses the enhanced multi-indicator strategy with EMA, RSI, Stochastic,
+        Bollinger Bands, Volume, and Pattern Recognition for maximum accuracy
         """
         try:
-            logger.info(f"🎯 Executing EMA RSI 5S OTC Force Analysis for {symbol}")
+            logger.info(f"🎯 Executing ENHANCED 5S Multi-Indicator Force Analysis for {symbol}")
             
-            # Use the specialized 5-second strategy
+            # Try enhanced strategy first for maximum accuracy
+            enhanced_result = enhanced_5s_strategy.analyze_signal(symbol)
+            
+            if enhanced_result and enhanced_result.get('signal'):
+                logger.info(f"✅ Enhanced 5S Strategy Generated Signal: {symbol} → {enhanced_result['signal']} ({enhanced_result['confidence']:.1f}%)")
+                
+                # Map to force signal format
+                force_signal_data = {
+                    'direction': enhanced_result['signal'],
+                    'confidence': min(enhanced_result['confidence'] + 3, 98),  # Slight boost for force mode
+                    'probability': min(enhanced_result['confidence'] + 3, 98),
+                    'reasoning': f"🚀 ENHANCED MULTI-INDICATOR: {' | '.join(enhanced_result['reasoning'][:3])}",
+                    'strategy': 'enhanced_5s_multi_indicator',
+                    'timeframe': '5s',
+                    'market_type': 'otc',
+                    'ultra_short_specialist': True,
+                    'force_enhanced': True,
+                    'multi_indicator_count': enhanced_result.get('signal_scores', {}).get('bullish_score', 0) + enhanced_result.get('signal_scores', {}).get('bearish_score', 0),
+                    'technical_details': {
+                        **enhanced_result.get('indicators', {}),
+                        'force_mode': True,
+                        'pattern_detected': enhanced_result.get('pattern', 'None'),
+                        'signal_scores': enhanced_result.get('signal_scores', {}),
+                        'enhanced_analysis': True
+                    },
+                    'suggested_stake': 2.0
+                }
+                
+                return force_signal_data
+            
+            # Fallback to original EMA RSI strategy
+            logger.info(f"⚠️ Enhanced strategy no signal, trying standard EMA RSI 5S for {symbol}")
             result = ema_rsi_5s_strategy.generate_5s_otc_signal(symbol)
             
             if result:
@@ -346,7 +377,7 @@ class ForceSignalGenerator:
                 return await self._create_emergency_ema_rsi_signal(symbol)
                 
         except Exception as e:
-            logger.error(f"Error in EMA RSI 5S force analysis for {symbol}: {e}")
+            logger.error(f"Error in Enhanced 5S force analysis for {symbol}: {e}")
             # Create emergency signal as last resort
             return await self._create_emergency_ema_rsi_signal(symbol)
     
