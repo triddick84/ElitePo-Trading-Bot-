@@ -30,8 +30,10 @@ const BotControls = ({ onStatusUpdate }) => {
   });
   
   const [botStatus, setBotStatus] = useState({ is_running: false });
+  const [autoSignalStatus, setAutoSignalStatus] = useState({ auto_generation_active: false });
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isAutoLoading, setIsAutoLoading] = useState(false);
 
   useEffect(() => {
     fetchCurrentConfig();
