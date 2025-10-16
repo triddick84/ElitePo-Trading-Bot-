@@ -136,6 +136,7 @@ class TradingConfiguration(BaseModel):
     target_assets: List[AssetType] = [AssetType.FOREX, AssetType.CRYPTO]
     selected_assets: List[str] = ['EURUSD_regular', 'BTCUSD_regular']  # Specific asset selections
     selected_timeframes: List[str] = ['1m', '5m']  # Pocket Option timeframes
+    chart_type: ChartType = ChartType.JAPANESE_CANDLES  # Chart type for signal generation
     risk_tolerance: str = "medium"  # low, medium, high
     max_stake_per_trade: float = 10.0
     max_daily_trades: int = 50
