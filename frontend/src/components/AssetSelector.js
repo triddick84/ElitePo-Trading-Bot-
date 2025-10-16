@@ -228,11 +228,34 @@ const AssetSelector = ({ onSelectionChange, selectedAssets = [], selectedTimefra
 
           {/* Category Cards */}
           {Object.keys(pocketOptionAssets).map(categoryKey => {
-            const category = pocketOptionAssets[categoryKey];
-            const categoryAssets = [...category.regular, ...category.otc];
-            const selectedCount = categoryAssets.filter(asset => 
-              localSelectedAssets.includes(`${asset.symbol}_${asset.market}`)
-            ).length;
+            const categoryAssets = pocketOptionAssets[categoryKey];
+            const categoryMeta = categoryInfo[categoryKey];
+            
+            // Handle both API structure (array) and legacy structure (object with regular/otc)
+            let allAssets = [];
+            let regularAssets = [];
+            let otcAssets = [];
+            
+            if (Array.isArray(categoryAssets)) {
+              // API structure: assets are directly in an array
+              allAssets = categoryAssets;
+              regularAssets = categoryAssets.filter(asset => 
+                (asset.market_type || asset.market || 'regular') === 'regular'
+              );
+              otcAssets = categoryAssets.filter(asset => 
+                (asset.market_type || asset.market || 'regular') === 'otc'
+              );
+            } else if (categoryAssets && typeof categoryAssets === 'object') {
+              // Legacy structure: regular and otc arrays
+              regularAssets = categoryAssets.regular || [];
+              otcAssets = categoryAssets.otc || [];
+              allAssets = [...regularAssets, ...otcAssets];
+            }
+            
+            const selectedCount = allAssets.filter(asset => {
+              const market = asset.market_type || asset.market || 'regular';
+              return localSelectedAssets.includes(`${asset.symbol}_${market}`);
+            }).length;
             
             if (activeCategory !== 'all' && activeCategory !== categoryKey) return null;
 
@@ -240,11 +263,11 @@ const AssetSelector = ({ onSelectionChange, selectedAssets = [], selectedTimefra
               <Card key={categoryKey} className="p-6 glass-dark border-slate-700/50">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center space-x-3">
-                    <span className="text-2xl">{category.icon}</span>
+                    <span className="text-2xl">{categoryMeta?.icon || '📊'}</span>
                     <div>
-                      <h4 className="text-white font-semibold text-lg">{category.name}</h4>
+                      <h4 className="text-white font-semibold text-lg">{categoryMeta?.name || categoryKey}</h4>
                       <p className="text-slate-400 text-sm">
-                        {categoryAssets.length} assets • {selectedCount} selected
+                        {allAssets.length} assets • {selectedCount} selected
                       </p>
                     </div>
                   </div>
@@ -267,87 +290,101 @@ const AssetSelector = ({ onSelectionChange, selectedAssets = [], selectedTimefra
                 </div>
 
                 {/* Regular Exchange Assets */}
-                <div className="mb-6">
-                  <h5 className="text-emerald-400 font-medium mb-3 flex items-center">
-                    <span className="w-2 h-2 bg-emerald-500 rounded-full mr-2"></span>
-                    Regular Exchange
-                  </h5>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {category.regular.map(asset => {
-                      const assetId = `${asset.symbol}_${asset.market}`;
-                      const isSelected = localSelectedAssets.includes(assetId);
-                      
-                      return (
-                        <div
-                          key={assetId}
-                          onClick={() => handleAssetToggle(asset)}
-                          className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 ${
-                            isSelected
-                              ? 'border-emerald-500/50 bg-emerald-500/10'
-                              : 'border-slate-600/50 bg-slate-800/30 hover:border-slate-500/50'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p className="text-white font-medium">{asset.symbol}</p>
-                              <p className="text-slate-400 text-xs">{asset.name}</p>
-                            </div>
-                            <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
+                {regularAssets.length > 0 && (
+                  <div className="mb-6">
+                    <h5 className="text-emerald-400 font-medium mb-3 flex items-center">
+                      <span className="w-2 h-2 bg-emerald-500 rounded-full mr-2"></span>
+                      Regular Exchange
+                    </h5>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {regularAssets.map(asset => {
+                        const market = asset.market_type || asset.market || 'regular';
+                        const assetId = `${asset.symbol}_${market}`;
+                        const isSelected = localSelectedAssets.includes(assetId);
+                        const displayName = asset.display_name || asset.name || asset.symbol;
+                        
+                        return (
+                          <div
+                            key={assetId}
+                            onClick={() => handleAssetToggle({...asset, market})}
+                            className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 ${
                               isSelected
-                                ? 'border-emerald-500 bg-emerald-500'
-                                : 'border-slate-400'
-                            }`}>
-                              {isSelected && <span className="text-white text-xs">✓</span>}
+                                ? 'border-emerald-500/50 bg-emerald-500/10'
+                                : 'border-slate-600/50 bg-slate-800/30 hover:border-slate-500/50'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-white font-medium">{asset.symbol}</p>
+                                <p className="text-slate-400 text-xs">{displayName}</p>
+                                {asset.description && (
+                                  <p className="text-slate-500 text-xs mt-1">{asset.description}</p>
+                                )}
+                              </div>
+                              <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
+                                isSelected
+                                  ? 'border-emerald-500 bg-emerald-500'
+                                  : 'border-slate-400'
+                              }`}>
+                                {isSelected && <span className="text-white text-xs">✓</span>}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* OTC Market Assets */}
-                <div>
-                  <h5 className="text-blue-400 font-medium mb-3 flex items-center">
-                    <span className="w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
-                    OTC Market (24/7)
-                  </h5>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {category.otc.map(asset => {
-                      const assetId = `${asset.symbol}_${asset.market}`;
-                      const isSelected = localSelectedAssets.includes(assetId);
-                      
-                      return (
-                        <div
-                          key={assetId}
-                          onClick={() => handleAssetToggle(asset)}
-                          className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 ${
-                            isSelected
-                              ? 'border-blue-500/50 bg-blue-500/10'
-                              : 'border-slate-600/50 bg-slate-800/30 hover:border-slate-500/50'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p className="text-white font-medium">{asset.symbol}</p>
-                              <p className="text-slate-400 text-xs">{asset.name}</p>
-                              <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-xs mt-1">
-                                24/7
-                              </Badge>
-                            </div>
-                            <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
+                {otcAssets.length > 0 && (
+                  <div>
+                    <h5 className="text-blue-400 font-medium mb-3 flex items-center">
+                      <span className="w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
+                      OTC Market (24/7)
+                    </h5>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {otcAssets.map(asset => {
+                        const market = asset.market_type || asset.market || 'otc';
+                        const assetId = `${asset.symbol}_${market}`;
+                        const isSelected = localSelectedAssets.includes(assetId);
+                        const displayName = asset.display_name || asset.name || asset.symbol;
+                        
+                        return (
+                          <div
+                            key={assetId}
+                            onClick={() => handleAssetToggle({...asset, market})}
+                            className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 ${
                               isSelected
-                                ? 'border-blue-500 bg-blue-500'
-                                : 'border-slate-400'
-                            }`}>
-                              {isSelected && <span className="text-white text-xs">✓</span>}
+                                ? 'border-blue-500/50 bg-blue-500/10'
+                                : 'border-slate-600/50 bg-slate-800/30 hover:border-slate-500/50'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-white font-medium">{asset.symbol}</p>
+                                <p className="text-slate-400 text-xs">{displayName}</p>
+                                {asset.description && (
+                                  <p className="text-slate-500 text-xs mt-1">{asset.description}</p>
+                                )}
+                                <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-xs mt-1">
+                                  24/7
+                                </Badge>
+                              </div>
+                              <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
+                                isSelected
+                                  ? 'border-blue-500 bg-blue-500'
+                                  : 'border-slate-400'
+                              }`}>
+                                {isSelected && <span className="text-white text-xs">✓</span>}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
+                )}
               </Card>
             );
           })}
