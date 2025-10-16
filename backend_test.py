@@ -1205,6 +1205,445 @@ class BackendTester:
             print(f"   Enhanced signal performance test error: {e}")
             return False
 
+    # ========== POCKET OPTION ASSET SYSTEM TESTING ==========
+    
+    async def test_asset_api_all_endpoint(self) -> bool:
+        """Test GET /api/assets/all endpoint"""
+        try:
+            async with self.session.get(f"{BACKEND_URL}/assets/all") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    
+                    # Verify response structure
+                    if not data.get('success'):
+                        print("   ❌ Response success field is False")
+                        return False
+                    
+                    assets = data.get('assets', {})
+                    summary = data.get('summary', {})
+                    
+                    print(f"   ✅ Assets endpoint successful")
+                    print(f"   Total assets: {summary.get('total_assets', 0)}")
+                    print(f"   Forex: {summary.get('forex_count', 0)}")
+                    print(f"   Crypto: {summary.get('crypto_count', 0)}")
+                    print(f"   Stocks: {summary.get('stocks_count', 0)}")
+                    print(f"   Commodities: {summary.get('commodities_count', 0)}")
+                    print(f"   Indices: {summary.get('indices_count', 0)}")
+                    
+                    # Verify all categories are present
+                    required_categories = ['forex', 'crypto', 'stocks', 'commodities', 'indices']
+                    for category in required_categories:
+                        if category not in assets:
+                            print(f"   ❌ Missing category: {category}")
+                            return False
+                        print(f"   ✅ Category {category}: {len(assets[category])} assets")
+                    
+                    return True
+                else:
+                    print(f"   ❌ Assets all endpoint failed: {response.status}")
+                    return False
+        except Exception as e:
+            print(f"   Asset API all endpoint test error: {e}")
+            return False
+
+    async def test_asset_api_symbols_endpoint(self) -> bool:
+        """Test GET /api/assets/symbols endpoint"""
+        try:
+            async with self.session.get(f"{BACKEND_URL}/assets/symbols") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    
+                    if not data.get('success'):
+                        print("   ❌ Symbols response success field is False")
+                        return False
+                    
+                    regular_symbols = data.get('regular_symbols', [])
+                    otc_symbols = data.get('otc_symbols', [])
+                    
+                    print(f"   ✅ Symbols endpoint successful")
+                    print(f"   Regular symbols: {len(regular_symbols)}")
+                    print(f"   OTC symbols: {len(otc_symbols)}")
+                    print(f"   Total regular: {data.get('total_regular', 0)}")
+                    print(f"   Total OTC: {data.get('total_otc', 0)}")
+                    
+                    # Verify we have symbols
+                    if len(regular_symbols) == 0:
+                        print("   ❌ No regular symbols found")
+                        return False
+                    
+                    if len(otc_symbols) == 0:
+                        print("   ❌ No OTC symbols found")
+                        return False
+                    
+                    # Sample some symbols
+                    print(f"   Sample regular symbols: {regular_symbols[:5]}")
+                    print(f"   Sample OTC symbols: {otc_symbols[:5]}")
+                    
+                    return True
+                else:
+                    print(f"   ❌ Assets symbols endpoint failed: {response.status}")
+                    return False
+        except Exception as e:
+            print(f"   Asset API symbols endpoint test error: {e}")
+            return False
+
+    async def test_asset_api_category_endpoints(self) -> bool:
+        """Test GET /api/assets/category/{category} endpoints"""
+        try:
+            categories = ['forex', 'crypto', 'stocks', 'commodities', 'indices']
+            expected_counts = {
+                'forex': 53,      # 53 forex pairs
+                'crypto': 33,     # 33+ cryptocurrencies  
+                'stocks': 29,     # 29+ stocks
+                'commodities': 7, # 7 commodities
+                'indices': 17     # 17+ indices
+            }
+            
+            for category in categories:
+                async with self.session.get(f"{BACKEND_URL}/assets/category/{category}") as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        
+                        if not data.get('success'):
+                            print(f"   ❌ Category {category} response success field is False")
+                            return False
+                        
+                        assets = data.get('assets', [])
+                        count = data.get('count', 0)
+                        expected_min = expected_counts[category]
+                        
+                        print(f"   ✅ Category {category}: {count} assets (expected {expected_min}+)")
+                        
+                        # Verify minimum counts
+                        if count < expected_min:
+                            print(f"   ❌ {category} has {count} assets, expected at least {expected_min}")
+                            return False
+                        
+                        # Verify asset structure
+                        if assets and len(assets) > 0:
+                            sample_asset = assets[0]
+                            required_fields = ['symbol', 'display_name', 'description', 'category', 'market_types']
+                            for field in required_fields:
+                                if field not in sample_asset:
+                                    print(f"   ❌ Missing field {field} in {category} asset")
+                                    return False
+                            
+                            print(f"   ✅ Sample {category} asset: {sample_asset['symbol']} - {sample_asset['display_name']}")
+                        
+                    else:
+                        print(f"   ❌ Category {category} endpoint failed: {response.status}")
+                        return False
+            
+            return True
+        except Exception as e:
+            print(f"   Asset API category endpoints test error: {e}")
+            return False
+
+    async def test_asset_data_validation(self) -> bool:
+        """Test asset data validation - verify specific counts and market classifications"""
+        try:
+            # Get all assets
+            async with self.session.get(f"{BACKEND_URL}/assets/all") as response:
+                if response.status != 200:
+                    print("   ❌ Failed to get assets for validation")
+                    return False
+                
+                data = await response.json()
+                assets = data.get('assets', {})
+                summary = data.get('summary', {})
+                
+                # Verify specific counts
+                validations = [
+                    ('forex_count', 53, 'forex pairs'),
+                    ('crypto_count', 33, 'cryptocurrencies'),
+                    ('stocks_count', 29, 'stocks'),
+                    ('commodities_count', 7, 'commodities'),
+                    ('indices_count', 17, 'indices')
+                ]
+                
+                for field, min_expected, description in validations:
+                    actual_count = summary.get(field, 0)
+                    if actual_count >= min_expected:
+                        print(f"   ✅ {description}: {actual_count} (expected {min_expected}+)")
+                    else:
+                        print(f"   ❌ {description}: {actual_count} (expected {min_expected}+)")
+                        return False
+                
+                # Verify market type classifications
+                forex_assets = assets.get('forex', [])
+                crypto_assets = assets.get('crypto', [])
+                
+                # Check that forex has both regular and OTC
+                forex_with_both_markets = [asset for asset in forex_assets if 'regular' in asset.get('market_types', []) and 'otc' in asset.get('market_types', [])]
+                if len(forex_with_both_markets) > 0:
+                    print(f"   ✅ Forex assets have both Regular and OTC markets: {len(forex_with_both_markets)} assets")
+                else:
+                    print("   ❌ No forex assets found with both Regular and OTC markets")
+                    return False
+                
+                # Check that crypto is OTC only
+                crypto_otc_only = [asset for asset in crypto_assets if asset.get('market_types') == ['otc']]
+                if len(crypto_otc_only) == len(crypto_assets):
+                    print(f"   ✅ All crypto assets are OTC only: {len(crypto_otc_only)} assets")
+                else:
+                    print(f"   ❌ Some crypto assets are not OTC only: {len(crypto_otc_only)}/{len(crypto_assets)}")
+                    return False
+                
+                # Verify total asset count
+                total_expected = sum(summary.get(field, 0) for field, _, _ in validations)
+                if summary.get('total_assets', 0) >= 139:
+                    print(f"   ✅ Total assets: {summary.get('total_assets')} (expected 139+)")
+                else:
+                    print(f"   ❌ Total assets: {summary.get('total_assets')} (expected 139+)")
+                    return False
+                
+                return True
+                
+        except Exception as e:
+            print(f"   Asset data validation test error: {e}")
+            return False
+
+    async def test_signal_generation_with_new_assets(self) -> bool:
+        """Test signal generation with new asset symbols from comprehensive catalog"""
+        try:
+            # Test force signal generation with various asset categories
+            test_assets = [
+                'EURUSD',     # Forex
+                'BTCUSD',     # Crypto
+                'AAPL',       # Stock
+                'XAUUSD',     # Commodity
+                'US100'       # Index
+            ]
+            
+            for asset_symbol in test_assets:
+                print(f"   Testing force signal generation for {asset_symbol}")
+                
+                async with self.session.post(f"{BACKEND_URL}/signals/force-generate/asset/{asset_symbol}") as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        
+                        if data.get('success'):
+                            signals = data.get('signals', [])
+                            regular_signal = data.get('regular_signal')
+                            otc_signal = data.get('otc_signal')
+                            
+                            print(f"   ✅ {asset_symbol}: {len(signals)} signals generated")
+                            
+                            # Verify both regular and OTC signals for applicable assets
+                            if regular_signal:
+                                print(f"   ✅ Regular signal: {regular_signal['symbol']} {regular_signal['direction']} {regular_signal['probability']}%")
+                            
+                            if otc_signal:
+                                print(f"   ✅ OTC signal: {otc_signal['symbol']} {otc_signal['direction']} {otc_signal['probability']}%")
+                            
+                            # Verify signal quality
+                            for signal in signals:
+                                if signal.get('probability', 0) < 75:
+                                    print(f"   ❌ Low probability signal: {signal.get('probability')}%")
+                                    return False
+                        else:
+                            print(f"   ❌ Force generation failed for {asset_symbol}")
+                            return False
+                    else:
+                        print(f"   ❌ Force generation request failed for {asset_symbol}: {response.status}")
+                        return False
+            
+            return True
+            
+        except Exception as e:
+            print(f"   Signal generation with new assets test error: {e}")
+            return False
+
+    async def test_ema_rsi_5s_strategy_with_otc_assets(self) -> bool:
+        """Test EMA RSI 5S strategy works with OTC assets"""
+        try:
+            # Test OTC assets that should trigger EMA RSI 5S strategy
+            otc_assets = ['EURUSD_OTC', 'BTCUSD_OTC', 'GBPUSD_OTC']
+            
+            for otc_asset in otc_assets:
+                print(f"   Testing EMA RSI 5S strategy with {otc_asset}")
+                
+                async with self.session.post(f"{BACKEND_URL}/signals/force-generate/asset/{otc_asset}") as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        
+                        if data.get('success'):
+                            analysis_details = data.get('analysis_details', {})
+                            signals = data.get('signals', [])
+                            
+                            # Check for EMA RSI 5S strategy activation
+                            if 'ema_rsi_5s_otc' in str(analysis_details):
+                                print(f"   ✅ EMA RSI 5S strategy activated for {otc_asset}")
+                            else:
+                                print(f"   ⚠️ EMA RSI 5S strategy not detected for {otc_asset}")
+                            
+                            # Verify 5-second timeframe
+                            for signal in signals:
+                                if signal.get('timeframe') == '5s':
+                                    print(f"   ✅ 5-second timeframe confirmed: {signal['timeframe']}")
+                                else:
+                                    print(f"   ❌ Unexpected timeframe: {signal.get('timeframe')}")
+                                    return False
+                        else:
+                            print(f"   ❌ Signal generation failed for {otc_asset}")
+                            return False
+                    else:
+                        print(f"   ❌ Request failed for {otc_asset}: {response.status}")
+                        return False
+            
+            return True
+            
+        except Exception as e:
+            print(f"   EMA RSI 5S strategy with OTC assets test error: {e}")
+            return False
+
+    async def test_ai_ensemble_with_comprehensive_asset_list(self) -> bool:
+        """Test AI ensemble with new comprehensive asset list"""
+        try:
+            # Test that AI ensemble can handle various asset types
+            print("   Testing AI ensemble with comprehensive asset catalog")
+            
+            # Start bot to enable signal generation
+            config_data = {
+                "trading_mode": "demo",
+                "active_strategies": ["hybrid"],
+                "target_assets": ["forex", "crypto", "stocks", "commodities", "indices"],
+                "selected_assets": ["EURUSD_regular", "BTCUSD_regular", "AAPL_regular", "XAUUSD", "US100_regular"],
+                "selected_timeframes": ["5s", "1m", "5m"],
+                "risk_tolerance": "medium",
+                "max_stake_per_trade": 10.0,
+                "max_daily_trades": 50,
+                "min_probability_threshold": 75.0,
+                "auto_trading_enabled": False,
+                "invert_signals": False,
+                "sound_alerts_enabled": True
+            }
+            
+            await self.session.post(f"{BACKEND_URL}/bot/start", json=config_data)
+            
+            # Test general force generation (should use AI ensemble)
+            async with self.session.post(f"{BACKEND_URL}/signals/force-generate") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    
+                    if data.get('success'):
+                        signals = data.get('signals', [])
+                        analysis_details = data.get('analysis_details', {})
+                        
+                        print(f"   ✅ AI ensemble generated {len(signals)} signals")
+                        
+                        # Check for AI ensemble indicators
+                        if signals:
+                            sample_signal = signals[0]
+                            justification = sample_signal.get('justification', '')
+                            
+                            # Look for AI ensemble or advanced analysis indicators
+                            ai_indicators = ['AI', 'ensemble', 'advanced', 'multi-strategy', 'enhanced']
+                            if any(indicator.lower() in justification.lower() for indicator in ai_indicators):
+                                print("   ✅ AI ensemble analysis detected in justification")
+                            else:
+                                print("   ℹ️ Standard analysis used (acceptable)")
+                        
+                        return True
+                    else:
+                        print("   ❌ AI ensemble signal generation failed")
+                        return False
+                else:
+                    print(f"   ❌ AI ensemble request failed: {response.status}")
+                    return False
+            
+        except Exception as e:
+            print(f"   AI ensemble with comprehensive asset list test error: {e}")
+            return False
+
+    async def test_auto_signal_generation_with_expanded_assets(self) -> bool:
+        """Test auto signal generation works with expanded asset list"""
+        try:
+            print("   Testing auto signal generation with expanded asset catalog")
+            
+            # Configure bot with diverse asset selection
+            config_data = {
+                "trading_mode": "demo",
+                "active_strategies": ["hybrid"],
+                "target_assets": ["forex", "crypto", "stocks", "commodities", "indices"],
+                "selected_assets": [
+                    "EURUSD_regular", "GBPUSD_regular",  # Forex
+                    "BTCUSD_regular", "ETHUSD_regular",  # Crypto
+                    "AAPL_regular", "MSFT_regular",      # Stocks
+                    "XAUUSD", "XAGUSD",                  # Commodities
+                    "US100_regular", "SPX500_regular"    # Indices
+                ],
+                "selected_timeframes": ["5s", "1m", "5m"],
+                "risk_tolerance": "medium",
+                "max_stake_per_trade": 10.0,
+                "max_daily_trades": 50,
+                "min_probability_threshold": 75.0,
+                "auto_trading_enabled": False,
+                "invert_signals": False,
+                "sound_alerts_enabled": True
+            }
+            
+            # Start bot
+            async with self.session.post(f"{BACKEND_URL}/bot/start", json=config_data) as response:
+                if response.status != 200:
+                    print("   ❌ Failed to start bot with expanded assets")
+                    return False
+            
+            # Test auto generation status
+            async with self.session.get(f"{BACKEND_URL}/signals/auto-generate/status") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Auto generation status: {data.get('status')}")
+                    print(f"   Bot running: {data.get('bot_running')}")
+                else:
+                    print(f"   ❌ Auto generation status failed: {response.status}")
+                    return False
+            
+            # Test start auto generation
+            async with self.session.post(f"{BACKEND_URL}/signals/auto-generate/start") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if data.get('success') and data.get('status') == 'active':
+                        print("   ✅ Auto generation started successfully")
+                    else:
+                        print(f"   ❌ Auto generation start failed: {data}")
+                        return False
+                else:
+                    print(f"   ❌ Auto generation start request failed: {response.status}")
+                    return False
+            
+            # Verify status after start
+            async with self.session.get(f"{BACKEND_URL}/signals/auto-generate/status") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if data.get('auto_generation_active'):
+                        print("   ✅ Auto generation confirmed active")
+                    else:
+                        print("   ❌ Auto generation not active after start")
+                        return False
+                else:
+                    print(f"   ❌ Status check after start failed: {response.status}")
+                    return False
+            
+            # Test stop auto generation
+            async with self.session.post(f"{BACKEND_URL}/signals/auto-generate/stop") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if data.get('success') and data.get('status') == 'stopped':
+                        print("   ✅ Auto generation stopped successfully")
+                    else:
+                        print(f"   ❌ Auto generation stop failed: {data}")
+                        return False
+                else:
+                    print(f"   ❌ Auto generation stop request failed: {response.status}")
+                    return False
+            
+            return True
+            
+        except Exception as e:
+            print(f"   Auto signal generation with expanded assets test error: {e}")
+            return False
+
     # ========== ULTRA-SHORT TIMEFRAME TESTING ==========
     
     async def test_ultra_short_timeframe_verification(self) -> bool:
