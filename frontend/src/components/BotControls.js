@@ -51,6 +51,7 @@ const BotControls = ({ onStatusUpdate }) => {
       setConfig(prev => ({
         ...prev,
         ...fetchedConfig,
+        chart_type: fetchedConfig.chart_type ?? 'japanese_candles',
         invert_signals: fetchedConfig.invert_signals ?? false,
         sound_alerts_enabled: fetchedConfig.sound_alerts_enabled ?? true
       }));
