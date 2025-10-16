@@ -217,11 +217,11 @@ const AssetSelector = ({ onSelectionChange, selectedAssets = [], selectedTimefra
               </SelectTrigger>
               <SelectContent className="bg-slate-800 border-slate-600">
                 <SelectItem value="all">All Categories</SelectItem>
-                <SelectItem value="forex">💱 Forex</SelectItem>
-                <SelectItem value="crypto">₿ Cryptocurrency</SelectItem>
-                <SelectItem value="stocks">📈 Stocks</SelectItem>
-                <SelectItem value="commodities">🥇 Commodities</SelectItem>
-                <SelectItem value="indices">📊 Indices</SelectItem>
+                {Object.keys(categoryInfo).map(categoryKey => (
+                  <SelectItem key={categoryKey} value={categoryKey}>
+                    {categoryInfo[categoryKey].icon} {categoryInfo[categoryKey].name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
