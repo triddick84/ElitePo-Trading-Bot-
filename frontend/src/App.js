@@ -15,14 +15,65 @@ import BotControls from "./components/BotControls";
 import BacktestPanel from "./components/BacktestPanel";
 import ApiConfiguration from "./components/ApiConfiguration";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
+const API = BACKEND_URL ? `${BACKEND_URL}/api` : '';
 
 function App() {
   const [botStatus, setBotStatus] = useState(null);
   const [activeView, setActiveView] = useState("dashboard");
   const [isLoading, setIsLoading] = useState(true);
   const [liveSignals, setLiveSignals] = useState([]);
+  
+  // Check if backend URL is configured
+  if (!BACKEND_URL) {
+    return (
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '100vh',
+        backgroundColor: '#1a1a1a',
+        color: '#fff',
+        fontFamily: 'Arial, sans-serif',
+        padding: '20px',
+        textAlign: 'center'
+      }}>
+        <h1 style={{ fontSize: '2rem', marginBottom: '1rem', color: '#ff4444' }}>⚠️ Configuration Error</h1>
+        <p style={{ fontSize: '1.2rem', marginBottom: '1rem' }}>Backend URL is not configured</p>
+        <p style={{ fontSize: '1rem', color: '#888' }}>Please ensure REACT_APP_BACKEND_URL is set in the .env file</p>
+        <div style={{ 
+          marginTop: '2rem', 
+          padding: '1rem', 
+          backgroundColor: '#2a2a2a', 
+          borderRadius: '8px',
+          maxWidth: '600px'
+        }}>
+          <p style={{ fontSize: '0.9rem', color: '#aaa', marginBottom: '0.5rem' }}>
+            Current .env location: /app/frontend/.env
+          </p>
+          <p style={{ fontSize: '0.9rem', color: '#aaa' }}>
+            Required variable: REACT_APP_BACKEND_URL=&lt;your-backend-url&gt;
+          </p>
+        </div>
+        <button 
+          onClick={() => window.location.reload()} 
+          style={{
+            marginTop: '2rem',
+            padding: '12px 24px',
+            fontSize: '1rem',
+            backgroundColor: '#4CAF50',
+            color: 'white',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer'
+          }}
+        >
+          Reload Page
+        </button>
+      </div>
+    );
+  }
   const [globalNotificationSettings, setGlobalNotificationSettings] = useState({
     popupEnabled: true,
     soundEnabled: true,
