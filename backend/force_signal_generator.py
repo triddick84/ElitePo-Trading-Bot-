@@ -61,19 +61,25 @@ class ForceSignalGenerator:
             # Run comprehensive analysis on all timeframes
             analysis_results = []
             
-            # EMA RSI 5-Second OTC Strategy (50% weight for OTC symbols - HIGHEST PRIORITY)
+            # Advanced AI Ensemble Analysis (60% weight - MAXIMUM ACCURACY)
+            if data_1m and len(data_1m) > 50:
+                ai_ensemble_signal = await self._advanced_ai_ensemble_force_analysis(data_1m, symbol)
+                if ai_ensemble_signal:
+                    analysis_results.append(('advanced_ai_ensemble', ai_ensemble_signal, 0.60))
+                    logger.info(f"🤖 Advanced AI Ensemble activated for {symbol}")
+            
+            # EMA RSI 5-Second OTC Strategy (25% weight for OTC symbols)
             if '_OTC' in symbol or symbol.endswith('_OTC'):
                 ema_rsi_5s_signal = await self._ema_rsi_5s_force_analysis(symbol)
                 if ema_rsi_5s_signal:
-                    analysis_results.append(('ema_rsi_5s_otc', ema_rsi_5s_signal, 0.50))
+                    analysis_results.append(('ema_rsi_5s_otc', ema_rsi_5s_signal, 0.25))
                     logger.info(f"🎯 EMA RSI 5S OTC strategy activated for {symbol}")
             
-            # 1-minute scalping analysis (30% weight for precision - reduced when EMA RSI 5S active)
+            # 1-minute scalping analysis (15% weight - supporting analysis)
             if data_1m and len(data_1m) > 100:
                 scalping_signal = await self._ultra_precision_scalping_analysis(data_1m, symbol)
                 if scalping_signal:
-                    weight = 0.30 if '_OTC' in symbol else 0.40  # Reduced weight for OTC
-                    analysis_results.append(('scalping_1m', scalping_signal, weight))
+                    analysis_results.append(('scalping_1m', scalping_signal, 0.15))
             
             # 5-minute momentum analysis (25% weight)
             if data_5m and len(data_5m) > 50:
