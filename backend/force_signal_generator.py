@@ -60,11 +60,19 @@ class ForceSignalGenerator:
             # Run comprehensive analysis on all timeframes
             analysis_results = []
             
-            # 1-minute scalping analysis (40% weight for precision)
+            # EMA RSI 5-Second OTC Strategy (50% weight for OTC symbols - HIGHEST PRIORITY)
+            if '_OTC' in symbol or symbol.endswith('_OTC'):
+                ema_rsi_5s_signal = await self._ema_rsi_5s_force_analysis(symbol)
+                if ema_rsi_5s_signal:
+                    analysis_results.append(('ema_rsi_5s_otc', ema_rsi_5s_signal, 0.50))
+                    logger.info(f"🎯 EMA RSI 5S OTC strategy activated for {symbol}")
+            
+            # 1-minute scalping analysis (30% weight for precision - reduced when EMA RSI 5S active)
             if data_1m and len(data_1m) > 100:
                 scalping_signal = await self._ultra_precision_scalping_analysis(data_1m, symbol)
                 if scalping_signal:
-                    analysis_results.append(('scalping_1m', scalping_signal, 0.40))
+                    weight = 0.30 if '_OTC' in symbol else 0.40  # Reduced weight for OTC
+                    analysis_results.append(('scalping_1m', scalping_signal, weight))
             
             # 5-minute momentum analysis (25% weight)
             if data_5m and len(data_5m) > 50:
