@@ -317,16 +317,12 @@
 
 ## test_plan:
   current_focus:
-    - "Ultra-Short Timeframe Signal Generation"
-    - "Ultra-Short Timeframe Configuration"
-    - "Ultra-Short Timeframe Timing Synchronization"
-    - "OTC Market Signal Generation"
-    - "OTC Signal Quality and Confidence"
-    - "OTC Database Storage"
-    - "OTC Asset Symbol Handling"
-    - "OTC Platform Integration"
-    - "OTC Emergency Fallback"
-    - "Force Signal Generation with OTC Support"
+    - "EMA RSI 5S OTC Strategy Implementation"
+    - "EMA RSI 5S Strategy Activation"
+    - "EMA RSI 5S Signal Generation"
+    - "EMA RSI 5S Confidence Scoring"
+    - "EMA RSI 5S Precision Entry Timing"
+    - "EMA RSI 5S Emergency Fallback"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
