@@ -54,7 +54,12 @@ class EnhancedSignalGenerator:
             # Run all signal generation strategies
             signals = []
             
-            # 1. EMA RSI 5-Second OTC Strategy (30% weight) - NEW ULTRA-SHORT STRATEGY
+            # 1. Advanced AI Ensemble Strategy (40% weight) - CUTTING-EDGE AI MODELS
+            ai_ensemble_signal = await self._advanced_ai_ensemble_strategy(symbol, df)
+            if ai_ensemble_signal:
+                signals.append(('advanced_ai_ensemble', ai_ensemble_signal))
+            
+            # 2. EMA RSI 5-Second OTC Strategy (25% weight) - ULTRA-SHORT STRATEGY
             if symbol.endswith('_OTC') or '_OTC' in symbol:
                 ema_rsi_signal = await self._ema_rsi_5s_otc_strategy(symbol)
                 if ema_rsi_signal:
