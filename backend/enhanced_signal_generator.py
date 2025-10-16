@@ -23,11 +23,11 @@ class EnhancedSignalGenerator:
     def __init__(self):
         self.executor = ThreadPoolExecutor(max_workers=5)
         self.signal_weights = {
-            'ema_rsi_5s_otc': 0.30,      # NEW: EMA 20 + RSI 5-second OTC strategy
-            'trend_momentum': 0.30,      # EMA + MACD + RSI divergence strategy  
-            'volatility_breakout': 0.20,  # Bollinger Bands + volatility analysis
-            'multi_timeframe': 0.15,     # Cross-timeframe confirmation
-            'market_structure': 0.05     # Support/resistance levels
+            'advanced_ai_ensemble': 0.40,  # NEW: Advanced AI Ensemble (Transformer + LSTM + DQN + Sentiment)
+            'ema_rsi_5s_otc': 0.25,       # EMA 20 + RSI 5-second OTC strategy
+            'trend_momentum': 0.20,       # EMA + MACD + RSI divergence strategy  
+            'volatility_breakout': 0.10,   # Bollinger Bands + volatility analysis
+            'multi_timeframe': 0.05       # Cross-timeframe confirmation
         }
     
     async def generate_enhanced_signal(self, symbol: str, market_data: MarketData, 
