@@ -329,6 +329,28 @@ const BotControls = ({ onStatusUpdate }) => {
               </Select>
             </div>
 
+            {/* Chart Type Selection */}
+            <div>
+              <Label className="text-slate-300 font-medium mb-3 block">Chart Type for Signal Generation</Label>
+              <Select value={config.chart_type} onValueChange={(value) => handleConfigChange('chart_type', value)}>
+                <SelectTrigger className="bg-slate-800/50 border-slate-600 text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-600">
+                  <SelectItem value="japanese_candles">🕯️ Japanese Candlesticks</SelectItem>
+                  <SelectItem value="line">📈 Line Chart</SelectItem>
+                  <SelectItem value="bars">📊 Bar Chart</SelectItem>
+                  <SelectItem value="heikin_ashi">🎴 Heikin Ashi</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-slate-500 text-sm mt-2">
+                {config.chart_type === 'japanese_candles' && 'Standard OHLC candlesticks - Best for pattern recognition'}
+                {config.chart_type === 'line' && 'Clean price line - Best for trend identification'}
+                {config.chart_type === 'bars' && 'OHLC bars - Best for price range analysis'}
+                {config.chart_type === 'heikin_ashi' && 'Smoothed candles - Best for trend following, filters noise'}
+              </p>
+            </div>
+
             {/* Auto Trading */}
             <div className="flex items-center justify-between">
               <Label className="text-slate-300 font-medium">Auto Trading</Label>
