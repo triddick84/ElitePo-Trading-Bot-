@@ -38,6 +38,7 @@ const BotControls = ({ onStatusUpdate }) => {
   useEffect(() => {
     fetchCurrentConfig();
     fetchBotStatus();
+    fetchAutoSignalStatus();
   }, []);
 
   const fetchCurrentConfig = async () => {
