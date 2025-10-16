@@ -10,6 +10,7 @@ import yfinance as yf
 from scipy import stats
 import math
 from ema_rsi_5s_strategy import ema_rsi_5s_strategy
+from advanced_ai_ensemble import advanced_ai_ensemble
 
 logger = logging.getLogger(__name__)
 
