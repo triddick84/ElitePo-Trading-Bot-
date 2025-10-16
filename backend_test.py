@@ -5211,6 +5211,14 @@ class BackendTester:
             ("OTC Platform Integration", self.test_otc_platform_integration),
             ("OTC Emergency Fallback", self.test_otc_emergency_fallback),
             
+            # EMA RSI 5S OTC Strategy Tests (NEW - PRIMARY FOCUS)
+            ("EMA RSI 5S OTC Strategy Activation", self.test_ema_rsi_5s_otc_strategy_activation),
+            ("EMA RSI 5S Strategy Signal Generation", self.test_ema_rsi_5s_strategy_signal_generation),
+            ("EMA RSI 5S Confidence Scoring", self.test_ema_rsi_5s_confidence_scoring),
+            ("EMA RSI 5S Precision Entry Timing", self.test_ema_rsi_5s_precision_entry_timing),
+            ("EMA RSI 5S Emergency Fallback", self.test_ema_rsi_5s_emergency_fallback),
+            ("EMA RSI 5S Log Entries", self.test_ema_rsi_5s_log_entries),
+            
             # Force Signal Generation Tests (Updated with OTC Support)
             ("Force Signal Generation - General Endpoint", self.test_force_signal_generation_general_endpoint),
             ("Force Signal Generation - Specific Asset", self.test_force_signal_generation_specific_asset),
