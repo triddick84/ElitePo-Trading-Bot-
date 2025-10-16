@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 import yfinance as yf
 from scipy import stats
 import math
+from ema_rsi_5s_strategy import ema_rsi_5s_strategy
 
 logger = logging.getLogger(__name__)
 
