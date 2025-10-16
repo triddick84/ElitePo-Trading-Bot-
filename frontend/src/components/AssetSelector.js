@@ -392,7 +392,7 @@ const AssetSelector = ({ onSelectionChange, selectedAssets = [], selectedTimefra
                 )}
 
                 {/* OTC Market Assets */}
-                {otcAssets.length > 0 && (
+                {otcAssets.length > 0 && showOTC && (
                   <div>
                     <h5 className="text-blue-400 font-medium mb-3 flex items-center">
                       <span className="w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
