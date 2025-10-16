@@ -170,7 +170,7 @@ class ForceSignalGenerator:
                 enhanced_data.append(enhanced_item)
             
             # Generate ensemble signal with force enhancement
-            ensemble_result = advanced_ai_ensemble.generate_ensemble_signal(symbol, enhanced_data)
+            ensemble_result = lightweight_ai_ensemble.generate_ai_ensemble_signal(symbol, enhanced_data)
             
             if ensemble_result:
                 # Force mode enhancements - boost confidence and ensure signal generation
