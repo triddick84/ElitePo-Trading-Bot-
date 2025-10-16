@@ -229,6 +229,16 @@ const AssetSelector = ({ onSelectionChange, selectedAssets = [], selectedTimefra
             </Select>
           </div>
 
+          {/* Loading State */}
+          {loading && (
+            <Card className="p-6 glass-dark border-slate-700/50">
+              <div className="flex items-center justify-center space-x-3">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-emerald-500"></div>
+                <p className="text-slate-400">Loading assets...</p>
+              </div>
+            </Card>
+          )}
+
           {/* Category Cards */}
           {Object.keys(pocketOptionAssets).map(categoryKey => {
             const categoryAssets = pocketOptionAssets[categoryKey];
