@@ -252,6 +252,45 @@ const BotControls = ({ onStatusUpdate }) => {
         </div>
       </div>
 
+      {/* Auto Signal Generation Controls */}
+      <Card className="p-6 glass-dark border-slate-700/50">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-xl font-semibold text-white mb-2">Auto Signal Generation</h3>
+            <p className="text-slate-400 text-sm mb-4">
+              Automatically generate trading signals at optimal intervals using advanced AI algorithms
+            </p>
+            <div className="flex items-center space-x-2">
+              <div className={`w-2 h-2 ${autoSignalStatus.auto_generation_active ? 'bg-green-500' : 'bg-red-500'} rounded-full`}></div>
+              <span className={`text-sm ${autoSignalStatus.auto_generation_active ? 'text-green-400' : 'text-red-400'}`}>
+                Status: {autoSignalStatus.auto_generation_active ? 'Auto Generation Active' : 'Auto Generation Stopped'}
+              </span>
+            </div>
+            {!botStatus.is_running && (
+              <p className="text-yellow-400 text-xs mt-2">⚠️ Bot must be running to enable auto generation</p>
+            )}
+          </div>
+          
+          {autoSignalStatus.auto_generation_active ? (
+            <Button 
+              onClick={stopAutoSignalGeneration}
+              disabled={isAutoLoading}
+              className="bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30"
+            >
+              {isAutoLoading ? 'Stopping...' : '⏹️ Stop Auto Generation'}
+            </Button>
+          ) : (
+            <Button 
+              onClick={startAutoSignalGeneration}
+              disabled={isAutoLoading || !botStatus.is_running}
+              className="bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:bg-blue-500/30 disabled:opacity-50"
+            >
+              {isAutoLoading ? 'Starting...' : '🚀 Start Auto Generation'}
+            </Button>
+          )}
+        </div>
+      </Card>
+
       {/* Configuration Sections */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Basic Settings */}
