@@ -65,25 +65,20 @@ class EnhancedSignalGenerator:
                 if ema_rsi_signal:
                     signals.append(('ema_rsi_5s_otc', ema_rsi_signal))
             
-            # 2. Trend-Momentum Strategy (30% weight)
+            # 3. Trend-Momentum Strategy (20% weight)
             trend_signal = self._trend_momentum_strategy(df, indicators)
             if trend_signal:
                 signals.append(('trend_momentum', trend_signal))
             
-            # 3. Volatility Breakout Strategy (20% weight)
+            # 4. Volatility Breakout Strategy (10% weight)
             volatility_signal = self._volatility_breakout_strategy(df, indicators)
             if volatility_signal:
                 signals.append(('volatility_breakout', volatility_signal))
             
-            # 4. Multi-Timeframe Analysis (15% weight)
+            # 5. Multi-Timeframe Analysis (5% weight)
             mtf_signal = await self._multi_timeframe_analysis(symbol, df)
             if mtf_signal:
                 signals.append(('multi_timeframe', mtf_signal))
-            
-            # 5. Market Structure Analysis (5% weight)
-            structure_signal = self._market_structure_analysis(df)
-            if structure_signal:
-                signals.append(('market_structure', structure_signal))
             
             # Combine signals with weighted consensus
             final_signal = self._combine_signals_with_consensus(signals, market_data, df)
