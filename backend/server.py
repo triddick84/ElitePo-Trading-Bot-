@@ -694,7 +694,17 @@ async def force_generate_signal_for_asset(asset_symbol: str):
         # Try to get real-time data for the asset
         target_data = None
         try:
-            target_data = market_data_service.get_real_time_data(asset_symbol, asset_type.value)
+            data_dict = market_data_service.get_real_time_data(asset_symbol, asset_type.value)
+            if data_dict:
+                # Convert dictionary to MarketData object
+                from models import MarketData
+                target_data = MarketData(
+                    symbol=asset_symbol,
+                    price=data_dict.get('price', 0.0),
+                    timestamp=datetime.now(timezone.utc),
+                    asset_type=asset_type,
+                    volume=data_dict.get('volume', 0)
+                )
         except Exception as e:
             logger.warning(f"Could not get real-time data for {asset_symbol}: {e}")
             target_data = None
