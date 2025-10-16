@@ -30,8 +30,43 @@ const AssetSelector = ({ onSelectionChange, selectedAssets = [], selectedTimefra
   const [loading, setLoading] = useState(true);
   const [showOTC, setShowOTC] = useState(true);
 
-  // Complete Pocket Option Asset List
-  const pocketOptionAssets = {
+  // Fetch assets from API
+  const fetchAssets = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(`${API}/api/assets/all`);
+      
+      if (response.data.success) {
+        setPocketOptionAssets(response.data.assets);
+        setAssetSummary(response.data.summary);
+        console.log('✅ Loaded Pocket Option assets:', response.data.summary);
+      } else {
+        toast.error('Failed to load asset list');
+        console.error('Failed to load assets:', response.data.error);
+      }
+    } catch (error) {
+      console.error('Error fetching assets:', error);
+      toast.error('Error loading assets from server');
+      
+      // Fallback to minimal asset list
+      setPocketOptionAssets({
+        forex: [{ symbol: 'EURUSD', display_name: 'EUR/USD', description: 'Euro vs US Dollar' }],
+        crypto: [{ symbol: 'BTCUSD', display_name: 'BTC/USD', description: 'Bitcoin vs US Dollar' }],
+        stocks: [{ symbol: 'AAPL', display_name: 'AAPL - Apple Inc.', description: 'Technology - Consumer Electronics' }],
+        commodities: [{ symbol: 'XAUUSD', display_name: 'Gold OTC', description: 'Precious Metals - Gold Spot Price' }],
+        indices: [{ symbol: 'US100', display_name: 'US100 (NASDAQ)', description: 'US Technology Index' }]
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAssets();
+  }, []);
+
+  // Legacy asset structure (now loaded from API)
+  const legacyPocketOptionAssets = {
     forex: {
       name: 'Forex',
       icon: '💱',
