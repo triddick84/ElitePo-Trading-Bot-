@@ -300,18 +300,22 @@ class ForceSignalGenerator:
                 'final_ai_safety': True
             }
     
-    async def _ema_rsi_5s_force_analysis(self, symbol: str) -> Optional[Dict]:
+    async def _ema_rsi_5s_force_analysis(self, symbol: str, chart_type: str = 'japanese_candles') -> Optional[Dict]:
         """
         Enhanced 5-Second Multi-Indicator Force Analysis - Ultra-High Accuracy
         
         Uses the enhanced multi-indicator strategy with EMA, RSI, Stochastic,
         Bollinger Bands, Volume, and Pattern Recognition for maximum accuracy
+        
+        Args:
+            symbol: Trading symbol
+            chart_type: Chart type for analysis ('japanese_candles', 'line', 'bars', 'heikin_ashi')
         """
         try:
-            logger.info(f"🎯 Executing ENHANCED 5S Multi-Indicator Force Analysis for {symbol}")
+            logger.info(f"🎯 Executing ENHANCED 5S Multi-Indicator Force Analysis for {symbol} using {chart_type} chart")
             
             # Try enhanced strategy first for maximum accuracy
-            enhanced_result = enhanced_5s_strategy.analyze_signal(symbol)
+            enhanced_result = enhanced_5s_strategy.analyze_signal(symbol, chart_type)
             
             if enhanced_result and enhanced_result.get('signal'):
                 logger.info(f"✅ Enhanced 5S Strategy Generated Signal: {symbol} → {enhanced_result['signal']} ({enhanced_result['confidence']:.1f}%)")
@@ -321,10 +325,11 @@ class ForceSignalGenerator:
                     'direction': enhanced_result['signal'],
                     'confidence': min(enhanced_result['confidence'] + 3, 98),  # Slight boost for force mode
                     'probability': min(enhanced_result['confidence'] + 3, 98),
-                    'reasoning': f"🚀 ENHANCED MULTI-INDICATOR: {' | '.join(enhanced_result['reasoning'][:3])}",
+                    'reasoning': f"🚀 {enhanced_result.get('chart_info', {}).get('icon', '📊')} {chart_type.upper()}: {' | '.join(enhanced_result['reasoning'][:3])}",
                     'strategy': 'enhanced_5s_multi_indicator',
                     'timeframe': '5s',
                     'market_type': 'otc',
+                    'chart_type': chart_type,
                     'ultra_short_specialist': True,
                     'force_enhanced': True,
                     'multi_indicator_count': enhanced_result.get('signal_scores', {}).get('bullish_score', 0) + enhanced_result.get('signal_scores', {}).get('bearish_score', 0),
