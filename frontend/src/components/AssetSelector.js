@@ -10,7 +10,7 @@ import { Switch } from './ui/switch';
 import { Label } from './ui/label';
 import { toast } from 'sonner';
 
-const API = import.meta.env.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
+const API = process.env.REACT_APP_BACKEND_URL || '';
 
 const AssetSelector = ({ onSelectionChange, selectedAssets = [], selectedTimeframes = ['1min'] }) => {
   const [searchTerm, setSearchTerm] = useState('');
