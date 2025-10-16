@@ -30,6 +30,12 @@ class AssetType(str, Enum):
     INDICES = "indices"
     OTC = "otc"
 
+class ChartType(str, Enum):
+    JAPANESE_CANDLES = "japanese_candles"
+    LINE = "line"
+    BARS = "bars"
+    HEIKIN_ASHI = "heikin_ashi"
+
 # Data Models
 class MarketData(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
