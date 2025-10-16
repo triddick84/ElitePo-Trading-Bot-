@@ -48,9 +48,22 @@ class EMA_RSI_5S_Strategy:
         try:
             # Convert symbol for yfinance
             if '_OTC' in symbol:
-                yf_symbol = symbol.replace('_OTC', '').replace('_', '=X')
+                base_symbol = symbol.replace('_OTC', '')
             else:
-                yf_symbol = symbol.replace('_', '=X')
+                base_symbol = symbol
+            
+            # Convert to yfinance format
+            if base_symbol == 'EURUSD':
+                yf_symbol = 'EURUSD=X'
+            elif base_symbol == 'GBPUSD':
+                yf_symbol = 'GBPUSD=X'
+            elif base_symbol == 'BTCUSD':
+                yf_symbol = 'BTC-USD'
+            elif base_symbol == 'ETHUSD':
+                yf_symbol = 'ETH-USD'
+            else:
+                # Default conversion
+                yf_symbol = base_symbol + '=X'
             
             # Fetch recent 1-minute data
             ticker = yf.Ticker(yf_symbol)
