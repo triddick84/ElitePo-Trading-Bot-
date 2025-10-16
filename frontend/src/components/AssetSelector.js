@@ -128,8 +128,11 @@ const AssetSelector = ({ onSelectionChange, selectedAssets = [], selectedTimefra
   };
 
   const filteredAssets = getAllAssets().filter(asset => {
+    const displayName = asset.display_name || asset.name || asset.symbol;
+    const description = asset.description || '';
     const matchesSearch = asset.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         asset.name.toLowerCase().includes(searchTerm.toLowerCase());
+                         displayName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         description.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = activeCategory === 'all' || asset.category === activeCategory;
     return matchesSearch && matchesCategory;
   });
