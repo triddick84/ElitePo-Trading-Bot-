@@ -117,7 +117,7 @@ class EnhancedSignalGenerator:
                 })
             
             # Generate ensemble signal
-            ensemble_result = advanced_ai_ensemble.generate_ensemble_signal(symbol, market_data)
+            ensemble_result = lightweight_ai_ensemble.generate_ai_ensemble_signal(symbol, market_data)
             
             if ensemble_result and ensemble_result.get('confidence', 0) >= 75:
                 signal_data = {
