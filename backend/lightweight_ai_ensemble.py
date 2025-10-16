@@ -140,12 +140,30 @@ class NeuralSignalFilter:
                     volatility.iloc[-1] / volatility.mean(),  # Relative volatility
                 ])
                 
-                # Price position features
-                high_20 = max([float(item['high']) for item in market_data[-20:]])
-                low_20 = min([float(item['low']) for item in market_data[-20:]])
-                current_price = prices.iloc[-1]
-                price_position = (current_price - low_20) / (high_20 - low_20) if high_20 != low_20 else 0.5
-                features.append(price_position)
+                # Price position features (handle missing high/low fields gracefully)
+                try:
+                    # Try to get high/low from market data, fallback to close prices
+                    high_values = []
+                    low_values = []
+                    
+                    for item in market_data[-20:]:
+                        # Check for different possible field names
+                        high_val = item.get('high') or item.get('High') or item.get('close') or item.get('Close', 0)
+                        low_val = item.get('low') or item.get('Low') or item.get('close') or item.get('Close', 0)
+                        high_values.append(float(high_val))
+                        low_values.append(float(low_val))
+                    
+                    if high_values and low_values:
+                        high_20 = max(high_values)
+                        low_20 = min(low_values)
+                        current_price = prices.iloc[-1]
+                        price_position = (current_price - low_20) / (high_20 - low_20) if high_20 != low_20 else 0.5
+                        features.append(price_position)
+                    else:
+                        features.append(0.5)  # Default middle position
+                except Exception as e:
+                    logger.debug(f"Error calculating price position features: {e}")
+                    features.append(0.5)  # Default middle position
             
             # Technical indicator features
             if technical_indicators:
