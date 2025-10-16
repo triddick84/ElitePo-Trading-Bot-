@@ -272,9 +272,13 @@ class Enhanced5SecondStrategy:
             logger.error(f"Error fetching data for {symbol}: {e}")
             return None
     
-    def analyze_signal(self, symbol: str) -> Optional[Dict]:
+    def analyze_signal(self, symbol: str, chart_type: str = 'japanese_candles') -> Optional[Dict]:
         """
         Comprehensive multi-indicator analysis for 5-second trading
+        
+        Args:
+            symbol: Trading symbol (e.g., EURUSD_OTC)
+            chart_type: Chart type for analysis ('japanese_candles', 'line', 'bars', 'heikin_ashi')
         """
         try:
             # Get data
@@ -282,11 +286,17 @@ class Enhanced5SecondStrategy:
             if data is None:
                 return None
             
+            # Transform data based on chart type
+            transformed_data = chart_transformer.transform_data(data, chart_type)
+            chart_info = chart_transformer.get_chart_type_info(chart_type)
+            
+            logger.info(f"Using {chart_info['name']} for {symbol} analysis")
+            
             # Calculate all indicators
-            prices = data['Close']
-            high = data['High']
-            low = data['Low']
-            volume = data['Volume']
+            prices = transformed_data['Close']
+            high = transformed_data['High']
+            low = transformed_data['Low']
+            volume = transformed_data['Volume']
             
             # Core indicators
             ema_20 = self.calculate_ema(prices, self.ema_period)
