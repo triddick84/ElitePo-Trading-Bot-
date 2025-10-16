@@ -92,15 +92,37 @@ const AssetSelector = ({ onSelectionChange, selectedAssets = [], selectedTimefra
   const getAllAssets = () => {
     const allAssets = [];
     Object.keys(pocketOptionAssets).forEach(category => {
-      const categoryData = pocketOptionAssets[category];
-      [...categoryData.regular, ...categoryData.otc].forEach(asset => {
-        allAssets.push({
-          ...asset,
-          category,
-          categoryName: categoryData.name,
-          icon: categoryData.icon
+      const categoryAssets = pocketOptionAssets[category];
+      const categoryMeta = categoryInfo[category];
+      
+      if (Array.isArray(categoryAssets)) {
+        // Handle API structure where assets are directly in an array
+        categoryAssets.forEach(asset => {
+          allAssets.push({
+            ...asset,
+            category,
+            categoryName: categoryMeta?.name || category,
+            icon: categoryMeta?.icon || '📊',
+            // Ensure we have the required fields for compatibility
+            symbol: asset.symbol,
+            name: asset.display_name || asset.name || asset.symbol,
+            market: asset.market_type || 'regular'
+          });
         });
-      });
+      } else if (categoryAssets && typeof categoryAssets === 'object') {
+        // Handle legacy structure with regular/otc arrays (fallback)
+        const regularAssets = categoryAssets.regular || [];
+        const otcAssets = categoryAssets.otc || [];
+        
+        [...regularAssets, ...otcAssets].forEach(asset => {
+          allAssets.push({
+            ...asset,
+            category,
+            categoryName: categoryMeta?.name || category,
+            icon: categoryMeta?.icon || '📊'
+          });
+        });
+      }
     });
     return allAssets;
   };
