@@ -1,6 +1,7 @@
 """
 Enhanced 5-Second Ultra-High Accuracy Strategy for Pocket Option
 Combines EMA, RSI, Stochastic, Bollinger Bands, Volume, and Pattern Recognition
+Supports multiple chart types: Japanese Candles, Line, Bars, Heikin Ashi
 Target: 85%+ Accuracy
 """
 
@@ -11,6 +12,7 @@ from datetime import datetime, timedelta
 import logging
 from typing import Dict, Optional, Tuple, List
 from scipy import stats
+from chart_transformations import chart_transformer
 
 logger = logging.getLogger(__name__)
 
