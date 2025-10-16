@@ -380,7 +380,9 @@ class Enhanced5SecondStrategy:
                 'signal_scores': signal_scores,
                 'strategy': 'ENHANCED_5S_MULTI_INDICATOR',
                 'timeframe': '5s',
-                'expiration': '5_seconds'
+                'expiration': '5_seconds',
+                'chart_type': chart_type,
+                'chart_info': chart_info
             }
             
         except Exception as e:
