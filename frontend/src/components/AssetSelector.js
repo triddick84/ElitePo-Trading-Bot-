@@ -98,15 +98,28 @@ const AssetSelector = ({ onSelectionChange, selectedAssets = [], selectedTimefra
       if (Array.isArray(categoryAssets)) {
         // Handle API structure where assets are directly in an array
         categoryAssets.forEach(asset => {
-          allAssets.push({
-            ...asset,
-            category,
-            categoryName: categoryMeta?.name || category,
-            icon: categoryMeta?.icon || '📊',
-            // Ensure we have the required fields for compatibility
-            symbol: asset.symbol,
-            name: asset.display_name || asset.name || asset.symbol,
-            market: asset.market_type || 'regular'
+          const marketTypes = asset.market_types || (asset.market_type ? [asset.market_type] : ['regular']);
+          
+          // Create separate entries for each market type (regular and OTC)
+          marketTypes.forEach(marketType => {
+            // Apply OTC filter
+            if (!showOTC && marketType === 'otc') {
+              return; // Skip OTC assets if showOTC is false
+            }
+            
+            allAssets.push({
+              ...asset,
+              category,
+              categoryName: categoryMeta?.name || category,
+              icon: categoryMeta?.icon || '📊',
+              // Ensure we have the required fields for compatibility
+              symbol: asset.symbol,
+              name: asset.display_name || asset.name || asset.symbol,
+              market: marketType,
+              // Add market type badge info
+              isOTC: marketType === 'otc',
+              marketLabel: marketType === 'otc' ? '🌙 OTC' : '🌞 Regular'
+            });
           });
         });
       } else if (categoryAssets && typeof categoryAssets === 'object') {
@@ -115,11 +128,21 @@ const AssetSelector = ({ onSelectionChange, selectedAssets = [], selectedTimefra
         const otcAssets = categoryAssets.otc || [];
         
         [...regularAssets, ...otcAssets].forEach(asset => {
+          const marketType = asset.market || asset.market_type || 'regular';
+          
+          // Apply OTC filter
+          if (!showOTC && marketType === 'otc') {
+            return; // Skip OTC assets if showOTC is false
+          }
+          
           allAssets.push({
             ...asset,
             category,
             categoryName: categoryMeta?.name || category,
-            icon: categoryMeta?.icon || '📊'
+            icon: categoryMeta?.icon || '📊',
+            market: marketType,
+            isOTC: marketType === 'otc',
+            marketLabel: marketType === 'otc' ? '🌙 OTC' : '🌞 Regular'
           });
         });
       }
