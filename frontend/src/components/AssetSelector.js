@@ -273,14 +273,22 @@ const AssetSelector = ({ onSelectionChange, selectedAssets = [], selectedTimefra
             let otcAssets = [];
             
             if (Array.isArray(categoryAssets)) {
-              // API structure: assets are directly in an array
-              allAssets = categoryAssets;
-              regularAssets = categoryAssets.filter(asset => 
-                (asset.market_type || asset.market || 'regular') === 'regular'
-              );
-              otcAssets = categoryAssets.filter(asset => 
-                (asset.market_type || asset.market || 'regular') === 'otc'
-              );
+              // API structure: assets are directly in an array with market_types field
+              categoryAssets.forEach(asset => {
+                const marketTypes = asset.market_types || (asset.market_type ? [asset.market_type] : ['regular']);
+                
+                // Add to regular assets if it supports regular market
+                if (marketTypes.includes('regular')) {
+                  regularAssets.push({ ...asset, market: 'regular', market_type: 'regular' });
+                }
+                
+                // Add to OTC assets if it supports OTC market
+                if (marketTypes.includes('otc')) {
+                  otcAssets.push({ ...asset, market: 'otc', market_type: 'otc' });
+                }
+              });
+              
+              allAssets = [...regularAssets, ...otcAssets];
             } else if (categoryAssets && typeof categoryAssets === 'object') {
               // Legacy structure: regular and otc arrays
               regularAssets = categoryAssets.regular || [];
