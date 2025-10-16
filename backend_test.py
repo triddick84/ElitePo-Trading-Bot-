@@ -6206,7 +6206,22 @@ async def main():
         print("   Check the failed tests above for root cause analysis")
         return 1
 
+async def main_asset_system():
+    """Main function for Pocket Option asset system testing"""
+    tester = BackendTester()
+    success = await tester.run_pocket_option_asset_system_tests()
+    
+    if success:
+        print("\n✅ Pocket Option asset system testing completed successfully!")
+        print("   All 139+ assets are properly loaded and signal generation systems work correctly")
+        return 0
+    else:
+        print("\n❌ Pocket Option asset system testing found issues!")
+        print("   Check the failed tests above for root cause analysis")
+        return 1
+
 if __name__ == "__main__":
     import sys
-    result = asyncio.run(main())
+    # Run the asset system tests as requested
+    result = asyncio.run(main_asset_system())
     sys.exit(result)
