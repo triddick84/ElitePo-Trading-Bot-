@@ -106,6 +106,41 @@ const BotControls = ({ onStatusUpdate }) => {
     }
   };
 
+  const startAutoSignalGeneration = async () => {
+    if (!botStatus.is_running) {
+      toast.error('Please start the trading bot first before enabling auto signal generation');
+      return;
+    }
+
+    setIsAutoLoading(true);
+    try {
+      await axios.post(`${API}/signals/auto-generate/start`);
+      toast.success('🚀 Auto Signal Generation Started! Signals will be generated automatically.');
+      fetchAutoSignalStatus();
+      if (onStatusUpdate) onStatusUpdate();
+    } catch (error) {
+      console.error('Error starting auto signal generation:', error);
+      toast.error('Failed to start auto signal generation');
+    } finally {
+      setIsAutoLoading(false);
+    }
+  };
+
+  const stopAutoSignalGeneration = async () => {
+    setIsAutoLoading(true);
+    try {
+      await axios.post(`${API}/signals/auto-generate/stop`);
+      toast.success('Auto Signal Generation Stopped');
+      fetchAutoSignalStatus();
+      if (onStatusUpdate) onStatusUpdate();
+    } catch (error) {
+      console.error('Error stopping auto signal generation:', error);
+      toast.error('Failed to stop auto signal generation');
+    } finally {
+      setIsAutoLoading(false);
+    }
+  };
+
   const updateConfig = async () => {
     setIsSaving(true);
     try {
