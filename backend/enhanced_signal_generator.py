@@ -53,7 +53,13 @@ class EnhancedSignalGenerator:
             # Run all signal generation strategies
             signals = []
             
-            # 1. Trend-Momentum Strategy (35% weight)
+            # 1. EMA RSI 5-Second OTC Strategy (30% weight) - NEW ULTRA-SHORT STRATEGY
+            if symbol.endswith('_OTC') or '_OTC' in symbol:
+                ema_rsi_signal = await self._ema_rsi_5s_otc_strategy(symbol)
+                if ema_rsi_signal:
+                    signals.append(('ema_rsi_5s_otc', ema_rsi_signal))
+            
+            # 2. Trend-Momentum Strategy (30% weight)
             trend_signal = self._trend_momentum_strategy(df, indicators)
             if trend_signal:
                 signals.append(('trend_momentum', trend_signal))
