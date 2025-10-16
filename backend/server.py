@@ -833,6 +833,73 @@ async def force_generate_signal_for_asset(asset_symbol: str):
 async def root():
     return {"message": "GPT Signal Bot API - Advanced AI Trading System"}
 
+# Asset Management Routes
+@api_router.get("/assets/all")
+async def get_all_assets():
+    """Get all Pocket Option assets (Regular + OTC)"""
+    try:
+        assets = pocket_option_assets.get_all_assets_formatted()
+        
+        # Add summary statistics
+        total_count = sum(len(category_assets) for category_assets in assets.values())
+        summary = {
+            "forex_count": len(assets["forex"]),
+            "crypto_count": len(assets["crypto"]),
+            "stocks_count": len(assets["stocks"]),
+            "commodities_count": len(assets["commodities"]),
+            "indices_count": len(assets["indices"]),
+            "total_assets": total_count
+        }
+        
+        return {
+            "success": True,
+            "assets": assets,
+            "summary": summary,
+            "last_updated": "2025-01-01"
+        }
+    except Exception as e:
+        logger.error(f"Error getting assets: {e}")
+        return {"success": False, "error": str(e)}
+
+@api_router.get("/assets/symbols")
+async def get_asset_symbols():
+    """Get simple list of all asset symbols"""
+    try:
+        symbols = pocket_option_assets.get_symbols_list()
+        otc_symbols = pocket_option_assets.get_otc_symbols()
+        
+        return {
+            "success": True,
+            "regular_symbols": symbols,
+            "otc_symbols": otc_symbols,
+            "total_regular": len(symbols),
+            "total_otc": len(otc_symbols)
+        }
+    except Exception as e:
+        logger.error(f"Error getting asset symbols: {e}")
+        return {"success": False, "error": str(e)}
+
+@api_router.get("/assets/category/{category}")
+async def get_assets_by_category(category: str):
+    """Get assets by category (forex, crypto, stocks, commodities, indices)"""
+    try:
+        assets = pocket_option_assets.get_all_assets_formatted()
+        
+        if category.lower() not in assets:
+            return {"success": False, "error": f"Invalid category: {category}"}
+        
+        category_assets = assets[category.lower()]
+        
+        return {
+            "success": True,
+            "category": category.lower(),
+            "assets": category_assets,
+            "count": len(category_assets)
+        }
+    except Exception as e:
+        logger.error(f"Error getting assets for category {category}: {e}")
+        return {"success": False, "error": str(e)}
+
 # Include the router in the main app
 app.include_router(api_router)
 
