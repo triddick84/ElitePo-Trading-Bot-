@@ -6080,6 +6080,68 @@ class BackendTester:
             
         return len(self.failed_tests) == 0
 
+    async def run_pocket_option_asset_system_tests(self):
+        """Run comprehensive Pocket Option asset system tests"""
+        print("🚀 Starting Pocket Option Asset System Testing")
+        print("=" * 80)
+        print("Testing complete asset catalog with 139+ assets across all categories")
+        print("=" * 80)
+        
+        await self.setup()
+        
+        # Define asset system focused test suite
+        tests = [
+            ("Health Check", self.test_health_check),
+            
+            # Asset API Endpoints Testing
+            ("Asset API - All Assets Endpoint", self.test_asset_api_all_endpoint),
+            ("Asset API - Symbols Endpoint", self.test_asset_api_symbols_endpoint),
+            ("Asset API - Category Endpoints", self.test_asset_api_category_endpoints),
+            
+            # Asset Data Validation
+            ("Asset Data Validation", self.test_asset_data_validation),
+            
+            # Signal Generation with New Assets
+            ("Signal Generation with New Assets", self.test_signal_generation_with_new_assets),
+            ("EMA RSI 5S Strategy with OTC Assets", self.test_ema_rsi_5s_strategy_with_otc_assets),
+            ("AI Ensemble with Comprehensive Asset List", self.test_ai_ensemble_with_comprehensive_asset_list),
+            
+            # Auto Signal Generation
+            ("Auto Signal Generation with Expanded Assets", self.test_auto_signal_generation_with_expanded_assets),
+            
+            # Supporting Tests
+            ("Environment Variables", self.test_environment_variables),
+            ("Bot Status", self.test_bot_status_endpoint),
+        ]
+        
+        # Run all tests
+        for test_name, test_func in tests:
+            await self.run_test(test_name, test_func)
+            
+        await self.cleanup()
+        
+        # Print summary
+        print("\n" + "=" * 70)
+        print("🏁 POCKET OPTION ASSET SYSTEM TESTING SUMMARY")
+        print("=" * 70)
+        
+        total_tests = len(tests)
+        passed_tests = total_tests - len(self.failed_tests)
+        
+        print(f"Total Tests: {total_tests}")
+        print(f"Passed: {passed_tests}")
+        print(f"Failed: {len(self.failed_tests)}")
+        print(f"Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+        
+        if self.failed_tests:
+            print(f"\n❌ Failed Tests:")
+            for test in self.failed_tests:
+                print(f"   - {test}")
+        else:
+            print(f"\n🎉 All asset system tests passed!")
+            
+        return len(self.failed_tests) == 0
+
     async def run_ultra_short_timeframe_tests(self):
         """Run focused ultra-short timeframe tests"""
         print("🚀 Starting Ultra-Short Timeframe Testing for GPT Signal Bot")
