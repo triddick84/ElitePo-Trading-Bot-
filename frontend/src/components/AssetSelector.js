@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -7,12 +8,27 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Switch } from './ui/switch';
 import { Label } from './ui/label';
+import { toast } from 'sonner';
+
+const API = import.meta.env.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
 
 const AssetSelector = ({ onSelectionChange, selectedAssets = [], selectedTimeframes = ['1min'] }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState('all');
   const [localSelectedAssets, setLocalSelectedAssets] = useState(selectedAssets);
   const [localSelectedTimeframes, setLocalSelectedTimeframes] = useState(selectedTimeframes);
+  
+  // API-driven asset data
+  const [pocketOptionAssets, setPocketOptionAssets] = useState({
+    forex: [],
+    crypto: [],
+    stocks: [],
+    commodities: [],
+    indices: []
+  });
+  const [assetSummary, setAssetSummary] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [showOTC, setShowOTC] = useState(true);
 
   // Complete Pocket Option Asset List
   const pocketOptionAssets = {
