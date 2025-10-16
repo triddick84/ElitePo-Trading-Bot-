@@ -240,7 +240,7 @@ const AssetSelector = ({ onSelectionChange, selectedAssets = [], selectedTimefra
           )}
 
           {/* Category Cards */}
-          {Object.keys(pocketOptionAssets).map(categoryKey => {
+          {!loading && Object.keys(pocketOptionAssets).map(categoryKey => {
             const categoryAssets = pocketOptionAssets[categoryKey];
             const categoryMeta = categoryInfo[categoryKey];
             
