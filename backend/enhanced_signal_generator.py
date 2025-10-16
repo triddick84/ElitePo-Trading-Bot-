@@ -134,8 +134,8 @@ class EnhancedSignalGenerator:
                     'ensemble_method': ensemble_result.get('ensemble_method', 'weighted_voting'),
                     'filter_score': ensemble_result.get('filter_score', 0.75),
                     'technical_details': {
-                        'ai_models_used': ['transformer', 'lstm_dqn', 'adaptive_rsi', 'sentiment_analyzer', 'neural_filter'],
-                        'ensemble_weights': advanced_ai_ensemble.model_weights,
+                        'ai_models_used': ['adaptive_rsi', 'sentiment_analyzer', 'volatility_predictor', 'neural_filter'],
+                        'ensemble_weights': lightweight_ai_ensemble.model_weights,
                         'prediction_method': 'weighted_voting_with_confidence',
                         'market_data_points': len(market_data),
                         'ai_enhanced_analysis': True
