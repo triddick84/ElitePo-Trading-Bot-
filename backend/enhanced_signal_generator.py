@@ -89,6 +89,69 @@ class EnhancedSignalGenerator:
             logger.error(f"Error generating enhanced signal for {symbol}: {e}")
             return None
     
+    async def _advanced_ai_ensemble_strategy(self, symbol: str, df: pd.DataFrame) -> Optional[Dict]:
+        """
+        Advanced AI Ensemble Strategy - Cutting-Edge AI Models
+        
+        Combines:
+        - Transformer Neural Networks (long-term dependencies)
+        - LSTM with Deep Q-Networks (reinforcement learning)
+        - Neural Signal Filter (noise reduction)
+        - Adaptive RSI (volatility-based adjustments)
+        - Real-time Sentiment Analysis
+        - Ensemble Voting System
+        """
+        try:
+            logger.info(f"🤖 Executing Advanced AI Ensemble Strategy for {symbol}")
+            
+            # Convert DataFrame to market data format
+            market_data = []
+            for _, row in df.iterrows():
+                market_data.append({
+                    'timestamp': row.name.isoformat() if hasattr(row.name, 'isoformat') else str(row.name),
+                    'open': float(row.get('Open', row.get('open', 0))),
+                    'high': float(row.get('High', row.get('high', 0))),
+                    'low': float(row.get('Low', row.get('low', 0))),
+                    'close': float(row.get('Close', row.get('close', 0))),
+                    'volume': float(row.get('Volume', row.get('volume', 0)))
+                })
+            
+            # Generate ensemble signal
+            ensemble_result = advanced_ai_ensemble.generate_ensemble_signal(symbol, market_data)
+            
+            if ensemble_result and ensemble_result.get('confidence', 0) >= 75:
+                signal_data = {
+                    'direction': ensemble_result['signal'],
+                    'confidence': ensemble_result['confidence'],
+                    'probability': ensemble_result['probability'],
+                    'reasoning': ensemble_result['reasoning'],
+                    'strategy': 'advanced_ai_ensemble',
+                    'timeframe': ensemble_result.get('timeframe', '5s'),
+                    'ai_enhanced': True,
+                    'model_predictions': ensemble_result.get('model_predictions', {}),
+                    'model_confidences': ensemble_result.get('model_confidences', {}),
+                    'sentiment_data': ensemble_result.get('sentiment_data', {}),
+                    'ensemble_method': ensemble_result.get('ensemble_method', 'weighted_voting'),
+                    'filter_score': ensemble_result.get('filter_score', 0.75),
+                    'technical_details': {
+                        'ai_models_used': ['transformer', 'lstm_dqn', 'adaptive_rsi', 'sentiment_analyzer', 'neural_filter'],
+                        'ensemble_weights': advanced_ai_ensemble.model_weights,
+                        'prediction_method': 'weighted_voting_with_confidence',
+                        'market_data_points': len(market_data),
+                        'ai_enhanced_analysis': True
+                    }
+                }
+                
+                logger.info(f"✅ Advanced AI Ensemble Signal: {symbol} → {ensemble_result['signal']} ({ensemble_result['confidence']:.1f}%)")
+                return signal_data
+            else:
+                logger.debug(f"No high-confidence AI ensemble signal for {symbol}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error in Advanced AI Ensemble strategy for {symbol}: {e}")
+            return None
+    
     async def _ema_rsi_5s_otc_strategy(self, symbol: str) -> Optional[Dict]:
         """
         EMA 20 + RSI 5-Second OTC Strategy
