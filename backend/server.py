@@ -554,55 +554,77 @@ async def get_auto_signal_generation_status():
 @api_router.post("/signals/force-generate")
 async def force_generate_signal():
     """
-    Force generate a trading signal using maximum analysis depth
+    Force generate trading signals for ALL selected assets using maximum analysis depth
     Bypasses all thresholds and uses advanced multi-strategy analysis
     """
     try:
-        # Get current market data for configured assets
-        market_data = await trading_bot._get_relevant_market_data()
-        
-        if not market_data:
-            # Create emergency market data for force generation
-            from models import MarketData, AssetType
-            logger.warning("No market data available - creating emergency market data for force generation")
-            target_asset = MarketData(
-                symbol="EURUSD",
-                price=1.0500,  # Default price
-                timestamp=datetime.now(timezone.utc),
-                asset_type=AssetType.FOREX,
-                volume=0
-            )
-        else:
-            # Use the first available asset for force generation
-            target_asset = market_data[0]
-        
-        logger.info(f"🚀 FORCE GENERATING SIGNAL for {target_asset.symbol} using maximum analysis depth")
-        
-        # Get user's selected timeframes from current configuration
+        # Get user's configuration for selected assets and timeframes
         try:
             config_doc = await db.trading_configurations.find_one({"user_id": "default_user"})
+            selected_assets = config_doc.get('selected_assets', ['EURUSD_regular']) if config_doc else ['EURUSD_regular']
             user_timeframes = config_doc.get('selected_timeframes', ['5m']) if config_doc else ['5m']
+            chart_type = config_doc.get('chart_type', 'japanese_candles') if config_doc else 'japanese_candles'
+            
+            # If no assets selected, use defaults
+            if not selected_assets or len(selected_assets) == 0:
+                selected_assets = ['EURUSD_OTC']
+                logger.info("No assets selected, using EURUSD_OTC default")
             
             # If no timeframes are selected, use ultra-short default
             if not user_timeframes or len(user_timeframes) == 0:
                 user_timeframes = ['5s']  # Default to ultra-short 5 second timeframe
                 logger.info("No timeframes selected, using ultra-short 5s default")
+                
         except Exception as e:
-            logger.warning(f"Could not get user timeframes, using default: {e}")
+            logger.warning(f"Could not get user configuration, using defaults: {e}")
+            selected_assets = ['EURUSD_OTC']
             user_timeframes = ['5s']
+            chart_type = 'japanese_candles'
         
-        logger.info(f"Using user selected timeframes: {user_timeframes}")
+        logger.info(f"📊 Force generating signals for {len(selected_assets)} selected assets: {selected_assets}")
+        logger.info(f"⏱️ Using timeframes: {user_timeframes}")
+        logger.info(f"🎴 Using chart type: {chart_type}")
         
-        # Force generate signals using advanced algorithms (both regular and OTC)
-        forced_signals = await force_signal_generator.force_generate_signal(
-            target_asset.symbol, target_asset, user_timeframes
-        )
+        all_forced_signals = []
         
-        if forced_signals:
+        # Generate signals for each selected asset
+        for asset in selected_assets:
+            # Extract base symbol (remove _regular or _otc suffix)
+            base_symbol = asset.replace('_regular', '').replace('_otc', '')
+            market_type = 'otc' if '_otc' in asset.lower() else 'regular'
+            
+            logger.info(f"🚀 FORCE GENERATING SIGNAL for {asset} (base: {base_symbol}, market: {market_type})")
+            
+            # Create market data object for this asset
+            from models import MarketData, AssetType
+            target_asset = MarketData(
+                symbol=base_symbol,
+                price=1.0500,  # Default price - will be fetched by strategy
+                timestamp=datetime.now(timezone.utc),
+                asset_type=AssetType.FOREX,  # Will be determined by symbol
+                volume=0
+            )
+            
+            # Force generate signals using advanced algorithms
+            forced_signals = await force_signal_generator.force_generate_signal(
+                base_symbol, target_asset, user_timeframes, chart_type=chart_type
+            )
+            
+            if forced_signals:
+                # Tag signals with the selected asset info
+                for signal in forced_signals:
+                    signal.symbol = asset  # Use full asset name with suffix
+                    signal.market_type = market_type
+                all_forced_signals.extend(forced_signals)
+                logger.info(f"✅ Generated {len(forced_signals)} signals for {asset}")
+            else:
+                logger.warning(f"⚠️ No signals generated for {asset}")
+        
+        if all_forced_signals:
             stored_signals = []
             
             # Store all forced signals in database
-            for signal in forced_signals:
+            for signal in all_forced_signals:
                 try:
                     signal_dict = signal.dict()
                     signal_dict['timestamp'] = signal_dict['timestamp'].isoformat()
