@@ -29,13 +29,19 @@ class ForceSignalGenerator:
         self.executor = ThreadPoolExecutor(max_workers=10)
         self.min_force_confidence = 75.0  # Minimum for forced signals
         
-    async def force_generate_signal(self, symbol: str, market_data: MarketData, user_timeframes: List[str] = None) -> List[TradingSignal]:
+    async def force_generate_signal(self, symbol: str, market_data: MarketData, user_timeframes: List[str] = None, chart_type: str = 'japanese_candles') -> List[TradingSignal]:
         """
         Force generate a signal using maximum analysis depth
         Bypasses all normal thresholds and provides the best possible prediction
+        
+        Args:
+            symbol: Trading symbol
+            market_data: Market data object
+            user_timeframes: List of timeframes to analyze
+            chart_type: Chart type for analysis ('japanese_candles', 'line', 'bars', 'heikin_ashi')
         """
         try:
-            logger.info(f"🚀 FORCE GENERATING SIGNAL for {symbol} - Maximum analysis mode activated")
+            logger.info(f"🚀 FORCE GENERATING SIGNAL for {symbol} using {chart_type} chart - Maximum analysis mode activated")
             
             # Get comprehensive multi-timeframe data
             loop = asyncio.get_event_loop()
