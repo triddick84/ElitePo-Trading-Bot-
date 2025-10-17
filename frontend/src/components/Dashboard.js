@@ -3,6 +3,7 @@ import axios from 'axios';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import LiveSignalsDisplay from './LiveSignalsDisplay';
+import AssetSelectorDropdown from './AssetSelectorDropdown';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -12,6 +13,11 @@ const Dashboard = ({ botStatus, liveSignals, setLiveSignals, notificationSetting
   const [recentSignals, setRecentSignals] = useState([]);
   const [performanceData, setPerformanceData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [config, setConfig] = useState({
+    selected_assets: [],
+    selected_timeframes: []
+  });
+  const [showAssetSelector, setShowAssetSelector] = useState(false);
 
   const handleSignalExecute = (signal) => {
     console.log("Executing signal from dashboard:", signal);
