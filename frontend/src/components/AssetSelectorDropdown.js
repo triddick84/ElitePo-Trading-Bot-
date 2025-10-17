@@ -37,7 +37,11 @@ const AssetSelectorDropdown = ({ selectedAssets, onAssetsChange, selectedTimefra
     try {
       setLoading(true);
       const response = await fetch(`${API}/api/assets/all`);
-      const data = await response.json();
+      const result = await response.json();
+      
+      // API returns { success: true, assets: {...} }
+      const data = result.assets || result;
+      
       setAllAssets(data);
       console.log('✅ Loaded Pocket Option assets:', {
         forex_count: data.forex?.length || 0,
