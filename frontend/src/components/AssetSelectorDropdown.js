@@ -57,9 +57,25 @@ const AssetSelectorDropdown = ({ selectedAssets, onAssetsChange, selectedTimefra
   const getCurrentAssets = () => {
     if (!allAssets[selectedCategory]) return [];
     
-    return allAssets[selectedCategory]
+    const categoryAssets = allAssets[selectedCategory];
+    if (!Array.isArray(categoryAssets)) return [];
+    
+    const expandedAssets = categoryAssets
       .map(asset => {
-        const marketTypes = asset.market_types || [];
+        // Get market types - handle both array and single value
+        let marketTypes = asset.market_types || [];
+        
+        // If no market_types defined, check if asset has market_type field
+        if (marketTypes.length === 0 && asset.market_type) {
+          marketTypes = [asset.market_type];
+        }
+        
+        // If still no market types, default to both regular and otc
+        if (marketTypes.length === 0) {
+          marketTypes = ['regular', 'otc'];
+        }
+        
+        // Create separate entries for each market type
         return marketTypes.map(marketType => ({
           ...asset,
           market_type: marketType,
@@ -68,15 +84,24 @@ const AssetSelectorDropdown = ({ selectedAssets, onAssetsChange, selectedTimefra
         }));
       })
       .flat()
-      .filter(asset => asset.market_type === selectedMarketType)
-      .filter(asset => {
-        if (!searchTerm) return true;
-        const search = searchTerm.toLowerCase();
-        return (
-          asset.symbol.toLowerCase().includes(search) ||
-          asset.display_name.toLowerCase().includes(search)
-        );
-      });
+      .filter(asset => asset.market_type === selectedMarketType);
+    
+    // Apply search filter
+    const filteredAssets = expandedAssets.filter(asset => {
+      if (!searchTerm) return true;
+      const search = searchTerm.toLowerCase();
+      return (
+        asset.symbol.toLowerCase().includes(search) ||
+        asset.display_name.toLowerCase().includes(search)
+      );
+    });
+    
+    // Debug logging
+    if (filteredAssets.length === 0 && expandedAssets.length > 0) {
+      console.log(`No ${selectedMarketType} assets found in ${selectedCategory} after search filter`);
+    }
+    
+    return filteredAssets;
   };
 
   const handleAssetToggle = (assetId) => {
