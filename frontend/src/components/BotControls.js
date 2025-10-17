@@ -525,10 +525,11 @@ const BotControls = ({ onStatusUpdate }) => {
 
       {/* Advanced Asset & Timeframe Selection */}
       <Card className="p-6 glass-dark border-slate-700/50">
-        <AssetSelector 
+        <AssetSelectorDropdown 
           selectedAssets={config.selected_assets}
           selectedTimeframes={config.selected_timeframes}
-          onSelectionChange={handleAssetSelectionChange}
+          onAssetsChange={(assets) => handleConfigChange('selected_assets', assets)}
+          onTimeframesChange={(timeframes) => handleConfigChange('selected_timeframes', timeframes)}
         />
       </Card>
 
