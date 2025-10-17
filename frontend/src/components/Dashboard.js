@@ -26,9 +26,42 @@ const Dashboard = ({ botStatus, liveSignals, setLiveSignals, notificationSetting
 
   useEffect(() => {
     fetchDashboardData();
+    fetchConfiguration();
     const interval = setInterval(fetchDashboardData, 10000); // Update every 10 seconds
     return () => clearInterval(interval);
   }, []);
+
+  const fetchConfiguration = async () => {
+    try {
+      const response = await axios.get(`${API}/config`);
+      setConfig({
+        selected_assets: response.data.selected_assets || [],
+        selected_timeframes: response.data.selected_timeframes || []
+      });
+    } catch (error) {
+      console.error('Error fetching config:', error);
+    }
+  };
+
+  const handleAssetsChange = async (assets) => {
+    setConfig(prev => ({ ...prev, selected_assets: assets }));
+    // Update backend config
+    try {
+      await axios.put(`${API}/config`, { selected_assets: assets });
+    } catch (error) {
+      console.error('Error updating assets:', error);
+    }
+  };
+
+  const handleTimeframesChange = async (timeframes) => {
+    setConfig(prev => ({ ...prev, selected_timeframes: timeframes }));
+    // Update backend config
+    try {
+      await axios.put(`${API}/config`, { selected_timeframes: timeframes });
+    } catch (error) {
+      console.error('Error updating timeframes:', error);
+    }
+  };
 
   const fetchDashboardData = async () => {
     try {
