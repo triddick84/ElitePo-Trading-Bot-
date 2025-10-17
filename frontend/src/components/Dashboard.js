@@ -134,6 +134,54 @@ const Dashboard = ({ botStatus, liveSignals, setLiveSignals, notificationSetting
         onSignalExecute={handleSignalExecute}
       />
 
+      {/* Quick Market Selection */}
+      <Card className="p-6 glass-dark border-slate-700/50">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-xl font-semibold text-white">Quick Market Selection</h3>
+            <p className="text-slate-400 text-sm mt-1">
+              Select assets and timeframes for signal generation
+            </p>
+          </div>
+          <Button
+            onClick={() => setShowAssetSelector(!showAssetSelector)}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            {showAssetSelector ? '📊 Hide Selector' : '📊 Show Selector'}
+          </Button>
+        </div>
+
+        {/* Current Selection Summary */}
+        <div className="flex items-center gap-6 p-4 bg-slate-800/50 rounded-lg">
+          <div className="flex items-center gap-2">
+            <span className="text-slate-400">Assets:</span>
+            <span className="font-semibold text-white text-lg">{config.selected_assets.length}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-slate-400">Timeframes:</span>
+            <span className="font-semibold text-white text-lg">{config.selected_timeframes.length}</span>
+          </div>
+          <div className="flex-1"></div>
+          <div className="text-sm text-blue-400">
+            {config.selected_assets.length > 0 && config.selected_timeframes.length > 0 
+              ? '✅ Ready for signal generation' 
+              : '⚠️ Select assets and timeframes'}
+          </div>
+        </div>
+
+        {/* Asset Selector Dropdown */}
+        {showAssetSelector && (
+          <div className="mt-6 border-t border-slate-700 pt-6">
+            <AssetSelectorDropdown
+              selectedAssets={config.selected_assets}
+              selectedTimeframes={config.selected_timeframes}
+              onAssetsChange={handleAssetsChange}
+              onTimeframesChange={handleTimeframesChange}
+            />
+          </div>
+        )}
+      </Card>
+
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card className="p-6 glass-dark border-emerald-500/20 card-hover">
