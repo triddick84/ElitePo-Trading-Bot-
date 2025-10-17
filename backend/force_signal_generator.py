@@ -77,10 +77,10 @@ class ForceSignalGenerator:
             
             # EMA RSI 5-Second OTC Strategy (25% weight for OTC symbols)
             if '_OTC' in symbol or symbol.endswith('_OTC'):
-                ema_rsi_5s_signal = await self._ema_rsi_5s_force_analysis(symbol)
+                ema_rsi_5s_signal = await self._ema_rsi_5s_force_analysis(symbol, chart_type)
                 if ema_rsi_5s_signal:
                     analysis_results.append(('ema_rsi_5s_otc', ema_rsi_5s_signal, 0.25))
-                    logger.info(f"🎯 EMA RSI 5S OTC strategy activated for {symbol}")
+                    logger.info(f"🎯 EMA RSI 5S OTC strategy activated for {symbol} with {chart_type}")
             
             # 1-minute scalping analysis (15% weight - supporting analysis)
             if data_1m and len(data_1m) > 100:
