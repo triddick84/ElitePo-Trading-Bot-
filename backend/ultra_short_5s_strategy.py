@@ -124,10 +124,6 @@ class UltraShort5SecondStrategy:
             if not pd.isna(rsi.iloc[-1]) and (current_rsi > self.rsi_extreme_overbought or current_rsi < self.rsi_extreme_oversold):
                 # RULE 1: RSI EXTREMES → MEAN REVERSION (Primary signal)
                 if current_rsi > self.rsi_extreme_overbought:
-            # If RSI is valid and shows extremes, use it
-            if not pd.isna(rsi.iloc[-1]) and (current_rsi > self.rsi_extreme_overbought or current_rsi < self.rsi_extreme_oversold):
-                # RULE 1: RSI EXTREMES → MEAN REVERSION (Primary signal)
-                if current_rsi > self.rsi_extreme_overbought:
                     # RSI OVERBOUGHT → Price likely to reverse DOWN → PUT
                     signal = "PUT"
                     confidence = 78 + min(10, (current_rsi - 75) * 2)  # Higher RSI = higher confidence
