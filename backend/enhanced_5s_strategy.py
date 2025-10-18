@@ -187,87 +187,81 @@ class Enhanced5SecondStrategy:
     
     def get_ultra_short_data(self, symbol: str) -> Optional[pd.DataFrame]:
         """
-        Fetch and prepare ultra-short timeframe data with OHLC
+        Fetch REAL ultra-short timeframe data - NO SIMULATION
+        Uses actual 1-minute data from yfinance (lowest available interval)
         """
         try:
             # Convert symbol
-            if '_OTC' in symbol:
-                base_symbol = symbol.replace('_OTC', '')
+            if '_OTC' in symbol or '_otc' in symbol:
+                base_symbol = symbol.replace('_OTC', '').replace('_otc', '')
             else:
-                base_symbol = symbol
+                base_symbol = symbol.replace('_regular', '').replace('_REGULAR', '')
             
-            # Convert to yfinance format
+            # Comprehensive symbol mapping for yfinance
             symbol_map = {
+                # Forex
                 'EURUSD': 'EURUSD=X',
                 'GBPUSD': 'GBPUSD=X',
                 'USDJPY': 'USDJPY=X',
                 'AUDUSD': 'AUDUSD=X',
+                'USDCHF': 'USDCHF=X',
+                'USDCAD': 'USDCAD=X',
+                'NZDUSD': 'NZDUSD=X',
+                'EURGBP': 'EURGBP=X',
+                'EURJPY': 'EURJPY=X',
+                'GBPJPY': 'GBPJPY=X',
+                'AUDJPY': 'AUDJPY=X',
+                'AUDCAD': 'AUDCAD=X',
+                'AUDCHF': 'AUDCHF=X',
+                'AUDNZD': 'AUDNZD=X',
+                'CADJPY': 'CADJPY=X',
+                'CHFJPY': 'CHFJPY=X',
+                'EURCHF': 'EURCHF=X',
+                'EURCAD': 'EURCAD=X',
+                'EURAUD': 'EURAUD=X',
+                'EURNZD': 'EURNZD=X',
+                'GBPCHF': 'GBPCHF=X',
+                'GBPCAD': 'GBPCAD=X',
+                'GBPAUD': 'GBPAUD=X',
+                'GBPNZD': 'GBPNZD=X',
+                'NZDJPY': 'NZDJPY=X',
+                'NZDCHF': 'NZDCHF=X',
+                'NZDCAD': 'NZDCAD=X',
+                # Crypto
                 'BTCUSD': 'BTC-USD',
                 'ETHUSD': 'ETH-USD',
+                'XRPUSD': 'XRP-USD',
+                'LTCUSD': 'LTC-USD',
+                'ADAUSD': 'ADA-USD',
+                'DOGUSD': 'DOGE-USD',
+                'SOLUSD': 'SOL-USD',
+                'DOTUSD': 'DOT-USD',
             }
             
             yf_symbol = symbol_map.get(base_symbol, base_symbol + '=X')
             
-            # Fetch 1-minute data
+            # Fetch REAL 1-minute data (lowest interval available on yfinance)
+            logger.info(f"📊 Fetching REAL market data for {yf_symbol} (no simulation)")
             ticker = yf.Ticker(yf_symbol)
             data = ticker.history(period="1d", interval="1m")
             
-            if data.empty or len(data) < 50:
-                logger.warning(f"Insufficient data for {symbol}")
+            if data.empty or len(data) < 20:
+                logger.warning(f"❌ Insufficient REAL market data for {symbol} ({yf_symbol})")
                 return None
             
-            # Get recent data
-            recent_data = data.tail(50).copy()
+            # Use ACTUAL 1-minute data - NO INTERPOLATION OR SIMULATION
+            # For 5-second strategies, we use the most granular real data available (1m)
+            # This is MORE ACCURATE than simulated 5s data
+            recent_data = data.tail(self.min_data_points).copy()
             
-            # Create 5-second OHLC data through interpolation
-            expanded_data = []
-            for i in range(len(recent_data)):
-                row = recent_data.iloc[i]
-                # 12 intervals per minute (5 seconds each)
-                for j in range(12):
-                    timestamp = row.name + pd.Timedelta(seconds=j*5)
-                    
-                    # Create realistic OHLC for each 5-second interval
-                    if i < len(recent_data) - 1:
-                        next_row = recent_data.iloc[i + 1]
-                        progress = j / 12
-                        
-                        # Interpolate between current close and next open
-                        base_price = row['Close'] + (next_row['Open'] - row['Close']) * progress
-                        
-                        # Add micro volatility
-                        volatility = row['Close'] * 0.0002  # 0.02% per 5s
-                        high = base_price + abs(np.random.normal(0, volatility))
-                        low = base_price - abs(np.random.normal(0, volatility))
-                        close = np.random.uniform(low, high)
-                        open_price = expanded_data[-1]['Close'] if expanded_data else base_price
-                        
-                    else:
-                        # Last minute - use small variations
-                        base_price = row['Close']
-                        volatility = row['Close'] * 0.0002
-                        high = base_price + abs(np.random.normal(0, volatility))
-                        low = base_price - abs(np.random.normal(0, volatility))
-                        close = np.random.uniform(low, high)
-                        open_price = expanded_data[-1]['Close'] if expanded_data else base_price
-                    
-                    expanded_data.append({
-                        'timestamp': timestamp,
-                        'Open': open_price,
-                        'High': high,
-                        'Low': low,
-                        'Close': close,
-                        'Volume': row['Volume'] / 12
-                    })
+            logger.info(f"✅ Using {len(recent_data)} REAL 1-minute candles for {symbol} (from {yf_symbol})")
+            logger.info(f"📈 Latest price: {recent_data['Close'].iloc[-1]:.5f}")
             
-            # Convert to DataFrame
-            df = pd.DataFrame(expanded_data)
-            df.set_index('timestamp', inplace=True)
-            df = df.tail(self.min_data_points)
+            return recent_data
             
-            logger.info(f"Generated {len(df)} 5-second OHLC data points for {symbol}")
-            return df
-            
+        except Exception as e:
+            logger.error(f"❌ Error fetching REAL market data for {symbol}: {e}")
+            return None
         except Exception as e:
             logger.error(f"Error fetching data for {symbol}: {e}")
             return None
