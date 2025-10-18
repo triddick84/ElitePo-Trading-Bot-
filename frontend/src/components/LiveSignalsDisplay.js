@@ -34,6 +34,9 @@ const LiveSignalsDisplay = ({
       const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
       const response = await fetch(`${BACKEND_URL}/api/config`);
       const config = await response.json();
+      console.log('📊 Fetched configuration:', config);
+      console.log('  - selected_assets:', config.selected_assets);
+      console.log('  - selected_timeframes:', config.selected_timeframes);
       setSelectedAssets(config.selected_assets || []);
       setSelectedTimeframes(config.selected_timeframes || []);
       setCurrentThreshold(config.min_probability_threshold || 85);
