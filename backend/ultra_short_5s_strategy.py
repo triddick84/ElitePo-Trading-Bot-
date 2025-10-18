@@ -139,8 +139,6 @@ class UltraShort5SecondStrategy:
             
             # RULE 2: EMA DISTANCE → MEAN REVERSION (Primary when RSI unavailable)
             if signal is None and abs(ema_distance) > 0.1:  # More than 0.1% from EMA
-            # RULE 2: EMA DISTANCE → MEAN REVERSION (Primary when RSI unavailable)
-            if signal is None and abs(ema_distance) > 0.1:  # More than 0.1% from EMA
                 if ema_distance > 0.1:
                     # Price TOO FAR ABOVE EMA → Expect pullback → PUT
                     signal = "PUT"
