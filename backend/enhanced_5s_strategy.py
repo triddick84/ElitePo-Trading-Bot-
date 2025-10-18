@@ -323,13 +323,14 @@ class Enhanced5SecondStrategy:
             )
             
             # Determine final signal based on scores
-            if signal_scores['bullish_score'] >= 4:
+            # Lowered threshold to 3 for more signal generation
+            if signal_scores['bullish_score'] >= 3:
                 signal = "CALL"
                 confidence = self._calculate_confidence(signal_scores, 'bullish')
                 reasoning = self._generate_reasoning(signal_scores, 'bullish', 
                                                      current_price, current_ema, current_rsi,
                                                      current_stoch_k, patterns)
-            elif signal_scores['bearish_score'] >= 4:
+            elif signal_scores['bearish_score'] >= 3:
                 signal = "PUT"
                 confidence = self._calculate_confidence(signal_scores, 'bearish')
                 reasoning = self._generate_reasoning(signal_scores, 'bearish',
@@ -342,7 +343,7 @@ class Enhanced5SecondStrategy:
                     'confidence': 0,
                     'reasoning': [
                         f"⚠️ Insufficient indicator alignment (Bullish: {signal_scores['bullish_score']}, Bearish: {signal_scores['bearish_score']})",
-                        "❌ Minimum 4 indicators must align for signal generation"
+                        "❌ Minimum 3 indicators must align for signal generation"
                     ],
                     'current_price': current_price,
                     'indicators': {
