@@ -33,6 +33,15 @@ const AssetSelectorDropdown = ({ selectedAssets, onAssetsChange, selectedTimefra
     fetchAssets();
   }, []);
 
+  // Sync local state with props when they change
+  useEffect(() => {
+    setLocalSelectedAssets(selectedAssets || []);
+  }, [selectedAssets]);
+
+  useEffect(() => {
+    setLocalSelectedTimeframes(selectedTimeframes || []);
+  }, [selectedTimeframes]);
+
   const fetchAssets = async () => {
     try {
       setLoading(true);
