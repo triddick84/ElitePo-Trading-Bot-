@@ -131,12 +131,24 @@ const LiveSignalsDisplay = ({
     }
   };
 
-  const handleAssetSelectionChange = (assets, timeframes) => {
+  const handleAssetSelectionChange = async (assets, timeframes) => {
     setSelectedAssets(assets);
     setSelectedTimeframes(timeframes);
     
-    // Send selection to backend
-    updateBotConfiguration(assets, timeframes);
+    // Save to backend configuration
+    try {
+      const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+      await fetch(`${BACKEND_URL}/api/config`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          selected_assets: assets,
+          selected_timeframes: timeframes
+        })
+      });
+    } catch (error) {
+      console.error('Error saving configuration:', error);
+    }
   };
 
   const updateBotConfiguration = async (assets, timeframes) => {
