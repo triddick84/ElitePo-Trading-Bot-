@@ -321,19 +321,19 @@ class ForceSignalGenerator:
         try:
             logger.info(f"🎯 Executing ENHANCED 5S Multi-Indicator Force Analysis for {symbol} using {chart_type} chart")
             
-            # For 5-second timeframe, use specialized ultra-short strategy
-            if '5s' in user_timeframes or '5' in str(user_timeframes):
-                logger.info(f"⚡ Using ULTRA-SHORT 5S CONTRARIAN strategy for {symbol}")
+            # For OTC symbols (5-second trading), use specialized ultra-short CONTRARIAN strategy
+            if '_OTC' in symbol or '_otc' in symbol:
+                logger.info(f"⚡ Using ULTRA-SHORT 5S CONTRARIAN strategy for OTC market: {symbol}")
                 ultra_short_result = ultra_short_5s_strategy.analyze_ultra_short(symbol, chart_type)
                 
                 if ultra_short_result and ultra_short_result.get('signal'):
-                    logger.info(f"✅ Ultra-Short 5S Strategy: {symbol} → {ultra_short_result['signal']} ({ultra_short_result['confidence']:.1f}%)")
+                    logger.info(f"✅ Ultra-Short 5S CONTRARIAN: {symbol} → {ultra_short_result['signal']} ({ultra_short_result['confidence']:.1f}%)")
                     
                     force_signal_data = {
                         'direction': ultra_short_result['signal'],
-                        'confidence': min(ultra_short_result['confidence'] + 2, 90),  # Slight boost
+                        'confidence': min(ultra_short_result['confidence'] + 2, 90),
                         'probability': min(ultra_short_result['confidence'] + 2, 90),
-                        'reasoning': f"⚡ 5S ULTRA-SHORT: {' | '.join(ultra_short_result['reasoning'][:3])}",
+                        'reasoning': f"⚡ 5S CONTRARIAN: {' | '.join(ultra_short_result['reasoning'][:3])}",
                         'strategy': 'ultra_short_5s_contrarian',
                         'timeframe': '5s',
                         'market_type': 'otc',
@@ -351,7 +351,7 @@ class ForceSignalGenerator:
                     
                     return force_signal_data
             
-            # Try enhanced strategy for other timeframes
+            # Try enhanced strategy for other timeframes/markets
             enhanced_result = enhanced_5s_strategy.analyze_signal(symbol, chart_type)
             
             if enhanced_result and enhanced_result.get('signal'):
