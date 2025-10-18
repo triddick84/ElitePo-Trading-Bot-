@@ -228,21 +228,21 @@ function App() {
 
         <div className="flex">
           {/* Sidebar Navigation */}
-          <nav className="w-64 bg-slate-800/30 backdrop-blur-xl border-r border-slate-700/50 min-h-screen">
+          <nav className="w-64 bg-[#13131a]/50 backdrop-blur-xl border-r border-[#2a2a35] min-h-screen">
             <div className="p-6">
               <div className="space-y-2">
                 {navigation.map((item) => (
                   <button
                     key={item.id}
                     onClick={() => setActiveView(item.id)}
-                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 ${
+                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 group ${
                       activeView === item.id
-                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                        : 'text-slate-400 hover:text-white hover:bg-slate-700/30'
+                        ? 'bg-purple-600/20 text-purple-400 border border-purple-500/30 shadow-lg glow-purple'
+                        : 'text-slate-400 hover:text-white hover:bg-[#1a1a24] hover:border hover:border-[#2a2a35]'
                     }`}
                     data-testid={`nav-${item.id}`}
                   >
-                    <span className="text-lg">{item.icon}</span>
+                    <span className="text-lg group-hover:scale-110 transition-transform duration-200">{item.icon}</span>
                     <span className="font-medium">{item.label}</span>
                   </button>
                 ))}
@@ -251,7 +251,7 @@ function App() {
           </nav>
 
           {/* Main Content */}
-          <main className="flex-1 p-6">
+          <main className="flex-1 p-6 bg-gradient-to-br from-[#0a0a0f] via-[#0f0f16] to-[#0a0a0f]">
             <Routes>
               <Route path="/*" element={renderActiveView()} />
             </Routes>
