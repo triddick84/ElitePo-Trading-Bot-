@@ -4,7 +4,7 @@
 
 body {
     margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
         "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans",
         "Helvetica Neue", sans-serif;
     -webkit-font-smoothing: antialiased;
@@ -12,75 +12,115 @@ body {
 }
 
 code {
-    font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New",
+    font-family: 'JetBrains Mono', source-code-pro, Menlo, Monaco, Consolas, "Courier New",
         monospace;
 }
 
-
-
 @layer base {
   :root {
-        --background: 0 0% 100%;
-        --foreground: 0 0% 3.9%;
-        --card: 0 0% 100%;
-        --card-foreground: 0 0% 3.9%;
-        --popover: 0 0% 100%;
-        --popover-foreground: 0 0% 3.9%;
-        --primary: 0 0% 9%;
-        --primary-foreground: 0 0% 98%;
-        --secondary: 0 0% 96.1%;
-        --secondary-foreground: 0 0% 9%;
-        --muted: 0 0% 96.1%;
-        --muted-foreground: 0 0% 45.1%;
-        --accent: 0 0% 96.1%;
-        --accent-foreground: 0 0% 9%;
-        --destructive: 0 84.2% 60.2%;
-        --destructive-foreground: 0 0% 98%;
-        --border: 0 0% 89.8%;
-        --input: 0 0% 89.8%;
-        --ring: 0 0% 3.9%;
-        --chart-1: 12 76% 61%;
-        --chart-2: 173 58% 39%;
-        --chart-3: 197 37% 24%;
-        --chart-4: 43 74% 66%;
-        --chart-5: 27 87% 67%;
+        /* Trading Theme - Dark Mode with Black, Purple, Green, Grey */
+        --background: 240 10% 3.9%;  /* Deep black */
+        --foreground: 0 0% 95%;  /* Off-white text */
+        
+        --card: 240 8% 8%;  /* Dark grey cards */
+        --card-foreground: 0 0% 95%;
+        
+        --popover: 240 10% 6%;
+        --popover-foreground: 0 0% 95%;
+        
+        /* Purple accent for primary actions */
+        --primary: 270 75% 60%;  /* Vibrant purple */
+        --primary-foreground: 0 0% 100%;
+        
+        /* Green for positive/bullish */
+        --secondary: 142 76% 45%;  /* Trading green */
+        --secondary-foreground: 0 0% 100%;
+        
+        --muted: 240 5% 15%;  /* Medium grey */
+        --muted-foreground: 240 5% 64%;
+        
+        --accent: 270 70% 50%;  /* Purple accent */
+        --accent-foreground: 0 0% 100%;
+        
+        /* Red for negative/bearish */
+        --destructive: 0 84% 60%;
+        --destructive-foreground: 0 0% 100%;
+        
+        --border: 240 6% 18%;  /* Grey borders */
+        --input: 240 6% 16%;
+        --ring: 270 75% 60%;
+        
+        /* Trading chart colors */
+        --chart-1: 142 76% 45%;  /* Green - bullish */
+        --chart-2: 0 84% 60%;    /* Red - bearish */
+        --chart-3: 270 75% 60%;  /* Purple - neutral */
+        --chart-4: 45 93% 47%;   /* Gold - alert */
+        --chart-5: 195 85% 48%;  /* Cyan - info */
+        
         --radius: 0.5rem;
-    }
-  .dark {
-        --background: 0 0% 3.9%;
-        --foreground: 0 0% 98%;
-        --card: 0 0% 3.9%;
-        --card-foreground: 0 0% 98%;
-        --popover: 0 0% 3.9%;
-        --popover-foreground: 0 0% 98%;
-        --primary: 0 0% 98%;
-        --primary-foreground: 0 0% 9%;
-        --secondary: 0 0% 14.9%;
-        --secondary-foreground: 0 0% 98%;
-        --muted: 0 0% 14.9%;
-        --muted-foreground: 0 0% 63.9%;
-        --accent: 0 0% 14.9%;
-        --accent-foreground: 0 0% 98%;
-        --destructive: 0 62.8% 30.6%;
-        --destructive-foreground: 0 0% 98%;
-        --border: 0 0% 14.9%;
-        --input: 0 0% 14.9%;
-        --ring: 0 0% 83.1%;
-        --chart-1: 220 70% 50%;
-        --chart-2: 160 60% 45%;
-        --chart-3: 30 80% 55%;
-        --chart-4: 280 65% 60%;
-        --chart-5: 340 75% 55%;
+        
+        /* Custom trading colors */
+        --trading-bg: 240 10% 3.9%;
+        --trading-card: 240 8% 8%;
+        --trading-border: 240 6% 18%;
+        --trading-purple: 270 75% 60%;
+        --trading-purple-dark: 270 70% 40%;
+        --trading-green: 142 76% 45%;
+        --trading-green-dark: 142 76% 30%;
+        --trading-red: 0 84% 60%;
+        --trading-grey: 240 5% 15%;
+        --trading-grey-light: 240 5% 25%;
     }
 }
-
-
 
 @layer base {
   * {
     @apply border-border;
     }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-[#0a0a0f] text-foreground;
     }
+}
+
+/* Custom scrollbar for trading theme */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(240 8% 8%);
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(270 75% 60% / 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(270 75% 60% / 0.5);
+}
+
+/* Trading card styles */
+.glass-dark {
+  background: rgba(15, 15, 25, 0.7);
+  backdrop-filter: blur(10px);
+  border: 1px solid hsl(240 6% 18%);
+}
+
+/* Glow effects */
+.glow-purple {
+  box-shadow: 0 0 20px hsl(270 75% 60% / 0.2);
+}
+
+.glow-green {
+  box-shadow: 0 0 20px hsl(142 76% 45% / 0.2);
+}
+
+/* Trading grid pattern */
+.trading-grid {
+  background-image: 
+    linear-gradient(hsl(240 6% 18% / 0.3) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(240 6% 18% / 0.3) 1px, transparent 1px);
+  background-size: 20px 20px;
 }
