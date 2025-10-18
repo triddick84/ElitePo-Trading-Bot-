@@ -430,12 +430,15 @@ class Enhanced5SecondStrategy:
             # Pattern recognition
             patterns = self.detect_candlestick_patterns(data)
             
-            # Multi-indicator signal logic
+            # Support & Resistance analysis
+            sr_analysis = self.find_support_resistance_levels(high, low, prices)
+            
+            # Multi-indicator signal logic including S/R
             signal_scores = self._calculate_signal_scores(
                 current_price, current_ema, current_rsi,
                 current_stoch_k, current_stoch_d,
                 current_bb_upper, current_bb_middle, current_bb_lower,
-                volume_spike, patterns
+                volume_spike, patterns, sr_analysis
             )
             
             # Determine final signal based on scores
