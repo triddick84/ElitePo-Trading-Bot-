@@ -16,13 +16,31 @@ const LiveSignalsDisplay = ({
   setNotificationSettings 
 }) => {
   const [recentSignals, setRecentSignals] = useState([]);
-  const [selectedAssets, setSelectedAssets] = useState(['EURUSD_regular', 'BTCUSD_regular']);
-  const [selectedTimeframes, setSelectedTimeframes] = useState(['1m', '5m']);
+  const [selectedAssets, setSelectedAssets] = useState([]);
+  const [selectedTimeframes, setSelectedTimeframes] = useState([]);
   const [previousSignalsCount, setPreviousSignalsCount] = useState(0);
   const [isGeneratingSignal, setIsGeneratingSignal] = useState(false);
   const [autoGenerationActive, setAutoGenerationActive] = useState(false);
   const [currentThreshold, setCurrentThreshold] = useState(85);
   const [isForceGenerating, setIsForceGenerating] = useState(false);
+
+  // Fetch configuration on mount
+  useEffect(() => {
+    fetchConfiguration();
+  }, []);
+
+  const fetchConfiguration = async () => {
+    try {
+      const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+      const response = await fetch(`${BACKEND_URL}/api/config`);
+      const config = await response.json();
+      setSelectedAssets(config.selected_assets || []);
+      setSelectedTimeframes(config.selected_timeframes || []);
+      setCurrentThreshold(config.min_probability_threshold || 85);
+    } catch (error) {
+      console.error('Error fetching configuration:', error);
+    }
+  };
 
   // Sound notification function
   const playNotificationSound = () => {
