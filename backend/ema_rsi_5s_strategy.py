@@ -42,70 +42,50 @@ class EMA_RSI_5S_Strategy:
     
     def get_ultra_short_data(self, symbol: str) -> Optional[pd.DataFrame]:
         """
-        Fetch ultra-short timeframe data for 5-second strategy
-        Uses 1-minute data and interpolates for higher resolution
+        Fetch REAL ultra-short timeframe data - NO SIMULATION
+        Uses actual 1-minute data from yfinance
         """
         try:
             # Convert symbol for yfinance
-            if '_OTC' in symbol:
-                base_symbol = symbol.replace('_OTC', '')
+            if '_OTC' in symbol or '_otc' in symbol:
+                base_symbol = symbol.replace('_OTC', '').replace('_otc', '')
             else:
-                base_symbol = symbol
+                base_symbol = symbol.replace('_regular', '').replace('_REGULAR', '')
             
-            # Convert to yfinance format
-            if base_symbol == 'EURUSD':
-                yf_symbol = 'EURUSD=X'
-            elif base_symbol == 'GBPUSD':
-                yf_symbol = 'GBPUSD=X'
-            elif base_symbol == 'BTCUSD':
-                yf_symbol = 'BTC-USD'
-            elif base_symbol == 'ETHUSD':
-                yf_symbol = 'ETH-USD'
-            else:
-                # Default conversion
-                yf_symbol = base_symbol + '=X'
+            # Comprehensive symbol mapping
+            symbol_map = {
+                # Forex
+                'EURUSD': 'EURUSD=X', 'GBPUSD': 'GBPUSD=X', 'USDJPY': 'USDJPY=X',
+                'AUDUSD': 'AUDUSD=X', 'USDCHF': 'USDCHF=X', 'USDCAD': 'USDCAD=X',
+                'NZDUSD': 'NZDUSD=X', 'EURGBP': 'EURGBP=X', 'EURJPY': 'EURJPY=X',
+                # Crypto
+                'BTCUSD': 'BTC-USD', 'ETHUSD': 'ETH-USD', 'XRPUSD': 'XRP-USD',
+                'LTCUSD': 'LTC-USD', 'ADAUSD': 'ADA-USD',
+            }
             
-            # Fetch recent 1-minute data
+            yf_symbol = symbol_map.get(base_symbol, base_symbol + '=X')
+            
+            # Fetch REAL 1-minute data - NO SIMULATION
+            logger.info(f"📊 Fetching REAL market data for {yf_symbol}")
             ticker = yf.Ticker(yf_symbol)
             data = ticker.history(period="1d", interval="1m")
             
             if data.empty or len(data) < self.min_data_points:
-                logger.warning(f"Insufficient data for {symbol}: {len(data) if not data.empty else 0} points")
+                logger.warning(f"❌ Insufficient REAL data for {symbol}")
                 return None
             
-            # Get the most recent data points for ultra-short analysis
+            # Use ACTUAL 1-minute data - NO INTERPOLATION
             recent_data = data.tail(self.min_data_points).copy()
             
-            # Create higher resolution data through interpolation for 5-second precision
-            expanded_data = []
-            for i in range(len(recent_data)):
-                row = recent_data.iloc[i]
-                # Create 12 data points per minute (5-second intervals)
-                for j in range(12):
-                    timestamp = row.name + pd.Timedelta(seconds=j*5)
-                    # Interpolate price within the minute
-                    if i < len(recent_data) - 1:
-                        next_row = recent_data.iloc[i + 1]
-                        interpolation_factor = j / 12
-                        price = row['Close'] + (next_row['Open'] - row['Close']) * interpolation_factor
-                    else:
-                        # For the last minute, use small random variations
-                        price_change = np.random.normal(0, row['Close'] * 0.0001)  # 0.01% volatility
-                        price = row['Close'] + price_change
-                    
-                    expanded_data.append({
-                        'timestamp': timestamp,
-                        'Close': price,
-                        'Volume': row['Volume'] / 12  # Distribute volume
-                    })
+            # Rename columns to match expected format
+            recent_data = recent_data.rename(columns={'Close': 'close', 'Volume': 'volume'})
+            recent_data['close'] = recent_data['close'].astype(float)
+            recent_data['volume'] = recent_data['volume'].astype(float)
             
-            # Convert to DataFrame
-            df = pd.DataFrame(expanded_data)
-            df.set_index('timestamp', inplace=True)
-            df = df.tail(200)  # Keep last 200 5-second intervals
+            logger.info(f"✅ Using {len(recent_data)} REAL 1-min candles for {symbol}")
+            logger.info(f"📈 Latest price: {recent_data['close'].iloc[-1]:.5f}")
             
-            logger.info(f"Generated {len(df)} 5-second data points for {symbol}")
-            return df
+            return recent_data
             
         except Exception as e:
             logger.error(f"Error fetching ultra-short data for {symbol}: {e}")
