@@ -155,8 +155,6 @@ class UltraShort5SecondStrategy:
             
             # RULE 3: VELOCITY REVERSAL (Tertiary signal)
             if signal is None and abs(price_velocity) > 0.05:  # Strong recent move
-            # RULE 3: VELOCITY REVERSAL (Tertiary signal)
-            if signal is None and abs(price_velocity) > 0.05:  # Strong recent move
                 if price_velocity > 0.05:
                     # Fast move UP recently → Expect exhaustion → PUT
                     signal = "PUT"
