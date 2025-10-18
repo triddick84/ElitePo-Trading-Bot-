@@ -490,9 +490,17 @@ class Enhanced5SecondStrategy:
                     'bb_lower': current_bb_lower,
                     'volume_spike': volume_spike
                 },
+                'support_resistance': {
+                    'nearest_support': sr_analysis.get('nearest_support'),
+                    'nearest_resistance': sr_analysis.get('nearest_resistance'),
+                    'near_support': sr_analysis.get('near_support', False),
+                    'near_resistance': sr_analysis.get('near_resistance', False),
+                    'bounce_from_support': sr_analysis.get('bounce_from_support', False),
+                    'bounce_from_resistance': sr_analysis.get('bounce_from_resistance', False)
+                },
                 'pattern': patterns.get('pattern_name', 'None'),
                 'signal_scores': signal_scores,
-                'strategy': 'ENHANCED_5S_MULTI_INDICATOR',
+                'strategy': 'ENHANCED_5S_MULTI_INDICATOR_SR',
                 'timeframe': '5s',
                 'expiration': '5_seconds',
                 'chart_type': chart_type,
