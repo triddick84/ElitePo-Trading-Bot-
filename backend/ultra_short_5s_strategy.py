@@ -124,21 +124,25 @@ class UltraShort5SecondStrategy:
             if not pd.isna(rsi.iloc[-1]) and (current_rsi > self.rsi_extreme_overbought or current_rsi < self.rsi_extreme_oversold):
                 # RULE 1: RSI EXTREMES → MEAN REVERSION (Primary signal)
                 if current_rsi > self.rsi_extreme_overbought:
-                # RSI OVERBOUGHT → Price likely to reverse DOWN → PUT
-                signal = "PUT"
-                confidence = 78 + min(10, (current_rsi - 75) * 2)  # Higher RSI = higher confidence
-                reasoning.append(f"🔴 RSI OVERBOUGHT: {current_rsi:.1f} → Expect reversal DOWN")
-                reasoning.append("💡 CONTRARIAN: Price overextended, mean reversion expected")
-                
-            elif current_rsi < self.rsi_extreme_oversold:
-                # RSI OVERSOLD → Price likely to reverse UP → CALL
-                signal = "CALL"
-                confidence = 78 + min(10, (25 - current_rsi) * 2)  # Lower RSI = higher confidence
-                reasoning.append(f"🟢 RSI OVERSOLD: {current_rsi:.1f} → Expect reversal UP")
-                reasoning.append("💡 CONTRARIAN: Price oversold, bounce expected")
+            # If RSI is valid and shows extremes, use it
+            if not pd.isna(rsi.iloc[-1]) and (current_rsi > self.rsi_extreme_overbought or current_rsi < self.rsi_extreme_oversold):
+                # RULE 1: RSI EXTREMES → MEAN REVERSION (Primary signal)
+                if current_rsi > self.rsi_extreme_overbought:
+                    # RSI OVERBOUGHT → Price likely to reverse DOWN → PUT
+                    signal = "PUT"
+                    confidence = 78 + min(10, (current_rsi - 75) * 2)  # Higher RSI = higher confidence
+                    reasoning.append(f"🔴 RSI OVERBOUGHT: {current_rsi:.1f} → Expect reversal DOWN")
+                    reasoning.append("💡 CONTRARIAN: Price overextended, mean reversion expected")
+                    
+                elif current_rsi < self.rsi_extreme_oversold:
+                    # RSI OVERSOLD → Price likely to reverse UP → CALL
+                    signal = "CALL"
+                    confidence = 78 + min(10, (25 - current_rsi) * 2)  # Lower RSI = higher confidence
+                    reasoning.append(f"🟢 RSI OVERSOLD: {current_rsi:.1f} → Expect reversal UP")
+                    reasoning.append("💡 CONTRARIAN: Price oversold, bounce expected")
             
-            # RULE 2: EMA DISTANCE → MEAN REVERSION (Secondary signal)
-            elif abs(ema_distance) > 0.15:  # More than 0.15% from EMA
+            # RULE 2: EMA DISTANCE → MEAN REVERSION (Primary when RSI unavailable)
+            if signal is None and abs(ema_distance) > 0.1:  # More than 0.1% from EMA
                 if ema_distance > 0.15:
                     # Price TOO FAR ABOVE EMA → Expect pullback → PUT
                     signal = "PUT"
