@@ -39,6 +39,10 @@ class Enhanced5SecondStrategy:
         self.bb_period = 5
         self.bb_std = 2.5
         
+        # Support/Resistance parameters
+        self.sr_lookback = 20  # Lookback period for S/R levels
+        self.sr_tolerance = 0.0003  # 0.03% tolerance for price near level
+        
         # Thresholds
         self.rsi_overbought = 70
         self.rsi_oversold = 30
@@ -47,6 +51,118 @@ class Enhanced5SecondStrategy:
         
         # Minimum data requirements
         self.min_data_points = 200
+    
+    def find_support_resistance_levels(self, high: pd.Series, low: pd.Series, close: pd.Series) -> Dict:
+        """
+        Identify key support and resistance levels using pivot points
+        
+        Returns:
+            Dict with support_levels, resistance_levels, and current analysis
+        """
+        try:
+            # Find local maxima (resistance) and minima (support)
+            support_levels = []
+            resistance_levels = []
+            
+            # Use rolling window to find pivot points
+            window = 5  # Check 5 periods on each side
+            
+            for i in range(window, len(close) - window):
+                # Check for resistance (local high)
+                is_resistance = True
+                for j in range(i - window, i + window + 1):
+                    if j != i and high.iloc[i] <= high.iloc[j]:
+                        is_resistance = False
+                        break
+                
+                if is_resistance:
+                    resistance_levels.append(high.iloc[i])
+                
+                # Check for support (local low)
+                is_support = True
+                for j in range(i - window, i + window + 1):
+                    if j != i and low.iloc[i] >= low.iloc[j]:
+                        is_support = False
+                        break
+                
+                if is_support:
+                    support_levels.append(low.iloc[i])
+            
+            # Filter to most recent and significant levels
+            if support_levels:
+                support_levels = sorted(support_levels)[-3:]  # Top 3 support levels
+            if resistance_levels:
+                resistance_levels = sorted(resistance_levels)[-3:]  # Top 3 resistance levels
+            
+            current_price = close.iloc[-1]
+            
+            # Analyze current price position
+            nearest_support = None
+            nearest_resistance = None
+            distance_to_support = float('inf')
+            distance_to_resistance = float('inf')
+            
+            for support in support_levels:
+                dist = abs(current_price - support) / current_price
+                if dist < distance_to_support:
+                    distance_to_support = dist
+                    nearest_support = support
+            
+            for resistance in resistance_levels:
+                dist = abs(current_price - resistance) / current_price
+                if dist < distance_to_resistance:
+                    distance_to_resistance = dist
+                    nearest_resistance = resistance
+            
+            # Determine if near support or resistance
+            near_support = distance_to_support < self.sr_tolerance
+            near_resistance = distance_to_resistance < self.sr_tolerance
+            
+            # Check for bounce or breakout
+            bounce_from_support = False
+            bounce_from_resistance = False
+            breaking_support = False
+            breaking_resistance = False
+            
+            if near_support and nearest_support:
+                # Check if bouncing (price moving up from support)
+                price_change = close.iloc[-1] - close.iloc[-3]
+                if price_change > 0:
+                    bounce_from_support = True
+                elif price_change < 0:
+                    breaking_support = True
+            
+            if near_resistance and nearest_resistance:
+                # Check if bouncing (price moving down from resistance)
+                price_change = close.iloc[-1] - close.iloc[-3]
+                if price_change < 0:
+                    bounce_from_resistance = True
+                elif price_change > 0:
+                    breaking_resistance = True
+            
+            return {
+                'support_levels': support_levels,
+                'resistance_levels': resistance_levels,
+                'nearest_support': nearest_support,
+                'nearest_resistance': nearest_resistance,
+                'near_support': near_support,
+                'near_resistance': near_resistance,
+                'bounce_from_support': bounce_from_support,
+                'bounce_from_resistance': bounce_from_resistance,
+                'breaking_support': breaking_support,
+                'breaking_resistance': breaking_resistance,
+                'distance_to_support_pct': distance_to_support * 100,
+                'distance_to_resistance_pct': distance_to_resistance * 100
+            }
+            
+        except Exception as e:
+            logger.error(f"Error finding support/resistance: {e}")
+            return {
+                'support_levels': [],
+                'resistance_levels': [],
+                'near_support': False,
+                'near_resistance': False
+            }
         
     def calculate_ema(self, prices: pd.Series, period: int) -> pd.Series:
         """Calculate Exponential Moving Average"""
