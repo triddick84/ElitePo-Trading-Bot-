@@ -1104,13 +1104,24 @@ class ForceSignalGenerator:
                 sma_10 = closes.rolling(10).mean().iloc[-1]
                 current_price = closes.iloc[-1]
                 
-                # Basic direction
-                if current_price > sma_5 > sma_10:
+                # Basic direction - BALANCED logic
+                if current_price > sma_5 and sma_5 > sma_10:
+                    # Clear uptrend
                     direction = SignalDirection.BUY
                     confidence = 78.0
-                else:
+                elif current_price < sma_5 and sma_5 < sma_10:
+                    # Clear downtrend
                     direction = SignalDirection.SELL
                     confidence = 78.0
+                else:
+                    # Mixed signals - use momentum
+                    price_change = closes.iloc[-1] - closes.iloc[-5]
+                    if price_change > 0:
+                        direction = SignalDirection.BUY
+                        confidence = 75.0
+                    else:
+                        direction = SignalDirection.SELL
+                        confidence = 75.0
             else:
                 # Fallback to random but reasonable signal
                 import random
