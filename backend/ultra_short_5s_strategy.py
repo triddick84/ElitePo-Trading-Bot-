@@ -143,22 +143,24 @@ class UltraShort5SecondStrategy:
             
             # RULE 2: EMA DISTANCE → MEAN REVERSION (Primary when RSI unavailable)
             if signal is None and abs(ema_distance) > 0.1:  # More than 0.1% from EMA
-                if ema_distance > 0.15:
+            # RULE 2: EMA DISTANCE → MEAN REVERSION (Primary when RSI unavailable)
+            if signal is None and abs(ema_distance) > 0.1:  # More than 0.1% from EMA
+                if ema_distance > 0.1:
                     # Price TOO FAR ABOVE EMA → Expect pullback → PUT
                     signal = "PUT"
-                    confidence = 75 + min(8, abs(ema_distance) * 20)
+                    confidence = 75 + min(8, abs(ema_distance) * 30)
                     reasoning.append(f"📉 Price {ema_distance:.2f}% above EMA → Pullback expected")
                     reasoning.append("💡 MEAN REVERSION: Price extended from average")
                     
-                elif ema_distance < -0.15:
+                elif ema_distance < -0.1:
                     # Price TOO FAR BELOW EMA → Expect bounce → CALL
                     signal = "CALL"
-                    confidence = 75 + min(8, abs(ema_distance) * 20)
+                    confidence = 75 + min(8, abs(ema_distance) * 30)
                     reasoning.append(f"📈 Price {abs(ema_distance):.2f}% below EMA → Bounce expected")
                     reasoning.append("💡 MEAN REVERSION: Price below average, bounce up")
             
             # RULE 3: VELOCITY REVERSAL (Tertiary signal)
-            elif abs(price_velocity) > 0.08:  # Strong recent move
+            if signal is None and abs(price_velocity) > 0.05:  # Strong recent move
                 if price_velocity > 0.08:
                     # Fast move UP recently → Expect exhaustion → PUT
                     signal = "PUT"
