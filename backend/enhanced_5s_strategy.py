@@ -467,14 +467,15 @@ class Enhanced5SecondStrategy:
         
         max_score = signal_scores['max_possible']
         
-        # Base confidence mapping
+        # Base confidence mapping - updated for lower threshold
         confidence_map = {
-            4: 80.0,
-            5: 87.5,
+            3: 75.0,
+            4: 82.0,
+            5: 88.0,
             6: 95.0
         }
         
-        return confidence_map.get(score, 75.0)
+        return confidence_map.get(score, 70.0)
     
     def _generate_reasoning(self, signal_scores: Dict, direction: str,
                            price: float, ema: float, rsi: float, stoch: float,
