@@ -622,12 +622,13 @@ class Enhanced5SecondStrategy:
         
         max_score = signal_scores['max_possible']
         
-        # Base confidence mapping - updated for lower threshold
+        # Base confidence mapping - updated for 7 indicators with S/R
         confidence_map = {
             3: 75.0,
-            4: 82.0,
-            5: 88.0,
-            6: 95.0
+            4: 80.0,
+            5: 85.0,
+            6: 90.0,
+            7: 95.0
         }
         
         return confidence_map.get(score, 70.0)
