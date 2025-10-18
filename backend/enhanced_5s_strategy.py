@@ -506,9 +506,10 @@ class Enhanced5SecondStrategy:
     def _calculate_signal_scores(self, price: float, ema: float, rsi: float,
                                  stoch_k: float, stoch_d: float,
                                  bb_upper: float, bb_middle: float, bb_lower: float,
-                                 volume_spike: bool, patterns: Dict) -> Dict:
+                                 volume_spike: bool, patterns: Dict, sr_analysis: Dict) -> Dict:
         """
         Score each indicator for bullish/bearish signals
+        Now includes Support/Resistance analysis
         """
         bullish_score = 0
         bearish_score = 0
@@ -568,11 +569,38 @@ class Enhanced5SecondStrategy:
             bearish_score += 1
             details.append(f"✅ Bearish pattern: {patterns['pattern_name']}")
         
+        # 7. Support/Resistance Analysis (1 point) - NEW!
+        if sr_analysis.get('bounce_from_support'):
+            bullish_score += 1
+            if sr_analysis.get('nearest_support'):
+                details.append(f"🔥 BOUNCE from Support @ {sr_analysis['nearest_support']:.5f} - Reversal Signal!")
+        elif sr_analysis.get('near_support') and not sr_analysis.get('breaking_support'):
+            bullish_score += 0.5  # Half point for being near support
+            details.append(f"📍 Near Support @ {sr_analysis['nearest_support']:.5f} ({sr_analysis['distance_to_support_pct']:.2f}%)")
+        
+        if sr_analysis.get('bounce_from_resistance'):
+            bearish_score += 1
+            if sr_analysis.get('nearest_resistance'):
+                details.append(f"🔥 BOUNCE from Resistance @ {sr_analysis['nearest_resistance']:.5f} - Reversal Signal!")
+        elif sr_analysis.get('near_resistance') and not sr_analysis.get('breaking_resistance'):
+            bearish_score += 0.5  # Half point for being near resistance
+            details.append(f"📍 Near Resistance @ {sr_analysis['nearest_resistance']:.5f} ({sr_analysis['distance_to_resistance_pct']:.2f}%)")
+        
+        # Breaking through levels (indicates strong momentum)
+        if sr_analysis.get('breaking_resistance'):
+            bullish_score += 1
+            details.append(f"🚀 BREAKING Resistance @ {sr_analysis['nearest_resistance']:.5f} - Breakout!")
+        
+        if sr_analysis.get('breaking_support'):
+            bearish_score += 1
+            details.append(f"💥 BREAKING Support @ {sr_analysis['nearest_support']:.5f} - Breakdown!")
+        
         return {
             'bullish_score': bullish_score,
             'bearish_score': bearish_score,
             'details': details,
-            'max_possible': 6
+            'max_possible': 7,  # Updated to 7 with S/R
+            'sr_analysis': sr_analysis
         }
     
     def _calculate_confidence(self, signal_scores: Dict, direction: str) -> float:
