@@ -134,7 +134,7 @@ class EMA_RSI_5S_Strategy:
                 return None
             
             # Calculate indicators
-            prices = data['Close']
+            prices = data['close']
             ema_20 = self.calculate_ema(prices, self.ema_period)
             rsi = self.calculate_rsi(prices, self.rsi_period)
             
