@@ -177,10 +177,11 @@ function App() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-[#0a0a0f] trading-grid flex items-center justify-center">
         <div className="text-center space-y-4">
-          <div className="animate-spin w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full mx-auto"></div>
+          <div className="animate-spin w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full mx-auto glow-purple"></div>
           <p className="text-slate-300 text-lg font-medium">Loading GPT Signal Bot...</p>
+          <p className="text-slate-500 text-sm">Initializing trading systems...</p>
         </div>
       </div>
     );
@@ -188,36 +189,36 @@ function App() {
 
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+      <div className="min-h-screen bg-[#0a0a0f] trading-grid">
         {/* Header */}
-        <header className="bg-slate-800/50 backdrop-blur-xl border-b border-slate-700/50 sticky top-0 z-50">
+        <header className="bg-[#13131a]/80 backdrop-blur-xl border-b border-[#2a2a35] sticky top-0 z-50">
           <div className="container mx-auto px-6 py-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
-                <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center">
+                <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-purple-800 rounded-xl flex items-center justify-center shadow-lg glow-purple">
                   <span className="text-white font-bold text-lg">🤖</span>
                 </div>
                 <div>
-                  <h1 className="text-2xl font-bold text-white">GPT Signal Bot</h1>
-                  <p className="text-slate-400 text-sm">AI-Powered Trading System • Real Market Data</p>
+                  <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-purple-600 bg-clip-text text-transparent">GPT Signal Bot</h1>
+                  <p className="text-slate-500 text-sm">AI-Powered Trading System • Real Market Data</p>
                 </div>
               </div>
               
               {/* Status Indicator */}
               <div className="flex items-center space-x-4">
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-2 bg-[#1a1a24] px-4 py-2 rounded-lg border border-[#2a2a35]">
                   <div className={`w-3 h-3 rounded-full ${
-                    botStatus?.is_running ? 'bg-green-500 animate-pulse' : 'bg-red-500'
+                    botStatus?.is_running ? 'bg-green-500 animate-pulse shadow-lg shadow-green-500/50' : 'bg-red-500 shadow-lg shadow-red-500/50'
                   }`}></div>
                   <span className="text-slate-300 font-medium">
                     {botStatus?.is_running ? 'Active' : 'Stopped'}
                   </span>
                 </div>
-                <div className="text-slate-400 text-sm">
-                  Mode: {botStatus?.current_mode || 'Unknown'}
+                <div className="text-slate-400 text-sm bg-[#1a1a24] px-4 py-2 rounded-lg border border-[#2a2a35]">
+                  Mode: <span className="text-purple-400 font-semibold">{botStatus?.current_mode || 'live'}</span>
                 </div>
-                <div className="flex items-center space-x-1 text-emerald-400 text-sm">
-                  <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                <div className="flex items-center space-x-1 text-green-400 text-sm bg-[#1a1a24] px-4 py-2 rounded-lg border border-[#2a2a35]">
+                  <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-lg shadow-green-500/50"></span>
                   <span>Live Data</span>
                 </div>
               </div>
