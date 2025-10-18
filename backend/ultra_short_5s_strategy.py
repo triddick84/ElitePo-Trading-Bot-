@@ -161,13 +161,15 @@ class UltraShort5SecondStrategy:
             
             # RULE 3: VELOCITY REVERSAL (Tertiary signal)
             if signal is None and abs(price_velocity) > 0.05:  # Strong recent move
-                if price_velocity > 0.08:
+            # RULE 3: VELOCITY REVERSAL (Tertiary signal)
+            if signal is None and abs(price_velocity) > 0.05:  # Strong recent move
+                if price_velocity > 0.05:
                     # Fast move UP recently → Expect exhaustion → PUT
                     signal = "PUT"
                     confidence = 72
                     reasoning.append(f"⚡ Fast UP move ({price_velocity:.2f}%) → Exhaustion expected")
                     
-                elif price_velocity < -0.08:
+                elif price_velocity < -0.05:
                     # Fast move DOWN recently → Expect bounce → CALL  
                     signal = "CALL"
                     confidence = 72
