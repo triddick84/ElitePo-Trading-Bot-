@@ -344,6 +344,18 @@ class PocketOption5SecondStrategy:
             if signal is None:
                 return None
             
+            # === CRITICAL: Validate signal against S/R levels ===
+            # Prevent wrong-direction signals during trend reversals
+            validation = self.sr_detector.validate_signal_direction(signal, current_price, sr_levels)
+            
+            if not validation['valid']:
+                logger.warning(f"⚠️ Signal REJECTED by S/R validation: {validation['reasoning']}")
+                return None  # Don't generate signal if it contradicts S/R
+            
+            # Apply confidence adjustment from S/R validation
+            confidence += validation['confidence_adjustment']
+            reasoning.extend(validation['reasoning'])
+            
             # Cap confidence at 98%
             confidence = min(confidence, 98)
             
