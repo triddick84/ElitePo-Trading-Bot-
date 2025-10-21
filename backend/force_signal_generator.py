@@ -1085,7 +1085,7 @@ class ForceSignalGenerator:
             
             # Use Pocket Option timing synchronization instead of hardcoded values
             if not user_timeframes:
-                user_timeframes = ['5m']  # Default timeframe if none selected
+                user_timeframes = ['5s']  # Default to 5s for ultra-short trading
             
             # Get Chicago time for Pocket Option synchronization
             chicago_time = pocket_option_sync.get_chicago_time()
