@@ -83,40 +83,30 @@ class ForceSignalGenerator:
             # Apply researched high-accuracy strategy based on timeframe
             strategy_signal = await self._apply_researched_strategy(symbol, primary_timeframe, chart_type)
             if strategy_signal:
-                weight = 0.70  # Primary strategy gets 70% weight
-                analysis_results.append(('pocket_option_strategy', strategy_signal, weight))
-                logger.info(f"🎯 Pocket Option {primary_timeframe} strategy activated for {symbol} with {chart_type}")
-            
-            # 1-minute scalping analysis (15% weight - supporting analysis)
-            if data_1m and len(data_1m) > 100:
-                scalping_signal = await self._ultra_precision_scalping_analysis(data_1m, symbol)
-                if scalping_signal:
-                    analysis_results.append(('scalping_1m', scalping_signal, 0.15))
-            
-            # 5-minute momentum analysis (25% weight)
-            if data_5m and len(data_5m) > 50:
-                momentum_signal = await self._advanced_momentum_analysis(data_5m, symbol)
-                if momentum_signal:
-                    analysis_results.append(('momentum_5m', momentum_signal, 0.25))
-            
-            # Multi-timeframe trend analysis (20% weight)
-            trend_signal = await self._multi_timeframe_trend_analysis(
-                [data_15m, data_1h, data_4h, data_1d], symbol
-            )
-            if trend_signal:
-                analysis_results.append(('trend_multi', trend_signal, 0.20))
-            
-            # Sentiment and news analysis (10% weight)
-            if sentiment_data:
-                sentiment_signal = await self._deep_sentiment_analysis(sentiment_data, symbol)
-                if sentiment_signal:
-                    analysis_results.append(('sentiment', sentiment_signal, 0.10))
-            
-            # Market structure and pattern analysis (5% weight)
-            if data_1h and len(data_1h) > 200:
-                pattern_signal = await self._advanced_pattern_recognition(data_1h, symbol)
-                if pattern_signal:
-                    analysis_results.append(('patterns', pattern_signal, 0.05))
+                # Use researched strategy as PRIMARY signal with 100% weight for ultra-short timeframes
+                if primary_timeframe in ['5s', '15s', '30s']:
+                    # For ultra-short timeframes, use ONLY the researched strategy
+                    weight = 1.0  # 100% weight - use researched strategy exclusively
+                    analysis_results.append(('pocket_option_strategy', strategy_signal, weight))
+                    logger.info(f"🎯 Using ONLY Pocket Option {primary_timeframe} strategy for {symbol} (100% weight)")
+                else:
+                    # For longer timeframes (1m+), use researched strategy as primary with other strategies as support
+                    weight = 0.70  # Primary strategy gets 70% weight
+                    analysis_results.append(('pocket_option_strategy', strategy_signal, weight))
+                    logger.info(f"🎯 Pocket Option {primary_timeframe} strategy activated for {symbol} with {chart_type}")
+                    
+                    # Only add supporting strategies for longer timeframes
+                    # 1-minute scalping analysis (15% weight - supporting analysis)
+                    if data_1m and len(data_1m) > 100:
+                        scalping_signal = await self._ultra_precision_scalping_analysis(data_1m, symbol)
+                        if scalping_signal:
+                            analysis_results.append(('scalping_1m', scalping_signal, 0.15))
+                    
+                    # 5-minute momentum analysis (15% weight)
+                    if data_5m and len(data_5m) > 50:
+                        momentum_signal = await self._advanced_momentum_analysis(data_5m, symbol)
+                        if momentum_signal:
+                            analysis_results.append(('momentum_5m', momentum_signal, 0.15))
             
             # Force combine all available analysis for both market types
             signals = []
