@@ -311,6 +311,81 @@ class ForceSignalGenerator:
                 'final_ai_safety': True
             }
     
+
+    async def _apply_researched_strategy(self, symbol: str, timeframe: str, chart_type: str = 'japanese_candles') -> Optional[Dict]:
+        """
+        Apply the researched high-accuracy Pocket Option strategy based on timeframe
+        
+        Timeframe-specific strategies:
+        - 5s: EMA 20 + RSI 2 + Stochastic (3,1,1) + BB (5, 2.5) - Target 93-95%
+        - 15s: EMA 5/20 crossover + RSI 14 - Target 90%+
+        - 1m/3m/5m: EMA 20 + RSI 14 + MACD + BB (20, 2) - Target 93%+
+        
+        Args:
+            symbol: Trading symbol
+            timeframe: Trading timeframe
+            chart_type: Chart type for analysis
+        """
+        try:
+            loop = asyncio.get_event_loop()
+            
+            # Route to appropriate strategy based on timeframe
+            if timeframe in ['5s', '5sec', '5 sec']:
+                logger.info(f"⚡ Applying Pocket Option 5-SECOND strategy for {symbol}")
+                result = await loop.run_in_executor(
+                    self.executor,
+                    pocket_option_5s_strategy.generate_signal,
+                    symbol,
+                    chart_type,
+                    [timeframe]
+                )
+                
+            elif timeframe in ['15s', '15sec', '15 sec']:
+                logger.info(f"⚡ Applying Pocket Option 15-SECOND strategy for {symbol}")
+                result = await loop.run_in_executor(
+                    self.executor,
+                    pocket_option_15s_strategy.generate_signal,
+                    symbol,
+                    chart_type,
+                    [timeframe]
+                )
+                
+            else:  # 1m, 3m, 5m, 15m, 30m
+                logger.info(f"⚡ Applying Pocket Option 1-MINUTE strategy for {symbol}")
+                result = await loop.run_in_executor(
+                    self.executor,
+                    pocket_option_1m_strategy.generate_signal,
+                    symbol,
+                    chart_type,
+                    [timeframe]
+                )
+            
+            if result and result.get('signal'):
+                logger.info(f"✅ {timeframe} Strategy: {symbol} → {result['signal']} ({result['confidence']:.1f}%)")
+                
+                # Convert to force signal format
+                force_signal_data = {
+                    'direction': result['signal'],
+                    'confidence': result['confidence'],
+                    'probability': result['confidence'],
+                    'reasoning': ' | '.join(result['reasoning'][:3]),
+                    'strategy': result.get('strategy', f'pocket_option_{timeframe}'),
+                    'timeframe': timeframe,
+                    'chart_type': chart_type,
+                    'researched_strategy': True,
+                    'technical_details': result.get('analysis', {}),
+                    'suggested_stake': 2.0
+                }
+                
+                return force_signal_data
+            else:
+                logger.warning(f"⚠️ No signal from {timeframe} strategy for {symbol}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error applying researched strategy for {symbol} at {timeframe}: {e}", exc_info=True)
+            return None
+
     async def _timeframe_specific_analysis(self, symbol: str, timeframe: str, chart_type: str = 'japanese_candles') -> Optional[Dict]:
         """
         Route to the correct high-accuracy strategy based on timeframe
