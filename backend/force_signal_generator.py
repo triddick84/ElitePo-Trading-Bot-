@@ -131,8 +131,8 @@ class ForceSignalGenerator:
             else:
                 # Generate emergency signals for both market types
                 emergency_signals = []
-                emergency_signals.append(self._generate_emergency_signal(symbol, market_data, data_1m or data_5m or [market_data.dict()], "regular"))
-                emergency_signals.append(self._generate_emergency_signal(symbol, market_data, data_1m or data_5m or [market_data.dict()], "otc"))
+                emergency_signals.append(self._generate_emergency_signal(symbol, market_data, data_1m or data_5m or [market_data.dict()], "regular", user_timeframes))
+                emergency_signals.append(self._generate_emergency_signal(symbol, market_data, data_1m or data_5m or [market_data.dict()], "otc", user_timeframes))
                 return emergency_signals
             
         except Exception as e:
