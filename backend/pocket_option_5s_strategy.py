@@ -297,13 +297,20 @@ class PocketOption5SecondStrategy:
                 confidence += 5
                 reasoning.append(f"✅ Stochastic confirms overbought ({current_stoch_k:.1f})")
             
-            # === RULE 4: Support/Resistance Confirmation (Boosts confidence) ===
-            if signal == "CALL" and sr_levels['near_support']:
-                confidence += 5
-                reasoning.append("✅ Price near support level")
-            elif signal == "PUT" and sr_levels['near_resistance']:
-                confidence += 5
-                reasoning.append("✅ Price near resistance level")
+            # === RULE 4: Enhanced S/R Confirmation & Reversal Detection ===
+            if reversal['reversal_detected']:
+                if reversal['bounce_off_support'] and signal == "CALL":
+                    confidence += 10
+                    reasoning.append(f"✅ REVERSAL DETECTED: Bounce off support (strength: {reversal['reversal_strength']})")
+                elif reversal['bounce_off_resistance'] and signal == "PUT":
+                    confidence += 10
+                    reasoning.append(f"✅ REVERSAL DETECTED: Reversal at resistance (strength: {reversal['reversal_strength']})")
+            elif proximity['near_support'] and signal == "CALL":
+                confidence += 6
+                reasoning.append(f"✅ Price near support ({proximity['support_distance_pct']:.2f}% away)")
+            elif proximity['near_resistance'] and signal == "PUT":
+                confidence += 6
+                reasoning.append(f"✅ Price near resistance ({proximity['resistance_distance_pct']:.2f}% away)")
             
             # === RULE 5: Candlestick Pattern Confirmation (Boosts confidence) ===
             if signal == "CALL":
