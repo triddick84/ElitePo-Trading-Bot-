@@ -307,24 +307,27 @@ class ForceSignalGenerator:
                 'final_ai_safety': True
             }
     
-    async def _ema_rsi_5s_force_analysis(self, symbol: str, chart_type: str = 'japanese_candles') -> Optional[Dict]:
+    async def _timeframe_specific_analysis(self, symbol: str, timeframe: str, chart_type: str = 'japanese_candles') -> Optional[Dict]:
         """
-        Enhanced 5-Second Multi-Indicator Force Analysis - Ultra-High Accuracy
+        Route to the correct high-accuracy strategy based on timeframe
         
-        Uses the enhanced multi-indicator strategy with EMA, RSI, Stochastic,
-        Bollinger Bands, Volume, and Pattern Recognition for maximum accuracy
+        Uses researched strategies for each timeframe:
+        - 5s: Pocket Option 5s High-Accuracy Strategy (93-95% target)
+        - 15s: Pocket Option 15s EMA Crossover Strategy (90%+ target)
+        - 1m/3m/5m: Pocket Option 1m Multi-Indicator Strategy (93%+ target)
         
         Args:
             symbol: Trading symbol
-            chart_type: Chart type for analysis ('japanese_candles', 'line', 'bars', 'heikin_ashi')
+            timeframe: Trading timeframe (5s, 15s, 1m, 3m, 5m)
+            chart_type: Chart type for analysis
         """
         try:
-            logger.info(f"🎯 Executing ENHANCED 5S Multi-Indicator Force Analysis for {symbol} using {chart_type} chart")
+            logger.info(f"🎯 Executing timeframe-specific analysis for {symbol} at {timeframe} using {chart_type} chart")
             
-            # For OTC symbols (5-second trading), use specialized ultra-short CONTRARIAN strategy
-            if '_OTC' in symbol or '_otc' in symbol:
-                logger.info(f"⚡ Using ULTRA-SHORT 5S CONTRARIAN strategy for OTC market: {symbol}")
-                ultra_short_result = ultra_short_5s_strategy.analyze_ultra_short(symbol, chart_type)
+            # Route to appropriate strategy based on timeframe
+            if timeframe in ['5s', '5sec']:
+                logger.info(f"⚡ Using Pocket Option 5-SECOND HIGH-ACCURACY strategy for {symbol}")
+                result = pocket_option_5s_strategy.generate_signal(symbol, chart_type)
                 
                 if ultra_short_result and ultra_short_result.get('signal'):
                     logger.info(f"✅ Ultra-Short 5S CONTRARIAN: {symbol} → {ultra_short_result['signal']} ({ultra_short_result['confidence']:.1f}%)")
