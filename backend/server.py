@@ -561,25 +561,44 @@ async def force_generate_signal():
         # Get user's configuration for selected assets and timeframes
         try:
             config_doc = await db.trading_configurations.find_one({"user_id": "default_user"})
-            selected_assets = config_doc.get('selected_assets', ['EURUSD_regular']) if config_doc else ['EURUSD_regular']
-            user_timeframes = config_doc.get('selected_timeframes', ['5s']) if config_doc else ['5s']  # Default to 5s for ultra-short trading
+            selected_assets = config_doc.get('selected_assets', []) if config_doc else []
+            user_timeframes = config_doc.get('selected_timeframes', []) if config_doc else []
             chart_type = config_doc.get('chart_type', 'japanese_candles') if config_doc else 'japanese_candles'
             
-            # If no assets selected, use defaults
+            # If no assets selected, return error - require user to select assets
             if not selected_assets or len(selected_assets) == 0:
-                selected_assets = ['EURUSD_OTC']
-                logger.info("No assets selected, using EURUSD_OTC default")
+                logger.warning("⚠️ No assets selected for force signal generation")
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "success": False,
+                        "error": "No assets selected",
+                        "message": "⚠️ Please select at least one asset from the Market Assets section on the Dashboard before generating signals."
+                    }
+                )
             
-            # If no timeframes are selected, use ultra-short default
+            # If no timeframes are selected, return error - require user to select timeframe
             if not user_timeframes or len(user_timeframes) == 0:
-                user_timeframes = ['5s']  # Default to ultra-short 5 second timeframe
-                logger.info("No timeframes selected, using ultra-short 5s default")
+                logger.warning("⚠️ No timeframes selected for force signal generation")
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "success": False,
+                        "error": "No timeframes selected",
+                        "message": "⚠️ Please select at least one timeframe from the Trading Timeframes section on the Dashboard before generating signals."
+                    }
+                )
                 
         except Exception as e:
-            logger.warning(f"Could not get user configuration, using defaults: {e}")
-            selected_assets = ['EURUSD_OTC']
-            user_timeframes = ['5s']
-            chart_type = 'japanese_candles'
+            logger.error(f"Error getting user configuration: {e}")
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "success": False,
+                    "error": "Configuration error",
+                    "message": f"Error retrieving configuration: {str(e)}"
+                }
+            )
         
         logger.info(f"📊 Force generating signals for {len(selected_assets)} selected assets: {selected_assets}")
         logger.info(f"⏱️ Using timeframes: {user_timeframes}")
