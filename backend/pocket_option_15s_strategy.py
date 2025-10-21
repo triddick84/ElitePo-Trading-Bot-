@@ -53,6 +53,9 @@ class PocketOption15SecondStrategy:
         self.stoch_overbought = 80
         self.stoch_oversold = 20
         
+        # Enhanced S/R detector for 15s timeframe
+        self.sr_detector = get_detector('15s')
+        
     def calculate_ema(self, prices: pd.Series, period: int) -> pd.Series:
         """Calculate EMA using TA-Lib"""
         return pd.Series(talib.EMA(prices.values, timeperiod=period), index=prices.index)
