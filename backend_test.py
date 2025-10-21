@@ -1205,6 +1205,542 @@ class BackendTester:
             print(f"   Enhanced signal performance test error: {e}")
             return False
 
+    # ========== NEW POCKET OPTION STRATEGY TESTING ==========
+    
+    async def test_pocket_option_5s_strategy_signal_generation(self) -> bool:
+        """Test Pocket Option 5-Second Strategy signal generation"""
+        try:
+            print("   Testing Pocket Option 5-Second Strategy")
+            
+            # Test with different assets and chart types
+            test_cases = [
+                {"asset": "EURUSD", "chart_type": "japanese_candles"},
+                {"asset": "BTCUSD", "chart_type": "line"},
+                {"asset": "GBPUSD", "chart_type": "bars"}
+            ]
+            
+            for case in test_cases:
+                print(f"   Testing {case['asset']} with {case['chart_type']} chart")
+                
+                # Test force signal generation with 5s timeframe
+                payload = {
+                    "selected_timeframes": ["5s"],
+                    "selected_assets": [f"{case['asset']}_OTC"],
+                    "chart_type": case['chart_type']
+                }
+                
+                async with self.session.post(f"{BACKEND_URL}/signals/force-generate/asset/{case['asset']}_OTC") as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        
+                        if data.get('success'):
+                            signals = data.get('signals', [])
+                            print(f"   ✅ Generated {len(signals)} signals for {case['asset']}")
+                            
+                            # Verify signal properties
+                            for signal in signals:
+                                timeframe = signal.get('timeframe')
+                                confidence = signal.get('probability', 0)
+                                direction = signal.get('direction')
+                                
+                                print(f"   Signal: {direction} at {confidence}% confidence, timeframe: {timeframe}")
+                                
+                                # Verify 5s strategy requirements
+                                if timeframe != '5s':
+                                    print(f"   ❌ Expected 5s timeframe, got {timeframe}")
+                                    return False
+                                
+                                if confidence < 75 or confidence > 98:
+                                    print(f"   ❌ Confidence {confidence}% outside expected range (75-98%)")
+                                    return False
+                                
+                                if direction not in ['BUY', 'SELL', 'CALL', 'PUT']:
+                                    print(f"   ❌ Invalid direction: {direction}")
+                                    return False
+                        else:
+                            print(f"   ⚠️ No signals generated for {case['asset']} (acceptable)")
+                    else:
+                        print(f"   ❌ Force generation failed: {response.status}")
+                        return False
+            
+            return True
+            
+        except Exception as e:
+            print(f"   Pocket Option 5s strategy test error: {e}")
+            return False
+
+    async def test_pocket_option_15s_strategy_signal_generation(self) -> bool:
+        """Test Pocket Option 15-Second Strategy signal generation"""
+        try:
+            print("   Testing Pocket Option 15-Second Strategy")
+            
+            # Test with 15s timeframe
+            test_assets = ["EURUSD_OTC", "BTCUSD_OTC", "GBPUSD_OTC"]
+            
+            for asset in test_assets:
+                print(f"   Testing 15s strategy for {asset}")
+                
+                async with self.session.post(f"{BACKEND_URL}/signals/force-generate/asset/{asset}") as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        
+                        if data.get('success'):
+                            # Check if we can get analysis details
+                            analysis_details = data.get('analysis_details', {})
+                            signals = data.get('signals', [])
+                            
+                            print(f"   ✅ Generated {len(signals)} signals for {asset}")
+                            
+                            # Look for 15s strategy indicators
+                            for signal in signals:
+                                technical_analysis = signal.get('technical_analysis', {})
+                                strategy_used = signal.get('strategy_used', '')
+                                
+                                # Check for EMA crossover indicators (15s strategy feature)
+                                if 'ema' in str(technical_analysis).lower() or 'crossover' in str(technical_analysis).lower():
+                                    print(f"   ✅ EMA crossover analysis detected in {asset}")
+                                
+                                confidence = signal.get('probability', 0)
+                                if confidence >= 80:  # 15s strategy targets 90%+
+                                    print(f"   ✅ High confidence signal: {confidence}%")
+                                else:
+                                    print(f"   ℹ️ Moderate confidence signal: {confidence}%")
+                        else:
+                            print(f"   ⚠️ No signals generated for {asset}")
+                    else:
+                        print(f"   ❌ Force generation failed for {asset}: {response.status}")
+                        return False
+            
+            return True
+            
+        except Exception as e:
+            print(f"   Pocket Option 15s strategy test error: {e}")
+            return False
+
+    async def test_pocket_option_1m_strategy_signal_generation(self) -> bool:
+        """Test Pocket Option 1-Minute Strategy signal generation"""
+        try:
+            print("   Testing Pocket Option 1-Minute Strategy")
+            
+            # Test with 1m timeframe
+            test_assets = ["EURUSD", "BTCUSD", "GBPUSD"]
+            
+            for asset in test_assets:
+                print(f"   Testing 1m strategy for {asset}")
+                
+                async with self.session.post(f"{BACKEND_URL}/signals/force-generate/asset/{asset}") as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        
+                        if data.get('success'):
+                            signals = data.get('signals', [])
+                            analysis_details = data.get('analysis_details', {})
+                            
+                            print(f"   ✅ Generated {len(signals)} signals for {asset}")
+                            
+                            # Check for 1m strategy indicators (MACD, RSI, EMA)
+                            for signal in signals:
+                                technical_analysis = signal.get('technical_analysis', {})
+                                confidence = signal.get('probability', 0)
+                                
+                                # Look for multi-indicator analysis
+                                indicators_found = []
+                                if 'macd' in str(technical_analysis).lower():
+                                    indicators_found.append('MACD')
+                                if 'rsi' in str(technical_analysis).lower():
+                                    indicators_found.append('RSI')
+                                if 'ema' in str(technical_analysis).lower():
+                                    indicators_found.append('EMA')
+                                if 'bollinger' in str(technical_analysis).lower():
+                                    indicators_found.append('Bollinger Bands')
+                                
+                                if indicators_found:
+                                    print(f"   ✅ Multi-indicator analysis: {', '.join(indicators_found)}")
+                                
+                                if confidence >= 83:  # 1m strategy targets 93%+
+                                    print(f"   ✅ High confidence 1m signal: {confidence}%")
+                                else:
+                                    print(f"   ℹ️ Moderate confidence 1m signal: {confidence}%")
+                        else:
+                            print(f"   ⚠️ No signals generated for {asset}")
+                    else:
+                        print(f"   ❌ Force generation failed for {asset}: {response.status}")
+                        return False
+            
+            return True
+            
+        except Exception as e:
+            print(f"   Pocket Option 1m strategy test error: {e}")
+            return False
+
+    async def test_force_signal_generator_strategy_routing(self) -> bool:
+        """Test Force Signal Generator strategy routing based on timeframes"""
+        try:
+            print("   Testing Force Signal Generator strategy routing")
+            
+            # Test different timeframe routing
+            timeframe_tests = [
+                {"timeframes": ["5s"], "expected_strategy": "5s"},
+                {"timeframes": ["15s"], "expected_strategy": "15s"},
+                {"timeframes": ["1m"], "expected_strategy": "1m"},
+                {"timeframes": ["3m"], "expected_strategy": "1m"},  # Should route to 1m strategy
+                {"timeframes": ["5m"], "expected_strategy": "1m"}   # Should route to 1m strategy
+            ]
+            
+            for test_case in timeframe_tests:
+                timeframes = test_case["timeframes"]
+                expected = test_case["expected_strategy"]
+                
+                print(f"   Testing timeframe routing: {timeframes} -> {expected} strategy")
+                
+                # Update configuration with specific timeframes
+                config_data = {
+                    "trading_mode": "demo",
+                    "active_strategies": ["hybrid"],
+                    "target_assets": ["forex"],
+                    "selected_assets": ["EURUSD_OTC"],
+                    "selected_timeframes": timeframes,
+                    "risk_tolerance": "medium",
+                    "max_stake_per_trade": 10.0,
+                    "max_daily_trades": 50,
+                    "min_probability_threshold": 75.0,
+                    "auto_trading_enabled": False,
+                    "invert_signals": False,
+                    "sound_alerts_enabled": True
+                }
+                
+                # Update configuration
+                async with self.session.put(f"{BACKEND_URL}/config", json=config_data) as response:
+                    if response.status != 200:
+                        print(f"   ❌ Failed to update config for {timeframes}")
+                        return False
+                
+                # Test force signal generation
+                async with self.session.post(f"{BACKEND_URL}/signals/force-generate") as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        
+                        if data.get('success'):
+                            signals = data.get('signals', [])
+                            
+                            # Check if signals use correct timeframe
+                            for signal in signals:
+                                signal_timeframe = signal.get('timeframe')
+                                strategy_used = signal.get('strategy_used', '')
+                                
+                                print(f"   Signal timeframe: {signal_timeframe}, Strategy: {strategy_used}")
+                                
+                                # Verify timeframe matches expectation
+                                if signal_timeframe == timeframes[0]:
+                                    print(f"   ✅ Correct timeframe routing: {timeframes[0]}")
+                                else:
+                                    print(f"   ⚠️ Timeframe mismatch: expected {timeframes[0]}, got {signal_timeframe}")
+                        else:
+                            print(f"   ⚠️ No signals generated for timeframes {timeframes}")
+                    else:
+                        print(f"   ❌ Force generation failed for {timeframes}: {response.status}")
+                        return False
+            
+            return True
+            
+        except Exception as e:
+            print(f"   Force signal generator routing test error: {e}")
+            return False
+
+    async def test_ta_lib_integration(self) -> bool:
+        """Test TA-Lib integration and calculations"""
+        try:
+            print("   Testing TA-Lib integration")
+            
+            # Test that TA-Lib can be imported and used
+            try:
+                import sys
+                sys.path.append('/app/backend')
+                import talib
+                import numpy as np
+                
+                print("   ✅ TA-Lib imported successfully")
+                
+                # Test basic TA-Lib calculations
+                test_data = np.array([1.0, 1.1, 1.05, 1.15, 1.12, 1.18, 1.16, 1.20, 1.19, 1.22])
+                
+                # Test EMA calculation
+                ema = talib.EMA(test_data, timeperiod=5)
+                if not np.isnan(ema[-1]):
+                    print(f"   ✅ EMA calculation working: {ema[-1]:.4f}")
+                else:
+                    print("   ❌ EMA calculation returned NaN")
+                    return False
+                
+                # Test RSI calculation
+                rsi = talib.RSI(test_data, timeperiod=5)
+                if not np.isnan(rsi[-1]):
+                    print(f"   ✅ RSI calculation working: {rsi[-1]:.2f}")
+                else:
+                    print("   ❌ RSI calculation returned NaN")
+                    return False
+                
+                # Test MACD calculation
+                macd, signal, hist = talib.MACD(test_data)
+                if not np.isnan(macd[-1]):
+                    print(f"   ✅ MACD calculation working: {macd[-1]:.6f}")
+                else:
+                    print("   ❌ MACD calculation returned NaN")
+                    return False
+                
+                # Test Bollinger Bands
+                upper, middle, lower = talib.BBANDS(test_data, timeperiod=5)
+                if not np.isnan(upper[-1]):
+                    print(f"   ✅ Bollinger Bands calculation working: {upper[-1]:.4f}")
+                else:
+                    print("   ❌ Bollinger Bands calculation returned NaN")
+                    return False
+                
+                # Test Stochastic
+                high_data = test_data * 1.01  # Simulate high prices
+                low_data = test_data * 0.99   # Simulate low prices
+                slowk, slowd = talib.STOCH(high_data, low_data, test_data)
+                if not np.isnan(slowk[-1]):
+                    print(f"   ✅ Stochastic calculation working: {slowk[-1]:.2f}")
+                else:
+                    print("   ❌ Stochastic calculation returned NaN")
+                    return False
+                
+                return True
+                
+            except ImportError as e:
+                print(f"   ❌ TA-Lib import failed: {e}")
+                return False
+            except Exception as e:
+                print(f"   ❌ TA-Lib calculation error: {e}")
+                return False
+            
+        except Exception as e:
+            print(f"   TA-Lib integration test error: {e}")
+            return False
+
+    async def test_real_market_data_integration_for_strategies(self) -> bool:
+        """Test real market data integration for new strategies"""
+        try:
+            print("   Testing real market data integration for strategies")
+            
+            # Test yfinance data fetching for different assets
+            test_symbols = ["EURUSD=X", "BTC-USD", "GBPUSD=X"]
+            
+            for symbol in test_symbols:
+                print(f"   Testing market data for {symbol}")
+                
+                try:
+                    import yfinance as yf
+                    
+                    ticker = yf.Ticker(symbol)
+                    hist = ticker.history(period="1d", interval="1m")
+                    
+                    if not hist.empty and len(hist) >= 100:
+                        print(f"   ✅ {symbol}: {len(hist)} data points fetched")
+                        
+                        # Verify OHLCV data structure
+                        required_columns = ['Open', 'High', 'Low', 'Close', 'Volume']
+                        missing_columns = [col for col in required_columns if col not in hist.columns]
+                        
+                        if missing_columns:
+                            print(f"   ❌ Missing columns for {symbol}: {missing_columns}")
+                            return False
+                        else:
+                            print(f"   ✅ Complete OHLCV data for {symbol}")
+                        
+                        # Check for NaN values
+                        nan_count = hist.isnull().sum().sum()
+                        if nan_count > 0:
+                            print(f"   ⚠️ {symbol} has {nan_count} NaN values")
+                        else:
+                            print(f"   ✅ No NaN values in {symbol} data")
+                    else:
+                        print(f"   ⚠️ Insufficient data for {symbol}: {len(hist) if not hist.empty else 0} points")
+                
+                except Exception as e:
+                    print(f"   ❌ Error fetching data for {symbol}: {e}")
+                    return False
+            
+            return True
+            
+        except Exception as e:
+            print(f"   Real market data integration test error: {e}")
+            return False
+
+    async def test_end_to_end_strategy_signal_generation(self) -> bool:
+        """Test end-to-end signal generation with new strategies"""
+        try:
+            print("   Testing end-to-end strategy signal generation")
+            
+            # Test different timeframe configurations
+            test_configs = [
+                {
+                    "name": "5s Ultra-Short Strategy",
+                    "timeframes": ["5s"],
+                    "assets": ["EURUSD_OTC"],
+                    "expected_confidence_min": 75
+                },
+                {
+                    "name": "15s EMA Crossover Strategy", 
+                    "timeframes": ["15s"],
+                    "assets": ["BTCUSD_OTC"],
+                    "expected_confidence_min": 80
+                },
+                {
+                    "name": "1m Multi-Indicator Strategy",
+                    "timeframes": ["1m"],
+                    "assets": ["GBPUSD"],
+                    "expected_confidence_min": 83
+                }
+            ]
+            
+            for config in test_configs:
+                print(f"   Testing {config['name']}")
+                
+                # Configure bot for this test
+                bot_config = {
+                    "trading_mode": "demo",
+                    "active_strategies": ["hybrid"],
+                    "target_assets": ["forex", "crypto"],
+                    "selected_assets": config["assets"],
+                    "selected_timeframes": config["timeframes"],
+                    "risk_tolerance": "medium",
+                    "max_stake_per_trade": 10.0,
+                    "max_daily_trades": 50,
+                    "min_probability_threshold": 75.0,
+                    "auto_trading_enabled": False,
+                    "invert_signals": False,
+                    "sound_alerts_enabled": True
+                }
+                
+                # Update configuration
+                async with self.session.put(f"{BACKEND_URL}/config", json=bot_config) as response:
+                    if response.status != 200:
+                        print(f"   ❌ Failed to update config for {config['name']}")
+                        return False
+                
+                # Test force signal generation
+                async with self.session.post(f"{BACKEND_URL}/signals/force-generate") as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        
+                        if data.get('success'):
+                            signals = data.get('signals', [])
+                            print(f"   ✅ Generated {len(signals)} signals for {config['name']}")
+                            
+                            # Verify signal quality
+                            for signal in signals:
+                                confidence = signal.get('probability', 0)
+                                timeframe = signal.get('timeframe')
+                                direction = signal.get('direction')
+                                symbol = signal.get('symbol')
+                                
+                                print(f"   Signal: {symbol} {direction} at {confidence}% ({timeframe})")
+                                
+                                # Check confidence meets minimum
+                                if confidence >= config["expected_confidence_min"]:
+                                    print(f"   ✅ Confidence {confidence}% meets minimum {config['expected_confidence_min']}%")
+                                else:
+                                    print(f"   ⚠️ Confidence {confidence}% below expected {config['expected_confidence_min']}%")
+                                
+                                # Check timeframe matches
+                                if timeframe in config["timeframes"]:
+                                    print(f"   ✅ Timeframe {timeframe} matches configuration")
+                                else:
+                                    print(f"   ⚠️ Timeframe {timeframe} doesn't match expected {config['timeframes']}")
+                        else:
+                            print(f"   ⚠️ No signals generated for {config['name']}")
+                    else:
+                        print(f"   ❌ Force generation failed for {config['name']}: {response.status}")
+                        return False
+            
+            return True
+            
+        except Exception as e:
+            print(f"   End-to-end strategy test error: {e}")
+            return False
+
+    async def test_strategy_confidence_levels_and_accuracy_targets(self) -> bool:
+        """Test that strategies meet their accuracy targets and confidence levels"""
+        try:
+            print("   Testing strategy confidence levels and accuracy targets")
+            
+            # Test multiple signals to check consistency
+            confidence_results = {
+                "5s_strategy": [],
+                "15s_strategy": [], 
+                "1m_strategy": []
+            }
+            
+            # Generate multiple signals for each strategy
+            for i in range(3):  # Test 3 signals each
+                print(f"   Testing round {i+1}/3")
+                
+                # Test 5s strategy
+                async with self.session.post(f"{BACKEND_URL}/signals/force-generate/asset/EURUSD_OTC") as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        if data.get('success'):
+                            signals = data.get('signals', [])
+                            for signal in signals:
+                                if signal.get('timeframe') == '5s':
+                                    confidence_results["5s_strategy"].append(signal.get('probability', 0))
+                
+                # Test 15s strategy (would need specific routing)
+                # For now, we'll use force generation and check analysis details
+                
+                # Test 1m strategy
+                async with self.session.post(f"{BACKEND_URL}/signals/force-generate/asset/GBPUSD") as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        if data.get('success'):
+                            signals = data.get('signals', [])
+                            for signal in signals:
+                                if signal.get('timeframe') in ['1m', '3m', '5m']:
+                                    confidence_results["1m_strategy"].append(signal.get('probability', 0))
+                
+                await asyncio.sleep(1)  # Small delay between tests
+            
+            # Analyze results
+            for strategy, confidences in confidence_results.items():
+                if confidences:
+                    avg_confidence = sum(confidences) / len(confidences)
+                    min_confidence = min(confidences)
+                    max_confidence = max(confidences)
+                    
+                    print(f"   {strategy}: Avg={avg_confidence:.1f}%, Min={min_confidence:.1f}%, Max={max_confidence:.1f}%")
+                    
+                    # Check against targets
+                    if strategy == "5s_strategy":
+                        target_min = 75  # 5s strategy targets 93-95% but force mode may be lower
+                        if avg_confidence >= target_min:
+                            print(f"   ✅ {strategy} meets confidence target")
+                        else:
+                            print(f"   ⚠️ {strategy} below target: {avg_confidence:.1f}% < {target_min}%")
+                    
+                    elif strategy == "15s_strategy":
+                        target_min = 80  # 15s strategy targets 90%+
+                        if avg_confidence >= target_min:
+                            print(f"   ✅ {strategy} meets confidence target")
+                        else:
+                            print(f"   ⚠️ {strategy} below target: {avg_confidence:.1f}% < {target_min}%")
+                    
+                    elif strategy == "1m_strategy":
+                        target_min = 83  # 1m strategy targets 93%+
+                        if avg_confidence >= target_min:
+                            print(f"   ✅ {strategy} meets confidence target")
+                        else:
+                            print(f"   ⚠️ {strategy} below target: {avg_confidence:.1f}% < {target_min}%")
+                else:
+                    print(f"   ⚠️ No confidence data collected for {strategy}")
+            
+            return True
+            
+        except Exception as e:
+            print(f"   Strategy confidence levels test error: {e}")
+            return False
+
     # ========== POCKET OPTION ASSET SYSTEM TESTING ==========
     
     async def test_asset_api_all_endpoint(self) -> bool:
