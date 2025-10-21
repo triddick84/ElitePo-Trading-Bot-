@@ -1020,7 +1020,7 @@ class ForceSignalGenerator:
         try:
             if not analysis_results:
                 # Emergency analysis - force generate based on basic indicators
-                return self._generate_emergency_signal(symbol, market_data, recent_data, market_type)
+                return self._generate_emergency_signal(symbol, market_data, recent_data, market_type, user_timeframes)
             
             # Calculate weighted scores
             buy_score = 0.0
