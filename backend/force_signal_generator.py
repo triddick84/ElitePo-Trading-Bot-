@@ -12,9 +12,9 @@ from scipy import stats
 import math
 import requests
 from textblob import TextBlob
-from ema_rsi_5s_strategy import ema_rsi_5s_strategy
-from enhanced_5s_strategy import enhanced_5s_strategy
-from ultra_short_5s_strategy import ultra_short_5s_strategy
+from pocket_option_5s_strategy import pocket_option_5s_strategy
+from pocket_option_15s_strategy import pocket_option_15s_strategy
+from pocket_option_1m_strategy import pocket_option_1m_strategy
 from lightweight_ai_ensemble import lightweight_ai_ensemble
 
 logger = logging.getLogger(__name__)
