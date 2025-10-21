@@ -16,7 +16,7 @@ const MarketAssetSelector = ({ onSelectionChange }) => {
     indices: []
   });
   const [selectedAssets, setSelectedAssets] = useState([]);
-  const [selectedTimeframes, setSelectedTimeframes] = useState(['5s']);
+  const [selectedTimeframes, setSelectedTimeframes] = useState([]);
   const [showOTC, setShowOTC] = useState(true);
   const [showRegular, setShowRegular] = useState(true);
   const [expandedCategories, setExpandedCategories] = useState({
