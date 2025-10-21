@@ -452,10 +452,8 @@
 
 ## test_plan:
   current_focus:
-    - "Pocket Option 5-Second High-Accuracy Strategy"
-    - "Pocket Option 15-Second EMA Crossover Strategy"
-    - "Pocket Option 1-Minute Multi-Indicator Strategy"
-    - "Force Signal Generator Strategy Routing"
+    - "Real Market Data Integration for Strategies"
+    - "End-to-End Strategy Performance Optimization"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
