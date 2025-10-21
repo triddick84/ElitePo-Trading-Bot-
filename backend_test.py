@@ -6564,7 +6564,17 @@ class BackendTester:
             ("OTC Platform Integration", self.test_otc_platform_integration),
             ("OTC Emergency Fallback", self.test_otc_emergency_fallback),
             
-            # EMA RSI 5S OTC Strategy Tests (NEW - PRIMARY FOCUS)
+            # NEW POCKET OPTION STRATEGY TESTS (PRIMARY FOCUS)
+            ("Pocket Option 5s Strategy Signal Generation", self.test_pocket_option_5s_strategy_signal_generation),
+            ("Pocket Option 15s Strategy Signal Generation", self.test_pocket_option_15s_strategy_signal_generation),
+            ("Pocket Option 1m Strategy Signal Generation", self.test_pocket_option_1m_strategy_signal_generation),
+            ("Force Signal Generator Strategy Routing", self.test_force_signal_generator_strategy_routing),
+            ("TA-Lib Integration", self.test_ta_lib_integration),
+            ("Real Market Data Integration for Strategies", self.test_real_market_data_integration_for_strategies),
+            ("End-to-End Strategy Signal Generation", self.test_end_to_end_strategy_signal_generation),
+            ("Strategy Confidence Levels and Accuracy Targets", self.test_strategy_confidence_levels_and_accuracy_targets),
+            
+            # EMA RSI 5S OTC Strategy Tests (LEGACY SUPPORT)
             ("EMA RSI 5S OTC Strategy Activation", self.test_ema_rsi_5s_otc_strategy_activation),
             ("EMA RSI 5S Strategy Signal Generation", self.test_ema_rsi_5s_strategy_signal_generation),
             ("EMA RSI 5S Confidence Scoring", self.test_ema_rsi_5s_confidence_scoring),
