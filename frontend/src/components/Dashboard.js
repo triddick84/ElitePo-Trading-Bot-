@@ -125,6 +125,17 @@ const Dashboard = ({ botStatus, liveSignals, setLiveSignals, notificationSetting
         </Button>
       </div>
 
+      {/* Market Asset & Timeframe Selector */}
+      <MarketAssetSelector 
+        onSelectionChange={(selection) => {
+          setConfig(prev => ({
+            ...prev,
+            selected_assets: selection.assets,
+            selected_timeframes: selection.timeframes
+          }));
+        }}
+      />
+
       {/* Live Signals Display - New Primary Section */}
       <LiveSignalsDisplay 
         botStatus={botStatus} 
