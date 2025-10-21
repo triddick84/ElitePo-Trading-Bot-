@@ -1238,16 +1238,25 @@ class ForceSignalGenerator:
                 confidence = 75.0
                 logger.warning(f"⚠️ Using random signal for {symbol} - insufficient data")
             
+            # Use user's selected timeframe or default to ultra-short
+            if not user_timeframes or len(user_timeframes) == 0:
+                user_timeframes = ['5s']  # Default to ultra-short trading
+            
+            timeframe = user_timeframes[0]
+            
+            # Calculate expiration based on timeframe
+            timeframe_to_minutes = {
+                '5s': 1, '15s': 1, '30s': 1,
+                '1m': 2, '3m': 5, '5m': 10, '15m': 30, '30m': 60
+            }
+            expiration_minutes = timeframe_to_minutes.get(timeframe, 1)
+            
             # Market type specific adjustments
             if market_type == "otc":
-                expiration_minutes = 10  # Shorter for OTC
-                timeframe = "3m"
                 symbol_suffix = "_OTC"
                 market_description = "📈 OTC Market - 24/7 availability"
                 confidence += 1.0  # Small OTC boost
             else:
-                expiration_minutes = 15
-                timeframe = "5m"
                 symbol_suffix = "_regular"
                 market_description = "📊 Regular Market - Exchange hours"
             
