@@ -76,12 +76,16 @@ class ForceSignalGenerator:
                     analysis_results.append(('advanced_ai_ensemble', ai_ensemble_signal, 0.60))
                     logger.info(f"🤖 Advanced AI Ensemble activated for {symbol}")
             
-            # EMA RSI 5-Second OTC Strategy (25% weight for OTC symbols)
-            if '_OTC' in symbol or symbol.endswith('_OTC'):
-                ema_rsi_5s_signal = await self._ema_rsi_5s_force_analysis(symbol, chart_type)
-                if ema_rsi_5s_signal:
-                    analysis_results.append(('ema_rsi_5s_otc', ema_rsi_5s_signal, 0.25))
-                    logger.info(f"🎯 EMA RSI 5S OTC strategy activated for {symbol} with {chart_type}")
+            # Timeframe-specific strategy routing
+            # Determine timeframe from user_timeframes or default to 5s for OTC
+            primary_timeframe = user_timeframes[0] if user_timeframes else '5s'
+            
+            # Apply researched high-accuracy strategy based on timeframe
+            strategy_signal = await self._apply_researched_strategy(symbol, primary_timeframe, chart_type)
+            if strategy_signal:
+                weight = 0.70  # Primary strategy gets 70% weight
+                analysis_results.append(('pocket_option_strategy', strategy_signal, weight))
+                logger.info(f"🎯 Pocket Option {primary_timeframe} strategy activated for {symbol} with {chart_type}")
             
             # 1-minute scalping analysis (15% weight - supporting analysis)
             if data_1m and len(data_1m) > 100:
