@@ -562,7 +562,7 @@ async def force_generate_signal():
         try:
             config_doc = await db.trading_configurations.find_one({"user_id": "default_user"})
             selected_assets = config_doc.get('selected_assets', ['EURUSD_regular']) if config_doc else ['EURUSD_regular']
-            user_timeframes = config_doc.get('selected_timeframes', ['5m']) if config_doc else ['5m']
+            user_timeframes = config_doc.get('selected_timeframes', ['5s']) if config_doc else ['5s']  # Default to 5s for ultra-short trading
             chart_type = config_doc.get('chart_type', 'japanese_candles') if config_doc else 'japanese_candles'
             
             # If no assets selected, use defaults
