@@ -1192,7 +1192,8 @@ class ForceSignalGenerator:
             return self._generate_emergency_signal(symbol, market_data, recent_data, market_type)
     
     def _generate_emergency_signal(self, symbol: str, market_data: MarketData, 
-                                 recent_data: Optional[List[Dict]] = None, market_type: str = "regular") -> TradingSignal:
+                                 recent_data: Optional[List[Dict]] = None, market_type: str = "regular", 
+                                 user_timeframes: List[str] = None) -> TradingSignal:
         """
         Generate emergency signal when all else fails
         """
