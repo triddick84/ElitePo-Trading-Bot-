@@ -153,7 +153,16 @@ class PocketOption5SecondStrategy:
     def get_real_market_data(self, symbol: str) -> Optional[pd.DataFrame]:
         """Fetch real 1-minute data for analysis"""
         try:
-            ticker = yf.Ticker(symbol)
+            # Convert symbol for yfinance (forex pairs need =X suffix)
+            yf_symbol = symbol
+            if '_OTC' in symbol or '_regular' in symbol:
+                yf_symbol = symbol.replace('_OTC', '').replace('_regular', '')
+            
+            # Add =X for forex pairs
+            if len(yf_symbol) == 6 and yf_symbol.isalpha():  # Forex pair like EURUSD
+                yf_symbol = f"{yf_symbol}=X"
+            
+            ticker = yf.Ticker(yf_symbol)
             # Get last 1 day of 1-minute data
             df = ticker.history(period="1d", interval="1m")
             
