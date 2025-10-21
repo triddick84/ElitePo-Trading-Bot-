@@ -192,7 +192,7 @@ class PocketOption1MinuteStrategy:
                 return None
             
             # Apply chart transformation
-            df = chart_transformer.transform(df, chart_type)
+            df = chart_transformer.transform_data(df, chart_type)
             
             # Calculate all indicators
             close_prices = df['close']
