@@ -279,6 +279,13 @@ const LiveSignalsDisplay = ({
       
       const result = await response.json();
       
+      // Handle error responses (no assets or timeframes selected)
+      if (!result.success) {
+        toast.error(result.message || 'Failed to generate signals', { duration: 8000 });
+        setIsForceGenerating(false);
+        return;
+      }
+      
       if (result.success && result.signals && result.signals.length > 0) {
         // Add the new forced signals to live signals for popup notifications
         const newSignals = result.signals.map(signal => ({
