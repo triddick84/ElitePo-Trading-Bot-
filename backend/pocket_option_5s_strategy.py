@@ -341,6 +341,27 @@ class PocketOption5SecondStrategy:
                         confidence += 3
                         reasoning.append("✅ Doji at support confirms reversal")
             
+            # === AI ENSEMBLE BOOST (Advanced ML Analysis) ===
+            # Use advanced AI ensemble for additional confirmation
+            ai_analysis = advanced_5s_ai_ensemble.analyze_5s_candle(df)
+            if ai_analysis and signal:
+                ai_signal = ai_analysis['signal']
+                ai_confidence = ai_analysis['confidence']
+                
+                # If AI agrees with our signal, boost confidence
+                if ai_signal == signal:
+                    confidence_boost = min(8, (ai_confidence - 70) / 3)  # Up to +8%
+                    confidence += confidence_boost
+                    reasoning.append(f"🤖 AI Ensemble confirms {signal} ({ai_confidence:.0f}% AI confidence)")
+                    reasoning.extend(ai_analysis['reasoning'][:2])  # Add top 2 AI reasons
+                    
+                    logger.info(f"✅ AI Ensemble agrees: {signal} with {ai_confidence:.0f}% confidence")
+                else:
+                    # AI disagrees - reduce confidence
+                    confidence -= 10
+                    reasoning.append(f"⚠️ AI Ensemble suggests {ai_signal} (conflicting signal)")
+                    logger.warning(f"⚠️ AI Ensemble conflict: Strategy says {signal}, AI says {ai_signal}")
+            
             # === Final Signal Check ===
             if signal is None:
                 return None
