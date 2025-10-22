@@ -24,6 +24,7 @@ import logging
 from typing import Dict, Optional, List
 from chart_transformations import chart_transformer
 from support_resistance_detector import get_detector
+from advanced_5s_ai_ensemble import advanced_5s_ai_ensemble
 import talib
 
 logger = logging.getLogger(__name__)
