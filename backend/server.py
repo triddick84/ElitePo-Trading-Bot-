@@ -659,6 +659,13 @@ async def force_generate_signal():
                     logger.error(f"Error storing signal {signal.id} in database: {e}")
                     # Continue with other signals even if one fails
                 
+                # Calculate seconds to entry for countdown timer
+                seconds_to_entry = 0
+                if signal.precision_entry_time:
+                    from pocket_option_timing_sync import pocket_option_sync
+                    chicago_time = pocket_option_sync.get_chicago_time()
+                    seconds_to_entry = max(0, (signal.precision_entry_time - chicago_time).total_seconds())
+                
                 stored_signals.append({
                     "id": str(signal.id),
                     "symbol": str(signal.symbol),
@@ -673,6 +680,7 @@ async def force_generate_signal():
                     "strategy_used": str(signal.strategy_used),
                     "confidence_level": str(signal.confidence_level),
                     "precision_entry_time": signal.precision_entry_time.isoformat() if signal.precision_entry_time else None,
+                    "seconds_to_entry": float(seconds_to_entry),  # For countdown timer synchronization
                     "technical_analysis": _convert_numpy_types(signal.technical_analysis) if signal.technical_analysis else {},
                     "forced_generation": True,
                     "timestamp": signal.timestamp.isoformat()
@@ -830,6 +838,13 @@ async def force_generate_signal_for_asset(asset_symbol: str):
                 signal_dict = _convert_numpy_types(signal_dict)
                 await db.trading_signals.insert_one(signal_dict)
                 
+                # Calculate seconds to entry for countdown timer
+                seconds_to_entry = 0
+                if signal.precision_entry_time:
+                    from pocket_option_timing_sync import pocket_option_sync
+                    chicago_time = pocket_option_sync.get_chicago_time()
+                    seconds_to_entry = max(0, (signal.precision_entry_time - chicago_time).total_seconds())
+                
                 stored_signals.append({
                     "id": str(signal.id),
                     "symbol": str(signal.symbol),
@@ -844,6 +859,7 @@ async def force_generate_signal_for_asset(asset_symbol: str):
                     "strategy_used": str(signal.strategy_used),
                     "confidence_level": str(signal.confidence_level),
                     "precision_entry_time": signal.precision_entry_time.isoformat() if signal.precision_entry_time else None,
+                    "seconds_to_entry": float(seconds_to_entry),  # For countdown timer synchronization
                     "technical_analysis": _convert_numpy_types(signal.technical_analysis) if signal.technical_analysis else {},
                     "forced_generation": True,
                     "timestamp": signal.timestamp.isoformat()
