@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 # Import our trading bot components
 from models import (
     TradingSignal, MarketData, TechnicalIndicators, TradingConfiguration,
-    PerformanceMetrics, BacktestResult, TradingStrategy, TradingMode, AssetType
+    PerformanceMetrics, BacktestResult, TradingStrategy, TradingMode, AssetType, SignalDirection
 )
 from trading_bot_service import TradingBotService
 from real_market_data_service import RealMarketDataService
