@@ -26,7 +26,9 @@ import logging
 from typing import Dict, Optional, List
 from chart_transformations import chart_transformer
 from support_resistance_detector import get_detector
+from gpt_signal_enhancer import gpt_signal_enhancer
 import talib
+import asyncio
 
 logger = logging.getLogger(__name__)
 
