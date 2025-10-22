@@ -66,7 +66,7 @@ class PocketOptionTimingSync:
             logger.error(f"Error calculating seconds to next candle: {e}")
             return 0
     
-    def get_next_candle_formation_time(self, timeframe: str, market_type: str = "regular") -> datetime:
+    def get_next_candle_formation_time(self, timeframe: str, market_type: str = "regular", apply_latency_compensation: bool = True) -> datetime:
         """
         Calculate the EXACT next candle formation time for Pocket Option
         
