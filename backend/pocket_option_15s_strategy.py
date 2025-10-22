@@ -326,7 +326,12 @@ class PocketOption15SecondStrategy:
                     "stoch_k": current_stoch_k,
                     "bb_position": bb_position,
                     "trend": "UP" if in_uptrend else "DOWN",
-                    "crossover": "BULLISH" if bullish_crossover else ("BEARISH" if bearish_crossover else "NONE")
+                    "crossover": "BULLISH" if bullish_crossover else ("BEARISH" if bearish_crossover else "NONE"),
+                    "nearest_support": sr_levels['nearest_support'],
+                    "nearest_resistance": sr_levels['nearest_resistance'],
+                    "pivot_point": sr_levels['pivot_point'],
+                    "reversal_detected": reversal['reversal_detected'],
+                    "reversal_type": reversal['reversal_type']
                 },
                 "strategy": "Pocket Option 15s EMA Crossover",
                 "timeframe": "15s"
