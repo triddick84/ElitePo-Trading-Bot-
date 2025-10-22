@@ -365,6 +365,50 @@ class PocketOption1MinuteStrategy:
             if signal is None:
                 return None
             
+            # === GPT-4 ENHANCEMENT (Advanced AI Validation) ===
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    gpt_result = {'enhanced': False, 'valid': True, 'confidence_adjustment': 0, 'reasoning': [], 'risk_factors': []}
+                else:
+                    gpt_result = loop.run_until_complete(
+                        gpt_signal_enhancer.enhance_signal(
+                            signal=signal,
+                            confidence=confidence,
+                            features={},  # 1m strategy doesn't have advanced features yet
+                            technical_analysis={
+                                'rsi_14': current_rsi,
+                                'ema_distance': (current_price - current_ema) / current_price if current_price > 0 else 0,
+                                'stoch_k': current_stoch_k,
+                                'bb_position': bb_position,
+                                'macd_histogram': current_macd_hist,
+                                'nearest_support': sr_levels.get('nearest_support'),
+                                'nearest_resistance': sr_levels.get('nearest_resistance'),
+                                'reversal_detected': reversal.get('reversal_detected'),
+                                'reversal_type': reversal.get('reversal_type')
+                            },
+                            timeframe='1m'
+                        )
+                    )
+                
+                if gpt_result.get('enhanced'):
+                    gpt_adjustment = gpt_result.get('confidence_adjustment', 0)
+                    confidence += gpt_adjustment
+                    
+                    if gpt_result.get('reasoning'):
+                        reasoning.append(f"🤖 GPT-4: {', '.join(gpt_result['reasoning'][:2])}")
+                    
+                    if gpt_result.get('risk_factors'):
+                        reasoning.append(f"⚠️ Risks: {', '.join(gpt_result['risk_factors'][:2])}")
+                    
+                    if not gpt_result.get('valid', True):
+                        logger.warning(f"⚠️ GPT-4 REJECTED signal: {gpt_result.get('reasoning')}")
+                        return None
+                    
+                    logger.info(f"🤖 GPT-4 Enhanced: {signal} ({gpt_adjustment:+.1f}% adjustment)")
+            except Exception as e:
+                logger.error(f"GPT enhancement error (continuing without): {e}")
+            
             # === CRITICAL: Validate signal against S/R levels ===
             validation = self.sr_detector.validate_signal_direction(signal, current_price, sr_levels)
             
