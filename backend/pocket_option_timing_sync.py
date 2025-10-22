@@ -54,40 +54,59 @@ class PocketOptionTimingSync:
     
     def get_next_candle_formation_time(self, timeframe: str, market_type: str = "regular") -> datetime:
         """
-        Calculate the exact next candle formation time for Pocket Option
-        This is when the signal should be generated for maximum accuracy
+        Calculate the EXACT next candle formation time for Pocket Option
+        
+        CRITICAL: Pocket Option candles are synchronized to UTC and close at exact
+        multiples of the timeframe interval (e.g., for 5s: 00, 05, 10, 15, 20, 25, 30... seconds)
+        
+        Returns time when NEW candle will FORM (close of current + start of next)
         """
         try:
             if timeframe not in self.timeframe_seconds:
-                logger.warning(f"Unknown timeframe {timeframe}, using 5m default")
-                timeframe = '5m'
+                logger.warning(f"Unknown timeframe {timeframe}, using 5s default")
+                timeframe = '5s'
             
             interval_seconds = self.timeframe_seconds[timeframe]
-            current_time = self.get_chicago_time()
             
-            # Calculate seconds since midnight Chicago time
-            chicago_midnight = current_time.replace(hour=0, minute=0, second=0, microsecond=0)
-            seconds_since_midnight = (current_time - chicago_midnight).total_seconds()
+            # Use UTC time for Pocket Option synchronization (as per research)
+            current_utc = datetime.now(timezone.utc)
             
-            # Calculate next candle boundary
-            seconds_into_current_candle = seconds_since_midnight % interval_seconds
-            seconds_to_next_candle = interval_seconds - seconds_into_current_candle
+            # For ultra-short timeframes, calculate from seconds within current minute
+            if interval_seconds < 60:
+                # Calculate seconds past the current minute
+                seconds_in_minute = current_utc.second
+                
+                # Find next candle boundary within this minute
+                # Example for 5s: if at 07s, next boundaries are 10s, 15s, 20s...
+                next_boundary = ((seconds_in_minute // interval_seconds) + 1) * interval_seconds
+                
+                if next_boundary >= 60:
+                    # Next candle is in the next minute
+                    next_candle_time = current_utc.replace(second=0, microsecond=0) + timedelta(minutes=1)
+                else:
+                    # Next candle is within this minute
+                    next_candle_time = current_utc.replace(second=next_boundary, microsecond=0)
             
-            # Add small buffer for network latency (2 seconds before candle forms)
-            if market_type == "otc":
-                # OTC markets - signal 1 second before candle forms
-                signal_time = current_time + timedelta(seconds=seconds_to_next_candle - 1)
             else:
-                # Regular markets - signal 2 seconds before candle forms
-                signal_time = current_time + timedelta(seconds=seconds_to_next_candle - 2)
+                # For timeframes 1m+, calculate based on total seconds since epoch
+                epoch_seconds = int(current_utc.timestamp())
+                seconds_into_current_candle = epoch_seconds % interval_seconds
+                seconds_to_next_candle = interval_seconds - seconds_into_current_candle
+                next_candle_time = current_utc + timedelta(seconds=seconds_to_next_candle)
+                next_candle_time = next_candle_time.replace(microsecond=0)
             
-            return signal_time
+            # Convert to Chicago time for display
+            chicago_time = next_candle_time.astimezone(self.pocket_option_tz)
+            
+            logger.info(f"📊 Next {timeframe} candle formation: UTC {next_candle_time.strftime('%H:%M:%S')}, Chicago {chicago_time.strftime('%H:%M:%S')}")
+            
+            return chicago_time
             
         except Exception as e:
             logger.error(f"Error calculating next candle formation time: {e}")
             # Fallback: next minute boundary
             current_time = self.get_chicago_time()
-            return current_time.replace(second=58, microsecond=0) + timedelta(minutes=1)
+            return current_time.replace(second=0, microsecond=0) + timedelta(minutes=1)
     
     def calculate_optimal_expiration_time(self, timeframe: str, entry_time: datetime, market_type: str = "regular") -> int:
         """
