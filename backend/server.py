@@ -565,6 +565,7 @@ async def force_generate_signal():
             selected_assets = config_doc.get('selected_assets', []) if config_doc else []
             user_timeframes = config_doc.get('selected_timeframes', []) if config_doc else []
             chart_type = config_doc.get('chart_type', 'japanese_candles') if config_doc else 'japanese_candles'
+            invert_signals = config_doc.get('invert_signals', False) if config_doc else False
             
             # If no assets selected, return error - require user to select assets
             if not selected_assets or len(selected_assets) == 0:
