@@ -148,17 +148,17 @@ const MarketAssetSelector = ({ onSelectionChange }) => {
 
     return (
       <div key={category} className="border border-slate-700/50 rounded-lg overflow-hidden bg-slate-800/30">
-        <button
-          onClick={() => toggleCategory(category)}
-          className="w-full flex items-center justify-between p-4 hover:bg-slate-700/30 transition-colors"
-        >
-          <div className="flex items-center space-x-3">
+        <div className="w-full flex items-center justify-between p-4 bg-slate-800/30 rounded-t-lg">
+          <button
+            onClick={() => toggleCategory(category)}
+            className="flex items-center space-x-3 flex-1 hover:opacity-80 transition-opacity"
+          >
             <span className="text-2xl">{icon}</span>
             <div>
               <h3 className="text-lg font-semibold text-white capitalize">{category}</h3>
               <p className="text-sm text-slate-400">{filteredAssets.length} assets available</p>
             </div>
-          </div>
+          </button>
           <div className="flex items-center space-x-3">
             <Button
               onClick={(e) => {
@@ -169,11 +169,14 @@ const MarketAssetSelector = ({ onSelectionChange }) => {
             >
               Select All
             </Button>
-            <span className="text-slate-400">
+            <button
+              onClick={() => toggleCategory(category)}
+              className="text-slate-400 hover:text-white transition-colors"
+            >
               {expandedCategories[category] ? '▼' : '▶'}
-            </span>
+            </button>
           </div>
-        </button>
+        </div>
 
         {expandedCategories[category] && (
           <div className="p-4 pt-0 space-y-2 max-h-64 overflow-y-auto">
