@@ -158,8 +158,15 @@ class PocketOption5SecondStrategy:
         }
     
     def get_real_market_data(self, symbol: str) -> Optional[pd.DataFrame]:
-        """Fetch real 1-minute data for analysis"""
+        """
+        Fetch REAL-TIME 1-minute data for analysis
+        
+        CRITICAL: Only real market data - NO simulations or mocks
+        """
         try:
+            import time
+            start_time = time.time()
+            
             # Convert symbol for yfinance (forex pairs need =X suffix)
             yf_symbol = symbol
             if '_OTC' in symbol or '_regular' in symbol:
@@ -170,7 +177,7 @@ class PocketOption5SecondStrategy:
                 yf_symbol = f"{yf_symbol}=X"
             
             ticker = yf.Ticker(yf_symbol)
-            # Get last 1 day of 1-minute data
+            # Get last 1 day of 1-minute data (REAL-TIME)
             df = ticker.history(period="1d", interval="1m")
             
             if df.empty or len(df) < self.min_data_points:
