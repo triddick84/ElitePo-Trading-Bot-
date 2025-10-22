@@ -181,7 +181,7 @@ class PocketOption5SecondStrategy:
             df = ticker.history(period="1d", interval="1m")
             
             if df.empty or len(df) < self.min_data_points:
-                logger.warning(f"Insufficient data for {symbol}")
+                logger.error(f"❌ Insufficient REAL-TIME data for {symbol} - got {len(df)} candles, need {self.min_data_points}")
                 return None
             
             # Ensure we have OHLCV columns
@@ -192,6 +192,24 @@ class PocketOption5SecondStrategy:
                 'Close': 'close',
                 'Volume': 'volume'
             })
+            
+            # CRITICAL: Verify data is recent (within last 5 minutes)
+            if not df.empty:
+                latest_data_time = df.index[-1]
+                current_time = datetime.now(timezone.utc)
+                data_age_seconds = (current_time - latest_data_time).total_seconds()
+                
+                if data_age_seconds > 300:  # 5 minutes
+                    logger.error(f"❌ DATA TOO OLD: Latest data is {data_age_seconds:.0f}s old for {symbol}")
+                    logger.error(f"   Latest: {latest_data_time}, Current: {current_time}")
+                    return None
+                
+                logger.info(f"✅ REAL-TIME DATA: {symbol} - {len(df)} candles, age: {data_age_seconds:.1f}s")
+            
+            # Measure data fetch latency
+            end_time = time.time()
+            from latency_optimizer import latency_optimizer
+            latency_optimizer.measure_latency(start_time, end_time, f"Data fetch: {symbol}")
             
             return df
             
