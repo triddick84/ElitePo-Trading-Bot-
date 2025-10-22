@@ -112,6 +112,13 @@ class PocketOptionTimingSync:
             # Convert to Chicago time for display
             chicago_time = next_candle_time.astimezone(self.pocket_option_tz)
             
+            # Apply latency compensation for ultra-short timeframes
+            if apply_latency_compensation and timeframe in ['5s', '15s', '30s']:
+                from latency_optimizer import latency_optimizer
+                # Subtract latency buffer to signal earlier
+                chicago_time = chicago_time - timedelta(seconds=latency_optimizer.early_signal_buffer_seconds)
+                logger.info(f"⏰ Latency compensation applied: -{latency_optimizer.early_signal_buffer_seconds:.2f}s")
+            
             logger.info(f"📊 Next {timeframe} candle formation: UTC {next_candle_time.strftime('%H:%M:%S')}, Chicago {chicago_time.strftime('%H:%M:%S')}")
             
             return chicago_time
