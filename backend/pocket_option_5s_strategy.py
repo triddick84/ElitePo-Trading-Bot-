@@ -396,7 +396,8 @@ class PocketOption5SecondStrategy:
                     "pivot_point": sr_levels['pivot_point'],
                     "reversal_detected": reversal['reversal_detected'],
                     "reversal_type": reversal['reversal_type'],
-                    "patterns": patterns
+                    "patterns": patterns,
+                    "ai_ensemble": ai_analysis if ai_analysis else None
                 },
                 "strategy": "Pocket Option 5s High-Accuracy",
                 "timeframe": "5s"
