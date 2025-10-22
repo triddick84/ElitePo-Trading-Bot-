@@ -660,6 +660,19 @@ async def force_generate_signal():
                     logger.error(f"Error storing signal {signal.id} in database: {e}")
                     # Continue with other signals even if one fails
                 
+                # Apply signal inversion if enabled in configuration
+                if invert_signals:
+                    original_direction = signal.direction
+                    if signal.direction in [SignalDirection.BUY, SignalDirection.CALL]:
+                        signal.direction = SignalDirection.SELL
+                        logger.info(f"🔄 SIGNAL INVERTED: {original_direction} → SELL for {signal.symbol}")
+                    else:
+                        signal.direction = SignalDirection.BUY
+                        logger.info(f"🔄 SIGNAL INVERTED: {original_direction} → BUY for {signal.symbol}")
+                    
+                    # Add inversion note to justification
+                    signal.justification = f"[INVERTED - Original: {original_direction.value if hasattr(original_direction, 'value') else original_direction}] {signal.justification}"
+                
                 # Calculate seconds to entry for countdown timer
                 seconds_to_entry = 0
                 if signal.precision_entry_time:
@@ -838,6 +851,19 @@ async def force_generate_signal_for_asset(asset_symbol: str):
                 # Convert numpy types for JSON serialization
                 signal_dict = _convert_numpy_types(signal_dict)
                 await db.trading_signals.insert_one(signal_dict)
+                
+                # Apply signal inversion if enabled in configuration
+                if invert_signals:
+                    original_direction = signal.direction
+                    if signal.direction in [SignalDirection.BUY, SignalDirection.CALL]:
+                        signal.direction = SignalDirection.SELL
+                        logger.info(f"🔄 SIGNAL INVERTED: {original_direction} → SELL for {signal.symbol}")
+                    else:
+                        signal.direction = SignalDirection.BUY
+                        logger.info(f"🔄 SIGNAL INVERTED: {original_direction} → BUY for {signal.symbol}")
+                    
+                    # Add inversion note to justification
+                    signal.justification = f"[INVERTED - Original: {original_direction.value if hasattr(original_direction, 'value') else original_direction}] {signal.justification}"
                 
                 # Calculate seconds to entry for countdown timer
                 seconds_to_entry = 0
