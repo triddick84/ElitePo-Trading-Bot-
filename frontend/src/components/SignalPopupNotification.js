@@ -81,8 +81,21 @@ const SignalPopupNotification = ({ signal, onClose, onExecute }) => {
     };
 
     // Initialize the corrected entry time once
-    correctedEntryTime = initializeEntryTime();
-    if (!correctedEntryTime) return;
+    // PRIORITY: Use backend's seconds_to_entry if available (Pocket Option synchronized)
+    if (signal?.seconds_to_entry !== undefined && signal.seconds_to_entry > 0) {
+      // Backend provides exact seconds until next candle formation (Pocket Option sync)
+      const backendCalculatedTime = Date.now() + (signal.seconds_to_entry * 1000);
+      correctedEntryTime = new Date(backendCalculatedTime);
+      console.log('✅ Using Pocket Option synchronized timing from backend:', {
+        timeframe: signal.timeframe,
+        seconds_to_entry: signal.seconds_to_entry,
+        candle_formation_time: correctedEntryTime.toISOString()
+      });
+    } else {
+      // Fallback to frontend calculation if backend timing not available
+      correctedEntryTime = initializeEntryTime();
+      if (!correctedEntryTime) return;
+    }
     
     // Timer calculation function that uses the fixed entry time
     const calculateTimeLeft = () => {
