@@ -52,6 +52,20 @@ class PocketOptionTimingSync:
         """Get current time in Chicago/Central timezone"""
         return datetime.now(self.pocket_option_tz)
     
+    def get_seconds_to_next_candle(self, timeframe: str) -> float:
+        """
+        Get exact seconds until next candle formation
+        Used for countdown timers in frontend
+        """
+        try:
+            next_candle = self.get_next_candle_formation_time(timeframe)
+            current_time = self.get_chicago_time()
+            seconds_diff = (next_candle - current_time).total_seconds()
+            return max(0, seconds_diff)  # Never negative
+        except Exception as e:
+            logger.error(f"Error calculating seconds to next candle: {e}")
+            return 0
+    
     def get_next_candle_formation_time(self, timeframe: str, market_type: str = "regular") -> datetime:
         """
         Calculate the EXACT next candle formation time for Pocket Option
