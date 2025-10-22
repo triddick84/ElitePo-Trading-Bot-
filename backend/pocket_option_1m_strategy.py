@@ -390,8 +390,11 @@ class PocketOption1MinuteStrategy:
                     "macd_histogram": current_macd_hist,
                     "stoch_k": current_stoch_k,
                     "bb_position": bb_position,
-                    "support": sr_levels['support'],
-                    "resistance": sr_levels['resistance'],
+                    "nearest_support": sr_levels['nearest_support'],
+                    "nearest_resistance": sr_levels['nearest_resistance'],
+                    "pivot_point": sr_levels['pivot_point'],
+                    "reversal_detected": reversal['reversal_detected'],
+                    "reversal_type": reversal['reversal_type'],
                     "patterns": patterns
                 },
                 "strategy": "Pocket Option 1m Multi-Indicator",
