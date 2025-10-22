@@ -328,10 +328,13 @@ class PocketOption1MinuteStrategy:
                     confidence += 5
                     reasoning.append(f"✅ Stochastic oversold ({current_stoch_k:.1f})")
                 
-                # Support level
-                if sr_levels['near_support']:
-                    confidence += 4
-                    reasoning.append("✅ Price near support level")
+                # Enhanced S/R confirmation with reversal detection
+                if reversal['reversal_detected'] and reversal['bounce_off_support']:
+                    confidence += 7
+                    reasoning.append(f"✅ REVERSAL: Bounce off support (strength: {reversal['reversal_strength']})")
+                elif proximity['near_support']:
+                    confidence += 5
+                    reasoning.append(f"✅ Price near support ({proximity['support_distance_pct']:.2f}% away)")
                 
                 # Bullish patterns
                 if patterns.get('hammer') or patterns.get('bullish_engulfing'):
@@ -344,10 +347,13 @@ class PocketOption1MinuteStrategy:
                     confidence += 5
                     reasoning.append(f"✅ Stochastic overbought ({current_stoch_k:.1f})")
                 
-                # Resistance level
-                if sr_levels['near_resistance']:
-                    confidence += 4
-                    reasoning.append("✅ Price near resistance level")
+                # Enhanced S/R confirmation with reversal detection
+                if reversal['reversal_detected'] and reversal['bounce_off_resistance']:
+                    confidence += 7
+                    reasoning.append(f"✅ REVERSAL: Reversal at resistance (strength: {reversal['reversal_strength']})")
+                elif proximity['near_resistance']:
+                    confidence += 5
+                    reasoning.append(f"✅ Price near resistance ({proximity['resistance_distance_pct']:.2f}% away)")
                 
                 # Bearish patterns
                 if patterns.get('hanging_man') or patterns.get('bearish_engulfing'):
@@ -356,6 +362,17 @@ class PocketOption1MinuteStrategy:
             
             if signal is None:
                 return None
+            
+            # === CRITICAL: Validate signal against S/R levels ===
+            validation = self.sr_detector.validate_signal_direction(signal, current_price, sr_levels)
+            
+            if not validation['valid']:
+                logger.warning(f"⚠️ Signal REJECTED by S/R validation: {validation['reasoning']}")
+                return None
+            
+            # Apply confidence adjustment from S/R validation
+            confidence += validation['confidence_adjustment']
+            reasoning.extend(validation['reasoning'])
             
             # Cap confidence at 98%
             confidence = min(confidence, 98)
