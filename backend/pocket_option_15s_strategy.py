@@ -190,8 +190,10 @@ class PocketOption15SecondStrategy:
                 logger.warning(f"NaN values in indicators for {symbol}")
                 return None
             
-            # Detect support/resistance
-            sr_levels = self.detect_support_resistance(close_prices)
+            # Enhanced S/R detection with trend reversal analysis
+            sr_levels = self.sr_detector.identify_key_levels(df)
+            proximity = self.sr_detector.is_near_support_resistance(current_price, sr_levels)
+            reversal = self.sr_detector.detect_trend_reversal(df, sr_levels)
             
             # Detect EMA crossover
             bullish_crossover = prev_ema_fast <= prev_ema_slow and current_ema_fast > current_ema_slow
