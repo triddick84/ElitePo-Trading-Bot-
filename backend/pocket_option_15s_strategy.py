@@ -282,16 +282,34 @@ class PocketOption15SecondStrategy:
                     confidence -= 3
                     reasoning.append(f"⚠️ Stochastic oversold ({current_stoch_k:.1f}) - reduced confidence")
             
-            # === RULE 5: Support/Resistance Confirmation ===
-            if signal == "CALL" and sr_levels['near_support']:
-                confidence += 4
-                reasoning.append("✅ Price near support level")
-            elif signal == "PUT" and sr_levels['near_resistance']:
-                confidence += 4
-                reasoning.append("✅ Price near resistance level")
+            # === RULE 5: Enhanced S/R Confirmation & Reversal Detection ===
+            if reversal['reversal_detected']:
+                if reversal['bounce_off_support'] and signal == "CALL":
+                    confidence += 8
+                    reasoning.append(f"✅ REVERSAL: Bounce off support (strength: {reversal['reversal_strength']})")
+                elif reversal['bounce_off_resistance'] and signal == "PUT":
+                    confidence += 8
+                    reasoning.append(f"✅ REVERSAL: Reversal at resistance (strength: {reversal['reversal_strength']})")
+            elif proximity['near_support'] and signal == "CALL":
+                confidence += 5
+                reasoning.append(f"✅ Price near support ({proximity['support_distance_pct']:.2f}% away)")
+            elif proximity['near_resistance'] and signal == "PUT":
+                confidence += 5
+                reasoning.append(f"✅ Price near resistance ({proximity['resistance_distance_pct']:.2f}% away)")
             
             if signal is None:
                 return None
+            
+            # === CRITICAL: Validate signal against S/R levels ===
+            validation = self.sr_detector.validate_signal_direction(signal, current_price, sr_levels)
+            
+            if not validation['valid']:
+                logger.warning(f"⚠️ Signal REJECTED by S/R validation: {validation['reasoning']}")
+                return None
+            
+            # Apply confidence adjustment from S/R validation
+            confidence += validation['confidence_adjustment']
+            reasoning.extend(validation['reasoning'])
             
             # Cap confidence at 97%
             confidence = min(confidence, 97)
