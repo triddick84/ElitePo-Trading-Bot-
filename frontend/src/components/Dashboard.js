@@ -38,7 +38,8 @@ const Dashboard = ({ botStatus, liveSignals, setLiveSignals, notificationSetting
       const response = await axios.get(`${API}/config`);
       setConfig({
         selected_assets: response.data.selected_assets || [],
-        selected_timeframes: response.data.selected_timeframes || []
+        selected_timeframes: response.data.selected_timeframes || [],
+        invert_signals: response.data.invert_signals || false
       });
     } catch (error) {
       console.error('Error fetching config:', error);
