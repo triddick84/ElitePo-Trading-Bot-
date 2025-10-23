@@ -138,6 +138,29 @@ const Dashboard = ({ botStatus, liveSignals, setLiveSignals, notificationSetting
         }}
       />
 
+      {/* Invert Signals Warning Banner */}
+      {config.invert_signals && (
+        <div className="bg-orange-500/20 border-2 border-orange-500 rounded-lg p-4 mb-6">
+          <div className="flex items-start space-x-3">
+            <div className="text-2xl">🔄</div>
+            <div className="flex-1">
+              <h3 className="text-orange-400 font-bold text-lg">⚠️ SIGNAL INVERSION ACTIVE</h3>
+              <p className="text-orange-300 text-sm mt-1">
+                All signals are being inverted across ALL timeframes (5s, 15s, 1m, 3m, 5m, etc.)
+              </p>
+              <p className="text-orange-200 text-xs mt-2">
+                • BUY signals → converted to SELL signals<br/>
+                • SELL signals → converted to BUY signals<br/>
+                • Applies to both regular and OTC markets
+              </p>
+              <p className="text-orange-400 text-xs mt-2 font-medium">
+                To disable, go to Bot Controls and turn off "Invert Signals" toggle
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Live Signals Display - New Primary Section */}
       <LiveSignalsDisplay 
         botStatus={botStatus} 
