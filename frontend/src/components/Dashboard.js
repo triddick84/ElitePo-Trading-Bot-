@@ -16,7 +16,8 @@ const Dashboard = ({ botStatus, liveSignals, setLiveSignals, notificationSetting
   const [isLoading, setIsLoading] = useState(true);
   const [config, setConfig] = useState({
     selected_assets: [],
-    selected_timeframes: []
+    selected_timeframes: [],
+    invert_signals: false
   });
   const [showAssetSelector, setShowAssetSelector] = useState(false);
 
