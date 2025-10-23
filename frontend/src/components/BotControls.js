@@ -362,10 +362,15 @@ const BotControls = ({ onStatusUpdate }) => {
             </div>
 
             {/* Invert Signals */}
-            <div className="flex items-center justify-between">
+            <div className={`flex items-center justify-between p-3 rounded-lg transition-colors ${config.invert_signals ? 'bg-orange-500/10 border border-orange-500/30' : ''}`}>
               <div>
-                <Label className="text-slate-300 font-medium">Invert Signals</Label>
-                <p className="text-slate-500 text-sm">Convert BUY signals to SELL and vice versa</p>
+                <Label className="text-slate-300 font-medium">
+                  Invert Signals {config.invert_signals && <span className="text-orange-400 text-xs ml-2">(ACTIVE - All Timeframes)</span>}
+                </Label>
+                <p className="text-slate-500 text-sm">
+                  Convert BUY signals to SELL and vice versa
+                  {config.invert_signals && <span className="text-orange-400 block text-xs mt-1">⚠️ Applied to ALL timeframes (5s, 15s, 1m, etc.)</span>}
+                </p>
               </div>
               <Switch 
                 checked={config.invert_signals}
