@@ -48,14 +48,20 @@ class PocketOption15SecondStrategy:
         
         self.min_data_points = 100
         
-        # Thresholds
-        self.rsi_overbought = 70
-        self.rsi_oversold = 30
-        self.stoch_overbought = 80
-        self.stoch_oversold = 20
+        # AGGRESSIVE ACCURACY THRESHOLDS (90%+ TARGET)
+        self.rsi_overbought = 72  # Stricter (was 70)
+        self.rsi_oversold = 28    # Stricter (was 30)
+        self.stoch_overbought = 82  # Stricter (was 80)
+        self.stoch_oversold = 18    # Stricter (was 20)
+        
+        # Minimum base confidence
+        self.min_base_confidence = 90  # Start high for 15s
         
         # Enhanced S/R detector for 15s timeframe
         self.sr_detector = get_detector('15s')
+        
+        # Market quality filter
+        self.market_filter = get_market_filter('15s')
         
     def calculate_ema(self, prices: pd.Series, period: int) -> pd.Series:
         """Calculate EMA using TA-Lib"""
