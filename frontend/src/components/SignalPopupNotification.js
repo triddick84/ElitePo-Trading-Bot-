@@ -105,28 +105,44 @@ const SignalPopupNotification = ({ signal, onClose, onExecute }) => {
         const entryTimeMs = correctedEntryTime.getTime();
         const diffMs = entryTimeMs - now;
         
-        // Prevent timer jumping by using consistent rounding
-        const diffSeconds = Math.floor(diffMs / 1000);
+        // For ultra-short timeframes, use precise millisecond-level calculation
+        const isUltraShort = ['5s', '15s', '30s'].includes(signal?.timeframe);
+        
+        let diffSeconds;
+        if (isUltraShort) {
+          // Show fractional seconds for better precision in ultra-short timeframes
+          diffSeconds = diffMs / 1000;  // Keep decimals
+        } else {
+          // For longer timeframes, round to whole seconds
+          diffSeconds = Math.floor(diffMs / 1000);
+        }
         
         // Only update if the value actually changed (prevents unnecessary re-renders)
         setTimeLeft(prevTime => {
-          if (prevTime !== diffSeconds) {
-            return diffSeconds;
+          // For ultra-short, update if difference > 0.1s
+          if (isUltraShort) {
+            if (Math.abs(prevTime - diffSeconds) > 0.1) {
+              return diffSeconds;
+            }
+          } else {
+            // For longer timeframes, update if whole second changed
+            if (prevTime !== diffSeconds) {
+              return diffSeconds;
+            }
           }
           return prevTime;
         });
         
         // Determine timeframe category for appropriate thresholds
-        const isUltraShort = ['5s', '15s', '30s'].includes(signal?.timeframe);
         const isShort = ['1m', '3m'].includes(signal?.timeframe);
         
         let optimalStart, optimalEnd, expireAfter;
         
         if (isUltraShort) {
-          // Ultra-short: precise but not too tight entry window
-          optimalStart = 8;   // 8 seconds before entry time
-          optimalEnd = -2;    // 2 seconds after entry time
-          expireAfter = -15;  // Expire 15 seconds after entry
+          // Ultra-short: VERY precise entry window (Pocket Option requires perfect timing)
+          optimalStart = 5;   // Start showing "optimal" 5 seconds before
+          optimalEnd = -1;    // Allow 1 second after candle formation
+          expireAfter = -10;  // Expire 10 seconds after entry
         } else if (isShort) {
           // Short: moderate entry window
           optimalStart = 10;  // 10 seconds before
@@ -155,8 +171,12 @@ const SignalPopupNotification = ({ signal, onClose, onExecute }) => {
     // Initial calculation
     calculateTimeLeft();
     
-    // Set up interval with optimized frequency
-    intervalId = setInterval(calculateTimeLeft, 1000); // Update every second for stability
+    // Set up interval with optimized frequency based on timeframe
+    // Ultra-short timeframes need more frequent updates for precision
+    const isUltraShort = ['5s', '15s', '30s'].includes(signal?.timeframe);
+    const updateInterval = isUltraShort ? 100 : 1000;  // 100ms for ultra-short, 1000ms for others
+    
+    intervalId = setInterval(calculateTimeLeft, updateInterval);
     
     // Cleanup interval
     return () => {
@@ -164,7 +184,7 @@ const SignalPopupNotification = ({ signal, onClose, onExecute }) => {
         clearInterval(intervalId);
       }
     };
-  }, [signal?.precision_entry_time, signal?.timestamp, signal?.timeframe]);
+  }, [signal?.precision_entry_time, signal?.timestamp, signal?.timeframe, signal?.seconds_to_entry]);
 
   useEffect(() => {
     if (isExpired) {
