@@ -241,6 +241,16 @@ class PocketOption5SecondStrategy:
             # Apply chart transformation
             df = chart_transformer.transform_data(df, chart_type)
             
+            # === CRITICAL: MARKET QUALITY CHECK (90%+ ACCURACY FILTER) ===
+            market_quality = self.market_filter.check_market_quality(df)
+            
+            if not market_quality['passed']:
+                logger.warning(f"⛔ SIGNAL REJECTED: Poor market quality for {symbol}")
+                logger.warning(f"   Reasons: {', '.join(market_quality['rejection_reasons'])}")
+                return None  # Don't trade in poor conditions
+            
+            logger.info(f"✅ Market quality check passed: {market_quality['overall_quality']:.1%}")
+            
             # Calculate all indicators
             close_prices = df['close']
             high_prices = df['high']
