@@ -207,6 +207,15 @@ class PocketOption1MinuteStrategy:
             # Apply chart transformation
             df = chart_transformer.transform_data(df, chart_type)
             
+            # === MARKET QUALITY CHECK ===
+            market_quality = self.market_filter.check_market_quality(df)
+            
+            if not market_quality['passed']:
+                logger.warning(f"⛔ SIGNAL REJECTED: Poor market quality for {symbol}")
+                return None
+            
+            logger.info(f"✅ Market quality: {market_quality['overall_quality']:.1%}")
+            
             # Calculate all indicators
             close_prices = df['close']
             high_prices = df['high']
