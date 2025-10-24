@@ -302,46 +302,57 @@ class PocketOption5SecondStrategy:
             logger.info(f"   Price={current_price:.5f}, EMA={current_ema:.5f}, RSI={current_rsi:.1f}")
             logger.info(f"   Stoch K={current_stoch_k:.1f}, BB Position={bb_position:.2%}")
             
-            # === RULE 1: Bollinger Bands + RSI (Primary Signal) ===
-            if bb_position < 0.15:  # Price near lower BB
-                if current_rsi < self.rsi_oversold:
-                    # Oversold condition - expect bounce UP
+            # === AGGRESSIVE SELECTIVITY: ONLY HIGHEST-PROBABILITY SETUPS ===
+            # We will ONLY generate signals when MULTIPLE factors strongly align
+            # This reduces signal volume but dramatically increases accuracy
+            
+            signal = None
+            confidence = 0
+            reasoning = []
+            confirmations_count = 0  # Track how many indicators confirm
+            
+            # === PRIMARY SIGNAL: Extreme Bollinger Bands + RSI (STRICT THRESHOLDS) ===
+            # Only the STRONGEST oversold/overbought conditions
+            if bb_position < 0.10:  # Price near lower BB (stricter: was 0.15)
+                if current_rsi < self.rsi_oversold:  # RSI < 25 (stricter)
                     signal = "CALL"
-                    confidence = 85
-                    reasoning.append(f"🟢 OVERSOLD: Price at lower BB ({bb_position:.1%}), RSI={current_rsi:.1f}")
-                    reasoning.append("💡 Strong bounce expected from support zone")
+                    confidence = self.min_base_confidence  # Start at 87%
+                    reasoning.append(f"🟢 EXTREME OVERSOLD: BB position {bb_position:.1%}, RSI={current_rsi:.1f}")
+                    confirmations_count += 2  # BB + RSI = 2 confirmations
             
-            elif bb_position > 0.85:  # Price near upper BB
-                if current_rsi > self.rsi_overbought:
-                    # Overbought condition - expect reversal DOWN
+            elif bb_position > 0.90:  # Price near upper BB (stricter: was 0.85)
+                if current_rsi > self.rsi_overbought:  # RSI > 75 (stricter)
                     signal = "PUT"
-                    confidence = 85
-                    reasoning.append(f"🔴 OVERBOUGHT: Price at upper BB ({bb_position:.1%}), RSI={current_rsi:.1f}")
-                    reasoning.append("💡 Strong reversal expected from resistance zone")
+                    confidence = self.min_base_confidence
+                    reasoning.append(f"🔴 EXTREME OVERBOUGHT: BB position {bb_position:.1%}, RSI={current_rsi:.1f}")
+                    confirmations_count += 2
             
-            # === RULE 2: EMA + RSI Trend Confirmation ===
+            # === SECONDARY SIGNALS REMOVED ===
+            # We NO LONGER generate signals from weaker "EMA + RSI Trend" setups
+            # ONLY the strongest BB extreme + RSI extreme setups pass
+            
+            # If no primary signal, STOP HERE - don't generate weak signals
             if signal is None:
-                if current_price > current_ema and self.rsi_oversold < current_rsi < 65:
-                    # Uptrend with momentum
-                    signal = "CALL"
-                    confidence = 78
-                    reasoning.append(f"📈 UPTREND: Price above EMA, RSI={current_rsi:.1f} shows strength")
-                    reasoning.append("💡 Trend continuation expected")
-                
-                elif current_price < current_ema and 35 < current_rsi < self.rsi_overbought:
-                    # Downtrend with momentum
-                    signal = "PUT"
-                    confidence = 78
-                    reasoning.append(f"📉 DOWNTREND: Price below EMA, RSI={current_rsi:.1f} shows weakness")
-                    reasoning.append("💡 Trend continuation expected")
+                logger.info(f"⛔ NO PRIMARY SIGNAL: Conditions not extreme enough for {symbol}")
+                return None
             
-            # === RULE 3: Stochastic Confirmation (Boosts confidence) ===
-            if signal == "CALL" and current_stoch_k < self.stoch_oversold:
-                confidence += 5
+            # === REQUIRE STOCHASTIC CONFIRMATION (MANDATORY) ===
+            # Stochastic MUST agree, or we reject the signal
+            stoch_confirms = False
+            if signal == "CALL" and current_stoch_k < self.stoch_oversold:  # < 15
+                confidence += 6
                 reasoning.append(f"✅ Stochastic confirms oversold ({current_stoch_k:.1f})")
-            elif signal == "PUT" and current_stoch_k > self.stoch_overbought:
-                confidence += 5
+                confirmations_count += 1
+                stoch_confirms = True
+            elif signal == "PUT" and current_stoch_k > self.stoch_overbought:  # > 85
+                confidence += 6
                 reasoning.append(f"✅ Stochastic confirms overbought ({current_stoch_k:.1f})")
+                confirmations_count += 1
+                stoch_confirms = True
+            
+            if not stoch_confirms:
+                logger.warning(f"⛔ SIGNAL REJECTED: Stochastic doesn't confirm (K={current_stoch_k:.1f})")
+                return None  # MANDATORY - if stochastic doesn't agree, reject signal
             
             # === RULE 4: Enhanced S/R Confirmation & Reversal Detection ===
             if reversal['reversal_detected']:
