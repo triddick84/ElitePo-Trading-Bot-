@@ -410,10 +410,6 @@ class PocketOption5SecondStrategy:
             
             # Doji at extremes signals indecision - we ignore for 5s momentum strategy
             # (Removed doji logic as it conflicts with continuation strategy)
-                elif bb_position < 0.15:
-                    if signal == "CALL":
-                        confidence += 3
-                        reasoning.append("✅ Doji at support confirms reversal")
             
             # === AI ENSEMBLE VALIDATION (STRICT - CAN VETO) ===
             # AI Ensemble now has VETO power - if it strongly disagrees, reject signal
