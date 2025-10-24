@@ -409,7 +409,7 @@ class PocketOption1MinuteStrategy:
             if signal is None:
                 return None
             
-            # === GPT-4 ENHANCEMENT (Advanced AI Validation) ===
+            # === GPT-4 ENHANCEMENT WITH VETO POWER ===
             try:
                 loop = asyncio.get_event_loop()
                 if loop.is_running():
@@ -419,7 +419,7 @@ class PocketOption1MinuteStrategy:
                         gpt_signal_enhancer.enhance_signal(
                             signal=signal,
                             confidence=confidence,
-                            features={},  # 1m strategy doesn't have advanced features yet
+                            features={},
                             technical_analysis={
                                 'rsi_14': current_rsi,
                                 'ema_distance': (current_price - current_ema) / current_price if current_price > 0 else 0,
@@ -437,6 +437,12 @@ class PocketOption1MinuteStrategy:
                 
                 if gpt_result.get('enhanced'):
                     gpt_adjustment = gpt_result.get('confidence_adjustment', 0)
+                    
+                    # If GPT reduces confidence significantly, reject
+                    if gpt_adjustment < -10:
+                        logger.warning(f"⛔ SIGNAL REJECTED: GPT-4 reduces confidence by {gpt_adjustment}%")
+                        return None
+                    
                     confidence += gpt_adjustment
                     
                     if gpt_result.get('reasoning'):
@@ -444,9 +450,11 @@ class PocketOption1MinuteStrategy:
                     
                     if gpt_result.get('risk_factors'):
                         reasoning.append(f"⚠️ Risks: {', '.join(gpt_result['risk_factors'][:2])}")
+                        if len(gpt_result['risk_factors']) > 2:
+                            confidence -= 5
                     
                     if not gpt_result.get('valid', True):
-                        logger.warning(f"⚠️ GPT-4 REJECTED signal: {gpt_result.get('reasoning')}")
+                        logger.warning(f"⛔ GPT-4 REJECTED signal: {gpt_result.get('reasoning')}")
                         return None
                     
                     logger.info(f"🤖 GPT-4 Enhanced: {signal} ({gpt_adjustment:+.1f}% adjustment)")
