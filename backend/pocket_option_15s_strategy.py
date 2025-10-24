@@ -232,71 +232,67 @@ class PocketOption15SecondStrategy:
             logger.info(f"   RSI={current_rsi:.1f}, Stoch={current_stoch_k:.1f}")
             logger.info(f"   Bullish Cross={bullish_crossover}, Bearish Cross={bearish_crossover}")
             
-            # === RULE 1: EMA Crossover + RSI Confirmation (Primary Signal) ===
+            # === AGGRESSIVE SELECTIVITY: ONLY CLEAR CROSSOVERS WITH CONFIRMATION ===
+            signal = None
+            confidence = 0
+            reasoning = []
+            confirmations_count = 0
+            
+            # === PRIMARY SIGNAL: EMA Crossover + RSI Confirmation (MANDATORY) ===
+            # Only accept crossovers with proper RSI confirmation
             if bullish_crossover:
-                if current_rsi > 40 and current_rsi < 70:  # Not overbought
+                if 45 < current_rsi < self.rsi_overbought:  # RSI in "healthy" range
                     signal = "CALL"
-                    confidence = 88
+                    confidence = self.min_base_confidence
                     reasoning.append("🟢 BULLISH CROSSOVER: EMA 5 crossed above EMA 20")
                     reasoning.append(f"✅ RSI confirms momentum ({current_rsi:.1f})")
-                    reasoning.append("💡 Strong uptrend signal")
+                    confirmations_count += 2  # Crossover + RSI
+                else:
+                    logger.warning(f"⛔ Bullish crossover but RSI out of range ({current_rsi:.1f})")
+                    return None  # Reject if RSI doesn't support
             
             elif bearish_crossover:
-                if current_rsi < 60 and current_rsi > 30:  # Not oversold
+                if self.rsi_oversold < current_rsi < 55:  # RSI in "healthy" range
                     signal = "PUT"
-                    confidence = 88
+                    confidence = self.min_base_confidence
                     reasoning.append("🔴 BEARISH CROSSOVER: EMA 5 crossed below EMA 20")
                     reasoning.append(f"✅ RSI confirms momentum ({current_rsi:.1f})")
-                    reasoning.append("💡 Strong downtrend signal")
+                    confirmations_count += 2
+                else:
+                    logger.warning(f"⛔ Bearish crossover but RSI out of range ({current_rsi:.1f})")
+                    return None
             
-            # === RULE 2: Trend Continuation + RSI ===
-            if signal is None:
-                if in_uptrend and current_price > current_ema_fast:
-                    if 40 < current_rsi < 70:
-                        signal = "CALL"
-                        confidence = 80
-                        reasoning.append("📈 UPTREND CONTINUATION: Price above both EMAs")
-                        reasoning.append(f"✅ RSI shows healthy momentum ({current_rsi:.1f})")
-                
-                elif in_downtrend and current_price < current_ema_fast:
-                    if 30 < current_rsi < 60:
-                        signal = "PUT"
-                        confidence = 80
-                        reasoning.append("📉 DOWNTREND CONTINUATION: Price below both EMAs")
-                        reasoning.append(f"✅ RSI shows bearish momentum ({current_rsi:.1f})")
+            # If no crossover, don't look for weaker signals - STOP HERE
+            else:
+                logger.info(f"⛔ NO EMA CROSSOVER: No primary signal for {symbol}")
+                return None  # ONLY trade crossovers in 15s strategy
             
-            # === RULE 3: BB Extremes + Trend (Mean Reversion) ===
-            if signal is None:
-                if bb_position < 0.1 and in_uptrend:
-                    # Price at lower BB but in uptrend - likely bounce
-                    signal = "CALL"
-                    confidence = 82
-                    reasoning.append("🟢 BOUNCE SETUP: Price at lower BB in uptrend")
-                    reasoning.append("💡 Mean reversion expected")
-                
-                elif bb_position > 0.9 and in_downtrend:
-                    # Price at upper BB but in downtrend - likely pullback
-                    signal = "PUT"
-                    confidence = 82
-                    reasoning.append("🔴 PULLBACK SETUP: Price at upper BB in downtrend")
-                    reasoning.append("💡 Mean reversion expected")
-            
-            # === RULE 4: Stochastic Confirmation (Boosts confidence) ===
+            # === REQUIRE STOCHASTIC CONFIRMATION (MANDATORY) ===
+            stoch_confirms = False
             if signal == "CALL":
-                if current_stoch_k < 30:
+                if current_stoch_k < 50:  # Stochastic shows room to rise
                     confidence += 5
-                    reasoning.append(f"✅ Stochastic oversold ({current_stoch_k:.1f}) - strong bounce potential")
-                elif current_stoch_k > 80:
-                    confidence -= 3
-                    reasoning.append(f"⚠️ Stochastic overbought ({current_stoch_k:.1f}) - reduced confidence")
+                    reasoning.append(f"✅ Stochastic below midpoint ({current_stoch_k:.1f}) - room for upside")
+                    confirmations_count += 1
+                    stoch_confirms = True
+                elif current_stoch_k > 82:  # Too overbought
+                    logger.warning(f"⛔ CALL rejected: Stochastic overbought ({current_stoch_k:.1f})")
+                    return None
             
             elif signal == "PUT":
-                if current_stoch_k > 70:
+                if current_stoch_k > 50:  # Stochastic shows room to fall
                     confidence += 5
-                    reasoning.append(f"✅ Stochastic overbought ({current_stoch_k:.1f}) - strong reversal potential")
-                elif current_stoch_k < 20:
-                    confidence -= 3
-                    reasoning.append(f"⚠️ Stochastic oversold ({current_stoch_k:.1f}) - reduced confidence")
+                    reasoning.append(f"✅ Stochastic above midpoint ({current_stoch_k:.1f}) - room for downside")
+                    confirmations_count += 1
+                    stoch_confirms = True
+                elif current_stoch_k < 18:  # Too oversold
+                    logger.warning(f"⛔ PUT rejected: Stochastic oversold ({current_stoch_k:.1f})")
+                    return None
+            
+            if not stoch_confirms:
+                # Stochastic in neutral zone - still allow but don't boost
+                reasoning.append(f"⚠️ Stochastic neutral ({current_stoch_k:.1f})")
+                confidence -= 3  # Small penalty
             
             # === RULE 5: Enhanced S/R Confirmation & Reversal Detection ===
             if reversal['reversal_detected']:
