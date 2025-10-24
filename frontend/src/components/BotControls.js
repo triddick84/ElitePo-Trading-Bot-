@@ -8,8 +8,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Slider } from './ui/slider';
 import { toast } from 'sonner';
-import AssetSelector from './AssetSelector';
-import AssetSelectorDropdown from './AssetSelectorDropdown';
+// AssetSelector and AssetSelectorDropdown removed - using MarketAssetSelector in Dashboard instead
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
