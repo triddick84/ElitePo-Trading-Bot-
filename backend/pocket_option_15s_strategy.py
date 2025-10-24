@@ -24,6 +24,7 @@ import logging
 from typing import Dict, Optional, List
 from chart_transformations import chart_transformer
 from support_resistance_detector import get_detector
+from market_quality_filter import get_market_filter
 import talib
 
 logger = logging.getLogger(__name__)
