@@ -102,7 +102,7 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-## user_problem_statement: Research and implement top Pocket Option trading strategies with 93%+ accuracy for 5s, 15s, and 1m timeframes. Replace existing strategies with researched high-accuracy algorithms using specific technical indicators (EMA, RSI, MACD, Stochastic, Bollinger Bands), price action patterns, and AI/ML approaches.
+## user_problem_statement: Research and implement top Pocket Option trading strategies with 93%+ accuracy for 5s, 15s, and 1m timeframes. Replace existing strategies with researched high-accuracy algorithms using specific technical indicators (EMA, RSI, MACD, Stochastic, Bollinger Bands), price action patterns, and AI/ML approaches. **CURRENT FOCUS: Aggressively improve signal accuracy to 90%+ by making system much more selective.**
 
 ## backend:
   - task: "Pocket Option 5-Second High-Accuracy Strategy"
