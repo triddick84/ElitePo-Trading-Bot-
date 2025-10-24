@@ -561,17 +561,6 @@ const LiveSignalsDisplay = ({
         )}
       </Card>
 
-      {/* Asset Selection */}
-      <Card className="p-6 glass-dark border-slate-700/50">
-        <h3 className="text-xl font-semibold text-white mb-6">Asset & Timeframe Selection</h3>
-        <AssetSelectorDropdown 
-          selectedAssets={selectedAssets}
-          selectedTimeframes={selectedTimeframes}
-          onAssetsChange={setSelectedAssets}
-          onTimeframesChange={setSelectedTimeframes}
-        />
-      </Card>
-
       {/* Live Signals Section */}
       <Card className="p-6 glass-dark border-emerald-500/30">
         <div className="flex items-center justify-between mb-6">
