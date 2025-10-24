@@ -313,18 +313,19 @@ class PocketOption5SecondStrategy:
             
             # === PRIMARY SIGNAL: Extreme Bollinger Bands + RSI (STRICT THRESHOLDS) ===
             # Only the STRONGEST oversold/overbought conditions
+            # 🔄 INVERTED LOGIC FOR 5s BINARY OPTIONS - Price extremes continue their momentum briefly
             if bb_position < 0.10:  # Price near lower BB (stricter: was 0.15)
                 if current_rsi < self.rsi_oversold:  # RSI < 25 (stricter)
-                    signal = "CALL"
+                    signal = "PUT"  # ⬇️ INVERTED: Extreme low continues down for 5s
                     confidence = self.min_base_confidence  # Start at 87%
-                    reasoning.append(f"🟢 EXTREME OVERSOLD: BB position {bb_position:.1%}, RSI={current_rsi:.1f}")
+                    reasoning.append(f"🔴 EXTREME OVERSOLD: BB position {bb_position:.1%}, RSI={current_rsi:.1f} - Expect 5s downward continuation")
                     confirmations_count += 2  # BB + RSI = 2 confirmations
             
             elif bb_position > 0.90:  # Price near upper BB (stricter: was 0.85)
                 if current_rsi > self.rsi_overbought:  # RSI > 75 (stricter)
-                    signal = "PUT"
+                    signal = "CALL"  # ⬆️ INVERTED: Extreme high continues up for 5s
                     confidence = self.min_base_confidence
-                    reasoning.append(f"🔴 EXTREME OVERBOUGHT: BB position {bb_position:.1%}, RSI={current_rsi:.1f}")
+                    reasoning.append(f"🟢 EXTREME OVERBOUGHT: BB position {bb_position:.1%}, RSI={current_rsi:.1f} - Expect 5s upward continuation")
                     confirmations_count += 2
             
             # === SECONDARY SIGNALS REMOVED ===
