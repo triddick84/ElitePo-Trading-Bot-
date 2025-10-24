@@ -355,24 +355,56 @@ class PocketOption1MinuteStrategy:
                     confidence += 3
                     reasoning.append("✅ Bullish candlestick pattern detected")
             
-            elif signal == "PUT":
-                # Stochastic confirmation
-                if current_stoch_k > 70:
-                    confidence += 5
-                    reasoning.append(f"✅ Stochastic overbought ({current_stoch_k:.1f})")
+            # === REQUIRE S/R CONFIRMATION (MANDATORY) ===
+            sr_confirms = False
+            
+            if signal == "CALL":
+                # Enhanced S/R confirmation with reversal detection
+                if reversal['reversal_detected'] and reversal['bounce_off_support']:
+                    confidence += 8
+                    reasoning.append(f"✅ REVERSAL: Bounce off support (strength: {reversal['reversal_strength']})")
+                    confirmations_count += 1
+                    sr_confirms = True
+                elif proximity['near_support']:
+                    confidence += 6
+                    reasoning.append(f"✅ Price near support ({proximity['support_distance_pct']:.2f}% away)")
+                    confirmations_count += 1
+                    sr_confirms = True
                 
+                # Bullish patterns (bonus)
+                if patterns.get('hammer') or patterns.get('bullish_engulfing'):
+                    confidence += 3
+                    reasoning.append("✅ Bullish candlestick pattern")
+            
+            elif signal == "PUT":
                 # Enhanced S/R confirmation with reversal detection
                 if reversal['reversal_detected'] and reversal['bounce_off_resistance']:
-                    confidence += 7
+                    confidence += 8
                     reasoning.append(f"✅ REVERSAL: Reversal at resistance (strength: {reversal['reversal_strength']})")
+                    confirmations_count += 1
+                    sr_confirms = True
                 elif proximity['near_resistance']:
-                    confidence += 5
+                    confidence += 6
                     reasoning.append(f"✅ Price near resistance ({proximity['resistance_distance_pct']:.2f}% away)")
+                    confirmations_count += 1
+                    sr_confirms = True
                 
-                # Bearish patterns
+                # Bearish patterns (bonus)
                 if patterns.get('hanging_man') or patterns.get('bearish_engulfing'):
                     confidence += 3
-                    reasoning.append("✅ Bearish candlestick pattern detected")
+                    reasoning.append("✅ Bearish candlestick pattern")
+            
+            if not sr_confirms:
+                logger.warning(f"⛔ SIGNAL REJECTED: No S/R confirmation")
+                return None
+            
+            # === MINIMUM CONFIRMATIONS CHECK ===
+            # Need at least 5 confirmations (3 from triple + 1 stoch + 1 S/R)
+            if confirmations_count < 5:
+                logger.warning(f"⛔ SIGNAL REJECTED: Only {confirmations_count} confirmations (need 5+)")
+                return None
+            
+            reasoning.append(f"✅ ELITE SETUP: {confirmations_count} confirmations")
             
             if signal is None:
                 return None
