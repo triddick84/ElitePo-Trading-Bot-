@@ -412,26 +412,41 @@ class PocketOption5SecondStrategy:
                         confidence += 3
                         reasoning.append("✅ Doji at support confirms reversal")
             
-            # === AI ENSEMBLE BOOST (Advanced ML Analysis) ===
-            # Use advanced AI ensemble for additional confirmation
+            # === AI ENSEMBLE VALIDATION (STRICT - CAN VETO) ===
+            # AI Ensemble now has VETO power - if it strongly disagrees, reject signal
             ai_analysis = advanced_5s_ai_ensemble.analyze_5s_candle(df)
-            if ai_analysis and signal:
+            if ai_analysis:
                 ai_signal = ai_analysis['signal']
                 ai_confidence = ai_analysis['confidence']
                 
                 # If AI agrees with our signal, boost confidence
                 if ai_signal == signal:
-                    confidence_boost = min(8, (ai_confidence - 70) / 3)  # Up to +8%
+                    confidence_boost = min(10, (ai_confidence - 70) / 2.5)  # Up to +10%
                     confidence += confidence_boost
                     reasoning.append(f"🤖 AI Ensemble confirms {signal} ({ai_confidence:.0f}% AI confidence)")
-                    reasoning.extend(ai_analysis['reasoning'][:2])  # Add top 2 AI reasons
-                    
+                    reasoning.extend(ai_analysis['reasoning'][:2])
+                    confirmations_count += 1
                     logger.info(f"✅ AI Ensemble agrees: {signal} with {ai_confidence:.0f}% confidence")
+                
                 else:
-                    # AI disagrees - reduce confidence
-                    confidence -= 10
-                    reasoning.append(f"⚠️ AI Ensemble suggests {ai_signal} (conflicting signal)")
-                    logger.warning(f"⚠️ AI Ensemble conflict: Strategy says {signal}, AI says {ai_signal}")
+                    # AI DISAGREES - this is a red flag
+                    if ai_confidence > 70:  # AI is confident in opposite direction
+                        logger.warning(f"⛔ SIGNAL REJECTED: AI strongly disagrees ({ai_signal} at {ai_confidence:.0f}%)")
+                        return None  # VETO - reject signal completely
+                    else:
+                        # AI disagrees but not confident - reduce our confidence significantly
+                        confidence -= 15
+                        reasoning.append(f"⚠️ AI Ensemble suggests {ai_signal} (conflicting, reduced confidence)")
+                        logger.warning(f"⚠️ AI weak disagree: Strategy says {signal}, AI says {ai_signal} at {ai_confidence:.0f}%")
+                        
+                        # If confidence drops too low, reject
+                        if confidence < 85:
+                            logger.warning(f"⛔ SIGNAL REJECTED: Confidence too low after AI disagreement ({confidence:.0f}%)")
+                            return None
+            else:
+                # No AI analysis - this is concerning, reduce confidence
+                confidence -= 5
+                logger.warning(f"⚠️ No AI Ensemble analysis available")
             
             # === Final Signal Check ===
             if signal is None:
