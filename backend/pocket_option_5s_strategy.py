@@ -2,18 +2,26 @@
 Pocket Option 5-Second High-Accuracy Strategy (93%+ Target)
 Based on research of top-performing Pocket Option bots in 2024-2025
 
+🔄 **INVERTED MOMENTUM CONTINUATION STRATEGY FOR 5s BINARY OPTIONS**
+
+CRITICAL: 5-second binary options work differently than traditional trading!
+- When price hits EXTREME lows (oversold), it continues DOWN for 5 seconds before bouncing
+- When price hits EXTREME highs (overbought), it continues UP for 5 seconds before reversing
+
+This is because 5 seconds is too short for a reversal - momentum continues briefly.
+
 EXACT PARAMETERS FROM RESEARCH:
 - EMA: 20 periods
 - RSI: 2 periods (ultra-fast for 5s)
 - Stochastic Oscillator: (3, 1, 1)
 - Bollinger Bands: 5 periods, 2.5 SD
 
-Strategy Logic:
-1. Bollinger Bands + RSI for overbought/oversold confirmation
-2. EMA 20 for trend direction
-3. Stochastic for momentum filter
-4. Support/Resistance detection
-5. Candlestick pattern recognition (Pin Bar, Doji, Engulfing)
+Strategy Logic (INVERTED):
+1. Extreme LOW (BB<10%, RSI<25, Stoch<15) → PUT (downward continuation for 5s)
+2. Extreme HIGH (BB>90%, RSI>75, Stoch>85) → CALL (upward continuation for 5s)
+3. ALL confirmations mandatory: BB, RSI, Stochastic, S/R, AI
+4. Support/Resistance acts as continuation points (not reversal)
+5. Failed candlestick patterns signal continuation
 """
 
 import pandas as pd
