@@ -487,6 +487,12 @@ class PocketOption5SecondStrategy:
                 if gpt_result.get('enhanced'):
                     # Apply GPT confidence adjustment
                     gpt_adjustment = gpt_result.get('confidence_adjustment', 0)
+                    
+                    # If GPT reduces confidence significantly, reject
+                    if gpt_adjustment < -10:
+                        logger.warning(f"⛔ SIGNAL REJECTED: GPT-4 reduces confidence by {gpt_adjustment}%")
+                        return None
+                    
                     confidence += gpt_adjustment
                     
                     # Add GPT reasoning
@@ -496,10 +502,13 @@ class PocketOption5SecondStrategy:
                     # Check for risk factors
                     if gpt_result.get('risk_factors'):
                         reasoning.append(f"⚠️ Risks: {', '.join(gpt_result['risk_factors'][:2])}")
+                        # If multiple risk factors, be very cautious
+                        if len(gpt_result['risk_factors']) > 2:
+                            confidence -= 5
                     
-                    # If GPT says invalid, reject signal
+                    # If GPT says invalid, REJECT
                     if not gpt_result.get('valid', True):
-                        logger.warning(f"⚠️ GPT-4 REJECTED signal: {gpt_result.get('reasoning')}")
+                        logger.warning(f"⛔ GPT-4 REJECTED signal: {gpt_result.get('reasoning')}")
                         return None
                     
                     logger.info(f"🤖 GPT-4 Enhanced: {signal} ({gpt_adjustment:+.1f}% adjustment)")
