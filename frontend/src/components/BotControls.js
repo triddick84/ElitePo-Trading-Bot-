@@ -528,38 +528,6 @@ const BotControls = ({ onStatusUpdate }) => {
         </div>
       </Card>
 
-      {/* Advanced Asset & Timeframe Selection */}
-      <Card className="p-6 glass-dark border-slate-700/50">
-        <AssetSelectorDropdown 
-          selectedAssets={config.selected_assets}
-          selectedTimeframes={config.selected_timeframes}
-          onAssetsChange={(assets) => handleConfigChange('selected_assets', assets)}
-          onTimeframesChange={(timeframes) => handleConfigChange('selected_timeframes', timeframes)}
-        />
-      </Card>
-
-      {/* Quick Asset Categories (Legacy) */}
-      <Card className="p-6 glass-dark border-slate-700/50">
-        <h3 className="text-xl font-semibold text-white mb-6">Quick Asset Categories</h3>
-        
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4" data-testid="asset-selection">
-          {assetTypes.map((asset) => (
-            <div
-              key={asset.id}
-              className={`p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 text-center ${
-                config.target_assets?.includes(asset.id)
-                  ? 'border-blue-500/50 bg-blue-500/10'
-                  : 'border-slate-600/50 bg-slate-800/30 hover:border-slate-500/50'
-              }`}
-              onClick={() => handleAssetToggle(asset.id)}
-            >
-              <div className="text-2xl mb-2">{asset.icon}</div>
-              <p className="text-white font-medium text-sm">{asset.name}</p>
-            </div>
-          ))}
-        </div>
-      </Card>
-
       {/* Save Configuration */}
       <div className="flex justify-end">
         <Button 
