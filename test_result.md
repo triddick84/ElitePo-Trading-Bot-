@@ -105,6 +105,18 @@
 ## user_problem_statement: Research and implement top Pocket Option trading strategies with 93%+ accuracy for 5s, 15s, and 1m timeframes. Replace existing strategies with researched high-accuracy algorithms using specific technical indicators (EMA, RSI, MACD, Stochastic, Bollinger Bands), price action patterns, and AI/ML approaches. **CURRENT FOCUS: Aggressively improve signal accuracy to 90%+ by making system much more selective.**
 
 ## backend:
+  - task: "Aggressive Accuracy Improvements (90%+ Target)"
+    implemented: false
+    working: "NA"
+    file: "/app/backend/market_quality_filter.py, /app/backend/pocket_option_5s_strategy.py, /app/backend/pocket_option_15s_strategy.py, /app/backend/pocket_option_1m_strategy.py"
+    stuck_count: 0
+    priority: "critical"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+        - agent: "main"
+        - comment: "IMPLEMENTING: Making signal generation MUCH more selective to achieve 90%+ accuracy. Changes include: 1) Market Quality Filter - reject signals during low volume, extreme volatility, or choppy markets, 2) Stricter Confidence Thresholds - only generate signals starting at 85%+ confidence, 3) Multi-Factor Requirement - ALL indicators must align (not just 2-3), 4) Stronger AI Veto Power - if AI/GPT disagrees significantly, reject signal, 5) Remove weak fallback rules that generate marginal signals. This will result in 50-70% fewer signals but significantly higher accuracy."
+
   - task: "Pocket Option 5-Second High-Accuracy Strategy"
     implemented: true
     working: true
