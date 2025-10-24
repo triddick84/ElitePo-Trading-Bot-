@@ -278,75 +278,71 @@ class PocketOption1MinuteStrategy:
             logger.info(f"   MACD={current_macd:.5f}, Signal={current_macd_signal:.5f}, Hist={current_macd_hist:.5f}")
             logger.info(f"   Stoch={current_stoch_k:.1f}, BB Position={bb_position:.2%}")
             
-            # === RULE 1: Triple Confirmation (EMA + RSI + MACD) - Highest Priority ===
+            # === AGGRESSIVE SELECTIVITY: ONLY TRIPLE CONFIRMATION SETUPS ===
+            # The HIGHEST quality signals: ALL THREE indicators must align
+            signal = None
+            confidence = 0
+            reasoning = []
+            confirmations_count = 0
+            
+            # === PRIMARY SIGNAL: TRIPLE CONFIRMATION (EMA + RSI + MACD) - MANDATORY ===
+            # This is THE signal - everything must align perfectly
             if current_price > current_ema and current_rsi > 50 and current_macd > current_macd_signal:
-                # Strong bullish alignment
+                # Perfect bullish alignment
                 signal = "CALL"
-                confidence = 90
-                reasoning.append("🟢 TRIPLE BULLISH: Price > EMA, RSI > 50, MACD > Signal")
-                reasoning.append("💡 All major indicators aligned for upward movement")
+                confidence = self.min_base_confidence  # Start at 92%
+                reasoning.append("🟢 TRIPLE BULLISH CONFIRMATION: Price > EMA, RSI > 50, MACD > Signal")
+                reasoning.append("💡 All major indicators perfectly aligned")
+                confirmations_count += 3  # All three indicators
             
             elif current_price < current_ema and current_rsi < 50 and current_macd < current_macd_signal:
-                # Strong bearish alignment
+                # Perfect bearish alignment
                 signal = "PUT"
-                confidence = 90
-                reasoning.append("🔴 TRIPLE BEARISH: Price < EMA, RSI < 50, MACD < Signal")
-                reasoning.append("💡 All major indicators aligned for downward movement")
+                confidence = self.min_base_confidence
+                reasoning.append("🔴 TRIPLE BEARISH CONFIRMATION: Price < EMA, RSI < 50, MACD < Signal")
+                reasoning.append("💡 All major indicators perfectly aligned")
+                confirmations_count += 3
             
-            # === RULE 2: MACD Crossover + RSI Confirmation ===
-            if signal is None:
-                if macd_bullish_cross and current_rsi > 40:
-                    signal = "CALL"
-                    confidence = 87
-                    reasoning.append("🟢 MACD BULLISH CROSSOVER detected")
-                    reasoning.append(f"✅ RSI confirms momentum ({current_rsi:.1f})")
-                
-                elif macd_bearish_cross and current_rsi < 60:
-                    signal = "PUT"
-                    confidence = 87
-                    reasoning.append("🔴 MACD BEARISH CROSSOVER detected")
-                    reasoning.append(f"✅ RSI confirms momentum ({current_rsi:.1f})")
+            # If no triple confirmation, REJECT - don't look for weaker signals
+            else:
+                logger.info(f"⛔ NO TRIPLE CONFIRMATION: Indicators not aligned for {symbol}")
+                logger.info(f"   Price vs EMA: {'>' if current_price > current_ema else '<'}")
+                logger.info(f"   RSI vs 50: {'>' if current_rsi > 50 else '<'} ({current_rsi:.1f})")
+                logger.info(f"   MACD vs Signal: {'>' if current_macd > current_macd_signal else '<'}")
+                return None  # ONLY trade perfect triple confirmations
             
-            # === RULE 3: BB Extremes + Multiple Confirmations ===
-            if signal is None:
-                if bb_position < 0.1:  # Lower BB
-                    if current_rsi < 35 and current_stoch_k < 30:
-                        signal = "CALL"
-                        confidence = 88
-                        reasoning.append("🟢 OVERSOLD BOUNCE: Price at lower BB")
-                        reasoning.append(f"✅ RSI ({current_rsi:.1f}) and Stoch ({current_stoch_k:.1f}) confirm oversold")
-                
-                elif bb_position > 0.9:  # Upper BB
-                    if current_rsi > 65 and current_stoch_k > 70:
-                        signal = "PUT"
-                        confidence = 88
-                        reasoning.append("🔴 OVERBOUGHT REVERSAL: Price at upper BB")
-                        reasoning.append(f"✅ RSI ({current_rsi:.1f}) and Stoch ({current_stoch_k:.1f}) confirm overbought")
-            
-            # === RULE 4: Trend Following + Momentum ===
-            if signal is None:
-                if current_price > current_ema:
-                    if 45 < current_rsi < 70 and current_macd_hist > 0:
-                        signal = "CALL"
-                        confidence = 83
-                        reasoning.append("📈 UPTREND: Price above EMA with positive momentum")
-                        reasoning.append(f"✅ RSI ({current_rsi:.1f}) and MACD histogram positive")
-                
-                elif current_price < current_ema:
-                    if 30 < current_rsi < 55 and current_macd_hist < 0:
-                        signal = "PUT"
-                        confidence = 83
-                        reasoning.append("📉 DOWNTREND: Price below EMA with negative momentum")
-                        reasoning.append(f"✅ RSI ({current_rsi:.1f}) and MACD histogram negative")
-            
-            # === Confidence Boosters ===
+            # === REQUIRE STOCHASTIC CONFIRMATION (MANDATORY) ===
+            stoch_confirms = False
             if signal == "CALL":
-                # Stochastic confirmation
-                if current_stoch_k < 30:
-                    confidence += 5
-                    reasoning.append(f"✅ Stochastic oversold ({current_stoch_k:.1f})")
-                
-                # Enhanced S/R confirmation with reversal detection
+                if current_stoch_k < 70:  # Not too overbought
+                    if current_stoch_k < 30:  # Bonus for oversold
+                        confidence += 6
+                        reasoning.append(f"✅ Stochastic oversold ({current_stoch_k:.1f}) - strong upside")
+                    else:
+                        confidence += 4
+                        reasoning.append(f"✅ Stochastic OK ({current_stoch_k:.1f})")
+                    confirmations_count += 1
+                    stoch_confirms = True
+                else:
+                    logger.warning(f"⛔ CALL rejected: Stochastic too high ({current_stoch_k:.1f})")
+                    return None  # Too overbought
+            
+            elif signal == "PUT":
+                if current_stoch_k > 30:  # Not too oversold
+                    if current_stoch_k > 70:  # Bonus for overbought
+                        confidence += 6
+                        reasoning.append(f"✅ Stochastic overbought ({current_stoch_k:.1f}) - strong downside")
+                    else:
+                        confidence += 4
+                        reasoning.append(f"✅ Stochastic OK ({current_stoch_k:.1f})")
+                    confirmations_count += 1
+                    stoch_confirms = True
+                else:
+                    logger.warning(f"⛔ PUT rejected: Stochastic too low ({current_stoch_k:.1f})")
+                    return None  # Too oversold
+            
+            if not stoch_confirms:
+                return None
                 if reversal['reversal_detected'] and reversal['bounce_off_support']:
                     confidence += 7
                     reasoning.append(f"✅ REVERSAL: Bounce off support (strength: {reversal['reversal_strength']})")
