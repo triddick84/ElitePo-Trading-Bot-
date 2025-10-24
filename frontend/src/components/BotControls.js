@@ -361,20 +361,47 @@ const BotControls = ({ onStatusUpdate }) => {
             </div>
 
             {/* Invert Signals */}
-            <div className={`flex items-center justify-between p-3 rounded-lg transition-colors ${config.invert_signals ? 'bg-orange-500/10 border border-orange-500/30' : ''}`}>
-              <div>
-                <Label className="text-slate-300 font-medium">
-                  Invert Signals {config.invert_signals && <span className="text-orange-400 text-xs ml-2">(ACTIVE - All Timeframes)</span>}
-                </Label>
-                <p className="text-slate-500 text-sm">
-                  Convert BUY signals to SELL and vice versa
-                  {config.invert_signals && <span className="text-orange-400 block text-xs mt-1">⚠️ Applied to ALL timeframes (5s, 15s, 1m, etc.)</span>}
-                </p>
+            <div className={`rounded-lg transition-colors ${config.invert_signals ? 'bg-orange-500/10 border border-orange-500/30 p-3' : 'p-3'}`}>
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <Label className="text-slate-300 font-medium">
+                    Invert Signals {config.invert_signals && <span className="text-orange-400 text-xs ml-2">(ACTIVE - All Timeframes)</span>}
+                  </Label>
+                  <p className="text-slate-500 text-sm">
+                    Convert BUY signals to SELL and vice versa
+                    {config.invert_signals && <span className="text-orange-400 block text-xs mt-1">⚠️ Applied to ALL timeframes (5s, 15s, 1m, etc.)</span>}
+                  </p>
+                </div>
+                <Switch 
+                  checked={config.invert_signals}
+                  onCheckedChange={(checked) => handleConfigChange('invert_signals', checked)}
+                />
               </div>
-              <Switch 
-                checked={config.invert_signals}
-                onCheckedChange={(checked) => handleConfigChange('invert_signals', checked)}
-              />
+              
+              {/* IMPORTANT: Demo vs Real Account Warning */}
+              <div className="mt-3 p-3 rounded-lg border-2 border-blue-500/50 bg-blue-500/10">
+                <div className="flex items-start space-x-2">
+                  <span className="text-blue-400 text-xl">ℹ️</span>
+                  <div className="flex-1">
+                    <p className="text-blue-300 font-semibold text-sm mb-1">
+                      📋 Account Type Guide:
+                    </p>
+                    <div className="space-y-1 text-xs text-blue-200">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-green-400">✅</span>
+                        <span><strong className="text-white">Demo Account:</strong> Activate Invert (Turn ON)</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-red-400">⛔</span>
+                        <span><strong className="text-white">Real Account:</strong> Leave Invert OFF (Default)</span>
+                      </div>
+                    </div>
+                    <p className="text-blue-300 text-xs mt-2 italic">
+                      💡 Demo and Real accounts may have different signal behavior on Pocket Option
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Sound Alerts */}
