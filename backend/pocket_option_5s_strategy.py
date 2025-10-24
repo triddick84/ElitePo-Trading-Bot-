@@ -50,14 +50,21 @@ class PocketOption5SecondStrategy:
         
         self.min_data_points = 100
         
-        # Thresholds from research
-        self.rsi_overbought = 70
-        self.rsi_oversold = 30
-        self.stoch_overbought = 80
-        self.stoch_oversold = 20
+        # AGGRESSIVE ACCURACY THRESHOLDS (90%+ TARGET)
+        # Stricter thresholds to reduce false signals
+        self.rsi_overbought = 75  # More extreme (was 70)
+        self.rsi_oversold = 25    # More extreme (was 30)
+        self.stoch_overbought = 85  # More extreme (was 80)
+        self.stoch_oversold = 15    # More extreme (was 20)
+        
+        # MINIMUM confidence to even consider generating signal
+        self.min_base_confidence = 87  # Start at 87%, not 78%
         
         # Enhanced S/R detector for 5s timeframe
         self.sr_detector = get_detector('5s')
+        
+        # Market quality filter for aggressive selectivity
+        self.market_filter = get_market_filter('5s')
         
     def calculate_ema(self, prices: pd.Series, period: int) -> pd.Series:
         """Calculate EMA using TA-Lib for accuracy"""
