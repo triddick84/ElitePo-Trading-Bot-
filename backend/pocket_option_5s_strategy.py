@@ -358,27 +358,29 @@ class PocketOption5SecondStrategy:
             
             # === REQUIRE SUPPORT/RESISTANCE OR REVERSAL CONFIRMATION (MANDATORY) ===
             # At least ONE of these must be true
+            # 🔄 INVERTED to match 5s momentum continuation logic
             sr_confirms = False
             
             if reversal['reversal_detected']:
-                if reversal['bounce_off_support'] and signal == "CALL":
+                # For 5s, we want continuation at S/R, not reversal
+                if reversal['bounce_off_support'] and signal == "PUT":
                     confidence += 10
-                    reasoning.append(f"✅ REVERSAL DETECTED: Bounce off support (strength: {reversal['reversal_strength']})")
+                    reasoning.append(f"✅ AT SUPPORT: Testing support (strength: {reversal['reversal_strength']}) - downward continuation expected")
                     confirmations_count += 1
                     sr_confirms = True
-                elif reversal['bounce_off_resistance'] and signal == "PUT":
+                elif reversal['bounce_off_resistance'] and signal == "CALL":
                     confidence += 10
-                    reasoning.append(f"✅ REVERSAL DETECTED: Reversal at resistance (strength: {reversal['reversal_strength']})")
+                    reasoning.append(f"✅ AT RESISTANCE: Testing resistance (strength: {reversal['reversal_strength']}) - upward continuation expected")
                     confirmations_count += 1
                     sr_confirms = True
-            elif proximity['near_support'] and signal == "CALL":
+            elif proximity['near_support'] and signal == "PUT":
                 confidence += 7
-                reasoning.append(f"✅ Price near support ({proximity['support_distance_pct']:.2f}% away)")
+                reasoning.append(f"✅ Price near support ({proximity['support_distance_pct']:.2f}% away) - downward momentum")
                 confirmations_count += 1
                 sr_confirms = True
-            elif proximity['near_resistance'] and signal == "PUT":
+            elif proximity['near_resistance'] and signal == "CALL":
                 confidence += 7
-                reasoning.append(f"✅ Price near resistance ({proximity['resistance_distance_pct']:.2f}% away)")
+                reasoning.append(f"✅ Price near resistance ({proximity['resistance_distance_pct']:.2f}% away) - upward momentum")
                 confirmations_count += 1
                 sr_confirms = True
             
@@ -387,17 +389,24 @@ class PocketOption5SecondStrategy:
                 return None  # MANDATORY - must have S/R or reversal confirmation
             
             # === Candlestick Pattern Confirmation (BONUS, not mandatory) ===
+            # 🔄 INVERTED for 5s continuation strategy
             if signal == "CALL":
-                if patterns['pin_bar'] == 'BULLISH':
-                    confidence += 5
-                    reasoning.append("✅ Bullish Pin Bar detected")
-                elif patterns['engulfing'] == 'BULLISH':
-                    confidence += 5
-                    reasoning.append("✅ Bullish Engulfing pattern detected")
-            
-            elif signal == "PUT":
+                # Look for bearish patterns that failed (continuation up)
                 if patterns['pin_bar'] == 'BEARISH':
                     confidence += 5
+                    reasoning.append("✅ Failed bearish pin bar - upward continuation")
+                elif patterns['engulfing'] == 'BEARISH':
+                    confidence += 5
+                    reasoning.append("✅ Failed bearish engulfing - upward continuation")
+            
+            elif signal == "PUT":
+                # Look for bullish patterns that failed (continuation down)
+                if patterns['pin_bar'] == 'BULLISH':
+                    confidence += 5
+                    reasoning.append("✅ Failed bullish pin bar - downward continuation")
+                elif patterns['engulfing'] == 'BULLISH':
+                    confidence += 5
+                    reasoning.append("✅ Failed bullish engulfing - downward continuation")
                     reasoning.append("✅ Bearish Pin Bar detected")
                 elif patterns['engulfing'] == 'BEARISH':
                     confidence += 5
