@@ -5,7 +5,7 @@ import { Badge } from './ui/badge';
 import { Switch } from './ui/switch';
 import { Label } from './ui/label';
 import { toast } from 'sonner';
-import AssetSelectorDropdown from './AssetSelectorDropdown';
+// AssetSelectorDropdown removed - using MarketAssetSelector in Dashboard instead
 
 const LiveSignalsDisplay = ({ 
   botStatus, 
