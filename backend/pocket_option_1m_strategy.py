@@ -472,8 +472,15 @@ class PocketOption1MinuteStrategy:
             confidence += validation['confidence_adjustment']
             reasoning.extend(validation['reasoning'])
             
+            # === FINAL CONFIDENCE CHECK ===
+            if confidence < 93:
+                logger.warning(f"⛔ SIGNAL REJECTED: Final confidence too low ({confidence:.0f}% < 93%)")
+                return None
+            
             # Cap confidence at 98%
             confidence = min(confidence, 98)
+            
+            logger.info(f"✅ ELITE SIGNAL APPROVED: {signal} with {confidence:.0f}% confidence")
             
             return {
                 "signal": signal,
