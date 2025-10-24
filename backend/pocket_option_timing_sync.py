@@ -52,16 +52,31 @@ class PocketOptionTimingSync:
         """Get current time in Chicago/Central timezone"""
         return datetime.now(self.pocket_option_tz)
     
-    def get_seconds_to_next_candle(self, timeframe: str) -> float:
+    def get_seconds_to_next_candle(self, timeframe: str, include_latency_compensation: bool = True) -> float:
         """
         Get exact seconds until next candle formation
         Used for countdown timers in frontend
+        
+        Returns precise seconds with millisecond accuracy for ultra-short timeframes
         """
         try:
-            next_candle = self.get_next_candle_formation_time(timeframe)
+            next_candle = self.get_next_candle_formation_time(timeframe, apply_latency_compensation=include_latency_compensation)
             current_time = self.get_chicago_time()
-            seconds_diff = (next_candle - current_time).total_seconds()
+            
+            # Use high precision calculation including microseconds
+            time_diff = next_candle - current_time
+            seconds_diff = time_diff.total_seconds()
+            
+            # For ultra-short timeframes, provide millisecond precision
+            if timeframe in ['5s', '15s', '30s']:
+                # Round to 2 decimal places for precision
+                seconds_diff = round(seconds_diff, 2)
+            else:
+                # For longer timeframes, 1 decimal place is sufficient
+                seconds_diff = round(seconds_diff, 1)
+            
             return max(0, seconds_diff)  # Never negative
+            
         except Exception as e:
             logger.error(f"Error calculating seconds to next candle: {e}")
             return 0
