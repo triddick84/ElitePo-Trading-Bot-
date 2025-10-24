@@ -138,6 +138,19 @@ const Dashboard = ({ botStatus, liveSignals, setLiveSignals, notificationSetting
         }}
       />
 
+      {/* Developer Credit */}
+      <div className="mb-6 p-4 bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/30 rounded-lg">
+        <div className="flex items-center justify-center space-x-2">
+          <span className="text-2xl">👨‍💻</span>
+          <p className="text-slate-300 text-sm">
+            <span className="font-semibold text-purple-400">Created by</span>{' '}
+            <span className="text-white font-bold">Thomas Riddick</span>{' '}
+            <span className="text-slate-400">- Trader / Developer</span>
+          </p>
+          <span className="text-2xl">📈</span>
+        </div>
+      </div>
+
       {/* Invert Signals Warning Banner */}
       {config.invert_signals && (
         <div className="bg-orange-500/20 border-2 border-orange-500 rounded-lg p-4 mb-6">
