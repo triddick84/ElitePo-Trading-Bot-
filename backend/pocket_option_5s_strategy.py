@@ -339,15 +339,16 @@ class PocketOption5SecondStrategy:
             
             # === REQUIRE STOCHASTIC CONFIRMATION (MANDATORY) ===
             # Stochastic MUST agree, or we reject the signal
+            # 🔄 INVERTED to match 5s momentum continuation logic
             stoch_confirms = False
-            if signal == "CALL" and current_stoch_k < self.stoch_oversold:  # < 15
+            if signal == "PUT" and current_stoch_k < self.stoch_oversold:  # < 15
                 confidence += 6
-                reasoning.append(f"✅ Stochastic confirms oversold ({current_stoch_k:.1f})")
+                reasoning.append(f"✅ Stochastic confirms extreme low ({current_stoch_k:.1f}) - downward continuation")
                 confirmations_count += 1
                 stoch_confirms = True
-            elif signal == "PUT" and current_stoch_k > self.stoch_overbought:  # > 85
+            elif signal == "CALL" and current_stoch_k > self.stoch_overbought:  # > 85
                 confidence += 6
-                reasoning.append(f"✅ Stochastic confirms overbought ({current_stoch_k:.1f})")
+                reasoning.append(f"✅ Stochastic confirms extreme high ({current_stoch_k:.1f}) - upward continuation")
                 confirmations_count += 1
                 stoch_confirms = True
             
