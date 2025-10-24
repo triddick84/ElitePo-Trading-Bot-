@@ -407,17 +407,9 @@ class PocketOption5SecondStrategy:
                 elif patterns['engulfing'] == 'BULLISH':
                     confidence += 5
                     reasoning.append("✅ Failed bullish engulfing - downward continuation")
-                    reasoning.append("✅ Bearish Pin Bar detected")
-                elif patterns['engulfing'] == 'BEARISH':
-                    confidence += 5
-                    reasoning.append("✅ Bearish Engulfing pattern detected")
             
-            # Doji at extremes signals reversal
-            if patterns['doji'] == 'INDECISION':
-                if bb_position > 0.85:
-                    if signal == "PUT":
-                        confidence += 3
-                        reasoning.append("✅ Doji at resistance confirms reversal")
+            # Doji at extremes signals indecision - we ignore for 5s momentum strategy
+            # (Removed doji logic as it conflicts with continuation strategy)
                 elif bb_position < 0.15:
                     if signal == "CALL":
                         confidence += 3
