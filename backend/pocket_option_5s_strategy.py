@@ -354,22 +354,37 @@ class PocketOption5SecondStrategy:
                 logger.warning(f"⛔ SIGNAL REJECTED: Stochastic doesn't confirm (K={current_stoch_k:.1f})")
                 return None  # MANDATORY - if stochastic doesn't agree, reject signal
             
-            # === RULE 4: Enhanced S/R Confirmation & Reversal Detection ===
+            # === REQUIRE SUPPORT/RESISTANCE OR REVERSAL CONFIRMATION (MANDATORY) ===
+            # At least ONE of these must be true
+            sr_confirms = False
+            
             if reversal['reversal_detected']:
                 if reversal['bounce_off_support'] and signal == "CALL":
                     confidence += 10
                     reasoning.append(f"✅ REVERSAL DETECTED: Bounce off support (strength: {reversal['reversal_strength']})")
+                    confirmations_count += 1
+                    sr_confirms = True
                 elif reversal['bounce_off_resistance'] and signal == "PUT":
                     confidence += 10
                     reasoning.append(f"✅ REVERSAL DETECTED: Reversal at resistance (strength: {reversal['reversal_strength']})")
+                    confirmations_count += 1
+                    sr_confirms = True
             elif proximity['near_support'] and signal == "CALL":
-                confidence += 6
+                confidence += 7
                 reasoning.append(f"✅ Price near support ({proximity['support_distance_pct']:.2f}% away)")
+                confirmations_count += 1
+                sr_confirms = True
             elif proximity['near_resistance'] and signal == "PUT":
-                confidence += 6
+                confidence += 7
                 reasoning.append(f"✅ Price near resistance ({proximity['resistance_distance_pct']:.2f}% away)")
+                confirmations_count += 1
+                sr_confirms = True
             
-            # === RULE 5: Candlestick Pattern Confirmation (Boosts confidence) ===
+            if not sr_confirms:
+                logger.warning(f"⛔ SIGNAL REJECTED: No S/R confirmation for {signal}")
+                return None  # MANDATORY - must have S/R or reversal confirmation
+            
+            # === Candlestick Pattern Confirmation (BONUS, not mandatory) ===
             if signal == "CALL":
                 if patterns['pin_bar'] == 'BULLISH':
                     confidence += 5
