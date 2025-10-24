@@ -448,12 +448,16 @@ class PocketOption5SecondStrategy:
                 confidence -= 5
                 logger.warning(f"⚠️ No AI Ensemble analysis available")
             
-            # === Final Signal Check ===
-            if signal is None:
+            # === MINIMUM CONFIRMATIONS CHECK ===
+            # Require at least 4 confirmations total (BB+RSI=2, Stoch=1, S/R=1, AI=1 potential)
+            if confirmations_count < 4:
+                logger.warning(f"⛔ SIGNAL REJECTED: Only {confirmations_count} confirmations (need 4+)")
                 return None
             
-            # === GPT-4 ENHANCEMENT (Advanced AI Validation) ===
-            # Use GPT-4 for final validation and confidence adjustment
+            reasoning.append(f"✅ STRONG SETUP: {confirmations_count} confirmations detected")
+            
+            # === GPT-4 ENHANCEMENT WITH VETO POWER ===
+            # GPT-4 can also veto signals that don't make sense
             try:
                 loop = asyncio.get_event_loop()
                 if loop.is_running():
