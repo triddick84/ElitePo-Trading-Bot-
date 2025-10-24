@@ -294,20 +294,41 @@ class PocketOption15SecondStrategy:
                 reasoning.append(f"⚠️ Stochastic neutral ({current_stoch_k:.1f})")
                 confidence -= 3  # Small penalty
             
-            # === RULE 5: Enhanced S/R Confirmation & Reversal Detection ===
+            # === REQUIRE S/R CONFIRMATION (MANDATORY) ===
+            sr_confirms = False
+            
             if reversal['reversal_detected']:
                 if reversal['bounce_off_support'] and signal == "CALL":
-                    confidence += 8
+                    confidence += 9
                     reasoning.append(f"✅ REVERSAL: Bounce off support (strength: {reversal['reversal_strength']})")
+                    confirmations_count += 1
+                    sr_confirms = True
                 elif reversal['bounce_off_resistance'] and signal == "PUT":
-                    confidence += 8
+                    confidence += 9
                     reasoning.append(f"✅ REVERSAL: Reversal at resistance (strength: {reversal['reversal_strength']})")
+                    confirmations_count += 1
+                    sr_confirms = True
             elif proximity['near_support'] and signal == "CALL":
-                confidence += 5
+                confidence += 6
                 reasoning.append(f"✅ Price near support ({proximity['support_distance_pct']:.2f}% away)")
+                confirmations_count += 1
+                sr_confirms = True
             elif proximity['near_resistance'] and signal == "PUT":
-                confidence += 5
+                confidence += 6
                 reasoning.append(f"✅ Price near resistance ({proximity['resistance_distance_pct']:.2f}% away)")
+                confirmations_count += 1
+                sr_confirms = True
+            
+            if not sr_confirms:
+                logger.warning(f"⛔ SIGNAL REJECTED: No S/R confirmation")
+                return None
+            
+            # === MINIMUM CONFIRMATIONS CHECK ===
+            if confirmations_count < 3:
+                logger.warning(f"⛔ SIGNAL REJECTED: Only {confirmations_count} confirmations (need 3+)")
+                return None
+            
+            reasoning.append(f"✅ STRONG SETUP: {confirmations_count} confirmations")
             
             if signal is None:
                 return None
