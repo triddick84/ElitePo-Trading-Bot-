@@ -218,6 +218,16 @@ const SignalPopupNotification = ({ signal, onClose, onExecute }) => {
     
     const isNegative = seconds < 0;
     const absSeconds = Math.abs(seconds);
+    
+    // For ultra-short timeframes, show more precision
+    const isUltraShort = ['5s', '15s', '30s'].includes(signal?.timeframe);
+    
+    if (isUltraShort && absSeconds < 10) {
+      // Show 1 decimal place when under 10 seconds for ultra-short timeframes
+      const formatted = absSeconds.toFixed(1);
+      return isNegative ? `-${formatted}s` : `${formatted}s`;
+    }
+    
     const mins = Math.floor(absSeconds / 60);
     const secs = Math.floor(absSeconds % 60);
     
