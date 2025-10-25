@@ -355,8 +355,8 @@ class PocketOption15SecondStrategy:
                 return None
             
             # === MINIMUM CONFIRMATIONS CHECK ===
-            if confirmations_count < 3:
-                logger.warning(f"⛔ SIGNAL REJECTED: Only {confirmations_count} confirmations (need 3+)")
+            if confirmations_count < 4:
+                logger.warning(f"⛔ SIGNAL REJECTED: Only {confirmations_count} confirmations (need 4+)")
                 return None
             
             reasoning.append(f"✅ STRONG SETUP: {confirmations_count} confirmations")
