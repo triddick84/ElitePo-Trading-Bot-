@@ -280,6 +280,24 @@ class PocketOption15SecondStrategy:
                 logger.info(f"⛔ NO EMA CROSSOVER: No primary signal for {symbol}")
                 return None  # ONLY trade crossovers in 15s strategy
             
+            # === SUPERTREND VALIDATION (CRITICAL - PREVENTS COUNTER-TREND SIGNALS) ===
+            # Check if crossover signal aligns with the prevailing trend
+            supertrend_check = self.supertrend.should_allow_signal(df, signal)
+            
+            if not supertrend_check['allowed']:
+                logger.warning(f"⛔ SUPERTREND REJECTED: {supertrend_check['reason']}")
+                logger.warning(f"   Trend: {supertrend_check['trend_info'].get('trend')}, "
+                              f"Strength: {supertrend_check['trend_info'].get('strength', 0):.1%}")
+                return None  # MANDATORY - crossover must align with trend
+            
+            # Crossover aligns with trend - add confidence boost
+            confidence += 7
+            reasoning.append(f"✅ SuperTrend confirms {supertrend_check['trend_info']['trend']} trend "
+                           f"(strength: {supertrend_check['trend_info']['strength']:.1%}, "
+                           f"duration: {supertrend_check['trend_info']['trend_duration']} candles)")
+            confirmations_count += 1
+            logger.info(f"✅ SuperTrend validation passed: {supertrend_check['reason']}")
+            
             # === REQUIRE STOCHASTIC CONFIRMATION (MANDATORY) ===
             stoch_confirms = False
             if signal == "CALL":
