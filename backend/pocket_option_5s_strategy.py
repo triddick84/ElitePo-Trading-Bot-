@@ -281,6 +281,14 @@ class PocketOption5SecondStrategy:
             # Bollinger Bands (5, 2.5)
             bb_upper, bb_middle, bb_lower = self.calculate_bollinger_bands(close_prices)
             
+            # === SUPERTREND CALCULATION (NEW - TREND FILTER) ===
+            df = self.supertrend.calculate_supertrend(df)
+            trend_analysis = self.supertrend.get_current_trend(df)
+            
+            logger.info(f"📊 SuperTrend Analysis: {trend_analysis['trend']} trend, "
+                       f"Strength: {trend_analysis['strength']:.1%}, "
+                       f"Duration: {trend_analysis['trend_duration']} candles")
+            
             # Get current values
             current_price = close_prices.iloc[-1]
             current_ema = ema.iloc[-1]
