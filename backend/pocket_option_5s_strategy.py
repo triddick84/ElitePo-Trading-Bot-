@@ -75,6 +75,10 @@ class PocketOption5SecondStrategy:
         # Market quality filter for aggressive selectivity
         self.market_filter = get_market_filter('5s')
         
+        # SuperTrend indicator for trend confirmation (NEW)
+        self.supertrend = get_supertrend('5s')
+        logger.info("🔥 5s Strategy initialized with SuperTrend trend filter (ATR=10, Multiplier=5)")
+        
     def calculate_ema(self, prices: pd.Series, period: int) -> pd.Series:
         """Calculate EMA using TA-Lib for accuracy"""
         return pd.Series(talib.EMA(prices.values, timeperiod=period), index=prices.index)
