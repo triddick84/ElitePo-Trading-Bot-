@@ -177,6 +177,14 @@ class PocketOption15SecondStrategy:
             
             logger.info(f"✅ Market quality: {market_quality['overall_quality']:.1%}")
             
+            # === SUPERTREND CALCULATION (NEW - TREND FILTER) ===
+            df = self.supertrend.calculate_supertrend(df)
+            trend_analysis = self.supertrend.get_current_trend(df)
+            
+            logger.info(f"📊 SuperTrend Analysis: {trend_analysis['trend']} trend, "
+                       f"Strength: {trend_analysis['strength']:.1%}, "
+                       f"Duration: {trend_analysis['trend_duration']} candles")
+            
             # Calculate all indicators
             close_prices = df['close']
             high_prices = df['high']
