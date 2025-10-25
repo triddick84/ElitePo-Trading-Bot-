@@ -488,9 +488,9 @@ class PocketOption5SecondStrategy:
                 logger.warning(f"⚠️ No AI Ensemble analysis available")
             
             # === MINIMUM CONFIRMATIONS CHECK ===
-            # Require at least 4 confirmations total (BB+RSI=2, Stoch=1, S/R=1, AI=1 potential)
-            if confirmations_count < 4:
-                logger.warning(f"⛔ SIGNAL REJECTED: Only {confirmations_count} confirmations (need 4+)")
+            # Require at least 5 confirmations total (BB+RSI=2, Stoch=1, S/R=1, SuperTrend=1)
+            if confirmations_count < 5:
+                logger.warning(f"⛔ SIGNAL REJECTED: Only {confirmations_count} confirmations (need 5+)")
                 return None
             
             reasoning.append(f"✅ STRONG SETUP: {confirmations_count} confirmations detected")
