@@ -25,6 +25,7 @@ from typing import Dict, Optional, List
 from chart_transformations import chart_transformer
 from support_resistance_detector import get_detector
 from market_quality_filter import get_market_filter
+from supertrend_indicator import get_supertrend
 import talib
 
 logger = logging.getLogger(__name__)
