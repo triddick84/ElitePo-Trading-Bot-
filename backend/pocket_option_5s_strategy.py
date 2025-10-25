@@ -35,6 +35,7 @@ from support_resistance_detector import get_detector
 from advanced_5s_ai_ensemble import advanced_5s_ai_ensemble
 from gpt_signal_enhancer import gpt_signal_enhancer
 from market_quality_filter import get_market_filter
+from supertrend_indicator import get_supertrend
 import talib
 import asyncio
 
