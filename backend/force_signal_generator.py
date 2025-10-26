@@ -12,7 +12,7 @@ from scipy import stats
 import math
 import requests
 from textblob import TextBlob
-from pocket_option_5s_strategy import pocket_option_5s_strategy
+from pocket_option_5s_elite_strategy import pocket_option_5s_elite_strategy
 from pocket_option_15s_strategy import pocket_option_15s_strategy
 from pocket_option_1m_strategy import pocket_option_1m_strategy
 from lightweight_ai_ensemble import lightweight_ai_ensemble
