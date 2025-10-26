@@ -43,7 +43,10 @@ const Dashboard = ({ botStatus, liveSignals, setLiveSignals, notificationSetting
       setConfig({
         selected_assets: response.data.selected_assets || [],
         selected_timeframes: response.data.selected_timeframes || [],
-        invert_signals: response.data.invert_signals || false
+        invert_signals: response.data.invert_signals || false,
+        chart_type: response.data.chart_type || 'japanese_candles',
+        chart_timeframe: response.data.chart_timeframe || '15s',
+        signal_timeframe: response.data.signal_timeframe || '5s'
       });
     } catch (error) {
       console.error('Error fetching config:', error);
