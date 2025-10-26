@@ -324,7 +324,7 @@ class ForceSignalGenerator:
                 logger.info(f"⚡ Applying Pocket Option 5-SECOND strategy for {symbol}")
                 result = await loop.run_in_executor(
                     self.executor,
-                    pocket_option_5s_strategy.generate_signal,
+                    pocket_option_5s_elite_strategy.generate_signal,
                     symbol,
                     chart_type,
                     [timeframe]
