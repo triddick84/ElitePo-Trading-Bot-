@@ -145,6 +145,18 @@ const Dashboard = ({ botStatus, liveSignals, setLiveSignals, notificationSetting
         }}
       />
 
+      {/* Chart Configuration */}
+      <ChartConfiguration 
+        onConfigChange={(chartConfig) => {
+          setConfig(prev => ({
+            ...prev,
+            chart_type: chartConfig.chartType,
+            chart_timeframe: chartConfig.chartTimeframe,
+            signal_timeframe: chartConfig.signalTimeframe
+          }));
+        }}
+      />
+
       {/* Developer Credit */}
       <div className="mb-6 p-4 bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/30 rounded-lg">
         <div className="flex items-center justify-center space-x-2">
