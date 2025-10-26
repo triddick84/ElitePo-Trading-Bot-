@@ -18,7 +18,10 @@ const Dashboard = ({ botStatus, liveSignals, setLiveSignals, notificationSetting
   const [config, setConfig] = useState({
     selected_assets: [],
     selected_timeframes: [],
-    invert_signals: false
+    invert_signals: false,
+    chart_type: 'japanese_candles',
+    chart_timeframe: '15s',
+    signal_timeframe: '5s'
   });
   const [showAssetSelector, setShowAssetSelector] = useState(false);
 
