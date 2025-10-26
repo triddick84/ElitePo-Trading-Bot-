@@ -236,8 +236,12 @@ class SuperTrendIndicator:
         """
         Check if a signal should be allowed based on SuperTrend
         
+        ⚠️ INVERTED LOGIC: SuperTrend signals are INVERTED per user request
+        - SuperTrend says UP → Allow PUT signals (sell the high)
+        - SuperTrend says DOWN → Allow CALL signals (buy the low)
+        
         This prevents:
-        - Counter-trend signals (selling in uptrend, buying in downtrend)
+        - Trading with the trend (contrarian approach)
         - Signals during weak/uncertain trends
         - Signals too close to trend reversal points
         
@@ -257,18 +261,19 @@ class SuperTrendIndicator:
             # Convert signal to comparable format
             signal_type = 1 if signal_direction in ['CALL', 'BUY'] else -1
             
-            # Check if signal aligns with trend
+            # Get trend direction
             trend_direction = trend_info['direction']
             
-            # CRITICAL: For ultra-short timeframes, only allow signals WITH the trend
-            if signal_type != trend_direction:
+            # ⚠️ INVERTED LOGIC: Only allow signals AGAINST the trend
+            # This is the OPPOSITE of normal SuperTrend usage
+            if signal_type == trend_direction:
                 return {
                     'allowed': False,
-                    'reason': f'Counter-trend signal rejected: Signal={signal_direction}, Trend={trend_info["trend"]}',
+                    'reason': f'With-trend signal rejected (inverted logic): Signal={signal_direction}, Trend={trend_info["trend"]}',
                     'trend_info': trend_info
                 }
             
-            # Check if trend is strong enough
+            # Check if trend is strong enough (we want strong trends to fade)
             if not trend_info['is_trend_strong']:
                 return {
                     'allowed': False,
@@ -276,18 +281,17 @@ class SuperTrendIndicator:
                     'trend_info': trend_info
                 }
             
-            # Check if price is too far from SuperTrend line (may indicate exhaustion)
+            # Check if price is too far from SuperTrend line (may indicate exhaustion - good for fading)
             if trend_info['distance_from_trend'] > 5.0:  # 5% threshold
-                return {
-                    'allowed': False,
-                    'reason': f'Price too far from trend line: {trend_info["distance_from_trend"]:.2f}% away',
-                    'trend_info': trend_info
-                }
+                # For fading strategy, this is actually GOOD - trend exhaustion
+                confidence_boost = "⚡ Trend exhaustion detected - excellent fade opportunity"
+            else:
+                confidence_boost = ""
             
-            # All checks passed
+            # All checks passed - INVERTED validation
             return {
                 'allowed': True,
-                'reason': f'✅ Trend-aligned signal: {signal_direction} with {trend_info["trend"]} trend (strength: {trend_info["strength"]:.1%})',
+                'reason': f'✅ Counter-trend signal (INVERTED): {signal_direction} against {trend_info["trend"]} trend (strength: {trend_info["strength"]:.1%}) {confidence_boost}',
                 'trend_info': trend_info
             }
             
