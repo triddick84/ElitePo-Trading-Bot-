@@ -38,25 +38,13 @@ class SuperTrendIndicator:
         """
         self.timeframe = timeframe
         
-        # Optimal settings based on Pocket Option research
-        if timeframe == '5s':
-            self.atr_period = 10  # Higher period for noise reduction
-            self.multiplier = 5.0  # Higher multiplier to filter false signals
-        elif timeframe == '15s':
-            self.atr_period = 7   # Balance between sensitivity and stability
-            self.multiplier = 2.0  # Lower multiplier for faster response
-        elif timeframe == '30s':
-            self.atr_period = 7
-            self.multiplier = 2.5
-        elif timeframe == '1m':
-            self.atr_period = 10
-            self.multiplier = 3.0  # Standard setting
-        else:
-            # Default for longer timeframes
-            self.atr_period = 10
-            self.multiplier = 3.0
+        # UPDATED SETTINGS: Standardized ATR=10, Multiplier=3 across all timeframes
+        # Per user request: Universal settings for consistency
+        self.atr_period = 10
+        self.multiplier = 3.0
         
         logger.info(f"SuperTrend initialized for {timeframe}: ATR={self.atr_period}, Multiplier={self.multiplier}")
+        logger.info(f"⚠️ SuperTrend signals INVERTED: BUY→SELL, SELL→BUY")
     
     def calculate_supertrend(self, df: pd.DataFrame) -> pd.DataFrame:
         """
