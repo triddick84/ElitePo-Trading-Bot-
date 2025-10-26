@@ -5,6 +5,7 @@ import { Button } from './ui/button';
 import LiveSignalsDisplay from './LiveSignalsDisplay';
 import AssetSelectorDropdown from './AssetSelectorDropdown';
 import MarketAssetSelector from './MarketAssetSelector';
+import ChartConfiguration from './ChartConfiguration';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
