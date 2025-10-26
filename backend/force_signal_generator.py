@@ -321,13 +321,15 @@ class ForceSignalGenerator:
             
             # Route to appropriate strategy based on timeframe
             if timeframe in ['5s', '5sec', '5 sec']:
-                logger.info(f"⚡ Applying Pocket Option 5-SECOND strategy for {symbol}")
+                logger.info(f"⚡ Applying Pocket Option 5-SECOND ELITE strategy for {symbol}")
                 result = await loop.run_in_executor(
                     self.executor,
                     pocket_option_5s_elite_strategy.generate_signal,
                     symbol,
                     chart_type,
-                    [timeframe]
+                    '5s',
+                    'heikin_ashi',  # 5s REQUIRES Heikin Ashi
+                    False  # invert parameter
                 )
                 
             elif timeframe in ['15s', '15sec', '15 sec']:
