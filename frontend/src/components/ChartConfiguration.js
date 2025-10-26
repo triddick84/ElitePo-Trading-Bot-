@@ -35,7 +35,8 @@ const ChartConfiguration = ({ onConfigChange }) => {
     if (onConfigChange) {
       onConfigChange(chartConfig);
     }
-  }, [chartConfig, onConfigChange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chartConfig.chartType, chartConfig.chartTimeframe, chartConfig.signalTimeframe]);
 
   const handleChartTypeChange = (typeId) => {
     setChartConfig(prev => ({ ...prev, chartType: typeId }));
