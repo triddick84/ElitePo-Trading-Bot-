@@ -396,7 +396,7 @@ class ForceSignalGenerator:
             # Route to appropriate strategy based on timeframe
             if timeframe in ['5s', '5sec']:
                 logger.info(f"⚡ Using Pocket Option 5-SECOND HIGH-ACCURACY strategy for {symbol}")
-                result = pocket_option_5s_strategy.generate_signal(symbol, chart_type)
+                result = pocket_option_5s_elite_strategy.generate_signal(symbol, chart_type)
                 
                 if ultra_short_result and ultra_short_result.get('signal'):
                     logger.info(f"✅ Ultra-Short 5S CONTRARIAN: {symbol} → {ultra_short_result['signal']} ({ultra_short_result['confidence']:.1f}%)")
