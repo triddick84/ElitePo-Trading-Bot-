@@ -178,67 +178,89 @@ class PocketOption1MinAIStrategy:
             logger.info(f"   RSI 7={curr_rsi:.1f}, Stoch RSI={curr_stoch_rsi:.1f}")
             logger.info(f"   BB Position={bb_position:.2%}, Trend={'UP' if in_uptrend else 'DOWN'}")
             
-            # === SIGNAL GENERATION ===
+            # === SIGNAL GENERATION - MOMENTUM CONTINUATION ===
+            # For 1-minute binary options, strong momentum continues
+            # Oversold with downtrend → expect further DOWN
+            # Overbought with uptrend → expect further UP
+            
             signal = None
             confidence = 0
             reasoning = []
             confirmations = 0
             
-            # CALL Signal (Buy for 60 seconds)
+            # PUT Signal (Momentum DOWN - 60 seconds)
+            # Oversold in downtrend = continuation down
             if curr_rsi < self.rsi_oversold:  # RSI oversold
                 if curr_stoch_rsi < self.stoch_rsi_oversold:  # Stoch RSI confirms
                     if bb_position < 0.25:  # At/below lower BB
-                        signal = "CALL"
-                        confidence = 75
-                        reasoning.append(f"🟢 OVERSOLD: RSI={curr_rsi:.1f}, StochRSI={curr_stoch_rsi:.1f}")
-                        reasoning.append(f"📊 Price at lower BB ({bb_position:.1%})")
-                        confirmations += 3  # RSI + StochRSI + BB
-                        
-                        # Trend confirmation
-                        if in_uptrend:
-                            confidence += 5
-                            reasoning.append("✅ Uptrend confirmed (Price > SMA 50)")
-                            confirmations += 1
-                        
-                        # Support bounce
-                        if proximity['near_support']:
-                            confidence += 5
-                            reasoning.append(f"✅ Near support ({proximity['support_distance_pct']:.2f}% away)")
-                            confirmations += 1
-                        
-                        # Pattern confirmation
-                        if patterns['strongest']['signal'] == 'CALL':
-                            confidence += patterns['strongest']['confidence'] * 0.08
-                            reasoning.append(f"✅ {patterns['strongest']['description']}")
-                            confirmations += 1
-            
-            # PUT Signal (Sell for 60 seconds)
-            elif curr_rsi > self.rsi_overbought:  # RSI overbought
-                if curr_stoch_rsi > self.stoch_rsi_overbought:  # Stoch RSI confirms
-                    if bb_position > 0.75:  # At/above upper BB
-                        signal = "PUT"
-                        confidence = 75
-                        reasoning.append(f"🔴 OVERBOUGHT: RSI={curr_rsi:.1f}, StochRSI={curr_stoch_rsi:.1f}")
-                        reasoning.append(f"📊 Price at upper BB ({bb_position:.1%})")
-                        confirmations += 3
-                        
-                        # Trend confirmation
-                        if not in_uptrend:
+                        # Check if in DOWNTREND (price below SMA)
+                        if not in_uptrend:  # Downtrend
+                            signal = "PUT"  # ⬇️ Continue downtrend
+                            confidence = 75
+                            reasoning.append(f"🔴 DOWNTREND MOMENTUM: RSI={curr_rsi:.1f}, StochRSI={curr_stoch_rsi:.1f}")
+                            reasoning.append(f"📊 Oversold in downtrend → 1min continuation down")
+                            reasoning.append(f"Price at lower BB ({bb_position:.1%}) → further downside")
+                            confirmations += 3  # RSI + StochRSI + BB
+                            
+                            # Downtrend confirmation
                             confidence += 5
                             reasoning.append("✅ Downtrend confirmed (Price < SMA 50)")
                             confirmations += 1
-                        
-                        # Resistance rejection
-                        if proximity['near_resistance']:
+                            
+                            # Resistance rejection
+                            if proximity['near_resistance']:
+                                confidence += 5
+                                reasoning.append(f"✅ Near resistance ({proximity['resistance_distance_pct']:.2f}% away)")
+                                confirmations += 1
+                            
+                            # Pattern confirmation
+                            if patterns['strongest']['signal'] == 'PUT':
+                                confidence += patterns['strongest']['confidence'] * 0.08
+                                reasoning.append(f"✅ {patterns['strongest']['description']}")
+                                confirmations += 1
+                        else:
+                            # Oversold in uptrend = potential reversal (traditional logic)
+                            signal = "CALL"
+                            confidence = 70
+                            reasoning.append(f"🟢 REVERSAL: Oversold bounce in uptrend")
+                            confirmations += 2
+            
+            # CALL Signal (Momentum UP - 60 seconds)
+            # Overbought in uptrend = continuation up
+            elif curr_rsi > self.rsi_overbought:  # RSI overbought
+                if curr_stoch_rsi > self.stoch_rsi_overbought:  # Stoch RSI confirms
+                    if bb_position > 0.75:  # At/above upper BB
+                        # Check if in UPTREND (price above SMA)
+                        if in_uptrend:  # Uptrend
+                            signal = "CALL"  # ⬆️ Continue uptrend
+                            confidence = 75
+                            reasoning.append(f"🟢 UPTREND MOMENTUM: RSI={curr_rsi:.1f}, StochRSI={curr_stoch_rsi:.1f}")
+                            reasoning.append(f"📊 Overbought in uptrend → 1min continuation up")
+                            reasoning.append(f"Price at upper BB ({bb_position:.1%}) → further upside")
+                            confirmations += 3
+                            
+                            # Uptrend confirmation
                             confidence += 5
-                            reasoning.append(f"✅ Near resistance ({proximity['resistance_distance_pct']:.2f}% away)")
+                            reasoning.append("✅ Uptrend confirmed (Price > SMA 50)")
                             confirmations += 1
-                        
-                        # Pattern confirmation
-                        if patterns['strongest']['signal'] == 'PUT':
-                            confidence += patterns['strongest']['confidence'] * 0.08
-                            reasoning.append(f"✅ {patterns['strongest']['description']}")
-                            confirmations += 1
+                            
+                            # Support bounce
+                            if proximity['near_support']:
+                                confidence += 5
+                                reasoning.append(f"✅ Near support ({proximity['support_distance_pct']:.2f}% away)")
+                                confirmations += 1
+                            
+                            # Pattern confirmation
+                            if patterns['strongest']['signal'] == 'CALL':
+                                confidence += patterns['strongest']['confidence'] * 0.08
+                                reasoning.append(f"✅ {patterns['strongest']['description']}")
+                                confirmations += 1
+                        else:
+                            # Overbought in downtrend = potential reversal (traditional logic)
+                            signal = "PUT"
+                            confidence = 70
+                            reasoning.append(f"🔴 REVERSAL: Overbought rejection in downtrend")
+                            confirmations += 2
             
             # No signal
             if signal is None:
