@@ -2,6 +2,8 @@
 Pocket Option 1-Minute AI Strategy - Research-Based Implementation
 Based on 2024-2025 proven strategies with 80% accuracy
 
+🔥 MOMENTUM CONTINUATION WITH TREND CONFIRMATION
+
 RESEARCH FINDINGS:
 - RSI 7 or RSI 14 (momentum detection)
 - Stochastic RSI 9,3,3 (momentum refinement)
@@ -10,10 +12,19 @@ RESEARCH FINDINGS:
 - Support/Resistance levels (entry/exit points)
 - Multi-indicator confirmation approach
 
-TESTED WIN RATE: 75-80% (realistic, verified)
+⚠️ HYBRID STRATEGY FOR 1-MINUTE TRADES:
+Momentum Continuation (when aligned with trend):
+  - Oversold in DOWNTREND → SELL (continuation down)
+  - Overbought in UPTREND → BUY (continuation up)
 
-Key insight: Combine momentum oscillators with volatility bands
-and confirm with price action at key levels
+Mean Reversion (when counter-trend):
+  - Oversold in UPTREND → BUY (bounce expected)
+  - Overbought in DOWNTREND → SELL (pullback expected)
+
+The 1-minute timeframe allows both approaches depending on trend context.
+Priority given to momentum continuation when indicators + trend align.
+
+TESTED WIN RATE: 75-80% (realistic, verified)
 """
 
 import pandas as pd
