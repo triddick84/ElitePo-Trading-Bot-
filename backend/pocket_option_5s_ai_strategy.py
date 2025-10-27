@@ -170,52 +170,60 @@ class PocketOption5SecAIStrategy:
             logger.info(f"   RSI={curr_rsi:.1f}, Stoch={curr_stoch:.1f}")
             logger.info(f"   BB Position={bb_position:.2%}")
             
-            # === SIGNAL GENERATION ===
+            # === SIGNAL GENERATION - MOMENTUM CONTINUATION (INVERTED) ===
+            # For 5-second binary options, momentum CONTINUES briefly
+            # When oversold → price continues DOWN (not up)
+            # When overbought → price continues UP (not down)
+            
             signal = None
             confidence = 0
             reasoning = []
             confirmations = 0
             
-            # CALL Signal (Buy)
+            # PUT Signal (Momentum DOWN continuation)
+            # When RSI oversold + Stochastic oversold → expect FURTHER downside
             if curr_rsi < self.rsi_oversold:  # RSI oversold
                 if curr_stoch < self.stoch_oversold:  # Stochastic confirms
                     if bb_position < 0.3:  # Near lower BB
-                        signal = "CALL"
+                        signal = "PUT"  # ⬇️ INVERTED: Oversold continues down
                         confidence = 75
-                        reasoning.append(f"🟢 OVERSOLD: RSI={curr_rsi:.1f}, Stoch={curr_stoch:.1f}")
-                        reasoning.append(f"📊 Price at lower BB ({bb_position:.1%})")
+                        reasoning.append(f"🔴 MOMENTUM DOWN: RSI={curr_rsi:.1f}, Stoch={curr_stoch:.1f}")
+                        reasoning.append(f"📊 Extreme oversold → 5s downward continuation")
+                        reasoning.append(f"Price at lower BB ({bb_position:.1%}) → further downside")
                         confirmations += 3
                         
-                        # EMA cross bonus
-                        if ema_bullish_cross or price_above_ema:
-                            confidence += 5
-                            reasoning.append("✅ EMA bullish alignment")
-                            confirmations += 1
-                        
-                        # Pattern bonus
-                        if patterns['strongest']['signal'] == 'CALL':
-                            confidence += patterns['strongest']['confidence'] * 0.1
-                            reasoning.append(f"✅ {patterns['strongest']['description']}")
-                            confirmations += 1
-            
-            # PUT Signal (Sell)
-            elif curr_rsi > self.rsi_overbought:  # RSI overbought
-                if curr_stoch > self.stoch_overbought:  # Stochastic confirms
-                    if bb_position > 0.7:  # Near upper BB
-                        signal = "PUT"
-                        confidence = 75
-                        reasoning.append(f"🔴 OVERBOUGHT: RSI={curr_rsi:.1f}, Stoch={curr_stoch:.1f}")
-                        reasoning.append(f"📊 Price at upper BB ({bb_position:.1%})")
-                        confirmations += 3
-                        
-                        # EMA cross bonus
-                        if ema_bearish_cross or not price_above_ema:
+                        # EMA bearish alignment
+                        if not price_above_ema or ema_bearish_cross:
                             confidence += 5
                             reasoning.append("✅ EMA bearish alignment")
                             confirmations += 1
                         
-                        # Pattern bonus
+                        # Bearish pattern bonus
                         if patterns['strongest']['signal'] == 'PUT':
+                            confidence += patterns['strongest']['confidence'] * 0.1
+                            reasoning.append(f"✅ {patterns['strongest']['description']}")
+                            confirmations += 1
+            
+            # CALL Signal (Momentum UP continuation)
+            # When RSI overbought + Stochastic overbought → expect FURTHER upside
+            elif curr_rsi > self.rsi_overbought:  # RSI overbought
+                if curr_stoch > self.stoch_overbought:  # Stochastic confirms
+                    if bb_position > 0.7:  # Near upper BB
+                        signal = "CALL"  # ⬆️ INVERTED: Overbought continues up
+                        confidence = 75
+                        reasoning.append(f"🟢 MOMENTUM UP: RSI={curr_rsi:.1f}, Stoch={curr_stoch:.1f}")
+                        reasoning.append(f"📊 Extreme overbought → 5s upward continuation")
+                        reasoning.append(f"Price at upper BB ({bb_position:.1%}) → further upside")
+                        confirmations += 3
+                        
+                        # EMA bullish alignment
+                        if price_above_ema or ema_bullish_cross:
+                            confidence += 5
+                            reasoning.append("✅ EMA bullish alignment")
+                            confirmations += 1
+                        
+                        # Bullish pattern bonus
+                        if patterns['strongest']['signal'] == 'CALL':
                             confidence += patterns['strongest']['confidence'] * 0.1
                             reasoning.append(f"✅ {patterns['strongest']['description']}")
                             confirmations += 1
