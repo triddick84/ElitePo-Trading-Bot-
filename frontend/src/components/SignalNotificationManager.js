@@ -4,6 +4,7 @@ import SignalPopupNotification from './SignalPopupNotification';
 const SignalNotificationManager = ({ signals = [], onSignalExecute, onSignalDismiss, notificationSettings = {} }) => {
   const [activeNotifications, setActiveNotifications] = useState([]);
   const [processedSignalIds, setProcessedSignalIds] = useState(new Set());
+  const [assetNotificationTimestamps, setAssetNotificationTimestamps] = useState(new Map());
 
   useEffect(() => {
     // Process new signals for popup notifications
@@ -16,7 +17,13 @@ const SignalNotificationManager = ({ signals = [], onSignalExecute, onSignalDism
       const isRecentSignal = signal.timestamp && 
         (Date.now() - new Date(signal.timestamp).getTime()) < 300000; // 5 minutes
 
-      return isHighPriority && isNewSignal && isRecentSignal && notificationSettings.popupEnabled;
+      // Check if we already have a notification for this asset within last 30 seconds
+      const assetKey = signal.asset || signal.symbol;
+      const lastNotificationTime = assetNotificationTimestamps.get(assetKey);
+      const timeSinceLastNotification = lastNotificationTime ? (Date.now() - lastNotificationTime) : Infinity;
+      const isNotRecentlyNotified = timeSinceLastNotification > 30000; // 30 seconds cooldown per asset
+
+      return isHighPriority && isNewSignal && isRecentSignal && isNotRecentlyNotified && notificationSettings.popupEnabled;
     });
 
     if (newSignals.length > 0) {
@@ -24,17 +31,33 @@ const SignalNotificationManager = ({ signals = [], onSignalExecute, onSignalDism
       setActiveNotifications(prev => {
         const updated = [...prev];
         newSignals.forEach(signal => {
-          // Avoid duplicates
-          if (!updated.find(n => n.id === signal.id)) {
-            updated.push({
-              ...signal,
-              notificationId: `${signal.id}_${Date.now()}`,
-              showTime: Date.now()
-            });
-          }
+          const assetKey = signal.asset || signal.symbol;
+          
+          // Remove any existing notification for the same asset
+          const filteredUpdated = updated.filter(n => {
+            const existingAssetKey = n.asset || n.symbol;
+            return existingAssetKey !== assetKey;
+          });
+          
+          // Add the new notification
+          filteredUpdated.push({
+            ...signal,
+            notificationId: `${signal.id}_${Date.now()}`,
+            showTime: Date.now()
+          });
+          
+          // Update the asset notification timestamp
+          setAssetNotificationTimestamps(prev => {
+            const updated = new Map(prev);
+            updated.set(assetKey, Date.now());
+            return updated;
+          });
+          
+          return filteredUpdated;
         });
-        // Limit to 3 active notifications
-        return updated.slice(-3);
+        
+        // Limit to 1 active notification (only show one at a time)
+        return updated.slice(-1);
       });
 
       // Mark signals as processed
@@ -49,7 +72,7 @@ const SignalNotificationManager = ({ signals = [], onSignalExecute, onSignalDism
         playNotificationSound();
       }
     }
-  }, [signals, processedSignalIds, notificationSettings.popupEnabled, notificationSettings.soundEnabled]);
+  }, [signals, processedSignalIds, assetNotificationTimestamps, notificationSettings.popupEnabled, notificationSettings.soundEnabled]);
 
   const playNotificationSound = () => {
     try {
