@@ -84,17 +84,39 @@ class PocketOption15SecondStrategy:
         """Calculate RSI using TA-Lib"""
         return pd.Series(talib.RSI(prices.values, timeperiod=period), index=prices.index)
     
-    def calculate_stochastic(self, high: pd.Series, low: pd.Series, close: pd.Series) -> tuple:
-        """Calculate Slow Stochastic Oscillator"""
-        slowk, slowd = talib.STOCH(
-            high.values, low.values, close.values,
-            fastk_period=self.stoch_k_period,
-            slowk_period=self.stoch_d_period,
-            slowk_matype=0,
-            slowd_period=self.stoch_smooth,
-            slowd_matype=0
-        )
-        return pd.Series(slowk, index=close.index), pd.Series(slowd, index=close.index)
+    def calculate_stochastic_rsi(self, prices: pd.Series) -> tuple:
+        """
+        Calculate Stochastic RSI (9, 3, 3) for scalping
+        First calculate RSI, then apply Stochastic formula on RSI values
+        """
+        # Calculate RSI first
+        rsi = talib.RSI(prices.values, timeperiod=self.stoch_rsi_k_period)
+        
+        # Apply Stochastic formula on RSI values
+        # %K = (Current RSI - Lowest RSI) / (Highest RSI - Lowest RSI) * 100
+        stoch_rsi_k = []
+        for i in range(len(rsi)):
+            if i < self.stoch_rsi_k_period - 1:
+                stoch_rsi_k.append(np.nan)
+            else:
+                rsi_slice = rsi[i - self.stoch_rsi_k_period + 1:i + 1]
+                if len(rsi_slice) > 0 and not np.isnan(rsi_slice).all():
+                    rsi_min = np.nanmin(rsi_slice)
+                    rsi_max = np.nanmax(rsi_slice)
+                    if rsi_max - rsi_min != 0:
+                        k_value = ((rsi[i] - rsi_min) / (rsi_max - rsi_min)) * 100
+                        stoch_rsi_k.append(k_value)
+                    else:
+                        stoch_rsi_k.append(50)  # Neutral when range is 0
+                else:
+                    stoch_rsi_k.append(np.nan)
+        
+        stoch_rsi_k = pd.Series(stoch_rsi_k, index=prices.index)
+        
+        # Calculate %D as SMA of %K
+        stoch_rsi_d = stoch_rsi_k.rolling(window=self.stoch_rsi_d_period).mean()
+        
+        return stoch_rsi_k, stoch_rsi_d
     
     def calculate_bollinger_bands(self, prices: pd.Series) -> tuple:
         """Calculate Bollinger Bands"""
