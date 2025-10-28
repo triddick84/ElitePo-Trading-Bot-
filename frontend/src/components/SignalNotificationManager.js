@@ -129,15 +129,28 @@ const SignalNotificationManager = ({ signals = [], onSignalExecute, onSignalDism
     }
   };
 
-  // Auto-cleanup old notifications (after 5 minutes)
+  // Auto-cleanup old notifications and asset timestamps (after 5 minutes)
   useEffect(() => {
     const cleanup = setInterval(() => {
       const now = Date.now();
+      
+      // Clean up old notifications
       setActiveNotifications(prev => 
         prev.filter(notification => 
           (now - notification.showTime) < 300000 // 5 minutes
         )
       );
+      
+      // Clean up old asset timestamps (older than 5 minutes)
+      setAssetNotificationTimestamps(prev => {
+        const updated = new Map(prev);
+        for (const [asset, timestamp] of updated.entries()) {
+          if (now - timestamp > 300000) {
+            updated.delete(asset);
+          }
+        }
+        return updated;
+      });
     }, 30000); // Check every 30 seconds
 
     return () => clearInterval(cleanup);
