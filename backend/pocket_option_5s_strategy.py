@@ -400,29 +400,30 @@ class PocketOption5SecondStrategy:
             
             # === REQUIRE SUPPORT/RESISTANCE OR REVERSAL CONFIRMATION (MANDATORY) ===
             # At least ONE of these must be true
-            # 🔄 INVERTED to match 5s momentum continuation logic
+            # Support acts as bounce point for CALL, Resistance as rejection for PUT
             sr_confirms = False
             
             if reversal['reversal_detected']:
-                # For 5s, we want continuation at S/R, not reversal
-                if reversal['bounce_off_support'] and signal == "PUT":
+                # Price bouncing off support → CALL
+                if reversal['bounce_off_support'] and signal == "CALL":
                     confidence += 10
-                    reasoning.append(f"✅ AT SUPPORT: Testing support (strength: {reversal['reversal_strength']}) - downward continuation expected")
+                    reasoning.append(f"✅ BOUNCE OFF SUPPORT: Price reversing from support (strength: {reversal['reversal_strength']}) - upward move expected")
                     confirmations_count += 1
                     sr_confirms = True
-                elif reversal['bounce_off_resistance'] and signal == "CALL":
+                # Price rejecting at resistance → PUT
+                elif reversal['bounce_off_resistance'] and signal == "PUT":
                     confidence += 10
-                    reasoning.append(f"✅ AT RESISTANCE: Testing resistance (strength: {reversal['reversal_strength']}) - upward continuation expected")
+                    reasoning.append(f"✅ REJECTION AT RESISTANCE: Price reversing from resistance (strength: {reversal['reversal_strength']}) - downward move expected")
                     confirmations_count += 1
                     sr_confirms = True
-            elif proximity['near_support'] and signal == "PUT":
+            elif proximity['near_support'] and signal == "CALL":
                 confidence += 7
-                reasoning.append(f"✅ Price near support ({proximity['support_distance_pct']:.2f}% away) - downward momentum")
+                reasoning.append(f"✅ Near support ({proximity['support_distance_pct']:.2f}% away) - bounce expected for CALL")
                 confirmations_count += 1
                 sr_confirms = True
-            elif proximity['near_resistance'] and signal == "CALL":
+            elif proximity['near_resistance'] and signal == "PUT":
                 confidence += 7
-                reasoning.append(f"✅ Price near resistance ({proximity['resistance_distance_pct']:.2f}% away) - upward momentum")
+                reasoning.append(f"✅ Near resistance ({proximity['resistance_distance_pct']:.2f}% away) - rejection expected for PUT")
                 confirmations_count += 1
                 sr_confirms = True
             
