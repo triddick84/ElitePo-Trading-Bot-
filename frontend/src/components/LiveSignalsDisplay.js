@@ -111,11 +111,8 @@ const LiveSignalsDisplay = ({
           playNotificationSound();
         }
         
-        // Show popup notification if enabled
-        if (newSignalsCount > 0 && notificationSettings.popupEnabled) {
-          const latestSignal = highProbabilitySignals[0];
-          toast.success(`🚀 New ${latestSignal.direction} signal for ${latestSignal.symbol} (${latestSignal.probability}%)`);
-        }
+        // Popup notifications handled by SignalNotificationManager component
+        // Toast notifications removed as per user request
       }
       
       setPreviousSignalsCount(highProbabilitySignals.length);
