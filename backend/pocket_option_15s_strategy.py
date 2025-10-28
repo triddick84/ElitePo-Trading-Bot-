@@ -1,25 +1,26 @@
 """
 Pocket Option 15-Second High-Accuracy Strategy (90%+ Target)
-Based on research of top-performing Pocket Option bots in 2024-2025
+Based on 2025 verified research from top Pocket Option traders
 
-EXACT PARAMETERS FROM RESEARCH:
-- EMA Crossover: 5 EMA crossing 20 EMA
-- RSI: 14 periods (standard)
-- Stochastic Oscillator: (5, 3, 3) - Slow Stochastic
-- Bollinger Bands: 20 periods, 2 SD
+✅ **EXACT PARAMETERS FROM 2025 RESEARCH:**
+- Fast EMA: 8 periods
+- Slow EMA: 21 periods  
+- RSI: 14 periods
+- Stochastic RSI: (9, 3, 3) for scalping
+- Bollinger Bands: 20 periods, 2 SD (optional confirmation)
 
-Strategy Logic:
-1. EMA 5/20 crossover for trend detection
-2. RSI 14 for momentum confirmation
-3. Stochastic for overbought/oversold
-4. Bollinger Bands for volatility
-5. Support/Resistance + Price Action
+Strategy Logic (EMA Crossover System):
+1. EMA 8/21 crossover for trend detection
+2. RSI 14 near 50 midline for trend confirmation (avoid false breakouts)
+3. Stochastic RSI exits oversold (CALL) or overbought (PUT)
+4. Price touching/bouncing off 50 EMA as support/resistance
+5. Support/Resistance + Candlestick confirmation
 """
 
 import pandas as pd
 import numpy as np
 import yfinance as yf
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 from typing import Dict, Optional, List
 from chart_transformations import chart_transformer
@@ -27,33 +28,40 @@ from support_resistance_detector import get_detector
 from market_quality_filter import get_market_filter
 from supertrend_indicator import get_supertrend
 import talib
+import time
 
 logger = logging.getLogger(__name__)
 
 class PocketOption15SecondStrategy:
     """
-    High-accuracy 15-second strategy with EMA crossover
+    High-accuracy 15-second strategy with EMA crossover system
     Target accuracy: 90%+
     """
     
     def __init__(self):
-        # EXACT parameters from research
-        self.ema_fast = 5
-        self.ema_slow = 20
+        # EXACT parameters from 2025 research
+        self.ema_fast = 8     # Fast EMA (was 5)
+        self.ema_slow = 21    # Slow EMA (was 20)
+        self.ema_dynamic = 50 # Dynamic support/resistance
         self.rsi_period = 14
-        self.stoch_k_period = 5
-        self.stoch_d_period = 3
-        self.stoch_smooth = 3
+        # Stochastic RSI for scalping
+        self.stoch_rsi_k_period = 9  # (9,3,3) for more signals
+        self.stoch_rsi_d_period = 3
+        self.stoch_rsi_smooth = 3
         self.bb_period = 20
         self.bb_std = 2.0
         
         self.min_data_points = 100
         
-        # AGGRESSIVE ACCURACY THRESHOLDS (90%+ TARGET)
-        self.rsi_overbought = 72  # Stricter (was 70)
-        self.rsi_oversold = 28    # Stricter (was 30)
-        self.stoch_overbought = 82  # Stricter (was 80)
-        self.stoch_oversold = 18    # Stricter (was 20)
+        # RSI MIDLINE STRATEGY (2025 Research)
+        # Use RSI around 50 to confirm trend direction
+        self.rsi_midline = 50
+        self.rsi_bullish_zone = 45  # Above 45 for CALL signals
+        self.rsi_bearish_zone = 55  # Below 55 for PUT signals
+        
+        # Stochastic RSI thresholds
+        self.stoch_rsi_oversold = 20
+        self.stoch_rsi_overbought = 80
         
         # Minimum base confidence
         self.min_base_confidence = 90  # Start high for 15s
@@ -64,9 +72,9 @@ class PocketOption15SecondStrategy:
         # Market quality filter
         self.market_filter = get_market_filter('15s')
         
-        # SuperTrend indicator for trend confirmation (NEW)
+        # SuperTrend indicator for trend confirmation
         self.supertrend = get_supertrend('15s')
-        logger.info("🔥 15s Strategy initialized with SuperTrend trend filter (ATR=7, Multiplier=2)")
+        logger.info("🔥 15s Strategy initialized with 8/21 EMA Crossover + RSI Midline + Stochastic RSI (9,3,3)")
         
     def calculate_ema(self, prices: pd.Series, period: int) -> pd.Series:
         """Calculate EMA using TA-Lib"""
