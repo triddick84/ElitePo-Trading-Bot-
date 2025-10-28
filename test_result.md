@@ -271,6 +271,18 @@
         - comment: "✅ VERIFIED: New fields properly added to TradingConfiguration model. Both invert_signals (bool, default=False) and sound_alerts_enabled (bool, default=True) fields working correctly. Tested through bot start endpoint with new fields, config GET/PUT endpoints handle fields properly, values persist correctly in configuration updates."
 
 ## frontend:
+  - task: "Consolidated Signal Popup Notifications"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/src/components/SignalNotificationManager.js, /app/frontend/src/components/ConsolidatedSignalPopup.js, /app/frontend/src/components/LiveSignalsDisplay.js"
+    stuck_count: 0
+    priority: "critical"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+        - agent: "main"
+        - comment: "✅ IMPLEMENTED: Consolidated signal popup notification system. CHANGES: 1) Removed toast notifications completely from signal generation flow (LiveSignalsDisplay.js line 117), 2) Created new ConsolidatedSignalPopup.js component that accepts array of signals and displays them all in ONE popup, 3) Refactored SignalNotificationManager.js to consolidate multiple signals arriving at same time into ONE popup, 4) New signals while popup showing create NEW separate popup (not added to existing), 5) Auto-dismiss when ALL countdowns in popup expire, 6) Fixed broken forEach logic in deduplication code that was preventing popups from showing. Expected behavior: Multiple asset signals → 1 consolidated popup showing all signals together with individual countdowns. New signal arrival → new popup appears. READY FOR TESTING."
+
   - task: "Sound Alerts Implementation"
     implemented: true
     working: true
