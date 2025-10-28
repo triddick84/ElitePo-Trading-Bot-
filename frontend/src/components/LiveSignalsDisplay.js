@@ -201,15 +201,15 @@ const LiveSignalsDisplay = ({
       const result = await response.json();
       
       if (result.success && result.signal) {
-        toast.success(`🎯 Signal generated: ${result.signal.direction} ${result.signal.symbol} (${result.signal.probability}%)`);
+        // Signal generated - popup will show automatically via SignalNotificationManager
+        console.log('✅ Single signal generated:', result.signal);
         // Refresh signals to show the new one
         await fetchLiveSignals();
       } else {
-        toast.warning(result.message || 'No high-probability signal found for current market conditions');
+        console.warn('Signal generation completed but no high-probability signal found:', result.message);
       }
     } catch (error) {
       console.error('Error generating single signal:', error);
-      toast.error('Failed to generate signal. Please try again.');
     } finally {
       setIsGeneratingSignal(false);
     }
