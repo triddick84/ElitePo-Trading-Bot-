@@ -277,7 +277,7 @@ const LiveSignalsDisplay = ({
       
       // Handle error responses (no assets or timeframes selected)
       if (!result.success) {
-        toast.error(result.message || 'Failed to generate signals', { duration: 8000 });
+        console.error('Force generation failed:', result.message || 'Failed to generate signals');
         setIsForceGenerating(false);
         return;
       }
@@ -293,50 +293,40 @@ const LiveSignalsDisplay = ({
         // Update live signals with new force-generated signals
         setLiveSignals(prev => [...newSignals, ...prev].slice(0, 20)); // Keep last 20 signals
         
-        // Show success toast message
+        // Log success (popup will show automatically via SignalNotificationManager)
         const regularSignal = result.regular_signal;
         const otcSignal = result.otc_signal;
         
         if (regularSignal && otcSignal) {
-          toast.success(
-            `🚀 POCKET OPTION SYNCHRONIZED SIGNALS: 
-            📊 Regular: ${regularSignal.direction} ${regularSignal.symbol} (${regularSignal.probability}%) - ${regularSignal.timeframe} 
-            📈 OTC: ${otcSignal.direction} ${otcSignal.symbol} (${otcSignal.probability}%) - ${otcSignal.timeframe}
-            🕐 Chicago Timezone Synchronized for Candle Formation Timing!`,
-            { duration: 12000 }
-          );
+          console.log('🚀 POCKET OPTION SYNCHRONIZED SIGNALS:', {
+            regular: `${regularSignal.direction} ${regularSignal.symbol} (${regularSignal.probability}%) - ${regularSignal.timeframe}`,
+            otc: `${otcSignal.direction} ${otcSignal.symbol} (${otcSignal.probability}%) - ${otcSignal.timeframe}`,
+            timing: 'Chicago Timezone Synchronized'
+          });
         } else if (regularSignal) {
-          toast.success(
-            `🚀 POCKET OPTION SYNCHRONIZED SIGNAL: ${regularSignal.direction} ${regularSignal.symbol} (${regularSignal.probability}%)
-            🕐 ${regularSignal.timeframe} Candle Formation Timing - Chicago Timezone`,
-            { duration: 10000 }
-          );
+          console.log('🚀 POCKET OPTION SYNCHRONIZED SIGNAL:', `${regularSignal.direction} ${regularSignal.symbol} (${regularSignal.probability}%) - ${regularSignal.timeframe}`);
         } else if (otcSignal) {
-          toast.success(
-            `🚀 POCKET OPTION SYNCHRONIZED SIGNAL: ${otcSignal.direction} ${otcSignal.symbol} (${otcSignal.probability}%)
-            🕐 ${otcSignal.timeframe} Candle Formation Timing - Chicago Timezone`,
-            { duration: 10000 }
-          );
+          console.log('🚀 POCKET OPTION SYNCHRONIZED SIGNAL:', `${otcSignal.direction} ${otcSignal.symbol} (${otcSignal.probability}%) - ${otcSignal.timeframe}`);
         }
         
-        // Show detailed analysis info
+        // Log analysis details
         if (result.analysis_details && result.analysis_details.strategies_analyzed > 0) {
-          setTimeout(() => {
-            toast.info(
-              `📊 Analysis: ${result.analysis_details.strategies_analyzed} strategies combined. ${result.signals.length} markets analyzed. Enhanced popups with countdown timers activated!`,
-              { duration: 6000 }
-            );
-          }, 1000);
+          console.log('📊 Analysis:', {
+            strategies: result.analysis_details.strategies_analyzed,
+            markets: result.signals.length,
+            note: 'Enhanced popups with countdown timers activated!'
+          });
         }
       } else {
-        toast.warning(result.message || 'Force signal generation completed but no signals produced');
+        console.warn('Force signal generation completed but no signals produced:', result.message);
       }
     } catch (error) {
       console.error('Error force generating signal:', error);
       if (error.message.includes('404')) {
-        toast.error('No market data available for force generation');
+        console.error('No market data available for force generation');
       } else {
-        toast.error('Failed to force generate signal. Please try again.');
+        console.error('Failed to force generate signal');
+      }
       }
     } finally {
       setIsForceGenerating(false);
