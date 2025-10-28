@@ -231,13 +231,12 @@ const LiveSignalsDisplay = ({
       
       if (result.success) {
         setAutoGenerationActive(!autoGenerationActive);
-        toast.success(result.message);
+        console.log('✅ Auto generation toggled:', result.message);
       } else {
-        toast.error(result.message || 'Failed to toggle auto generation');
+        console.error('Failed to toggle auto generation:', result.message);
       }
     } catch (error) {
       console.error('Error toggling auto generation:', error);
-      toast.error('Failed to toggle auto generation. Please try again.');
     }
   };
 
