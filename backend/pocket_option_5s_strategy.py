@@ -432,24 +432,24 @@ class PocketOption5SecondStrategy:
                 return None  # MANDATORY - must have S/R or reversal confirmation
             
             # === Candlestick Pattern Confirmation (BONUS, not mandatory) ===
-            # 🔄 INVERTED for 5s continuation strategy
+            # Bullish patterns support CALL, Bearish patterns support PUT
             if signal == "CALL":
-                # Look for bearish patterns that failed (continuation up)
-                if patterns['pin_bar'] == 'BEARISH':
-                    confidence += 5
-                    reasoning.append("✅ Failed bearish pin bar - upward continuation")
-                elif patterns['engulfing'] == 'BEARISH':
-                    confidence += 5
-                    reasoning.append("✅ Failed bearish engulfing - upward continuation")
-            
-            elif signal == "PUT":
-                # Look for bullish patterns that failed (continuation down)
+                # Look for bullish patterns
                 if patterns['pin_bar'] == 'BULLISH':
                     confidence += 5
-                    reasoning.append("✅ Failed bullish pin bar - downward continuation")
+                    reasoning.append("✅ Bullish pin bar confirms CALL")
                 elif patterns['engulfing'] == 'BULLISH':
                     confidence += 5
-                    reasoning.append("✅ Failed bullish engulfing - downward continuation")
+                    reasoning.append("✅ Bullish engulfing confirms CALL")
+            
+            elif signal == "PUT":
+                # Look for bearish patterns
+                if patterns['pin_bar'] == 'BEARISH':
+                    confidence += 5
+                    reasoning.append("✅ Bearish pin bar confirms PUT")
+                elif patterns['engulfing'] == 'BEARISH':
+                    confidence += 5
+                    reasoning.append("✅ Bearish engulfing confirms PUT")
             
             # Doji at extremes signals indecision - we ignore for 5s momentum strategy
             # (Removed doji logic as it conflicts with continuation strategy)
