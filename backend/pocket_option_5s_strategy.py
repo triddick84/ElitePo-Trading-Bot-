@@ -325,38 +325,38 @@ class PocketOption5SecondStrategy:
             logger.info(f"   Stoch K={current_stoch_k:.1f}, BB Position={bb_position:.2%}")
             
             # === AGGRESSIVE SELECTIVITY: ONLY HIGHEST-PROBABILITY SETUPS ===
-            # We will ONLY generate signals when MULTIPLE factors strongly align
-            # This reduces signal volume but dramatically increases accuracy
+            # Use PROVEN EMA 20 + RSI 2 combination from successful Pocket Option traders
             
             signal = None
             confidence = 0
             reasoning = []
             confirmations_count = 0  # Track how many indicators confirm
             
-            # === PRIMARY SIGNAL: Extreme Bollinger Bands + RSI (STRICT THRESHOLDS) ===
-            # Only the STRONGEST oversold/overbought conditions
-            # 🔄 INVERTED LOGIC FOR 5s BINARY OPTIONS - Price extremes continue their momentum briefly
-            if bb_position < 0.10:  # Price near lower BB (stricter: was 0.15)
-                if current_rsi < self.rsi_oversold:  # RSI < 25 (stricter)
-                    signal = "PUT"  # ⬇️ INVERTED: Extreme low continues down for 5s
+            # === PRIMARY SIGNAL: EMA 20 + RSI 2 COMBINATION (CORRECT LOGIC) ===
+            # This is the CORNERSTONE of successful 5s trading on Pocket Option
+            
+            #  **CALL (UP) SETUP**: Price ABOVE EMA 20 + RSI 50-70
+            if current_price > current_ema:
+                if self.rsi_call_min <= current_rsi <= self.rsi_call_max:
+                    signal = "CALL"  # ⬆️ Strong upward momentum
                     confidence = self.min_base_confidence  # Start at 87%
-                    reasoning.append(f"🔴 EXTREME OVERSOLD: BB position {bb_position:.1%}, RSI={current_rsi:.1f} - Expect 5s downward continuation")
-                    confirmations_count += 2  # BB + RSI = 2 confirmations
+                    reasoning.append(f"🟢 CALL SETUP: Price above EMA 20 (${current_price:.5f} > ${current_ema:.5f}) + RSI={current_rsi:.1f} (50-70 range) - Strong upward momentum")
+                    confirmations_count += 2  # EMA + RSI = 2 confirmations
+                    logger.info(f"✅ CALL Signal: Price {((current_price/current_ema - 1)*100):.2f}% above EMA, RSI in momentum zone")
             
-            elif bb_position > 0.90:  # Price near upper BB (stricter: was 0.85)
-                if current_rsi > self.rsi_overbought:  # RSI > 75 (stricter)
-                    signal = "CALL"  # ⬆️ INVERTED: Extreme high continues up for 5s
+            # **PUT (DOWN) SETUP**: Price BELOW EMA 20 + RSI 30-50
+            elif current_price < current_ema:
+                if self.rsi_put_min <= current_rsi <= self.rsi_put_max:
+                    signal = "PUT"  # ⬇️ Strong downward momentum
                     confidence = self.min_base_confidence
-                    reasoning.append(f"🟢 EXTREME OVERBOUGHT: BB position {bb_position:.1%}, RSI={current_rsi:.1f} - Expect 5s upward continuation")
+                    reasoning.append(f"🔴 PUT SETUP: Price below EMA 20 (${current_price:.5f} < ${current_ema:.5f}) + RSI={current_rsi:.1f} (30-50 range) - Strong downward momentum")
                     confirmations_count += 2
+                    logger.info(f"✅ PUT Signal: Price {((current_ema/current_price - 1)*100):.2f}% below EMA, RSI in momentum zone")
             
-            # === SECONDARY SIGNALS REMOVED ===
-            # We NO LONGER generate signals from weaker "EMA + RSI Trend" setups
-            # ONLY the strongest BB extreme + RSI extreme setups pass
-            
-            # If no primary signal, STOP HERE - don't generate weak signals
+            # If no primary signal, STOP HERE - conditions not optimal
             if signal is None:
-                logger.info(f"⛔ NO PRIMARY SIGNAL: Conditions not extreme enough for {symbol}")
+                logger.info(f"⛔ NO PRIMARY SIGNAL: EMA+RSI conditions not met for {symbol}")
+                logger.info(f"   Current: Price={current_price:.5f}, EMA={current_ema:.5f}, RSI={current_rsi:.1f}")
                 return None
             
             # === SUPERTREND VALIDATION (CRITICAL - PREVENTS COUNTER-TREND SIGNALS) ===
