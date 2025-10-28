@@ -44,7 +44,7 @@ class PocketOption5SecondStrategy:
     """
     
     def __init__(self):
-        # EXACT parameters from research
+        # EXACT parameters from research (2025 verified)
         self.ema_period = 20
         self.rsi_period = 2  # Ultra-fast RSI for 5s
         self.stoch_k_period = 3
@@ -55,15 +55,20 @@ class PocketOption5SecondStrategy:
         
         self.min_data_points = 100
         
-        # AGGRESSIVE ACCURACY THRESHOLDS (90%+ TARGET)
-        # Stricter thresholds to reduce false signals
-        self.rsi_overbought = 75  # More extreme (was 70)
-        self.rsi_oversold = 25    # More extreme (was 30)
-        self.stoch_overbought = 85  # More extreme (was 80)
-        self.stoch_oversold = 15    # More extreme (was 20)
+        # CORRECT RSI THRESHOLDS FOR EMA + RSI STRATEGY (2025)
+        # For CALL: RSI 50-70 (momentum confirmation when above EMA)
+        # For PUT: RSI 30-50 (momentum confirmation when below EMA)
+        self.rsi_call_min = 50  # CALL when RSI 50-70
+        self.rsi_call_max = 70
+        self.rsi_put_min = 30   # PUT when RSI 30-50
+        self.rsi_put_max = 50
+        
+        # Stochastic thresholds for additional confirmation
+        self.stoch_overbought = 85  # More extreme
+        self.stoch_oversold = 15    # More extreme
         
         # MINIMUM confidence to even consider generating signal
-        self.min_base_confidence = 87  # Start at 87%, not 78%
+        self.min_base_confidence = 87  # Start at 87% for high accuracy
         
         # Enhanced S/R detector for 5s timeframe
         self.sr_detector = get_detector('5s')
