@@ -327,7 +327,6 @@ const LiveSignalsDisplay = ({
       } else {
         console.error('Failed to force generate signal');
       }
-      }
     } finally {
       setIsForceGenerating(false);
     }
