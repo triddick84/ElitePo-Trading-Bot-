@@ -1,64 +1,39 @@
 import React, { useState, useEffect } from 'react';
-import SignalPopupNotification from './SignalPopupNotification';
+import ConsolidatedSignalPopup from './ConsolidatedSignalPopup';
 
 const SignalNotificationManager = ({ signals = [], onSignalExecute, onSignalDismiss, notificationSettings = {} }) => {
-  const [activeNotifications, setActiveNotifications] = useState([]);
+  const [activePopups, setActivePopups] = useState([]);
   const [processedSignalIds, setProcessedSignalIds] = useState(new Set());
-  const [assetNotificationTimestamps, setAssetNotificationTimestamps] = useState(new Map());
 
   useEffect(() => {
     // Process new signals for popup notifications
     if (!signals || !Array.isArray(signals)) return;
+    if (!notificationSettings.popupEnabled) return;
 
+    // Find new high-priority signals that haven't been processed
     const newSignals = signals.filter(signal => {
-      // Only show popup for high-priority signals
       const isHighPriority = signal.probability >= 85 || signal.forced_generation;
       const isNewSignal = !processedSignalIds.has(signal.id);
       const isRecentSignal = signal.timestamp && 
         (Date.now() - new Date(signal.timestamp).getTime()) < 300000; // 5 minutes
-
-      // Check if we already have a notification for this asset within last 30 seconds
-      const assetKey = signal.asset || signal.symbol;
-      const lastNotificationTime = assetNotificationTimestamps.get(assetKey);
-      const timeSinceLastNotification = lastNotificationTime ? (Date.now() - lastNotificationTime) : Infinity;
-      const isNotRecentlyNotified = timeSinceLastNotification > 30000; // 30 seconds cooldown per asset
-
-      return isHighPriority && isNewSignal && isRecentSignal && isNotRecentlyNotified && notificationSettings.popupEnabled;
+      
+      return isHighPriority && isNewSignal && isRecentSignal;
     });
 
     if (newSignals.length > 0) {
-      // Add new signals to active notifications
-      setActiveNotifications(prev => {
-        const updated = [...prev];
-        newSignals.forEach(signal => {
-          const assetKey = signal.asset || signal.symbol;
-          
-          // Remove any existing notification for the same asset
-          const filteredUpdated = updated.filter(n => {
-            const existingAssetKey = n.asset || n.symbol;
-            return existingAssetKey !== assetKey;
-          });
-          
-          // Add the new notification
-          filteredUpdated.push({
-            ...signal,
-            notificationId: `${signal.id}_${Date.now()}`,
-            showTime: Date.now()
-          });
-          
-          // Update the asset notification timestamp
-          setAssetNotificationTimestamps(prev => {
-            const updated = new Map(prev);
-            updated.set(assetKey, Date.now());
-            return updated;
-          });
-          
-          return filteredUpdated;
-        });
-        
-        // Limit to 1 active notification (only show one at a time)
-        return updated.slice(-1);
-      });
+      // Create ONE new popup containing ALL new signals
+      const popupId = `popup_${Date.now()}`;
+      const newPopup = {
+        id: popupId,
+        signals: newSignals.map(signal => ({
+          ...signal,
+          notificationId: `${signal.id}_${Date.now()}`
+        })),
+        createdAt: Date.now()
+      };
+
+      // Add new popup (this will create a separate popup even if one is already showing)
+      setActivePopups(prev => [...prev, newPopup]);
 
       // Mark signals as processed
       setProcessedSignalIds(prev => {
@@ -72,7 +47,7 @@ const SignalNotificationManager = ({ signals = [], onSignalExecute, onSignalDism
         playNotificationSound();
       }
     }
-  }, [signals, processedSignalIds, assetNotificationTimestamps, notificationSettings.popupEnabled, notificationSettings.soundEnabled]);
+  }, [signals, processedSignalIds, notificationSettings.popupEnabled, notificationSettings.soundEnabled]);
 
   const playNotificationSound = () => {
     try {
