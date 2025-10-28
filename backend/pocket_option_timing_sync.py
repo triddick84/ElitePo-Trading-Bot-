@@ -85,10 +85,11 @@ class PocketOptionTimingSync:
         """
         Calculate the EXACT next candle formation time for Pocket Option
         
-        CRITICAL: Pocket Option candles are synchronized to UTC and close at exact
-        multiples of the timeframe interval (e.g., for 5s: 00, 05, 10, 15, 20, 25, 30... seconds)
+        CRITICAL FIX: Pocket Option trades execute at CURRENT candle close (not next candle).
+        For 5s at time 12:00:07 → Entry should be 12:00:10 (current candle closes)
+        NOT 12:00:15 (next candle).
         
-        Returns time when NEW candle will FORM (close of current + start of next)
+        Returns time when CURRENT candle will CLOSE (which is when we enter the trade)
         
         ENHANCED: Now provides millisecond-precision timing for ultra-short timeframes
         """
@@ -108,29 +109,29 @@ class PocketOptionTimingSync:
                 # Get current second with millisecond precision
                 current_second = current_utc.second + (current_utc.microsecond / 1_000_000)
                 
-                # Find next candle boundary within this minute
-                # Example for 5s: if at 07.5s, next boundary is 10s
-                next_boundary_second = ((int(current_second) // interval_seconds) + 1) * interval_seconds
+                # Find CURRENT candle close (not next candle)
+                # Example for 5s at 07.5s: current candle closes at 10s (not 15s)
+                current_boundary_second = ((int(current_second) // interval_seconds) + 1) * interval_seconds
                 
-                if next_boundary_second >= 60:
-                    # Next candle is in the next minute at second 0
-                    next_candle_time = current_utc.replace(second=0, microsecond=0) + timedelta(minutes=1)
+                if current_boundary_second >= 60:
+                    # Current candle closes at minute boundary
+                    candle_close_time = current_utc.replace(second=0, microsecond=0) + timedelta(minutes=1)
                 else:
-                    # Next candle is within this minute
-                    next_candle_time = current_utc.replace(second=next_boundary_second, microsecond=0)
+                    # Current candle closes within this minute
+                    candle_close_time = current_utc.replace(second=current_boundary_second, microsecond=0)
                 
-                logger.info(f"🕐 Ultra-short timing: Current {current_second:.3f}s → Next candle at second {next_boundary_second}")
+                logger.info(f"🕐 Ultra-short timing: Current {current_second:.3f}s → Candle closes at second {current_boundary_second}")
             
             else:
                 # For timeframes 1m+, calculate based on total seconds since epoch
                 epoch_seconds = int(current_utc.timestamp())
                 seconds_into_current_candle = epoch_seconds % interval_seconds
-                seconds_to_next_candle = interval_seconds - seconds_into_current_candle
-                next_candle_time = current_utc + timedelta(seconds=seconds_to_next_candle)
-                next_candle_time = next_candle_time.replace(microsecond=0)
+                seconds_to_candle_close = interval_seconds - seconds_into_current_candle
+                candle_close_time = current_utc + timedelta(seconds=seconds_to_candle_close)
+                candle_close_time = candle_close_time.replace(microsecond=0)
             
             # Convert to Chicago time for display
-            chicago_time = next_candle_time.astimezone(self.pocket_option_tz)
+            chicago_time = candle_close_time.astimezone(self.pocket_option_tz)
             
             # Apply latency compensation for ultra-short timeframes
             # This signals slightly earlier to account for network/execution delay
@@ -149,9 +150,8 @@ class PocketOptionTimingSync:
             
             # Log the calculated timing with full precision
             time_until = (chicago_time - self.get_chicago_time()).total_seconds()
-            logger.info(f"📊 Next {timeframe} candle: UTC {next_candle_time.strftime('%H:%M:%S.%f')[:-3]}, "
-                       f"Chicago {chicago_time.strftime('%H:%M:%S')}, "
-                       f"Entry in {time_until:.2f}s")
+            logger.info(f"📊 {timeframe} candle CLOSES in {time_until:.2f}s: UTC {candle_close_time.strftime('%H:%M:%S.%f')[:-3]}, "
+                       f"Chicago {chicago_time.strftime('%H:%M:%S')}")
             
             return chicago_time
             
