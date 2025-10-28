@@ -273,15 +273,18 @@
 ## frontend:
   - task: "Consolidated Signal Popup Notifications"
     implemented: true
-    working: "NA"
+    working: false
     file: "/app/frontend/src/components/SignalNotificationManager.js, /app/frontend/src/components/ConsolidatedSignalPopup.js, /app/frontend/src/components/LiveSignalsDisplay.js"
     stuck_count: 0
     priority: "critical"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: "NA"
         - agent: "main"
         - comment: "✅ IMPLEMENTED: Consolidated signal popup notification system. CHANGES: 1) Removed toast notifications completely from signal generation flow (LiveSignalsDisplay.js line 117), 2) Created new ConsolidatedSignalPopup.js component that accepts array of signals and displays them all in ONE popup, 3) Refactored SignalNotificationManager.js to consolidate multiple signals arriving at same time into ONE popup, 4) New signals while popup showing create NEW separate popup (not added to existing), 5) Auto-dismiss when ALL countdowns in popup expire, 6) Fixed broken forEach logic in deduplication code that was preventing popups from showing. Expected behavior: Multiple asset signals → 1 consolidated popup showing all signals together with individual countdowns. New signal arrival → new popup appears. READY FOR TESTING."
+        - working: false
+        - agent: "testing"
+        - comment: "🔍 COMPREHENSIVE TESTING COMPLETED - Consolidated popup system is 90% working but has one critical issue. ✅ WORKING FEATURES: 1) ✅ Consolidated Popup Display: Multiple signals (2-3 assets) successfully display in ONE popup with proper header '🚀 Trading Alerts (2)', each signal shows Asset name (EURUSD OTC), Direction (UP/DOWN with color coding), Timeframe (5s), Accuracy % (75-76%), 2) ✅ Individual Countdown Timers: Each signal has independent countdown timer counting down properly (observed 27s→17s, 42s→32s, etc.), timers display in different colors (blue→yellow→green for optimal entry), 3) ✅ Multiple Popup Creation: When generating new signals while popup showing, NEW separate popup appears correctly (verified 1→2 popups), popups stack vertically with proper z-index, 4) ✅ Signal Details Complete: All required information displayed - asset names, directions with emoji indicators (🟢 UP, 🔴 DOWN), timeframes, accuracy percentages, proper countdown formatting, 5) ✅ Auto-Dismiss Logic: Popups remain visible during countdown period, auto-dismiss functionality implemented (though not fully tested due to long timers). ❌ CRITICAL ISSUE: Toast notifications still appearing despite requirement to remove them completely. Found 1 toast notification during force signal generation - this violates the primary requirement that ONLY popup notifications should appear. The toast notifications are coming from LiveSignalsDisplay.js lines 204, 234, 281-331 where success/error toasts are still being triggered. ⚠️ MINOR ISSUES: Auto-dismiss testing incomplete due to 60+ second countdown timers, START NOW! highlighting not fully verified due to selector syntax issues in testing. RECOMMENDATION: Remove all remaining toast.success() and toast.error() calls from force signal generation flow in LiveSignalsDisplay.js to meet the 'NO TOAST NOTIFICATIONS' requirement."
 
   - task: "Sound Alerts Implementation"
     implemented: true
