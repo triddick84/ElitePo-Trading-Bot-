@@ -379,17 +379,18 @@ class PocketOption5SecondStrategy:
             logger.info(f"✅ SuperTrend validation passed: {supertrend_check['reason']}")
             
             # === REQUIRE STOCHASTIC CONFIRMATION (MANDATORY) ===
-            # Stochastic MUST agree, or we reject the signal
-            # 🔄 INVERTED to match 5s momentum continuation logic
+            # Stochastic Oscillator (3, 1, 1) provides additional confirmation
+            # For CALL: Stochastic should NOT be in extreme oversold (confirms upward momentum)
+            # For PUT: Stochastic should NOT be in extreme overbought (confirms downward momentum)
             stoch_confirms = False
-            if signal == "PUT" and current_stoch_k < self.stoch_oversold:  # < 15
+            if signal == "CALL" and current_stoch_k > 20:  # Not in oversold zone
                 confidence += 6
-                reasoning.append(f"✅ Stochastic confirms extreme low ({current_stoch_k:.1f}) - downward continuation")
+                reasoning.append(f"✅ Stochastic confirms upward momentum (K={current_stoch_k:.1f}, not oversold)")
                 confirmations_count += 1
                 stoch_confirms = True
-            elif signal == "CALL" and current_stoch_k > self.stoch_overbought:  # > 85
+            elif signal == "PUT" and current_stoch_k < 80:  # Not in overbought zone
                 confidence += 6
-                reasoning.append(f"✅ Stochastic confirms extreme high ({current_stoch_k:.1f}) - upward continuation")
+                reasoning.append(f"✅ Stochastic confirms downward momentum (K={current_stoch_k:.1f}, not overbought)")
                 confirmations_count += 1
                 stoch_confirms = True
             
