@@ -82,69 +82,43 @@ const SignalNotificationManager = ({ signals = [], onSignalExecute, onSignalDism
     }
   };
 
-  const handleCloseNotification = (notificationId) => {
-    setActiveNotifications(prev => 
-      prev.filter(notification => notification.notificationId !== notificationId)
-    );
-    
-    // Call dismiss callback if provided
-    const notification = activeNotifications.find(n => n.notificationId === notificationId);
-    if (notification && onSignalDismiss) {
-      onSignalDismiss(notification.id);
-    }
+  const handleClosePopup = (popupId) => {
+    setActivePopups(prev => prev.filter(popup => popup.id !== popupId));
   };
 
   const handleExecuteSignal = (signal) => {
-    // Close the notification
-    handleCloseNotification(signal.notificationId);
-    
     // Call execute callback if provided
     if (onSignalExecute) {
       onSignalExecute(signal);
     }
   };
 
-  // Auto-cleanup old notifications and asset timestamps (after 5 minutes)
+  // Auto-cleanup old popups (after 10 minutes)
   useEffect(() => {
     const cleanup = setInterval(() => {
       const now = Date.now();
-      
-      // Clean up old notifications
-      setActiveNotifications(prev => 
-        prev.filter(notification => 
-          (now - notification.showTime) < 300000 // 5 minutes
-        )
+      setActivePopups(prev => 
+        prev.filter(popup => (now - popup.createdAt) < 600000) // 10 minutes
       );
-      
-      // Clean up old asset timestamps (older than 5 minutes)
-      setAssetNotificationTimestamps(prev => {
-        const updated = new Map(prev);
-        for (const [asset, timestamp] of updated.entries()) {
-          if (now - timestamp > 300000) {
-            updated.delete(asset);
-          }
-        }
-        return updated;
-      });
-    }, 30000); // Check every 30 seconds
+    }, 60000); // Check every minute
 
     return () => clearInterval(cleanup);
   }, []);
 
   return (
     <div className="fixed top-0 right-0 z-50 pointer-events-none">
-      <div className="pointer-events-auto space-y-4 p-4">
-        {activeNotifications.map((signal, index) => (
+      <div className="pointer-events-auto space-y-4">
+        {activePopups.map((popup, index) => (
           <div
-            key={signal.notificationId}
+            key={popup.id}
             style={{
-              transform: `translateY(${index * 10}px)`,
+              transform: `translateY(${index * 20}px)`,
               zIndex: 1000 - index
             }}
           >
-            <SignalPopupNotification
-              signal={signal}
-              onClose={() => handleCloseNotification(signal.notificationId)}
+            <ConsolidatedSignalPopup
+              signals={popup.signals}
+              onClose={() => handleClosePopup(popup.id)}
               onExecute={handleExecuteSignal}
             />
           </div>
