@@ -683,14 +683,52 @@ class PocketOption5SecondStrategy:
             # Market quality contribution
             fusion_confidence += market_quality['overall_quality'] * 100 * fusion_weights['quality']
             
+            # === ADVANCED BONUSES: Volatility Squeeze + Supply/Demand Zones ===
+            squeeze_bonus = 0
+            zone_bonus = 0
+            
+            # Volatility Squeeze Bonus
+            if squeeze_data.get('in_squeeze'):
+                if squeeze_data.get('breakout_imminent'):
+                    # High-priority: breakout imminent
+                    squeeze_bonus = squeeze_data.get('confidence', 0) * 0.15  # Up to 15 points
+                    reasoning.append(f"🔥 VOLATILITY SQUEEZE: Breakout imminent (strength: {squeeze_data.get('squeeze_strength', 0):.0f}%)")
+                    
+                    # Check if breakout direction matches our signal
+                    if breakout_data.get('breakout_confirmed'):
+                        if breakout_data.get('direction') == 'UP' and signal == 'CALL':
+                            squeeze_bonus += 10
+                            reasoning.append(f"   ✅ Breakout UP confirms CALL")
+                        elif breakout_data.get('direction') == 'DOWN' and signal == 'PUT':
+                            squeeze_bonus += 10
+                            reasoning.append(f"   ✅ Breakout DOWN confirms PUT")
+                else:
+                    # Lower priority: in squeeze but no breakout yet
+                    squeeze_bonus = 5
+                    reasoning.append(f"🔥 VOLATILITY SQUEEZE: Building pressure (duration: {squeeze_data.get('squeeze_duration', 0)} candles)")
+            
+            # Supply/Demand Zone Bonus
+            zone_signal = sd_zones.get_zone_signal(df, zones_data, signal)
+            if zone_signal.get('in_zone'):
+                zone_bonus = zone_signal.get('confidence_boost', 0)
+                if zone_bonus > 0:
+                    reasoning.append(f"📦 SUPPLY/DEMAND ZONE: {zone_signal['zone_type'].upper()} zone "
+                                   f"(quality: {zone_signal['zone_quality']:.0f}%, fresh: {zone_signal.get('is_fresh', False)})")
+            
+            # Add bonuses to fusion confidence
+            fusion_confidence += squeeze_bonus + zone_bonus
+            
+            if squeeze_bonus > 0 or zone_bonus > 0:
+                logger.info(f"   💎 ADVANCED BONUSES: Squeeze +{squeeze_bonus:.1f}%, Zone +{zone_bonus:.1f}%")
+            
             # Update final confidence with fusion score
             original_confidence = confidence
             confidence = fusion_confidence
             
-            logger.info(f"🎯 Fusion Confidence: {confidence:.1f}% (Technical: {original_confidence:.1f}%, SMC: {smc_confidence:.1f}%, ML: {ml_confidence:.1f}%)")
+            logger.info(f"🎯 Fusion Confidence: {confidence:.1f}% (Technical: {original_confidence:.1f}%, SMC: {smc_confidence:.1f}%, ML: {ml_confidence:.1f}%, Squeeze: {squeeze_bonus:.1f}%, Zone: {zone_bonus:.1f}%)")
             
             # Add fusion analysis to reasoning
-            reasoning.append(f"🎯 Multi-layer fusion: SMC {smc_confidence:.0f}% + Tech {original_confidence:.0f}% + ML {ml_confidence:.0f}% = {confidence:.0f}%")
+            reasoning.append(f"🎯 Multi-layer fusion: SMC {smc_confidence:.0f}% + Tech {original_confidence:.0f}% + ML {ml_confidence:.0f}% + Squeeze {squeeze_bonus:.0f}% + Zone {zone_bonus:.0f}% = {confidence:.0f}%")
             
             # === FINAL CONFIDENCE CHECK (RAISED THRESHOLD) ===
             # After fusion, confidence must be >= 88% to proceed
