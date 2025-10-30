@@ -431,71 +431,71 @@ class PocketOption1MinuteStrategy:
                         confidence += 4
                         reasoning.append(f"🎯 BONUS: Fresh EMA bearish crossover (inverted for CALL)!")
             
-            # === STOCHASTIC CONFIRMATION (MANDATORY) ===
+            # === STOCHASTIC CONFIRMATION (MANDATORY - INVERTED) ===
             stoch_confirms = False
-            if signal == "CALL":
-                if current_stoch_k < 30:  # Oversold
-                    confidence += 7
-                    reasoning.append(f"✅ Stochastic oversold ({current_stoch_k:.1f}) - strong bounce expected")
-                    confirmations_count += 1
-                    stoch_confirms = True
-                elif current_stoch_k < 70:  # Not overbought
-                    confidence += 4
-                    reasoning.append(f"✅ Stochastic OK ({current_stoch_k:.1f}) - room to rise")
-                    stoch_confirms = True
-            elif signal == "PUT":
+            if signal == "CALL":  # INVERTED: CALL needs overbought stoch
                 if current_stoch_k > 70:  # Overbought
                     confidence += 7
-                    reasoning.append(f"✅ Stochastic overbought ({current_stoch_k:.1f}) - strong drop expected")
+                    reasoning.append(f"✅ Stochastic overbought-INVERTED ({current_stoch_k:.1f}) for CALL")
                     confirmations_count += 1
                     stoch_confirms = True
                 elif current_stoch_k > 30:  # Not oversold
                     confidence += 4
-                    reasoning.append(f"✅ Stochastic OK ({current_stoch_k:.1f}) - room to fall")
+                    reasoning.append(f"✅ Stochastic OK-INVERTED ({current_stoch_k:.1f}) for CALL")
+                    stoch_confirms = True
+            elif signal == "PUT":  # INVERTED: PUT needs oversold stoch
+                if current_stoch_k < 30:  # Oversold
+                    confidence += 7
+                    reasoning.append(f"✅ Stochastic oversold-INVERTED ({current_stoch_k:.1f}) for PUT")
+                    confirmations_count += 1
+                    stoch_confirms = True
+                elif current_stoch_k < 70:  # Not overbought
+                    confidence += 4
+                    reasoning.append(f"✅ Stochastic OK-INVERTED ({current_stoch_k:.1f}) for PUT")
                     stoch_confirms = True
             
             if not stoch_confirms:
                 logger.warning(f"⛔ SIGNAL REJECTED: Stochastic doesn't confirm")
                 return None
             
-            # === SUPPORT/RESISTANCE CONFIRMATION (MANDATORY) ===
+            # === SUPPORT/RESISTANCE CONFIRMATION (MANDATORY - INVERTED) ===
             sr_confirms = False
             
-            if signal == "CALL":
-                # Enhanced S/R confirmation with reversal detection
-                if reversal['reversal_detected'] and reversal['bounce_off_support']:
-                    confidence += 8
-                    reasoning.append(f"✅ REVERSAL: Bounce off support (strength: {reversal['reversal_strength']})")
-                    confirmations_count += 1
-                    sr_confirms = True
-                elif proximity['near_support']:
-                    confidence += 6
-                    reasoning.append(f"✅ Price near support ({proximity['support_distance_pct']:.2f}% away)")
-                    confirmations_count += 1
-                    sr_confirms = True
-                
-                # Bullish patterns (bonus)
-                if patterns.get('hammer') or patterns.get('bullish_engulfing'):
-                    confidence += 3
-                    reasoning.append("✅ Bullish candlestick pattern")
-            
-            elif signal == "PUT":
+            if signal == "CALL":  # INVERTED: CALL at resistance
                 # Enhanced S/R confirmation with reversal detection
                 if reversal['reversal_detected'] and reversal['bounce_off_resistance']:
                     confidence += 8
-                    reasoning.append(f"✅ REVERSAL: Reversal at resistance (strength: {reversal['reversal_strength']})")
+                    reasoning.append(f"✅ REVERSAL-INVERTED: At resistance (strength: {reversal['reversal_strength']}) for CALL")
                     confirmations_count += 1
                     sr_confirms = True
                 elif proximity['near_resistance']:
                     confidence += 6
-                    reasoning.append(f"✅ Price near resistance ({proximity['resistance_distance_pct']:.2f}% away)")
+                    reasoning.append(f"✅ Price near resistance-INVERTED ({proximity['resistance_distance_pct']:.2f}% away) for CALL")
                     confirmations_count += 1
                     sr_confirms = True
                 
-                # Bearish patterns (bonus)
+                # Bearish patterns inverted for CALL
                 if patterns.get('hanging_man') or patterns.get('bearish_engulfing'):
                     confidence += 3
-                    reasoning.append("✅ Bearish candlestick pattern")
+                    reasoning.append("✅ Bearish pattern-INVERTED for CALL")
+            
+            elif signal == "PUT":  # INVERTED: PUT at support
+                # Enhanced S/R confirmation with reversal detection
+                if reversal['reversal_detected'] and reversal['bounce_off_support']:
+                    confidence += 8
+                    reasoning.append(f"✅ REVERSAL-INVERTED: At support (strength: {reversal['reversal_strength']}) for PUT")
+                    confirmations_count += 1
+                    sr_confirms = True
+                elif proximity['near_support']:
+                    confidence += 6
+                    reasoning.append(f"✅ Price near support-INVERTED ({proximity['support_distance_pct']:.2f}% away) for PUT")
+                    confirmations_count += 1
+                    sr_confirms = True
+                
+                # Bullish patterns inverted for PUT
+                if patterns.get('hammer') or patterns.get('bullish_engulfing'):
+                    confidence += 3
+                    reasoning.append("✅ Bullish pattern-INVERTED for PUT")
             
             if not sr_confirms:
                 logger.warning(f"⛔ SIGNAL REJECTED: No S/R confirmation")
