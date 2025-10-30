@@ -241,7 +241,14 @@ class PocketOption5SecondStrategy:
     
     def generate_signal(self, symbol: str, chart_type: str = "japanese_candles", user_timeframes: List[str] = None) -> Optional[Dict]:
         """
-        Generate 5-second trading signal using researched high-accuracy strategy
+        Generate 5-second trading signal using ADVANCED MULTI-LAYER strategy
+        
+        Layer 1: Smart Money Concepts (SMC) - Institutional activity detection
+        Layer 2: Technical Analysis - EMA, RSI, Stochastic, BB
+        Layer 3: ML Ensemble - XGBoost + LightGBM + Random Forest
+        Layer 4: Signal Fusion - All layers must confirm
+        
+        Target Accuracy: 93-95%+
         
         Returns:
             Dict with signal, confidence, reasoning, and analysis
@@ -264,6 +271,41 @@ class PocketOption5SecondStrategy:
                 return None  # Don't trade in poor conditions
             
             logger.info(f"✅ Market quality check passed: {market_quality['overall_quality']:.1%}")
+            
+            # === LAYER 1: SMART MONEY CONCEPTS ANALYSIS (NEW) ===
+            logger.info("🧠 === LAYER 1: Smart Money Analysis ===")
+            from smart_money_detector import get_smart_money_detector
+            smc_detector = get_smart_money_detector('5s')
+            smc_analysis = smc_detector.get_comprehensive_analysis(df)
+            
+            smc_confidence = smc_analysis.get('smc_confidence', 0)
+            smc_direction = smc_analysis.get('smc_direction')
+            
+            if smc_confidence < 30:
+                logger.warning(f"⛔ SIGNAL REJECTED: Insufficient Smart Money signals ({smc_confidence:.1f}%)")
+                logger.warning(f"   No clear institutional activity detected")
+                return None  # Smart Money layer must show some activity
+            
+            logger.info(f"✅ Smart Money: {smc_direction or 'NEUTRAL'} with {smc_confidence:.1f}% confidence")
+            logger.info(f"   SMC Reasons: {', '.join(smc_analysis.get('smc_reasons', []))}")
+            
+            # === LAYER 3: MACHINE LEARNING ENSEMBLE (NEW) ===
+            # Run ML prediction early to validate setup
+            logger.info("🤖 === LAYER 3: ML Ensemble Prediction ===")
+            from ml_signal_ensemble import get_ml_ensemble
+            ml_ensemble = get_ml_ensemble()
+            ml_prediction = ml_ensemble.predict(df, smc_analysis)
+            
+            ml_confidence = ml_prediction.get('confidence', 0)
+            ml_direction = ml_prediction.get('direction')
+            ml_agreement = ml_prediction.get('agreement', False)
+            
+            logger.info(f"🤖 ML Prediction: {ml_direction or 'NONE'} with {ml_confidence:.1f}% confidence (Agreement: {ml_agreement})")
+            if ml_prediction.get('model_votes'):
+                logger.info(f"   Model Votes: {ml_prediction['model_votes']}")
+            
+            # === LAYER 2: TECHNICAL ANALYSIS ===
+            logger.info("📊 === LAYER 2: Technical Indicators ===")
             
             # Calculate all indicators
             close_prices = df['close']
