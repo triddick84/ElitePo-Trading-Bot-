@@ -771,9 +771,23 @@ class PocketOption5SecondStrategy:
                         "direction": ml_direction,
                         "agreement": ml_agreement,
                         "model_votes": ml_prediction.get('model_votes', {})
+                    },
+                    "volatility_squeeze": {
+                        "in_squeeze": squeeze_data.get('in_squeeze', False),
+                        "breakout_imminent": squeeze_data.get('breakout_imminent', False),
+                        "squeeze_strength": squeeze_data.get('squeeze_strength', 0),
+                        "breakout_direction": squeeze_data.get('breakout_direction'),
+                        "bonus": squeeze_bonus
+                    },
+                    "supply_demand_zones": {
+                        "total_zones": zones_data.get('total_zones', 0),
+                        "in_zone": zone_signal.get('in_zone', False),
+                        "zone_type": zone_signal.get('zone_type'),
+                        "zone_quality": zone_signal.get('zone_quality', 0),
+                        "bonus": zone_bonus
                     }
                 },
-                "strategy": "Pocket Option 5s ADVANCED Multi-Layer",
+                "strategy": "Pocket Option 5s ULTRA-ADVANCED Multi-Layer",
                 "timeframe": "5s",
                 "fusion_score": confidence
             }
