@@ -611,16 +611,74 @@ class PocketOption5SecondStrategy:
             confidence += validation['confidence_adjustment']
             reasoning.extend(validation['reasoning'])
             
-            # === FINAL CONFIDENCE CHECK ===
-            # After all adjustments, confidence must still be >= 88% to proceed
+            # === LAYER 4: SIGNAL FUSION (Multi-Layer Confirmation) ===
+            logger.info("🎯 === LAYER 4: Signal Fusion & Final Validation ===")
+            
+            # Check layer agreement
+            layer_signals = []
+            if smc_direction:
+                layer_signals.append(smc_direction)
+            if signal:
+                layer_signals.append(signal)
+            if ml_direction:
+                layer_signals.append(ml_direction)
+            
+            # All active layers must agree on direction
+            if len(set(layer_signals)) > 1:
+                logger.warning(f"⛔ SIGNAL REJECTED: Layer disagreement")
+                logger.warning(f"   SMC: {smc_direction}, Technical: {signal}, ML: {ml_direction}")
+                return None
+            
+            # Calculate weighted fusion confidence
+            fusion_confidence = 0
+            fusion_weights = {
+                'smc': 0.30,      # 30% from Smart Money
+                'technical': 0.25,  # 25% from Technical
+                'ml': 0.25,       # 25% from ML
+                'structure': 0.10,  # 10% from Market Structure  
+                'quality': 0.10   # 10% from Market Quality
+            }
+            
+            # SMC contribution
+            fusion_confidence += smc_confidence * fusion_weights['smc']
+            
+            # Technical contribution
+            fusion_confidence += confidence * fusion_weights['technical']
+            
+            # ML contribution
+            if ml_direction:
+                fusion_confidence += ml_confidence * fusion_weights['ml']
+            else:
+                # If ML doesn't predict, redistribute weight to technical
+                fusion_confidence += confidence * fusion_weights['ml']
+            
+            # Market structure contribution
+            structure_score = smc_analysis.get('market_structure', {}).get('strength', 50)
+            fusion_confidence += structure_score * fusion_weights['structure']
+            
+            # Market quality contribution
+            fusion_confidence += market_quality['overall_quality'] * 100 * fusion_weights['quality']
+            
+            # Update final confidence with fusion score
+            original_confidence = confidence
+            confidence = fusion_confidence
+            
+            logger.info(f"🎯 Fusion Confidence: {confidence:.1f}% (Technical: {original_confidence:.1f}%, SMC: {smc_confidence:.1f}%, ML: {ml_confidence:.1f}%)")
+            
+            # Add fusion analysis to reasoning
+            reasoning.append(f"🎯 Multi-layer fusion: SMC {smc_confidence:.0f}% + Tech {original_confidence:.0f}% + ML {ml_confidence:.0f}% = {confidence:.0f}%")
+            
+            # === FINAL CONFIDENCE CHECK (RAISED THRESHOLD) ===
+            # After fusion, confidence must be >= 88% to proceed
             if confidence < 88:
-                logger.warning(f"⛔ SIGNAL REJECTED: Final confidence too low ({confidence:.0f}% < 88%)")
+                logger.warning(f"⛔ SIGNAL REJECTED: Fusion confidence too low ({confidence:.0f}% < 88%)")
                 return None
             
             # Cap confidence at 98%
             confidence = min(confidence, 98)
             
-            logger.info(f"✅ SIGNAL APPROVED: {signal} with {confidence:.0f}% confidence ({confirmations_count} confirmations)")
+            logger.info(f"✅ SIGNAL APPROVED: {signal} with {confidence:.0f}% fusion confidence ({confirmations_count} confirmations)")
+            logger.info(f"   🧠 SMC + 📊 Technical + 🤖 ML = 🎯 High-Probability Setup")
             
             return {
                 "signal": signal,
@@ -638,10 +696,24 @@ class PocketOption5SecondStrategy:
                     "reversal_detected": reversal['reversal_detected'],
                     "reversal_type": reversal['reversal_type'],
                     "patterns": patterns,
-                    "ai_ensemble": ai_analysis if ai_analysis else None
+                    "ai_ensemble": ai_analysis if ai_analysis else None,
+                    "smc_analysis": {
+                        "confidence": smc_confidence,
+                        "direction": smc_direction,
+                        "liquidity_grab": smc_analysis.get('liquidity_grab', {}).get('grab_detected', False),
+                        "near_order_block": smc_analysis.get('order_blocks', {}).get('near_ob', False),
+                        "fvg_detected": smc_analysis.get('fair_value_gap', {}).get('fvg_detected', False)
+                    },
+                    "ml_prediction": {
+                        "confidence": ml_confidence,
+                        "direction": ml_direction,
+                        "agreement": ml_agreement,
+                        "model_votes": ml_prediction.get('model_votes', {})
+                    }
                 },
-                "strategy": "Pocket Option 5s High-Accuracy",
-                "timeframe": "5s"
+                "strategy": "Pocket Option 5s ADVANCED Multi-Layer",
+                "timeframe": "5s",
+                "fusion_score": confidence
             }
             
         except Exception as e:
