@@ -458,41 +458,6 @@ class PocketOption1MinuteStrategy:
                 return None
             
             # === SUPPORT/RESISTANCE CONFIRMATION (MANDATORY) ===
-                    confirmations_count += 1
-                    stoch_confirms = True
-                else:
-                    logger.warning(f"⛔ CALL rejected: Stochastic too high ({current_stoch_k:.1f})")
-                    return None  # Too overbought
-            
-            elif signal == "PUT":
-                if current_stoch_k > 30:  # Not too oversold
-                    if current_stoch_k > 70:  # Bonus for overbought
-                        confidence += 6
-                        reasoning.append(f"✅ Stochastic overbought ({current_stoch_k:.1f}) - strong downside")
-                    else:
-                        confidence += 4
-                        reasoning.append(f"✅ Stochastic OK ({current_stoch_k:.1f})")
-                    confirmations_count += 1
-                    stoch_confirms = True
-                else:
-                    logger.warning(f"⛔ PUT rejected: Stochastic too low ({current_stoch_k:.1f})")
-                    return None  # Too oversold
-            
-            if not stoch_confirms:
-                return None
-                if reversal['reversal_detected'] and reversal['bounce_off_support']:
-                    confidence += 7
-                    reasoning.append(f"✅ REVERSAL: Bounce off support (strength: {reversal['reversal_strength']})")
-                elif proximity['near_support']:
-                    confidence += 5
-                    reasoning.append(f"✅ Price near support ({proximity['support_distance_pct']:.2f}% away)")
-                
-                # Bullish patterns
-                if patterns.get('hammer') or patterns.get('bullish_engulfing'):
-                    confidence += 3
-                    reasoning.append("✅ Bullish candlestick pattern detected")
-            
-            # === REQUIRE S/R CONFIRMATION (MANDATORY) ===
             sr_confirms = False
             
             if signal == "CALL":
@@ -536,12 +501,12 @@ class PocketOption1MinuteStrategy:
                 return None
             
             # === MINIMUM CONFIRMATIONS CHECK ===
-            # Need at least 5 confirmations (3 from triple + 1 stoch + 1 S/R)
-            if confirmations_count < 5:
-                logger.warning(f"⛔ SIGNAL REJECTED: Only {confirmations_count} confirmations (need 5+)")
+            # Need at least 4 confirmations (RSI+BB + MACD + Stoch + S/R)
+            if confirmations_count < 4:
+                logger.warning(f"⛔ SIGNAL REJECTED: Only {confirmations_count} confirmations (need 4+)")
                 return None
             
-            reasoning.append(f"✅ ELITE SETUP: {confirmations_count} confirmations")
+            reasoning.append(f"✅ HIGH-QUALITY SETUP: {confirmations_count} confirmations")
             
             if signal is None:
                 return None
