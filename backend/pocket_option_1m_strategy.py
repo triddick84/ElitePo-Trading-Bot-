@@ -304,13 +304,14 @@ class PocketOption1MinuteStrategy:
             current_stoch_k = stoch_k.iloc[-1]
             current_bb_upper = bb_upper.iloc[-1]
             current_bb_lower = bb_lower.iloc[-1]
+            current_bb_middle = bb_middle.iloc[-1]
             
             # Check for NaN values
-            if pd.isna([current_ema, current_rsi, current_macd, current_stoch_k]).any():
+            if pd.isna([current_ema_fast, current_ema_slow, current_rsi_fast, current_macd, current_stoch_k]).any():
                 logger.warning(f"NaN values in indicators for {symbol}")
                 return None
             
-            # Enhanced S/R detection with trend reversal analysis
+            # Enhanced S/R detection
             sr_levels = self.sr_detector.identify_key_levels(df)
             proximity = self.sr_detector.is_near_support_resistance(current_price, sr_levels)
             reversal = self.sr_detector.detect_trend_reversal(df, sr_levels)
@@ -318,66 +319,145 @@ class PocketOption1MinuteStrategy:
             # Detect candlestick patterns
             patterns = self.detect_candlestick_patterns(df)
             
-            # MACD crossover detection
+            # MACD crossover and histogram analysis
             macd_bullish_cross = prev_macd_hist < 0 and current_macd_hist > 0
             macd_bearish_cross = prev_macd_hist > 0 and current_macd_hist < 0
+            macd_bullish_momentum = current_macd_hist > 0 and current_macd_hist > prev_macd_hist
+            macd_bearish_momentum = current_macd_hist < 0 and current_macd_hist < prev_macd_hist
+            
+            # EMA crossover analysis
+            ema_cross_bullish = prev_ema_fast < prev_ema_slow and current_ema_fast > current_ema_slow
+            ema_cross_bearish = prev_ema_fast > prev_ema_slow and current_ema_fast < current_ema_slow
+            ema_aligned_bullish = current_ema_fast > current_ema_slow
+            ema_aligned_bearish = current_ema_fast < current_ema_slow
             
             # Calculate BB position
             bb_position = (current_price - current_bb_lower) / (current_bb_upper - current_bb_lower) if current_bb_upper != current_bb_lower else 0.5
             
-            # Strategy Logic (Multi-Indicator Confluence)
-            signal = None
-            confidence = 0
-            reasoning = []
+            # Price touching Bollinger Bands
+            touching_lower_bb = current_price <= current_bb_lower * 1.002  # Within 0.2% of lower BB
+            touching_upper_bb = current_price >= current_bb_upper * 0.998  # Within 0.2% of upper BB
             
-            logger.info(f"🎯 1m Analysis for {symbol}:")
-            logger.info(f"   Price={current_price:.5f}, EMA={current_ema:.5f}, RSI={current_rsi:.1f}")
-            logger.info(f"   MACD={current_macd:.5f}, Signal={current_macd_signal:.5f}, Hist={current_macd_hist:.5f}")
-            logger.info(f"   Stoch={current_stoch_k:.1f}, BB Position={bb_position:.2%}")
-            
-            # === AGGRESSIVE SELECTIVITY: ONLY TRIPLE CONFIRMATION SETUPS ===
-            # The HIGHEST quality signals: ALL THREE indicators must align
+            # Strategy Logic (Research-Verified 1-minute setup)
             signal = None
             confidence = 0
             reasoning = []
             confirmations_count = 0
             
-            # === PRIMARY SIGNAL: TRIPLE CONFIRMATION (EMA + RSI + MACD) - MANDATORY ===
-            # This is THE signal - everything must align perfectly
-            if current_price > current_ema and current_rsi > 50 and current_macd > current_macd_signal:
-                # Perfect bullish alignment
-                signal = "CALL"
-                confidence = self.min_base_confidence  # Start at 92%
-                reasoning.append("🟢 TRIPLE BULLISH CONFIRMATION: Price > EMA, RSI > 50, MACD > Signal")
-                reasoning.append("💡 All major indicators perfectly aligned")
-                confirmations_count += 3  # All three indicators
+            logger.info(f"🎯 1m Analysis for {symbol}:")
+            logger.info(f"   Price={current_price:.5f}, EMA Fast={current_ema_fast:.5f}, EMA Slow={current_ema_slow:.5f}")
+            logger.info(f"   RSI-7={current_rsi_fast:.1f}, RSI-14={current_rsi_slow:.1f}")
+            logger.info(f"   MACD Hist={current_macd_hist:.5f}, Stoch={current_stoch_k:.1f}")
+            logger.info(f"   BB Position={bb_position:.2%}, Lower BB={current_bb_lower:.5f}, Upper BB={current_bb_upper:.5f}")
             
-            elif current_price < current_ema and current_rsi < 50 and current_macd < current_macd_signal:
-                # Perfect bearish alignment
+            # === PRIMARY SIGNAL: RSI EXTREMES + BOLLINGER BAND TOUCHES ===
+            # Research-verified: Best setup for 1-minute binary options
+            
+            # **CALL Setup**: RSI oversold + Price touches lower BB
+            if current_rsi_fast < self.rsi_oversold and touching_lower_bb:
+                signal = "CALL"
+                confidence = self.min_base_confidence  # Start at 90%
+                confirmations_count += 2  # RSI + BB
+                
+                if current_rsi_fast < self.rsi_extreme_oversold:
+                    reasoning.append(f"🟢 EXTREME OVERSOLD: RSI-7={current_rsi_fast:.1f} (< 20) + Price touching lower BB")
+                    confidence += 5  # Extra confidence for extreme
+                else:
+                    reasoning.append(f"🟢 OVERSOLD SETUP: RSI-7={current_rsi_fast:.1f} (< 30) + Price at lower BB ({bb_position:.1%})")
+                
+                logger.info(f"✅ CALL Signal: Oversold RSI + Lower BB touch")
+            
+            # **PUT Setup**: RSI overbought + Price touches upper BB  
+            elif current_rsi_fast > self.rsi_overbought and touching_upper_bb:
                 signal = "PUT"
                 confidence = self.min_base_confidence
-                reasoning.append("🔴 TRIPLE BEARISH CONFIRMATION: Price < EMA, RSI < 50, MACD < Signal")
-                reasoning.append("💡 All major indicators perfectly aligned")
-                confirmations_count += 3
+                confirmations_count += 2  # RSI + BB
+                
+                if current_rsi_fast > self.rsi_extreme_overbought:
+                    reasoning.append(f"🔴 EXTREME OVERBOUGHT: RSI-7={current_rsi_fast:.1f} (> 80) + Price touching upper BB")
+                    confidence += 5
+                else:
+                    reasoning.append(f"🔴 OVERBOUGHT SETUP: RSI-7={current_rsi_fast:.1f} (> 70) + Price at upper BB ({bb_position:.1%})")
+                
+                logger.info(f"✅ PUT Signal: Overbought RSI + Upper BB touch")
             
-            # If no triple confirmation, REJECT - don't look for weaker signals
-            else:
-                logger.info(f"⛔ NO TRIPLE CONFIRMATION: Indicators not aligned for {symbol}")
-                logger.info(f"   Price vs EMA: {'>' if current_price > current_ema else '<'}")
-                logger.info(f"   RSI vs 50: {'>' if current_rsi > 50 else '<'} ({current_rsi:.1f})")
-                logger.info(f"   MACD vs Signal: {'>' if current_macd > current_macd_signal else '<'}")
-                return None  # ONLY trade perfect triple confirmations
+            # If no primary signal, STOP HERE
+            if signal is None:
+                logger.info(f"⛔ NO PRIMARY SIGNAL: RSI+BB conditions not met")
+                logger.info(f"   RSI-7: {current_rsi_fast:.1f} (need < 30 or > 70)")
+                logger.info(f"   BB Position: {bb_position:.2%} (need near 0% or 100%)")
+                return None
             
-            # === REQUIRE STOCHASTIC CONFIRMATION (MANDATORY) ===
+            # === REQUIRE MACD CONFIRMATION (MANDATORY) ===
+            macd_confirms = False
+            if signal == "CALL":
+                # MACD histogram must be positive or turning positive
+                if current_macd_hist > 0 or macd_bullish_cross or macd_bullish_momentum:
+                    confidence += 8
+                    macd_type = "bullish cross" if macd_bullish_cross else ("rising" if macd_bullish_momentum else "positive")
+                    reasoning.append(f"✅ MACD confirms CALL ({macd_type}, hist={current_macd_hist:.5f})")
+                    confirmations_count += 1
+                    macd_confirms = True
+            elif signal == "PUT":
+                # MACD histogram must be negative or turning negative
+                if current_macd_hist < 0 or macd_bearish_cross or macd_bearish_momentum:
+                    confidence += 8
+                    macd_type = "bearish cross" if macd_bearish_cross else ("falling" if macd_bearish_momentum else "negative")
+                    reasoning.append(f"✅ MACD confirms PUT ({macd_type}, hist={current_macd_hist:.5f})")
+                    confirmations_count += 1
+                    macd_confirms = True
+            
+            if not macd_confirms:
+                logger.warning(f"⛔ SIGNAL REJECTED: MACD doesn't confirm {signal}")
+                logger.warning(f"   MACD Histogram: {current_macd_hist:.5f}")
+                return None
+            
+            # === EMA CROSSOVER CONFIRMATION (BONUS) ===
+            if signal == "CALL":
+                if ema_aligned_bullish:
+                    confidence += 6
+                    reasoning.append(f"✅ EMA trend bullish (Fast {current_ema_fast:.5f} > Slow {current_ema_slow:.5f})")
+                    confirmations_count += 1
+                    if ema_cross_bullish:
+                        confidence += 4
+                        reasoning.append(f"🎯 BONUS: Fresh EMA bullish crossover!")
+            elif signal == "PUT":
+                if ema_aligned_bearish:
+                    confidence += 6
+                    reasoning.append(f"✅ EMA trend bearish (Fast {current_ema_fast:.5f} < Slow {current_ema_slow:.5f})")
+                    confirmations_count += 1
+                    if ema_cross_bearish:
+                        confidence += 4
+                        reasoning.append(f"🎯 BONUS: Fresh EMA bearish crossover!")
+            
+            # === STOCHASTIC CONFIRMATION (MANDATORY) ===
             stoch_confirms = False
             if signal == "CALL":
-                if current_stoch_k < 70:  # Not too overbought
-                    if current_stoch_k < 30:  # Bonus for oversold
-                        confidence += 6
-                        reasoning.append(f"✅ Stochastic oversold ({current_stoch_k:.1f}) - strong upside")
-                    else:
-                        confidence += 4
-                        reasoning.append(f"✅ Stochastic OK ({current_stoch_k:.1f})")
+                if current_stoch_k < 30:  # Oversold
+                    confidence += 7
+                    reasoning.append(f"✅ Stochastic oversold ({current_stoch_k:.1f}) - strong bounce expected")
+                    confirmations_count += 1
+                    stoch_confirms = True
+                elif current_stoch_k < 70:  # Not overbought
+                    confidence += 4
+                    reasoning.append(f"✅ Stochastic OK ({current_stoch_k:.1f}) - room to rise")
+                    stoch_confirms = True
+            elif signal == "PUT":
+                if current_stoch_k > 70:  # Overbought
+                    confidence += 7
+                    reasoning.append(f"✅ Stochastic overbought ({current_stoch_k:.1f}) - strong drop expected")
+                    confirmations_count += 1
+                    stoch_confirms = True
+                elif current_stoch_k > 30:  # Not oversold
+                    confidence += 4
+                    reasoning.append(f"✅ Stochastic OK ({current_stoch_k:.1f}) - room to fall")
+                    stoch_confirms = True
+            
+            if not stoch_confirms:
+                logger.warning(f"⛔ SIGNAL REJECTED: Stochastic doesn't confirm")
+                return None
+            
+            # === SUPPORT/RESISTANCE CONFIRMATION (MANDATORY) ===
                     confirmations_count += 1
                     stoch_confirms = True
                 else:
