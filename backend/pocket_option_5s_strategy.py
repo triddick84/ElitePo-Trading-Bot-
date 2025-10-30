@@ -397,27 +397,26 @@ class PocketOption5SecondStrategy:
             reasoning = []
             confirmations_count = 0  # Track how many indicators confirm
             
-            # === PRIMARY SIGNAL: EMA 20 + RSI 2 COMBINATION (INVERTED LOGIC) ===
+            # === PRIMARY SIGNAL: EMA 20 + RSI 2 COMBINATION (CORRECT LOGIC) ===
             # This is the CORNERSTONE of successful 5s trading on Pocket Option
-            # ⚠️ INVERTED: Momentum continues briefly before reversal on 5s timeframe
             
-            #  **PUT (DOWN) SETUP**: Price ABOVE EMA 20 + RSI 50-70 → Expect reversal DOWN
+            #  **CALL (UP) SETUP**: Price ABOVE EMA 20 + RSI 50-70
             if current_price > current_ema:
                 if self.rsi_call_min <= current_rsi <= self.rsi_call_max:
-                    signal = "PUT"  # ⬇️ INVERTED: Overbought momentum reverses
+                    signal = "CALL"  # ⬆️ Strong upward momentum
                     confidence = self.min_base_confidence  # Start at 87%
-                    reasoning.append(f"🔴 PUT SETUP (INVERTED): Price above EMA 20 (${current_price:.5f} > ${current_ema:.5f}) + RSI={current_rsi:.1f} (50-70 range) - Expect reversal DOWN")
+                    reasoning.append(f"🟢 CALL SETUP: Price above EMA 20 (${current_price:.5f} > ${current_ema:.5f}) + RSI={current_rsi:.1f} (50-70 range) - Strong upward momentum")
                     confirmations_count += 2  # EMA + RSI = 2 confirmations
-                    logger.info(f"✅ PUT Signal (Inverted): Price {((current_price/current_ema - 1)*100):.2f}% above EMA, expect reversal")
+                    logger.info(f"✅ CALL Signal: Price {((current_price/current_ema - 1)*100):.2f}% above EMA, RSI in momentum zone")
             
-            # **CALL (UP) SETUP**: Price BELOW EMA 20 + RSI 30-50 → Expect reversal UP
+            # **PUT (DOWN) SETUP**: Price BELOW EMA 20 + RSI 30-50
             elif current_price < current_ema:
                 if self.rsi_put_min <= current_rsi <= self.rsi_put_max:
-                    signal = "CALL"  # ⬆️ INVERTED: Oversold momentum reverses
+                    signal = "PUT"  # ⬇️ Strong downward momentum
                     confidence = self.min_base_confidence
-                    reasoning.append(f"🟢 CALL SETUP (INVERTED): Price below EMA 20 (${current_price:.5f} < ${current_ema:.5f}) + RSI={current_rsi:.1f} (30-50 range) - Expect reversal UP")
+                    reasoning.append(f"🔴 PUT SETUP: Price below EMA 20 (${current_price:.5f} < ${current_ema:.5f}) + RSI={current_rsi:.1f} (30-50 range) - Strong downward momentum")
                     confirmations_count += 2
-                    logger.info(f"✅ CALL Signal (Inverted): Price {((current_ema/current_price - 1)*100):.2f}% below EMA, expect reversal")
+                    logger.info(f"✅ PUT Signal: Price {((current_ema/current_price - 1)*100):.2f}% below EMA, RSI in momentum zone")
             
             # If no primary signal, STOP HERE - conditions not optimal
             if signal is None:
