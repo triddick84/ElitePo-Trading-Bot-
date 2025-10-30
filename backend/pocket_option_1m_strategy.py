@@ -388,22 +388,22 @@ class PocketOption1MinuteStrategy:
                 logger.info(f"   BB Position: {bb_position:.2%} (need near 0% or 100%)")
                 return None
             
-            # === REQUIRE MACD CONFIRMATION (MANDATORY - INVERTED) ===
+            # === REQUIRE MACD CONFIRMATION (MANDATORY) ===
             macd_confirms = False
-            if signal == "PUT":  # INVERTED: PUT needs bullish MACD
+            if signal == "CALL":
                 # MACD histogram must be positive or turning positive
                 if current_macd_hist > 0 or macd_bullish_cross or macd_bullish_momentum:
                     confidence += 8
                     macd_type = "bullish cross" if macd_bullish_cross else ("rising" if macd_bullish_momentum else "positive")
-                    reasoning.append(f"✅ MACD confirms PUT-INVERTED ({macd_type}, hist={current_macd_hist:.5f})")
+                    reasoning.append(f"✅ MACD confirms CALL ({macd_type}, hist={current_macd_hist:.5f})")
                     confirmations_count += 1
                     macd_confirms = True
-            elif signal == "CALL":  # INVERTED: CALL needs bearish MACD
+            elif signal == "PUT":
                 # MACD histogram must be negative or turning negative
                 if current_macd_hist < 0 or macd_bearish_cross or macd_bearish_momentum:
                     confidence += 8
                     macd_type = "bearish cross" if macd_bearish_cross else ("falling" if macd_bearish_momentum else "negative")
-                    reasoning.append(f"✅ MACD confirms CALL-INVERTED ({macd_type}, hist={current_macd_hist:.5f})")
+                    reasoning.append(f"✅ MACD confirms PUT ({macd_type}, hist={current_macd_hist:.5f})")
                     confirmations_count += 1
                     macd_confirms = True
             
@@ -412,23 +412,23 @@ class PocketOption1MinuteStrategy:
                 logger.warning(f"   MACD Histogram: {current_macd_hist:.5f}")
                 return None
             
-            # === EMA CROSSOVER CONFIRMATION (BONUS - INVERTED) ===
-            if signal == "PUT":  # INVERTED: PUT with bullish EMA
+            # === EMA CROSSOVER CONFIRMATION (BONUS) ===
+            if signal == "CALL":
                 if ema_aligned_bullish:
                     confidence += 6
-                    reasoning.append(f"✅ EMA trend bullish-INVERTED (Fast {current_ema_fast:.5f} > Slow {current_ema_slow:.5f}) for PUT")
+                    reasoning.append(f"✅ EMA trend bullish (Fast {current_ema_fast:.5f} > Slow {current_ema_slow:.5f})")
                     confirmations_count += 1
                     if ema_cross_bullish:
                         confidence += 4
-                        reasoning.append(f"🎯 BONUS: Fresh EMA bullish crossover (inverted for PUT)!")
-            elif signal == "CALL":  # INVERTED: CALL with bearish EMA
+                        reasoning.append(f"🎯 BONUS: Fresh EMA bullish crossover!")
+            elif signal == "PUT":
                 if ema_aligned_bearish:
                     confidence += 6
-                    reasoning.append(f"✅ EMA trend bearish-INVERTED (Fast {current_ema_fast:.5f} < Slow {current_ema_slow:.5f}) for CALL")
+                    reasoning.append(f"✅ EMA trend bearish (Fast {current_ema_fast:.5f} < Slow {current_ema_slow:.5f})")
                     confirmations_count += 1
                     if ema_cross_bearish:
                         confidence += 4
-                        reasoning.append(f"🎯 BONUS: Fresh EMA bearish crossover (inverted for CALL)!")
+                        reasoning.append(f"🎯 BONUS: Fresh EMA bearish crossover!")
             
             # === STOCHASTIC CONFIRMATION (MANDATORY - INVERTED) ===
             stoch_confirms = False
