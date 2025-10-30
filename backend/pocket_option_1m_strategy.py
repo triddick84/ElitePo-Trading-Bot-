@@ -350,37 +350,36 @@ class PocketOption1MinuteStrategy:
             logger.info(f"   MACD Hist={current_macd_hist:.5f}, Stoch={current_stoch_k:.1f}")
             logger.info(f"   BB Position={bb_position:.2%}, Lower BB={current_bb_lower:.5f}, Upper BB={current_bb_upper:.5f}")
             
-            # === PRIMARY SIGNAL: RSI EXTREMES + BOLLINGER BAND TOUCHES (INVERTED) ===
+            # === PRIMARY SIGNAL: RSI EXTREMES + BOLLINGER BAND TOUCHES ===
             # Research-verified: Best setup for 1-minute binary options
-            # ⚠️ INVERTED: Market reverses from extremes
             
-            # **PUT Setup (INVERTED)**: RSI oversold + Price touches lower BB → Expect further DOWN
+            # **CALL Setup**: RSI oversold + Price touches lower BB
             if current_rsi_fast < self.rsi_oversold and touching_lower_bb:
-                signal = "PUT"  # INVERTED
+                signal = "CALL"
                 confidence = self.min_base_confidence  # Start at 90%
                 confirmations_count += 2  # RSI + BB
                 
                 if current_rsi_fast < self.rsi_extreme_oversold:
-                    reasoning.append(f"🔴 EXTREME OVERSOLD (INVERTED): RSI-7={current_rsi_fast:.1f} (< 20) + Price touching lower BB → Expect DOWN")
+                    reasoning.append(f"🟢 EXTREME OVERSOLD: RSI-7={current_rsi_fast:.1f} (< 20) + Price touching lower BB")
                     confidence += 5  # Extra confidence for extreme
                 else:
-                    reasoning.append(f"🔴 OVERSOLD SETUP (INVERTED): RSI-7={current_rsi_fast:.1f} (< 30) + Price at lower BB ({bb_position:.1%}) → Expect DOWN")
+                    reasoning.append(f"🟢 OVERSOLD SETUP: RSI-7={current_rsi_fast:.1f} (< 30) + Price at lower BB ({bb_position:.1%})")
                 
-                logger.info(f"✅ PUT Signal (Inverted): Oversold RSI + Lower BB touch")
+                logger.info(f"✅ CALL Signal: Oversold RSI + Lower BB touch")
             
-            # **CALL Setup (INVERTED)**: RSI overbought + Price touches upper BB → Expect further UP
+            # **PUT Setup**: RSI overbought + Price touches upper BB  
             elif current_rsi_fast > self.rsi_overbought and touching_upper_bb:
-                signal = "CALL"  # INVERTED
+                signal = "PUT"
                 confidence = self.min_base_confidence
                 confirmations_count += 2  # RSI + BB
                 
                 if current_rsi_fast > self.rsi_extreme_overbought:
-                    reasoning.append(f"🟢 EXTREME OVERBOUGHT (INVERTED): RSI-7={current_rsi_fast:.1f} (> 80) + Price touching upper BB → Expect UP")
+                    reasoning.append(f"🔴 EXTREME OVERBOUGHT: RSI-7={current_rsi_fast:.1f} (> 80) + Price touching upper BB")
                     confidence += 5
                 else:
-                    reasoning.append(f"🟢 OVERBOUGHT SETUP (INVERTED): RSI-7={current_rsi_fast:.1f} (> 70) + Price at upper BB ({bb_position:.1%}) → Expect UP")
+                    reasoning.append(f"🔴 OVERBOUGHT SETUP: RSI-7={current_rsi_fast:.1f} (> 70) + Price at upper BB ({bb_position:.1%})")
                 
-                logger.info(f"✅ CALL Signal (Inverted): Overbought RSI + Upper BB touch")
+                logger.info(f"✅ PUT Signal: Overbought RSI + Upper BB touch")
             
             # If no primary signal, STOP HERE
             if signal is None:
