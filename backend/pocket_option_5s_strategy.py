@@ -289,6 +289,29 @@ class PocketOption5SecondStrategy:
             logger.info(f"✅ Smart Money: {smc_direction or 'NEUTRAL'} with {smc_confidence:.1f}% confidence")
             logger.info(f"   SMC Reasons: {', '.join(smc_analysis.get('smc_reasons', []))}")
             
+            # === ADVANCED LAYER: VOLATILITY SQUEEZE & SUPPLY/DEMAND ZONES ===
+            logger.info("🔥 === ADVANCED: Volatility Squeeze & Supply/Demand Analysis ===")
+            
+            from volatility_squeeze_detector import get_volatility_squeeze
+            from supply_demand_zones import get_supply_demand_detector
+            
+            # Detect volatility squeeze
+            vol_squeeze = get_volatility_squeeze('5s')
+            squeeze_data = vol_squeeze.detect_squeeze(df)
+            
+            # Detect supply/demand zones
+            sd_zones = get_supply_demand_detector('5s')
+            zones_data = sd_zones.identify_zones(df)
+            
+            # Check for breakout if in squeeze
+            breakout_data = {}
+            if squeeze_data.get('in_squeeze') and squeeze_data.get('breakout_imminent'):
+                breakout_data = vol_squeeze.detect_breakout(df, squeeze_data)
+            
+            logger.info(f"   Squeeze: {squeeze_data.get('in_squeeze', False)}, "
+                       f"Breakout Imminent: {squeeze_data.get('breakout_imminent', False)}")
+            logger.info(f"   Supply/Demand Zones: {zones_data.get('total_zones', 0)} identified")
+            
             # === LAYER 3: MACHINE LEARNING ENSEMBLE (NEW) ===
             # Run ML prediction early to validate setup
             logger.info("🤖 === LAYER 3: ML Ensemble Prediction ===")
