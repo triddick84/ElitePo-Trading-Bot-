@@ -28,6 +28,7 @@ const Dashboard = ({ botStatus, liveSignals, setLiveSignals, notificationSetting
   // Flexible Trading System State
   const [flexibleConfig, setFlexibleConfig] = useState({
     asset_symbol: 'EURUSD',
+    market_type: 'regular', // regular or otc
     chart_timeframe: '30s',
     trade_duration_seconds: 82, // 1m 22s
     sma_fast: 6,
