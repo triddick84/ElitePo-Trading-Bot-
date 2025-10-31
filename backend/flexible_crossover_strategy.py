@@ -16,7 +16,7 @@ import numpy as np
 import yfinance as yf
 from datetime import datetime, timedelta, timezone
 import logging
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Tuple
 import talib
 
 logger = logging.getLogger(__name__)
