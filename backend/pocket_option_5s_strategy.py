@@ -424,6 +424,50 @@ class PocketOption5SecondStrategy:
                 logger.info(f"   Current: Price={current_price:.5f}, EMA={current_ema:.5f}, RSI={current_rsi:.1f}")
                 return None
             
+            # === ADVANCED: NEXT CANDLE PREDICTION ===
+            logger.info("🔮 === NEXT CANDLE PREDICTION ===")
+            from next_candle_predictor import get_next_candle_predictor
+            
+            next_candle = get_next_candle_predictor('5s')
+            prediction = next_candle.predict_next_candle(df)
+            
+            # Check if prediction agrees with our signal
+            signal_agrees_with_prediction = False
+            prediction_bonus = 0
+            
+            if prediction.get('direction'):
+                predicted_direction = prediction['direction']
+                pred_confidence = prediction.get('confidence', 0)
+                
+                # Convert signal to UP/DOWN for comparison
+                signal_as_direction = 'UP' if signal == 'CALL' else 'DOWN'
+                
+                if predicted_direction == signal_as_direction:
+                    signal_agrees_with_prediction = True
+                    prediction_bonus = min(30, pred_confidence * 0.3)  # Up to 30 points
+                    logger.info(f"✅ NEXT CANDLE PREDICTION: {predicted_direction} ({pred_confidence:.0f}%) AGREES with {signal}")
+                    reasoning.extend(prediction['reasoning'])
+                else:
+                    logger.warning(f"⚠️ PREDICTION CONFLICT: Next candle → {predicted_direction}, Signal → {signal}")
+                    logger.warning(f"   Rejecting signal due to prediction conflict")
+                    return None  # Don't trade if prediction disagrees
+            else:
+                logger.info(f"   No strong prediction (confidence too low)")
+            
+            # === ADVANCED: MULTI-TIMEFRAME CONFLUENCE ===
+            logger.info("📊 === MULTI-TIMEFRAME CONFLUENCE ===")
+            from multi_timeframe_confluence import get_mtf_confluence
+            
+            mtf = get_mtf_confluence('5s')
+            confluence = mtf.check_confluence(symbol, signal)
+            
+            confluence_bonus = confluence.get('confidence_boost', 0)
+            
+            if confluence['agreement_pct'] < 50:
+                logger.warning(f"⚠️ LOW TIMEFRAME AGREEMENT: {confluence['agreement_pct']:.0f}%")
+                logger.warning(f"   Higher timeframes don't support {signal}")
+                # Don't reject entirely, but reduce confidence significantly
+            
             # === SUPERTREND VALIDATION (CRITICAL - PREVENTS COUNTER-TREND SIGNALS) ===
             # Check if signal aligns with the prevailing trend
             supertrend_check = self.supertrend.should_allow_signal(df, signal)
