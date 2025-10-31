@@ -980,7 +980,7 @@ async def flexible_signal_generation(request: FlexibleStrategyRequest):
             yf_symbol = 'SOL-USD'
         
         # Generate signal
-        result = strategy.generate_signal(yf_symbol, trade_duration_seconds=request.trade_duration_seconds)
+        result = strategy.generate_signal(yf_symbol, trade_duration_seconds=request.trade_duration_seconds, force_signal=request.force_signal)
         
         if not result:
             return {
