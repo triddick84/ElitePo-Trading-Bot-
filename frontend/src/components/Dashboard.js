@@ -31,6 +31,7 @@ const Dashboard = ({ botStatus, liveSignals, setLiveSignals, notificationSetting
     market_type: 'regular', // regular or otc
     chart_timeframe: '30s',
     trade_duration_seconds: 82, // 1m 22s
+    force_signal: false, // Force signal generation
     sma_fast: 6,
     sma_slow: 12,
     supertrend_atr_period: 2,
