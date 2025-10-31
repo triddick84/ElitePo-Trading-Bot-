@@ -239,12 +239,14 @@ class FlexibleCrossoverStrategy:
             # 3. SuperTrend shows BUY
             supertrend_buy = current_supertrend == 1
             
+            # STRICT MODE: All conditions must be met
             if sma_bullish_cross and ao_below_zero_moving_up and supertrend_buy:
                 signal = "CALL"
-                reasoning.append(f"🟢 BUY: 6 SMA ({current_sma_fast:.5f}) crossed above 12 SMA ({current_sma_slow:.5f})")
+                reasoning.append(f"🟢 BUY: {self.sma_fast} SMA ({current_sma_fast:.5f}) crossed above {self.sma_slow} SMA ({current_sma_slow:.5f})")
                 reasoning.append(f"📈 AO moving UP towards 0: {current_ao:.5f} (from {prev_ao:.5f})")
                 reasoning.append(f"✅ SuperTrend: BUY signal")
-                confidence += 10
+                confidence = 95
+                confidence_level = "HIGH"
                 logger.info(f"✅ BUY SIGNAL: All 3 confirmations met")
             
             # === SELL SIGNAL CONDITIONS ===
@@ -258,17 +260,72 @@ class FlexibleCrossoverStrategy:
             # 3. SuperTrend shows SELL
             supertrend_sell = current_supertrend == -1
             
+            # STRICT MODE: All conditions must be met
             if sma_bearish_cross and ao_above_zero_moving_down and supertrend_sell:
                 signal = "PUT"
-                reasoning.append(f"🔴 SELL: 6 SMA ({current_sma_fast:.5f}) crossed below 12 SMA ({current_sma_slow:.5f})")
+                reasoning.append(f"🔴 SELL: {self.sma_fast} SMA ({current_sma_fast:.5f}) crossed below {self.sma_slow} SMA ({current_sma_slow:.5f})")
                 reasoning.append(f"📉 AO moving DOWN towards 0: {current_ao:.5f} (from {prev_ao:.5f})")
                 reasoning.append(f"✅ SuperTrend: SELL signal")
-                confidence += 10
+                confidence = 95
+                confidence_level = "HIGH"
                 logger.info(f"✅ SELL SIGNAL: All 3 confirmations met")
             
-            # No signal if conditions not met
+            # FORCE MODE: Generate signal based on current market state
+            if signal is None and force_signal:
+                logger.info(f"⚡ FORCE MODE: Generating signal from current market state")
+                
+                # Count bullish and bearish indicators
+                bullish_count = 0
+                bearish_count = 0
+                
+                # Price position relative to SMAs
+                if current_price > current_sma_fast:
+                    bullish_count += 1
+                    reasoning.append(f"💰 Price ({current_price:.5f}) above Fast SMA ({current_sma_fast:.5f})")
+                else:
+                    bearish_count += 1
+                    reasoning.append(f"💰 Price ({current_price:.5f}) below Fast SMA ({current_sma_fast:.5f})")
+                
+                if current_sma_fast > current_sma_slow:
+                    bullish_count += 1
+                    reasoning.append(f"📊 Fast SMA ({current_sma_fast:.5f}) above Slow SMA ({current_sma_slow:.5f})")
+                else:
+                    bearish_count += 1
+                    reasoning.append(f"📊 Fast SMA ({current_sma_fast:.5f}) below Slow SMA ({current_sma_slow:.5f})")
+                
+                # SuperTrend
+                if supertrend_buy:
+                    bullish_count += 1
+                    reasoning.append(f"🎯 SuperTrend: BUY")
+                else:
+                    bearish_count += 1
+                    reasoning.append(f"🎯 SuperTrend: SELL")
+                
+                # AO momentum
+                if current_ao > 0:
+                    bullish_count += 1
+                    reasoning.append(f"📈 AO positive: {current_ao:.5f}")
+                else:
+                    bearish_count += 1
+                    reasoning.append(f"📉 AO negative: {current_ao:.5f}")
+                
+                # Generate signal based on majority
+                if bullish_count > bearish_count:
+                    signal = "CALL"
+                    confidence = 70 + (bullish_count * 5)  # 75-95% based on confirmations
+                    confidence_level = "HIGH" if bullish_count >= 3 else "MEDIUM"
+                    reasoning.insert(0, f"⚡ FORCE BUY ({bullish_count}/4 bullish indicators)")
+                    logger.info(f"⚡ FORCE BUY: {bullish_count} bullish vs {bearish_count} bearish")
+                else:
+                    signal = "PUT"
+                    confidence = 70 + (bearish_count * 5)  # 75-95% based on confirmations
+                    confidence_level = "HIGH" if bearish_count >= 3 else "MEDIUM"
+                    reasoning.insert(0, f"⚡ FORCE SELL ({bearish_count}/4 bearish indicators)")
+                    logger.info(f"⚡ FORCE SELL: {bearish_count} bearish vs {bullish_count} bullish")
+            
+            # No signal if conditions not met (strict mode only)
             if signal is None:
-                logger.info(f"⛔ NO SIGNAL: Not all conditions met")
+                logger.info(f"⛔ NO SIGNAL: Not all conditions met (strict mode)")
                 logger.info(f"   SMA Cross: Bull={sma_bullish_cross}, Bear={sma_bearish_cross}")
                 logger.info(f"   AO: {current_ao:.5f} (moving {'up' if current_ao > prev_ao else 'down'})")
                 logger.info(f"   SuperTrend: {'BUY' if supertrend_buy else 'SELL'}")
