@@ -303,9 +303,19 @@ class FlexibleCrossoverStrategy:
 # Global instance (will be recreated for each timeframe)
 _flexible_strategy = None
 
-def get_flexible_strategy(chart_timeframe: str = '30s') -> FlexibleCrossoverStrategy:
-    """Get or create Flexible Crossover Strategy for specified timeframe"""
+def get_flexible_strategy(chart_timeframe: str = '30s', sma_fast: int = 6, sma_slow: int = 12,
+                         supertrend_atr_period: int = 2, supertrend_multiplier: float = 2.2,
+                         ao_short_period: int = 6, ao_long_period: int = 12) -> FlexibleCrossoverStrategy:
+    """Get or create Flexible Crossover Strategy for specified timeframe with custom parameters"""
     global _flexible_strategy
-    # Always create new instance to support different timeframes
-    _flexible_strategy = FlexibleCrossoverStrategy(chart_timeframe)
+    # Always create new instance to support different timeframes and parameters
+    _flexible_strategy = FlexibleCrossoverStrategy(
+        chart_timeframe=chart_timeframe,
+        sma_fast=sma_fast,
+        sma_slow=sma_slow,
+        supertrend_atr_period=supertrend_atr_period,
+        supertrend_multiplier=supertrend_multiplier,
+        ao_short_period=ao_short_period,
+        ao_long_period=ao_long_period
+    )
     return _flexible_strategy
