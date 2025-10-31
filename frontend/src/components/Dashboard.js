@@ -217,12 +217,150 @@ const Dashboard = ({ botStatus, liveSignals, setLiveSignals, notificationSetting
               onChange={(e) => setFlexibleConfig({...flexibleConfig, asset_symbol: e.target.value})}
               className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500"
             >
-              <option value="EURUSD">EUR/USD</option>
-              <option value="GBPUSD">GBP/USD</option>
-              <option value="BTCUSD">BTC/USD</option>
-              <option value="ETHUSD">ETH/USD</option>
-              <option value="USDJPY">USD/JPY</option>
-              <option value="AUDUSD">AUD/USD</option>
+              {/* FOREX - Major Pairs */}
+              <optgroup label="💱 FOREX - Major Pairs">
+                <option value="EURUSD">EUR/USD - Euro vs US Dollar</option>
+                <option value="GBPUSD">GBP/USD - British Pound vs US Dollar</option>
+                <option value="USDJPY">USD/JPY - US Dollar vs Japanese Yen</option>
+                <option value="AUDUSD">AUD/USD - Australian Dollar vs US Dollar</option>
+                <option value="USDCHF">USD/CHF - US Dollar vs Swiss Franc</option>
+                <option value="USDCAD">USD/CAD - US Dollar vs Canadian Dollar</option>
+                <option value="NZDUSD">NZD/USD - New Zealand Dollar vs US Dollar</option>
+              </optgroup>
+
+              {/* FOREX - Minor Pairs */}
+              <optgroup label="💱 FOREX - Minor Pairs">
+                <option value="EURGBP">EUR/GBP - Euro vs British Pound</option>
+                <option value="EURJPY">EUR/JPY - Euro vs Japanese Yen</option>
+                <option value="EURCHF">EUR/CHF - Euro vs Swiss Franc</option>
+                <option value="EURCAD">EUR/CAD - Euro vs Canadian Dollar</option>
+                <option value="EURAUD">EUR/AUD - Euro vs Australian Dollar</option>
+                <option value="GBPJPY">GBP/JPY - British Pound vs Japanese Yen</option>
+                <option value="GBPCHF">GBP/CHF - British Pound vs Swiss Franc</option>
+                <option value="GBPCAD">GBP/CAD - British Pound vs Canadian Dollar</option>
+                <option value="CHFJPY">CHF/JPY - Swiss Franc vs Japanese Yen</option>
+                <option value="CADJPY">CAD/JPY - Canadian Dollar vs Japanese Yen</option>
+                <option value="AUDJPY">AUD/JPY - Australian Dollar vs Japanese Yen</option>
+                <option value="AUDCHF">AUD/CHF - Australian Dollar vs Swiss Franc</option>
+                <option value="NZDJPY">NZD/JPY - New Zealand Dollar vs Japanese Yen</option>
+              </optgroup>
+
+              {/* FOREX - Exotic Pairs */}
+              <optgroup label="💱 FOREX - Exotic Pairs">
+                <option value="USDMXN">USD/MXN - US Dollar vs Mexican Peso</option>
+                <option value="USDBRL">USD/BRL - US Dollar vs Brazilian Real</option>
+                <option value="USDTRY">USD/TRY - US Dollar vs Turkish Lira</option>
+                <option value="USDZAR">USD/ZAR - US Dollar vs South African Rand</option>
+                <option value="USDPLN">USD/PLN - US Dollar vs Polish Zloty</option>
+                <option value="USDSGD">USD/SGD - US Dollar vs Singapore Dollar</option>
+                <option value="USDHKD">USD/HKD - US Dollar vs Hong Kong Dollar</option>
+                <option value="USDTHB">USD/THB - US Dollar vs Thai Baht</option>
+                <option value="USDSEK">USD/SEK - US Dollar vs Swedish Krona</option>
+                <option value="USDNOK">USD/NOK - US Dollar vs Norwegian Krone</option>
+              </optgroup>
+
+              {/* CRYPTO - Major */}
+              <optgroup label="₿ CRYPTO - Major">
+                <option value="BTCUSD">BTC/USD - Bitcoin vs US Dollar</option>
+                <option value="ETHUSD">ETH/USD - Ethereum vs US Dollar</option>
+                <option value="LTCUSD">LTC/USD - Litecoin vs US Dollar</option>
+                <option value="ADAUSD">ADA/USD - Cardano vs US Dollar</option>
+                <option value="DOTUSD">DOT/USD - Polkadot vs US Dollar</option>
+                <option value="BNBUSD">BNB/USD - Binance Coin vs US Dollar</option>
+              </optgroup>
+
+              {/* CRYPTO - Popular Altcoins */}
+              <optgroup label="₿ CRYPTO - Popular Altcoins">
+                <option value="DOGEUSD">DOGE/USD - Dogecoin vs US Dollar</option>
+                <option value="SOLUSD">SOL/USD - Solana vs US Dollar</option>
+                <option value="AVAXUSD">AVAX/USD - Avalanche vs US Dollar</option>
+                <option value="MATICUSD">MATIC/USD - Polygon vs US Dollar</option>
+                <option value="LINKUSD">LINK/USD - Chainlink vs US Dollar</option>
+                <option value="TONUSD">TON/USD - Toncoin vs US Dollar</option>
+                <option value="ATOMUSD">ATOM/USD - Cosmos vs US Dollar</option>
+                <option value="NEARUSD">NEAR/USD - NEAR Protocol vs US Dollar</option>
+                <option value="APTOUSD">APTO/USD - Aptos vs US Dollar</option>
+                <option value="OPUSD">OP/USD - Optimism vs US Dollar</option>
+                <option value="ARBUSD">ARB/USD - Arbitrum vs US Dollar</option>
+              </optgroup>
+
+              {/* CRYPTO - DeFi & Meme */}
+              <optgroup label="₿ CRYPTO - DeFi & Meme">
+                <option value="UNIUSD">UNI/USD - Uniswap vs US Dollar</option>
+                <option value="AAVEUSD">AAVE/USD - Aave vs US Dollar</option>
+                <option value="SHIBUSDT">SHIB/USD - Shiba Inu vs US Dollar</option>
+                <option value="FLOKIUSD">FLOKI/USD - Floki vs US Dollar</option>
+              </optgroup>
+
+              {/* STOCKS - Tech Giants */}
+              <optgroup label="📈 STOCKS - Tech Giants">
+                <option value="AAPL">AAPL - Apple Inc.</option>
+                <option value="MSFT">MSFT - Microsoft Corp.</option>
+                <option value="GOOGL">GOOGL - Alphabet Inc.</option>
+                <option value="AMZN">AMZN - Amazon.com Inc.</option>
+                <option value="TSLA">TSLA - Tesla Inc.</option>
+                <option value="META">META - Meta Platforms Inc.</option>
+                <option value="NFLX">NFLX - Netflix Inc.</option>
+                <option value="NVDA">NVDA - NVIDIA Corp.</option>
+                <option value="BABA">BABA - Alibaba Group</option>
+              </optgroup>
+
+              {/* STOCKS - Financial */}
+              <optgroup label="📈 STOCKS - Financial">
+                <option value="JPM">JPM - JPMorgan Chase</option>
+                <option value="BAC">BAC - Bank of America</option>
+                <option value="WFC">WFC - Wells Fargo</option>
+                <option value="GS">GS - Goldman Sachs</option>
+                <option value="MS">MS - Morgan Stanley</option>
+              </optgroup>
+
+              {/* STOCKS - Consumer & Other */}
+              <optgroup label="📈 STOCKS - Consumer & Industrial">
+                <option value="MCD">MCD - McDonald's Corp.</option>
+                <option value="KO">KO - Coca-Cola Co.</option>
+                <option value="WMT">WMT - Walmart Inc.</option>
+                <option value="BA">BA - Boeing Co.</option>
+                <option value="CAT">CAT - Caterpillar Inc.</option>
+                <option value="JNJ">JNJ - Johnson & Johnson</option>
+                <option value="PFE">PFE - Pfizer Inc.</option>
+              </optgroup>
+
+              {/* COMMODITIES */}
+              <optgroup label="🥇 COMMODITIES">
+                <option value="XAUUSD">XAU/USD - Gold Spot</option>
+                <option value="XAGUSD">XAG/USD - Silver Spot</option>
+                <option value="BRENTOIL">BRENT - Brent Oil</option>
+                <option value="WTIUSD">WTI - Crude Oil</option>
+                <option value="NATGAS">NATGAS - Natural Gas</option>
+                <option value="XPTUSD">XPT/USD - Platinum</option>
+                <option value="XPDUSD">XPD/USD - Palladium</option>
+              </optgroup>
+
+              {/* INDICES - US */}
+              <optgroup label="📊 INDICES - US">
+                <option value="US100">US100 - NASDAQ 100</option>
+                <option value="US30">US30 - Dow Jones</option>
+                <option value="SPX500">SPX500 - S&P 500</option>
+                <option value="US2000">US2000 - Russell 2000</option>
+              </optgroup>
+
+              {/* INDICES - European */}
+              <optgroup label="📊 INDICES - European">
+                <option value="GER40">GER40 - DAX (Germany)</option>
+                <option value="UK100">UK100 - FTSE 100 (UK)</option>
+                <option value="FRA40">FRA40 - CAC 40 (France)</option>
+                <option value="ESP35">ESP35 - IBEX 35 (Spain)</option>
+                <option value="ITA40">ITA40 - FTSE MIB (Italy)</option>
+                <option value="E35EUR">E35EUR - EuroStoxx 35</option>
+              </optgroup>
+
+              {/* INDICES - Asia Pacific */}
+              <optgroup label="📊 INDICES - Asia Pacific">
+                <option value="JPN225">JPN225 - Nikkei 225 (Japan)</option>
+                <option value="HK50">HK50 - Hang Seng (Hong Kong)</option>
+                <option value="CHINA50">CHINA50 - China A50</option>
+                <option value="AUS200">AUS200 - ASX 200 (Australia)</option>
+              </optgroup>
             </select>
           </div>
 
