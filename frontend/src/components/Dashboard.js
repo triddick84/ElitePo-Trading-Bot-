@@ -194,6 +194,217 @@ const Dashboard = ({ botStatus, liveSignals, setLiveSignals, notificationSetting
         }}
       />
 
+      {/* Flexible Trading System */}
+      <Card className="p-6 glass-dark border-purple-500/30">
+        <div className="mb-6">
+          <h3 className="text-xl font-bold text-white mb-2 flex items-center">
+            <span className="mr-2">🎯</span>
+            Flexible Trading System
+          </h3>
+          <p className="text-slate-400 text-sm">
+            Customize chart timeframe, trade duration, and indicator parameters independently
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* Asset Selection */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Trading Asset
+            </label>
+            <select
+              value={flexibleConfig.asset_symbol}
+              onChange={(e) => setFlexibleConfig({...flexibleConfig, asset_symbol: e.target.value})}
+              className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500"
+            >
+              <option value="EURUSD">EUR/USD</option>
+              <option value="GBPUSD">GBP/USD</option>
+              <option value="BTCUSD">BTC/USD</option>
+              <option value="ETHUSD">ETH/USD</option>
+              <option value="USDJPY">USD/JPY</option>
+              <option value="AUDUSD">AUD/USD</option>
+            </select>
+          </div>
+
+          {/* Chart Timeframe */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Chart Timeframe (Data Analysis)
+            </label>
+            <select
+              value={flexibleConfig.chart_timeframe}
+              onChange={(e) => setFlexibleConfig({...flexibleConfig, chart_timeframe: e.target.value})}
+              className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500"
+            >
+              <option value="5s">5 seconds</option>
+              <option value="10s">10 seconds</option>
+              <option value="15s">15 seconds</option>
+              <option value="30s">30 seconds</option>
+              <option value="1m">1 minute</option>
+              <option value="2m">2 minutes</option>
+              <option value="3m">3 minutes</option>
+              <option value="5m">5 minutes</option>
+            </select>
+          </div>
+
+          {/* Trade Duration */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Trade Duration (seconds)
+            </label>
+            <input
+              type="number"
+              min="5"
+              max="3600"
+              value={flexibleConfig.trade_duration_seconds}
+              onChange={(e) => setFlexibleConfig({...flexibleConfig, trade_duration_seconds: parseInt(e.target.value)})}
+              className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500"
+              placeholder="e.g., 82 for 1m 22s"
+            />
+            <p className="text-xs text-slate-500 mt-1">
+              {Math.floor(flexibleConfig.trade_duration_seconds / 60)}m {flexibleConfig.trade_duration_seconds % 60}s
+            </p>
+          </div>
+        </div>
+
+        {/* Indicator Parameters */}
+        <div className="mt-6 p-4 bg-slate-800/30 rounded-lg border border-slate-700/50">
+          <h4 className="text-sm font-semibold text-purple-400 mb-4 flex items-center">
+            <span className="mr-2">⚙️</span>
+            Customizable Indicator Parameters
+          </h4>
+          
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">Fast SMA</label>
+              <input
+                type="number"
+                min="1"
+                max="50"
+                value={flexibleConfig.sma_fast}
+                onChange={(e) => setFlexibleConfig({...flexibleConfig, sma_fast: parseInt(e.target.value)})}
+                className="w-full px-2 py-1 bg-slate-700 border border-slate-600 rounded text-white text-sm focus:outline-none focus:border-purple-500"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">Slow SMA</label>
+              <input
+                type="number"
+                min="1"
+                max="100"
+                value={flexibleConfig.sma_slow}
+                onChange={(e) => setFlexibleConfig({...flexibleConfig, sma_slow: parseInt(e.target.value)})}
+                className="w-full px-2 py-1 bg-slate-700 border border-slate-600 rounded text-white text-sm focus:outline-none focus:border-purple-500"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">ST ATR Period</label>
+              <input
+                type="number"
+                min="1"
+                max="50"
+                value={flexibleConfig.supertrend_atr_period}
+                onChange={(e) => setFlexibleConfig({...flexibleConfig, supertrend_atr_period: parseInt(e.target.value)})}
+                className="w-full px-2 py-1 bg-slate-700 border border-slate-600 rounded text-white text-sm focus:outline-none focus:border-purple-500"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">ST Multiplier</label>
+              <input
+                type="number"
+                min="0.1"
+                max="10"
+                step="0.1"
+                value={flexibleConfig.supertrend_multiplier}
+                onChange={(e) => setFlexibleConfig({...flexibleConfig, supertrend_multiplier: parseFloat(e.target.value)})}
+                className="w-full px-2 py-1 bg-slate-700 border border-slate-600 rounded text-white text-sm focus:outline-none focus:border-purple-500"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">AO Short</label>
+              <input
+                type="number"
+                min="1"
+                max="50"
+                value={flexibleConfig.ao_short_period}
+                onChange={(e) => setFlexibleConfig({...flexibleConfig, ao_short_period: parseInt(e.target.value)})}
+                className="w-full px-2 py-1 bg-slate-700 border border-slate-600 rounded text-white text-sm focus:outline-none focus:border-purple-500"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">AO Long</label>
+              <input
+                type="number"
+                min="1"
+                max="100"
+                value={flexibleConfig.ao_long_period}
+                onChange={(e) => setFlexibleConfig({...flexibleConfig, ao_long_period: parseInt(e.target.value)})}
+                className="w-full px-2 py-1 bg-slate-700 border border-slate-600 rounded text-white text-sm focus:outline-none focus:border-purple-500"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Generate Button */}
+        <div className="mt-6 flex items-center justify-between">
+          <div className="text-sm text-slate-400">
+            <p>Strategy: Moving Average Crossover + SuperTrend + Awesome Oscillator</p>
+            <p className="text-xs mt-1">
+              Chart: <span className="text-purple-400 font-medium">{flexibleConfig.chart_timeframe}</span> | 
+              Trade: <span className="text-purple-400 font-medium">{Math.floor(flexibleConfig.trade_duration_seconds / 60)}m {flexibleConfig.trade_duration_seconds % 60}s</span>
+            </p>
+          </div>
+          
+          <Button
+            onClick={handleFlexibleGenerate}
+            disabled={flexibleLoading}
+            className="bg-purple-500 hover:bg-purple-600 text-white px-6 py-3 font-semibold"
+          >
+            {flexibleLoading ? '⏳ Generating...' : '🚀 Generate Signal'}
+          </Button>
+        </div>
+
+        {/* Result Display */}
+        {flexibleResult && (
+          <div className={`mt-6 p-4 rounded-lg border ${
+            flexibleResult.success 
+              ? 'bg-green-500/10 border-green-500/30' 
+              : 'bg-red-500/10 border-red-500/30'
+          }`}>
+            <p className={`font-medium ${flexibleResult.success ? 'text-green-400' : 'text-red-400'}`}>
+              {flexibleResult.message}
+            </p>
+            {flexibleResult.success && flexibleResult.signal && (
+              <div className="mt-3 space-y-2">
+                <div className="flex items-center space-x-4">
+                  <div className={`px-4 py-2 rounded-full font-bold ${
+                    flexibleResult.signal.direction === 'CALL' 
+                      ? 'bg-green-500/20 text-green-400' 
+                      : 'bg-red-500/20 text-red-400'
+                  }`}>
+                    {flexibleResult.signal.direction}
+                  </div>
+                  <div className="text-white">
+                    <p className="font-semibold">{flexibleResult.signal.symbol}</p>
+                    <p className="text-sm text-slate-400">
+                      Confidence: {flexibleResult.signal.probability}% ({flexibleResult.signal.confidence_level})
+                    </p>
+                  </div>
+                </div>
+                <div className="text-sm text-slate-300 mt-2 p-3 bg-slate-800/50 rounded">
+                  <p className="whitespace-pre-wrap">{flexibleResult.signal.justification}</p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </Card>
+
       {/* Developer Credit */}
       <div className="mb-6 p-4 bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/30 rounded-lg">
         <div className="flex items-center justify-center space-x-2">
