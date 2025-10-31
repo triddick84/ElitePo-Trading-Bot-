@@ -339,6 +339,7 @@ class FlexibleCrossoverStrategy:
             return {
                 "signal": signal,
                 "confidence": min(98, confidence),
+                "confidence_level": confidence_level,
                 "reasoning": reasoning,
                 "analysis": {
                     "sma_fast": current_sma_fast,
@@ -348,7 +349,7 @@ class FlexibleCrossoverStrategy:
                     "awesome_oscillator": current_ao,
                     "ao_direction": "UP" if ao_moving_up else ("DOWN" if ao_moving_down else "FLAT")
                 },
-                "strategy": "Moving Average Crossover (Flexible)",
+                "strategy": "Moving Average Crossover (Flexible)" + (" - FORCE MODE" if force_signal else ""),
                 "chart_timeframe": self.chart_timeframe,
                 "trade_duration_seconds": trade_duration_seconds,
                 "trade_duration_text": duration_text
