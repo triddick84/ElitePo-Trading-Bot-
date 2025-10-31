@@ -9,7 +9,7 @@ import json
 from datetime import datetime
 
 # Test configuration
-BACKEND_URL = "https://signalmaster-ai-2.preview.emergentagent.com/api"
+BACKEND_URL = "https://tradepulse-169.preview.emergentagent.com/api"
 
 async def test_force_signal_generation_with_timing_verification():
     """Test force signal generation endpoint with focus on timing and OTC signals"""
