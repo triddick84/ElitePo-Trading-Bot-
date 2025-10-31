@@ -342,6 +342,7 @@ class FlexibleCrossoverStrategy:
                 "confidence_level": confidence_level,
                 "reasoning": reasoning,
                 "analysis": {
+                    "current_price": current_price,
                     "sma_fast": current_sma_fast,
                     "sma_slow": current_sma_slow,
                     "sma_cross": "bullish" if sma_bullish_cross else ("bearish" if sma_bearish_cross else "none"),
