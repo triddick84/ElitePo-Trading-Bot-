@@ -166,6 +166,7 @@ class FlexibleStrategyRequest(BaseModel):
     market_type: str = Field(default='regular', description="Market type: 'regular' or 'otc'")
     chart_timeframe: str = Field(default='30s', description="Chart timeframe for analysis (5s, 10s, 15s, 30s, 1m, 2m, 3m, 5m)")
     trade_duration_seconds: int = Field(default=82, ge=5, le=3600, description="Trade/signal expiration in seconds (e.g., 82 = 1m 22s)")
+    force_signal: bool = Field(default=False, description="Force signal generation based on current market state")
     
     # Customizable indicator parameters
     sma_fast: int = Field(default=6, ge=1, le=50, description="Fast SMA period")
