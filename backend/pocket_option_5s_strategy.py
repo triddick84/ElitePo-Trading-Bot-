@@ -770,19 +770,19 @@ class PocketOption5SecondStrategy:
                                    f"(quality: {zone_signal['zone_quality']:.0f}%, fresh: {zone_signal.get('is_fresh', False)})")
             
             # Add bonuses to fusion confidence
-            fusion_confidence += squeeze_bonus + zone_bonus
+            fusion_confidence += squeeze_bonus + zone_bonus + prediction_bonus + confluence_bonus
             
-            if squeeze_bonus > 0 or zone_bonus > 0:
-                logger.info(f"   💎 ADVANCED BONUSES: Squeeze +{squeeze_bonus:.1f}%, Zone +{zone_bonus:.1f}%")
+            if squeeze_bonus > 0 or zone_bonus > 0 or prediction_bonus > 0 or confluence_bonus > 0:
+                logger.info(f"   💎 ADVANCED BONUSES: Squeeze +{squeeze_bonus:.1f}%, Zone +{zone_bonus:.1f}%, Prediction +{prediction_bonus:.1f}%, Confluence +{confluence_bonus:.1f}%")
             
             # Update final confidence with fusion score
             original_confidence = confidence
             confidence = fusion_confidence
             
-            logger.info(f"🎯 Fusion Confidence: {confidence:.1f}% (Technical: {original_confidence:.1f}%, SMC: {smc_confidence:.1f}%, ML: {ml_confidence:.1f}%, Squeeze: {squeeze_bonus:.1f}%, Zone: {zone_bonus:.1f}%)")
+            logger.info(f"🎯 Fusion Confidence: {confidence:.1f}% (Tech: {original_confidence:.1f}%, SMC: {smc_confidence:.1f}%, ML: {ml_confidence:.1f}%, Advanced: {squeeze_bonus+zone_bonus+prediction_bonus+confluence_bonus:.1f}%)")
             
             # Add fusion analysis to reasoning
-            reasoning.append(f"🎯 Multi-layer fusion: SMC {smc_confidence:.0f}% + Tech {original_confidence:.0f}% + ML {ml_confidence:.0f}% + Squeeze {squeeze_bonus:.0f}% + Zone {zone_bonus:.0f}% = {confidence:.0f}%")
+            reasoning.append(f"🎯 ULTRA-ADVANCED fusion: SMC {smc_confidence:.0f}% + Tech {original_confidence:.0f}% + ML {ml_confidence:.0f}% + Squeeze {squeeze_bonus:.0f}% + Zone {zone_bonus:.0f}% + Prediction {prediction_bonus:.0f}% + Confluence {confluence_bonus:.0f}% = {confidence:.0f}%")
             
             # === FINAL CONFIDENCE CHECK (RAISED THRESHOLD) ===
             # After fusion, confidence must be >= 88% to proceed
