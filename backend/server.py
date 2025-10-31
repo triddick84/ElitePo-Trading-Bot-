@@ -925,6 +925,126 @@ async def force_generate_signal_for_asset(asset_symbol: str):
         logger.error(f"Error in force signal generation for {asset_symbol}: {e}")
         raise HTTPException(status_code=500, detail=f"Force signal generation failed: {str(e)}")
 
+
+@api_router.post("/signals/flexible-generate")
+async def flexible_signal_generation(request: 'FlexibleStrategyRequest'):
+    """
+    Generate signal using flexible crossover strategy with custom parameters
+    Allows independent selection of chart timeframe and trade duration
+    """
+    try:
+        from flexible_crossover_strategy import get_flexible_strategy
+        from models import FlexibleStrategyRequest, TradingSignal, SignalDirection, AssetType, TradingStrategy
+        
+        logger.info(f"🎯 Flexible Strategy Signal Generation Request:")
+        logger.info(f"   Asset: {request.asset_symbol}")
+        logger.info(f"   Chart Timeframe: {request.chart_timeframe}")
+        logger.info(f"   Trade Duration: {request.trade_duration_seconds}s")
+        logger.info(f"   Indicators: SMA({request.sma_fast}/{request.sma_slow}), ST(ATR:{request.supertrend_atr_period}, M:{request.supertrend_multiplier}), AO({request.ao_short_period}/{request.ao_long_period})")
+        
+        # Create flexible strategy instance with custom parameters
+        strategy = get_flexible_strategy(
+            chart_timeframe=request.chart_timeframe,
+            sma_fast=request.sma_fast,
+            sma_slow=request.sma_slow,
+            supertrend_atr_period=request.supertrend_atr_period,
+            supertrend_multiplier=request.supertrend_multiplier,
+            ao_short_period=request.ao_short_period,
+            ao_long_period=request.ao_long_period
+        )
+        
+        # Convert symbol format if needed (for yfinance compatibility)
+        yf_symbol = request.asset_symbol
+        if request.asset_symbol == 'EURUSD':
+            yf_symbol = 'EURUSD=X'
+        elif request.asset_symbol == 'GBPUSD':
+            yf_symbol = 'GBPUSD=X'
+        elif request.asset_symbol == 'BTCUSD':
+            yf_symbol = 'BTC-USD'
+        elif request.asset_symbol == 'ETHUSD':
+            yf_symbol = 'ETH-USD'
+        
+        # Generate signal
+        result = strategy.generate_signal(yf_symbol, trade_duration_seconds=request.trade_duration_seconds)
+        
+        if not result:
+            return {
+                "success": False,
+                "message": f"No signal generated for {request.asset_symbol} on {request.chart_timeframe} chart - market conditions not met",
+                "signal": None
+            }
+        
+        # Convert to TradingSignal model
+        signal_direction = SignalDirection.CALL if result['signal'] == 'CALL' else SignalDirection.PUT
+        
+        # Determine asset type
+        asset_type = AssetType.FOREX
+        if any(crypto in request.asset_symbol.upper() for crypto in ['BTC', 'ETH', 'LTC', 'XRP']):
+            asset_type = AssetType.CRYPTO
+        
+        # Create TradingSignal object
+        trading_signal = TradingSignal(
+            symbol=request.asset_symbol,
+            asset_type=asset_type,
+            direction=signal_direction,
+            entry_price=result['analysis']['sma_fast'],  # Use current price from analysis
+            expiration_minutes=request.trade_duration_seconds // 60,
+            timeframe=request.chart_timeframe,
+            market_type="regular",
+            probability=result['confidence'],
+            confidence_level="HIGH" if result['confidence'] >= 90 else ("MEDIUM" if result['confidence'] >= 80 else "LOW"),
+            strategy_used=TradingStrategy.EMA_CROSSOVER,  # Using crossover strategy
+            technical_analysis={
+                "sma_fast": result['analysis']['sma_fast'],
+                "sma_slow": result['analysis']['sma_slow'],
+                "sma_cross": result['analysis']['sma_cross'],
+                "supertrend": result['analysis']['supertrend'],
+                "awesome_oscillator": result['analysis']['awesome_oscillator'],
+                "ao_direction": result['analysis']['ao_direction'],
+                "chart_timeframe": result['chart_timeframe'],
+                "trade_duration_text": result['trade_duration_text']
+            },
+            market_analysis_summary=f"Flexible Crossover Strategy on {request.chart_timeframe} chart",
+            justification="\n".join(result['reasoning']),
+            risk_assessment=f"Confidence: {result['confidence']}% - {result['confidence_level']}",
+            suggested_stake=10.0  # Default stake
+        )
+        
+        # Store signal in database
+        signal_dict = trading_signal.dict()
+        signal_dict['timestamp'] = signal_dict['timestamp'].isoformat()
+        signal_dict['precision_entry_time'] = None
+        signal_dict = _convert_numpy_types(signal_dict)
+        await db.trading_signals.insert_one(signal_dict)
+        
+        logger.info(f"✅ Flexible signal generated and stored: {signal_direction.value} for {request.asset_symbol}")
+        
+        return {
+            "success": True,
+            "message": f"Signal generated using {request.chart_timeframe} chart with {result['trade_duration_text']} expiration",
+            "signal": {
+                "id": trading_signal.id,
+                "symbol": trading_signal.symbol,
+                "direction": trading_signal.direction.value,
+                "entry_price": float(trading_signal.entry_price),
+                "probability": float(trading_signal.probability),
+                "confidence_level": trading_signal.confidence_level,
+                "timeframe": trading_signal.timeframe,
+                "expiration_minutes": trading_signal.expiration_minutes,
+                "trade_duration_text": result['trade_duration_text'],
+                "justification": trading_signal.justification,
+                "technical_analysis": trading_signal.technical_analysis,
+                "timestamp": trading_signal.timestamp.isoformat()
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in flexible signal generation: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Flexible signal generation failed: {str(e)}")
+
+
 # Legacy endpoints for compatibility
 @api_router.get("/")
 async def root():
