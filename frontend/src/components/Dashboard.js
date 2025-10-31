@@ -207,7 +207,7 @@ const Dashboard = ({ botStatus, liveSignals, setLiveSignals, notificationSetting
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {/* Asset Selection */}
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-2">
