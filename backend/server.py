@@ -941,6 +941,7 @@ async def flexible_signal_generation(request: FlexibleStrategyRequest):
         logger.info(f"   Market Type: {request.market_type}")
         logger.info(f"   Chart Timeframe: {request.chart_timeframe}")
         logger.info(f"   Trade Duration: {request.trade_duration_seconds}s")
+        logger.info(f"   Force Signal: {request.force_signal}")
         logger.info(f"   Indicators: SMA({request.sma_fast}/{request.sma_slow}), ST(ATR:{request.supertrend_atr_period}, M:{request.supertrend_multiplier}), AO({request.ao_short_period}/{request.ao_long_period})")
         
         # Create flexible strategy instance with custom parameters
