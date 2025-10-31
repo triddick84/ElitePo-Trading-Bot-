@@ -938,6 +938,7 @@ async def flexible_signal_generation(request: FlexibleStrategyRequest):
         
         logger.info(f"🎯 Flexible Strategy Signal Generation Request:")
         logger.info(f"   Asset: {request.asset_symbol}")
+        logger.info(f"   Market Type: {request.market_type}")
         logger.info(f"   Chart Timeframe: {request.chart_timeframe}")
         logger.info(f"   Trade Duration: {request.trade_duration_seconds}s")
         logger.info(f"   Indicators: SMA({request.sma_fast}/{request.sma_slow}), ST(ATR:{request.supertrend_atr_period}, M:{request.supertrend_multiplier}), AO({request.ao_short_period}/{request.ao_long_period})")
@@ -954,15 +955,28 @@ async def flexible_signal_generation(request: FlexibleStrategyRequest):
         )
         
         # Convert symbol format if needed (for yfinance compatibility)
-        yf_symbol = request.asset_symbol
-        if request.asset_symbol == 'EURUSD':
-            yf_symbol = 'EURUSD=X'
-        elif request.asset_symbol == 'GBPUSD':
-            yf_symbol = 'GBPUSD=X'
-        elif request.asset_symbol == 'BTCUSD':
+        # Remove OTC suffix if present for yfinance
+        base_symbol = request.asset_symbol.replace('_OTC', '').replace('_otc', '')
+        yf_symbol = base_symbol
+        
+        # Forex pairs
+        if base_symbol in ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCHF', 'USDCAD', 'NZDUSD',
+                           'EURGBP', 'EURJPY', 'EURCHF', 'GBPJPY', 'GBPCHF', 'CHFJPY', 
+                           'CADJPY', 'AUDJPY', 'AUDCHF', 'NZDJPY']:
+            yf_symbol = f'{base_symbol}=X'
+        # Crypto
+        elif base_symbol == 'BTCUSD':
             yf_symbol = 'BTC-USD'
-        elif request.asset_symbol == 'ETHUSD':
+        elif base_symbol == 'ETHUSD':
             yf_symbol = 'ETH-USD'
+        elif base_symbol == 'LTCUSD':
+            yf_symbol = 'LTC-USD'
+        elif base_symbol == 'ADAUSD':
+            yf_symbol = 'ADA-USD'
+        elif base_symbol == 'DOGEUSD':
+            yf_symbol = 'DOGE-USD'
+        elif base_symbol == 'SOLUSD':
+            yf_symbol = 'SOL-USD'
         
         # Generate signal
         result = strategy.generate_signal(yf_symbol, trade_duration_seconds=request.trade_duration_seconds)
@@ -970,7 +984,7 @@ async def flexible_signal_generation(request: FlexibleStrategyRequest):
         if not result:
             return {
                 "success": False,
-                "message": f"No signal generated for {request.asset_symbol} on {request.chart_timeframe} chart - market conditions not met",
+                "message": f"No signal generated for {request.asset_symbol} ({request.market_type.upper()}) on {request.chart_timeframe} chart - market conditions not met",
                 "signal": None
             }
         
@@ -979,18 +993,27 @@ async def flexible_signal_generation(request: FlexibleStrategyRequest):
         
         # Determine asset type
         asset_type = AssetType.FOREX
-        if any(crypto in request.asset_symbol.upper() for crypto in ['BTC', 'ETH', 'LTC', 'XRP']):
+        if any(crypto in base_symbol.upper() for crypto in ['BTC', 'ETH', 'LTC', 'XRP', 'ADA', 'DOGE', 'SOL', 'AVAX', 'MATIC']):
             asset_type = AssetType.CRYPTO
+        elif base_symbol.upper() in ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NFLX', 'NVDA', 'JPM', 'BAC']:
+            asset_type = AssetType.STOCKS
+        elif base_symbol.upper() in ['XAUUSD', 'XAGUSD', 'BRENTOIL', 'WTIUSD', 'NATGAS', 'XPTUSD', 'XPDUSD']:
+            asset_type = AssetType.COMMODITIES
+        elif base_symbol.upper() in ['US100', 'US30', 'SPX500', 'GER40', 'UK100', 'JPN225']:
+            asset_type = AssetType.INDICES
+        
+        # Add market type suffix to symbol for display
+        display_symbol = f"{request.asset_symbol}_{request.market_type.upper()}" if request.market_type == 'otc' else request.asset_symbol
         
         # Create TradingSignal object
         trading_signal = TradingSignal(
-            symbol=request.asset_symbol,
+            symbol=display_symbol,
             asset_type=asset_type,
             direction=signal_direction,
             entry_price=result['analysis']['sma_fast'],  # Use current price from analysis
             expiration_minutes=request.trade_duration_seconds // 60,
             timeframe=request.chart_timeframe,
-            market_type="regular",
+            market_type=request.market_type,
             probability=result['confidence'],
             confidence_level="HIGH" if result['confidence'] >= 90 else ("MEDIUM" if result['confidence'] >= 80 else "LOW"),
             strategy_used=TradingStrategy.EMA_CROSSOVER,  # Using crossover strategy
