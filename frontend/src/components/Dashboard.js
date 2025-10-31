@@ -44,6 +44,28 @@ const Dashboard = ({ botStatus, liveSignals, setLiveSignals, notificationSetting
     console.log("Executing signal from dashboard:", signal);
     // Here you could integrate with platform trading APIs
   };
+  
+  const handleFlexibleGenerate = async () => {
+    setFlexibleLoading(true);
+    setFlexibleResult(null);
+    try {
+      const response = await axios.post(`${API}/signals/flexible-generate`, flexibleConfig);
+      setFlexibleResult(response.data);
+      
+      // Add signal to live signals if successful
+      if (response.data.success && response.data.signal) {
+        setLiveSignals(prev => [response.data.signal, ...prev]);
+      }
+    } catch (error) {
+      console.error('Error generating flexible signal:', error);
+      setFlexibleResult({
+        success: false,
+        message: error.response?.data?.detail || 'Failed to generate signal'
+      });
+    } finally {
+      setFlexibleLoading(false);
+    }
+  };
 
   useEffect(() => {
     fetchDashboardData();
