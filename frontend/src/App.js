@@ -81,8 +81,6 @@ function App() {
       </div>
     );
   }
-    signalInversion: false
-  });
 
   useEffect(() => {
     fetchBotStatus();
