@@ -508,6 +508,24 @@ const Dashboard = ({ botStatus, liveSignals, setLiveSignals, notificationSetting
           </div>
         </div>
 
+        {/* Force Signal Option */}
+        <div className="mt-6 p-4 bg-slate-800/30 rounded-lg border border-slate-700/50">
+          <label className="flex items-center space-x-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={flexibleConfig.force_signal}
+              onChange={(e) => setFlexibleConfig({...flexibleConfig, force_signal: e.target.checked})}
+              className="w-5 h-5 rounded border-slate-600 bg-slate-700 text-purple-500 focus:ring-2 focus:ring-purple-500 focus:ring-offset-0 cursor-pointer"
+            />
+            <div className="flex-1">
+              <span className="text-sm font-medium text-slate-200">⚡ Force Signal Generation</span>
+              <p className="text-xs text-slate-500 mt-1">
+                Generate signal based on current market state even if strict conditions aren't met. Useful when no signals are generated in strict mode.
+              </p>
+            </div>
+          </label>
+        </div>
+
         {/* Generate Button */}
         <div className="mt-6 flex items-center justify-between">
           <div className="text-sm text-slate-400">
