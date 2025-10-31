@@ -839,9 +839,22 @@ class PocketOption5SecondStrategy:
                         "zone_type": zone_signal.get('zone_type'),
                         "zone_quality": zone_signal.get('zone_quality', 0),
                         "bonus": zone_bonus
+                    },
+                    "next_candle_prediction": {
+                        "predicted_direction": prediction.get('direction'),
+                        "prediction_confidence": prediction.get('confidence', 0),
+                        "agrees_with_signal": signal_agrees_with_prediction,
+                        "prediction_reasoning": prediction.get('reasoning', []),
+                        "bonus": prediction_bonus
+                    },
+                    "multi_timeframe": {
+                        "confluence": confluence.get('confluence', False),
+                        "agreement_pct": confluence.get('agreement_pct', 0),
+                        "recommendation": confluence.get('recommendation'),
+                        "bonus": confluence_bonus
                     }
                 },
-                "strategy": "Pocket Option 5s ULTRA-ADVANCED Multi-Layer",
+                "strategy": "Pocket Option 5s ULTIMATE Multi-Layer",
                 "timeframe": "5s",
                 "fusion_score": confidence
             }
