@@ -27,16 +27,18 @@ class FlexibleCrossoverStrategy:
     Supports multiple chart timeframes (5s, 10s, 15s, 30s, 1m, 2m, 3m, 5m)
     """
     
-    def __init__(self, chart_timeframe: str = '30s'):
+    def __init__(self, chart_timeframe: str = '30s', sma_fast: int = 6, sma_slow: int = 12,
+                 supertrend_atr_period: int = 2, supertrend_multiplier: float = 2.2,
+                 ao_short_period: int = 6, ao_long_period: int = 12):
         self.chart_timeframe = chart_timeframe
         
-        # User-specified indicator parameters
-        self.sma_fast = 6
-        self.sma_slow = 12
-        self.supertrend_atr_period = 2
-        self.supertrend_multiplier = 2.2
-        self.ao_short_period = 6
-        self.ao_long_period = 12
+        # User-specified indicator parameters (now customizable)
+        self.sma_fast = sma_fast
+        self.sma_slow = sma_slow
+        self.supertrend_atr_period = supertrend_atr_period
+        self.supertrend_multiplier = supertrend_multiplier
+        self.ao_short_period = ao_short_period
+        self.ao_long_period = ao_long_period
         
         # Minimum data points needed
         self.min_data_points = 50
