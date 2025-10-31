@@ -163,6 +163,7 @@ class PerformanceMetrics(BaseModel):
 class FlexibleStrategyRequest(BaseModel):
     """Request model for flexible trading strategy with customizable parameters"""
     asset_symbol: str = Field(..., description="Trading symbol (e.g., EURUSD, BTCUSD)")
+    market_type: str = Field(default='regular', description="Market type: 'regular' or 'otc'")
     chart_timeframe: str = Field(default='30s', description="Chart timeframe for analysis (5s, 10s, 15s, 30s, 1m, 2m, 3m, 5m)")
     trade_duration_seconds: int = Field(default=82, ge=5, le=3600, description="Trade/signal expiration in seconds (e.g., 82 = 1m 22s)")
     
@@ -173,3 +174,4 @@ class FlexibleStrategyRequest(BaseModel):
     supertrend_multiplier: float = Field(default=2.2, ge=0.1, le=10.0, description="SuperTrend multiplier")
     ao_short_period: int = Field(default=6, ge=1, le=50, description="Awesome Oscillator short period")
     ao_long_period: int = Field(default=12, ge=1, le=100, description="Awesome Oscillator long period")
+
