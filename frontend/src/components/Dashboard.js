@@ -365,6 +365,24 @@ const Dashboard = ({ botStatus, liveSignals, setLiveSignals, notificationSetting
             </select>
           </div>
 
+          {/* Market Type Selection */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Market Type
+            </label>
+            <select
+              value={flexibleConfig.market_type}
+              onChange={(e) => setFlexibleConfig({...flexibleConfig, market_type: e.target.value})}
+              className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-md text-white focus:outline-none focus:border-purple-500"
+            >
+              <option value="regular">🔵 Regular Market</option>
+              <option value="otc">🟢 OTC Market (24/7)</option>
+            </select>
+            <p className="text-xs text-slate-500 mt-1">
+              {flexibleConfig.market_type === 'otc' ? '24/7 Trading Available' : 'Standard Trading Hours'}
+            </p>
+          </div>
+
           {/* Chart Timeframe */}
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-2">
