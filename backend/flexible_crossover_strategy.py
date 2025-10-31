@@ -173,13 +173,14 @@ class FlexibleCrossoverStrategy:
             logger.error(f"Error calculating Awesome Oscillator: {e}")
             return pd.Series([0]*len(df), index=df.index)
     
-    def generate_signal(self, symbol: str, trade_duration_seconds: int = 82) -> Optional[Dict]:
+    def generate_signal(self, symbol: str, trade_duration_seconds: int = 82, force_signal: bool = False) -> Optional[Dict]:
         """
         Generate trading signal with custom trade duration
         
         Args:
         - symbol: trading pair
         - trade_duration_seconds: signal expiration time in seconds (e.g., 82 = 1m 22s)
+        - force_signal: if True, generate signal based on current market state even if conditions aren't perfect
         
         Returns signal with all confirmations
         """
@@ -190,6 +191,7 @@ class FlexibleCrossoverStrategy:
                 return None
             
             close = df['Close']
+            current_price = close.iloc[-1]
             
             # Calculate all indicators
             sma_fast = self.calculate_sma(close, self.sma_fast)
@@ -214,15 +216,17 @@ class FlexibleCrossoverStrategy:
                 logger.warning(f"NaN values in indicators for {symbol}")
                 return None
             
-            logger.info(f"🎯 Crossover Analysis for {symbol} ({self.chart_timeframe}):")
+            logger.info(f"🎯 Crossover Analysis for {symbol} ({self.chart_timeframe}) - Force: {force_signal}:")
+            logger.info(f"   Price: {current_price:.5f}")
             logger.info(f"   SMA Fast: {current_sma_fast:.5f} (prev: {prev_sma_fast:.5f})")
             logger.info(f"   SMA Slow: {current_sma_slow:.5f} (prev: {prev_sma_slow:.5f})")
             logger.info(f"   SuperTrend: {'BUY' if current_supertrend == 1 else 'SELL'}")
             logger.info(f"   AO: {current_ao:.5f} (prev: {prev_ao:.5f})")
             
             signal = None
-            confidence = 85  # Base confidence
+            confidence = 75  # Base confidence for force mode
             reasoning = []
+            confidence_level = "MEDIUM"
             
             # === BUY SIGNAL CONDITIONS ===
             # 1. 6 SMA crosses above 12 SMA
