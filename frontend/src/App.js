@@ -30,8 +30,58 @@ function App() {
     autoRefresh: true,
     signalInversion: false
   });
+
+  // Fetch functions (must be declared before useEffect)
+  const fetchBotStatus = async () => {
+    try {
+      const response = await axios.get(`${API}/bot/status`);
+      setBotStatus(response.data);
+    } catch (error) {
+      console.error("Error fetching bot status:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const fetchLiveSignals = async () => {
+    try {
+      const response = await axios.get(`${API}/signals/active`);
+      const newSignals = response.data || [];
+      
+      // Filter for truly new signals (not already in our state)
+      const existingIds = liveSignals.map(s => s.id);
+      const freshSignals = newSignals.filter(signal => 
+        !existingIds.includes(signal.id) && 
+        signal.quality_check_passed && 
+        signal.probability >= 95
+      );
+      
+      if (freshSignals.length > 0) {
+        setLiveSignals(prev => [...freshSignals, ...prev.slice(0, 9)]); // Keep last 10
+      }
+    } catch (error) {
+      console.error("Error fetching live signals:", error);
+    }
+  };
+
+  // useEffect must be after state declarations but before conditional returns
+  useEffect(() => {
+    if (!BACKEND_URL) return; // Skip if no backend URL
+    
+    fetchBotStatus();
+    fetchLiveSignals();
+    
+    // Set up periodic status updates
+    const statusInterval = setInterval(fetchBotStatus, 5000);
+    const signalsInterval = setInterval(fetchLiveSignals, 3000); // Check for new signals every 3 seconds
+    
+    return () => {
+      clearInterval(statusInterval);
+      clearInterval(signalsInterval);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   
-  // Check if backend URL is configured
+  // Check if backend URL is configured (now AFTER all hooks)
   if (!BACKEND_URL) {
     return (
       <div style={{
@@ -81,52 +131,6 @@ function App() {
       </div>
     );
   }
-
-  useEffect(() => {
-    fetchBotStatus();
-    fetchLiveSignals();
-    
-    // Set up periodic status updates
-    const statusInterval = setInterval(fetchBotStatus, 5000);
-    const signalsInterval = setInterval(fetchLiveSignals, 3000); // Check for new signals every 3 seconds
-    
-    return () => {
-      clearInterval(statusInterval);
-      clearInterval(signalsInterval);
-    };
-  }, []);
-
-  const fetchBotStatus = async () => {
-    try {
-      const response = await axios.get(`${API}/bot/status`);
-      setBotStatus(response.data);
-    } catch (error) {
-      console.error("Error fetching bot status:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const fetchLiveSignals = async () => {
-    try {
-      const response = await axios.get(`${API}/signals/active`);
-      const newSignals = response.data || [];
-      
-      // Filter for truly new signals (not already in our state)
-      const existingIds = liveSignals.map(s => s.id);
-      const freshSignals = newSignals.filter(signal => 
-        !existingIds.includes(signal.id) && 
-        signal.quality_check_passed && 
-        signal.probability >= 95
-      );
-      
-      if (freshSignals.length > 0) {
-        setLiveSignals(prev => [...freshSignals, ...prev.slice(0, 9)]); // Keep last 10
-      }
-    } catch (error) {
-      console.error("Error fetching live signals:", error);
-    }
-  };
 
   const handleSignalExecute = (signal) => {
     console.log("Executing trade signal:", signal);
