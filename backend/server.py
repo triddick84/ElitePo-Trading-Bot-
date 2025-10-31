@@ -928,14 +928,13 @@ async def force_generate_signal_for_asset(asset_symbol: str):
 
 
 @api_router.post("/signals/flexible-generate")
-async def flexible_signal_generation(request: 'FlexibleStrategyRequest'):
+async def flexible_signal_generation(request: FlexibleStrategyRequest):
     """
     Generate signal using flexible crossover strategy with custom parameters
     Allows independent selection of chart timeframe and trade duration
     """
     try:
         from flexible_crossover_strategy import get_flexible_strategy
-        from models import FlexibleStrategyRequest, TradingSignal, SignalDirection, AssetType, TradingStrategy
         
         logger.info(f"🎯 Flexible Strategy Signal Generation Request:")
         logger.info(f"   Asset: {request.asset_symbol}")
