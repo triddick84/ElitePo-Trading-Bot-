@@ -19,10 +19,17 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
 const API = BACKEND_URL ? `${BACKEND_URL}/api` : '';
 
 function App() {
+  // All hooks must be declared at the top before any conditional returns
   const [botStatus, setBotStatus] = useState(null);
   const [activeView, setActiveView] = useState("dashboard");
   const [isLoading, setIsLoading] = useState(true);
   const [liveSignals, setLiveSignals] = useState([]);
+  const [globalNotificationSettings, setGlobalNotificationSettings] = useState({
+    popupEnabled: true,
+    soundEnabled: true,
+    autoRefresh: true,
+    signalInversion: false
+  });
   
   // Check if backend URL is configured
   if (!BACKEND_URL) {
@@ -74,10 +81,6 @@ function App() {
       </div>
     );
   }
-  const [globalNotificationSettings, setGlobalNotificationSettings] = useState({
-    popupEnabled: true,
-    soundEnabled: true,
-    autoRefresh: true,
     signalInversion: false
   });
 
