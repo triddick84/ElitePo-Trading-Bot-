@@ -24,6 +24,21 @@ const Dashboard = ({ botStatus, liveSignals, setLiveSignals, notificationSetting
     signal_timeframe: '5s'
   });
   const [showAssetSelector, setShowAssetSelector] = useState(false);
+  
+  // Flexible Trading System State
+  const [flexibleConfig, setFlexibleConfig] = useState({
+    asset_symbol: 'EURUSD',
+    chart_timeframe: '30s',
+    trade_duration_seconds: 82, // 1m 22s
+    sma_fast: 6,
+    sma_slow: 12,
+    supertrend_atr_period: 2,
+    supertrend_multiplier: 2.2,
+    ao_short_period: 6,
+    ao_long_period: 12
+  });
+  const [flexibleLoading, setFlexibleLoading] = useState(false);
+  const [flexibleResult, setFlexibleResult] = useState(null);
 
   const handleSignalExecute = (signal) => {
     console.log("Executing signal from dashboard:", signal);
