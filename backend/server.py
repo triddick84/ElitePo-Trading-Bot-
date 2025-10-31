@@ -1027,7 +1027,7 @@ async def flexible_signal_generation(request: FlexibleStrategyRequest):
                 "chart_timeframe": result['chart_timeframe'],
                 "trade_duration_text": result['trade_duration_text']
             },
-            market_analysis_summary=f"Flexible Crossover Strategy on {request.chart_timeframe} chart",
+            market_analysis_summary=f"Flexible Crossover Strategy on {request.chart_timeframe} chart ({request.market_type.upper()} market)",
             justification="\n".join(result['reasoning']),
             risk_assessment=f"Confidence: {result['confidence']}% - {result['confidence_level']}",
             suggested_stake=10.0  # Default stake
@@ -1040,11 +1040,11 @@ async def flexible_signal_generation(request: FlexibleStrategyRequest):
         signal_dict = _convert_numpy_types(signal_dict)
         await db.trading_signals.insert_one(signal_dict)
         
-        logger.info(f"✅ Flexible signal generated and stored: {signal_direction.value} for {request.asset_symbol}")
+        logger.info(f"✅ Flexible signal generated and stored: {signal_direction.value} for {display_symbol} ({request.market_type.upper()})")
         
         return {
             "success": True,
-            "message": f"Signal generated using {request.chart_timeframe} chart with {result['trade_duration_text']} expiration",
+            "message": f"Signal generated for {request.market_type.upper()} market using {request.chart_timeframe} chart with {result['trade_duration_text']} expiration",
             "signal": {
                 "id": trading_signal.id,
                 "symbol": trading_signal.symbol,
