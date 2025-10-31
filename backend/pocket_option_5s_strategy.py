@@ -487,6 +487,17 @@ class PocketOption5SecondStrategy:
             confirmations_count += 1
             logger.info(f"✅ SuperTrend validation passed: {supertrend_check['reason']}")
             
+            # Add prediction and confluence bonuses
+            if prediction_bonus > 0:
+                confidence += prediction_bonus
+                reasoning.append(f"🔮 Next candle prediction bonus: +{prediction_bonus:.1f}%")
+                confirmations_count += 1
+            
+            if confluence_bonus > 0:
+                confidence += confluence_bonus
+                reasoning.append(f"📊 Multi-timeframe confluence bonus: +{confluence_bonus:.1f}%")
+                confirmations_count += 1
+            
             # === REQUIRE STOCHASTIC CONFIRMATION (MANDATORY) ===
             # Stochastic Oscillator (3, 1, 1) provides additional confirmation
             # For CALL: Stochastic should NOT be in extreme oversold (confirms upward momentum)
