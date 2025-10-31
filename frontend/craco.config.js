@@ -43,4 +43,22 @@ module.exports = {
       return webpackConfig;
     },
   },
+  eslint: {
+    enable: true,
+    mode: 'extends',
+    configure: (eslintConfig) => {
+      // Add react-hooks plugin
+      eslintConfig.plugins = eslintConfig.plugins || [];
+      if (!eslintConfig.plugins.includes('react-hooks')) {
+        eslintConfig.plugins.push('react-hooks');
+      }
+      
+      // Add react-hooks rules
+      eslintConfig.rules = eslintConfig.rules || {};
+      eslintConfig.rules['react-hooks/rules-of-hooks'] = 'error';
+      eslintConfig.rules['react-hooks/exhaustive-deps'] = 'warn';
+      
+      return eslintConfig;
+    },
+  },
 };
