@@ -1011,14 +1011,15 @@ async def flexible_signal_generation(request: FlexibleStrategyRequest):
             symbol=display_symbol,
             asset_type=asset_type,
             direction=signal_direction,
-            entry_price=result['analysis']['sma_fast'],  # Use current price from analysis
+            entry_price=result['analysis'].get('current_price', result['analysis']['sma_fast']),  # Use actual current price
             expiration_minutes=request.trade_duration_seconds // 60,
             timeframe=request.chart_timeframe,
             market_type=request.market_type,
             probability=result['confidence'],
-            confidence_level="HIGH" if result['confidence'] >= 90 else ("MEDIUM" if result['confidence'] >= 80 else "LOW"),
+            confidence_level=result.get('confidence_level', "HIGH" if result['confidence'] >= 90 else ("MEDIUM" if result['confidence'] >= 80 else "LOW")),
             strategy_used=TradingStrategy.EMA_CROSSOVER,  # Using crossover strategy
             technical_analysis={
+                "current_price": result['analysis'].get('current_price', 0),
                 "sma_fast": result['analysis']['sma_fast'],
                 "sma_slow": result['analysis']['sma_slow'],
                 "sma_cross": result['analysis']['sma_cross'],
@@ -1026,11 +1027,12 @@ async def flexible_signal_generation(request: FlexibleStrategyRequest):
                 "awesome_oscillator": result['analysis']['awesome_oscillator'],
                 "ao_direction": result['analysis']['ao_direction'],
                 "chart_timeframe": result['chart_timeframe'],
-                "trade_duration_text": result['trade_duration_text']
+                "trade_duration_text": result['trade_duration_text'],
+                "trade_duration_seconds": request.trade_duration_seconds
             },
             market_analysis_summary=f"Flexible Crossover Strategy on {request.chart_timeframe} chart ({request.market_type.upper()} market)",
             justification="\n".join(result['reasoning']),
-            risk_assessment=f"Confidence: {result['confidence']}% - {result['confidence_level']}",
+            risk_assessment=f"Confidence: {result['confidence']}% - {result.get('confidence_level', 'HIGH')}",
             suggested_stake=10.0  # Default stake
         )
         
