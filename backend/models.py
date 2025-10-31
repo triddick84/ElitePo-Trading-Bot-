@@ -158,3 +158,18 @@ class PerformanceMetrics(BaseModel):
     profit_factor: Optional[float] = None
     max_drawdown: Optional[float] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class FlexibleStrategyRequest(BaseModel):
+    """Request model for flexible trading strategy with customizable parameters"""
+    asset_symbol: str = Field(..., description="Trading symbol (e.g., EURUSD, BTCUSD)")
+    chart_timeframe: str = Field(default='30s', description="Chart timeframe for analysis (5s, 10s, 15s, 30s, 1m, 2m, 3m, 5m)")
+    trade_duration_seconds: int = Field(default=82, ge=5, le=3600, description="Trade/signal expiration in seconds (e.g., 82 = 1m 22s)")
+    
+    # Customizable indicator parameters
+    sma_fast: int = Field(default=6, ge=1, le=50, description="Fast SMA period")
+    sma_slow: int = Field(default=12, ge=1, le=100, description="Slow SMA period")
+    supertrend_atr_period: int = Field(default=2, ge=1, le=50, description="SuperTrend ATR period")
+    supertrend_multiplier: float = Field(default=2.2, ge=0.1, le=10.0, description="SuperTrend multiplier")
+    ao_short_period: int = Field(default=6, ge=1, le=50, description="Awesome Oscillator short period")
+    ao_long_period: int = Field(default=12, ge=1, le=100, description="Awesome Oscillator long period")
