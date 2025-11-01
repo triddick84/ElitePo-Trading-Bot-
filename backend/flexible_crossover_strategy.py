@@ -188,6 +188,8 @@ class FlexibleCrossoverStrategy:
             # Fetch market data
             df = self.get_real_market_data(symbol)
             if df is None:
+                if force_signal:
+                    logger.warning(f"⚠️ Market data unavailable for {symbol}, but force mode enabled - cannot generate without data")
                 return None
             
             close = df['Close']
@@ -202,19 +204,28 @@ class FlexibleCrossoverStrategy:
             # Get current values
             current_sma_fast = sma_fast.iloc[-1]
             current_sma_slow = sma_slow.iloc[-1]
-            prev_sma_fast = sma_fast.iloc[-2]
-            prev_sma_slow = sma_slow.iloc[-2]
+            prev_sma_fast = sma_fast.iloc[-2] if len(sma_fast) >= 2 else current_sma_fast
+            prev_sma_slow = sma_slow.iloc[-2] if len(sma_slow) >= 2 else current_sma_slow
             
             current_supertrend = trend.iloc[-1]
             
             current_ao = ao.iloc[-1]
-            prev_ao = ao.iloc[-2]
+            prev_ao = ao.iloc[-2] if len(ao) >= 2 else current_ao
             prev_prev_ao = ao.iloc[-3] if len(ao) >= 3 else prev_ao
             
-            # Check for NaN
-            if pd.isna([current_sma_fast, current_sma_slow, current_supertrend, current_ao]).any():
-                logger.warning(f"NaN values in indicators for {symbol}")
-                return None
+            # Check for NaN - but handle differently for force mode
+            has_nan = pd.isna([current_sma_fast, current_sma_slow, current_supertrend, current_ao]).any()
+            if has_nan:
+                if force_signal:
+                    logger.warning(f"⚠️ NaN values in indicators for {symbol}, but force mode enabled - using available data")
+                    # Replace NaN with neutral values for force mode
+                    current_sma_fast = current_price if pd.isna(current_sma_fast) else current_sma_fast
+                    current_sma_slow = current_price if pd.isna(current_sma_slow) else current_sma_slow
+                    current_supertrend = 1 if pd.isna(current_supertrend) else current_supertrend  # Default to BUY
+                    current_ao = 0 if pd.isna(current_ao) else current_ao
+                else:
+                    logger.warning(f"NaN values in indicators for {symbol}")
+                    return None
             
             logger.info(f"🎯 Crossover Analysis for {symbol} ({self.chart_timeframe}) - Force: {force_signal}:")
             logger.info(f"   Price: {current_price:.5f}")
