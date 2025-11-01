@@ -47,12 +47,16 @@ class FlexibleCrossoverStrategy:
         logger.info(f"   SMA: {self.sma_fast}/{self.sma_slow}, SuperTrend: ATR({self.supertrend_atr_period}), Mult({self.supertrend_multiplier})")
         logger.info(f"   Awesome Oscillator: {self.ao_short_period}/{self.ao_long_period}")
     
-    def get_real_market_data(self, symbol: str) -> Optional[pd.DataFrame]:
+    def get_real_market_data(self, symbol: str, force_mode: bool = False) -> Optional[pd.DataFrame]:
         """
         Fetch real-time market data for the specified chart timeframe
         
         For ultra-short timeframes (5s-30s), we fetch 1m data and use it
         For 1m+, we fetch actual interval data
+        
+        Args:
+            symbol: Trading symbol
+            force_mode: If True, accept older data (up to 30 minutes)
         """
         try:
             logger.info(f"📊 Fetching {self.chart_timeframe} data for {symbol}")
@@ -83,9 +87,15 @@ class FlexibleCrossoverStrategy:
             current_time = datetime.now(timezone.utc)
             data_age_seconds = (current_time - latest_data_time).total_seconds()
             
-            if data_age_seconds > 300:
-                logger.error(f"❌ DATA TOO OLD: {data_age_seconds:.0f}s")
-                return None
+            # More lenient age check for force mode
+            max_age = 1800 if force_mode else 300  # 30 minutes for force, 5 minutes for strict
+            
+            if data_age_seconds > max_age:
+                if force_mode:
+                    logger.warning(f"⚠️ DATA OLD: {data_age_seconds:.0f}s, but force mode accepts up to {max_age}s")
+                else:
+                    logger.error(f"❌ DATA TOO OLD: {data_age_seconds:.0f}s")
+                    return None
             
             logger.info(f"✅ Got {len(df)} candles for {symbol}, age: {data_age_seconds:.1f}s")
             return df
