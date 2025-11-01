@@ -195,8 +195,8 @@ class FlexibleCrossoverStrategy:
         Returns signal with all confirmations
         """
         try:
-            # Fetch market data
-            df = self.get_real_market_data(symbol)
+            # Fetch market data (more lenient for force mode)
+            df = self.get_real_market_data(symbol, force_mode=force_signal)
             if df is None:
                 if force_signal:
                     logger.warning(f"⚠️ Market data unavailable for {symbol}, but force mode enabled - cannot generate without data")
