@@ -1071,6 +1071,125 @@ async def flexible_signal_generation(request: FlexibleStrategyRequest):
         raise HTTPException(status_code=500, detail=f"Flexible signal generation failed: {str(e)}")
 
 
+
+@api_router.post("/signals/micro-momentum-5s-otc")
+async def micro_momentum_5s_otc_signal_generation(asset_symbol: str, trade_duration_seconds: int = 5):
+    """
+    Generate signal using Micro-Momentum Scalp strategy for 5-second OTC markets
+    
+    Strategy: EMA20 + RSI(2) + Stochastic(3,1,1) + Bollinger Bands(5,2.5)
+    Target: 65-75% win rate through micro-trend confluence
+    Markets: OTC Forex only (EUR/USD_OTC, GBP/USD_OTC, etc.)
+    """
+    try:
+        from micro_momentum_scalp_5s_otc import get_micro_momentum_5s_otc_strategy
+        
+        logger.info(f"🚀 Micro-Momentum 5s OTC Signal Generation:")
+        logger.info(f"   Asset: {asset_symbol}")
+        logger.info(f"   Trade Duration: {trade_duration_seconds}s")
+        
+        # Ensure it's an OTC market
+        if "_OTC" not in asset_symbol.upper() and "_otc" not in asset_symbol:
+            logger.warning(f"⚠️ {asset_symbol} is not OTC market, appending _OTC suffix")
+            display_symbol = f"{asset_symbol}_OTC"
+        else:
+            display_symbol = asset_symbol
+        
+        # Get strategy instance
+        strategy = get_micro_momentum_5s_otc_strategy()
+        
+        # Convert symbol for yfinance
+        base_symbol = asset_symbol.replace('_OTC', '').replace('_otc', '')
+        yf_symbol = base_symbol
+        
+        # Forex pairs
+        if base_symbol in ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCHF', 'USDCAD', 'NZDUSD',
+                           'EURGBP', 'EURJPY', 'EURCHF', 'GBPJPY', 'GBPCHF', 'CHFJPY',
+                           'CADJPY', 'AUDJPY', 'AUDCHF', 'NZDJPY', 'EURAUD', 'EURCAD', 'GBPCAD']:
+            yf_symbol = f'{base_symbol}=X'
+        
+        # Generate signal
+        result = strategy.generate_signal(yf_symbol, trade_duration_seconds=trade_duration_seconds)
+        
+        if not result:
+            return {
+                "success": False,
+                "message": f"No signal generated for {display_symbol} on 5s OTC - market conditions not met",
+                "signal": None
+            }
+        
+        # Convert to TradingSignal model
+        signal_direction = SignalDirection.CALL if result['signal'] == 'CALL' else SignalDirection.PUT
+        
+        # Create TradingSignal object
+        trading_signal = TradingSignal(
+            symbol=display_symbol,
+            asset_type=AssetType.FOREX,  # OTC is primarily Forex
+            direction=signal_direction,
+            entry_price=result['analysis']['current_price'],
+            expiration_minutes=trade_duration_seconds // 60 if trade_duration_seconds >= 60 else 0,
+            timeframe="5s",
+            market_type="otc",  # Always OTC
+            probability=result['confidence'],
+            confidence_level=result['confidence_level'],
+            strategy_used=TradingStrategy.EMA_CROSSOVER,  # Closest match
+            technical_analysis={
+                "current_price": result['analysis']['current_price'],
+                "ema20": result['analysis']['ema20'],
+                "rsi2": result['analysis']['rsi2'],
+                "stoch_k": result['analysis']['stoch_k'],
+                "stoch_d": result['analysis']['stoch_d'],
+                "bb_upper": result['analysis']['bb_upper'],
+                "bb_lower": result['analysis']['bb_lower'],
+                "bb_width": result['analysis']['bb_width'],
+                "trend": result['analysis']['trend'],
+                "volatility": result['analysis']['volatility'],
+                "trade_duration_seconds": trade_duration_seconds,
+                "trade_duration_text": result['trade_duration_text']
+            },
+            market_analysis_summary=f"Micro-Momentum Scalp 5s OTC for {display_symbol}",
+            justification="\n".join(result['reasoning']),
+            risk_assessment=f"Confidence: {result['confidence']}% - {result['confidence_level']} (5s OTC scalping)",
+            suggested_stake=10.0  # Default stake
+        )
+        
+        # Store signal in database
+        signal_dict = trading_signal.dict()
+        signal_dict['timestamp'] = signal_dict['timestamp'].isoformat()
+        signal_dict['precision_entry_time'] = None
+        signal_dict = _convert_numpy_types(signal_dict)
+        await db.trading_signals.insert_one(signal_dict)
+        
+        logger.info(f"✅ Micro-Momentum 5s OTC signal generated: {signal_direction.value} for {display_symbol}")
+        
+        return {
+            "success": True,
+            "message": f"5-second OTC signal generated for {display_symbol} with {result['confidence']}% confidence",
+            "signal": {
+                "id": trading_signal.id,
+                "symbol": trading_signal.symbol,
+                "direction": trading_signal.direction.value,
+                "entry_price": float(trading_signal.entry_price),
+                "probability": float(trading_signal.probability),
+                "confidence_level": trading_signal.confidence_level,
+                "timeframe": "5s",
+                "market_type": "otc",
+                "expiration_minutes": trading_signal.expiration_minutes,
+                "trade_duration_text": result['trade_duration_text'],
+                "justification": trading_signal.justification,
+                "technical_analysis": trading_signal.technical_analysis,
+                "timestamp": trading_signal.timestamp.isoformat(),
+                "strategy": "Micro-Momentum Scalp 5s OTC"
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in micro-momentum 5s OTC signal generation: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Micro-momentum signal generation failed: {str(e)}")
+
+
 # Legacy endpoints for compatibility
 @api_router.get("/")
 async def root():
