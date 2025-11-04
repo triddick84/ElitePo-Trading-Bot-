@@ -21,36 +21,36 @@ class Enhanced5SecondStrategy:
     Ultra-High Accuracy 5-Second Strategy
     
     Multi-Indicator Approach:
-    1. EMA 20 - Trend Direction
+    1. EMA 21 - Trend Direction
     2. RSI 2 - Fast Momentum
-    3. Stochastic (3,1,1) - Overbought/Oversold
-    4. Bollinger Bands (5, 2.5) - Volatility
+    3. Stochastic (5,3,3) - Overbought/Oversold
+    4. Bollinger Bands (6, 1.3) - Volatility
     5. Volume - Confirmation
     6. Candlestick Patterns - Additional confirmation
     """
     
     def __init__(self):
         # Core indicators
-        self.ema_period = 20
+        self.ema_period = 21
         self.rsi_period = 2  # Fast RSI for 5-second
-        self.stoch_k_period = 3
-        self.stoch_d_period = 1
-        self.stoch_smooth = 1
-        self.bb_period = 5
-        self.bb_std = 2.5
-        
+        self.stoch_k_period = 5
+        self.stoch_d_period = 3
+        self.stoch_smooth = 3
+        self.bb_period = 6
+        self.bb_std = 1.3
+    
         # Support/Resistance parameters
         self.sr_lookback = 20  # Lookback period for S/R levels
         self.sr_tolerance = 0.0003  # 0.03% tolerance for price near level
         
         # Thresholds
-        self.rsi_overbought = 70
-        self.rsi_oversold = 30
+        self.rsi_overbought = 60
+        self.rsi_oversold = 40
         self.stoch_overbought = 80
         self.stoch_oversold = 20
         
         # Minimum data requirements
-        self.min_data_points = 200
+        self.min_data_points = 28
     
     def find_support_resistance_levels(self, high: pd.Series, low: pd.Series, close: pd.Series) -> Dict:
         """
@@ -179,7 +179,7 @@ class Enhanced5SecondStrategy:
     
     def calculate_stochastic(self, high: pd.Series, low: pd.Series, close: pd.Series) -> Tuple[pd.Series, pd.Series]:
         """
-        Calculate Stochastic Oscillator (3,1,1)
+        Calculate Stochastic Oscillator (5,3,3)
         Returns: (%K, %D)
         """
         # %K = (Current Close - Lowest Low) / (Highest High - Lowest Low) * 100
@@ -195,7 +195,7 @@ class Enhanced5SecondStrategy:
     
     def calculate_bollinger_bands(self, prices: pd.Series) -> Tuple[pd.Series, pd.Series, pd.Series]:
         """
-        Calculate Bollinger Bands (5, 2.5)
+        Calculate Bollinger Bands (6, 1.3)
         Returns: (upper_band, middle_band, lower_band)
         """
         middle_band = prices.rolling(window=self.bb_period).mean()
@@ -416,7 +416,7 @@ class Enhanced5SecondStrategy:
             
             # Current values
             current_price = prices.iloc[-1]
-            current_ema = ema_20.iloc[-1]
+            current_ema = ema_21.iloc[-1]
             current_rsi = rsi.iloc[-1]
             current_stoch_k = stoch_k.iloc[-1]
             current_stoch_d = stoch_d.iloc[-1]
@@ -466,7 +466,7 @@ class Enhanced5SecondStrategy:
                     ],
                     'current_price': current_price,
                     'indicators': {
-                        'ema_20': current_ema,
+                        'ema_21': current_ema,
                         'rsi': current_rsi,
                         'stoch_k': current_stoch_k,
                         'stoch_d': current_stoch_d,
@@ -481,7 +481,7 @@ class Enhanced5SecondStrategy:
                 'reasoning': reasoning,
                 'current_price': current_price,
                 'indicators': {
-                    'ema_20': current_ema,
+                    'ema_21': current_ema,
                     'rsi': current_rsi,
                     'stoch_k': current_stoch_k,
                     'stoch_d': current_stoch_d,
@@ -526,10 +526,10 @@ class Enhanced5SecondStrategy:
         # 1. EMA Trend (1 point)
         if price > ema:
             bullish_score += 1
-            details.append("✅ Price above EMA 20 (Bullish)")
+            details.append("✅ Price above EMA 21 (Bullish)")
         else:
             bearish_score += 1
-            details.append("✅ Price below EMA 20 (Bearish)")
+            details.append("✅ Price below EMA 21 (Bearish)")
         
         # 2. RSI Momentum (1 point)
         if 50 < rsi < self.rsi_overbought:
@@ -624,14 +624,14 @@ class Enhanced5SecondStrategy:
         
         # Base confidence mapping - updated for 7 indicators with S/R
         confidence_map = {
-            3: 75.0,
-            4: 80.0,
-            5: 85.0,
-            6: 90.0,
-            7: 95.0
+            3: 70.0,
+            4: 75.0,
+            5: 80.0,
+            6: 88.0,
+            7: 99.0
         }
         
-        return confidence_map.get(score, 70.0)
+        return confidence_map.get(score, 65.0)
     
     def _generate_reasoning(self, signal_scores: Dict, direction: str,
                            price: float, ema: float, rsi: float, stoch: float,
@@ -647,7 +647,7 @@ class Enhanced5SecondStrategy:
         reasoning.extend([
             "",
             f"💹 Current Price: {price:.5f}",
-            f"📊 EMA 20: {ema:.5f}",
+            f"📊 EMA 21: {ema:.5f}",
             f"⚡ RSI(2): {rsi:.1f}",
             f"📈 Stochastic: {stoch:.1f}",
             f"🕯️ Pattern: {patterns.get('pattern_name', 'None')}"

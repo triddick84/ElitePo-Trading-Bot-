@@ -24,7 +24,7 @@ class EnhancedSignalGenerator:
         self.executor = ThreadPoolExecutor(max_workers=5)
         self.signal_weights = {
             'advanced_ai_ensemble': 0.40,  # NEW: Advanced AI Ensemble (Transformer + LSTM + DQN + Sentiment)
-            'ema_rsi_5s_otc': 0.25,       # EMA 20 + RSI 5-second OTC strategy
+            'ema_rsi_5s_otc': 0.25,       # EMA 9 + RSI 5-second OTC strategy
             'trend_momentum': 0.20,       # EMA + MACD + RSI divergence strategy  
             'volatility_breakout': 0.10,   # Bollinger Bands + volatility analysis
             'multi_timeframe': 0.05       # Cross-timeframe confirmation
@@ -573,8 +573,8 @@ class EnhancedSignalGenerator:
             # Determine final signal
             final_confidence = max(buy_score, sell_score)
             
-            # High threshold for signal generation (minimum 90% for enhanced accuracy)
-            if final_confidence < 90.0:
+            # High threshold for signal generation (minimum 85% for enhanced accuracy)
+            if final_confidence < 85.0:
                 return None
             
             direction = SignalDirection.BUY if buy_score > sell_score else SignalDirection.SELL
@@ -596,7 +596,7 @@ class EnhancedSignalGenerator:
                 direction=direction,
                 entry_price=current_price,
                 expiration_minutes=expiration_minutes,
-                probability=min(final_confidence, 98.0),  # Cap at 98% for realism
+                probability=min(final_confidence, 99.0),  # Cap at 99% for realism
                 suggested_stake=suggested_stake,
                 justification=f"Enhanced multi-strategy consensus: {len(signals)} strategies aligned. "
                             f"Weighted confidence: {final_confidence:.1f}%. Strategies: {', '.join([s[0] for s in signals])}",

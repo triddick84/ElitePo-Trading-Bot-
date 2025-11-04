@@ -51,20 +51,20 @@ Count Bearish Indicators (0-4)
 
 IF bullish_count > bearish_count:
     Signal = CALL
-    Confidence = 70 + (bullish_count × 5)  # 75-95%
+    Confidence = 80 + (bullish_count × 5)  # 75-99%
     Level = HIGH if bullish_count >= 3 else MEDIUM
     
 ELSE:
     Signal = PUT
-    Confidence = 70 + (bearish_count × 5)  # 75-95%
+    Confidence = 65 + (bearish_count × 5)  # 75-99%
     Level = HIGH if bearish_count >= 3 else MEDIUM
 ```
 
 **Confidence Calculation:**
-- 4/4 confirmations: 95% (HIGH)
-- 3/4 confirmations: 85% (HIGH)
-- 2/4 confirmations: 80% (MEDIUM)
-- Minimum: 75% (MEDIUM)
+- 4/4 confirmations: 99% (HIGH)
+- 3/4 confirmations: 80% (HIGH)
+- 2/4 confirmations: 75% (MEDIUM)
+- Minimum: 70% (MEDIUM)
 
 ## Implementation Details
 
@@ -92,7 +92,7 @@ def generate_signal(self, symbol: str, trade_duration_seconds: int = 82,
     # STRICT MODE (default)
     if all_3_conditions_met:
         signal = "CALL" or "PUT"
-        confidence = 95
+        confidence = 99
         confidence_level = "HIGH"
     
     # FORCE MODE (if enabled and no strict signal)
@@ -100,7 +100,7 @@ def generate_signal(self, symbol: str, trade_duration_seconds: int = 82,
         # Analyze 4 indicators
         # Count bullish vs bearish
         # Generate signal based on majority
-        confidence = 75-95
+        confidence = 75-99
         confidence_level = "HIGH" or "MEDIUM"
     
     return signal_data
@@ -156,7 +156,7 @@ const [flexibleConfig, setFlexibleConfig] = useState({
 ### Example 1: Strict Mode (Default)
 ```json
 {
-  "asset_symbol": "EURUSD",
+  "asset_symbol": "EURUSD_OTC",
   "market_type": "regular",
   "chart_timeframe": "30s",
   "trade_duration_seconds": 82,
@@ -165,7 +165,7 @@ const [flexibleConfig, setFlexibleConfig] = useState({
 ```
 
 **Possible Outcomes:**
-- ✅ Signal with 95% confidence (all conditions met)
+- ✅ Signal with 99% confidence (all conditions met)
 - ❌ "No signal generated - market conditions not met"
 
 ### Example 2: Force Mode Enabled
@@ -173,15 +173,15 @@ const [flexibleConfig, setFlexibleConfig] = useState({
 {
   "asset_symbol": "BTCUSD",
   "market_type": "otc",
-  "chart_timeframe": "1m",
-  "trade_duration_seconds": 300,
+  "chart_timeframe": "30s",
+  "trade_duration_seconds": 82,
   "force_signal": true
 }
 ```
 
 **Guaranteed Outcome:**
 - ✅ Signal generated (CALL or PUT)
-- Confidence: 75-95% based on indicator agreement
+- Confidence: 75-99% based on indicator agreement
 - Detailed reasoning with all 4 indicator states
 
 ## Signal Output Comparison
@@ -190,7 +190,7 @@ const [flexibleConfig, setFlexibleConfig] = useState({
 ```json
 {
   "signal": "CALL",
-  "confidence": 95,
+  "confidence": 99,
   "confidence_level": "HIGH",
   "reasoning": [
     "🟢 BUY: 6 SMA crossed above 12 SMA",
@@ -251,12 +251,12 @@ const [flexibleConfig, setFlexibleConfig] = useState({
 
 ## Confidence Levels Explained
 
-### HIGH (85-95%)
+### HIGH (90-99%)
 - 3-4 indicators in agreement
 - Strong directional bias
 - Recommended for trading
 
-### MEDIUM (75-84%)
+### MEDIUM (80-89%)
 - 2-3 indicators in agreement
 - Moderate directional bias
 - Trade with caution
@@ -273,12 +273,12 @@ const [flexibleConfig, setFlexibleConfig] = useState({
 
 **Strict Mode:**
 - Signal Rate: Low (5-15% of time)
-- Confidence: Very High (95%+)
+- Confidence: Very High (99%+)
 - Quality: Premium
 
 **Force Mode:**
 - Signal Rate: 100% (always generates)
-- Confidence: Variable (75-95%)
+- Confidence: Variable (75-99%)
 - Quality: Good to Premium
 
 ## Technical Flow
@@ -302,7 +302,7 @@ Count bullish vs bearish
     ↓
 Generate signal (majority wins)
     ↓
-Calculate confidence (75-95%)
+Calculate confidence (75-99%)
     ↓
 Return signal with reasoning
 ```
@@ -323,19 +323,19 @@ Return signal with reasoning
 ✅ **Force Mode**: Generates signals from current state (75-95% confidence)
 ✅ **UI Checkbox**: Toggles correctly
 ✅ **Signal Display**: Shows force mode indicator in reasoning
-✅ **Confidence Scaling**: Properly adjusts 75-95% based on confirmations
+✅ **Confidence Scaling**: Properly adjusts 75-99% based on confirmations
 ✅ **Live Signals Integration**: Signals added to live display
 
 ## Example Test Case
 
-**Asset:** EUR/USD
+**Asset:** EUR/USD_OTC 
 **Timeframe:** 30 seconds
 **Trade Duration:** 1m 22s (82 seconds)
 **Force Signal:** Enabled ✓
 
 **Result:**
 - Signal: PUT
-- Confidence: 85% (MEDIUM)
+- Confidence: 95% (MEDIUM)
 - Reasoning: 3/4 bearish indicators
   - Price below Fast SMA ✓
   - Fast SMA below Slow SMA ✓

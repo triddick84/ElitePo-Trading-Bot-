@@ -23,15 +23,15 @@ class EMA_RSI_5S_Strategy:
     """
     
     def __init__(self):
-        self.ema_period = 20
-        self.rsi_period = 14
+        self.ema_period = 9
+        self.rsi_period = 5
         self.min_data_points = 50  # Minimum data points for reliable calculation
         
     def calculate_ema(self, prices: pd.Series, period: int) -> pd.Series:
         """Calculate Exponential Moving Average"""
         return prices.ewm(span=period, adjust=False).mean()
     
-    def calculate_rsi(self, prices: pd.Series, period: int = 14) -> pd.Series:
+    def calculate_rsi(self, prices: pd.Series, period: int = 5) -> pd.Series:
         """Calculate Relative Strength Index"""
         delta = prices.diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
@@ -135,16 +135,16 @@ class EMA_RSI_5S_Strategy:
             
             # Calculate indicators
             prices = data['close']
-            ema_20 = self.calculate_ema(prices, self.ema_period)
+            ema_9 = self.calculate_ema(prices, self.ema_period)
             rsi = self.calculate_rsi(prices, self.rsi_period)
             
             # Get current values
             current_price = prices.iloc[-1]
-            current_ema = ema_20.iloc[-1]
+            current_ema = ema_9.iloc[-1]
             current_rsi = rsi.iloc[-1]
             
             # Check for EMA breaks
-            break_above, break_below = self.detect_ema_break(prices, ema_20)
+            break_above, break_below = self.detect_ema_break(prices, ema_9)
             
             # Strategy Logic Implementation
             signal = None
@@ -152,28 +152,28 @@ class EMA_RSI_5S_Strategy:
             reasoning = []
             
             # HIGHER Trade Conditions
-            if break_above and 50 <= current_rsi <= 70:
+            if break_above and 40 <= current_rsi <= 60 :
                 signal = "CALL"  # Higher/Up trade
                 confidence = self._calculate_confidence(
                     current_price, current_ema, current_rsi, 
                     break_above=True, rsi_in_range=True
                 )
                 reasoning = [
-                    f"✅ Price broke above EMA 20: {current_price:.5f} > {current_ema:.5f}",
-                    f"✅ RSI in optimal range for upward move: {current_rsi:.1f} (50-70)",
+                    f"✅ Price broke above EMA 9: {current_price:.5f} > {current_ema:.5f}",
+                    f"✅ RSI in optimal range for upward move: {current_rsi:.1f} (40-60)",
                     f"📈 HIGHER trade signal for 5-second OTC expiration"
                 ]
             
             # LOWER Trade Conditions  
-            elif break_below and 30 <= current_rsi <= 50:
+            elif break_below and 40 <= current_rsi <= 60:
                 signal = "PUT"  # Lower/Down trade
                 confidence = self._calculate_confidence(
                     current_price, current_ema, current_rsi,
                     break_below=True, rsi_in_range=True
                 )
                 reasoning = [
-                    f"✅ Price broke below EMA 20: {current_price:.5f} < {current_ema:.5f}",
-                    f"✅ RSI in optimal range for downward move: {current_rsi:.1f} (30-50)",
+                    f"✅ Price broke below EMA 9: {current_price:.5f} < {current_ema:.5f}",
+                    f"✅ RSI in optimal range for downward move: {current_rsi:.1f} (20-40)",
                     f"📉 LOWER trade signal for 5-second OTC expiration"
                 ]
             
@@ -181,18 +181,18 @@ class EMA_RSI_5S_Strategy:
             else:
                 reasons_no_signal = []
                 if not break_above and not break_below:
-                    reasons_no_signal.append("❌ No clear EMA 20 break detected")
+                    reasons_no_signal.append("❌ No clear EMA 9 break detected")
                 if signal is None and break_above:
-                    reasons_no_signal.append(f"❌ RSI not in range for HIGHER trade: {current_rsi:.1f} (need 50-70)")
+                    reasons_no_signal.append(f"❌ RSI not in range for HIGHER trade: {current_rsi:.1f} (need 40-60)")
                 if signal is None and break_below:
-                    reasons_no_signal.append(f"❌ RSI not in range for LOWER trade: {current_rsi:.1f} (need 30-50)")
+                    reasons_no_signal.append(f"❌ RSI not in range for LOWER trade: {current_rsi:.1f} (need 20-40)")
                 
                 return {
                     'signal': None,
                     'confidence': 0,
                     'reasoning': reasons_no_signal,
                     'current_price': current_price,
-                    'ema_20': current_ema,
+                    'ema_9': current_ema,
                     'rsi': current_rsi,
                     'market_analysis': 'No valid 5-second OTC signal conditions met'
                 }
@@ -202,14 +202,14 @@ class EMA_RSI_5S_Strategy:
                 'confidence': confidence,
                 'reasoning': reasoning,
                 'current_price': current_price,
-                'ema_20': current_ema,
+                'ema_9': current_ema,
                 'rsi': current_rsi,
                 'break_above': break_above,
                 'break_below': break_below,
-                'strategy': 'EMA_20_RSI_5S_OTC',
+                'strategy': 'EMA_9_RSI_5S_OTC',
                 'timeframe': '5s',
                 'expiration': '5_seconds',
-                'market_analysis': f"Ultra-short OTC analysis: Price={current_price:.5f}, EMA20={current_ema:.5f}, RSI={current_rsi:.1f}"
+                'market_analysis': f"Ultra-short OTC analysis: Price={current_price:.5f}, EMA9={current_ema:.5f}, RSI={current_rsi:.1f}"
             }
             
         except Exception as e:
@@ -240,7 +240,7 @@ class EMA_RSI_5S_Strategy:
             base_confidence += 3
         
         # Ultra-short timeframe adjustment (slightly lower confidence due to high volatility)
-        base_confidence = min(base_confidence * 0.95, 95.0)  # Cap at 95% for 5-second trades
+        base_confidence = min(base_confidence * 0.90, 90.0)  # Cap at 90% for 5-second trades
         
         return round(base_confidence, 1)
     
@@ -264,7 +264,7 @@ class EMA_RSI_5S_Strategy:
             'timeframe': '5s',
             'entry_price': analysis['current_price'],
             'probability': analysis['confidence'],
-            'confidence_level': 'HIGH' if analysis['confidence'] >= 85 else 'MEDIUM',
+            'confidence_level': 'HIGH' if analysis['confidence'] >= 75 else 'MEDIUM',
             'strategy_used': 'ema_rsi_5s_otc',
             'market_type': 'otc',
             'expiration_minutes': 1,  # Minimum 1 minute for system compatibility
@@ -274,13 +274,13 @@ class EMA_RSI_5S_Strategy:
             'expiration_time': expiration_time.isoformat(),
             'justification': ' | '.join(analysis['reasoning']),
             'technical_analysis': {
-                'indicators_used': ['EMA_20', 'RSI_14'],
+                'indicators_used': ['EMA_9', 'RSI_5'],
                 'current_price': analysis['current_price'],
-                'ema_20': analysis['ema_20'],
+                'ema_9': analysis['ema_9'],
                 'rsi': analysis['rsi'],
                 'break_above_ema': analysis.get('break_above', False),
                 'break_below_ema': analysis.get('break_below', False),
-                'strategy': 'EMA_20_RSI_5S_OTC',
+                'strategy': 'EMA_9_RSI_5S_OTC',
                 'market_analysis': analysis['market_analysis'],
                 'timeframe_analysis': '5-second ultra-short OTC strategy',
                 'risk_level': 'HIGH',  # Ultra-short trades are inherently risky

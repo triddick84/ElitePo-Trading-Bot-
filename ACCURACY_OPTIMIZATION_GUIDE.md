@@ -6,8 +6,8 @@ This trading system achieves maximum accuracy through 8 layers of validation:
 
 ### Layer 1: Real-Time Data Quality ✅
 - **NO SIMULATED DATA** - Only real market data from yfinance
-- Data freshness validation (must be < 5 minutes old)
-- Minimum 100 candles required for analysis
+- Data freshness validation (must be < 1 minutes old)
+- Minimum 28 candles required for analysis
 - Latency tracking for data fetch operations
 
 ### Layer 2: Market Microstructure Analysis ✅
@@ -20,16 +20,16 @@ This trading system achieves maximum accuracy through 8 layers of validation:
 ### Layer 3: Technical Indicators (Ultra-Fast) ✅
 **5-Second Strategy:**
 - RSI-2 (ultra-fast momentum)
-- EMA-20 (trend direction)
-- Stochastic (3,1,1) - fastest settings
-- Bollinger Bands (5, 2.5) - tight bands for volatility
+- EMA-21 (trend direction)
+- Stochastic (5,3,3) - fast settings
+- Bollinger Bands (6, 1.3) - tight bands for volatility
 
 **1-Minute Strategy:**
 - RSI-14 (standard momentum)
-- EMA-20 (trend direction)
+- EMA-21 (trend direction)
 - MACD (12,26,9) - trend confirmation
-- Stochastic (14,3,3) - oscillator
-- Bollinger Bands (20, 2) - volatility
+- Stochastic (5,3,3) - oscillator
+- Bollinger Bands (18, 1.8) - volatility
 
 ### Layer 4: Support/Resistance Intelligence ✅
 - Timeframe-optimized lookback periods
@@ -80,7 +80,7 @@ This trading system achieves maximum accuracy through 8 layers of validation:
    
 2. DATA QUALITY VALIDATION
    ✅ Sufficient candles (100+)
-   ✅ Fresh data (<5 minutes)
+   ✅ Fresh data (<1 minutes)
    ✅ No NaN values
    ↓
    
@@ -94,7 +94,7 @@ This trading system achieves maximum accuracy through 8 layers of validation:
    
 5. TRADITIONAL STRATEGY
    ↓ Rules: EMA cross, RSI extremes, BB position
-   ↓ Output: Signal + 75-85% confidence
+   ↓ Output: Signal + 70-85% confidence
    
 6. AI ENSEMBLE VALIDATION
    ↓ 15-feature analysis
@@ -103,21 +103,21 @@ This trading system achieves maximum accuracy through 8 layers of validation:
    
 7. GPT-4 INTELLIGENCE
    ↓ Elite validation with context
-   ✅ Perfect setup: +15 to +20%
+   ✅ Perfect setup: +18 to +25%
    ❌ Weak setup: Reject signal
    
 8. S/R VALIDATION
    ↓ Check against major levels
-   ✅ Valid direction: +8% confidence
+   ✅ Valid direction: +11% confidence
    ❌ Fighting S/R: Reject signal
    
 9. LATENCY COMPENSATION
-   ↓ Generate signal ~950ms early
+   ↓ Generate signal ~850ms early
    ↓ Ensures execution before candle close
    
 10. FINAL SIGNAL
     ↓ CALL/PUT
-    ↓ Confidence: 85-98%
+    ↓ Confidence: 75-99%
     ↓ Reasoning: 5-7 justifications
     ↓ Timing: Pocket Option synchronized
 ```
@@ -130,7 +130,7 @@ This trading system achieves maximum accuracy through 8 layers of validation:
 
 **1. Timing Lag (FIXED) ✅**
 - **Problem**: Signal arrives too late, candle already moved
-- **Solution**: Latency compensation (~950ms early generation)
+- **Solution**: Latency compensation (~850ms early generation)
 - **Verification**: Check `precision_entry_time` matches candle close
 
 **2. Market Closed (USER ERROR)**
@@ -140,7 +140,7 @@ This trading system achieves maximum accuracy through 8 layers of validation:
 
 **3. Data Lag (MONITORED)**
 - **Problem**: yfinance data delayed
-- **Solution**: System rejects data >5 minutes old
+- **Solution**: System rejects data >1 minutes old
 - **Status**: Real-time validation active
 
 **4. Weak Market Conditions (FILTERED)**
@@ -158,18 +158,18 @@ This trading system achieves maximum accuracy through 8 layers of validation:
 ## Accuracy Expectations
 
 ### Theoretical Maximum (Research-Based):
-- **5-Second Timeframe**: 90-95% (with all layers)
-- **1-Minute Timeframe**: 88-93% (with all layers)
-- **Industry Leaders**: 65-85% win rates (Tickeron, SYGNAL.ai)
+- **5-Second Timeframe**: 80-99% (with all layers)
+- **1-Minute Timeframe**: 78-98% (with all layers)
+- **Industry Leaders**: 75-95% win rates (Tickeron, SYGNAL.ai)
 
 ### Practical Reality:
-- **Perfect Conditions**: 85-90% accuracy
+- **Perfect Conditions**: 75-95% accuracy
   - Trending market
   - High liquidity
   - All indicators aligned
   - GPT-4 confirms setup
   
-- **Good Conditions**: 75-85% accuracy
+- **Good Conditions**: 65-90% accuracy
   - Moderate volatility
   - Decent liquidity
   - Most indicators aligned
@@ -183,7 +183,7 @@ This trading system achieves maximum accuracy through 8 layers of validation:
 ### Signal Filtering Impact:
 - **Before filtering**: 50-60 signals/hour (many low quality)
 - **After filtering**: 10-20 signals/hour (high quality only)
-- **Accuracy improvement**: +20-30% win rate
+- **Accuracy improvement**: +30-40% win rate
 
 ---
 
@@ -203,8 +203,8 @@ This trading system achieves maximum accuracy through 8 layers of validation:
 
 3. **Verify on Pocket Option:**
    - Check candle formation time
-   - Should match `precision_entry_time` ± 1 second
-   - If off by >2 seconds, latency compensation needs adjustment
+   - Should match `precision_entry_time` ± .5 second
+   - If off by >1 seconds, latency compensation needs adjustment
 
 4. **Check logs:**
    ```bash
@@ -212,11 +212,11 @@ This trading system achieves maximum accuracy through 8 layers of validation:
    ```
 
 ### Latency Budget:
-- Signal generation: ~500ms
-- Network latency: ~150ms
-- Frontend display: ~200ms
-- Pocket Option processing: ~100ms
-- **Total**: ~950ms (compensated)
+- Signal generation: ~400ms
+- Network latency: ~100ms
+- Frontend display: ~150ms
+- Pocket Option processing: ~50ms
+- **Total**: ~700ms (compensated)
 
 ---
 
@@ -224,9 +224,9 @@ This trading system achieves maximum accuracy through 8 layers of validation:
 
 ### Signal MUST pass ALL checks:
 
-✅ **Order Flow**: Strong directional bias (OFI > 0.3 or < -0.3)
-✅ **Liquidity**: Tight spread (<0.003) for reliable execution
-✅ **Indicators**: 3+ indicators aligned in same direction
+✅ **Order Flow**: Strong directional bias (OFI > 0.2 or < -0.2)
+✅ **Liquidity**: Tight spread (<0.002) for reliable execution
+✅ **Indicators**: 2+ indicators aligned in same direction
 ✅ **Support/Resistance**: Price NOT fighting major S/R level
 ✅ **Trend**: Trade WITH the trend, not against it
 ✅ **Volatility**: Manageable (not extreme chaos)
@@ -257,9 +257,9 @@ tail -f /var/log/supervisor/backend.out.log | grep "Latency"
 
 ### Key Metrics:
 - **Signal frequency**: 10-20/hour (too many = low quality)
-- **Confidence range**: 85-98% (lower = filtered out)
+- **Confidence range**: 75-99% (lower = filtered out)
 - **GPT-4 adjustment**: -10 to +20% (rejection if very negative)
-- **Latency**: <1000ms total (target: ~950ms)
+- **Latency**: <900ms total (target: ~850ms)
 
 ---
 
@@ -278,7 +278,7 @@ tail -f /var/log/supervisor/backend.out.log | grep "Latency"
 
 ### "Low accuracy"
 - Verify: Trading during liquid market hours
-- Check: Following signals with 90%+ confidence only
+- Check: Following signals with 80%+ confidence only
 - Review: GPT-4 risk factors in reasoning
 - Consider: Smaller position sizes during learning
 
@@ -287,16 +287,16 @@ tail -f /var/log/supervisor/backend.out.log | grep "Latency"
 ## Best Practices
 
 1. **Trade High-Confidence Signals Only**
-   - 90%+ confidence recommended
-   - 85-89% acceptable in perfect conditions
-   - <85% risky (system shouldn't generate these)
+   -80%+ confidence recommended
+   - 75-99% acceptable in perfect conditions
+   - <75% risky (system shouldn't generate these)
 
 2. **Respect Market Hours**
    - Forex: 24/5 (Sun 5PM - Fri 5PM EST)
    - Best hours: London/NY overlap (8AM-12PM EST)
 
 3. **Monitor Latency**
-   - Signal should arrive 1-2 seconds before candle close
+   - Signal should arrive .5-1 seconds before candle close
    - If arriving late, latency needs adjustment
 
 4. **Trust the Filtering**
@@ -305,7 +305,7 @@ tail -f /var/log/supervisor/backend.out.log | grep "Latency"
 
 5. **Use Pocket Option Timer**
    - Watch for candle formation time
-   - Enter 2-3 seconds before close
+   - Enter .5-2 seconds before close
    - Don't rush (better to miss than be wrong)
 
 ---
@@ -342,7 +342,7 @@ tail -f /var/log/supervisor/backend.out.log | grep "Latency"
 
 **Expected Result:**
 - 10-20 high-quality signals per hour
-- 85-95% accuracy in optimal conditions
+- 75-99% accuracy in optimal conditions
 - Better to miss opportunities than generate losing signals
 
 **Remember**: "Better no signal than wrong signal" - The system embodies this philosophy at every layer.

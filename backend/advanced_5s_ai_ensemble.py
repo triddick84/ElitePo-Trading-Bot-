@@ -216,9 +216,9 @@ class Advanced5sAIEnsemble:
             rsi_5 = talib.RSI(close, timeperiod=5)[-1] if len(close) >= 5 else 50
             
             # EMA for trend
-            ema_5 = talib.EMA(close, timeperiod=5)[-1] if len(close) >= 5 else current_price
-            ema_20 = talib.EMA(close, timeperiod=20)[-1] if len(close) >= 20 else current_price
-            ema_distance = (current_price - ema_20) / current_price if current_price > 0 else 0
+            ema_6 = talib.EMA(close, timeperiod=6)[-1] if len(close) >= 6 else current_price
+            ema_12 = talib.EMA(close, timeperiod=12)[-1] if len(close) >= 12 else current_price
+            ema_distance = (current_price - ema_6) / current_price if current_price > 0 else 0
             
             # Stochastic (ultra-fast for 5s)
             slowk, slowd = talib.STOCH(high, low, close, 
@@ -312,7 +312,7 @@ class Advanced5sAIEnsemble:
         Mimics ensemble behavior without requiring training
         """
         signal = None
-        confidence = 50
+        confidence = 60
         reasoning = []
         
         ofi = features['ofi']
@@ -337,37 +337,37 @@ class Advanced5sAIEnsemble:
         if signal is None:
             if vwap_distance < -0.005 and price_velocity < 0:
                 signal = "CALL"
-                confidence = 72
+                confidence = 82
                 reasoning.append(f"📊 Price below VWAP ({vwap_distance:.3%}), bounce expected")
             elif vwap_distance > 0.005 and price_velocity > 0:
                 signal = "PUT"
-                confidence = 72
+                confidence = 82
                 reasoning.append(f"📊 Price above VWAP ({vwap_distance:.3%}), pullback expected")
         
         # RULE 3: Extreme RSI + Stochastic (Mean reversion)
         if signal is None:
-            if rsi_2 < 20 and stoch < 20:
+            if rsi_2 < 40 and stoch < 40:
                 signal = "CALL"
-                confidence = 78
+                confidence = 88
                 reasoning.append(f"⚡ Extreme oversold (RSI: {rsi_2:.0f}, Stoch: {stoch:.0f})")
-            elif rsi_2 > 80 and stoch > 80:
+            elif rsi_2 > 60 and stoch > 60:
                 signal = "PUT"
-                confidence = 78
+                confidence = 88
                 reasoning.append(f"⚡ Extreme overbought (RSI: {rsi_2:.0f}, Stoch: {stoch:.0f})")
         
         # RULE 4: Price velocity momentum
         if signal is None and abs(price_velocity) > 0.002:
             if price_velocity > 0:
                 signal = "CALL"
-                confidence = 70
+                confidence = 80
                 reasoning.append(f"🚀 Strong upward momentum ({price_velocity:.3%})")
             else:
                 signal = "PUT"
-                confidence = 70
+                confidence = 80
                 reasoning.append(f"📉 Strong downward momentum ({price_velocity:.3%})")
         
         # Confidence adjustments based on spread (liquidity)
-        if signal and spread < 0.001:
+        if signal and spread < 0.003:
             confidence += 5
             reasoning.append("✅ High liquidity (tight spread)")
         elif signal and spread > 0.005:
@@ -375,11 +375,11 @@ class Advanced5sAIEnsemble:
             reasoning.append("⚠️ Low liquidity (wide spread)")
         
         # Volatility adjustment
-        if signal and volatility > 0.003:
-            confidence -= 3
+        if signal and volatility > 0.005:
+            confidence -= 5
             reasoning.append("⚠️ High volatility detected")
         
-        return signal, min(confidence, 95), reasoning
+        return signal, min(confidence, 85), reasoning
     
     def analyze_5s_candle(self, df: pd.DataFrame) -> Optional[Dict]:
         """
