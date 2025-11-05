@@ -133,6 +133,132 @@ class MicroMomentumScalp5sOTC:
         )
         return upper, middle, lower
     
+    def detect_bullish_patterns(self, open_prices: pd.Series, high: pd.Series, 
+                                low: pd.Series, close: pd.Series) -> Dict[str, bool]:
+        """
+        Detect bullish candlestick patterns for next candle prediction
+        """
+        patterns = {}
+        
+        # Get last 3 candles for pattern detection
+        if len(close) < 3:
+            return {"none": False}
+        
+        c0, c1, c2 = close.iloc[-3], close.iloc[-2], close.iloc[-1]
+        o0, o1, o2 = open_prices.iloc[-3], open_prices.iloc[-2], open_prices.iloc[-1]
+        h0, h1, h2 = high.iloc[-3], high.iloc[-2], high.iloc[-1]
+        l0, l1, l2 = low.iloc[-3], low.iloc[-2], low.iloc[-1]
+        
+        # Bullish Engulfing: Current green candle engulfs previous red candle
+        patterns['bullish_engulfing'] = (
+            c1 < o1 and  # Previous red
+            c2 > o2 and  # Current green
+            o2 < c1 and  # Opens below previous close
+            c2 > o1      # Closes above previous open
+        )
+        
+        # Hammer: Long lower wick, small body at top
+        body_size = abs(c2 - o2)
+        lower_wick = min(c2, o2) - l2
+        upper_wick = h2 - max(c2, o2)
+        patterns['hammer'] = (
+            c2 > o2 and  # Green candle
+            lower_wick > body_size * 2 and  # Long lower wick
+            upper_wick < body_size * 0.5  # Small upper wick
+        )
+        
+        # Three consecutive green candles (strong momentum)
+        patterns['three_green'] = (c0 > o0 and c1 > o1 and c2 > o2)
+        
+        return patterns
+    
+    def detect_bearish_patterns(self, open_prices: pd.Series, high: pd.Series,
+                                low: pd.Series, close: pd.Series) -> Dict[str, bool]:
+        """
+        Detect bearish candlestick patterns for next candle prediction
+        """
+        patterns = {}
+        
+        if len(close) < 3:
+            return {"none": False}
+        
+        c0, c1, c2 = close.iloc[-3], close.iloc[-2], close.iloc[-1]
+        o0, o1, o2 = open_prices.iloc[-3], open_prices.iloc[-2], open_prices.iloc[-1]
+        h0, h1, h2 = high.iloc[-3], high.iloc[-2], high.iloc[-1]
+        l0, l1, l2 = low.iloc[-3], low.iloc[-2], low.iloc[-1]
+        
+        # Bearish Engulfing
+        patterns['bearish_engulfing'] = (
+            c1 > o1 and  # Previous green
+            c2 < o2 and  # Current red
+            o2 > c1 and  # Opens above previous close
+            c2 < o1      # Closes below previous open
+        )
+        
+        # Shooting Star: Long upper wick, small body at bottom
+        body_size = abs(c2 - o2)
+        upper_wick = h2 - max(c2, o2)
+        lower_wick = min(c2, o2) - l2
+        patterns['shooting_star'] = (
+            c2 < o2 and  # Red candle
+            upper_wick > body_size * 2 and  # Long upper wick
+            lower_wick < body_size * 0.5  # Small lower wick
+        )
+        
+        # Three consecutive red candles (strong momentum)
+        patterns['three_red'] = (c0 < o0 and c1 < o1 and c2 < o2)
+        
+        return patterns
+    
+    def analyze_trend_strength(self, close: pd.Series, ema: pd.Series) -> Dict[str, float]:
+        """
+        Analyze trend strength and quality for better prediction
+        """
+        # Count consecutive candles above/below EMA
+        consecutive_above = 0
+        consecutive_below = 0
+        
+        for i in range(min(10, len(close))):
+            idx = -(i+1)
+            if close.iloc[idx] > ema.iloc[idx]:
+                if consecutive_below == 0:
+                    consecutive_above += 1
+                else:
+                    break
+            elif close.iloc[idx] < ema.iloc[idx]:
+                if consecutive_above == 0:
+                    consecutive_below += 1
+                else:
+                    break
+        
+        # Calculate trend angle (price momentum)
+        recent_prices = close.tail(5).values
+        trend_slope = (recent_prices[-1] - recent_prices[0]) / recent_prices[0] * 10000  # In pips
+        
+        return {
+            "consecutive_above": consecutive_above,
+            "consecutive_below": consecutive_below,
+            "trend_slope": trend_slope,
+            "strong_uptrend": consecutive_above >= self.trend_candles,
+            "strong_downtrend": consecutive_below >= self.trend_candles
+        }
+    
+    def calculate_multi_rsi_confluence(self, close: pd.Series) -> Dict[str, any]:
+        """
+        Calculate multiple RSI periods for stronger confluence
+        """
+        rsi2 = talib.RSI(close, timeperiod=self.rsi_period)
+        rsi7 = talib.RSI(close, timeperiod=self.rsi_mid)
+        rsi14 = talib.RSI(close, timeperiod=self.rsi_long)
+        
+        return {
+            "rsi2": rsi2.iloc[-1] if len(rsi2) > 0 else 50,
+            "rsi7": rsi7.iloc[-1] if len(rsi7) > 0 else 50,
+            "rsi14": rsi14.iloc[-1] if len(rsi14) > 0 else 50,
+            "all_bullish": (rsi2.iloc[-1] > 50 and rsi7.iloc[-1] > 50 and rsi14.iloc[-1] > 50),
+            "all_bearish": (rsi2.iloc[-1] < 50 and rsi7.iloc[-1] < 50 and rsi14.iloc[-1] < 50)
+        }
+    
     def generate_signal(self, symbol: str, trade_duration_seconds: int = 5) -> Optional[Dict]:
         """
         Generate 5-second OTC trading signal with micro-momentum analysis
