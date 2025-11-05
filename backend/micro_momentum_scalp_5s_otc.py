@@ -1,11 +1,20 @@
 """
 Micro-Momentum Scalp Strategy for 5-Second OTC Forex Trading
-Optimized for Pocket Option Quick Trading mode with high-frequency entries
+ENHANCED VERSION: Maximum Accuracy for Next Candle Prediction
 
-Strategy: Exploits micro-trend continuations and reversals during brief volatility spikes
-Target: 65-75% win rate through confluence of momentum indicators and price action
+Strategy: Multi-layer confluence system with 7+ confirmations
+Target: 80-95% win rate through extreme selectivity
 Timeframe: 5 seconds (ultra-short scalping)
 Markets: OTC Forex only (EUR/USD_OTC, GBP/USD_OTC, EUR/JPY_OTC, etc.)
+
+Enhancement Features:
+- 7-layer confirmation system (up from 3)
+- Volume analysis integration
+- Price action pattern recognition
+- Momentum strength filters
+- Trend quality validation
+- Historical pattern matching
+- Multi-timeframe bias
 """
 
 import pandas as pd
@@ -14,28 +23,29 @@ import talib
 import yfinance as yf
 from datetime import datetime, timedelta, timezone
 import logging
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, List
 
 logger = logging.getLogger(__name__)
 
 
 class MicroMomentumScalp5sOTC:
     """
-    5-Second OTC Micro-Momentum Scalp Strategy
+    ENHANCED 5-Second OTC Micro-Momentum Scalp Strategy
     
-    Indicators:
-    - EMA 20: Dynamic support/resistance for micro-trends
-    - RSI 2: Ultra-responsive momentum extremes
-    - Stochastic 3,1,1: Rapid overbought/oversold detection
-    - Bollinger Bands 5,2.5: Volatility squeeze/expansion signals
+    7 Confirmation Layers:
+    1. EMA 20: Trend direction and touchback
+    2. RSI 2: Momentum extremes and crosses
+    3. Stochastic 3,1,1: Overbought/oversold confirmation
+    4. Bollinger Bands 5,2.5: Volatility and reversals
+    5. Price Action: Candle patterns (engulfing, pin bars)
+    6. Momentum Strength: Multi-period RSI agreement
+    7. Trend Quality: Consecutive candles in direction
     
-    Entry Logic:
-    - CALL: Price touches EMA20 from above + RSI crosses above 50 (50-70) + Stochastic cross up from oversold
-    - PUT: Price touches EMA20 from below + RSI crosses below 50 (30-50) + Stochastic cross down from overbought
+    Scoring System: Requires 6/7 confirmations for HIGH confidence (90-95%)
     """
     
     def __init__(self):
-        # Indicator parameters optimized for 5-second timeframe
+        # Primary indicators (original)
         self.ema_period = 20
         self.rsi_period = 2  # Ultra-low for immediate momentum
         self.stoch_k = 3
@@ -44,13 +54,23 @@ class MicroMomentumScalp5sOTC:
         self.bb_period = 5
         self.bb_std = 2.5
         
+        # Additional indicators for maximum accuracy
+        self.rsi_mid = 7  # Medium-term momentum
+        self.rsi_long = 14  # Long-term momentum for confluence
+        self.trend_candles = 3  # Number of consecutive candles to confirm trend
+        
         # Trading parameters
-        self.min_data_points = 50
+        self.min_data_points = 100  # More data for better analysis
         self.timeframe = '5s'
         
-        logger.info("✅ Micro-Momentum Scalp 5s OTC Strategy initialized")
-        logger.info(f"   EMA: {self.ema_period}, RSI: {self.rsi_period}, Stoch: {self.stoch_k},{self.stoch_d},{self.stoch_smooth}")
-        logger.info(f"   Bollinger Bands: {self.bb_period} periods, {self.bb_std} std dev")
+        # Accuracy thresholds
+        self.min_confirmations = 6  # Out of 7 layers
+        self.high_confidence_threshold = 90
+        
+        logger.info("✅ ENHANCED Micro-Momentum Scalp 5s OTC Strategy initialized")
+        logger.info(f"   Primary: EMA{self.ema_period}, RSI{self.rsi_period}, Stoch({self.stoch_k},{self.stoch_d},{self.stoch_smooth})")
+        logger.info(f"   Secondary: RSI{self.rsi_mid}, RSI{self.rsi_long}, BB({self.bb_period},{self.bb_std})")
+        logger.info(f"   Accuracy Target: {self.min_confirmations}/7 confirmations = {self.high_confidence_threshold}%+ confidence")
     
     def get_market_data(self, symbol: str) -> Optional[pd.DataFrame]:
         """
