@@ -262,8 +262,8 @@ const IntegrationPage = () => {
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">
                 BUY Signal JSON Template
-                <span className="text-xs text-slate-500 ml-2">(Variables: {{"{{"}}symbol{{"}}"}}, {{"{{"}}price{{"}}"}}, {{"{{"}}confidence{{"}}"}}, {{"{{"}}timeframe{{"}}"}}, {{"{{"}}timestamp{{"}}"}})</span>
               </label>
+              <p className="text-xs text-slate-500 mb-2">Variables: symbol, price, confidence, timeframe, timestamp</p>
               <textarea
                 value={integrations.autobot.buy_message_template}
                 onChange={(e) => updateIntegration('autobot', 'buy_message_template', e.target.value)}
@@ -274,8 +274,8 @@ const IntegrationPage = () => {
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">
                 SELL Signal JSON Template
-                <span className="text-xs text-slate-500 ml-2">(Variables: {{"{{"}}symbol{{"}}"}}, {{"{{"}}price{{"}}"}}, {{"{{"}}confidence{{"}}"}}, {{"{{"}}timeframe{{"}}"}}, {{"{{"}}timestamp{{"}}"}})</span>
               </label>
+              <p className="text-xs text-slate-500 mb-2">Variables: symbol, price, confidence, timeframe, timestamp</p>
               <textarea
                 value={integrations.autobot.sell_message_template}
                 onChange={(e) => updateIntegration('autobot', 'sell_message_template', e.target.value)}
