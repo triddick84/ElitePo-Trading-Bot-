@@ -1072,6 +1072,177 @@ async def flexible_signal_generation(request: FlexibleStrategyRequest):
 
 
 
+@api_router.get("/integrations/settings")
+async def get_integration_settings():
+    """Get all platform integration settings"""
+    try:
+        settings = await db.integration_settings.find_one({"type": "platform_integrations"})
+        
+        if not settings:
+            # Return default settings
+            default_settings = {
+                "telegram": {
+                    "enabled": False,
+                    "bot_token": "",
+                    "chat_id": "",
+                    "username": ""
+                },
+                "autobot": {
+                    "enabled": False,
+                    "webhook_url": "",
+                    "signal_key": "",
+                    "buy_message_template": json.dumps({
+                        "action": "BUY",
+                        "symbol": "{{symbol}}",
+                        "price": "{{price}}",
+                        "confidence": "{{confidence}}",
+                        "timeframe": "{{timeframe}}",
+                        "timestamp": "{{timestamp}}"
+                    }, indent=2),
+                    "sell_message_template": json.dumps({
+                        "action": "SELL",
+                        "symbol": "{{symbol}}",
+                        "price": "{{price}}",
+                        "confidence": "{{confidence}}",
+                        "timeframe": "{{timeframe}}",
+                        "timestamp": "{{timestamp}}"
+                    }, indent=2)
+                },
+                "pocket_option": {
+                    "enabled": False,
+                    "email": "",
+                    "password": "",
+                    "ssid": "",
+                    "demo_mode": True
+                },
+                "mt4": {
+                    "enabled": False,
+                    "server": "",
+                    "login": "",
+                    "password": "",
+                    "account_type": "demo"
+                },
+                "mt5": {
+                    "enabled": False,
+                    "server": "",
+                    "login": "",
+                    "password": "",
+                    "account_type": "demo"
+                }
+            }
+            return {"success": True, "data": default_settings}
+        
+        # Remove MongoDB _id field
+        settings.pop('_id', None)
+        settings.pop('type', None)
+        
+        return {"success": True, "data": settings}
+        
+    except Exception as e:
+        logger.error(f"Error fetching integration settings: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/integrations/settings")
+async def save_integration_settings(settings: dict):
+    """Save platform integration settings"""
+    try:
+        settings["type"] = "platform_integrations"
+        settings["updated_at"] = datetime.now(timezone.utc).isoformat()
+        
+        # Upsert settings
+        await db.integration_settings.update_one(
+            {"type": "platform_integrations"},
+            {"$set": settings},
+            upsert=True
+        )
+        
+        logger.info("✅ Integration settings saved successfully")
+        return {"success": True, "message": "Settings saved successfully"}
+        
+    except Exception as e:
+        logger.error(f"Error saving integration settings: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/integrations/test/{platform}")
+async def test_integration_connection(platform: str, credentials: dict):
+    """Test connection to specific platform"""
+    try:
+        logger.info(f"🧪 Testing {platform} connection")
+        
+        if platform == "telegram":
+            # Test Telegram bot
+            if not credentials.get("bot_token") or not credentials.get("chat_id"):
+                return {"success": False, "message": "Bot token and chat ID are required"}
+            
+            import requests
+            url = f"https://api.telegram.org/bot{credentials['bot_token']}/sendMessage"
+            payload = {
+                "chat_id": credentials["chat_id"],
+                "text": "🧪 Test message from Trading Bot - Connection successful!"
+            }
+            response = requests.post(url, json=payload, timeout=10)
+            
+            if response.status_code == 200:
+                return {"success": True, "message": "Telegram connection successful! Test message sent."}
+            else:
+                return {"success": False, "message": f"Telegram API error: {response.text}"}
+        
+        elif platform == "autobot":
+            # Test AutobotSignal.io webhook
+            if not credentials.get("webhook_url"):
+                return {"success": False, "message": "Webhook URL is required"}
+            
+            import requests
+            test_payload = {
+                "action": "TEST",
+                "message": "Connection test from Trading Bot",
+                "signal_key": credentials.get("signal_key", ""),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+            response = requests.post(
+                credentials["webhook_url"],
+                json=test_payload,
+                timeout=10
+            )
+            
+            if response.status_code in [200, 201]:
+                return {"success": True, "message": "AutobotSignal.io connection successful!"}
+            else:
+                return {"success": False, "message": f"Webhook error: {response.text}"}
+        
+        elif platform == "pocket_option":
+            # Test Pocket Option connection
+            if not credentials.get("email") or not credentials.get("password"):
+                return {"success": False, "message": "Email and password are required"}
+            
+            # TODO: Implement Pocket Option API connection test
+            return {"success": True, "message": "Pocket Option credentials saved (connection test not yet implemented)"}
+        
+        elif platform == "mt4":
+            # Test MT4 connection
+            if not credentials.get("server") or not credentials.get("login") or not credentials.get("password"):
+                return {"success": False, "message": "Server, login, and password are required"}
+            
+            # TODO: Implement MT4 connection test
+            return {"success": True, "message": "MT4 credentials saved (connection test not yet implemented)"}
+        
+        elif platform == "mt5":
+            # Test MT5 connection
+            if not credentials.get("server") or not credentials.get("login") or not credentials.get("password"):
+                return {"success": False, "message": "Server, login, and password are required"}
+            
+            # TODO: Implement MT5 connection test
+            return {"success": True, "message": "MT5 credentials saved (connection test not yet implemented)"}
+        
+        else:
+            return {"success": False, "message": f"Unknown platform: {platform}"}
+            
+    except Exception as e:
+        logger.error(f"Error testing {platform} connection: {e}")
+        return {"success": False, "message": f"Connection test failed: {str(e)}"}
+
+
+
 @api_router.get("/alpha-vantage/exchange-rate")
 async def get_alpha_vantage_exchange_rate(from_currency: str, to_currency: str):
     """
