@@ -148,6 +148,7 @@ function App() {
     { id: "performance", label: "Performance", icon: "🎯" },
     { id: "controls", label: "Bot Controls", icon: "⚙️" },
     { id: "backtest", label: "Backtesting", icon: "🧪" },
+    { id: "integrations", label: "Integrations", icon: "🔗" },
     { id: "api", label: "API Config", icon: "🔑" }
   ];
 
