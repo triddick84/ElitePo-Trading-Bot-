@@ -1072,6 +1072,78 @@ async def flexible_signal_generation(request: FlexibleStrategyRequest):
 
 
 
+@api_router.get("/alpha-vantage/exchange-rate")
+async def get_alpha_vantage_exchange_rate(from_currency: str, to_currency: str):
+    """
+    Get real-time exchange rate from Alpha Vantage
+    
+    Example: /api/alpha-vantage/exchange-rate?from_currency=EUR&to_currency=USD
+    """
+    try:
+        from alpha_vantage_service import get_alpha_vantage_service
+        
+        logger.info(f"📊 Alpha Vantage Exchange Rate Request: {from_currency}/{to_currency}")
+        
+        service = get_alpha_vantage_service()
+        rate_data = service.get_exchange_rate(from_currency, to_currency)
+        
+        if rate_data is None:
+            return {
+                "success": False,
+                "message": f"Failed to fetch exchange rate for {from_currency}/{to_currency}",
+                "data": None
+            }
+        
+        return {
+            "success": True,
+            "message": f"Exchange rate fetched successfully",
+            "data": rate_data
+        }
+        
+    except Exception as e:
+        logger.error(f"Error fetching Alpha Vantage data: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Alpha Vantage request failed: {str(e)}")
+
+@api_router.get("/alpha-vantage/price/{symbol}")
+async def get_alpha_vantage_price(symbol: str):
+    """
+    Get current price for trading symbol using Alpha Vantage
+    
+    Example: /api/alpha-vantage/price/EURUSD
+    """
+    try:
+        from alpha_vantage_service import get_alpha_vantage_service
+        
+        logger.info(f"💰 Alpha Vantage Price Request: {symbol}")
+        
+        service = get_alpha_vantage_service()
+        price = service.get_current_price(symbol)
+        
+        if price is None:
+            return {
+                "success": False,
+                "message": f"Failed to fetch price for {symbol}",
+                "price": None
+            }
+        
+        return {
+            "success": True,
+            "message": f"Price fetched successfully",
+            "symbol": symbol,
+            "price": price,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error fetching Alpha Vantage price: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Alpha Vantage price request failed: {str(e)}")
+
+
+
 @api_router.post("/signals/micro-momentum-5s-otc")
 async def micro_momentum_5s_otc_signal_generation(asset_symbol: str, trade_duration_seconds: int = 5):
     """
