@@ -175,6 +175,8 @@ function App() {
         return <BotControls onStatusUpdate={fetchBotStatus} />;
       case "backtest":
         return <BacktestPanel />;
+      case "integrations":
+        return <IntegrationPage />;
       case "api":
         return <ApiConfiguration />;
       default:
