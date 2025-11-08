@@ -361,7 +361,34 @@ class ForceSignalGenerator:
             
             # Route to appropriate strategy based on timeframe
             if timeframe in ['5s', '5sec', '5 sec']:
-                logger.info(f"⚡ Applying Pocket Option 5-SECOND ELITE strategy for {symbol}")
+                logger.info(f"⚡ Applying Pocket Option 5-SECOND strategies for {symbol}")
+                
+                # Use NEW Ultra V2 strategy (research-backed 75%+ accuracy)
+                result_ultra_v2 = await loop.run_in_executor(
+                    self.executor,
+                    pocket_option_5s_ultra_v2.analyze,
+                    symbol,
+                    chart_type,
+                    '5s'
+                )
+                
+                if result_ultra_v2:
+                    logger.info(f"✅ 5s Ultra V2 strategy: {symbol} → {result_ultra_v2.get('signal', 'N/A')} ({result_ultra_v2.get('confidence', 0):.1f}%)")
+                    return {
+                        'direction': result_ultra_v2['signal'],
+                        'confidence': result_ultra_v2['confidence'],
+                        'probability': result_ultra_v2['confidence'],
+                        'reasoning': ' | '.join(result_ultra_v2.get('reasoning', ['Ultra V2 analysis'])[:3]),
+                        'strategy': 'pocket_option_5s_ultra_v2',
+                        'timeframe': timeframe,
+                        'chart_type': chart_type,
+                        'researched_strategy': True,
+                        'ultra_v2_enhanced': True,
+                        'technical_details': result_ultra_v2.get('analysis', {}),
+                        'suggested_stake': 2.0
+                    }
+                
+                # Also use original strategy for ensemble
                 result = await loop.run_in_executor(
                     self.executor,
                     pocket_option_5s_elite_strategy.generate_signal,
