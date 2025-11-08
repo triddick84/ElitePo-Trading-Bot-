@@ -32,9 +32,11 @@ const BotControls = ({ onStatusUpdate }) => {
   
   const [botStatus, setBotStatus] = useState({ is_running: false });
   const [autoSignalStatus, setAutoSignalStatus] = useState({ auto_generation_active: false });
+  const [candleSyncStatus, setCandleSyncStatus] = useState({ enabled: false, next_candle_times: {} });
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isAutoLoading, setIsAutoLoading] = useState(false);
+  const [isCandleSyncLoading, setIsCandleSyncLoading] = useState(false);
 
   useEffect(() => {
     fetchCurrentConfig();
