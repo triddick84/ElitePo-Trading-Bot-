@@ -376,8 +376,8 @@ class UltraShortPrecisionEngine:
             
             final_confidence = min(base_confidence + vote_confidence + timeframe_bonus + confidence_factors_bonus, 99.0)
             
-            # Only generate signals with 85%+ confidence for ultra-short timeframes
-            if final_confidence < 85.0:
+            # Generate signals with 82%+ confidence for ultra-short timeframes (LOWERED for maximum quality signals)
+            if final_confidence < 82.0:
                 logger.info(f"Confidence {final_confidence:.1f}% below threshold for {timeframe} signal")
                 return None
             
