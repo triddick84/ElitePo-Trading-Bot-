@@ -45,6 +45,27 @@ class ForceSignalGenerator:
         try:
             logger.info(f"🚀 FORCE GENERATING SIGNAL for {symbol} using {chart_type} chart - Maximum analysis mode activated")
             
+            # Wait for next candle formation if requested
+            if wait_for_candle and user_timeframes:
+                primary_timeframe = user_timeframes[0]
+                logger.info(f"⏰ WAITING FOR NEXT {primary_timeframe.upper()} CANDLE FORMATION...")
+                
+                # Calculate next candle formation time
+                chicago_time = pocket_option_sync.get_chicago_time()
+                next_candle_time = pocket_option_sync.get_next_candle_formation_time(
+                    primary_timeframe, "otc"  # Default to OTC for 24/7 availability
+                )
+                
+                # Calculate wait time
+                wait_seconds = (next_candle_time - chicago_time).total_seconds()
+                
+                if wait_seconds > 0 and wait_seconds <= 300:  # Max 5 minutes wait
+                    logger.info(f"🕐 Waiting {wait_seconds:.1f} seconds for {primary_timeframe} candle formation at {next_candle_time.strftime('%H:%M:%S')} Chicago time")
+                    await asyncio.sleep(wait_seconds)
+                    logger.info(f"✅ CANDLE FORMED! Generating signal at perfect timing for {primary_timeframe}")
+                else:
+                    logger.info(f"⚠️ Wait time too long ({wait_seconds:.1f}s), proceeding immediately")
+            
             # Get comprehensive multi-timeframe data
             loop = asyncio.get_event_loop()
             
