@@ -348,6 +348,7 @@ const ConsolidatedSignalPopup = ({ signals = [], onClose, onExecute }) => {
                         </div>
                       )}
                     </div>
+                    )}
                   </div>
                 )}
 
