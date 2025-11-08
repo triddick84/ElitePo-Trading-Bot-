@@ -1127,10 +1127,11 @@ class ForceSignalGenerator:
             # Risk-adjusted stake for forced signals
             suggested_stake = min(15.0, max(2.0, 8.0 * (final_confidence - 70) / 30))
             
-            # Determine confidence level
-            if final_confidence >= 95.0:
+            # Determine confidence level (ENHANCED for maximum confidence)
+            # Optimized thresholds for higher confidence ratings
+            if final_confidence >= 90.0:
                 confidence_level = "HIGH"
-            elif final_confidence >= 85.0:
+            elif final_confidence >= 82.0:
                 confidence_level = "MEDIUM"
             else:
                 confidence_level = "LOW"
