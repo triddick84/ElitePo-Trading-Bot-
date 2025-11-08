@@ -7525,6 +7525,13 @@ class BackendTester:
             ("Force Signal - Storage and Platform Integration", self.test_force_signal_storage_and_platform_integration),
             ("Force Signal - Performance and Response Time", self.test_force_signal_performance_and_response_time),
             
+            # ========== CLEAR ALL SESSIONS AND RESTART TESTING ==========
+            ("Bot Stop Enhancement", self.test_bot_stop_enhancement),
+            ("Clear All Sessions Functionality", self.test_clear_all_sessions_functionality),
+            ("Restart Bot Functionality", self.test_restart_bot_functionality),
+            ("Session Persistence During Operations", self.test_session_persistence_during_operations),
+            ("Error Handling Edge Cases", self.test_error_handling_edge_cases),
+            
             # Supporting Backend Tests
             ("Enhanced Signal Generator Integration", self.test_enhanced_signal_generator_integration),
             ("Real Market Data Integration", self.test_real_market_data_integration),
