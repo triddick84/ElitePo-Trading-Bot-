@@ -494,4 +494,169 @@ class TradingBotService:
         elif TradingStrategy.HYBRID in self.config.active_strategies:
             return 60  # 1 minute for hybrid
         else:
+            return 300  # 5 minutes default
+    
+    async def enable_candle_synchronization(self):
+        """
+        Enable candle formation synchronization mode
+        Signals will be generated precisely at candle formation times
+        """
+        try:
+            if not self.is_running:
+                logger.error("❌ Bot must be running to enable candle synchronization")
+                return {"success": False, "message": "Bot not running"}
+            
+            if self.candle_sync_enabled:
+                logger.warning("⚠️ Candle synchronization already enabled")
+                return {"success": True, "message": "Already enabled"}
+            
+            # Import the scheduler here to avoid circular imports
+            from candle_formation_scheduler import CandleFormationScheduler
+            
+            # Create scheduler instance
+            self.candle_scheduler = CandleFormationScheduler(trading_bot_service=self)
+            
+            # Register callback for signal generation
+            self.candle_scheduler.set_signal_callback(self._generate_signals_on_candle_formation)
+            
+            # Start monitoring configured timeframes
+            await self.candle_scheduler.start(
+                timeframes=self.config.selected_timeframes,
+                selected_assets=self.config.selected_assets
+            )
+            
+            self.candle_sync_enabled = True
+            logger.info("✅ Candle formation synchronization ENABLED")
+            
+            return {
+                "success": True,
+                "message": "Candle synchronization enabled",
+                "timeframes": self.config.selected_timeframes,
+                "assets_count": len(self.config.selected_assets)
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Error enabling candle synchronization: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"success": False, "message": str(e)}
+    
+    async def disable_candle_synchronization(self):
+        """Disable candle formation synchronization mode"""
+        try:
+            if not self.candle_sync_enabled:
+                logger.warning("⚠️ Candle synchronization not enabled")
+                return {"success": True, "message": "Already disabled"}
+            
+            if self.candle_scheduler:
+                await self.candle_scheduler.stop()
+                self.candle_scheduler = None
+            
+            self.candle_sync_enabled = False
+            logger.info("✅ Candle formation synchronization DISABLED")
+            
+            return {"success": True, "message": "Candle synchronization disabled"}
+            
+        except Exception as e:
+            logger.error(f"❌ Error disabling candle synchronization: {e}")
+            return {"success": False, "message": str(e)}
+    
+    async def get_candle_sync_status(self) -> Dict:
+        """Get current candle synchronization status"""
+        if not self.candle_sync_enabled or not self.candle_scheduler:
+            return {
+                "enabled": False,
+                "message": "Candle synchronization is disabled"
+            }
+        
+        status = self.candle_scheduler.get_status()
+        status["enabled"] = True
+        return status
+    
+    async def _generate_signals_on_candle_formation(
+        self,
+        timeframe: str,
+        selected_assets: List[str],
+        candle_time: datetime
+    ):
+        """
+        Callback function called by candle scheduler when a new candle forms
+        Generates signals for all selected assets synchronized with candle formation
+        
+        Args:
+            timeframe: The timeframe that formed a new candle (e.g., '5s', '1m')
+            selected_assets: List of assets to generate signals for
+            candle_time: The exact time when the candle formed (Chicago timezone)
+        """
+        try:
+            chicago_time = get_chicago_time()
+            
+            logger.info(f"🕐 CANDLE FORMATION CALLBACK - {timeframe}")
+            logger.info(f"   📍 Current Time: {chicago_time.strftime('%H:%M:%S.%f')[:-3]}")
+            logger.info(f"   🎯 Candle Time: {candle_time.strftime('%H:%M:%S.%f')[:-3]}")
+            logger.info(f"   💰 Generating signals for {len(selected_assets)} assets")
+            
+            signals_generated = 0
+            signals_failed = 0
+            
+            # Generate signals for each asset
+            for asset in selected_assets:
+                try:
+                    # Fetch fresh market data for this asset
+                    market_data = await self.market_service.get_real_market_data(asset)
+                    
+                    if not market_data:
+                        logger.warning(f"   ⚠️ {asset}: No market data available")
+                        continue
+                    
+                    # Generate signal for this asset
+                    # Use force signal generator for guaranteed signal with candle sync
+                    from force_signal_generator import force_signal_generator
+                    
+                    signals = await force_signal_generator.force_generate_signal(
+                        symbol=asset.replace('_regular', '').replace('_OTC', ''),
+                        market_data=market_data,
+                        user_timeframes=[timeframe],
+                        chart_type='japanese_candles'
+                    )
+                    
+                    if signals and len(signals) > 0:
+                        # Process each generated signal
+                        for signal in signals:
+                            # Update signal with precise candle formation timing
+                            signal.precision_entry_time = candle_time
+                            signal.timeframe = timeframe
+                            
+                            # Add candle sync metadata
+                            if signal.technical_analysis:
+                                signal.technical_analysis['candle_sync'] = True
+                                signal.technical_analysis['candle_formation_time'] = candle_time.isoformat()
+                                signal.technical_analysis['generation_mode'] = 'candle_formation_synchronized'
+                            
+                            # Process the signal (save to DB, send to platforms)
+                            await self._process_new_signal(signal)
+                            signals_generated += 1
+                            
+                            logger.info(f"   ✅ {asset}: {signal.direction.value} signal "
+                                      f"({signal.probability:.1f}% confidence)")
+                    else:
+                        logger.warning(f"   ⚠️ {asset}: No signal generated")
+                        signals_failed += 1
+                
+                except Exception as e:
+                    logger.error(f"   ❌ {asset}: Error generating signal - {e}")
+                    signals_failed += 1
+            
+            # Log summary
+            total_assets = len(selected_assets)
+            logger.info(f"🎉 {timeframe} CANDLE SYNC COMPLETE: "
+                       f"{signals_generated} signals generated, "
+                       f"{signals_failed} failed, "
+                       f"{total_assets - signals_generated - signals_failed} skipped")
+            
+        except Exception as e:
+            logger.error(f"❌ Error in candle formation callback: {e}")
+            import traceback
+            traceback.print_exc()
+
             return 120  # 2 minutes for conservative strategies
