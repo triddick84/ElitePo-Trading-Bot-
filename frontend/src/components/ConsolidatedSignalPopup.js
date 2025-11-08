@@ -347,7 +347,36 @@ const ConsolidatedSignalPopup = ({ signals = [], onClose, onExecute }) => {
                           <span className="font-medium text-green-400">✅ ACTIVE</span>
                         </div>
                       )}
+
+                      {/* Forced Generation */}
+                      {signal.technical_analysis.forced_generation && (
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">Mode:</span>
+                          <span className="font-medium text-yellow-400">🚀 FORCE</span>
+                        </div>
+                      )}
                     </div>
+
+                    {/* Analysis Summary */}
+                    {signal.market_analysis_summary && (
+                      <div className="mt-2 pt-2 border-t border-slate-600/50">
+                        <div className="text-xs text-slate-400 mb-1 font-semibold">Summary:</div>
+                        <div className="text-xs text-slate-300 leading-relaxed">
+                          {signal.market_analysis_summary}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Justification */}
+                    {signal.justification && (
+                      <div className="mt-2 pt-2 border-t border-slate-600/50">
+                        <div className="text-xs text-slate-400 mb-1 font-semibold">Justification:</div>
+                        <div className="text-xs text-slate-300 leading-relaxed">
+                          {signal.justification}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                     )}
                   </div>
                 )}
