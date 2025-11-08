@@ -96,13 +96,54 @@ const BotControls = ({ onStatusUpdate }) => {
   const stopBot = async () => {
     setIsLoading(true);
     try {
-      await axios.post(`${API}/bot/stop`);
-      toast.success('Trading bot stopped');
+      const response = await axios.post(`${API}/bot/stop`);
+      toast.success('✅ Trading bot stopped successfully');
+      console.log('Stop response:', response.data);
       fetchBotStatus();
       if (onStatusUpdate) onStatusUpdate();
     } catch (error) {
       console.error('Error stopping bot:', error);
-      toast.error('Failed to stop trading bot');
+      toast.error('❌ Failed to stop trading bot');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const clearAllSessions = async () => {
+    if (!window.confirm('⚠️ This will clear all active sessions and reset the bot. Continue?')) {
+      return;
+    }
+    
+    setIsLoading(true);
+    try {
+      const response = await axios.post(`${API}/bot/clear-all`);
+      toast.success('✅ All sessions cleared successfully');
+      console.log('Clear all response:', response.data);
+      fetchBotStatus();
+      if (onStatusUpdate) onStatusUpdate();
+    } catch (error) {
+      console.error('Error clearing sessions:', error);
+      toast.error('❌ Failed to clear sessions');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const restartBot = async () => {
+    if (!window.confirm('🔄 This will restart the bot with current configuration. Continue?')) {
+      return;
+    }
+    
+    setIsLoading(true);
+    try {
+      const response = await axios.post(`${API}/bot/restart`);
+      toast.success('✅ Bot restarted successfully');
+      console.log('Restart response:', response.data);
+      fetchBotStatus();
+      if (onStatusUpdate) onStatusUpdate();
+    } catch (error) {
+      console.error('Error restarting bot:', error);
+      toast.error('❌ Failed to restart bot');
     } finally {
       setIsLoading(false);
     }
