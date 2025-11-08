@@ -216,6 +216,120 @@ const ConsolidatedSignalPopup = ({ signals = [], onClose, onExecute }) => {
                   </div>
                 )}
 
+                {/* Technical Analysis */}
+                {signal.technical_analysis && (
+                  <div className="mb-2 p-2 bg-slate-800/50 rounded-lg border border-slate-600/50">
+                    <div className="text-xs font-semibold text-emerald-400 mb-1">📊 Technical Analysis</div>
+                    <div className="space-y-0.5 text-xs text-slate-300">
+                      {/* Strategy Used */}
+                      {signal.strategy_used && (
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">Strategy:</span>
+                          <span className="font-medium text-blue-300">
+                            {signal.strategy_used.replace('_', ' ').toUpperCase()}
+                          </span>
+                        </div>
+                      )}
+                      
+                      {/* Buy/Sell Scores */}
+                      {signal.technical_analysis.buy_score !== undefined && (
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">Buy Score:</span>
+                          <span className="font-medium text-green-400">
+                            {Number(signal.technical_analysis.buy_score).toFixed(1)}
+                          </span>
+                        </div>
+                      )}
+                      {signal.technical_analysis.sell_score !== undefined && (
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">Sell Score:</span>
+                          <span className="font-medium text-red-400">
+                            {Number(signal.technical_analysis.sell_score).toFixed(1)}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Confidence Boosters */}
+                      {signal.technical_analysis.confidence_boosters_applied > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">Boosters:</span>
+                          <span className="font-medium text-emerald-400">
+                            +{Number(signal.technical_analysis.confidence_boosters_applied).toFixed(1)}%
+                          </span>
+                        </div>
+                      )}
+
+                      {/* EMA Indicators */}
+                      {signal.technical_analysis.ema_3 && (
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">EMA 3:</span>
+                          <span className="font-medium">{Number(signal.technical_analysis.ema_3).toFixed(4)}</span>
+                        </div>
+                      )}
+                      {signal.technical_analysis.ema_8 && (
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">EMA 8:</span>
+                          <span className="font-medium">{Number(signal.technical_analysis.ema_8).toFixed(4)}</span>
+                        </div>
+                      )}
+
+                      {/* RSI */}
+                      {signal.technical_analysis.rsi && (
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">RSI:</span>
+                          <span className={`font-medium ${
+                            signal.technical_analysis.rsi > 70 ? 'text-red-400' :
+                            signal.technical_analysis.rsi < 30 ? 'text-green-400' :
+                            'text-yellow-400'
+                          }`}>
+                            {Number(signal.technical_analysis.rsi).toFixed(1)}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* MACD */}
+                      {signal.technical_analysis.macd_signal && (
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">MACD:</span>
+                          <span className={`font-medium ${
+                            signal.technical_analysis.macd_signal === 'bullish' ? 'text-green-400' : 'text-red-400'
+                          }`}>
+                            {signal.technical_analysis.macd_signal.toUpperCase()}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Volume Signal */}
+                      {signal.technical_analysis.volume_signal && (
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">Volume:</span>
+                          <span className="font-medium text-purple-400">
+                            {signal.technical_analysis.volume_signal.toUpperCase()}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* OTC Boost */}
+                      {signal.technical_analysis.otc_boost_applied > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">OTC Boost:</span>
+                          <span className="font-medium text-cyan-400">
+                            +{Number(signal.technical_analysis.otc_boost_applied).toFixed(1)}%
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Candle Sync */}
+                      {signal.technical_analysis.candle_sync && (
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">Candle Sync:</span>
+                          <span className="font-medium text-green-400">✅ ACTIVE</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* Countdown Timer */}
                 <div className={`
                   p-2 rounded-lg border text-center
