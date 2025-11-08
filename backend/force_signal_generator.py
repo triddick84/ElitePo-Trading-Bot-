@@ -1204,6 +1204,24 @@ class ForceSignalGenerator:
             # Calculate seconds until optimal entry
             seconds_to_entry = (optimal_entry_time - chicago_time).total_seconds()
             
+            # INVERT SIGNALS FOR 1 MINUTE TIMEFRAME
+            original_direction = direction
+            if user_timeframes and user_timeframes[0] == '1m':
+                # Invert the direction for 1m timeframe
+                if direction == SignalDirection.BUY:
+                    direction = SignalDirection.SELL
+                    logger.info(f"🔄 1m TIMEFRAME INVERSION: BUY → SELL")
+                elif direction == SignalDirection.SELL:
+                    direction = SignalDirection.BUY
+                    logger.info(f"🔄 1m TIMEFRAME INVERSION: SELL → BUY")
+                
+                # Add inversion flag to technical analysis
+                technical_analysis['signal_inverted'] = True
+                technical_analysis['original_direction'] = original_direction.value
+                technical_analysis['inversion_reason'] = '1m timeframe inversion enabled'
+            else:
+                technical_analysis['signal_inverted'] = False
+            
             # Create initial signal
             signal = TradingSignal(
                 id=f"FORCE_{market_type.upper()}_{chicago_time.strftime('%Y%m%d_%H%M%S')}_{symbol}",
