@@ -42,7 +42,17 @@ const BotControls = ({ onStatusUpdate }) => {
     fetchCurrentConfig();
     fetchBotStatus();
     fetchAutoSignalStatus();
-  }, []);
+    fetchCandleSyncStatus();
+    
+    // Poll candle sync status every 2 seconds for live countdown
+    const interval = setInterval(() => {
+      if (botStatus.is_running) {
+        fetchCandleSyncStatus();
+      }
+    }, 2000);
+    
+    return () => clearInterval(interval);
+  }, [botStatus.is_running]);
 
   const fetchCurrentConfig = async () => {
     try {
