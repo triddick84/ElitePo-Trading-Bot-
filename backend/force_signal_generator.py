@@ -1214,7 +1214,7 @@ class ForceSignalGenerator:
                 expiration_minutes=expiration_minutes,
                 timeframe=user_timeframes[0],  # Use user's selected timeframe
                 market_type=market_type,
-                probability=min(final_confidence, 98.5),  # Cap at 98.5% for forced signals
+                probability=min(final_confidence, 99.0),  # Cap at 99% for maximum confidence
                 confidence_level=confidence_level,
                 strategy_used=TradingStrategy.HYBRID,  # Use valid enum value
                 technical_analysis=technical_analysis,
