@@ -1136,12 +1136,42 @@ class ForceSignalGenerator:
             else:
                 confidence_level = "LOW"
             
-            # OTC market adjustments
-            otc_boost = 0.0
+            # ENHANCED confidence boosters for maximum confidence level
+            confidence_boosters = 0.0
+            
+            # 1. OTC market adjustments (24/7 availability advantage)
             if market_type == "otc":
-                # OTC markets have different volatility patterns - slight confidence boost
-                otc_boost = 2.0 if final_confidence >= 85.0 else 1.0
-                final_confidence = min(final_confidence + otc_boost, 98.5)
+                otc_boost = 3.0 if final_confidence >= 85.0 else 2.0
+                confidence_boosters += otc_boost
+                logger.info(f"   🚀 OTC Boost: +{otc_boost}%")
+            
+            # 2. Strong signal consensus boost
+            if buy_score > 0 and sell_score > 0:
+                score_gap = abs(buy_score - sell_score)
+                if score_gap >= 40:  # Very strong directional bias
+                    consensus_boost = 3.0
+                    confidence_boosters += consensus_boost
+                    logger.info(f"   🎯 Strong Consensus Boost: +{consensus_boost}%")
+                elif score_gap >= 25:  # Moderate directional bias
+                    consensus_boost = 2.0
+                    confidence_boosters += consensus_boost
+                    logger.info(f"   🎯 Moderate Consensus Boost: +{consensus_boost}%")
+            
+            # 3. Multiple strategy agreement boost
+            if len(analysis_results) >= 5:
+                strategy_boost = 2.0
+                confidence_boosters += strategy_boost
+                logger.info(f"   📊 Multiple Strategies Boost: +{strategy_boost}%")
+            
+            # 4. Ultra-short timeframe precision boost (5s, 15s)
+            if user_timeframes and user_timeframes[0] in ['5s', '15s']:
+                ultra_short_boost = 2.5
+                confidence_boosters += ultra_short_boost
+                logger.info(f"   ⚡ Ultra-Short Timeframe Boost: +{ultra_short_boost}%")
+            
+            # Apply all confidence boosters
+            final_confidence = min(final_confidence + confidence_boosters, 99.0)
+            logger.info(f"   ✅ Final Confidence after boosters: {final_confidence:.1f}%")
             
             # Create comprehensive technical analysis summary with safe float conversion
             def safe_float(value):
