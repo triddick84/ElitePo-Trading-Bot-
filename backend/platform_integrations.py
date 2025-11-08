@@ -206,7 +206,7 @@ class PlatformIntegrationService:
             logger.error(f"Error sending Telegram signal: {e}")
 
     async def send_autobot_signal(self, signal: TradingSignal):
-        """Send signal to AutobotSignal.io webhook"""
+        """Send signal to AutobotSignal.io webhook with enhanced format"""
         try:
             # Format signal for AutobotSignal.io
             side = "buy" if signal.direction in ['BUY', 'CALL'] else "sell"
@@ -214,11 +214,31 @@ class PlatformIntegrationService:
             # Clean symbol for AutobotSignal (remove _OTC, _regular suffixes)
             clean_symbol = signal.symbol.replace('_OTC', '').replace('_regular', '')
             
+            # Convert timestamp to Chicago timezone
+            chicago_time = utc_to_chicago(signal.timestamp) if signal.timestamp.tzinfo else signal.timestamp
+            
+            # Enhanced payload with additional information
             payload = {
                 "side": side,
                 "symbol": clean_symbol,
-                "key": self.autobot_signal_key
+                "key": self.autobot_signal_key,
+                # Additional optional parameters for better integration
+                "timeframe": signal.timeframe,
+                "market_type": signal.market_type,
+                "expiration": signal.expiration_minutes,
+                "probability": signal.probability,
+                "confidence": signal.confidence_level,
+                "strategy": signal.strategy_used.value,
+                "timestamp": chicago_time.isoformat(),
+                "timezone": "America/Chicago",
+                "entry_price": signal.entry_price,
+                "suggested_stake": signal.suggested_stake
             }
+            
+            # Add precision entry time if available
+            if signal.precision_entry_time:
+                entry_chicago = utc_to_chicago(signal.precision_entry_time) if signal.precision_entry_time.tzinfo else signal.precision_entry_time
+                payload["precision_entry_time"] = entry_chicago.isoformat()
 
             async with aiohttp.ClientSession() as session:
                 async with session.post(
@@ -227,7 +247,7 @@ class PlatformIntegrationService:
                     headers={'Content-Type': 'application/json'}
                 ) as response:
                     if response.status in [200, 201, 202]:
-                        logger.info(f"Signal sent to AutobotSignal.io: {signal.id}")
+                        logger.info(f"Signal sent to AutobotSignal.io: {signal.id} with Chicago timezone")
                     else:
                         error_text = await response.text()
                         logger.error(f"AutobotSignal send failed: {response.status} - {error_text}")
