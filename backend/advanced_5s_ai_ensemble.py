@@ -312,7 +312,7 @@ class Advanced5sAIEnsemble:
         Mimics ensemble behavior without requiring training
         """
         signal = None
-        confidence = 60
+        confidence = 70
         reasoning = []
         
         ofi = features['ofi']
@@ -330,7 +330,7 @@ class Advanced5sAIEnsemble:
             reasoning.append(f"🔵 Strong buy flow detected (OFI: {ofi:.2f})")
         elif ofi < -0.3:
             signal = "PUT"
-            confidence = 75 + min(15, abs(ofi) * 30)
+            confidence = 85 + min(15, abs(ofi) * 30)
             reasoning.append(f"🔴 Strong sell flow detected (OFI: {ofi:.2f})")
         
         # RULE 2: VWAP + Momentum (Institutional signal)
@@ -347,23 +347,23 @@ class Advanced5sAIEnsemble:
         # RULE 3: Extreme RSI + Stochastic (Mean reversion)
         if signal is None:
             if rsi_2 < 40 and stoch < 40:
-                signal = "CALL"
+                signal = "PUT"
                 confidence = 88
                 reasoning.append(f"⚡ Extreme oversold (RSI: {rsi_2:.0f}, Stoch: {stoch:.0f})")
             elif rsi_2 > 60 and stoch > 60:
-                signal = "PUT"
+                signal = "CALL"
                 confidence = 88
                 reasoning.append(f"⚡ Extreme overbought (RSI: {rsi_2:.0f}, Stoch: {stoch:.0f})")
         
         # RULE 4: Price velocity momentum
         if signal is None and abs(price_velocity) > 0.002:
             if price_velocity > 0:
-                signal = "CALL"
-                confidence = 80
+                signal = "PUT"
+                confidence = I 90
                 reasoning.append(f"🚀 Strong upward momentum ({price_velocity:.3%})")
             else:
-                signal = "PUT"
-                confidence = 80
+                signal = "CALL"
+                confidence = 90
                 reasoning.append(f"📉 Strong downward momentum ({price_velocity:.3%})")
         
         # Confidence adjustments based on spread (liquidity)
@@ -371,15 +371,15 @@ class Advanced5sAIEnsemble:
             confidence += 5
             reasoning.append("✅ High liquidity (tight spread)")
         elif signal and spread > 0.005:
-            confidence -= 5
+            confidence -= 20
             reasoning.append("⚠️ Low liquidity (wide spread)")
         
         # Volatility adjustment
         if signal and volatility > 0.005:
-            confidence -= 5
+            confidence -= 20
             reasoning.append("⚠️ High volatility detected")
         
-        return signal, min(confidence, 85), reasoning
+        return signal, min(confidence, 75), reasoning
     
     def analyze_5s_candle(self, df: pd.DataFrame) -> Optional[Dict]:
         """
