@@ -142,10 +142,20 @@ class PlatformIntegrationService:
             logger.error(f"Error sending signal to platforms: {e}")
 
     async def send_telegram_signal(self, signal: TradingSignal):
-        """Send signal to Telegram bot"""
+        """Send signal to Telegram bot with Chicago timezone"""
         try:
             # Format signal message for Telegram
             direction_emoji = "🟢 📈" if signal.direction in ['BUY', 'CALL'] else "🔴 📉"
+            
+            # Convert timestamp to Chicago timezone for display
+            chicago_timestamp = utc_to_chicago(signal.timestamp) if signal.timestamp.tzinfo else signal.timestamp
+            chicago_time_str = chicago_timestamp.strftime('%H:%M:%S CT')
+            
+            # Add precision entry time if available
+            entry_time_str = ""
+            if signal.precision_entry_time:
+                entry_chicago = utc_to_chicago(signal.precision_entry_time) if signal.precision_entry_time.tzinfo else signal.precision_entry_time
+                entry_time_str = f"\n🎯 **Precision Entry:** {entry_chicago.strftime('%H:%M:%S CT')}"
             
             message = f"""
 🚨 **ELITE POCKET TRADING SIGNAL** 🚨
@@ -153,7 +163,8 @@ class PlatformIntegrationService:
 {direction_emoji} **{signal.direction}** {signal.symbol}
 
 💰 **Entry Price:** ${signal.entry_price}
-⏱️ **Expiration:** {signal.expiration_minutes} minutes
+⏱️ **Timeframe:** {signal.timeframe} | **Expiration:** {signal.expiration_minutes} min
+🌐 **Market:** {signal.market_type.upper()}
 ⚡ **Probability:** {signal.probability}%
 🎯 **Strategy:** {signal.strategy_used.value.replace('_', ' ').title()}
 
@@ -168,7 +179,8 @@ class PlatformIntegrationService:
 
 💡 **Suggested Stake:** ${signal.suggested_stake}
 
-🕐 **Generated:** {signal.timestamp.strftime('%H:%M:%S UTC')}
+🕐 **Generated:** {chicago_time_str} (Chicago Central Time){entry_time_str}
+🌍 **Pocket Option Synchronized** ✅
 
 #ElitePocketSignals #TradingAlert #{signal.symbol.replace('/', '')}
             """.strip()
