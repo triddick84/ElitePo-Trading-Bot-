@@ -364,6 +364,7 @@ class ForceSignalGenerator:
                 logger.info(f"⚡ Applying Pocket Option 5-SECOND strategies for {symbol}")
                 
                 # Use NEW Ultra V2 strategy (research-backed 75%+ accuracy)
+                logger.info("   🚀 Applying 5s Ultra V2 (Research-Backed Strategy)")
                 result_ultra_v2 = await loop.run_in_executor(
                     self.executor,
                     pocket_option_5s_ultra_v2.analyze,
@@ -374,6 +375,7 @@ class ForceSignalGenerator:
                 
                 if result_ultra_v2:
                     logger.info(f"✅ 5s Ultra V2 strategy: {symbol} → {result_ultra_v2.get('signal', 'N/A')} ({result_ultra_v2.get('confidence', 0):.1f}%)")
+                    logger.info("   ✅ 5s Ultra V2 strategy contributed (Target 75%+ accuracy)")
                     return {
                         'direction': result_ultra_v2['signal'],
                         'confidence': result_ultra_v2['confidence'],
