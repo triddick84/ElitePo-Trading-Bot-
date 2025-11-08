@@ -927,6 +927,10 @@ async def force_generate_signal_for_asset(asset_symbol: str, wait_for_candle: bo
     """
     Force generate a signal for a specific asset
     Uses maximum analysis depth and bypasses all thresholds
+    
+    Args:
+        asset_symbol: The trading symbol to generate signal for
+        wait_for_candle: Whether to wait for the next candle formation before generating signal (default: True)
     """
     try:
         # Get market data for the specific asset
