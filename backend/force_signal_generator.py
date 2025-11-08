@@ -31,7 +31,7 @@ class ForceSignalGenerator:
         self.executor = ThreadPoolExecutor(max_workers=10)
         self.min_force_confidence = 75.0  # Minimum for forced signals
         
-    async def force_generate_signal(self, symbol: str, market_data: MarketData, user_timeframes: List[str] = None, chart_type: str = 'japanese_candles') -> List[TradingSignal]:
+    async def force_generate_signal(self, symbol: str, market_data: MarketData, user_timeframes: List[str] = None, chart_type: str = 'japanese_candles', wait_for_candle: bool = True) -> List[TradingSignal]:
         """
         Force generate a signal using maximum analysis depth
         Bypasses all normal thresholds and provides the best possible prediction
