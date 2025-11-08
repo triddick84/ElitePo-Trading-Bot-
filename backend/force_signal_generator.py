@@ -110,13 +110,21 @@ class ForceSignalGenerator:
                             analysis_results.append(('momentum_5m', momentum_signal, 0.15))
             
             # Generate SINGLE best signal based on market type and accuracy
-            # Determine preferred market type from symbol or default to OTC for 24/7 trading
-            preferred_market = "otc" if "_OTC" in symbol else "regular"
-            
-            # For ultra-short timeframes (5s, 15s, 30s), prefer OTC markets (24/7 availability)
+            # PRIORITY 1: Ultra-short timeframes ALWAYS use OTC (24/7 availability)
             if user_timeframes and user_timeframes[0] in ['5s', '15s', '30s']:
                 preferred_market = "otc"
-                logger.info(f"🎯 Ultra-short timeframe {user_timeframes[0]} - Using OTC market for 24/7 availability")
+                logger.info(f"🎯 ULTRA-SHORT TIMEFRAME {user_timeframes[0]} - FORCING OTC market for 24/7 availability")
+            # PRIORITY 2: Check symbol suffix
+            elif "_OTC" in symbol or "_otc" in symbol:
+                preferred_market = "otc"
+                logger.info(f"📍 Symbol suffix detected - Using OTC market")
+            elif "_regular" in symbol:
+                preferred_market = "regular"
+                logger.info(f"📍 Symbol suffix detected - Using Regular market")
+            # PRIORITY 3: Default to OTC for better availability
+            else:
+                preferred_market = "otc"
+                logger.info(f"📍 No suffix detected - Defaulting to OTC market")
             
             # Generate signal for preferred market type
             best_signal = await self._force_combine_analysis(
