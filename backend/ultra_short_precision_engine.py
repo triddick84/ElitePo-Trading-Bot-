@@ -364,14 +364,17 @@ class UltraShortPrecisionEngine:
                 logger.info("No clear directional signal, skipping")
                 return None
             
-            # Calculate final confidence
+            # ENHANCED Calculate final confidence for MAXIMUM levels
             base_confidence = signal_score
-            vote_confidence = vote_ratio * 20  # Up to 20% bonus for strong agreement
+            vote_confidence = vote_ratio * 22  # Up to 22% bonus for strong agreement (ENHANCED from 20)
             
-            # Ultra-short timeframe bonus (these timeframes can be more accurate)
-            timeframe_bonus = {'5s': 10, '15s': 8, '30s': 5}.get(timeframe, 0)
+            # Ultra-short timeframe bonus (ENHANCED - these timeframes can be very accurate)
+            timeframe_bonus = {'5s': 12, '15s': 10, '30s': 7}.get(timeframe, 0)
             
-            final_confidence = min(base_confidence + vote_confidence + timeframe_bonus, 98.0)
+            # Additional confidence factor boost
+            confidence_factors_bonus = len(confidence_factors) * 1.5  # Boost for each confirmation factor
+            
+            final_confidence = min(base_confidence + vote_confidence + timeframe_bonus + confidence_factors_bonus, 99.0)
             
             # Only generate signals with 85%+ confidence for ultra-short timeframes
             if final_confidence < 85.0:
