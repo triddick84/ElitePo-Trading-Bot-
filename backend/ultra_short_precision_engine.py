@@ -395,7 +395,7 @@ class UltraShortPrecisionEngine:
                 timeframe=timeframe,
                 market_type=market_type,
                 probability=final_confidence,
-                confidence_level="HIGH" if final_confidence >= 90 else "MEDIUM",
+                confidence_level="HIGH" if final_confidence >= 90 else ("MEDIUM" if final_confidence >= 82 else "LOW"),
                 strategy_used=TradingStrategy.HYBRID,
                 technical_analysis={
                     'ultra_short_analysis': True,
