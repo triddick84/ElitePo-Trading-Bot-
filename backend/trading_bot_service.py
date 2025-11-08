@@ -64,9 +64,31 @@ class TradingBotService:
         asyncio.create_task(self._trading_loop())
     
     async def stop_bot(self):
-        """Stop the trading bot"""
-        self.is_running = False
-        logger.info("Trading bot stopped")
+        """Stop the trading bot and all related processes"""
+        try:
+            logger.info("🛑 Stopping trading bot...")
+            
+            # Stop candle synchronization if enabled
+            if self.candle_sync_enabled:
+                logger.info("   🕐 Stopping candle synchronization...")
+                await self.disable_candle_synchronization()
+            
+            # Stop auto signal generation
+            if self.auto_signal_generation:
+                self.auto_signal_generation = False
+                logger.info("   📊 Auto signal generation disabled")
+            
+            # Set bot as not running
+            self.is_running = False
+            
+            logger.info("✅ Trading bot stopped successfully")
+            
+        except Exception as e:
+            logger.error(f"❌ Error stopping bot: {e}")
+            # Ensure bot is stopped even if cleanup fails
+            self.is_running = False
+            self.auto_signal_generation = False
+            self.candle_sync_enabled = False
     
     async def _trading_loop(self):
         """Main trading loop - runs continuously when bot is active"""
