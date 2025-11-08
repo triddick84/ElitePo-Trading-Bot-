@@ -234,7 +234,12 @@ const ConsolidatedSignalPopup = ({ signals = [], onClose, onExecute }) => {
                   )}
                   {timer.isExpired && (
                     <div className="text-xs mt-1 text-red-400">
-                      ⏰ Expired
+                      ⏰ Entry Time Passed
+                    </div>
+                  )}
+                  {!timer.isExpired && !timer.isOptimal && timer.timeLeft > 0 && (
+                    <div className="text-xs mt-1 text-blue-300">
+                      ⏳ Wait for optimal entry
                     </div>
                   )}
                 </div>
