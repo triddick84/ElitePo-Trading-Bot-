@@ -1015,19 +1015,23 @@ async def force_generate_signal_for_asset(asset_symbol: str):
                 except Exception as e:
                     logger.warning(f"Could not send forced signal to platforms: {e}")
             
-            # Extract analysis details with OTC boost information
-            analysis_details = forced_signals[0].technical_analysis if forced_signals else {}
-            otc_signal = next((s for s in forced_signals if s.market_type == 'otc'), None)
-            if otc_signal:
-                analysis_details["otc_boost_applied"] = otc_signal.technical_analysis.get('otc_boost_applied', 0)
+            # Extract analysis details from the single best signal
+            best_signal_obj = forced_signals[0] if forced_signals else None
+            analysis_details = best_signal_obj.technical_analysis if best_signal_obj else {}
+            
+            # Get best signal from stored signals
+            best_signal = stored_signals[0] if stored_signals else None
+            market_type = best_signal.get("market_type", "otc") if best_signal else "otc"
+            timeframe = best_signal.get("timeframe", "5s") if best_signal else "5s"
             
             response = {
                 "success": True,
-                "message": f"🚀 {len(forced_signals)} Force signals generated for {asset_symbol} (Regular + OTC)",
+                "message": f"🎯 Single {market_type.upper()} signal generated for {asset_symbol} at {timeframe} timeframe",
                 "asset": asset_symbol,
-                "signals": stored_signals,
-                "regular_signal": next((s for s in stored_signals if "regular" in s["symbol"]), None),
-                "otc_signal": next((s for s in stored_signals if "OTC" in s["symbol"]), None),
+                "signal": best_signal,  # Single best signal
+                "signals": stored_signals,  # Keep for compatibility
+                "market_type": market_type,
+                "timeframe": timeframe,
                 "analysis_details": analysis_details
             }
             return _convert_numpy_types(response)
