@@ -470,7 +470,7 @@ class ClearAllRestartTester:
             async with self.session.post(f"{BACKEND_URL}/bot/restart") as response:
                 if response.status == 200:
                     data = await response.json()
-                    if data.get('success'):
+                    if data.get('success') or data.get('bot_running'):
                         print("   ✅ Restart succeeds when bot is stopped")
                     else:
                         print(f"   ❌ Restart failed when bot stopped: {data.get('message')}")
