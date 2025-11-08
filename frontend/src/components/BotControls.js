@@ -404,6 +404,84 @@ const BotControls = ({ onStatusUpdate }) => {
         </div>
       </Card>
 
+      {/* Candle Formation Synchronization */}
+      <Card className="p-6 glass-dark border-emerald-700/50 border-2">
+        <div className="flex items-center justify-between">
+          <div className="flex-1">
+            <div className="flex items-center space-x-2 mb-2">
+              <h3 className="text-xl font-semibold text-white">🕐 Candle Synchronization</h3>
+              <span className="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded-full border border-emerald-500/30">
+                Pocket Option Sync
+              </span>
+            </div>
+            <p className="text-slate-400 text-sm mb-4">
+              Generate signals precisely when new candles form on Pocket Option platform for optimal entry timing
+            </p>
+            
+            {/* Status Indicator */}
+            <div className="flex items-center space-x-2 mb-3">
+              <div className={`w-2 h-2 ${candleSyncStatus.enabled ? 'bg-emerald-500 animate-pulse' : 'bg-slate-500'} rounded-full`}></div>
+              <span className={`text-sm font-medium ${candleSyncStatus.enabled ? 'text-emerald-400' : 'text-slate-400'}`}>
+                {candleSyncStatus.enabled ? '✅ Candle Sync Active' : '⏸️ Candle Sync Disabled'}
+              </span>
+            </div>
+
+            {/* Next Candle Times */}
+            {candleSyncStatus.enabled && candleSyncStatus.next_candle_times && Object.keys(candleSyncStatus.next_candle_times).length > 0 && (
+              <div className="mt-3 p-3 bg-slate-800/50 rounded-lg border border-slate-600/50">
+                <div className="text-xs font-semibold text-emerald-400 mb-2">⏱️ Next Candle Formation:</div>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                  {Object.entries(candleSyncStatus.next_candle_times).map(([timeframe, data]) => (
+                    <div key={timeframe} className="p-2 bg-slate-700/50 rounded border border-slate-600/50">
+                      <div className="text-xs text-slate-400">{timeframe}</div>
+                      <div className="text-sm font-bold text-white">{data.seconds_until > 0 ? `${Math.floor(data.seconds_until)}s` : 'NOW'}</div>
+                      <div className="text-xs text-slate-500">{data.time}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Active Timeframes */}
+            {candleSyncStatus.enabled && candleSyncStatus.active_timeframes && (
+              <div className="mt-2">
+                <span className="text-xs text-slate-500">Monitoring: </span>
+                {candleSyncStatus.active_timeframes.map((tf, idx) => (
+                  <span key={tf} className="text-xs text-emerald-400 font-medium">
+                    {tf}{idx < candleSyncStatus.active_timeframes.length - 1 ? ', ' : ''}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {!botStatus.is_running && (
+              <p className="text-yellow-500 text-sm mt-2">⚠️ Start the bot first to enable candle synchronization</p>
+            )}
+          </div>
+          
+          {/* Toggle Button */}
+          <div className="ml-4">
+            <Button
+              onClick={toggleCandleSync}
+              disabled={isCandleSyncLoading || !botStatus.is_running}
+              className={`${
+                candleSyncStatus.enabled
+                  ? 'bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30'
+                  : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30'
+              }`}
+            >
+              {isCandleSyncLoading ? (
+                'Processing...'
+              ) : candleSyncStatus.enabled ? (
+                '⏹️ Disable Sync'
+              ) : (
+                '▶️ Enable Sync'
+              )}
+            </Button>
+          </div>
+        </div>
+      </Card>
+
       {/* Configuration Sections */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Basic Settings */}
