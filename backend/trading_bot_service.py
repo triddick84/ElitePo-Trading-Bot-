@@ -17,6 +17,7 @@ from force_signal_generator import force_signal_generator
 from pocket_option_timing_sync import pocket_option_sync
 from llm_service import LLMTradingService
 from platform_integrations import PlatformIntegrationService
+from timezone_utils import get_chicago_time
 
 logger = logging.getLogger(__name__)
 
