@@ -109,32 +109,31 @@ class ForceSignalGenerator:
                         if momentum_signal:
                             analysis_results.append(('momentum_5m', momentum_signal, 0.15))
             
-            # Force combine all available analysis for both market types
-            signals = []
+            # Generate SINGLE best signal based on market type and accuracy
+            # Determine preferred market type from symbol or default to OTC for 24/7 trading
+            preferred_market = "otc" if "_OTC" in symbol else "regular"
             
-            # Generate signal for regular market
-            regular_signal = await self._force_combine_analysis(
-                analysis_results, market_data, symbol, data_1m or data_5m or [market_data.dict()], "regular", user_timeframes
+            # For ultra-short timeframes (5s, 15s, 30s), prefer OTC markets (24/7 availability)
+            if user_timeframes and user_timeframes[0] in ['5s', '15s', '30s']:
+                preferred_market = "otc"
+                logger.info(f"🎯 Ultra-short timeframe {user_timeframes[0]} - Using OTC market for 24/7 availability")
+            
+            # Generate signal for preferred market type
+            best_signal = await self._force_combine_analysis(
+                analysis_results, market_data, symbol, data_1m or data_5m or [market_data.dict()], preferred_market, user_timeframes
             )
-            if regular_signal:
-                signals.append(regular_signal)
             
-            # Generate signal for OTC market with slight variation in analysis
-            otc_signal = await self._force_combine_analysis(
-                analysis_results, market_data, symbol, data_1m or data_5m or [market_data.dict()], "otc", user_timeframes
-            )
-            if otc_signal:
-                signals.append(otc_signal)
-            
-            # Return all signals (both regular and OTC)
-            if signals:
-                return signals
+            # Return single best signal
+            if best_signal:
+                logger.info(f"✅ Generated SINGLE {preferred_market.upper()} signal with {best_signal.probability}% confidence")
+                return [best_signal]  # Return as list with ONE signal
             else:
-                # Generate emergency signals for both market types
-                emergency_signals = []
-                emergency_signals.append(self._generate_emergency_signal(symbol, market_data, data_1m or data_5m or [market_data.dict()], "regular", user_timeframes))
-                emergency_signals.append(self._generate_emergency_signal(symbol, market_data, data_1m or data_5m or [market_data.dict()], "otc", user_timeframes))
-                return emergency_signals
+                # Generate single emergency signal for preferred market
+                logger.warning(f"⚠️ Generating emergency {preferred_market.upper()} signal")
+                emergency_signal = self._generate_emergency_signal(
+                    symbol, market_data, data_1m or data_5m or [market_data.dict()], preferred_market, user_timeframes
+                )
+                return [emergency_signal]  # Return as list with ONE signal
             
         except Exception as e:
             logger.error(f"Error in force signal generation for {symbol}: {e}")
