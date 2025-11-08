@@ -25,6 +25,7 @@ from force_signal_generator import force_signal_generator
 from pocket_option_assets import pocket_option_assets
 from timezone_utils import get_chicago_time, utc_to_chicago, format_chicago_time
 from latency_accuracy_tester import latency_tester
+from live_accuracy_tester import live_accuracy_tester
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
