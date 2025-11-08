@@ -137,11 +137,12 @@ class ForceSignalGenerator:
             
         except Exception as e:
             logger.error(f"Error in force signal generation for {symbol}: {e}")
-            # Generate emergency fallback signals for both market types
-            emergency_signals = []
-            emergency_signals.append(self._generate_emergency_signal(symbol, market_data, None, "regular", user_timeframes))
-            emergency_signals.append(self._generate_emergency_signal(symbol, market_data, None, "otc", user_timeframes))
-            return emergency_signals
+            # Generate single emergency fallback signal
+            # Prefer OTC for ultra-short timeframes, otherwise use symbol preference
+            preferred_market = "otc" if (user_timeframes and user_timeframes[0] in ['5s', '15s', '30s']) or "_OTC" in symbol else "regular"
+            logger.warning(f"🚨 Emergency fallback - generating {preferred_market.upper()} signal")
+            emergency_signal = self._generate_emergency_signal(symbol, market_data, None, preferred_market, user_timeframes)
+            return [emergency_signal]  # Return as list with ONE signal
     
     async def _advanced_ai_ensemble_force_analysis(self, data: List[Dict], symbol: str) -> Optional[Dict]:
         """
