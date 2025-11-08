@@ -1316,6 +1316,10 @@ class ForceSignalGenerator:
                 symbol_suffix = "_regular"
                 market_description = "📊 Regular Market - Exchange hours"
             
+            # Enhanced emergency confidence
+            emergency_confidence = min(confidence + 5.0, 98.5)  # Boost emergency signals
+            emergency_conf_level = "MEDIUM" if emergency_confidence >= 82.0 else "LOW"
+            
             return TradingSignal(
                 id=f"EMERGENCY_{market_type.upper()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{symbol}",
                 symbol=f"{symbol}{symbol_suffix}",
@@ -1325,8 +1329,8 @@ class ForceSignalGenerator:
                 expiration_minutes=expiration_minutes,
                 timeframe=timeframe,
                 market_type=market_type,
-                probability=min(confidence, 98.5),
-                confidence_level="LOW",
+                probability=emergency_confidence,
+                confidence_level=emergency_conf_level,
                 strategy_used=TradingStrategy.HYBRID,
                 technical_analysis={
                     'emergency_generation': True,
