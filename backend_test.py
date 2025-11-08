@@ -7996,6 +7996,14 @@ class BackendTester:
             ("Force Signal - Storage and Platform Integration", self.test_force_signal_storage_and_platform_integration),
             ("Force Signal - Performance and Response Time", self.test_force_signal_performance_and_response_time),
             
+            # ========== SINGLE SIGNAL GENERATION TESTING (NEW FOCUS) ==========
+            ("Single Signal Generation Response Structure", self.test_single_signal_generation_response_structure),
+            ("Ultra-Short Timeframe OTC Market Selection", self.test_ultra_short_timeframe_otc_market_selection),
+            ("Symbol-Based Market Selection", self.test_symbol_based_market_selection),
+            ("Single Asset Force Generate Endpoint", self.test_single_asset_force_generate_endpoint),
+            ("Signal Quality and Required Fields", self.test_signal_quality_and_required_fields),
+            ("Database Storage Single Signal", self.test_database_storage_single_signal),
+            
             # ========== CLEAR ALL SESSIONS AND RESTART TESTING ==========
             ("Bot Stop Enhancement", self.test_bot_stop_enhancement),
             ("Clear All Sessions Functionality", self.test_clear_all_sessions_functionality),
