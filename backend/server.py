@@ -920,7 +920,7 @@ async def force_generate_signal(wait_for_candle: bool = True):
         raise HTTPException(status_code=500, detail=f"Force signal generation failed: {str(e)}")
 
 @api_router.post("/signals/force-generate/asset/{asset_symbol}")
-async def force_generate_signal_for_asset(asset_symbol: str):
+async def force_generate_signal_for_asset(asset_symbol: str, wait_for_candle: bool = True):
     """
     Force generate a signal for a specific asset
     Uses maximum analysis depth and bypasses all thresholds
