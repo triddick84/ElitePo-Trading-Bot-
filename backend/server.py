@@ -336,6 +336,72 @@ async def run_comprehensive_test_suite():
         logging.error(f"Error in comprehensive test suite: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# ============================================================================
+# LIVE ACCURACY TESTING ENDPOINTS
+# ============================================================================
+
+@api_router.post("/testing/accuracy/verify-signal/{signal_id}")
+async def verify_signal_outcome(signal_id: str, exit_price: float):
+    """
+    Manually verify a signal's outcome with actual exit price
+    Used to track real win/loss performance
+    """
+    try:
+        result = await live_accuracy_tester.verify_signal_outcome(signal_id, exit_price)
+        return result
+    except Exception as e:
+        logging.error(f"Error verifying signal outcome: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/testing/accuracy/stats")
+async def get_accuracy_stats(
+    strategy: Optional[str] = None,
+    timeframe: Optional[str] = None,
+    time_range_hours: int = 24
+):
+    """
+    Get accuracy statistics for signals
+    
+    Query params:
+        strategy: Filter by strategy name (optional)
+        timeframe: Filter by timeframe (optional)
+        time_range_hours: Time range in hours (default: 24)
+    """
+    try:
+        stats = live_accuracy_tester.calculate_accuracy_stats(
+            strategy=strategy,
+            timeframe=timeframe,
+            time_range_hours=time_range_hours
+        )
+        return stats
+    except Exception as e:
+        logging.error(f"Error getting accuracy stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/testing/accuracy/pending")
+async def get_pending_signals():
+    """
+    Get all signals awaiting verification
+    """
+    try:
+        signals = live_accuracy_tester.get_pending_signals()
+        return {"pending_signals": signals, "count": len(signals)}
+    except Exception as e:
+        logging.error(f"Error getting pending signals: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/testing/accuracy/recent")
+async def get_recent_results(limit: int = 20):
+    """
+    Get recent verified signal results
+    """
+    try:
+        results = live_accuracy_tester.get_recent_results(limit=limit)
+        return {"results": results, "count": len(results)}
+    except Exception as e:
+        logging.error(f"Error getting recent results: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @api_router.get("/bot/status", response_model=BotStatusResponse)
 async def get_bot_status():
     """Get current bot status and performance"""
