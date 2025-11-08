@@ -92,6 +92,21 @@ const ConsolidatedSignalPopup = ({ signals = [], onClose, onExecute }) => {
     }
   }, [onExecute]);
 
+  // Debug signal data on mount
+  useEffect(() => {
+    if (signals && signals.length > 0) {
+      console.log('📊 ConsolidatedSignalPopup - Signals received:', signals.map(s => ({
+        id: s.id,
+        symbol: s.symbol,
+        direction: s.direction,
+        probability: s.probability,
+        confidence_level: s.confidence_level,
+        timeframe: s.timeframe,
+        market_type: s.market_type
+      })));
+    }
+  }, [signals]);
+
   if (!signals || signals.length === 0) return null;
 
   const formatTime = (seconds) => {
