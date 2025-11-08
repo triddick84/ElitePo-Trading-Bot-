@@ -5,6 +5,7 @@ from typing import Dict, List, Optional, Tuple, Any
 import logging
 from models import TechnicalIndicators, MarketData, TradingSignal, SignalDirection, TradingStrategy
 from pocket_option_timing_sync import pocket_option_sync
+from timezone_utils import get_chicago_time, utc_to_chicago
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import yfinance as yf
