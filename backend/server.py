@@ -807,7 +807,7 @@ async def force_generate_signal(wait_for_candle: bool = True):
             
             # Force generate signals using advanced algorithms
             forced_signals = await force_signal_generator.force_generate_signal(
-                base_symbol, target_asset, user_timeframes, chart_type=chart_type
+                base_symbol, target_asset, user_timeframes, chart_type=chart_type, wait_for_candle=wait_for_candle
             )
             
             if forced_signals:
