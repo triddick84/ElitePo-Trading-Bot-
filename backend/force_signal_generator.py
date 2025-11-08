@@ -145,10 +145,17 @@ class ForceSignalGenerator:
             
         except Exception as e:
             logger.error(f"Error in force signal generation for {symbol}: {e}")
-            # Generate single emergency fallback signal
-            # Prefer OTC for ultra-short timeframes, otherwise use symbol preference
-            preferred_market = "otc" if (user_timeframes and user_timeframes[0] in ['5s', '15s', '30s']) or "_OTC" in symbol else "regular"
-            logger.warning(f"🚨 Emergency fallback - generating {preferred_market.upper()} signal")
+            # Generate single emergency fallback signal with same priority logic
+            if user_timeframes and user_timeframes[0] in ['5s', '15s', '30s']:
+                preferred_market = "otc"
+                logger.warning(f"🚨 Emergency fallback - ULTRA-SHORT {user_timeframes[0]} - FORCING OTC")
+            elif "_OTC" in symbol or "_otc" in symbol:
+                preferred_market = "otc"
+            elif "_regular" in symbol:
+                preferred_market = "regular"
+            else:
+                preferred_market = "otc"  # Default to OTC
+            
             emergency_signal = self._generate_emergency_signal(symbol, market_data, None, preferred_market, user_timeframes)
             return [emergency_signal]  # Return as list with ONE signal
     
