@@ -821,12 +821,18 @@ async def force_generate_signal():
             if otc_signal:
                 analysis_details["otc_boost_applied"] = otc_signal.technical_analysis.get('otc_boost_applied', 0)
             
+            # Get the single best signal
+            best_signal = stored_signals[0] if stored_signals else None
+            market_type = best_signal.get("market_type", "otc") if best_signal else "otc"
+            timeframe = best_signal.get("timeframe", "5s") if best_signal else "5s"
+            
             response = {
                 "success": True,
-                "message": f"🚀 {len(forced_signals)} Force signals generated with maximum analysis depth",
-                "signals": stored_signals,
-                "regular_signal": next((s for s in stored_signals if "regular" in s["symbol"]), None),
-                "otc_signal": next((s for s in stored_signals if "OTC" in s["symbol"]), None),
+                "message": f"🎯 Single {market_type.upper()} signal generated for {timeframe} timeframe with precise entry timing",
+                "signal": best_signal,  # Single signal
+                "signals": stored_signals,  # Keep for compatibility
+                "market_type": market_type,
+                "timeframe": timeframe,
                 "analysis_details": analysis_details
             }
             return _convert_numpy_types(response)
