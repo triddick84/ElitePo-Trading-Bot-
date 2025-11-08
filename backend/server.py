@@ -1024,7 +1024,7 @@ async def force_generate_signal_for_asset(asset_symbol: str, wait_for_candle: bo
         
         # Force generate signals (both regular and OTC)
         forced_signals = await force_signal_generator.force_generate_signal(
-            target_data.symbol, target_data, user_timeframes
+            target_data.symbol, target_data, user_timeframes, wait_for_candle=wait_for_candle
         )
         
         if forced_signals:
