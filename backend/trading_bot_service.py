@@ -81,6 +81,105 @@ class TradingBotService:
             # Set bot as not running
             self.is_running = False
             
+    
+    async def clear_all_sessions(self):
+        """
+        Clear all active trading sessions and reset bot state
+        This is a hard reset that stops everything and clears all data
+        """
+        try:
+            logger.info("🔄 CLEARING ALL SESSIONS - Hard reset initiated...")
+            
+            # 1. Stop the bot if running
+            if self.is_running:
+                await self.stop_bot()
+                logger.info("   ✅ Bot stopped")
+            
+            # 2. Stop candle synchronization if active
+            if self.candle_sync_enabled or self.candle_scheduler:
+                await self.disable_candle_synchronization()
+                logger.info("   ✅ Candle sync stopped")
+            
+            # 3. Clear current signals
+            self.current_signals.clear()
+            logger.info("   ✅ Active signals cleared")
+            
+            # 4. Reset performance metrics
+            self.performance_metrics = {}
+            logger.info("   ✅ Performance metrics reset")
+            
+            # 5. Reset auto signal generation flag
+            self.auto_signal_generation = False
+            logger.info("   ✅ Auto signal generation disabled")
+            
+            # 6. Reset all flags
+            self.is_running = False
+            self.candle_sync_enabled = False
+            self.candle_scheduler = None
+            
+            logger.info("✅ ALL SESSIONS CLEARED - Bot fully reset")
+            
+            return {
+                "success": True,
+                "message": "All trading sessions cleared successfully",
+                "bot_running": False,
+                "candle_sync_enabled": False,
+                "auto_signal_generation": False,
+                "active_signals_cleared": True
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Error clearing sessions: {e}")
+            # Force reset even if error occurs
+            self.is_running = False
+            self.auto_signal_generation = False
+            self.candle_sync_enabled = False
+            self.candle_scheduler = None
+            self.current_signals.clear()
+            
+            return {
+                "success": False,
+                "message": f"Sessions cleared with errors: {str(e)}",
+                "bot_running": False,
+                "candle_sync_enabled": False
+            }
+    
+    async def restart_bot(self):
+        """
+        Restart the bot with current configuration
+        Stops everything, clears sessions, then restarts
+        """
+        try:
+            logger.info("🔄 RESTARTING BOT...")
+            
+            # Clear all sessions first
+            clear_result = await self.clear_all_sessions()
+            
+            if not clear_result.get("success"):
+                logger.warning("⚠️ Sessions cleared with errors, continuing with restart...")
+            
+            # Wait a moment for cleanup
+            await asyncio.sleep(1)
+            
+            # Restart with current configuration
+            await self.start_bot(self.config)
+            
+            logger.info("✅ BOT RESTARTED successfully")
+            
+            return {
+                "success": True,
+                "message": "Bot restarted successfully",
+                "bot_running": True,
+                "configuration": self.config.dict()
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Error restarting bot: {e}")
+            return {
+                "success": False,
+                "message": f"Restart failed: {str(e)}"
+            }
+
             logger.info("✅ Trading bot stopped successfully")
             
         except Exception as e:
