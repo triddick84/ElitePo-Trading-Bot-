@@ -159,6 +159,57 @@ async def stop_bot():
         logging.error(f"Error stopping bot: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@api_router.post("/bot/candle-sync/enable")
+async def enable_candle_sync():
+    """
+    Enable candle formation synchronization mode
+    Signals will be generated precisely when new candles form on Pocket Option
+    """
+    try:
+        result = await trading_bot.enable_candle_synchronization()
+        
+        if result.get("success"):
+            return {
+                "status": "success",
+                "message": result.get("message"),
+                "timeframes": result.get("timeframes", []),
+                "assets_count": result.get("assets_count", 0)
+            }
+        else:
+            raise HTTPException(status_code=400, detail=result.get("message"))
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error enabling candle sync: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/bot/candle-sync/disable")
+async def disable_candle_sync():
+    """Disable candle formation synchronization mode"""
+    try:
+        result = await trading_bot.disable_candle_synchronization()
+        
+        return {
+            "status": "success",
+            "message": result.get("message")
+        }
+        
+    except Exception as e:
+        logging.error(f"Error disabling candle sync: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/bot/candle-sync/status")
+async def get_candle_sync_status():
+    """Get current candle synchronization status and next candle times"""
+    try:
+        status = await trading_bot.get_candle_sync_status()
+        return status
+        
+    except Exception as e:
+        logging.error(f"Error getting candle sync status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @api_router.get("/bot/status", response_model=BotStatusResponse)
 async def get_bot_status():
     """Get current bot status and performance"""
