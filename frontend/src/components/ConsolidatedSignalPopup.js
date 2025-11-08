@@ -44,8 +44,8 @@ const ConsolidatedSignalPopup = ({ signals = [], onClose, onExecute }) => {
             timeLeft = diffMs / 1000;
           }
 
-          // Signal expires 60 seconds after entry time passes
-          isExpired = timeLeft < -60;
+          // Signal expires when timer reaches 0 or goes negative
+          isExpired = timeLeft <= 0;
           
           if (!isExpired) {
             allAreExpired = false;
