@@ -99,8 +99,8 @@ class TradingSignal(BaseModel):
     justification: str
     risk_assessment: str
     suggested_stake: float
-    precision_entry_time: Optional[datetime] = None  # Optimal entry timing
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    precision_entry_time: Optional[datetime] = None  # Optimal entry timing in Chicago timezone
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))  # Chicago timezone synchronized
     
     # Quality check fields
     quality_check_passed: bool = True
