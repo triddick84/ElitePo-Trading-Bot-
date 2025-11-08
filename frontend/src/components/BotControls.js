@@ -273,25 +273,47 @@ const BotControls = ({ onStatusUpdate }) => {
             </span>
           </div>
           
-          {botStatus.is_running ? (
+          <div className="flex items-center space-x-2">
+            {botStatus.is_running ? (
+              <Button 
+                onClick={stopBot}
+                disabled={isLoading}
+                className="bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30"
+                data-testid="stop-bot-btn"
+              >
+                {isLoading ? 'Stopping...' : '⏹️ Stop Bot'}
+              </Button>
+            ) : (
+              <Button 
+                onClick={startBot}
+                disabled={isLoading}
+                className="bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30"
+                data-testid="start-bot-btn"
+              >
+                {isLoading ? 'Starting...' : '▶️ Start Bot'}
+              </Button>
+            )}
+            
+            {/* Clear All Sessions Button */}
             <Button 
-              onClick={stopBot}
+              onClick={clearAllSessions}
               disabled={isLoading}
-              className="bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30"
-              data-testid="stop-bot-btn"
+              className="bg-orange-500/20 text-orange-400 border border-orange-500/30 hover:bg-orange-500/30"
+              title="Clear all active sessions and reset bot state"
             >
-              {isLoading ? 'Stopping...' : '⏹️ Stop Bot'}
+              {isLoading ? 'Clearing...' : '🗑️ Clear All'}
             </Button>
-          ) : (
+            
+            {/* Restart Button */}
             <Button 
-              onClick={startBot}
+              onClick={restartBot}
               disabled={isLoading}
-              className="bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30"
-              data-testid="start-bot-btn"
+              className="bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:bg-blue-500/30"
+              title="Restart bot with current configuration"
             >
-              {isLoading ? 'Starting...' : '▶️ Start Bot'}
+              {isLoading ? 'Restarting...' : '🔄 Restart'}
             </Button>
-          )}
+          </div>
         </div>
       </div>
 
