@@ -35,6 +35,8 @@ class TradingBotService:
         self.current_signals = []
         self.performance_metrics = {}
         self.auto_signal_generation = False  # Flag for automated signal generation
+        self.candle_sync_enabled = False  # Flag for candle formation synchronization
+        self.candle_scheduler = None  # Will be set when candle sync is enabled
         
         # Default configuration - will be loaded from database if available
         self.config = TradingConfiguration()
