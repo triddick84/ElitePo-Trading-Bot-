@@ -14,9 +14,11 @@ import math
 import requests
 from textblob import TextBlob
 from pocket_option_5s_elite_strategy import pocket_option_5s_elite_strategy
+from pocket_option_5s_ultra_v2 import pocket_option_5s_ultra_v2
 from pocket_option_15s_strategy import pocket_option_15s_strategy
 from pocket_option_1m_strategy import pocket_option_1m_strategy
 from lightweight_ai_ensemble import lightweight_ai_ensemble
+from live_accuracy_tester import live_accuracy_tester
 
 logger = logging.getLogger(__name__)
 
