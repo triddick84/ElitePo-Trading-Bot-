@@ -150,13 +150,68 @@ async def start_bot(config: BotStartRequest):
 
 @api_router.post("/bot/stop")
 async def stop_bot():
-    """Stop the trading bot"""
+    """Stop the trading bot and all related processes"""
     try:
         await trading_bot.stop_bot()
-        return {"status": "success", "message": "Trading bot stopped"}
+        return {
+            "status": "success", 
+            "message": "Trading bot stopped successfully",
+            "bot_running": False,
+            "candle_sync_stopped": True,
+            "auto_generation_stopped": True
+        }
         
     except Exception as e:
         logging.error(f"Error stopping bot: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/bot/clear-all")
+async def clear_all_sessions():
+    """
+    Clear all active trading sessions and reset bot state
+    This performs a hard reset of all bot components
+    """
+    try:
+        result = await trading_bot.clear_all_sessions()
+        
+        return {
+            "status": "success" if result.get("success") else "warning",
+            "message": result.get("message"),
+            "details": {
+                "bot_running": result.get("bot_running"),
+                "candle_sync_enabled": result.get("candle_sync_enabled"),
+                "auto_signal_generation": result.get("auto_signal_generation"),
+                "active_signals_cleared": result.get("active_signals_cleared", True)
+            }
+        }
+        
+    except Exception as e:
+        logging.error(f"Error clearing sessions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/bot/restart")
+async def restart_bot():
+    """
+    Restart the bot with current configuration
+    Clears all sessions and restarts fresh
+    """
+    try:
+        result = await trading_bot.restart_bot()
+        
+        if result.get("success"):
+            return {
+                "status": "success",
+                "message": result.get("message"),
+                "bot_running": result.get("bot_running"),
+                "configuration_loaded": True
+            }
+        else:
+            raise HTTPException(status_code=500, detail=result.get("message"))
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error restarting bot: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.post("/bot/candle-sync/enable")
