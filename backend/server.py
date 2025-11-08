@@ -736,6 +736,9 @@ async def force_generate_signal(wait_for_candle: bool = True):
     """
     Force generate trading signals for ALL selected assets using maximum analysis depth
     Bypasses all thresholds and uses advanced multi-strategy analysis
+    
+    Args:
+        wait_for_candle: Whether to wait for the next candle formation before generating signals (default: True)
     """
     try:
         # Get user's configuration for selected assets and timeframes
