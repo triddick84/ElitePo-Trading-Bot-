@@ -69,12 +69,13 @@ const ConsolidatedSignalPopup = ({ signals = [], onClose, onExecute }) => {
     return () => clearInterval(intervalId);
   }, [signals]);
 
-  // Auto-close when all signals expire
+  // Auto-close when all signals expire (reach 0)
   useEffect(() => {
     if (allExpired && signals.length > 0) {
       const timer = setTimeout(() => {
+        console.log('⏰ All signal timers reached 0 - auto-closing popup');
         onClose();
-      }, 3000);
+      }, 1000); // Close after 1 second once all reach 0
       return () => clearTimeout(timer);
     }
   }, [allExpired, onClose, signals.length]);
