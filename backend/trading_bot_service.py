@@ -81,6 +81,14 @@ class TradingBotService:
             # Set bot as not running
             self.is_running = False
             
+            logger.info("✅ Trading bot stopped successfully")
+            
+        except Exception as e:
+            logger.error(f"❌ Error stopping bot: {e}")
+            # Ensure bot is stopped even if cleanup fails
+            self.is_running = False
+            self.auto_signal_generation = False
+            self.candle_sync_enabled = False
     
     async def clear_all_sessions(self):
         """
