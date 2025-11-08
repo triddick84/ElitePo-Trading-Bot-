@@ -224,10 +224,23 @@ const ConsolidatedSignalPopup = ({ signals = [], onClose, onExecute }) => {
                   </div>
                 )}
 
-                {/* Technical Analysis */}
+                {/* Technical Analysis Toggle */}
                 {signal.technical_analysis && (
-                  <div className="mb-2 p-2 bg-slate-800/50 rounded-lg border border-slate-600/50">
-                    <div className="text-xs font-semibold text-emerald-400 mb-1">📊 Technical Analysis</div>
+                  <div className="mb-2">
+                    <button
+                      onClick={() => toggleExpanded(signal.id)}
+                      className="w-full flex items-center justify-between p-2 bg-slate-800/50 rounded-lg border border-slate-600/50 hover:bg-slate-700/50 transition-colors"
+                    >
+                      <span className="text-xs font-semibold text-emerald-400">📊 Technical Analysis</span>
+                      {expandedSignals[signal.id] ? (
+                        <ChevronUp className="w-4 h-4 text-slate-400" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4 text-slate-400" />
+                      )}
+                    </button>
+                    
+                    {expandedSignals[signal.id] && (
+                      <div className="mt-1 p-2 bg-slate-800/50 rounded-lg border border-slate-600/50">
                     <div className="space-y-0.5 text-xs text-slate-300">
                       {/* Strategy Used */}
                       {signal.strategy_used && (
