@@ -184,9 +184,22 @@ const ConsolidatedSignalPopup = ({ signals = [], onClose, onExecute }) => {
 
                 {/* Timeframe & Accuracy */}
                 <div className="flex items-center justify-between text-sm text-slate-300 mb-2">
-                  <span>⏱ {signal.timeframe}</span>
-                  <span>🎯 {signal.probability}%</span>
+                  <span>⏱ {signal.timeframe || '1m'}</span>
+                  <span className="font-bold text-emerald-400">
+                    🎯 {typeof signal.probability === 'number' ? signal.probability.toFixed(1) : '0.0'}% Accuracy
+                  </span>
                 </div>
+
+                {/* Confidence Level */}
+                {signal.confidence_level && (
+                  <div className="text-xs text-slate-400 mb-2">
+                    Confidence: <span className={`font-semibold ${
+                      signal.confidence_level === 'HIGH' ? 'text-green-400' :
+                      signal.confidence_level === 'MEDIUM' ? 'text-yellow-400' :
+                      'text-orange-400'
+                    }`}>{signal.confidence_level}</span>
+                  </div>
+                )}
 
                 {/* Countdown Timer */}
                 <div className={`
