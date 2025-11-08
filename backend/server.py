@@ -266,6 +266,75 @@ async def get_candle_sync_status():
         logging.error(f"Error getting candle sync status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# ============================================================================
+# LATENCY & ACCURACY TESTING ENDPOINTS
+# ============================================================================
+
+@api_router.post("/testing/latency/signal-generation")
+async def test_signal_generation_latency(timeframe: str = '5s', iterations: int = 10):
+    """
+    Test signal generation lag time
+    Measures how fast signals can be generated
+    """
+    try:
+        result = await latency_tester.test_signal_generation_lag(timeframe, iterations)
+        return result
+    except Exception as e:
+        logging.error(f"Error in signal generation latency test: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/testing/latency/candle-timing")
+async def test_candle_timing_accuracy(timeframe: str = '5s', samples: int = 5):
+    """
+    Test candle formation timing accuracy
+    Measures how accurately we predict Pocket Option candle times
+    """
+    try:
+        result = await latency_tester.test_candle_timing_accuracy(timeframe, samples)
+        return result
+    except Exception as e:
+        logging.error(f"Error in candle timing accuracy test: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/testing/latency/network")
+async def test_network_latency(iterations: int = 10):
+    """
+    Test network latency
+    Simulates API call round-trip time
+    """
+    try:
+        result = await latency_tester.test_network_latency(iterations)
+        return result
+    except Exception as e:
+        logging.error(f"Error in network latency test: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/testing/latency/end-to-end")
+async def test_end_to_end_timing(timeframe: str = '5s'):
+    """
+    Test complete end-to-end timing
+    Measures total time from signal generation to platform execution
+    """
+    try:
+        result = await latency_tester.test_end_to_end_timing(timeframe)
+        return result
+    except Exception as e:
+        logging.error(f"Error in end-to-end timing test: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/testing/comprehensive")
+async def run_comprehensive_test_suite():
+    """
+    Run comprehensive latency and accuracy test suite
+    Tests all aspects and provides recommendations
+    """
+    try:
+        results = await latency_tester.run_comprehensive_test_suite()
+        return results
+    except Exception as e:
+        logging.error(f"Error in comprehensive test suite: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @api_router.get("/bot/status", response_model=BotStatusResponse)
 async def get_bot_status():
     """Get current bot status and performance"""
