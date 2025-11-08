@@ -93,6 +93,13 @@ const ConsolidatedSignalPopup = ({ signals = [], onClose, onExecute }) => {
     }
   }, [onExecute]);
 
+  const toggleExpanded = useCallback((signalId) => {
+    setExpandedSignals(prev => ({
+      ...prev,
+      [signalId]: !prev[signalId]
+    }));
+  }, []);
+
   // Debug signal data on mount
   useEffect(() => {
     if (signals && signals.length > 0) {
