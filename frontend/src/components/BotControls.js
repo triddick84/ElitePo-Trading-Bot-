@@ -83,10 +83,46 @@ const BotControls = ({ onStatusUpdate }) => {
 
   const fetchAutoSignalStatus = async () => {
     try {
-      const response = await axios.get(`${API}/signals/auto-generate/status`);
+      const response = await axios.get(`${API}/bot/auto-signal-status`);
       setAutoSignalStatus(response.data);
     } catch (error) {
       console.error('Error fetching auto signal status:', error);
+    }
+  };
+
+  const fetchCandleSyncStatus = async () => {
+    try {
+      const response = await axios.get(`${API}/bot/candle-sync/status`);
+      setCandleSyncStatus(response.data);
+    } catch (error) {
+      console.error('Error fetching candle sync status:', error);
+    }
+  };
+
+  const toggleCandleSync = async () => {
+    if (!botStatus.is_running) {
+      toast.error('⚠️ Please start the bot first before enabling candle synchronization');
+      return;
+    }
+
+    setIsCandleSyncLoading(true);
+    try {
+      if (candleSyncStatus.enabled) {
+        // Disable candle sync
+        await axios.post(`${API}/bot/candle-sync/disable`);
+        toast.success('🛑 Candle synchronization disabled');
+      } else {
+        // Enable candle sync
+        const response = await axios.post(`${API}/bot/candle-sync/enable`);
+        toast.success(`✅ Candle sync enabled for ${response.data.timeframes?.join(', ')} timeframes`);
+      }
+      fetchCandleSyncStatus();
+      if (onStatusUpdate) onStatusUpdate();
+    } catch (error) {
+      console.error('Error toggling candle sync:', error);
+      toast.error('❌ Failed to toggle candle synchronization');
+    } finally {
+      setIsCandleSyncLoading(false);
     }
   };
 
