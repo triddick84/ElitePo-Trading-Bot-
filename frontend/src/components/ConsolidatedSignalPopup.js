@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { X, Clock, TrendingUp, TrendingDown } from 'lucide-react';
+import { X, Clock, TrendingUp, TrendingDown, ChevronDown, ChevronUp } from 'lucide-react';
 
 const ConsolidatedSignalPopup = ({ signals = [], onClose, onExecute }) => {
   const [signalTimers, setSignalTimers] = useState({});
   const [allExpired, setAllExpired] = useState(false);
+  const [expandedSignals, setExpandedSignals] = useState({});
 
   // Initialize and update timers for all signals
   useEffect(() => {
