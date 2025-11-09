@@ -1231,33 +1231,46 @@ class ForceSignalGenerator:
             logger.info(f"   🎯 Applying Ultra Precision 90% Enhancement...")
             pre_enhancement_confidence = final_confidence
             
+            # Extract layer scores from strategy details for enhancement
+            layer_scores = {}
+            for strategy_name, signal in strategy_details.items():
+                if isinstance(signal, dict) and 'technical_details' in signal:
+                    tech_details = signal['technical_details']
+                    layer_scores.update({
+                        'ema_pullback': tech_details.get('ema_pullback_score', 0),
+                        'rsi_reversal': tech_details.get('rsi_score', 0),
+                        'volume_confirmation': tech_details.get('volume_signal_score', 0),
+                        'supertrend_alignment': tech_details.get('supertrend_score', 0),
+                        'momentum_strength': tech_details.get('momentum_score', 0)
+                    })
+                    break
+            
             enhancement_candidate = {
                 'confidence': final_confidence,
                 'technical_analysis': {
                     'bullish_score': buy_score,
                     'bearish_score': sell_score,
-                    'layer_scores': {
-                        'ema_pullback': technical_analysis.get('ema_pullback_score', 0),
-                        'rsi_reversal': technical_analysis.get('rsi_score', 0),
-                        'volume_confirmation': technical_analysis.get('volume_signal_score', 0),
-                        'supertrend_alignment': technical_analysis.get('supertrend_score', 0),
-                        'momentum_strength': technical_analysis.get('momentum_score', 0)
-                    },
-                    'volatility': technical_analysis.get('volatility', 1.0)
+                    'layer_scores': layer_scores,
+                    'volatility': 1.0  # Default volatility
                 }
             }
             
             enhanced_signal = ultra_precision_90.enhance_signal(enhancement_candidate)
             
+            # Store enhancement results for later use in technical_analysis
+            ultra_precision_applied = False
+            enhancement_bonus = 0
+            enhancement_layers = {}
+            
             if enhanced_signal:
                 final_confidence = enhanced_signal['confidence']
-                technical_analysis['ultra_precision_90_applied'] = True
-                technical_analysis['enhancement_bonus'] = enhanced_signal.get('enhancement_bonus', 0)
-                technical_analysis['enhancement_layers'] = enhanced_signal.get('technical_analysis', {}).get('enhancement_layers', {})
+                ultra_precision_applied = True
+                enhancement_bonus = enhanced_signal.get('enhancement_bonus', 0)
+                enhancement_layers = enhanced_signal.get('technical_analysis', {}).get('enhancement_layers', {})
                 logger.info(f"   ✅ 90% Enhancement PASSED: {pre_enhancement_confidence:.1f}% → {final_confidence:.1f}%")
             else:
                 logger.info(f"   ⚠️ Signal did not pass 90% enhancement filter - using base confidence")
-                technical_analysis['ultra_precision_90_applied'] = False
+                ultra_precision_applied = False
             
             # Create comprehensive technical analysis summary with safe float conversion
             def safe_float(value):
