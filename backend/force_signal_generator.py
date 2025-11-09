@@ -413,6 +413,14 @@ class ForceSignalGenerator:
                     [timeframe]
                 )
                 
+            elif timeframe in ['30s', '30sec', '30 sec']:
+                # Use NEW 30s SuperTrend + MA Crossover strategy
+                logger.info("   🚀 Applying 30s SuperTrend MA Strategy (ATR=2, Mult=1.1)")
+                result = await pocket_option_30s_supertrend_ma.analyze(
+                    symbol,  # Use symbol directly
+                    force_mode=True  # Enable AI prediction for force generation
+                )
+                
             else:  # 1m, 3m, 5m, 15m, 30m
                 logger.info(f"⚡ Applying Pocket Option 1-MINUTE strategy for {symbol}")
                 result = await loop.run_in_executor(
