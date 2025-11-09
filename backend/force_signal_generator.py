@@ -1294,7 +1294,10 @@ class ForceSignalGenerator:
                 'strategy_details': strategy_details,
                 'forced_generation': True,
                 'override_mode': True,
-                'emergency_boost_applied': final_confidence < 85.0
+                'emergency_boost_applied': final_confidence < 85.0,
+                'ultra_precision_90_applied': ultra_precision_applied,
+                'enhancement_bonus': enhancement_bonus,
+                'enhancement_layers': enhancement_layers
             }
             
             # Create OTC-specific symbol if needed
