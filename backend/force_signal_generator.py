@@ -416,10 +416,20 @@ class ForceSignalGenerator:
             elif timeframe in ['30s', '30sec', '30 sec']:
                 # Use NEW 30s SuperTrend + MA Crossover strategy
                 logger.info("   🚀 Applying 30s SuperTrend MA Strategy (ATR=2, Mult=1.1)")
-                result = await pocket_option_30s_supertrend_ma.analyze(
-                    symbol,  # Use symbol directly
-                    force_mode=True  # Enable AI prediction for force generation
-                )
+                # Get market data for analysis
+                from real_market_data_service import RealMarketDataService
+                market_service = RealMarketDataService()
+                market_data_list = await market_service.get_historical_data(symbol, interval='1m', periods=100)
+                
+                if market_data_list and len(market_data_list) > 50:
+                    result = await pocket_option_30s_supertrend_ma.analyze(
+                        market_data_list,  # Market data
+                        symbol,  # Symbol
+                        force_mode=True  # Enable AI prediction for force generation
+                    )
+                else:
+                    logger.warning(f"⚠️ Insufficient data for 30s strategy ({len(market_data_list) if market_data_list else 0} candles)")
+                    result = None
                 
             else:  # 1m, 3m, 5m, 15m, 30m
                 logger.info(f"⚡ Applying Pocket Option 1-MINUTE strategy for {symbol}")
