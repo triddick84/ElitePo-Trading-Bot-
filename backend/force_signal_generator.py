@@ -1227,6 +1227,38 @@ class ForceSignalGenerator:
             final_confidence = min(final_confidence + confidence_boosters, 99.0)
             logger.info(f"   ✅ Final Confidence after boosters: {final_confidence:.1f}%")
             
+            # === APPLY ULTRA PRECISION 90%+ ENHANCEMENT ===
+            logger.info(f"   🎯 Applying Ultra Precision 90% Enhancement...")
+            pre_enhancement_confidence = final_confidence
+            
+            enhancement_candidate = {
+                'confidence': final_confidence,
+                'technical_analysis': {
+                    'bullish_score': buy_score,
+                    'bearish_score': sell_score,
+                    'layer_scores': {
+                        'ema_pullback': technical_analysis.get('ema_pullback_score', 0),
+                        'rsi_reversal': technical_analysis.get('rsi_score', 0),
+                        'volume_confirmation': technical_analysis.get('volume_signal_score', 0),
+                        'supertrend_alignment': technical_analysis.get('supertrend_score', 0),
+                        'momentum_strength': technical_analysis.get('momentum_score', 0)
+                    },
+                    'volatility': technical_analysis.get('volatility', 1.0)
+                }
+            }
+            
+            enhanced_signal = ultra_precision_90.enhance_signal(enhancement_candidate)
+            
+            if enhanced_signal:
+                final_confidence = enhanced_signal['confidence']
+                technical_analysis['ultra_precision_90_applied'] = True
+                technical_analysis['enhancement_bonus'] = enhanced_signal.get('enhancement_bonus', 0)
+                technical_analysis['enhancement_layers'] = enhanced_signal.get('technical_analysis', {}).get('enhancement_layers', {})
+                logger.info(f"   ✅ 90% Enhancement PASSED: {pre_enhancement_confidence:.1f}% → {final_confidence:.1f}%")
+            else:
+                logger.info(f"   ⚠️ Signal did not pass 90% enhancement filter - using base confidence")
+                technical_analysis['ultra_precision_90_applied'] = False
+            
             # Create comprehensive technical analysis summary with safe float conversion
             def safe_float(value):
                 """Convert to float and handle NaN/infinity values"""
