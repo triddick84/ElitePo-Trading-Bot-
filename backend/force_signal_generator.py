@@ -1280,13 +1280,12 @@ class ForceSignalGenerator:
                                       f"Buy score: {buy_score:.1f}, Sell score: {sell_score:.1f}. "
                                       f"{'OTC boost applied. ' if market_type == 'otc' else ''}"
                                       f"Pocket Option synchronized timing for {user_timeframes[0]} timeframe.",
-                justification=f"🚀 FORCED {market_type.upper()} SIGNAL - Maximum analysis depth applied. "
-                            f"{len(analysis_results)} advanced strategies combined. "
-                            f"Confidence: {final_confidence:.1f}%. "
+                justification=f"🎯 PRECISION {market_type.upper()} SIGNAL - {len(analysis_results)} advanced strategies combined. "
+                            f"Confidence: {final_confidence:.1f}% (Target: 90%+). "
                             f"{'📈 OTC Market - 24/7 availability. ' if market_type == 'otc' else '📊 Regular Market - Exchange hours. '}"
-                            f"⚠️ OVERRIDE MODE - Normal thresholds bypassed for maximum signal generation. "
-                            f"{'🔄 1M INVERSION: Signal inverted (Original: ' + original_direction.value + '). ' if user_timeframes[0] == '1m' else ''}"
-                            f"🕐 ENTRY: {user_timeframes[0]} candle formation in {int(seconds_to_entry)}s (Chicago timezone).",
+                            f"⚡ SPEED OPTIMIZED - Ultra-fast generation with precise entry timing. "
+                            f"🎯 DIRECT ANALYSIS - No inversions, pure technical signals. "
+                            f"🕐 ENTRY: {user_timeframes[0]} candle @ {optimal_entry_time.strftime('%H:%M:%S')} CT (in {int(seconds_to_entry)}s).",
                 risk_assessment=f"Risk Level: {'LOW' if final_confidence >= 90 else 'MEDIUM' if final_confidence >= 80 else 'HIGH'}. "
                               f"Forced generation with {final_confidence:.1f}% confidence. "
                               f"{'OTC market volatility considered. ' if market_type == 'otc' else 'Regular market conditions. '}"
