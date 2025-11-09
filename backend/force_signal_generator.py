@@ -19,6 +19,7 @@ from pocket_option_15s_strategy import pocket_option_15s_strategy
 from pocket_option_1m_strategy import pocket_option_1m_strategy
 from lightweight_ai_ensemble import lightweight_ai_ensemble
 from live_accuracy_tester import live_accuracy_tester
+from ultra_precision_90_enhancer import ultra_precision_90
 
 logger = logging.getLogger(__name__)
 
