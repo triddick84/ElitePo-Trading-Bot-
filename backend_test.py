@@ -8488,6 +8488,13 @@ class BackendTester:
             ("Signal Quality and Required Fields", self.test_signal_quality_and_required_fields),
             ("Database Storage Single Signal", self.test_database_storage_single_signal),
             
+            # ========== AUTO SIGNAL GENERATION FIX TESTING (CRITICAL FOCUS) ==========
+            ("Auto Signal Generation Start/Stop Flow", self.test_auto_signal_generation_start_stop_flow),
+            ("Auto Generation Selected Assets Verification", self.test_auto_generation_selected_assets_verification),
+            ("Auto Generation Configuration Validation", self.test_auto_generation_configuration_validation),
+            ("Auto Generation Error Handling", self.test_auto_generation_error_handling),
+            ("Auto Generation Signal Quality", self.test_auto_generation_signal_quality),
+            
             # ========== CLEAR ALL SESSIONS AND RESTART TESTING ==========
             ("Bot Stop Enhancement", self.test_bot_stop_enhancement),
             ("Clear All Sessions Functionality", self.test_clear_all_sessions_functionality),
