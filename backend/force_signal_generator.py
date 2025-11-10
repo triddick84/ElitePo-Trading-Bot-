@@ -1251,7 +1251,6 @@ class ForceSignalGenerator:
                 logger.info(f"⚖️ Equal scores ({buy_score:.2f} vs {sell_score:.2f}), random choice: {direction_enum}")
             else:
                 direction_enum = SignalDirection.BUY if buy_score > sell_score else SignalDirection.SELL
-            direction = direction_enum  # Keep enum for TradingSignal model
             
             # Calculate signal parameters
             current_price = market_data.price
@@ -1259,6 +1258,18 @@ class ForceSignalGenerator:
             # Use Pocket Option timing synchronization instead of hardcoded values
             if not user_timeframes:
                 user_timeframes = ['5s']  # Default to 5s for ultra-short trading
+            
+            # 🔄 INVERT 1-MINUTE TIMEFRAME SIGNALS (User Requested)
+            # For 1m timeframe ONLY, invert the signal direction
+            if user_timeframes and user_timeframes[0] in ['1m', '1min']:
+                original_direction = direction_enum
+                if direction_enum == SignalDirection.BUY:
+                    direction_enum = SignalDirection.SELL
+                elif direction_enum == SignalDirection.SELL:
+                    direction_enum = SignalDirection.BUY
+                logger.info(f"🔄 1M TIMEFRAME SIGNAL INVERTED: {original_direction} → {direction_enum}")
+            
+            direction = direction_enum  # Keep enum for TradingSignal model
             
             # Get Chicago time for Pocket Option synchronization
             chicago_time = pocket_option_sync.get_chicago_time()
