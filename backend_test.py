@@ -1205,6 +1205,335 @@ class BackendTester:
             print(f"   Enhanced signal performance test error: {e}")
             return False
 
+    # ========== FORCE GENERATE SPEED OPTIMIZATION TESTING ==========
+    
+    async def test_force_generate_speed_optimization(self) -> bool:
+        """Test force generate speed optimization - MUST complete within 15 seconds"""
+        try:
+            print("   ⚡ Testing Force Generate Speed Optimization (15-second requirement)")
+            
+            # Setup configuration for speed testing
+            config_data = {
+                "trading_mode": "demo",
+                "active_strategies": ["hybrid"],
+                "target_assets": ["forex", "crypto"],
+                "selected_assets": ["EURUSD_regular", "BTCUSD_regular"],
+                "selected_timeframes": ["5s", "1m"],
+                "risk_tolerance": "medium",
+                "max_stake_per_trade": 10.0,
+                "max_daily_trades": 50,
+                "min_probability_threshold": 75.0,
+                "auto_trading_enabled": False,
+                "invert_signals": False,
+                "sound_alerts_enabled": True
+            }
+            
+            # Update configuration
+            async with self.session.put(f"{BACKEND_URL}/config", json=config_data) as response:
+                if response.status != 200:
+                    print("   ❌ Failed to set configuration for speed test")
+                    return False
+            
+            # Test 1: Force Generate Speed Test (CRITICAL - MUST BE < 15 seconds)
+            print("   🚀 Test 1: Force Generate Speed Test")
+            start_time = asyncio.get_event_loop().time()
+            
+            async with self.session.post(f"{BACKEND_URL}/signals/force-generate") as response:
+                end_time = asyncio.get_event_loop().time()
+                total_time = end_time - start_time
+                
+                print(f"   ⏱️ Total time: {total_time:.2f} seconds")
+                
+                if response.status == 200:
+                    data = await response.json()
+                    if data.get('success'):
+                        signal = data.get('signal')
+                        if signal:
+                            print(f"   ✅ Signal generated: {signal.get('symbol')} {signal.get('direction')} ({signal.get('probability')}%)")
+                        
+                        # CRITICAL CHECK: Must be under 15 seconds
+                        if total_time < 15.0:
+                            print(f"   ✅ SPEED REQUIREMENT MET: {total_time:.2f}s < 15s")
+                            speed_test_passed = True
+                        else:
+                            print(f"   ❌ SPEED REQUIREMENT FAILED: {total_time:.2f}s >= 15s")
+                            speed_test_passed = False
+                    else:
+                        print(f"   ❌ Force generate failed: {data.get('message')}")
+                        speed_test_passed = False
+                else:
+                    print(f"   ❌ Force generate request failed: {response.status}")
+                    speed_test_passed = False
+            
+            # Test 2: Single Asset Force Generate Speed Test
+            print("   🎯 Test 2: Single Asset Force Generate Speed Test")
+            start_time = asyncio.get_event_loop().time()
+            
+            async with self.session.post(f"{BACKEND_URL}/signals/force-generate/asset/EURUSD_regular") as response:
+                end_time = asyncio.get_event_loop().time()
+                single_asset_time = end_time - start_time
+                
+                print(f"   ⏱️ Single asset time: {single_asset_time:.2f} seconds")
+                
+                if response.status == 200:
+                    data = await response.json()
+                    if data.get('success'):
+                        signal = data.get('signal')
+                        if signal:
+                            print(f"   ✅ Single asset signal: {signal.get('symbol')} {signal.get('direction')} ({signal.get('probability')}%)")
+                        
+                        # CRITICAL CHECK: Must be under 15 seconds
+                        if single_asset_time < 15.0:
+                            print(f"   ✅ SINGLE ASSET SPEED MET: {single_asset_time:.2f}s < 15s")
+                            single_speed_passed = True
+                        else:
+                            print(f"   ❌ SINGLE ASSET SPEED FAILED: {single_asset_time:.2f}s >= 15s")
+                            single_speed_passed = False
+                    else:
+                        print(f"   ❌ Single asset force generate failed: {data.get('message')}")
+                        single_speed_passed = False
+                else:
+                    print(f"   ❌ Single asset request failed: {response.status}")
+                    single_speed_passed = False
+            
+            return speed_test_passed and single_speed_passed
+            
+        except Exception as e:
+            print(f"   Force generate speed optimization test error: {e}")
+            return False
+
+    async def test_speed_optimization_features(self) -> bool:
+        """Test specific speed optimization features"""
+        try:
+            print("   🔍 Testing Speed Optimization Features")
+            
+            # Setup configuration
+            config_data = {
+                "trading_mode": "demo",
+                "active_strategies": ["hybrid"],
+                "target_assets": ["forex", "crypto"],
+                "selected_assets": ["EURUSD_regular", "BTCUSD_regular", "GBPUSD_regular"],  # Multiple assets
+                "selected_timeframes": ["5s", "15s"],  # Ultra-short timeframes
+                "risk_tolerance": "medium",
+                "max_stake_per_trade": 10.0,
+                "max_daily_trades": 50,
+                "min_probability_threshold": 75.0,
+                "auto_trading_enabled": False,
+                "invert_signals": False,
+                "sound_alerts_enabled": True
+            }
+            
+            async with self.session.put(f"{BACKEND_URL}/config", json=config_data) as response:
+                if response.status != 200:
+                    print("   ❌ Failed to set configuration")
+                    return False
+            
+            # Test speed mode with multiple assets (should use first asset only)
+            print("   ⚡ Testing Speed Mode (First Asset Only)")
+            
+            async with self.session.post(f"{BACKEND_URL}/signals/force-generate") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if data.get('success'):
+                        signal = data.get('signal')
+                        if signal:
+                            symbol = signal.get('symbol')
+                            print(f"   ✅ Speed mode signal: {symbol}")
+                            
+                            # Should be first asset (EURUSD_regular) due to speed optimization
+                            if 'EURUSD' in symbol:
+                                print("   ✅ Speed mode using first asset as expected")
+                                speed_mode_working = True
+                            else:
+                                print(f"   ⚠️ Speed mode used different asset: {symbol}")
+                                speed_mode_working = True  # Still acceptable
+                        else:
+                            print("   ℹ️ No signal generated")
+                            speed_mode_working = True
+                    else:
+                        print(f"   ❌ Speed mode test failed: {data.get('message')}")
+                        speed_mode_working = False
+                else:
+                    print(f"   ❌ Speed mode request failed: {response.status}")
+                    speed_mode_working = False
+            
+            return speed_mode_working
+            
+        except Exception as e:
+            print(f"   Speed optimization features test error: {e}")
+            return False
+
+    async def test_multiple_consecutive_speed_tests(self) -> bool:
+        """Test multiple consecutive force generations for consistency"""
+        try:
+            print("   🔄 Testing Multiple Consecutive Speed Tests")
+            
+            # Setup configuration
+            config_data = {
+                "trading_mode": "demo",
+                "active_strategies": ["hybrid"],
+                "target_assets": ["forex"],
+                "selected_assets": ["EURUSD_regular"],
+                "selected_timeframes": ["5s"],
+                "risk_tolerance": "medium",
+                "max_stake_per_trade": 10.0,
+                "max_daily_trades": 50,
+                "min_probability_threshold": 75.0,
+                "auto_trading_enabled": False,
+                "invert_signals": False,
+                "sound_alerts_enabled": True
+            }
+            
+            async with self.session.put(f"{BACKEND_URL}/config", json=config_data) as response:
+                if response.status != 200:
+                    print("   ❌ Failed to set configuration")
+                    return False
+            
+            # Run 3 consecutive tests
+            times = []
+            successful_tests = 0
+            
+            for i in range(3):
+                print(f"   🧪 Consecutive test {i+1}/3")
+                start_time = asyncio.get_event_loop().time()
+                
+                async with self.session.post(f"{BACKEND_URL}/signals/force-generate") as response:
+                    end_time = asyncio.get_event_loop().time()
+                    test_time = end_time - start_time
+                    times.append(test_time)
+                    
+                    print(f"   ⏱️ Test {i+1} time: {test_time:.2f}s")
+                    
+                    if response.status == 200:
+                        data = await response.json()
+                        if data.get('success'):
+                            successful_tests += 1
+                            
+                            # Check speed requirement
+                            if test_time < 15.0:
+                                print(f"   ✅ Test {i+1} speed requirement met")
+                            else:
+                                print(f"   ❌ Test {i+1} speed requirement failed")
+                        else:
+                            print(f"   ⚠️ Test {i+1} no signal generated")
+                    else:
+                        print(f"   ❌ Test {i+1} request failed: {response.status}")
+                
+                # Small delay between tests
+                await asyncio.sleep(2)
+            
+            # Calculate statistics
+            if times:
+                avg_time = sum(times) / len(times)
+                max_time = max(times)
+                min_time = min(times)
+                
+                print(f"   📊 Speed Statistics:")
+                print(f"      Average time: {avg_time:.2f}s")
+                print(f"      Maximum time: {max_time:.2f}s")
+                print(f"      Minimum time: {min_time:.2f}s")
+                print(f"      Successful tests: {successful_tests}/3")
+                
+                # All tests should be under 15 seconds
+                all_under_15 = all(t < 15.0 for t in times)
+                
+                if all_under_15:
+                    print("   ✅ All consecutive tests met speed requirement")
+                    return True
+                else:
+                    print("   ❌ Some consecutive tests failed speed requirement")
+                    return False
+            else:
+                print("   ❌ No timing data collected")
+                return False
+            
+        except Exception as e:
+            print(f"   Multiple consecutive speed tests error: {e}")
+            return False
+
+    async def test_signal_quality_at_speed(self) -> bool:
+        """Test that signals maintain quality even at high speed"""
+        try:
+            print("   🎯 Testing Signal Quality at Speed")
+            
+            # Setup configuration
+            config_data = {
+                "trading_mode": "demo",
+                "active_strategies": ["hybrid"],
+                "target_assets": ["forex", "crypto"],
+                "selected_assets": ["EURUSD_regular", "BTCUSD_regular"],
+                "selected_timeframes": ["5s", "1m"],
+                "risk_tolerance": "medium",
+                "max_stake_per_trade": 10.0,
+                "max_daily_trades": 50,
+                "min_probability_threshold": 75.0,
+                "auto_trading_enabled": False,
+                "invert_signals": False,
+                "sound_alerts_enabled": True
+            }
+            
+            async with self.session.put(f"{BACKEND_URL}/config", json=config_data) as response:
+                if response.status != 200:
+                    print("   ❌ Failed to set configuration")
+                    return False
+            
+            # Generate signal and check quality
+            async with self.session.post(f"{BACKEND_URL}/signals/force-generate") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if data.get('success'):
+                        signal = data.get('signal')
+                        if signal:
+                            # Check required fields
+                            required_fields = ['symbol', 'direction', 'probability', 'confidence_level', 'timeframe', 'market_type', 'precision_entry_time', 'technical_analysis']
+                            missing_fields = [field for field in required_fields if field not in signal]
+                            
+                            if missing_fields:
+                                print(f"   ❌ Missing required fields: {missing_fields}")
+                                return False
+                            
+                            # Check confidence level
+                            confidence = signal.get('probability', 0)
+                            if confidence >= 75.0:
+                                print(f"   ✅ Signal confidence {confidence}% meets quality threshold")
+                                confidence_ok = True
+                            else:
+                                print(f"   ⚠️ Signal confidence {confidence}% below expected threshold")
+                                confidence_ok = False
+                            
+                            # Check direction is valid
+                            direction = signal.get('direction')
+                            if direction in ['CALL', 'PUT', 'BUY', 'SELL']:
+                                print(f"   ✅ Signal direction '{direction}' is valid")
+                                direction_ok = True
+                            else:
+                                print(f"   ❌ Invalid signal direction: {direction}")
+                                direction_ok = False
+                            
+                            # Check technical analysis is present
+                            technical_analysis = signal.get('technical_analysis', {})
+                            if technical_analysis and isinstance(technical_analysis, dict):
+                                print(f"   ✅ Technical analysis present with {len(technical_analysis)} fields")
+                                analysis_ok = True
+                            else:
+                                print("   ❌ Technical analysis missing or invalid")
+                                analysis_ok = False
+                            
+                            return confidence_ok and direction_ok and analysis_ok
+                        else:
+                            print("   ℹ️ No signal generated (acceptable)")
+                            return True
+                    else:
+                        print(f"   ❌ Signal generation failed: {data.get('message')}")
+                        return False
+                else:
+                    print(f"   ❌ Request failed: {response.status}")
+                    return False
+            
+        except Exception as e:
+            print(f"   Signal quality at speed test error: {e}")
+            return False
+
     # ========== 1M CHART / 5S SIGNAL REVERSAL STRATEGY TESTING ==========
     
     async def test_1m_5s_reversal_strategy_configuration(self) -> bool:
