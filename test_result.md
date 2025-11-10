@@ -592,6 +592,19 @@
   - task: "Ultra-Short Timeframe Signal Generation"
     implemented: true
     working: true
+
+  - task: "1M Chart / 5S Signal Reversal Strategy"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/pocket_option_1m_5s_reversal_strategy.py, /app/backend/force_signal_generator.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+        - agent: "main"
+        - comment: "✅ IMPLEMENTED: New strategy for 1-minute chart timeframe generating 5-second signals. STRATEGY RULES: 1) Green candle closes in middle (30-70% range) → BUY signal (continuation), 2) Red candle closes in middle (30-70% range) → SELL signal (continuation), 3) Green candle makes new high high at close (>85%) → SELL signal (reversal), 4) Red candle makes new low low at close (<15%) → BUY signal (reversal). FEATURES: Analyzes 1-minute candles from yfinance, detects candle color and close position, identifies new highs/lows compared to last 20 candles, confidence scoring 75-95% based on pattern strength, body size analysis for confidence adjustment, detailed technical analysis output. INTEGRATION: Imported into force_signal_generator.py, activates for 1m timeframe + japanese_candles chart type, generates 5s signals from 1m chart analysis, proper signal format with all required fields. Files created: pocket_option_1m_5s_reversal_strategy.py (new strategy), updated force_signal_generator.py (integration). Backend restarted successfully. READY FOR COMPREHENSIVE TESTING."
+
     file: "/app/backend/force_signal_generator.py, /app/backend/pocket_option_timing_sync.py"
     stuck_count: 0
     priority: "high"
