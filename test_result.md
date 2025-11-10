@@ -581,10 +581,12 @@
 
 ## test_plan:
   current_focus:
+    - "1M Timeframe SELL Bias Fix"
     - "Flexible Trading System Implementation"
     - "Real Market Data Integration for Strategies"
     - "End-to-End Strategy Performance Optimization"
-  stuck_tasks: []
+  stuck_tasks:
+    - "1M Timeframe SELL Bias Fix"
   test_all: false
   test_priority: "high_first"
 
