@@ -1244,7 +1244,13 @@ class ForceSignalGenerator:
                 # Emergency boost for forced signals
                 final_confidence = max(75.0, final_confidence * 1.2 if not (math.isnan(final_confidence) or math.isinf(final_confidence)) else 75.0)
             
-            direction_enum = SignalDirection.BUY if buy_score > sell_score else SignalDirection.SELL
+            # FIX: Remove SELL bias - use random choice when scores are equal
+            if abs(buy_score - sell_score) < 0.01:  # Essentially equal
+                import random
+                direction_enum = SignalDirection.BUY if random.random() > 0.5 else SignalDirection.SELL
+                logger.info(f"⚖️ Equal scores ({buy_score:.2f} vs {sell_score:.2f}), random choice: {direction_enum}")
+            else:
+                direction_enum = SignalDirection.BUY if buy_score > sell_score else SignalDirection.SELL
             direction = direction_enum  # Keep enum for TradingSignal model
             
             # Calculate signal parameters
