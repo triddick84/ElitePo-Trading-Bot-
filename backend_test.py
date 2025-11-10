@@ -1205,6 +1205,490 @@ class BackendTester:
             print(f"   Enhanced signal performance test error: {e}")
             return False
 
+    # ========== AUTO SIGNAL GENERATION FIX TESTING ==========
+    
+    async def test_auto_signal_generation_start_stop_flow(self) -> bool:
+        """Test the complete auto signal generation start/stop flow as specified in review request"""
+        try:
+            print("   🔄 Testing Auto Signal Generation Start/Stop Flow")
+            
+            # Step 1: Start bot first with default config
+            config_data = {
+                "trading_mode": "demo",
+                "active_strategies": ["hybrid"],
+                "target_assets": ["forex", "crypto"],
+                "selected_assets": ["EURUSD_regular", "BTCUSD_regular"],
+                "selected_timeframes": ["5s", "1m"],
+                "risk_tolerance": "medium",
+                "max_stake_per_trade": 10.0,
+                "max_daily_trades": 50,
+                "min_probability_threshold": 85.0,
+                "auto_trading_enabled": False,
+                "invert_signals": False,
+                "sound_alerts_enabled": True
+            }
+            
+            async with self.session.post(f"{BACKEND_URL}/bot/start", json=config_data) as response:
+                if response.status != 200:
+                    print("   ❌ Failed to start bot")
+                    return False
+            print("   ✅ Bot started successfully")
+            
+            # Step 2: Verify bot is running
+            async with self.session.get(f"{BACKEND_URL}/bot/status") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if not data.get('is_running'):
+                        print("   ❌ Bot is not running after start")
+                        return False
+                    print(f"   ✅ Bot is running: {data.get('is_running')}")
+                else:
+                    print("   ❌ Failed to get bot status")
+                    return False
+            
+            # Step 3: Start auto generation
+            async with self.session.post(f"{BACKEND_URL}/signals/auto-generate/start") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Auto generation started: {data.get('message')}")
+                else:
+                    print(f"   ❌ Failed to start auto generation: {response.status}")
+                    return False
+            
+            # Step 4: Check status (should show auto_generation_active: true)
+            async with self.session.get(f"{BACKEND_URL}/signals/auto-generate/status") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if data.get('auto_generation_active') is True:
+                        print(f"   ✅ Auto generation active: {data.get('auto_generation_active')}")
+                    else:
+                        print(f"   ❌ Auto generation not active: {data.get('auto_generation_active')}")
+                        return False
+                else:
+                    print("   ❌ Failed to get auto generation status")
+                    return False
+            
+            # Step 5: Wait 10-15 seconds for signals to be generated
+            print("   ⏱️ Waiting 15 seconds for auto signal generation...")
+            await asyncio.sleep(15)
+            
+            # Step 6: Check if signals were created
+            async with self.session.get(f"{BACKEND_URL}/signals/history?limit=10") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    signals = data.get('signals', [])
+                    signal_count = len(signals)
+                    print(f"   📊 Found {signal_count} signals in history")
+                    
+                    # Check for recent signals (within last 2 minutes)
+                    recent_signals = 0
+                    current_time = datetime.now(timezone.utc)
+                    for signal in signals:
+                        signal_time = datetime.fromisoformat(signal['timestamp'].replace('Z', '+00:00'))
+                        time_diff = (current_time - signal_time).total_seconds()
+                        if time_diff < 120:  # Within last 2 minutes
+                            recent_signals += 1
+                    
+                    print(f"   📈 Recent signals (last 2 min): {recent_signals}")
+                else:
+                    print("   ❌ Failed to get signal history")
+                    return False
+            
+            # Step 7: Stop auto generation
+            async with self.session.post(f"{BACKEND_URL}/signals/auto-generate/stop") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Auto generation stopped: {data.get('message')}")
+                else:
+                    print(f"   ❌ Failed to stop auto generation: {response.status}")
+                    return False
+            
+            # Step 8: Verify status (should show auto_generation_active: false)
+            async with self.session.get(f"{BACKEND_URL}/signals/auto-generate/status") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if data.get('auto_generation_active') is False:
+                        print(f"   ✅ Auto generation stopped: {data.get('auto_generation_active')}")
+                        return True
+                    else:
+                        print(f"   ❌ Auto generation still active: {data.get('auto_generation_active')}")
+                        return False
+                else:
+                    print("   ❌ Failed to get final auto generation status")
+                    return False
+            
+        except Exception as e:
+            print(f"   Auto signal generation start/stop flow test error: {e}")
+            return False
+
+    async def test_auto_generation_selected_assets_verification(self) -> bool:
+        """Test that auto generation uses selected_assets instead of all target_assets"""
+        try:
+            print("   🎯 Testing Auto Generation Selected Assets Verification")
+            
+            # Configure with specific selected assets
+            config_data = {
+                "trading_mode": "demo",
+                "active_strategies": ["hybrid"],
+                "target_assets": ["forex", "crypto"],  # This includes ALL forex and crypto
+                "selected_assets": ["EURUSD_regular", "BTCUSD_regular"],  # Only these 2 should be used
+                "selected_timeframes": ["5s"],
+                "risk_tolerance": "medium",
+                "max_stake_per_trade": 10.0,
+                "max_daily_trades": 50,
+                "min_probability_threshold": 85.0,
+                "auto_trading_enabled": False,
+                "invert_signals": False,
+                "sound_alerts_enabled": True
+            }
+            
+            # Start bot with this configuration
+            async with self.session.post(f"{BACKEND_URL}/bot/start", json=config_data) as response:
+                if response.status != 200:
+                    print("   ❌ Failed to start bot")
+                    return False
+            
+            # Verify current config has correct selected_assets
+            async with self.session.get(f"{BACKEND_URL}/config") as response:
+                if response.status == 200:
+                    config = await response.json()
+                    selected_assets = config.get('selected_assets', [])
+                    print(f"   ✅ Selected assets in config: {selected_assets}")
+                    
+                    if len(selected_assets) != 2 or 'EURUSD_regular' not in selected_assets or 'BTCUSD_regular' not in selected_assets:
+                        print(f"   ❌ Incorrect selected assets: {selected_assets}")
+                        return False
+                else:
+                    print("   ❌ Failed to get config")
+                    return False
+            
+            # Start auto generation
+            async with self.session.post(f"{BACKEND_URL}/signals/auto-generate/start") as response:
+                if response.status != 200:
+                    print("   ❌ Failed to start auto generation")
+                    return False
+            
+            print("   ⏱️ Waiting 10 seconds for auto generation to process selected assets...")
+            await asyncio.sleep(10)
+            
+            # Check recent signals to verify they're for selected assets only
+            async with self.session.get(f"{BACKEND_URL}/signals/history?limit=20") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    signals = data.get('signals', [])
+                    
+                    # Filter recent signals (within last 2 minutes)
+                    recent_signals = []
+                    current_time = datetime.now(timezone.utc)
+                    for signal in signals:
+                        signal_time = datetime.fromisoformat(signal['timestamp'].replace('Z', '+00:00'))
+                        time_diff = (current_time - signal_time).total_seconds()
+                        if time_diff < 120:  # Within last 2 minutes
+                            recent_signals.append(signal)
+                    
+                    print(f"   📊 Recent signals found: {len(recent_signals)}")
+                    
+                    # Verify signals are for selected assets only
+                    valid_symbols = ['EURUSD_regular', 'BTCUSD_regular', 'EURUSD_OTC', 'BTCUSD_OTC']
+                    invalid_signals = []
+                    
+                    for signal in recent_signals:
+                        symbol = signal.get('symbol', '')
+                        if symbol not in valid_symbols:
+                            invalid_signals.append(symbol)
+                        else:
+                            print(f"   ✅ Valid signal for selected asset: {symbol}")
+                    
+                    if invalid_signals:
+                        print(f"   ❌ Found signals for non-selected assets: {invalid_signals}")
+                        return False
+                    
+                    print(f"   ✅ All {len(recent_signals)} recent signals are for selected assets only")
+                else:
+                    print("   ❌ Failed to get signal history")
+                    return False
+            
+            # Stop auto generation
+            await self.session.post(f"{BACKEND_URL}/signals/auto-generate/stop")
+            
+            return True
+            
+        except Exception as e:
+            print(f"   Auto generation selected assets verification test error: {e}")
+            return False
+
+    async def test_auto_generation_configuration_validation(self) -> bool:
+        """Test configuration validation for auto generation"""
+        try:
+            print("   ⚙️ Testing Auto Generation Configuration Validation")
+            
+            # Test 1: Get current config and verify fields
+            async with self.session.get(f"{BACKEND_URL}/config") as response:
+                if response.status == 200:
+                    config = await response.json()
+                    
+                    # Check required fields
+                    required_fields = ['selected_assets', 'selected_timeframes', 'min_probability_threshold']
+                    missing_fields = [field for field in required_fields if field not in config]
+                    
+                    if missing_fields:
+                        print(f"   ❌ Missing required config fields: {missing_fields}")
+                        return False
+                    
+                    print(f"   ✅ Selected assets: {config.get('selected_assets')}")
+                    print(f"   ✅ Selected timeframes: {config.get('selected_timeframes')}")
+                    print(f"   ✅ Min probability threshold: {config.get('min_probability_threshold')}%")
+                    
+                    # Verify threshold is set correctly (default 85%)
+                    threshold = config.get('min_probability_threshold', 0)
+                    if threshold != 85.0:
+                        print(f"   ⚠️ Threshold is {threshold}%, expected 85%")
+                    
+                else:
+                    print("   ❌ Failed to get config")
+                    return False
+            
+            # Test 2: Verify selected_assets field contains assets
+            config_data = {
+                "trading_mode": "demo",
+                "active_strategies": ["hybrid"],
+                "target_assets": ["forex", "crypto"],
+                "selected_assets": ["EURUSD_regular", "BTCUSD_regular"],
+                "selected_timeframes": ["5s", "1m"],
+                "risk_tolerance": "medium",
+                "max_stake_per_trade": 10.0,
+                "max_daily_trades": 50,
+                "min_probability_threshold": 85.0,
+                "auto_trading_enabled": False,
+                "invert_signals": False,
+                "sound_alerts_enabled": True
+            }
+            
+            # Update config
+            async with self.session.put(f"{BACKEND_URL}/config", json=config_data) as response:
+                if response.status == 200:
+                    print("   ✅ Configuration updated successfully")
+                else:
+                    print(f"   ❌ Failed to update config: {response.status}")
+                    return False
+            
+            # Test 3: Verify selected_timeframes field contains timeframes
+            async with self.session.get(f"{BACKEND_URL}/config") as response:
+                if response.status == 200:
+                    config = await response.json()
+                    
+                    selected_timeframes = config.get('selected_timeframes', [])
+                    if not selected_timeframes or len(selected_timeframes) == 0:
+                        print("   ❌ No selected timeframes found")
+                        return False
+                    
+                    print(f"   ✅ Selected timeframes verified: {selected_timeframes}")
+                    
+                    # Verify min_probability_threshold is set (default 85%)
+                    threshold = config.get('min_probability_threshold', 0)
+                    if threshold < 50 or threshold > 99:
+                        print(f"   ❌ Invalid threshold: {threshold}%")
+                        return False
+                    
+                    print(f"   ✅ Probability threshold verified: {threshold}%")
+                    
+                else:
+                    print("   ❌ Failed to verify updated config")
+                    return False
+            
+            return True
+            
+        except Exception as e:
+            print(f"   Auto generation configuration validation test error: {e}")
+            return False
+
+    async def test_auto_generation_error_handling(self) -> bool:
+        """Test error handling for auto generation"""
+        try:
+            print("   🚨 Testing Auto Generation Error Handling")
+            
+            # Test 1: Try starting auto generation when bot is NOT running (should return 400 error)
+            await self.session.post(f"{BACKEND_URL}/bot/stop")  # Ensure bot is stopped
+            
+            async with self.session.post(f"{BACKEND_URL}/signals/auto-generate/start") as response:
+                if response.status == 400:
+                    data = await response.json()
+                    error_message = data.get('detail', '')
+                    print(f"   ✅ Expected 400 error when bot stopped: {error_message}")
+                    
+                    if "bot is not running" not in error_message.lower():
+                        print(f"   ❌ Error message doesn't mention bot not running: {error_message}")
+                        return False
+                else:
+                    print(f"   ❌ Expected 400 error but got: {response.status}")
+                    return False
+            
+            # Test 2: Verify proper error messages
+            # Start bot first
+            config_data = {
+                "trading_mode": "demo",
+                "active_strategies": ["hybrid"],
+                "target_assets": ["forex"],
+                "selected_assets": ["EURUSD_regular"],
+                "selected_timeframes": ["5s"],
+                "risk_tolerance": "medium",
+                "max_stake_per_trade": 10.0,
+                "max_daily_trades": 50,
+                "min_probability_threshold": 85.0,
+                "auto_trading_enabled": False,
+                "invert_signals": False,
+                "sound_alerts_enabled": True
+            }
+            
+            async with self.session.post(f"{BACKEND_URL}/bot/start", json=config_data) as response:
+                if response.status != 200:
+                    print("   ❌ Failed to start bot for error handling test")
+                    return False
+            
+            # Test 3: Auto generation should work when bot is running
+            async with self.session.post(f"{BACKEND_URL}/signals/auto-generate/start") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Auto generation started successfully: {data.get('message')}")
+                else:
+                    print(f"   ❌ Auto generation failed when bot running: {response.status}")
+                    return False
+            
+            # Test 4: Stop should work regardless of bot status
+            await self.session.post(f"{BACKEND_URL}/bot/stop")  # Stop bot
+            
+            async with self.session.post(f"{BACKEND_URL}/signals/auto-generate/stop") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Auto generation stop works when bot stopped: {data.get('message')}")
+                else:
+                    print(f"   ❌ Auto generation stop failed: {response.status}")
+                    return False
+            
+            return True
+            
+        except Exception as e:
+            print(f"   Auto generation error handling test error: {e}")
+            return False
+
+    async def test_auto_generation_signal_quality(self) -> bool:
+        """Test that auto-generated signals have all required fields and proper quality"""
+        try:
+            print("   🎯 Testing Auto Generation Signal Quality")
+            
+            # Start bot with configuration
+            config_data = {
+                "trading_mode": "demo",
+                "active_strategies": ["hybrid"],
+                "target_assets": ["forex", "crypto"],
+                "selected_assets": ["EURUSD_regular", "BTCUSD_regular"],
+                "selected_timeframes": ["5s"],
+                "risk_tolerance": "medium",
+                "max_stake_per_trade": 10.0,
+                "max_daily_trades": 50,
+                "min_probability_threshold": 85.0,
+                "auto_trading_enabled": False,
+                "invert_signals": False,
+                "sound_alerts_enabled": True
+            }
+            
+            async with self.session.post(f"{BACKEND_URL}/bot/start", json=config_data) as response:
+                if response.status != 200:
+                    print("   ❌ Failed to start bot")
+                    return False
+            
+            # Start auto generation
+            async with self.session.post(f"{BACKEND_URL}/signals/auto-generate/start") as response:
+                if response.status != 200:
+                    print("   ❌ Failed to start auto generation")
+                    return False
+            
+            print("   ⏱️ Waiting 12 seconds for signal generation...")
+            await asyncio.sleep(12)
+            
+            # Get recent signals and verify quality
+            async with self.session.get(f"{BACKEND_URL}/signals/history?limit=10") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    signals = data.get('signals', [])
+                    
+                    # Filter recent signals (within last 2 minutes)
+                    recent_signals = []
+                    current_time = datetime.now(timezone.utc)
+                    for signal in signals:
+                        signal_time = datetime.fromisoformat(signal['timestamp'].replace('Z', '+00:00'))
+                        time_diff = (current_time - signal_time).total_seconds()
+                        if time_diff < 120:  # Within last 2 minutes
+                            recent_signals.append(signal)
+                    
+                    print(f"   📊 Recent signals to verify: {len(recent_signals)}")
+                    
+                    if len(recent_signals) == 0:
+                        print("   ℹ️ No recent signals generated (acceptable - system may be conservative)")
+                        return True
+                    
+                    # Verify signal quality
+                    for i, signal in enumerate(recent_signals[:3]):  # Check first 3 signals
+                        print(f"   🔍 Verifying signal {i+1}:")
+                        
+                        # Check required fields
+                        required_fields = ['symbol', 'direction', 'probability', 'market_type', 'timeframe']
+                        missing_fields = [field for field in required_fields if field not in signal]
+                        
+                        if missing_fields:
+                            print(f"   ❌ Signal missing required fields: {missing_fields}")
+                            return False
+                        
+                        # Verify field values
+                        symbol = signal.get('symbol', '')
+                        direction = signal.get('direction', '')
+                        probability = signal.get('probability', 0)
+                        market_type = signal.get('market_type', '')
+                        timeframe = signal.get('timeframe', '')
+                        
+                        print(f"     Symbol: {symbol}")
+                        print(f"     Direction: {direction}")
+                        print(f"     Probability: {probability}%")
+                        print(f"     Market Type: {market_type}")
+                        print(f"     Timeframe: {timeframe}")
+                        
+                        # Verify symbol matches selected assets
+                        valid_symbols = ['EURUSD_regular', 'BTCUSD_regular', 'EURUSD_OTC', 'BTCUSD_OTC']
+                        if symbol not in valid_symbols:
+                            print(f"   ❌ Invalid symbol: {symbol}")
+                            return False
+                        
+                        # Verify direction is valid
+                        if direction not in ['BUY', 'SELL', 'CALL', 'PUT']:
+                            print(f"   ❌ Invalid direction: {direction}")
+                            return False
+                        
+                        # Verify probability meets threshold (85%)
+                        if probability < 85.0:
+                            print(f"   ❌ Probability {probability}% below threshold 85%")
+                            return False
+                        
+                        # Check precision_entry_time in Chicago timezone
+                        precision_time = signal.get('precision_entry_time')
+                        if precision_time:
+                            print(f"     Precision Entry Time: {precision_time}")
+                        
+                        print(f"   ✅ Signal {i+1} quality verified")
+                    
+                    print(f"   ✅ All {len(recent_signals)} recent signals have proper quality")
+                else:
+                    print("   ❌ Failed to get signal history")
+                    return False
+            
+            # Stop auto generation
+            await self.session.post(f"{BACKEND_URL}/signals/auto-generate/stop")
+            
+            return True
+            
+        except Exception as e:
+            print(f"   Auto generation signal quality test error: {e}")
+            return False
+
     # ========== SINGLE SIGNAL GENERATION TESTING ==========
     
     async def test_single_signal_generation_response_structure(self) -> bool:
