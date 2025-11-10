@@ -152,17 +152,29 @@ class ForceSignalGenerator:
                     logger.info(f"🎯 Pocket Option {primary_timeframe} strategy activated for {symbol} with {chart_type}")
                     
                     # Only add supporting strategies for longer timeframes
+                    # SPEED OPTIMIZATION: Run supporting strategies in parallel with timeout
+                    supporting_tasks = []
+                    
                     # 1-minute scalping analysis (15% weight - supporting analysis)
                     if data_1m and len(data_1m) > 100:
-                        scalping_signal = await self._ultra_precision_scalping_analysis(data_1m, symbol)
-                        if scalping_signal:
-                            analysis_results.append(('scalping_1m', scalping_signal, 0.15))
+                        supporting_tasks.append(('scalping', self._ultra_precision_scalping_analysis(data_1m, symbol), 0.15))
                     
                     # 5-minute momentum analysis (15% weight)
                     if data_5m and len(data_5m) > 50:
-                        momentum_signal = await self._advanced_momentum_analysis(data_5m, symbol)
-                        if momentum_signal:
-                            analysis_results.append(('momentum_5m', momentum_signal, 0.15))
+                        supporting_tasks.append(('momentum', self._advanced_momentum_analysis(data_5m, symbol), 0.15))
+                    
+                    # Execute supporting strategies in parallel with 3-second timeout
+                    if supporting_tasks:
+                        try:
+                            supporting_results = await asyncio.wait_for(
+                                asyncio.gather(*[task[1] for task in supporting_tasks], return_exceptions=True),
+                                timeout=3.0
+                            )
+                            for i, result in enumerate(supporting_results):
+                                if result and not isinstance(result, Exception):
+                                    analysis_results.append((supporting_tasks[i][0], result, supporting_tasks[i][2]))
+                        except asyncio.TimeoutError:
+                            logger.warning(f"⚠️ Supporting strategies timeout, skipping for speed")
             
             # Generate SINGLE best signal based on market type and accuracy
             # PRIORITY 1: Ultra-short timeframes ALWAYS use OTC (24/7 availability)
