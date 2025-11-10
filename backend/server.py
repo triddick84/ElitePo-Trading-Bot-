@@ -799,7 +799,7 @@ async def get_auto_signal_generation_status():
         raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.post("/signals/force-generate")
-async def force_generate_signal(wait_for_candle: bool = True):
+async def force_generate_signal(wait_for_candle: bool = False):
     """
     Force generate trading signals for ALL selected assets using maximum analysis depth
     Bypasses all thresholds and uses advanced multi-strategy analysis
