@@ -76,6 +76,7 @@ class ForceSignalGenerator:
             loop = asyncio.get_event_loop()
             
             # Parallel data fetching for maximum speed and depth
+            # OPTIMIZED: Use aggressive 8-second timeout for all data fetching
             tasks = [
                 loop.run_in_executor(self.executor, self._fetch_deep_market_data, symbol, "1m"),
                 loop.run_in_executor(self.executor, self._fetch_deep_market_data, symbol, "5m"), 
@@ -87,7 +88,17 @@ class ForceSignalGenerator:
                 loop.run_in_executor(self.executor, self._fetch_economic_indicators, symbol)
             ]
             
-            results = await asyncio.gather(*tasks, return_exceptions=True)
+            # SPEED OPTIMIZATION: 8-second timeout for data fetching to ensure fast response
+            try:
+                results = await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), timeout=8.0)
+            except asyncio.TimeoutError:
+                logger.warning(f"⚠️ Data fetching timeout after 8s, using available data")
+                # Cancel pending tasks
+                for task in tasks:
+                    if not task.done():
+                        task.cancel()
+                # Use empty results for timed out data
+                results = [None] * len(tasks)
             
             # Extract data
             data_1m, data_5m, data_15m, data_1h, data_4h, data_1d = results[:6]
