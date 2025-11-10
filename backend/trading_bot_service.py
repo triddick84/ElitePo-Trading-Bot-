@@ -215,29 +215,63 @@ class TradingBotService:
                     await asyncio.sleep(3600)  # Wait 1 hour before checking again
                     continue
                 
-                # Get market data for configured assets
-                market_data = await self._get_relevant_market_data()
+                # Get selected assets from configuration
+                selected_assets = self.config.selected_assets
                 
-                # Generate signals for each asset
-                for asset_data in market_data:
+                if not selected_assets or len(selected_assets) == 0:
+                    logger.warning("⚠️ No assets selected for auto signal generation. Waiting...")
+                    await asyncio.sleep(30)  # Wait 30 seconds before checking again
+                    continue
+                
+                logger.info(f"🔄 Auto generating signals for {len(selected_assets)} selected assets: {selected_assets}")
+                
+                # Generate signals for each selected asset using force generator
+                for asset in selected_assets:
                     try:
-                        signal = await self._generate_signal_for_asset(asset_data)
-                        if signal:
-                            await self._process_new_signal(signal)
-                            signal_count += 1
-                            logger.info(f"Generated signal #{signal_count}: {signal.symbol} {signal.direction} at {signal.entry_price}")
+                        # Extract base symbol (remove _regular or _otc suffix)
+                        base_symbol = asset.replace('_regular', '').replace('_otc', '').replace('_OTC', '')
+                        market_type = 'otc' if '_otc' in asset.lower() else 'regular'
+                        
+                        logger.info(f"🚀 Auto generating signal for {asset} (base: {base_symbol}, market: {market_type})")
+                        
+                        # Use force signal generator for consistent signal generation
+                        forced_signals = await force_signal_generator.force_generate_signal(
+                            base_symbol, 
+                            None,  # Let force generator fetch market data
+                            self.config.selected_timeframes, 
+                            chart_type=self.config.chart_type.value,
+                            wait_for_candle=False  # Don't wait for candle in auto mode
+                        )
+                        
+                        if forced_signals:
+                            # Process the first signal (auto generation uses one signal per asset)
+                            signal = forced_signals[0]
+                            signal.symbol = asset  # Use full asset name with suffix
+                            signal.market_type = market_type
+                            
+                            # Only process if signal meets probability threshold
+                            if signal.probability >= self.config.min_probability_threshold:
+                                await self._process_new_signal(signal)
+                                signal_count += 1
+                                logger.info(f"✅ Auto-generated signal #{signal_count}: {signal.symbol} {signal.direction} at {signal.probability}% confidence")
+                            else:
+                                logger.info(f"⚠️ Signal for {asset} below threshold ({signal.probability}% < {self.config.min_probability_threshold}%)")
+                        else:
+                            logger.warning(f"⚠️ No signals generated for {asset}")
                     
                     except Exception as e:
-                        logger.error(f"Error processing asset {asset_data.symbol}: {e}")
+                        logger.error(f"❌ Error auto-generating signal for {asset}: {e}")
                 
                 # Update performance metrics
                 await self._update_performance_metrics()
                 
                 # Wait before next cycle (adjust based on strategy)
-                await asyncio.sleep(self._get_cycle_interval())
+                cycle_interval = self._get_cycle_interval()
+                logger.info(f"⏱️ Auto signal generation cycle complete. Waiting {cycle_interval}s before next cycle...")
+                await asyncio.sleep(cycle_interval)
                 
             except Exception as e:
-                logger.error(f"Error in trading loop: {e}")
+                logger.error(f"❌ Error in auto signal generation loop: {e}")
                 await asyncio.sleep(30)  # Wait before retrying
     
     async def _generate_signal_for_asset(self, market_data: MarketData) -> Optional[TradingSignal]:
