@@ -9187,6 +9187,12 @@ class BackendTester:
             ("1M/5S Reversal Multiple Assets", self.test_1m_5s_reversal_multiple_assets),
             ("1M/5S Reversal Strategy Logic Validation", self.test_1m_5s_reversal_strategy_logic_validation),
             
+            # ========== FORCE GENERATE SPEED OPTIMIZATION TESTING (CRITICAL) ==========
+            ("Force Generate Speed Optimization", self.test_force_generate_speed_optimization),
+            ("Speed Optimization Features", self.test_speed_optimization_features),
+            ("Multiple Consecutive Speed Tests", self.test_multiple_consecutive_speed_tests),
+            ("Signal Quality at Speed", self.test_signal_quality_at_speed),
+            
             # Supporting Backend Tests
             ("Enhanced Signal Generator Integration", self.test_enhanced_signal_generator_integration),
             ("Real Market Data Integration", self.test_real_market_data_integration),
