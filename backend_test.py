@@ -9083,6 +9083,9 @@ class BackendTester:
             ("Health Check", self.test_health_check),
             ("Environment Variables", self.test_environment_variables),
             
+            # 1M TIMEFRAME SELL BIAS FIX TEST (PRIORITY)
+            ("1M Timeframe SELL Bias Fix", self.test_1m_timeframe_sell_bias_fix),
+            
             # FORCE SIGNAL GENERATION WITH TIMING VERIFICATION (PRIMARY FOCUS)
             ("Force Signal Generation with Timing Verification", self.test_force_signal_generation_with_timing_verification),
             
