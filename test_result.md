@@ -589,6 +589,18 @@
   test_priority: "high_first"
 
 ## backend:
+  - task: "1M Timeframe SELL Bias Fix"
+    implemented: false
+    working: false
+    file: "/app/backend/force_signal_generator.py"
+    stuck_count: 1
+    priority: "critical"
+    needs_retesting: true
+    status_history:
+        - working: false
+        - agent: "testing"
+        - comment: "❌ CRITICAL ISSUE IDENTIFIED: 1M Timeframe SELL Bias Fix NOT Working - Comprehensive testing reveals the SELL bias issue is NOT resolved. TESTING RESULTS: Generated 10 signals using 1m timeframe configuration, ALL 10 signals were PUT/SELL (100% SELL bias), NO CALL/BUY signals generated, violates success criteria requiring at least 1 CALL signal. INDIVIDUAL ASSET TESTING: EURUSD_regular: SELL (80%), GBPUSD_regular: SELL (80%), BTCUSD_regular: SELL (80%) - all assets show SELL bias. ROOT CAUSE IDENTIFIED: Backend logs show consistent fallback to '⚠️ Using random signal for [asset] - insufficient data' due to yfinance market data failures (symbols possibly delisted errors). The SELL bias appears to be in the random/emergency signal generation fallback logic, not in the main strategy algorithms. TECHNICAL DETAILS: Market data fetching fails for EURUSD_regular, GBPUSD_regular, BTCUSD_regular with 'possibly delisted' errors, system falls back to emergency/random signal generation, this fallback logic has systematic SELL bias. IMPACT: Force generation endpoints consistently produce SELL signals only, individual asset endpoints also affected, 1m timeframe specifically impacted by this fallback behavior. RECOMMENDATION: Main agent must investigate and fix the random/emergency signal generation logic in force_signal_generator.py to ensure balanced CALL/PUT distribution when market data is unavailable. The issue is NOT with the main strategies but with the fallback mechanism."
+
   - task: "Ultra-Short Timeframe Signal Generation"
     implemented: true
     working: true
