@@ -108,19 +108,36 @@ class ForceSignalGenerator:
             # Run comprehensive analysis on all timeframes
             analysis_results = []
             
-            # Advanced AI Ensemble Analysis (60% weight - MAXIMUM ACCURACY)
-            if data_1m and len(data_1m) > 50:
-                ai_ensemble_signal = await self._advanced_ai_ensemble_force_analysis(data_1m, symbol)
-                if ai_ensemble_signal:
-                    analysis_results.append(('advanced_ai_ensemble', ai_ensemble_signal, 0.60))
-                    logger.info(f"🤖 Advanced AI Ensemble activated for {symbol}")
-            
-            # Timeframe-specific strategy routing
             # Determine timeframe from user_timeframes or default to 5s for OTC
             primary_timeframe = user_timeframes[0] if user_timeframes else '5s'
             
+            # SPEED OPTIMIZATION: Skip AI Ensemble for ultra-short timeframes to save time (3-5 seconds)
+            # For ultra-short, use researched strategy exclusively
+            if primary_timeframe not in ['5s', '15s', '30s']:
+                # Advanced AI Ensemble Analysis (60% weight - MAXIMUM ACCURACY)
+                # Only for longer timeframes where speed is less critical
+                if data_1m and len(data_1m) > 50:
+                    try:
+                        ai_ensemble_signal = await asyncio.wait_for(
+                            self._advanced_ai_ensemble_force_analysis(data_1m, symbol),
+                            timeout=4.0  # 4-second timeout for AI analysis
+                        )
+                        if ai_ensemble_signal:
+                            analysis_results.append(('advanced_ai_ensemble', ai_ensemble_signal, 0.60))
+                            logger.info(f"🤖 Advanced AI Ensemble activated for {symbol}")
+                    except asyncio.TimeoutError:
+                        logger.warning(f"⚠️ AI Ensemble timeout, skipping for speed")
+            
             # Apply researched high-accuracy strategy based on timeframe
-            strategy_signal = await self._apply_researched_strategy(symbol, primary_timeframe, chart_type)
+            # SPEED OPTIMIZATION: 5-second timeout for strategy execution
+            try:
+                strategy_signal = await asyncio.wait_for(
+                    self._apply_researched_strategy(symbol, primary_timeframe, chart_type),
+                    timeout=5.0  # 5-second timeout
+                )
+            except asyncio.TimeoutError:
+                logger.warning(f"⚠️ Strategy execution timeout, using emergency fallback")
+                strategy_signal = None
             if strategy_signal:
                 # Use researched strategy as PRIMARY signal with 100% weight for ultra-short timeframes
                 if primary_timeframe in ['5s', '15s', '30s']:
