@@ -1478,7 +1478,12 @@ class ForceSignalGenerator:
                 else:
                     # Mixed signals - use momentum
                     price_change = closes.iloc[-1] - closes.iloc[-5]
-                    if price_change > 0:
+                    if abs(price_change) < 0.0001:  # Essentially no change
+                        # Use random choice for flat market
+                        import random
+                        direction = SignalDirection.BUY if random.random() > 0.5 else SignalDirection.SELL
+                        confidence = 75.0
+                    elif price_change > 0:
                         direction = SignalDirection.BUY
                         confidence = 75.0
                     else:
