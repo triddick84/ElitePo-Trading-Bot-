@@ -399,7 +399,7 @@
 
   - task: "Bot Auto Signal Generation Flag Integration"
     implemented: true
-    working: false
+    working: "NA"
     file: "/app/backend/trading_bot_service.py"
     stuck_count: 1
     priority: "critical"
@@ -411,6 +411,9 @@
         - working: false
         - agent: "main"
         - comment: "🔍 ROOT CAUSE IDENTIFIED: Auto signal generation flag is set correctly, but the _trading_loop does NOT generate signals for selected assets. The loop uses _get_relevant_market_data() which fetches ALL assets based on target_assets (FOREX, CRYPTO enums) instead of using config.selected_assets. Force generation works because it explicitly iterates through selected_assets. FIX REQUIRED: Modify _trading_loop to use selected_assets from config and generate signals for each selected asset, matching the force generation logic."
+        - working: "NA"
+        - agent: "main"
+        - comment: "✅ FIX IMPLEMENTED: Modified _trading_loop in trading_bot_service.py to use config.selected_assets instead of _get_relevant_market_data(). Now auto signal generation: 1) Gets selected_assets from configuration, 2) Validates assets are selected (warns if empty), 3) Iterates through each selected asset, 4) Uses force_signal_generator for consistent signal generation (same as force generate), 5) Applies probability threshold filtering, 6) Processes signals that meet threshold, 7) Respects cycle interval based on active strategies. CHANGES: Removed old market_data fetching logic, Added validation for empty selected_assets, Integrated force_signal_generator into auto loop, Added detailed logging for auto generation process, Applied threshold filtering before processing signals. Backend restarted successfully. READY FOR COMPREHENSIVE TESTING."
 
 ## metadata:
   created_by: "main_agent"
