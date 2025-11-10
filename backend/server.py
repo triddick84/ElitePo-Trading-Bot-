@@ -857,6 +857,13 @@ async def force_generate_signal(wait_for_candle: bool = False):
         
         all_forced_signals = []
         
+        # SPEED OPTIMIZATION: Limit to first asset only for quick response
+        # User can select specific asset if they want a particular one
+        # This ensures response within 15 seconds
+        if len(selected_assets) > 1:
+            logger.info(f"⚡ SPEED MODE: Using first selected asset only for quick response")
+            selected_assets = [selected_assets[0]]  # Use only first asset for speed
+        
         # Generate signals for each selected asset
         for asset in selected_assets:
             # Extract base symbol (remove _regular or _otc suffix)
@@ -875,10 +882,17 @@ async def force_generate_signal(wait_for_candle: bool = False):
                 volume=0
             )
             
-            # Force generate signals using advanced algorithms
-            forced_signals = await force_signal_generator.force_generate_signal(
-                base_symbol, target_asset, user_timeframes, chart_type=chart_type, wait_for_candle=wait_for_candle
-            )
+            # SPEED OPTIMIZATION: 12-second timeout per asset to ensure fast response
+            try:
+                forced_signals = await asyncio.wait_for(
+                    force_signal_generator.force_generate_signal(
+                        base_symbol, target_asset, user_timeframes, chart_type=chart_type, wait_for_candle=wait_for_candle
+                    ),
+                    timeout=12.0  # 12-second timeout per asset
+                )
+            except asyncio.TimeoutError:
+                logger.error(f"❌ Signal generation timeout for {asset} after 12 seconds")
+                forced_signals = None
             
             if forced_signals:
                 # Tag signals with the selected asset info
