@@ -8850,6 +8850,14 @@ class BackendTester:
             ("Session Persistence During Operations", self.test_session_persistence_during_operations),
             ("Error Handling Edge Cases", self.test_error_handling_edge_cases),
             
+            # ========== 1M CHART / 5S SIGNAL REVERSAL STRATEGY TESTING ==========
+            ("1M/5S Reversal Strategy Configuration", self.test_1m_5s_reversal_strategy_configuration),
+            ("1M/5S Reversal Force Generation", self.test_1m_5s_reversal_force_generation),
+            ("1M/5S Reversal Strategy Activation Logs", self.test_1m_5s_reversal_strategy_activation_logs),
+            ("1M/5S Reversal Signal Quality", self.test_1m_5s_reversal_signal_quality),
+            ("1M/5S Reversal Multiple Assets", self.test_1m_5s_reversal_multiple_assets),
+            ("1M/5S Reversal Strategy Logic Validation", self.test_1m_5s_reversal_strategy_logic_validation),
+            
             # Supporting Backend Tests
             ("Enhanced Signal Generator Integration", self.test_enhanced_signal_generator_integration),
             ("Real Market Data Integration", self.test_real_market_data_integration),
