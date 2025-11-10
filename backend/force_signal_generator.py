@@ -433,6 +433,35 @@ class ForceSignalGenerator:
                     result = None
                 
             else:  # 1m, 3m, 5m, 15m, 30m
+                # Check if this is 1m chart with 5s signal requirement (special reversal strategy)
+                # This strategy looks at 1-minute candles and generates 5-second signals
+                if timeframe == '1m' and chart_type in ['japanese_candles', 'candles']:
+                    logger.info(f"⚡ Applying Pocket Option 1M CHART / 5S SIGNAL Reversal strategy for {symbol}")
+                    result = await loop.run_in_executor(
+                        self.executor,
+                        pocket_option_1m_5s_reversal_strategy.generate_signal,
+                        symbol,
+                        None  # Will fetch 1m data internally
+                    )
+                    
+                    if result:
+                        logger.info(f"✅ 1M/5S Reversal strategy: {symbol} → {result['direction']} ({result['confidence']:.1f}%)")
+                        return {
+                            'direction': result['direction'],
+                            'confidence': result['confidence'],
+                            'probability': result['probability'],
+                            'reasoning': result['reasoning'],
+                            'strategy': 'pocket_option_1m_5s_reversal',
+                            'timeframe': '5s',  # Signal duration is 5s
+                            'chart_timeframe': '1m',  # Chart timeframe is 1m
+                            'chart_type': chart_type,
+                            'researched_strategy': True,
+                            'reversal_continuation_logic': True,
+                            'technical_details': result.get('technical_analysis', {}),
+                            'suggested_stake': 2.0
+                        }
+                
+                # Default to standard 1m strategy
                 logger.info(f"⚡ Applying Pocket Option 1-MINUTE strategy for {symbol}")
                 result = await loop.run_in_executor(
                     self.executor,
