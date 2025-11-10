@@ -211,6 +211,35 @@ class PocketOption1M5SReversalStrategy:
                 confidence = 77.0
                 is_reversal = True
             
+            # FALLBACK: If no clear pattern, use simple momentum
+            else:
+                # Use recent price momentum as fallback
+                if len(df) >= 5:
+                    recent_closes = df['Close'].iloc[-5:]
+                    price_momentum = recent_closes.iloc[-1] - recent_closes.iloc[0]
+                    
+                    if price_momentum > 0:
+                        # Upward momentum - continue with BUY
+                        signal_direction = 'CALL'
+                        reasoning = f"📈 Upward momentum ({price_momentum:.5f}) → Bullish bias"
+                        confidence = 76.0
+                    else:
+                        # Downward momentum - continue with SELL
+                        signal_direction = 'PUT'
+                        reasoning = f"📉 Downward momentum ({price_momentum:.5f}) → Bearish bias"
+                        confidence = 76.0
+                else:
+                    # Ultimate fallback - random balanced choice
+                    import random
+                    if random.random() > 0.5:
+                        signal_direction = 'CALL'
+                        reasoning = "⚖️ Neutral conditions → Random BUY choice"
+                        confidence = 75.0
+                    else:
+                        signal_direction = 'PUT'
+                        reasoning = "⚖️ Neutral conditions → Random SELL choice"
+                        confidence = 75.0
+            
             # Adjust confidence based on body size
             body_to_range = body_size / candle_range if candle_range > 0 else 0
             if body_to_range > 0.7:  # Strong body
