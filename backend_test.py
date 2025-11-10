@@ -16,7 +16,7 @@ from typing import Dict, Any, List
 sys.path.append('/app/backend')
 
 # Test configuration
-BACKEND_URL = "https://optionai-4.preview.emergentagent.com/api"
+BACKEND_URL = "https://autobot-trader-11.preview.emergentagent.com/api"
 
 class BackendTester:
     def __init__(self):
