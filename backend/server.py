@@ -972,20 +972,40 @@ async def force_generate_signal(wait_for_candle: bool = False):
             if otc_signal:
                 analysis_details["otc_boost_applied"] = otc_signal.technical_analysis.get('otc_boost_applied', 0)
             
-            # Get the single best signal
-            best_signal = stored_signals[0] if stored_signals else None
-            market_type = best_signal.get("market_type", "otc") if best_signal else "otc"
-            timeframe = best_signal.get("timeframe", "5s") if best_signal else "5s"
+            # Return ALL signals for selected assets
+            num_signals = len(stored_signals)
             
-            response = {
-                "success": True,
-                "message": f"🎯 Single {market_type.upper()} signal generated for {timeframe} timeframe with precise entry timing",
-                "signal": best_signal,  # Single signal
-                "signals": stored_signals,  # Keep for compatibility
-                "market_type": market_type,
-                "timeframe": timeframe,
-                "analysis_details": analysis_details
-            }
+            if num_signals == 1:
+                # Single signal response
+                best_signal = stored_signals[0]
+                market_type = best_signal.get("market_type", "otc")
+                timeframe = best_signal.get("timeframe", "5s")
+                
+                response = {
+                    "success": True,
+                    "message": f"🎯 Signal generated for {best_signal.get('symbol')} - {market_type.upper()} {timeframe} timeframe",
+                    "signal": best_signal,
+                    "signals": stored_signals,
+                    "market_type": market_type,
+                    "timeframe": timeframe,
+                    "analysis_details": analysis_details
+                }
+            else:
+                # Multiple signals response
+                timeframes_used = list(set(s.get("timeframe", "5s") for s in stored_signals))
+                assets_list = [s.get("symbol") for s in stored_signals]
+                
+                response = {
+                    "success": True,
+                    "message": f"🎯 {num_signals} signals generated for {', '.join(assets_list)} - Timeframes: {', '.join(timeframes_used)}",
+                    "signal": stored_signals[0],  # First signal for backward compatibility
+                    "signals": stored_signals,  # All signals
+                    "count": num_signals,
+                    "assets": assets_list,
+                    "timeframes": timeframes_used,
+                    "analysis_details": analysis_details
+                }
+            
             return _convert_numpy_types(response)
         else:
             return {
