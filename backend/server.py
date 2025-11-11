@@ -858,12 +858,8 @@ async def force_generate_signal(wait_for_candle: bool = False):
         
         all_forced_signals = []
         
-        # SPEED OPTIMIZATION: Limit to first asset only for quick response
-        # User can select specific asset if they want a particular one
-        # This ensures response within 15 seconds
-        if len(selected_assets) > 1:
-            logger.info(f"⚡ SPEED MODE: Using first selected asset only for quick response")
-            selected_assets = [selected_assets[0]]  # Use only first asset for speed
+        # Generate signals for ALL selected assets
+        logger.info(f"📊 Generating signals for {len(selected_assets)} selected assets: {selected_assets}")
         
         # Generate signals for each selected asset
         for asset in selected_assets:
