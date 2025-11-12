@@ -47,7 +47,7 @@ class ForceSignalGenerator:
             market_data: Market data object
             user_timeframes: List of timeframes to analyze
             chart_type: Chart type for analysis ('japanese_candles', 'line', 'bars', 'heikin_ashi')
-            wait_for_candle: Whether to wait for the next candle formation before generating signal (default: True)
+            wait_for_candle: Whether to wait for next candle formation for Pocket Option synchronization (default: True)
         """
         try:
             logger.info(f"🚀 FORCE GENERATING SIGNAL for {symbol} using {chart_type} chart - Maximum analysis mode activated")
