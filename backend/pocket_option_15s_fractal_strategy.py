@@ -36,7 +36,7 @@ class PocketOption15sFractalStrategy:
         self.chart_timeframe = "5s"
         self.signal_duration = "15s"
         self.fractal_period = 2
-        self.max_candles_since_fractal = 3  # Signal valid if fractal within last 3 candles
+        self.max_candles_since_fractal = 2  # REDUCED: Signal valid if fractal within last 2 candles (more aggressive)
         self.sr_proximity_threshold = 0.0015  # 0.15% proximity to S/R levels
         
     def generate_signal(self, symbol: str, chart_data: Optional[pd.DataFrame] = None) -> Optional[Dict[str, Any]]:
