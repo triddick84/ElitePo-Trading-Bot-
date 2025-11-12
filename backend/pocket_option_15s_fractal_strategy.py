@@ -304,14 +304,18 @@ class PocketOption15sFractalStrategy:
                     # Check if price has bounced/reversed from support
                     if at_support and current_price > df['Low'].iloc[-2]:
                         trend_confirmed = True
-                        confidence = 85.0
-                        reasoning = f"🟢 Up Fractal + Bounce from support detected ({fractal_candles_ago} candles ago)"
+                        confidence = 87.0 if up_fractal_just_confirmed else 85.0
+                        reasoning = f"🟢 Up Fractal + Bounce from support {'JUST CONFIRMED' if up_fractal_just_confirmed else f'({fractal_candles_ago} candles ago)'}"
                         signal_direction = 'CALL'
                         fractal_type = 'up'
                     else:
-                        # Regular up fractal signal
-                        confidence = 80.0
-                        reasoning = f"🟢 Up Fractal detected {fractal_candles_ago} candles ago → Bullish"
+                        # Regular up fractal signal - higher confidence if just confirmed
+                        if up_fractal_just_confirmed:
+                            confidence = 83.0
+                            reasoning = f"🟢 Up Fractal JUST CONFIRMED (fresh signal) → Bullish"
+                        else:
+                            confidence = 80.0
+                            reasoning = f"🟢 Up Fractal detected {fractal_candles_ago} candles ago → Bullish"
                         signal_direction = 'CALL'
                         fractal_type = 'up'
                         trend_confirmed = True
