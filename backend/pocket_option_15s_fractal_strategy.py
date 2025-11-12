@@ -266,10 +266,17 @@ class PocketOption15sFractalStrategy:
                 recent_down_fractal = fractals['down_fractals'][-1]
             
             # Check if fractals are recent enough (within max_candles_since_fractal)
+            # Fractals confirmed at period candles ago are the freshest possible signals
             up_fractal_valid = (recent_up_fractal is not None and 
                                current_index - recent_up_fractal <= self.max_candles_since_fractal)
             down_fractal_valid = (recent_down_fractal is not None and 
                                  current_index - recent_down_fractal <= self.max_candles_since_fractal)
+            
+            # Boost confidence for JUST confirmed fractals (exactly at period candles ago)
+            up_fractal_just_confirmed = (recent_up_fractal is not None and 
+                                        current_index - recent_up_fractal == self.fractal_period)
+            down_fractal_just_confirmed = (recent_down_fractal is not None and 
+                                          current_index - recent_down_fractal == self.fractal_period)
             
             # Check proximity to support/resistance
             at_resistance = self._is_near_resistance(current_price, resistance_levels)
