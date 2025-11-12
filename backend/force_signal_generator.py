@@ -446,7 +446,35 @@ class ForceSignalGenerator:
                 )
                 
             elif timeframe in ['15s', '15sec', '15 sec']:
-                logger.info(f"⚡ Applying Pocket Option 15-SECOND strategy for {symbol}")
+                logger.info(f"⚡ Applying Pocket Option 15-SECOND Fractal strategy (5s chart) for {symbol}")
+                
+                # Use NEW Fractal strategy with 5s chart data
+                result = await loop.run_in_executor(
+                    self.executor,
+                    pocket_option_15s_fractal_strategy.generate_signal,
+                    symbol,
+                    None  # Will fetch 5s data internally
+                )
+                
+                if result:
+                    logger.info(f"✅ 15s Fractal strategy: {symbol} → {result['direction']} ({result['confidence']:.1f}%)")
+                    return {
+                        'direction': result['direction'],
+                        'confidence': result['confidence'],
+                        'probability': result['probability'],
+                        'reasoning': result['reasoning'],
+                        'strategy': 'pocket_option_15s_fractal',
+                        'timeframe': '15s',
+                        'chart_timeframe': '5s',  # Uses 5s chart
+                        'chart_type': chart_type,
+                        'researched_strategy': True,
+                        'fractal_indicator': True,
+                        'technical_details': result.get('technical_analysis', {}),
+                        'suggested_stake': 2.0
+                    }
+                
+                # Fallback to original 15s strategy if Fractal fails
+                logger.info(f"   Falling back to original 15-SECOND strategy for {symbol}")
                 result = await loop.run_in_executor(
                     self.executor,
                     pocket_option_15s_strategy.generate_signal,
