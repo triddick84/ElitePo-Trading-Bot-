@@ -349,10 +349,35 @@ class PocketOption15sFractalStrategy:
                         fractal_type = 'down'
                         trend_confirmed = True
             
-            # Both fractals recent - conflicting signals
+            # Both fractals recent - use the most recent one
             elif up_fractal_valid and down_fractal_valid:
-                reasoning = "⚠️ Both Up and Down Fractals recent - conflicting signals"
-                signal_direction = None
+                # Use the fractal that was confirmed more recently
+                if recent_up_fractal > recent_down_fractal:
+                    fractal_candles_ago = current_index - recent_up_fractal
+                    fractal_price = float(df['High'].iloc[recent_up_fractal])
+                    
+                    if not at_resistance:
+                        confidence = 82.0 if up_fractal_just_confirmed else 78.0
+                        reasoning = f"🟢 Up Fractal more recent {'' if up_fractal_just_confirmed else f'({fractal_candles_ago} candles ago)'} → Bullish"
+                        signal_direction = 'CALL'
+                        fractal_type = 'up'
+                        trend_confirmed = True
+                    else:
+                        reasoning = "⚠️ Both fractals recent, up fractal more recent but at resistance - waiting"
+                        signal_direction = None
+                else:
+                    fractal_candles_ago = current_index - recent_down_fractal
+                    fractal_price = float(df['Low'].iloc[recent_down_fractal])
+                    
+                    if not at_support:
+                        confidence = 82.0 if down_fractal_just_confirmed else 78.0
+                        reasoning = f"🔴 Down Fractal more recent {'' if down_fractal_just_confirmed else f'({fractal_candles_ago} candles ago)'} → Bearish"
+                        signal_direction = 'PUT'
+                        fractal_type = 'down'
+                        trend_confirmed = True
+                    else:
+                        reasoning = "⚠️ Both fractals recent, down fractal more recent but at support - waiting"
+                        signal_direction = None
             
             # No recent fractals
             else:
