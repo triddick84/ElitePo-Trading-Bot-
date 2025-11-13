@@ -518,12 +518,17 @@ class ForceSignalGenerator:
                     )
                     
                     if donchian_result:
-                        logger.info(f"✅ Donchian-STC 1M: {symbol} → {donchian_result['direction']} ({donchian_result['confidence']:.1f}%)")
+                        original_direction = donchian_result['direction']
+                        
+                        # 🔄 INVERT 1-MINUTE SIGNALS (User Requested)
+                        inverted_direction = 'PUT' if original_direction == 'CALL' else 'CALL'
+                        logger.info(f"✅ Donchian-STC 1M: {symbol} → {original_direction} → 🔄 INVERTED to {inverted_direction} ({donchian_result['confidence']:.1f}%)")
+                        
                         return {
-                            'direction': donchian_result['direction'],
+                            'direction': inverted_direction,
                             'confidence': donchian_result['confidence'],
                             'probability': donchian_result['probability'],
-                            'reasoning': donchian_result['reasoning'],
+                            'reasoning': f"🔄 INVERTED: {donchian_result['reasoning']}",
                             'strategy': 'high_accuracy_donchian_stc_1m',
                             'timeframe': timeframe,
                             'chart_type': chart_type,
