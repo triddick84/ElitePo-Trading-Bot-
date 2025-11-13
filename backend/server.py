@@ -415,7 +415,8 @@ async def get_bot_status():
             current_mode=trading_bot.config.trading_mode.value,
             active_strategies=[s.value for s in trading_bot.config.active_strategies],
             signals_today=performance.get("total_signals", 0),
-            performance=performance
+            performance=performance,
+            auto_signal_generation=getattr(trading_bot, 'auto_signal_generation', False)
         )
         
     except Exception as e:
