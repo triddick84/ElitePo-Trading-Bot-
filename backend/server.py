@@ -113,6 +113,7 @@ class BotStatusResponse(BaseModel):
     active_strategies: List[str]
     signals_today: int
     performance: Dict[str, Any]
+    auto_signal_generation: bool = False
 
 class BacktestRequest(BaseModel):
     strategy: TradingStrategy
