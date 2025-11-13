@@ -144,6 +144,7 @@ class TradingConfiguration(BaseModel):
     auto_trading_enabled: bool = False
     invert_signals: bool = False  # Global invert signals setting
     sound_alerts_enabled: bool = True  # Sound alerts for new signals
+    candle_sync_enabled: bool = False  # Wait for candle formation before generating signals (Pocket Option sync)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 class PerformanceMetrics(BaseModel):
