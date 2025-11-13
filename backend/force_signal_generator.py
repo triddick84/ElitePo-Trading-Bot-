@@ -548,12 +548,17 @@ class ForceSignalGenerator:
                     )
                     
                     if triple_result:
-                        logger.info(f"✅ RSI-BB-MACD 1M: {symbol} → {triple_result['direction']} ({triple_result['confidence']:.1f}%)")
+                        original_direction = triple_result['direction']
+                        
+                        # 🔄 INVERT 1-MINUTE SIGNALS (User Requested)
+                        inverted_direction = 'PUT' if original_direction == 'CALL' else 'CALL'
+                        logger.info(f"✅ RSI-BB-MACD 1M: {symbol} → {original_direction} → 🔄 INVERTED to {inverted_direction} ({triple_result['confidence']:.1f}%)")
+                        
                         return {
-                            'direction': triple_result['direction'],
+                            'direction': inverted_direction,
                             'confidence': triple_result['confidence'],
                             'probability': triple_result['probability'],
-                            'reasoning': triple_result['reasoning'],
+                            'reasoning': f"🔄 INVERTED: {triple_result['reasoning']}",
                             'strategy': 'high_accuracy_rsi_bb_macd_1m',
                             'timeframe': timeframe,
                             'chart_type': chart_type,
