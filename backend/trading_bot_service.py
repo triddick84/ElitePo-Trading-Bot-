@@ -234,10 +234,22 @@ class TradingBotService:
                         
                         logger.info(f"🚀 Auto generating signal for {asset} (base: {base_symbol}, market: {market_type})")
                         
+                        # Create market data object for force generator
+                        from models import MarketData, AssetType
+                        from datetime import datetime, timezone
+                        
+                        target_asset = MarketData(
+                            symbol=base_symbol,
+                            price=1.0500,  # Default price - will be fetched by strategy
+                            timestamp=datetime.now(timezone.utc),
+                            asset_type=AssetType.FOREX,  # Will be determined by symbol
+                            volume=0
+                        )
+                        
                         # Use force signal generator for consistent signal generation
                         forced_signals = await force_signal_generator.force_generate_signal(
                             base_symbol, 
-                            None,  # Let force generator fetch market data
+                            target_asset,  # Provide proper MarketData object
                             self.config.selected_timeframes, 
                             chart_type=self.config.chart_type.value,
                             wait_for_candle=False  # Don't wait for candle in auto mode
