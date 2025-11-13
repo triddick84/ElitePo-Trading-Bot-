@@ -816,6 +816,11 @@ async def force_generate_signal(wait_for_candle: bool = False):
             user_timeframes = config_doc.get('selected_timeframes', []) if config_doc else []
             chart_type = config_doc.get('chart_type', 'japanese_candles') if config_doc else 'japanese_candles'
             invert_signals = config_doc.get('invert_signals', False) if config_doc else False
+            candle_sync_enabled = config_doc.get('candle_sync_enabled', False) if config_doc else False
+            
+            # Use config setting if not explicitly set in request
+            if not wait_for_candle:
+                wait_for_candle = candle_sync_enabled
             
             # If no assets selected, return error - require user to select assets
             if not selected_assets or len(selected_assets) == 0:
