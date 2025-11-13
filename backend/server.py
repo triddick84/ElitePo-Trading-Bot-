@@ -800,13 +800,13 @@ async def get_auto_signal_generation_status():
         raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.post("/signals/force-generate")
-async def force_generate_signal(wait_for_candle: bool = True):
+async def force_generate_signal(wait_for_candle: bool = False):
     """
     Force generate trading signals for ALL selected assets using maximum analysis depth
     Bypasses all thresholds and uses advanced multi-strategy analysis
     
     Args:
-        wait_for_candle: Whether to wait for the next candle formation before generating signals (default: True for synchronization)
+        wait_for_candle: Whether to wait for next candle formation for Pocket Option sync (default: False for speed, set True for perfect timing)
     """
     try:
         # Get user's configuration for selected assets and timeframes
