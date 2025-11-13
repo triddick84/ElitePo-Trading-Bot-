@@ -879,16 +879,20 @@ async def force_generate_signal(wait_for_candle: bool = True):
                 volume=0
             )
             
-            # SPEED OPTIMIZATION: 12-second timeout per asset to ensure fast response
+            # Dynamic timeout based on candle synchronization setting
+            # If waiting for candle, allow up to 65 seconds (max 60s wait + 5s processing)
+            # Otherwise use 12-second timeout for fast response
+            timeout_seconds = 65.0 if wait_for_candle else 12.0
+            
             try:
                 forced_signals = await asyncio.wait_for(
                     force_signal_generator.force_generate_signal(
                         base_symbol, target_asset, user_timeframes, chart_type=chart_type, wait_for_candle=wait_for_candle
                     ),
-                    timeout=12.0  # 12-second timeout per asset
+                    timeout=timeout_seconds
                 )
             except asyncio.TimeoutError:
-                logger.error(f"❌ Signal generation timeout for {asset} after 12 seconds")
+                logger.error(f"❌ Signal generation timeout for {asset} after {timeout_seconds} seconds")
                 forced_signals = None
             
             if forced_signals:
