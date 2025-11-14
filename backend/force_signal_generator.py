@@ -1676,15 +1676,6 @@ class ForceSignalGenerator:
             import random
             ultimate_direction = SignalDirection.BUY if random.random() > 0.5 else SignalDirection.SELL
             
-            # 🔄 INVERT 1-MINUTE TIMEFRAME SIGNALS (User Requested)
-            if timeframe in ['1m', '1min']:
-                original_direction = ultimate_direction
-                if ultimate_direction == SignalDirection.BUY:
-                    ultimate_direction = SignalDirection.SELL
-                elif ultimate_direction == SignalDirection.SELL:
-                    ultimate_direction = SignalDirection.BUY
-                logger.info(f"🔄 1M ULTIMATE SIGNAL INVERTED: {original_direction} → {ultimate_direction}")
-            
             return TradingSignal(
                 id=f"ULTIMATE_{market_type.upper()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
                 symbol=f"{symbol}{symbol_suffix}",
