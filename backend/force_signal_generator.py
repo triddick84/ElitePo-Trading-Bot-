@@ -1634,15 +1634,6 @@ class ForceSignalGenerator:
             emergency_confidence = min(confidence + 5.0, 98.5)  # Boost emergency signals
             emergency_conf_level = "MEDIUM" if emergency_confidence >= 82.0 else "LOW"
             
-            # 🔄 INVERT 1-MINUTE TIMEFRAME SIGNALS (User Requested)
-            if timeframe in ['1m', '1min']:
-                original_direction = direction
-                if direction == SignalDirection.BUY:
-                    direction = SignalDirection.SELL
-                elif direction == SignalDirection.SELL:
-                    direction = SignalDirection.BUY
-                logger.info(f"🔄 1M EMERGENCY SIGNAL INVERTED: {original_direction} → {direction}")
-            
             return TradingSignal(
                 id=f"EMERGENCY_{market_type.upper()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{symbol}",
                 symbol=f"{symbol}{symbol_suffix}",
