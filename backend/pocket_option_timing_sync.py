@@ -133,20 +133,20 @@ class PocketOptionTimingSync:
             # Convert to Chicago time for display
             chicago_time = candle_close_time.astimezone(self.pocket_option_tz)
             
-            # Apply latency compensation for ultra-short timeframes
-            # This signals slightly earlier to account for network/execution delay
-            if apply_latency_compensation and timeframe in ['5s', '15s', '30s']:
+            # Apply latency compensation for all short timeframes
+            # This signals earlier to account for network/execution/user reaction delay
+            if apply_latency_compensation and timeframe in ['5s', '15s', '30s', '1m', '3m']:
                 try:
                     from latency_optimizer import latency_optimizer
                     # Subtract latency buffer to signal earlier
                     latency_buffer = latency_optimizer.early_signal_buffer_seconds
                     chicago_time = chicago_time - timedelta(seconds=latency_buffer)
-                    logger.info(f"⚡ Latency compensation: -{latency_buffer:.2f}s earlier signal")
+                    logger.info(f"⚡ Latency compensation: -{latency_buffer:.2f}s earlier signal for {timeframe}")
                 except ImportError:
                     # Fallback if latency_optimizer not available
-                    default_buffer = 0.5  # 500ms default buffer
+                    default_buffer = 6.0  # 6 seconds default buffer (increased from 0.5s)
                     chicago_time = chicago_time - timedelta(seconds=default_buffer)
-                    logger.info(f"⚡ Default latency compensation: -{default_buffer}s")
+                    logger.info(f"⚡ Default latency compensation: -{default_buffer}s for {timeframe}")
             
             # Log the calculated timing with full precision
             time_until = (chicago_time - self.get_chicago_time()).total_seconds()
