@@ -143,7 +143,7 @@ class PocketOptionTimingSync:
                     if timeframe == '5s':
                         latency_buffer = latency_optimizer.early_signal_buffer_5s  # 1 second for 5s
                     else:
-                        latency_buffer = latency_optimizer.early_signal_buffer_seconds  # 6 seconds for others
+                        latency_buffer = latency_optimizer.early_signal_buffer_seconds  # 2 seconds for others
                     
                     chicago_time = chicago_time - timedelta(seconds=latency_buffer)
                     logger.info(f"⚡ Latency compensation: -{latency_buffer:.2f}s earlier signal for {timeframe}")
