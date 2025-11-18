@@ -152,7 +152,7 @@ class PocketOptionTimingSync:
                     if timeframe == '5s':
                         default_buffer = 1.0  # 1 second for 5s timeframe
                     else:
-                        default_buffer = 6.0  # 6 seconds for other timeframes
+                        default_buffer = 2.0  # 2 seconds for other timeframes
                     chicago_time = chicago_time - timedelta(seconds=default_buffer)
                     logger.info(f"⚡ Default latency compensation: -{default_buffer}s for {timeframe}")
             
