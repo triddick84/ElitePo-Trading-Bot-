@@ -408,10 +408,35 @@ class ForceSignalGenerator:
             
             # Route to appropriate strategy based on timeframe
             if timeframe in ['5s', '5sec', '5 sec']:
-                logger.info(f"⚡ Applying Pocket Option 5-SECOND strategies for {symbol}")
+                logger.info(f"⚡ Applying ULTRA-PRECISION 5-SECOND strategy (Multi-Confirmation) for {symbol}")
                 
-                # Use NEW Ultra V2 strategy (research-backed 75%+ accuracy)
-                logger.info("   🚀 Applying 5s Ultra V2 (Research-Backed Strategy)")
+                # NEW: Ultra-Precision Strategy (3+ confirmations required for max accuracy)
+                result_ultra_precision = await loop.run_in_executor(
+                    self.executor,
+                    ultra_precision_5s_strategy.generate_signal,
+                    symbol,
+                    None
+                )
+                
+                if result_ultra_precision:
+                    logger.info(f"✅ Ultra-Precision 5S: {symbol} → {result_ultra_precision['direction']} ({result_ultra_precision['confidence']:.1f}%) [{result_ultra_precision['technical_analysis']['confirmations']}/5 confirmations]")
+                    return {
+                        'direction': result_ultra_precision['direction'],
+                        'confidence': result_ultra_precision['confidence'],
+                        'probability': result_ultra_precision['probability'],
+                        'reasoning': result_ultra_precision['reasoning'],
+                        'strategy': 'ultra_precision_5s',
+                        'timeframe': timeframe,
+                        'chart_type': chart_type,
+                        'researched_strategy': True,
+                        'ultra_precision': True,
+                        'multi_confirmation': True,
+                        'technical_details': result_ultra_precision.get('technical_analysis', {}),
+                        'suggested_stake': 2.0
+                    }
+                
+                # Fallback: Try Ultra V2 Strategy
+                logger.info(f"   Trying Ultra V2 fallback for {symbol}")
                 result_ultra_v2 = await loop.run_in_executor(
                     self.executor,
                     pocket_option_5s_ultra_v2.analyze,
@@ -422,7 +447,6 @@ class ForceSignalGenerator:
                 
                 if result_ultra_v2:
                     logger.info(f"✅ 5s Ultra V2 strategy: {symbol} → {result_ultra_v2.get('signal', 'N/A')} ({result_ultra_v2.get('confidence', 0):.1f}%)")
-                    logger.info("   ✅ 5s Ultra V2 strategy contributed (Target 75%+ accuracy)")
                     return {
                         'direction': result_ultra_v2['signal'],
                         'confidence': result_ultra_v2['confidence'],
@@ -437,7 +461,8 @@ class ForceSignalGenerator:
                         'suggested_stake': 2.0
                     }
                 
-                # Also use original strategy for ensemble
+                # Final fallback: Original strategy
+                logger.info(f"   Trying original 5s strategy for {symbol}")
                 result = await loop.run_in_executor(
                     self.executor,
                     pocket_option_5s_elite_strategy.generate_signal,
