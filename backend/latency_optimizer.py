@@ -28,13 +28,12 @@ class LatencyOptimizer:
         self.latency_samples = []
         self.max_samples = 100  # Keep last 100 measurements
         
-        # Average latencies (milliseconds) - Set to 9 seconds total
-        self.avg_signal_generation = 1500  # Signal generation
-        self.avg_network_latency = 300     # Network round-trip
-        self.avg_ui_delay = 1200           # Frontend display + notification
+        # Average latencies (milliseconds) - Set to 4 seconds total (moved 5s ahead from 9s)
+        self.avg_signal_generation = 800   # Fast signal generation
+        self.avg_network_latency = 200     # Network round-trip
+        self.avg_ui_delay = 1000           # Frontend display + notification
         self.avg_pocket_option_processing = 200  # Pocket Option order processing
-        self.avg_user_reaction_time = 3800 # User reads and clicks
-        self.additional_buffer = 2000      # Extra 2 seconds safety buffer
+        self.avg_user_reaction_time = 1800 # User reads and clicks quickly
         
         # Total estimated latency
         self.total_latency_ms = (
@@ -42,15 +41,14 @@ class LatencyOptimizer:
             self.avg_network_latency +
             self.avg_ui_delay +
             self.avg_pocket_option_processing +
-            self.avg_user_reaction_time +
-            self.additional_buffer
-        )  # ~9000ms (9 seconds) total
+            self.avg_user_reaction_time
+        )  # ~4000ms (4 seconds) total
         
         # Early signal buffer (generate signal earlier to account for latency)
-        self.early_signal_buffer_seconds = self.total_latency_ms / 1000.0  # 9.0 seconds
+        self.early_signal_buffer_seconds = self.total_latency_ms / 1000.0  # 4.0 seconds
         
-        # Special override for 5s timeframe - use less compensation
-        self.early_signal_buffer_5s = 3.0  # 3 seconds for 5s timeframe
+        # Special override for 5s timeframe - minimal compensation for precision
+        self.early_signal_buffer_5s = 2.0  # 2 seconds for 5s timeframe
         
         logger.info(f"📊 Latency Optimizer initialized: {self.total_latency_ms}ms total latency")
         logger.info(f"⏰ Early signal buffer: {self.early_signal_buffer_seconds:.2f}s")
