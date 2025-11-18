@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 sys.path.append('/app/backend')
 
 # Test configuration
-BACKEND_URL = "https://autobot-trader-11.preview.emergentagent.com/api"
+BACKEND_URL = "https://signal-trader-84.preview.emergentagent.com/api"
 
 class ClearAllRestartTester:
     def __init__(self):
