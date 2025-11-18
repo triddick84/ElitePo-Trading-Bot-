@@ -28,12 +28,12 @@ class LatencyOptimizer:
         self.latency_samples = []
         self.max_samples = 100  # Keep last 100 measurements
         
-        # Average latencies (milliseconds)
-        self.avg_signal_generation = 1500  # Time to generate signal (increased for complex strategies)
-        self.avg_network_latency = 300     # Network round-trip (increased for reliability)
-        self.avg_ui_delay = 1500           # Frontend display + user reaction + notification
+        # Average latencies (milliseconds) - REDUCED for better timing
+        self.avg_signal_generation = 300   # Fast signal generation
+        self.avg_network_latency = 200     # Network round-trip
+        self.avg_ui_delay = 500            # Frontend display
         self.avg_pocket_option_processing = 200  # Pocket Option order processing
-        self.avg_user_reaction_time = 2500 # User reads signal and clicks (realistic timing)
+        self.avg_user_reaction_time = 800  # Quick user reaction
         
         # Total estimated latency
         self.total_latency_ms = (
@@ -42,12 +42,12 @@ class LatencyOptimizer:
             self.avg_ui_delay +
             self.avg_pocket_option_processing +
             self.avg_user_reaction_time
-        )  # ~6000ms (6 seconds) total
+        )  # ~2000ms (2 seconds) total
         
         # Early signal buffer (generate signal earlier to account for latency)
-        self.early_signal_buffer_seconds = self.total_latency_ms / 1000.0  # 6.0 seconds
+        self.early_signal_buffer_seconds = self.total_latency_ms / 1000.0  # 2.0 seconds
         
-        # Special override for 5s timeframe - use only 1 second compensation
+        # Special override for 5s timeframe - use minimal compensation
         self.early_signal_buffer_5s = 1.0  # 1 second for 5s timeframe
         
         logger.info(f"📊 Latency Optimizer initialized: {self.total_latency_ms}ms total latency")
