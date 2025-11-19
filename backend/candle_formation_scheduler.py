@@ -25,19 +25,20 @@ class CandleFormationScheduler:
         self.is_running = False
         self.signal_callback = None
         
-        # Configuration
+        # Configuration - OPTIMIZED FOR POCKET OPTION CANDLE SYNCHRONIZATION
+        # These values ensure signals arrive exactly when needed for candle close entry
         self.latency_compensation_seconds = {
-            '5s': 0.5,    # 500ms early for 5-second candles
-            '15s': 0.5,   # 500ms early for 15-second candles
-            '30s': 1.0,   # 1 second early for 30-second candles
-            '1m': 2.0,    # 2 seconds early for 1-minute candles
-            '2m': 2.0,    # 2 seconds early
-            '3m': 2.0,    # 2 seconds early
-            '5m': 3.0,    # 3 seconds early
-            '10m': 3.0,   # 3 seconds early
-            '15m': 3.0,   # 3 seconds early
-            '30m': 5.0,   # 5 seconds early
-            '1h': 5.0     # 5 seconds early
+            '5s': 1.5,    # 1.5s early - signals arrive at 3.5s (optimal for 5s candles)
+            '15s': 2.0,   # 2.0s early - signals arrive at 13s (optimal for 15s candles)
+            '30s': 2.5,   # 2.5s early - signals arrive at 27.5s (optimal for 30s candles)
+            '1m': 3.0,    # 3.0s early - signals arrive at 57s (optimal for 1m candles)
+            '2m': 3.0,    # 3.0s early
+            '3m': 3.0,    # 3.0s early
+            '5m': 4.0,    # 4.0s early
+            '10m': 4.0,   # 4.0s early
+            '15m': 5.0,   # 5.0s early
+            '30m': 6.0,   # 6.0s early
+            '1h': 6.0     # 6.0s early
         }
         
         logger.info("🕐 Candle Formation Scheduler initialized")
