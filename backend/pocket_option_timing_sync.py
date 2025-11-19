@@ -133,20 +133,26 @@ class PocketOptionTimingSync:
             # Convert to Chicago time for display
             chicago_time = candle_close_time.astimezone(self.pocket_option_tz)
             
-            # Apply latency compensation for all short timeframes
+            # Apply latency compensation for precise Pocket Option candle synchronization
             # This signals earlier to account for network/execution/user reaction delay
-            if apply_latency_compensation and timeframe in ['5s', '15s', '30s', '1m', '3m']:
+            if apply_latency_compensation:
                 try:
                     from latency_optimizer import latency_optimizer
                     
-                    # Special handling for 5s timeframe - use only 1 second compensation
+                    # Timeframe-specific latency compensation for optimal precision
                     if timeframe == '5s':
-                        latency_buffer = latency_optimizer.early_signal_buffer_5s  # 1 second for 5s
+                        latency_buffer = latency_optimizer.early_signal_buffer_5s  # 1.5 seconds
+                    elif timeframe == '15s':
+                        latency_buffer = latency_optimizer.early_signal_buffer_15s  # 2.0 seconds
+                    elif timeframe == '30s':
+                        latency_buffer = latency_optimizer.early_signal_buffer_30s  # 2.5 seconds
+                    elif timeframe == '1m':
+                        latency_buffer = latency_optimizer.early_signal_buffer_1m  # 3.0 seconds
                     else:
-                        latency_buffer = latency_optimizer.early_signal_buffer_seconds  # 2 seconds for others
+                        latency_buffer = latency_optimizer.early_signal_buffer_seconds  # 3.0 seconds default
                     
                     chicago_time = chicago_time - timedelta(seconds=latency_buffer)
-                    logger.info(f"⚡ Latency compensation: -{latency_buffer:.2f}s earlier signal for {timeframe}")
+                    logger.info(f"⚡ Pocket Option Sync: -{latency_buffer:.2f}s compensation for {timeframe} candle")
                 except ImportError:
                     # Fallback if latency_optimizer not available
                     if timeframe == '5s':
