@@ -1676,7 +1676,7 @@ class ForceSignalGenerator:
                             f"Confidence: {final_confidence:.1f}% (Target: 90%+). "
                             f"{'📈 OTC Market - 24/7 availability. ' if market_type == 'otc' else '📊 Regular Market - Exchange hours. '}"
                             f"⚡ SPEED OPTIMIZED - Ultra-fast generation with precise entry timing. "
-                            f"🎯 DIRECT ANALYSIS - No inversions, pure technical signals. "
+                            f"{'🔄 5S INVERTED SIGNAL - Original: {direction}, Final: {inverted_direction}. ' if signal_inverted else '🎯 DIRECT ANALYSIS - Pure technical signals. '}"
                             f"🕐 ENTRY: {user_timeframes[0]} candle @ {optimal_entry_time.strftime('%H:%M:%S')} CT (in {int(seconds_to_entry)}s).",
                 risk_assessment=f"Risk Level: {'LOW' if final_confidence >= 90 else 'MEDIUM' if final_confidence >= 80 else 'HIGH'}. "
                               f"Forced generation with {final_confidence:.1f}% confidence. "
