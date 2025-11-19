@@ -26,6 +26,9 @@ from ultra_precision_5s_strategy import ultra_precision_5s_strategy
 from lightweight_ai_ensemble import lightweight_ai_ensemble
 from live_accuracy_tester import live_accuracy_tester
 from ultra_precision_90_enhancer import ultra_precision_90
+import high_accuracy_1m_triple_confirmation
+import high_accuracy_williams_macd_strategy
+import high_accuracy_smart_money_ict
 
 logger = logging.getLogger(__name__)
 
