@@ -1633,17 +1633,33 @@ class ForceSignalGenerator:
             # Calculate seconds until optimal entry
             seconds_to_entry = (optimal_entry_time - chicago_time).total_seconds()
             
-            # NO SIGNAL INVERSION - All timeframes use direct analysis for maximum accuracy
-            technical_analysis['signal_inverted'] = False
-            technical_analysis['direct_analysis'] = True
-            technical_analysis['accuracy_mode'] = 'maximum_precision'
+            # SIGNAL INVERSION - Apply ONLY for 5-second timeframe
+            signal_inverted = False
+            inverted_direction = direction
             
-            # Create initial signal
+            # Check if user requested 5s timeframe
+            if user_timeframes and user_timeframes[0] in ['5s', '5sec', '5 sec']:
+                # INVERT the signal for 5s timeframe
+                if direction == 'CALL':
+                    inverted_direction = 'PUT'
+                    signal_inverted = True
+                    logger.info(f"🔄 5S SIGNAL INVERSION: CALL → PUT for {symbol}")
+                elif direction == 'PUT':
+                    inverted_direction = 'CALL'
+                    signal_inverted = True
+                    logger.info(f"🔄 5S SIGNAL INVERSION: PUT → CALL for {symbol}")
+            
+            technical_analysis['signal_inverted'] = signal_inverted
+            technical_analysis['direct_analysis'] = not signal_inverted
+            technical_analysis['accuracy_mode'] = 'inverted_5s' if signal_inverted else 'maximum_precision'
+            technical_analysis['original_direction'] = direction if signal_inverted else None
+            
+            # Create initial signal (use inverted direction for 5s)
             signal = TradingSignal(
                 id=f"FORCE_{market_type.upper()}_{chicago_time.strftime('%Y%m%d_%H%M%S')}_{symbol}",
                 symbol=display_symbol,
                 asset_type=market_data.asset_type,
-                direction=direction,
+                direction=inverted_direction,  # Use inverted direction for 5s
                 entry_price=current_price,
                 expiration_minutes=expiration_minutes,
                 timeframe=user_timeframes[0],  # Use user's selected timeframe
