@@ -247,12 +247,13 @@ class TradingBotService:
                         )
                         
                         # Use force signal generator for consistent signal generation
+                        # CRITICAL: wait_for_candle=True ensures Pocket Option synchronization
                         forced_signals = await force_signal_generator.force_generate_signal(
                             base_symbol, 
                             target_asset,  # Provide proper MarketData object
                             self.config.selected_timeframes, 
                             chart_type=self.config.chart_type.value,
-                            wait_for_candle=False  # Don't wait for candle in auto mode
+                            wait_for_candle=True  # Wait for candle formation for Pocket Option sync
                         )
                         
                         if forced_signals:
