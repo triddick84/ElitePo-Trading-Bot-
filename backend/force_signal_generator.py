@@ -1859,6 +1859,74 @@ class ForceSignalGenerator:
             # Apply Pocket Option timing synchronization
             synchronized_signal = pocket_option_sync.sync_signal_with_pocket_option_timing(signal, user_timeframes)
             
+            # APPLY MAXIMUM ACCURACY OPTIMIZATION
+            # This is the final quality gate - only highest quality signals pass
+            logger.info(f"🎯 Applying Maximum Accuracy Optimizer...")
+            
+            # Convert TradingSignal to dict for optimizer
+            signal_dict = {
+                'direction': 'CALL' if synchronized_signal.direction == SignalDirection.BUY else 'PUT',
+                'confidence': synchronized_signal.probability,
+                'probability': synchronized_signal.probability,
+                'technical_analysis': technical_analysis,
+                'strategy': synchronized_signal.strategy_used
+            }
+            
+            # Try to get market data DataFrame for optimizer
+            try:
+                if recent_data and len(recent_data) >= 50:
+                    df = pd.DataFrame(recent_data)
+                    # Rename columns to standard format
+                    if 'close' in df.columns:
+                        df = df.rename(columns={'close': 'Close', 'open': 'Open', 'high': 'High', 'low': 'Low', 'volume': 'Volume'})
+                    
+                    # Collect all strategy signals for ensemble validation
+                    all_strategy_signals = [
+                        {'direction': 'CALL' if buy_score > sell_score else 'PUT', 'confidence': final_confidence}
+                    ]
+                    for strategy_name, strat_sig in strategy_details.items():
+                        if strat_sig:
+                            all_strategy_signals.append(strat_sig)
+                    
+                    # Apply optimizer
+                    optimized_signal = signal_optimizer.optimize_signal(
+                        signal_dict,
+                        df,
+                        symbol,
+                        all_strategy_signals
+                    )
+                    
+                    if optimized_signal:
+                        # Signal passed all quality gates! Update confidence
+                        logger.info(f"✅ SIGNAL PASSED ALL QUALITY GATES - Enhanced confidence: {optimized_signal['confidence']:.1f}%")
+                        
+                        # Update synchronized signal with optimized confidence
+                        synchronized_signal.probability = optimized_signal['confidence']
+                        synchronized_signal.confidence_level = "HIGH" if optimized_signal['confidence'] >= 90 else "MEDIUM"
+                        
+                        # Add optimization details to technical analysis
+                        if synchronized_signal.technical_analysis:
+                            synchronized_signal.technical_analysis['optimizer_applied'] = True
+                            synchronized_signal.technical_analysis['optimization_score'] = optimized_signal.get('optimization_score', {})
+                            synchronized_signal.technical_analysis['quality_rating'] = optimized_signal.get('quality_rating', 'HIGH')
+                            synchronized_signal.technical_analysis['gates_passed'] = optimized_signal.get('gates_passed', 7)
+                        
+                        # Update justification with quality badge
+                        quality_badge = "🏆 PREMIUM QUALITY" if optimized_signal['confidence'] >= 90 else "⭐ HIGH QUALITY"
+                        synchronized_signal.justification = f"{quality_badge} | {synchronized_signal.justification}"
+                        
+                        return synchronized_signal
+                    else:
+                        # Signal failed quality gates - return None to skip it
+                        logger.warning(f"❌ Signal failed Maximum Accuracy Optimizer quality gates - REJECTED")
+                        return None
+                        
+            except Exception as opt_error:
+                logger.warning(f"⚠️ Optimizer error (using original signal): {opt_error}")
+                # Return original signal if optimizer fails
+                return synchronized_signal
+            
+            # If no recent data for optimization, return original signal
             return synchronized_signal
             
         except Exception as e:
