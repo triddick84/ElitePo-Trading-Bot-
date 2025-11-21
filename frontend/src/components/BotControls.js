@@ -723,19 +723,21 @@ const BotControls = ({ onStatusUpdate }) => {
                 Choose from multiple research-backed strategies for each timeframe (5s, 15s, 30s, 1m, 3m, 5m). 
                 Your selected strategies automatically apply to both Force Generate and Auto Generate signals.
               </p>
-              <button
-                onClick={() => window.location.href = '#'}
-                className="bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 px-6 rounded-lg transition-colors inline-flex items-center space-x-2"
-                onClickCapture={(e) => {
+              <a
+                href="#strategies"
+                className="bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 px-6 rounded-lg transition-colors inline-flex items-center space-x-2 no-underline"
+                onClick={(e) => {
                   e.preventDefault();
-                  const event = new CustomEvent('navigate', { detail: 'strategies' });
-                  window.dispatchEvent(event);
+                  // Navigate by updating the URL hash
+                  window.location.hash = 'strategies';
+                  // Force a page reload to trigger navigation
+                  window.location.reload();
                 }}
               >
                 <span>🎯</span>
                 <span>Go to Strategy Selector</span>
                 <span>→</span>
-              </button>
+              </a>
             </div>
           </div>
           
