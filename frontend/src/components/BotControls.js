@@ -281,14 +281,6 @@ const BotControls = ({ onStatusUpdate }) => {
     }));
   };
 
-  const strategies = [
-    { id: 'hybrid', name: 'Hybrid Strategy', description: 'Combines multiple indicators for highest accuracy' },
-    { id: 'cci_20', name: 'CCI 20', description: 'Commodity Channel Index overbought/oversold signals' },
-    { id: 'ema_crossover', name: 'EMA Crossover', description: 'Exponential Moving Average crossover signals' },
-    { id: 'rsi_5', name: 'RSI 5', description: 'Fast RSI scalping strategy' },
-    { id: 'macd_momentum', name: 'MACD Momentum', description: 'Trend-following momentum signals' }
-  ];
-
   const assetTypes = [
     { id: 'forex', name: 'Forex', icon: '💱' },
     { id: 'crypto', name: 'Cryptocurrency', icon: '₿' },
