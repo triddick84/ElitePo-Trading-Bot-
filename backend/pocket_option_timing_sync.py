@@ -141,7 +141,7 @@ class PocketOptionTimingSync:
                     
                     # Timeframe-specific latency compensation for optimal precision
                     if timeframe == '5s':
-                        latency_buffer = latency_optimizer.early_signal_buffer_5s  # 1.5 seconds
+                        latency_buffer = latency_optimizer.early_signal_buffer_5s  # 4.0 seconds (adjusted for lag)
                     elif timeframe == '15s':
                         latency_buffer = latency_optimizer.early_signal_buffer_15s  # 2.0 seconds
                     elif timeframe == '30s':
