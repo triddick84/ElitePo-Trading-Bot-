@@ -1809,6 +1809,114 @@ async def get_assets_by_category(category: str):
         logger.error(f"Error getting assets for category {category}: {e}")
         return {"success": False, "error": str(e)}
 
+# Strategy Selection API Endpoints
+@api_router.get("/strategies/available")
+async def get_available_strategies():
+    """Get all available strategies for all timeframes"""
+    try:
+        from strategy_selection_service import strategy_selection_service
+        strategies = strategy_selection_service.get_all_available_strategies()
+        
+        return {
+            "success": True,
+            "strategies": strategies
+        }
+    except Exception as e:
+        logger.error(f"Error getting available strategies: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/strategies/available/{timeframe}")
+async def get_available_strategies_for_timeframe(timeframe: str):
+    """Get available strategies for a specific timeframe"""
+    try:
+        from strategy_selection_service import strategy_selection_service
+        strategies = strategy_selection_service.get_available_strategies(timeframe)
+        
+        if not strategies:
+            raise HTTPException(status_code=404, detail=f"No strategies found for timeframe {timeframe}")
+        
+        return {
+            "success": True,
+            "timeframe": timeframe,
+            "strategies": strategies
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting strategies for {timeframe}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/strategies/selected")
+async def get_selected_strategies():
+    """Get user's currently selected strategies for all timeframes"""
+    try:
+        from strategy_selection_service import strategy_selection_service
+        selections = await strategy_selection_service.get_selected_strategies()
+        
+        return {
+            "success": True,
+            "selections": selections
+        }
+    except Exception as e:
+        logger.error(f"Error getting selected strategies: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+class StrategySelectionRequest(BaseModel):
+    timeframe: str
+    strategy_id: str
+
+@api_router.post("/strategies/select")
+async def update_strategy_selection(request: StrategySelectionRequest):
+    """Update strategy selection for a specific timeframe"""
+    try:
+        from strategy_selection_service import strategy_selection_service
+        
+        success = await strategy_selection_service.update_strategy_selection(
+            request.timeframe,
+            request.strategy_id
+        )
+        
+        if not success:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid timeframe or strategy ID"
+            )
+        
+        return {
+            "success": True,
+            "message": f"Strategy updated for {request.timeframe}",
+            "timeframe": request.timeframe,
+            "strategy_id": request.strategy_id
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating strategy selection: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/strategies/details/{timeframe}/{strategy_id}")
+async def get_strategy_details(timeframe: str, strategy_id: str):
+    """Get details for a specific strategy"""
+    try:
+        from strategy_selection_service import strategy_selection_service
+        details = await strategy_selection_service.get_strategy_details(timeframe, strategy_id)
+        
+        if not details:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Strategy {strategy_id} not found for timeframe {timeframe}"
+            )
+        
+        return {
+            "success": True,
+            "strategy": details
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting strategy details: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Include the router in the main app
 app.include_router(api_router)
 
