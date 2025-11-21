@@ -49,8 +49,8 @@ class LatencyOptimizer:
         self.early_signal_buffer_seconds = self.total_latency_ms / 1000.0  # 3.0 seconds
         
         # Timeframe-specific buffers for optimal precision
-        # ADJUSTED: 5s buffer increased from 1.5s to 4.0s to eliminate 2-3s lag
-        self.early_signal_buffer_5s = 4.0   # 4.0 seconds for 5s - compensates for latency
+        # FINE-TUNED: 5s buffer set to 3.1s for perfect Pocket Option sync (was 4.0s, but 0.9s too early)
+        self.early_signal_buffer_5s = 3.1   # 3.1 seconds for 5s - precise Pocket Option sync
         self.early_signal_buffer_15s = 2.0  # 2.0 seconds for 15s - allows 13s window
         self.early_signal_buffer_30s = 2.5  # 2.5 seconds for 30s - allows 27.5s window
         self.early_signal_buffer_1m = 3.0   # 3.0 seconds for 1m - allows 57s window
