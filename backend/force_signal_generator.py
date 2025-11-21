@@ -428,7 +428,91 @@ class ForceSignalGenerator:
             
             # Route to appropriate strategy based on timeframe
             if timeframe in ['5s', '5sec', '5 sec']:
-                logger.info(f"⚡ Applying ULTRA-PRECISION 5-SECOND strategy (Multi-Confirmation) for {symbol}")
+                # APPLY SELECTED STRATEGY FROM STRATEGY SELECTOR
+                if selected_strategy_id == 'keltner_fractal':
+                    logger.info(f"🎯 Applying SELECTED: Keltner Channel + Fractal for {symbol}")
+                    from strategy_5s_keltner_fractal import generate_signal as keltner_signal
+                    
+                    # Get market data
+                    from real_market_data_service import real_market_data_service
+                    market_data_list = await real_market_data_service.get_historical_data(symbol, interval='1m', periods=100)
+                    
+                    if market_data_list and len(market_data_list) >= 30:
+                        import pandas as pd
+                        df = pd.DataFrame([{
+                            'Open': md.open_price,
+                            'High': md.high_price,
+                            'Low': md.low_price,
+                            'Close': md.close_price,
+                            'Volume': md.volume if hasattr(md, 'volume') else 0
+                        } for md in market_data_list])
+                        
+                        result = await loop.run_in_executor(self.executor, keltner_signal, df, symbol)
+                        
+                        if result:
+                            logger.info(f"✅ Keltner+Fractal 5s: {symbol} → {result['direction']} ({result['confidence']:.1f}%)")
+                            result['strategy'] = 'keltner_fractal_5s'
+                            result['timeframe'] = timeframe
+                            result['chart_type'] = chart_type
+                            result['selected_strategy'] = True
+                            return result
+                
+                elif selected_strategy_id == '3ema_crossover':
+                    logger.info(f"🎯 Applying SELECTED: 3 EMA Crossover for {symbol}")
+                    from strategy_5s_3ema_crossover import generate_signal as ema3_signal
+                    
+                    from real_market_data_service import real_market_data_service
+                    market_data_list = await real_market_data_service.get_historical_data(symbol, interval='1m', periods=100)
+                    
+                    if market_data_list and len(market_data_list) >= 25:
+                        import pandas as pd
+                        df = pd.DataFrame([{
+                            'Open': md.open_price,
+                            'High': md.high_price,
+                            'Low': md.low_price,
+                            'Close': md.close_price,
+                            'Volume': md.volume if hasattr(md, 'volume') else 0
+                        } for md in market_data_list])
+                        
+                        result = await loop.run_in_executor(self.executor, ema3_signal, df, symbol)
+                        
+                        if result:
+                            logger.info(f"✅ 3-EMA Crossover 5s: {symbol} → {result['direction']} ({result['confidence']:.1f}%)")
+                            result['strategy'] = '3ema_crossover_5s'
+                            result['timeframe'] = timeframe
+                            result['chart_type'] = chart_type
+                            result['selected_strategy'] = True
+                            return result
+                
+                elif selected_strategy_id == 'ema20_rsi14':
+                    logger.info(f"🎯 Applying SELECTED: EMA 20 + RSI 14 for {symbol}")
+                    from strategy_5s_ema20_rsi14 import generate_signal as ema_rsi_signal
+                    
+                    from real_market_data_service import real_market_data_service
+                    market_data_list = await real_market_data_service.get_historical_data(symbol, interval='1m', periods=100)
+                    
+                    if market_data_list and len(market_data_list) >= 25:
+                        import pandas as pd
+                        df = pd.DataFrame([{
+                            'Open': md.open_price,
+                            'High': md.high_price,
+                            'Low': md.low_price,
+                            'Close': md.close_price,
+                            'Volume': md.volume if hasattr(md, 'volume') else 0
+                        } for md in market_data_list])
+                        
+                        result = await loop.run_in_executor(self.executor, ema_rsi_signal, df, symbol)
+                        
+                        if result:
+                            logger.info(f"✅ EMA20+RSI14 5s: {symbol} → {result['direction']} ({result['confidence']:.1f}%)")
+                            result['strategy'] = 'ema20_rsi14_5s'
+                            result['timeframe'] = timeframe
+                            result['chart_type'] = chart_type
+                            result['selected_strategy'] = True
+                            return result
+                
+                # DEFAULT or if selected strategy fails
+                logger.info(f"⚡ Applying DEFAULT 5-SECOND strategy (Ultra-Precision) for {symbol}")
                 
                 # NEW: Ultra-Precision Strategy (3+ confirmations required for max accuracy)
                 result_ultra_precision = await loop.run_in_executor(
