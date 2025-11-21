@@ -125,10 +125,10 @@ class ForceSignalGenerator:
             if primary_timeframe not in ['5s', '15s', '30s']:
                 # Advanced AI Ensemble Analysis (60% weight - MAXIMUM ACCURACY)
                 # Only for longer timeframes where speed is less critical
-                if data_1m and len(data_1m) > 50:
+                if primary_data and len(primary_data) > 50:
                     try:
                         ai_ensemble_signal = await asyncio.wait_for(
-                            self._advanced_ai_ensemble_force_analysis(data_1m, symbol),
+                            self._advanced_ai_ensemble_force_analysis(primary_data, symbol),
                             timeout=4.0  # 4-second timeout for AI analysis
                         )
                         if ai_ensemble_signal:
