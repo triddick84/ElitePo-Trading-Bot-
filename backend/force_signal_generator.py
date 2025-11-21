@@ -80,23 +80,27 @@ class ForceSignalGenerator:
                 else:
                     logger.info(f"⚠️ Wait time too long ({wait_seconds:.1f}s), proceeding immediately")
             
-            # Get comprehensive multi-timeframe data
+            # Determine primary timeframe from user selection
+            primary_timeframe = user_timeframes[0] if user_timeframes else '5s'
+            
+            # CRITICAL: Fetch market data in the SAME timeframe as the signal
+            # This ensures chart analysis timeframe = signal expiration timeframe
             loop = asyncio.get_event_loop()
             
-            # Parallel data fetching for maximum speed and depth
-            # OPTIMIZED: Use aggressive 8-second timeout for all data fetching
+            # Map ultra-short timeframes to 1m for data fetching (yfinance minimum)
+            # We'll interpolate for sub-minute timeframes
+            data_timeframe = "1m" if primary_timeframe in ['5s', '15s', '30s'] else primary_timeframe
+            
+            logger.info(f"📊 Fetching market data in {data_timeframe} timeframe for {primary_timeframe} signal")
+            
+            # Fetch primary timeframe data + sentiment/economic indicators
             tasks = [
-                loop.run_in_executor(self.executor, self._fetch_deep_market_data, symbol, "1m"),
-                loop.run_in_executor(self.executor, self._fetch_deep_market_data, symbol, "5m"), 
-                loop.run_in_executor(self.executor, self._fetch_deep_market_data, symbol, "15m"),
-                loop.run_in_executor(self.executor, self._fetch_deep_market_data, symbol, "1h"),
-                loop.run_in_executor(self.executor, self._fetch_deep_market_data, symbol, "4h"),
-                loop.run_in_executor(self.executor, self._fetch_deep_market_data, symbol, "1d"),
+                loop.run_in_executor(self.executor, self._fetch_deep_market_data, symbol, data_timeframe),
                 loop.run_in_executor(self.executor, self._fetch_market_sentiment, symbol),
                 loop.run_in_executor(self.executor, self._fetch_economic_indicators, symbol)
             ]
             
-            # SPEED OPTIMIZATION: 8-second timeout for data fetching to ensure fast response
+            # SPEED OPTIMIZATION: 8-second timeout for data fetching
             try:
                 results = await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), timeout=8.0)
             except asyncio.TimeoutError:
@@ -108,16 +112,13 @@ class ForceSignalGenerator:
                 # Use empty results for timed out data
                 results = [None] * len(tasks)
             
-            # Extract data
-            data_1m, data_5m, data_15m, data_1h, data_4h, data_1d = results[:6]
-            sentiment_data = results[6] if not isinstance(results[6], Exception) else {}
-            economic_data = results[7] if not isinstance(results[7], Exception) else {}
+            # Extract data - only primary timeframe data needed
+            primary_data = results[0] if results[0] and not isinstance(results[0], Exception) else None
+            sentiment_data = results[1] if not isinstance(results[1], Exception) else {}
+            economic_data = results[2] if not isinstance(results[2], Exception) else {}
             
-            # Run comprehensive analysis on all timeframes
+            # Run comprehensive analysis using PRIMARY TIMEFRAME ONLY
             analysis_results = []
-            
-            # Determine timeframe from user_timeframes or default to 5s for OTC
-            primary_timeframe = user_timeframes[0] if user_timeframes else '5s'
             
             # SPEED OPTIMIZATION: Skip AI Ensemble for ultra-short timeframes to save time (3-5 seconds)
             # For ultra-short, use researched strategy exclusively
