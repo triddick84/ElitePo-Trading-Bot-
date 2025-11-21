@@ -81,7 +81,7 @@ function App() {
     // Listen for custom navigation events
     const handleNavigate = (event) => {
       if (event.detail) {
-        setActiveTab(event.detail);
+        setActiveView(event.detail);
       }
     };
     window.addEventListener('navigate', handleNavigate);
