@@ -581,9 +581,9 @@
 
 ## test_plan:
   current_focus:
-    - "Timeframe Alignment System (Chart = Expiration)"
-    - "Pocket Option Candle Synchronization Integration"
-    - "Force Generate and Auto Generate Timing Verification"
+    - "Signal Quality Verification"
+    - "Multi-Timeframe Signal Generation"
+    - "Primary Timeframe Data Fetching"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
