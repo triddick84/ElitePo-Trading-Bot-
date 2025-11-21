@@ -581,12 +581,10 @@
 
 ## test_plan:
   current_focus:
-    - "1M Timeframe SELL Bias Fix"
-    - "Flexible Trading System Implementation"
-    - "Real Market Data Integration for Strategies"
-    - "End-to-End Strategy Performance Optimization"
-  stuck_tasks:
-    - "1M Timeframe SELL Bias Fix"
+    - "Timeframe Alignment System (Chart = Expiration)"
+    - "Pocket Option Candle Synchronization Integration"
+    - "Force Generate and Auto Generate Timing Verification"
+  stuck_tasks: []
   test_all: false
   test_priority: "high_first"
 
