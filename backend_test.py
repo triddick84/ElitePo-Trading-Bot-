@@ -9760,6 +9760,13 @@ class BackendTester:
             ("Health Check", self.test_health_check),
             ("Environment Variables", self.test_environment_variables),
             
+            # ========== CRITICAL: TIMEFRAME ALIGNMENT & CANDLE SYNCHRONIZATION TESTS ==========
+            ("Timeframe Alignment Verification", self.test_timeframe_alignment_verification),
+            ("Candle Synchronization Integration", self.test_candle_synchronization_integration),
+            ("Primary Timeframe Data Fetching", self.test_primary_timeframe_data_fetching),
+            ("Multi-Timeframe Signal Generation", self.test_multi_timeframe_signal_generation),
+            ("Signal Quality Verification", self.test_signal_quality_verification),
+            
             # 1M TIMEFRAME SELL BIAS FIX TEST (PRIORITY)
             ("1M Timeframe SELL Bias Fix", self.test_1m_timeframe_sell_bias_fix),
             
