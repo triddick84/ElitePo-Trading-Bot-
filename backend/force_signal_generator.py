@@ -212,10 +212,10 @@ class ForceSignalGenerator:
                 logger.info(f"✅ Generated SINGLE {preferred_market.upper()} signal with {best_signal.probability}% confidence")
                 return [best_signal]  # Return as list with ONE signal
             else:
-                # Generate single emergency signal for preferred market
+                # Generate single emergency signal for preferred market using primary timeframe data
                 logger.warning(f"⚠️ Generating emergency {preferred_market.upper()} signal")
                 emergency_signal = self._generate_emergency_signal(
-                    symbol, market_data, data_1m or data_5m or [market_data.dict()], preferred_market, user_timeframes
+                    symbol, market_data, primary_data or [market_data.dict()], preferred_market, user_timeframes
                 )
                 return [emergency_signal]  # Return as list with ONE signal
             
