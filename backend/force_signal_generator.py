@@ -160,17 +160,17 @@ class ForceSignalGenerator:
                     analysis_results.append(('pocket_option_strategy', strategy_signal, weight))
                     logger.info(f"🎯 Pocket Option {primary_timeframe} strategy activated for {symbol} with {chart_type}")
                     
-                    # Only add supporting strategies for longer timeframes
+                    # Only add supporting strategies for longer timeframes using primary timeframe data
                     # SPEED OPTIMIZATION: Run supporting strategies in parallel with timeout
                     supporting_tasks = []
                     
-                    # 1-minute scalping analysis (15% weight - supporting analysis)
-                    if data_1m and len(data_1m) > 100:
-                        supporting_tasks.append(('scalping', self._ultra_precision_scalping_analysis(data_1m, symbol), 0.15))
+                    # Scalping analysis using primary timeframe data (15% weight - supporting analysis)
+                    if primary_data and len(primary_data) > 100:
+                        supporting_tasks.append(('scalping', self._ultra_precision_scalping_analysis(primary_data, symbol), 0.15))
                     
-                    # 5-minute momentum analysis (15% weight)
-                    if data_5m and len(data_5m) > 50:
-                        supporting_tasks.append(('momentum', self._advanced_momentum_analysis(data_5m, symbol), 0.15))
+                    # Momentum analysis using primary timeframe data (15% weight)
+                    if primary_data and len(primary_data) > 50:
+                        supporting_tasks.append(('momentum', self._advanced_momentum_analysis(primary_data, symbol), 0.15))
                     
                     # Execute supporting strategies in parallel with 3-second timeout
                     if supporting_tasks:
