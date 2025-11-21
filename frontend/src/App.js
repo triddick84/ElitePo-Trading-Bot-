@@ -145,9 +145,10 @@ function App() {
 
   const navigation = [
     { id: "dashboard", label: "Dashboard", icon: "📊" },
-    { id: "signals", label: "Trading Signals", icon: "📈" },
-    { id: "market", label: "Market Data", icon: "💹" },
-    { id: "performance", label: "Performance", icon: "🎯" },
+    { id: "signals", label: "Signals", icon: "📡" },
+    { id: "strategies", label: "Strategy Selector", icon: "🎯" },
+    { id: "market", label: "Market Data", icon: "📈" },
+    { id: "performance", label: "Performance", icon: "📉" },
     { id: "controls", label: "Bot Controls", icon: "⚙️" },
     { id: "backtest", label: "Backtesting", icon: "🧪" },
     { id: "integrations", label: "Integrations", icon: "🔗" },
