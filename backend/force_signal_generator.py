@@ -29,6 +29,7 @@ from ultra_precision_90_enhancer import ultra_precision_90
 import high_accuracy_1m_triple_confirmation
 import high_accuracy_williams_macd_strategy
 import high_accuracy_smart_money_ict
+from signal_accuracy_optimizer import signal_optimizer
 
 logger = logging.getLogger(__name__)
 
