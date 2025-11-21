@@ -409,6 +409,23 @@ class ForceSignalGenerator:
         try:
             loop = asyncio.get_event_loop()
             
+            # GET SELECTED STRATEGY FROM DATABASE
+            from strategy_selection_service import strategy_selection_service
+            selected_strategies = await strategy_selection_service.get_selected_strategies()
+            
+            # Normalize timeframe for lookup
+            timeframe_normalized = timeframe.lower().replace(' ', '').replace('sec', 's')
+            if timeframe_normalized == '1min' or timeframe_normalized == '1minute':
+                timeframe_normalized = '1m'
+            elif timeframe_normalized == '3min' or timeframe_normalized == '3minute':
+                timeframe_normalized = '3m'
+            elif timeframe_normalized == '5min' or timeframe_normalized == '5minute':
+                timeframe_normalized = '5m'
+            
+            selected_strategy_id = selected_strategies.get(timeframe_normalized, 'default')
+            
+            logger.info(f"🎯 Selected strategy for {timeframe_normalized}: {selected_strategy_id}")
+            
             # Route to appropriate strategy based on timeframe
             if timeframe in ['5s', '5sec', '5 sec']:
                 logger.info(f"⚡ Applying ULTRA-PRECISION 5-SECOND strategy (Multi-Confirmation) for {symbol}")
