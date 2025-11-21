@@ -578,7 +578,90 @@ class ForceSignalGenerator:
                 )
                 
             elif timeframe in ['15s', '15sec', '15 sec']:
-                logger.info(f"⚡ Applying Pocket Option 15-SECOND Fractal strategy (5s chart) for {symbol}")
+                # APPLY SELECTED STRATEGY FROM STRATEGY SELECTOR
+                if selected_strategy_id == 'rsi_volume':
+                    logger.info(f"🎯 Applying SELECTED: RSI + Volume Reversal for {symbol}")
+                    from strategy_15s_rsi_volume import generate_signal as rsi_vol_signal
+                    
+                    from real_market_data_service import real_market_data_service
+                    market_data_list = await real_market_data_service.get_historical_data(symbol, interval='1m', periods=100)
+                    
+                    if market_data_list and len(market_data_list) >= 20:
+                        import pandas as pd
+                        df = pd.DataFrame([{
+                            'Open': md.open_price,
+                            'High': md.high_price,
+                            'Low': md.low_price,
+                            'Close': md.close_price,
+                            'Volume': md.volume if hasattr(md, 'volume') else 0
+                        } for md in market_data_list])
+                        
+                        result = await loop.run_in_executor(self.executor, rsi_vol_signal, df, symbol)
+                        
+                        if result:
+                            logger.info(f"✅ RSI+Volume 15s: {symbol} → {result['direction']} ({result['confidence']:.1f}%)")
+                            result['strategy'] = 'rsi_volume_15s'
+                            result['timeframe'] = timeframe
+                            result['chart_type'] = chart_type
+                            result['selected_strategy'] = True
+                            return result
+                
+                elif selected_strategy_id == 'bollinger_ema':
+                    logger.info(f"🎯 Applying SELECTED: Bollinger + EMA Breakout for {symbol}")
+                    from strategy_15s_bollinger_ema import generate_signal as bb_ema_signal
+                    
+                    from real_market_data_service import real_market_data_service
+                    market_data_list = await real_market_data_service.get_historical_data(symbol, interval='1m', periods=100)
+                    
+                    if market_data_list and len(market_data_list) >= 25:
+                        import pandas as pd
+                        df = pd.DataFrame([{
+                            'Open': md.open_price,
+                            'High': md.high_price,
+                            'Low': md.low_price,
+                            'Close': md.close_price,
+                            'Volume': md.volume if hasattr(md, 'volume') else 0
+                        } for md in market_data_list])
+                        
+                        result = await loop.run_in_executor(self.executor, bb_ema_signal, df, symbol)
+                        
+                        if result:
+                            logger.info(f"✅ Bollinger+EMA 15s: {symbol} → {result['direction']} ({result['confidence']:.1f}%)")
+                            result['strategy'] = 'bollinger_ema_15s'
+                            result['timeframe'] = timeframe
+                            result['chart_type'] = chart_type
+                            result['selected_strategy'] = True
+                            return result
+                
+                elif selected_strategy_id == 'macd_rsi':
+                    logger.info(f"🎯 Applying SELECTED: MACD + RSI Trend for {symbol}")
+                    from strategy_15s_macd_rsi import generate_signal as macd_rsi_signal
+                    
+                    from real_market_data_service import real_market_data_service
+                    market_data_list = await real_market_data_service.get_historical_data(symbol, interval='1m', periods=100)
+                    
+                    if market_data_list and len(market_data_list) >= 30:
+                        import pandas as pd
+                        df = pd.DataFrame([{
+                            'Open': md.open_price,
+                            'High': md.high_price,
+                            'Low': md.low_price,
+                            'Close': md.close_price,
+                            'Volume': md.volume if hasattr(md, 'volume') else 0
+                        } for md in market_data_list])
+                        
+                        result = await loop.run_in_executor(self.executor, macd_rsi_signal, df, symbol)
+                        
+                        if result:
+                            logger.info(f"✅ MACD+RSI 15s: {symbol} → {result['direction']} ({result['confidence']:.1f}%)")
+                            result['strategy'] = 'macd_rsi_15s'
+                            result['timeframe'] = timeframe
+                            result['chart_type'] = chart_type
+                            result['selected_strategy'] = True
+                            return result
+                
+                # DEFAULT or if selected strategy fails
+                logger.info(f"⚡ Applying DEFAULT 15-SECOND Fractal strategy for {symbol}")
                 
                 # Use NEW Fractal strategy with 5s chart data
                 result = await loop.run_in_executor(
