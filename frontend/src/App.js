@@ -181,6 +181,10 @@ function App() {
         return <BotControls onStatusUpdate={fetchBotStatus} />;
       case "backtest":
         return <BacktestPanel />;
+      case "strategies":
+        return <StrategySelector />;
+      case "money":
+        return <MoneyManagement />;
       case "integrations":
         return <IntegrationPage />;
       case "api":
