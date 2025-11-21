@@ -710,36 +710,49 @@ const BotControls = ({ onStatusUpdate }) => {
         </Card>
       </div>
 
-      {/* Trading Strategies */}
+      {/* Trading Strategies - Link to Strategy Selector */}
       <Card className="p-6 glass-dark border-slate-700/50">
-        <h3 className="text-xl font-semibold text-white mb-6">Active Trading Strategies</h3>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-xl font-semibold text-white mb-2">Trading Strategies</h3>
+            <p className="text-slate-400 text-sm">Manage your strategies for each timeframe</p>
+          </div>
+          <div className="text-4xl">🎯</div>
+        </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4" data-testid="strategy-selection">
-          {strategies.map((strategy) => (
-            <div 
-              key={strategy.id}
-              className={`p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 ${
-                config.active_strategies?.includes(strategy.id)
-                  ? 'border-emerald-500/50 bg-emerald-500/10'
-                  : 'border-slate-600/50 bg-slate-800/30 hover:border-slate-500/50'
-              }`}
-              onClick={() => handleStrategyToggle(strategy.id)}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <h4 className="text-white font-medium">{strategy.name}</h4>
-                <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
-                  config.active_strategies?.includes(strategy.id)
-                    ? 'border-emerald-500 bg-emerald-500'
-                    : 'border-slate-400'
-                }`}>
-                  {config.active_strategies?.includes(strategy.id) && (
-                    <span className="text-white text-xs">✓</span>
-                  )}
-                </div>
-              </div>
-              <p className="text-slate-400 text-sm">{strategy.description}</p>
+        <div className="bg-gradient-to-r from-blue-600/20 to-purple-600/20 border border-blue-500/30 rounded-xl p-6">
+          <div className="flex items-start space-x-4">
+            <div className="flex-shrink-0 w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center">
+              <span className="text-2xl">📊</span>
             </div>
-          ))}
+            <div className="flex-1">
+              <h4 className="text-white font-semibold mb-2">Strategy Selection Tool</h4>
+              <p className="text-blue-200 text-sm mb-4">
+                Choose from multiple research-backed strategies for each timeframe (5s, 15s, 30s, 1m, 3m, 5m). 
+                Your selected strategies automatically apply to both Force Generate and Auto Generate signals.
+              </p>
+              <button
+                onClick={() => window.location.href = '#'}
+                className="bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 px-6 rounded-lg transition-colors inline-flex items-center space-x-2"
+                onClickCapture={(e) => {
+                  e.preventDefault();
+                  const event = new CustomEvent('navigate', { detail: 'strategies' });
+                  window.dispatchEvent(event);
+                }}
+              >
+                <span>🎯</span>
+                <span>Go to Strategy Selector</span>
+                <span>→</span>
+              </button>
+            </div>
+          </div>
+          
+          <div className="mt-4 pt-4 border-t border-blue-400/20">
+            <p className="text-blue-200 text-xs">
+              💡 <strong>Tip:</strong> The Strategy Selector allows you to choose different strategies for each timeframe, 
+              giving you complete control over your trading approach.
+            </p>
+          </div>
         </div>
       </Card>
 
