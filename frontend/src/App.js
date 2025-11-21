@@ -78,9 +78,18 @@ function App() {
     const statusInterval = setInterval(fetchBotStatus, 5000);
     const signalsInterval = setInterval(fetchLiveSignals, 3000); // Check for new signals every 3 seconds
     
+    // Listen for custom navigation events
+    const handleNavigate = (event) => {
+      if (event.detail) {
+        setActiveTab(event.detail);
+      }
+    };
+    window.addEventListener('navigate', handleNavigate);
+    
     return () => {
       clearInterval(statusInterval);
       clearInterval(signalsInterval);
+      window.removeEventListener('navigate', handleNavigate);
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   
