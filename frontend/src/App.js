@@ -169,6 +169,8 @@ function App() {
         );
       case "signals":
         return <SignalsPanel />;
+      case "strategies":
+        return <StrategySelector />;
       case "market":
         return <MarketData />;
       case "performance":
