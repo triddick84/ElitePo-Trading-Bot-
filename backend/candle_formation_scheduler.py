@@ -28,7 +28,7 @@ class CandleFormationScheduler:
         # Configuration - OPTIMIZED FOR POCKET OPTION CANDLE SYNCHRONIZATION
         # These values ensure signals arrive exactly when needed for candle close entry
         self.latency_compensation_seconds = {
-            '5s': 1.5,    # 1.5s early - signals arrive at 3.5s (optimal for 5s candles)
+            '5s': 4.0,    # 4.0s early - compensates for 2-3s lag (signals arrive at 1s mark)
             '15s': 2.0,   # 2.0s early - signals arrive at 13s (optimal for 15s candles)
             '30s': 2.5,   # 2.5s early - signals arrive at 27.5s (optimal for 30s candles)
             '1m': 3.0,    # 3.0s early - signals arrive at 57s (optimal for 1m candles)
