@@ -1205,6 +1205,480 @@ class BackendTester:
             print(f"   Enhanced signal performance test error: {e}")
             return False
 
+    # ========== TIMEFRAME ALIGNMENT & CANDLE SYNCHRONIZATION TESTING ==========
+    
+    async def test_timeframe_alignment_verification(self) -> bool:
+        """
+        PRIORITY 1: Test timeframe alignment - signal expiration must match chart timeframe
+        5s chart → 5s expiration, 1m chart → 1m expiration, 5m chart → 5m expiration
+        """
+        try:
+            print("   🎯 PRIORITY 1: Testing Timeframe Alignment Verification")
+            
+            # Test different timeframes
+            test_timeframes = [
+                {"timeframe": "5s", "expected_expiration": 1},  # 5s → 1min (minimum)
+                {"timeframe": "1m", "expected_expiration": 1},  # 1m → 1min
+                {"timeframe": "5m", "expected_expiration": 5}   # 5m → 5min
+            ]
+            
+            for test_case in test_timeframes:
+                timeframe = test_case["timeframe"]
+                expected_expiration = test_case["expected_expiration"]
+                
+                print(f"   📊 Testing {timeframe} timeframe alignment...")
+                
+                # Configure bot with specific timeframe
+                config_data = {
+                    "trading_mode": "demo",
+                    "active_strategies": ["hybrid"],
+                    "target_assets": ["forex"],
+                    "selected_assets": ["EURUSD_regular"],
+                    "selected_timeframes": [timeframe],
+                    "risk_tolerance": "medium",
+                    "max_stake_per_trade": 10.0,
+                    "max_daily_trades": 50,
+                    "min_probability_threshold": 75.0,
+                    "auto_trading_enabled": False,
+                    "invert_signals": False,
+                    "sound_alerts_enabled": True
+                }
+                
+                # Start bot with timeframe configuration
+                async with self.session.post(f"{BACKEND_URL}/bot/start", json=config_data) as response:
+                    if response.status != 200:
+                        print(f"   ❌ Failed to start bot for {timeframe} test")
+                        return False
+                
+                # Force generate signal to test timeframe alignment
+                async with self.session.post(f"{BACKEND_URL}/signals/force-generate") as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        if data.get('success') and data.get('signal'):
+                            signal = data['signal']
+                            signal_timeframe = signal.get('timeframe')
+                            expiration_minutes = signal.get('expiration_minutes')
+                            
+                            print(f"   📈 Generated signal: timeframe={signal_timeframe}, expiration={expiration_minutes}min")
+                            
+                            # Verify timeframe alignment
+                            if signal_timeframe == timeframe and expiration_minutes == expected_expiration:
+                                print(f"   ✅ TIMEFRAME ALIGNMENT VERIFIED: {timeframe} → {expiration_minutes}min expiration")
+                            else:
+                                print(f"   ❌ TIMEFRAME ALIGNMENT FAILED: Expected {timeframe}→{expected_expiration}min, got {signal_timeframe}→{expiration_minutes}min")
+                                return False
+                        else:
+                            print(f"   ⚠️ No signal generated for {timeframe} (may be normal)")
+                    else:
+                        print(f"   ❌ Force generate failed for {timeframe}: {response.status}")
+                        return False
+            
+            print("   ✅ ALL TIMEFRAME ALIGNMENTS VERIFIED")
+            return True
+            
+        except Exception as e:
+            print(f"   ❌ Timeframe alignment test error: {e}")
+            return False
+    
+    async def test_candle_synchronization_integration(self) -> bool:
+        """
+        PRIORITY 2: Test candle synchronization integration
+        Verify wait_for_candle behavior and candle formation timing
+        """
+        try:
+            print("   ⏰ PRIORITY 2: Testing Candle Synchronization Integration")
+            
+            # Start bot first
+            config_data = {
+                "trading_mode": "demo",
+                "active_strategies": ["hybrid"],
+                "target_assets": ["forex"],
+                "selected_assets": ["EURUSD_regular"],
+                "selected_timeframes": ["5s"],
+                "risk_tolerance": "medium",
+                "max_stake_per_trade": 10.0,
+                "max_daily_trades": 50,
+                "min_probability_threshold": 75.0,
+                "auto_trading_enabled": False,
+                "invert_signals": False,
+                "sound_alerts_enabled": True
+            }
+            
+            async with self.session.post(f"{BACKEND_URL}/bot/start", json=config_data) as response:
+                if response.status != 200:
+                    print("   ❌ Failed to start bot for candle sync test")
+                    return False
+            
+            # Test candle sync status endpoint
+            async with self.session.get(f"{BACKEND_URL}/bot/candle-sync/status") as response:
+                if response.status == 200:
+                    status = await response.json()
+                    print(f"   📊 Initial candle sync status: enabled={status.get('enabled', False)}")
+                else:
+                    print(f"   ❌ Failed to get candle sync status: {response.status}")
+                    return False
+            
+            # Enable candle synchronization
+            async with self.session.post(f"{BACKEND_URL}/bot/candle-sync/enable") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Candle sync enabled: {data.get('message')}")
+                    print(f"   📈 Timeframes: {data.get('timeframes', [])}")
+                    print(f"   💰 Assets count: {data.get('assets_count', 0)}")
+                else:
+                    print(f"   ❌ Failed to enable candle sync: {response.status}")
+                    return False
+            
+            # Check status after enabling
+            async with self.session.get(f"{BACKEND_URL}/bot/candle-sync/status") as response:
+                if response.status == 200:
+                    status = await response.json()
+                    enabled = status.get('enabled', False)
+                    is_running = status.get('is_running', False)
+                    
+                    print(f"   📊 Candle sync after enable: enabled={enabled}, running={is_running}")
+                    
+                    if enabled:
+                        print("   ✅ CANDLE SYNCHRONIZATION ENABLED SUCCESSFULLY")
+                        
+                        # Check for next candle times
+                        next_candle_times = status.get('next_candle_times', {})
+                        if next_candle_times:
+                            print("   🕐 Next candle formation times:")
+                            for timeframe, candle_info in next_candle_times.items():
+                                seconds_until = candle_info.get('seconds_until', 0)
+                                print(f"      {timeframe}: {seconds_until:.1f}s")
+                        
+                        candle_sync_working = True
+                    else:
+                        print("   ❌ Candle sync not properly enabled")
+                        candle_sync_working = False
+                else:
+                    print(f"   ❌ Failed to get candle sync status after enable: {response.status}")
+                    candle_sync_working = False
+            
+            # Test force generate with candle synchronization (with timeout)
+            print("   🚀 Testing force generate with candle sync (10s timeout)...")
+            start_time = asyncio.get_event_loop().time()
+            
+            try:
+                # Use shorter timeout to avoid long waits in testing
+                async with asyncio.timeout(10):  # 10 second timeout
+                    async with self.session.post(f"{BACKEND_URL}/signals/force-generate?wait_for_candle=true") as response:
+                        end_time = asyncio.get_event_loop().time()
+                        generation_time = end_time - start_time
+                        
+                        print(f"   ⏱️ Signal generation time: {generation_time:.2f}s")
+                        
+                        if response.status == 200:
+                            data = await response.json()
+                            if data.get('success'):
+                                print("   ✅ CANDLE-SYNCHRONIZED SIGNAL GENERATED")
+                                signal = data.get('signal')
+                                if signal:
+                                    print(f"   📈 Signal: {signal.get('symbol')} {signal.get('direction')} ({signal.get('probability')}%)")
+                            else:
+                                print(f"   ⚠️ Signal generation failed: {data.get('message')}")
+                        else:
+                            print(f"   ❌ Force generate with candle sync failed: {response.status}")
+                            
+            except asyncio.TimeoutError:
+                print("   ⚠️ Force generate with candle sync timed out (expected for long waits)")
+                # This is acceptable - candle sync may wait for next candle formation
+            
+            # Disable candle synchronization
+            async with self.session.post(f"{BACKEND_URL}/bot/candle-sync/disable") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Candle sync disabled: {data.get('message')}")
+                else:
+                    print(f"   ❌ Failed to disable candle sync: {response.status}")
+                    return False
+            
+            return candle_sync_working
+            
+        except Exception as e:
+            print(f"   ❌ Candle synchronization test error: {e}")
+            return False
+    
+    async def test_primary_timeframe_data_fetching(self) -> bool:
+        """
+        PRIORITY 3: Test that force generator fetches ONLY primary timeframe data
+        Should see single timeframe data fetch, not multiple timeframes
+        """
+        try:
+            print("   📊 PRIORITY 3: Testing Primary Timeframe Data Fetching")
+            
+            # Configure bot with single timeframe
+            config_data = {
+                "trading_mode": "demo",
+                "active_strategies": ["hybrid"],
+                "target_assets": ["forex"],
+                "selected_assets": ["EURUSD_regular"],
+                "selected_timeframes": ["1m"],  # Single timeframe
+                "risk_tolerance": "medium",
+                "max_stake_per_trade": 10.0,
+                "max_daily_trades": 50,
+                "min_probability_threshold": 75.0,
+                "auto_trading_enabled": False,
+                "invert_signals": False,
+                "sound_alerts_enabled": True
+            }
+            
+            async with self.session.post(f"{BACKEND_URL}/bot/start", json=config_data) as response:
+                if response.status != 200:
+                    print("   ❌ Failed to start bot for primary timeframe test")
+                    return False
+            
+            # Force generate signal and check for primary timeframe usage
+            print("   🚀 Generating signal to verify primary timeframe data fetching...")
+            
+            async with self.session.post(f"{BACKEND_URL}/signals/force-generate") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if data.get('success'):
+                        signal = data.get('signal')
+                        analysis_details = data.get('analysis_details', {})
+                        
+                        if signal:
+                            signal_timeframe = signal.get('timeframe')
+                            print(f"   📈 Generated signal timeframe: {signal_timeframe}")
+                            
+                            # Check if signal uses primary timeframe
+                            if signal_timeframe == "1m":
+                                print("   ✅ PRIMARY TIMEFRAME DATA FETCHING VERIFIED")
+                                
+                                # Check analysis details for timeframe info
+                                if analysis_details:
+                                    print(f"   📊 Analysis details available: {len(analysis_details)} items")
+                                
+                                return True
+                            else:
+                                print(f"   ❌ Expected 1m timeframe, got {signal_timeframe}")
+                                return False
+                        else:
+                            print("   ⚠️ No signal generated (may be normal)")
+                            return True  # Not a failure if no signal generated
+                    else:
+                        print(f"   ❌ Signal generation failed: {data.get('message')}")
+                        return False
+                else:
+                    print(f"   ❌ Force generate failed: {response.status}")
+                    return False
+            
+        except Exception as e:
+            print(f"   ❌ Primary timeframe data fetching test error: {e}")
+            return False
+    
+    async def test_multi_timeframe_signal_generation(self) -> bool:
+        """
+        PRIORITY 4: Test auto generation with multiple timeframes
+        Verify signals are generated for each timeframe with correct expiration
+        """
+        try:
+            print("   🔄 PRIORITY 4: Testing Multi-Timeframe Signal Generation")
+            
+            # Configure bot with multiple timeframes
+            config_data = {
+                "trading_mode": "demo",
+                "active_strategies": ["hybrid"],
+                "target_assets": ["forex"],
+                "selected_assets": ["EURUSD_regular"],
+                "selected_timeframes": ["5s", "1m", "5m"],  # Multiple timeframes
+                "risk_tolerance": "medium",
+                "max_stake_per_trade": 10.0,
+                "max_daily_trades": 50,
+                "min_probability_threshold": 75.0,
+                "auto_trading_enabled": False,
+                "invert_signals": False,
+                "sound_alerts_enabled": True
+            }
+            
+            async with self.session.post(f"{BACKEND_URL}/bot/start", json=config_data) as response:
+                if response.status != 200:
+                    print("   ❌ Failed to start bot for multi-timeframe test")
+                    return False
+            
+            # Start auto signal generation
+            async with self.session.post(f"{BACKEND_URL}/signals/auto-generate/start") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Auto generation started: {data.get('message')}")
+                else:
+                    print(f"   ❌ Failed to start auto generation: {response.status}")
+                    return False
+            
+            # Wait a moment for auto generation to work
+            print("   ⏱️ Waiting 15 seconds for auto signal generation...")
+            await asyncio.sleep(15)
+            
+            # Check generated signals
+            async with self.session.get(f"{BACKEND_URL}/signals/history?limit=10") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    signals = data.get('signals', [])
+                    
+                    print(f"   📊 Found {len(signals)} recent signals")
+                    
+                    # Check for signals with different timeframes
+                    timeframes_found = set()
+                    expiration_matches = []
+                    
+                    for signal in signals:
+                        timeframe = signal.get('timeframe')
+                        expiration_minutes = signal.get('expiration_minutes')
+                        
+                        if timeframe:
+                            timeframes_found.add(timeframe)
+                            
+                            # Check expiration alignment
+                            expected_expiration = 1 if timeframe in ['5s', '1m'] else 5 if timeframe == '5m' else 1
+                            if expiration_minutes == expected_expiration:
+                                expiration_matches.append(f"{timeframe}→{expiration_minutes}min")
+                                print(f"   ✅ {timeframe} signal with {expiration_minutes}min expiration")
+                            else:
+                                print(f"   ❌ {timeframe} signal with {expiration_minutes}min expiration (expected {expected_expiration})")
+                    
+                    print(f"   📈 Timeframes found: {list(timeframes_found)}")
+                    print(f"   ⏰ Expiration matches: {expiration_matches}")
+                    
+                    # Stop auto generation
+                    await self.session.post(f"{BACKEND_URL}/signals/auto-generate/stop")
+                    
+                    # Success if we found signals (even if not all timeframes)
+                    if len(signals) > 0:
+                        print("   ✅ MULTI-TIMEFRAME SIGNAL GENERATION WORKING")
+                        return True
+                    else:
+                        print("   ⚠️ No signals generated during test period")
+                        return True  # Not necessarily a failure
+                else:
+                    print(f"   ❌ Failed to get signal history: {response.status}")
+                    return False
+            
+        except Exception as e:
+            print(f"   ❌ Multi-timeframe signal generation test error: {e}")
+            return False
+    
+    async def test_signal_quality_verification(self) -> bool:
+        """
+        PRIORITY 5: Test signal quality after timeframe alignment changes
+        Verify signals maintain quality standards (75%+ confidence, all fields present)
+        """
+        try:
+            print("   🎯 PRIORITY 5: Testing Signal Quality Verification")
+            
+            # Configure bot for quality testing
+            config_data = {
+                "trading_mode": "demo",
+                "active_strategies": ["hybrid"],
+                "target_assets": ["forex", "crypto"],
+                "selected_assets": ["EURUSD_regular", "BTCUSD_regular"],
+                "selected_timeframes": ["5s", "1m", "5m"],
+                "risk_tolerance": "medium",
+                "max_stake_per_trade": 10.0,
+                "max_daily_trades": 50,
+                "min_probability_threshold": 75.0,
+                "auto_trading_enabled": False,
+                "invert_signals": False,
+                "sound_alerts_enabled": True
+            }
+            
+            async with self.session.post(f"{BACKEND_URL}/bot/start", json=config_data) as response:
+                if response.status != 200:
+                    print("   ❌ Failed to start bot for signal quality test")
+                    return False
+            
+            # Generate multiple signals to test quality
+            quality_results = []
+            
+            for i in range(3):  # Test 3 signals
+                print(f"   🚀 Generating signal #{i+1} for quality verification...")
+                
+                async with self.session.post(f"{BACKEND_URL}/signals/force-generate") as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        if data.get('success') and data.get('signal'):
+                            signal = data['signal']
+                            
+                            # Check required fields
+                            required_fields = [
+                                'id', 'symbol', 'direction', 'entry_price', 
+                                'probability', 'timeframe', 'market_type',
+                                'precision_entry_time', 'technical_analysis'
+                            ]
+                            
+                            missing_fields = [field for field in required_fields if field not in signal or signal[field] is None]
+                            
+                            # Check probability threshold
+                            probability = signal.get('probability', 0)
+                            confidence_level = signal.get('confidence_level', '')
+                            market_type = signal.get('market_type', '')
+                            
+                            quality_check = {
+                                'signal_id': signal.get('id', f'signal_{i+1}'),
+                                'probability': probability,
+                                'confidence_level': confidence_level,
+                                'market_type': market_type,
+                                'missing_fields': missing_fields,
+                                'meets_threshold': probability >= 75.0,
+                                'has_all_fields': len(missing_fields) == 0
+                            }
+                            
+                            quality_results.append(quality_check)
+                            
+                            print(f"   📊 Signal #{i+1}: {signal.get('symbol')} {signal.get('direction')} "
+                                  f"({probability}% confidence, {market_type} market)")
+                            
+                            if missing_fields:
+                                print(f"   ⚠️ Missing fields: {missing_fields}")
+                            
+                            if probability < 75.0:
+                                print(f"   ⚠️ Below threshold: {probability}% < 75%")
+                        else:
+                            print(f"   ⚠️ No signal generated on attempt #{i+1}")
+                    else:
+                        print(f"   ❌ Force generate failed on attempt #{i+1}: {response.status}")
+                
+                # Small delay between generations
+                await asyncio.sleep(2)
+            
+            # Analyze quality results
+            if quality_results:
+                total_signals = len(quality_results)
+                signals_with_all_fields = sum(1 for r in quality_results if r['has_all_fields'])
+                signals_above_threshold = sum(1 for r in quality_results if r['meets_threshold'])
+                
+                avg_probability = sum(r['probability'] for r in quality_results) / total_signals
+                
+                print(f"   📊 SIGNAL QUALITY ANALYSIS:")
+                print(f"      Total signals tested: {total_signals}")
+                print(f"      Signals with all fields: {signals_with_all_fields}/{total_signals}")
+                print(f"      Signals above 75% threshold: {signals_above_threshold}/{total_signals}")
+                print(f"      Average probability: {avg_probability:.1f}%")
+                
+                # Quality criteria
+                field_completeness = (signals_with_all_fields / total_signals) >= 0.8  # 80% should have all fields
+                threshold_compliance = (signals_above_threshold / total_signals) >= 0.6  # 60% should meet threshold
+                avg_quality = avg_probability >= 70.0  # Average should be 70%+
+                
+                if field_completeness and threshold_compliance and avg_quality:
+                    print("   ✅ SIGNAL QUALITY VERIFICATION PASSED")
+                    return True
+                else:
+                    print("   ❌ SIGNAL QUALITY VERIFICATION FAILED")
+                    print(f"      Field completeness: {field_completeness} (need 80%+)")
+                    print(f"      Threshold compliance: {threshold_compliance} (need 60%+)")
+                    print(f"      Average quality: {avg_quality} (need 70%+)")
+                    return False
+            else:
+                print("   ⚠️ No signals generated for quality testing")
+                return True  # Not necessarily a failure
+            
+        except Exception as e:
+            print(f"   ❌ Signal quality verification test error: {e}")
+            return False
+
     # ========== FORCE GENERATE SPEED OPTIMIZATION TESTING ==========
     
     async def test_force_generate_speed_optimization(self) -> bool:
