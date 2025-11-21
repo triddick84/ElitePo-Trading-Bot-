@@ -202,9 +202,9 @@ class ForceSignalGenerator:
                 preferred_market = "otc"
                 logger.info(f"📍 No suffix detected - Defaulting to OTC market")
             
-            # Generate signal for preferred market type
+            # Generate signal for preferred market type using primary timeframe data
             best_signal = await self._force_combine_analysis(
-                analysis_results, market_data, symbol, data_1m or data_5m or [market_data.dict()], preferred_market, user_timeframes
+                analysis_results, market_data, symbol, primary_data or [market_data.dict()], preferred_market, user_timeframes
             )
             
             # Return single best signal
