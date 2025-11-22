@@ -94,20 +94,20 @@ class PocketOptionCandleService:
             # Get timeframe in seconds
             tf_seconds = self.timeframe_map.get(timeframe, 60)
             
-            # Fetch candle data from Pocket Option
-            candles = self.api.get_candles(clean_asset, tf_seconds, count=1)
+            # Fetch candle data from Pocket Option using async method
+            candles = await self.api.get_candles(clean_asset, tf_seconds, count=1)
             
             if candles and len(candles) > 0:
                 latest_candle = candles[-1]
                 
-                # Extract candle data
+                # Extract candle data (adapt to actual API response format)
                 candle_data = {
-                    'open': latest_candle.get('open'),
-                    'high': latest_candle.get('max'),
-                    'low': latest_candle.get('min'),
-                    'close': latest_candle.get('close'),
-                    'timestamp': latest_candle.get('time'),  # Unix timestamp
-                    'close_time': datetime.fromtimestamp(latest_candle.get('time'), tz=timezone.utc),
+                    'open': latest_candle.get('open') or latest_candle.get('o'),
+                    'high': latest_candle.get('high') or latest_candle.get('h') or latest_candle.get('max'),
+                    'low': latest_candle.get('low') or latest_candle.get('l') or latest_candle.get('min'),
+                    'close': latest_candle.get('close') or latest_candle.get('c'),
+                    'timestamp': latest_candle.get('time') or latest_candle.get('timestamp') or latest_candle.get('t'),
+                    'close_time': datetime.fromtimestamp(latest_candle.get('time') or latest_candle.get('timestamp') or latest_candle.get('t'), tz=timezone.utc),
                     'timeframe': timeframe,
                     'asset': asset
                 }
