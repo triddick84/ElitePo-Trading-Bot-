@@ -1917,6 +1917,79 @@ async def get_strategy_details(timeframe: str, strategy_id: str):
         logger.error(f"Error getting strategy details: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# Latency Adjustment Endpoints
+@api_router.get("/latency/settings")
+async def get_latency_settings():
+    """Get current user latency adjustment settings"""
+    try:
+        settings = await db.latency_settings.find_one({'type': 'user_latency_offset'})
+        
+        if settings:
+            return {
+                "success": True,
+                "latency_offset": settings.get('latency_offset', 0.0),
+                "updated_at": settings.get('updated_at')
+            }
+        
+        # Return defaults if no settings exist
+        return {
+            "success": True,
+            "latency_offset": 0.0,
+            "updated_at": None
+        }
+    except Exception as e:
+        logger.error(f"Error getting latency settings: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.put("/latency/settings")
+async def update_latency_settings(latency_offset: float):
+    """
+    Update user latency adjustment offset
+    
+    Args:
+        latency_offset: Latency offset in seconds (-10 to +10)
+            - Negative values: signals arrive earlier
+            - Positive values: signals arrive later
+            - 0: automatic timing (default)
+    """
+    try:
+        # Validate range
+        if latency_offset < -10 or latency_offset > 10:
+            raise HTTPException(
+                status_code=400,
+                detail="Latency offset must be between -10 and +10 seconds"
+            )
+        
+        # Update latency optimizer with new offset
+        from latency_optimizer import latency_optimizer
+        latency_optimizer.set_user_latency_offset(latency_offset)
+        
+        # Save to database
+        await db.latency_settings.update_one(
+            {'type': 'user_latency_offset'},
+            {
+                '$set': {
+                    'type': 'user_latency_offset',
+                    'latency_offset': latency_offset,
+                    'updated_at': datetime.now(timezone.utc).isoformat()
+                }
+            },
+            upsert=True
+        )
+        
+        logger.info(f"✅ Latency offset updated to {latency_offset}s")
+        
+        return {
+            "success": True,
+            "message": f"Latency offset updated to {latency_offset}s",
+            "latency_offset": latency_offset
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating latency settings: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Include the router in the main app
 app.include_router(api_router)
 
