@@ -728,6 +728,98 @@ const BotControls = ({ onStatusUpdate }) => {
         </Card>
       </div>
 
+      {/* Latency Adjustment Slider */}
+      <Card className="p-6 glass-dark border-emerald-700/50">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-xl font-semibold text-white mb-2">⚡ Latency Adjustment</h3>
+            <p className="text-slate-400 text-sm">Fine-tune signal timing for your network and platform speed</p>
+          </div>
+          <div className="text-4xl">🎛️</div>
+        </div>
+        
+        <div className="bg-gradient-to-r from-emerald-900/30 to-teal-900/30 border border-emerald-500/30 rounded-xl p-6">
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <label className="text-white font-medium">Timing Offset</label>
+              <div className="flex items-center space-x-2">
+                <span className={`text-2xl font-bold ${
+                  latencyOffset === 0 ? 'text-emerald-400' : 
+                  latencyOffset < 0 ? 'text-blue-400' : 'text-orange-400'
+                }`}>
+                  {latencyOffset >= 0 ? '+' : ''}{latencyOffset.toFixed(1)}s
+                </span>
+                {isLatencySaving && <span className="text-emerald-400 text-sm">Saving...</span>}
+              </div>
+            </div>
+            
+            <Slider
+              value={[latencyOffset]}
+              onValueChange={(values) => updateLatencyOffset(values[0])}
+              min={-10}
+              max={10}
+              step={0.1}
+              className="w-full"
+              disabled={isLatencySaving}
+            />
+            
+            <div className="flex justify-between mt-2 text-xs text-slate-400">
+              <span>-10s (Earlier)</span>
+              <span>0s (Auto)</span>
+              <span>+10s (Later)</span>
+            </div>
+          </div>
+          
+          <div className="space-y-3">
+            <div className="flex items-start space-x-3">
+              <div className="flex-shrink-0 w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center text-blue-400">
+                ⏪
+              </div>
+              <div className="flex-1">
+                <p className="text-blue-200 text-sm">
+                  <span className="font-semibold">Negative values (-1 to -10s):</span> Signals arrive earlier. 
+                  Use if you have a fast connection and want more time to prepare.
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex items-start space-x-3">
+              <div className="flex-shrink-0 w-8 h-8 bg-emerald-500/20 rounded-lg flex items-center justify-center text-emerald-400">
+                ⚡
+              </div>
+              <div className="flex-1">
+                <p className="text-emerald-200 text-sm">
+                  <span className="font-semibold">Zero (0s):</span> Automatic timing. 
+                  Signals arrive at candle formation with 10-second countdown to entry.
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex items-start space-x-3">
+              <div className="flex-shrink-0 w-8 h-8 bg-orange-500/20 rounded-lg flex items-center justify-center text-orange-400">
+                ⏩
+              </div>
+              <div className="flex-1">
+                <p className="text-orange-200 text-sm">
+                  <span className="font-semibold">Positive values (+1 to +10s):</span> Signals arrive later. 
+                  Use if signals are arriving too early for your platform speed.
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="mt-4 pt-4 border-t border-emerald-400/20">
+            <div className="flex items-center space-x-2 text-sm text-slate-300">
+              <span>💡</span>
+              <span>
+                Tip: Start at 0s and adjust based on your trading experience. 
+                If trades execute late, decrease offset. If too early, increase offset.
+              </span>
+            </div>
+          </div>
+        </div>
+      </Card>
+
       {/* Trading Strategies - Link to Strategy Selector */}
       <Card className="p-6 glass-dark border-slate-700/50">
         <div className="flex items-center justify-between mb-4">
