@@ -135,7 +135,41 @@ class PocketOptionTimingSync:
             # Fallback to next candle
             return self.get_next_candle_formation_time(timeframe, "otc", apply_latency_compensation=False)
     
-    def get_next_candle_formation_time(self, timeframe: str, market_type: str = "regular", apply_latency_compensation: bool = True) -> datetime:
+    async def get_next_candle_formation_time_from_api(self, asset: str, timeframe: str) -> Optional[datetime]:
+        """
+        Get next candle formation time directly from Pocket Option API
+        This is the most accurate method
+        
+        Args:
+            asset: Trading asset (e.g., "EURUSD_regular")
+            timeframe: Timeframe string (e.g., "1m", "5s")
+            
+        Returns:
+            Next candle close time from Pocket Option, or None if unavailable
+        """
+        try:
+            if not CANDLE_SERVICE_AVAILABLE:
+                return None
+            
+            # Ensure connection
+            if not pocket_option_candle_service.connected:
+                await pocket_option_candle_service.connect()
+            
+            # Fetch real next candle close time
+            next_close = await pocket_option_candle_service.get_next_candle_close_time(asset, timeframe)
+            
+            if next_close:
+                logger.info(f"🎯 Using REAL Pocket Option candle time for {asset} {timeframe}: {next_close.strftime('%H:%M:%S')} UTC")
+                return next_close
+            else:
+                logger.warning(f"⚠️ Could not fetch real candle time from Pocket Option for {asset} {timeframe}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"❌ Error fetching candle time from Pocket Option API: {e}")
+            return None
+    
+    def get_next_candle_formation_time(self, timeframe: str, market_type: str = "regular", apply_latency_compensation: bool = True, asset: Optional[str] = None) -> datetime:
         """
         Calculate the EXACT next candle formation time for Pocket Option
         
