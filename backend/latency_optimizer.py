@@ -56,8 +56,54 @@ class LatencyOptimizer:
         self.early_signal_buffer_30s = 0.0  # 0 seconds for 30s - signal at exact candle formation
         self.early_signal_buffer_1m = 0.0   # 0 seconds for 1m - signal at exact candle formation
         
+        # User-adjustable latency offset (allows manual fine-tuning)
+        # Positive = signals arrive later, Negative = signals arrive earlier
+        self.user_latency_offset = 0.0  # Default: no offset
+        
         logger.info(f"📊 Latency Optimizer initialized: {self.total_latency_ms}ms total latency")
         logger.info(f"⏰ Early signal buffer: {self.early_signal_buffer_seconds:.2f}s")
+    
+    def set_user_latency_offset(self, offset_seconds: float):
+        """
+        Set user-defined latency offset for manual timing adjustment
+        
+        Args:
+            offset_seconds: Offset in seconds (-10 to +10)
+                - Negative: signals arrive earlier
+                - Positive: signals arrive later
+                - 0: use automatic timing
+        """
+        self.user_latency_offset = max(-10.0, min(10.0, offset_seconds))
+        logger.info(f"🎛️ User latency offset set to {self.user_latency_offset:.2f}s")
+    
+    def get_effective_buffer(self, timeframe: str) -> float:
+        """
+        Get effective latency buffer including user offset
+        
+        Args:
+            timeframe: Trading timeframe (5s, 15s, 30s, 1m, etc.)
+            
+        Returns:
+            Effective buffer in seconds (base buffer + user offset)
+        """
+        # Get base buffer for timeframe
+        if timeframe == '5s':
+            base_buffer = self.early_signal_buffer_5s
+        elif timeframe == '15s':
+            base_buffer = self.early_signal_buffer_15s
+        elif timeframe == '30s':
+            base_buffer = self.early_signal_buffer_30s
+        elif timeframe == '1m':
+            base_buffer = self.early_signal_buffer_1m
+        else:
+            base_buffer = self.early_signal_buffer_seconds
+        
+        # Apply user offset (negative offset = earlier signal = increase buffer)
+        # (positive offset = later signal = decrease buffer)
+        effective_buffer = base_buffer - self.user_latency_offset
+        
+        # Ensure non-negative
+        return max(0.0, effective_buffer)
     
     def measure_latency(self, start_time: float, end_time: float, operation: str):
         """
