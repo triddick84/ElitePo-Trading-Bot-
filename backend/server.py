@@ -2027,10 +2027,36 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Track initialization status
+app_initialized = False
+
 @app.on_event("startup")
 async def startup_event():
-    # Ensure trading bot configuration is loaded
-    await trading_bot._load_config()
+    """
+    Startup event - load configuration in background task to avoid blocking server startup
+    This prevents nginx health checks from failing during initialization
+    """
+    global app_initialized
+    
+    async def initialize_app():
+        """Background initialization task"""
+        global app_initialized
+        try:
+            logger.info("🚀 Starting background initialization...")
+            # Load trading bot configuration
+            await trading_bot._load_config()
+            app_initialized = True
+            logger.info("✅ Application initialization complete")
+        except Exception as e:
+            logger.error(f"❌ Error during initialization: {e}")
+            app_initialized = False
+    
+    # Start initialization in background (non-blocking)
+    import asyncio
+    asyncio.create_task(initialize_app())
+    
+    # Return immediately so server can start accepting health checks
+    logger.info("⚡ Server startup complete - initialization running in background")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
