@@ -1,3 +1,9 @@
+"""
+Pocket Option Timing Synchronization
+Ensures signals arrive at optimal times relative to Pocket Option's candle formation
+Uses real-time Pocket Option candle data for perfect synchronization
+"""
+
 import asyncio
 from datetime import datetime, timezone, timedelta
 import pytz
@@ -6,6 +12,14 @@ import logging
 from models import TradingSignal, SignalDirection
 
 logger = logging.getLogger(__name__)
+
+# Import real-time candle service
+try:
+    from pocket_option_candle_service import pocket_option_candle_service
+    CANDLE_SERVICE_AVAILABLE = True
+except ImportError:
+    CANDLE_SERVICE_AVAILABLE = False
+    logger.warning("⚠️ Pocket Option Candle Service not available - using fallback timing")
 
 class PocketOptionTimingSync:
     """
