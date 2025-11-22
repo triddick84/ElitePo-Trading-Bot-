@@ -81,6 +81,46 @@ class PocketOptionTimingSync:
             logger.error(f"Error calculating seconds to next candle: {e}")
             return 0
     
+    def get_entry_candle_with_timer(self, timeframe: str, target_timer_seconds: float = 10.0) -> datetime:
+        """
+        Calculate entry candle time that provides approximately target_timer_seconds countdown
+        
+        For 5s timeframe with 10s timer:
+        - Current time: 12:00:02
+        - Next candles: 12:00:05 (3s away), 12:00:10 (8s away), 12:00:15 (13s away)
+        - Target: Find candle >= 10s away = 12:00:15
+        - Return: 12:00:15 (provides ~13s countdown, closest to 10s target)
+        """
+        try:
+            if timeframe not in self.timeframe_seconds:
+                logger.warning(f"Unknown timeframe {timeframe}, using 5s default")
+                timeframe = '5s'
+            
+            interval_seconds = self.timeframe_seconds[timeframe]
+            current_time = self.get_chicago_time()
+            
+            # Find the candle that's approximately target_timer_seconds away
+            # Start with immediate next candle
+            next_candle = self.get_next_candle_formation_time(timeframe, "otc", apply_latency_compensation=False)
+            time_to_next = (next_candle - current_time).total_seconds()
+            
+            # If next candle is already >= target, use it
+            if time_to_next >= target_timer_seconds:
+                return next_candle
+            
+            # Otherwise, keep adding intervals until we reach target
+            target_candle = next_candle
+            while (target_candle - current_time).total_seconds() < target_timer_seconds:
+                target_candle = target_candle + timedelta(seconds=interval_seconds)
+            
+            logger.info(f"🎯 Entry candle for {timeframe}: {target_candle.strftime('%H:%M:%S')} ({(target_candle - current_time).total_seconds():.1f}s away)")
+            return target_candle
+            
+        except Exception as e:
+            logger.error(f"Error calculating entry candle with timer: {e}")
+            # Fallback to next candle
+            return self.get_next_candle_formation_time(timeframe, "otc", apply_latency_compensation=False)
+    
     def get_next_candle_formation_time(self, timeframe: str, market_type: str = "regular", apply_latency_compensation: bool = True) -> datetime:
         """
         Calculate the EXACT next candle formation time for Pocket Option
