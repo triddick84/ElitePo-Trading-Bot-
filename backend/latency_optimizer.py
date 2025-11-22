@@ -49,9 +49,10 @@ class LatencyOptimizer:
         self.early_signal_buffer_seconds = self.total_latency_ms / 1000.0  # 3.0 seconds
         
         # Timeframe-specific buffers for optimal precision
-        # CRITICAL: 5s signals arrive 10 seconds early to provide countdown timer for entry preparation
-        # User requirement: 10 second timer until precise entry position on Pocket Option
-        self.early_signal_buffer_5s = 10.0  # 10 seconds for 5s - provides 10s countdown to entry
+        # CRITICAL: Adjusted for proper Pocket Option candle synchronization
+        # For 5s: Use 1 candle (5s) buffer to arrive at previous candle boundary
+        # This ensures signals sync with candle formation and provide countdown to next candle
+        self.early_signal_buffer_5s = 5.0   # 5 seconds for 5s - arrives 1 candle early for 5s countdown
         self.early_signal_buffer_15s = 10.0  # 10 seconds for 15s - provides 10s countdown to entry
         self.early_signal_buffer_30s = 10.0  # 10 seconds for 30s - provides 10s countdown to entry
         self.early_signal_buffer_1m = 10.0   # 10 seconds for 1m - provides 10s countdown to entry
