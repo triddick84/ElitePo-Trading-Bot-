@@ -21,6 +21,7 @@ class StrategySelectionService:
             {'id': 'keltner_fractal', 'name': 'Keltner Channel + Fractal', 'description': 'EMA(10) + ATR(10) Keltner with Fractal reversals'},
             {'id': '3ema_crossover', 'name': '3 EMA Crossover', 'description': 'EMA 3/8/20 crossover signals'},
             {'id': 'ema20_rsi14', 'name': 'EMA 20 + RSI 14', 'description': 'Momentum confirmation with EMA and RSI'},
+            {'id': 'stochastic_divergence', 'name': 'Stochastic Divergence', 'description': 'Stochastic(14,3,14) with divergence confirmation - High win rate mean-reversion strategy'},
         ],
         '15s': [
             {'id': 'default', 'name': 'Default 15s Strategy', 'description': 'Fractal-based reversal strategy'},
