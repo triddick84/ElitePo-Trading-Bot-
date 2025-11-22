@@ -179,17 +179,12 @@ class PocketOptionTimingSync:
                 try:
                     from latency_optimizer import latency_optimizer
                     
-                    # Timeframe-specific latency compensation for optimal precision
-                    if timeframe == '5s':
-                        latency_buffer = latency_optimizer.early_signal_buffer_5s  # 3.1 seconds (perfect sync)
-                    elif timeframe == '15s':
-                        latency_buffer = latency_optimizer.early_signal_buffer_15s  # 2.0 seconds
-                    elif timeframe == '30s':
-                        latency_buffer = latency_optimizer.early_signal_buffer_30s  # 2.5 seconds
-                    elif timeframe == '1m':
-                        latency_buffer = latency_optimizer.early_signal_buffer_1m  # 3.0 seconds
-                    else:
-                        latency_buffer = latency_optimizer.early_signal_buffer_seconds  # 3.0 seconds default
+                    # Get effective buffer including user's manual adjustment
+                    latency_buffer = latency_optimizer.get_effective_buffer(timeframe)
+                    
+                    # Apply user offset logging
+                    if latency_optimizer.user_latency_offset != 0:
+                        logger.info(f"🎛️ User offset: {latency_optimizer.user_latency_offset:+.2f}s, Effective buffer: {latency_buffer:.2f}s")
                     
                     chicago_time = chicago_time - timedelta(seconds=latency_buffer)
                     logger.info(f"⚡ Pocket Option Sync: -{latency_buffer:.2f}s compensation for {timeframe} candle")
