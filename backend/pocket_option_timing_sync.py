@@ -173,6 +173,9 @@ class PocketOptionTimingSync:
         """
         Calculate the EXACT next candle formation time for Pocket Option
         
+        PRIORITY 1: Try to fetch real candle formation time from Pocket Option API
+        FALLBACK: Use local calculation based on UTC time
+        
         CRITICAL FIX: Pocket Option trades execute at CURRENT candle close (not next candle).
         For 5s at time 12:00:07 → Entry should be 12:00:10 (current candle closes)
         NOT 12:00:15 (next candle).
@@ -182,6 +185,34 @@ class PocketOptionTimingSync:
         ENHANCED: Now provides millisecond-precision timing for ultra-short timeframes
         """
         try:
+            # PRIORITY: Try to fetch real candle time from Pocket Option API
+            if asset and CANDLE_SERVICE_AVAILABLE:
+                try:
+                    # Create event loop if needed for async call
+                    loop = asyncio.get_event_loop()
+                    real_candle_time = loop.run_until_complete(
+                        self.get_next_candle_formation_time_from_api(asset, timeframe)
+                    )
+                    
+                    if real_candle_time:
+                        logger.info(f"✅ Using REAL Pocket Option candle time for {asset} {timeframe}")
+                        
+                        # Apply latency compensation if requested
+                        if apply_latency_compensation:
+                            from latency_optimizer import latency_optimizer
+                            latency_buffer = latency_optimizer.get_effective_buffer(timeframe)
+                            if latency_optimizer.user_latency_offset != 0:
+                                logger.info(f"🎛️ User offset: {latency_optimizer.user_latency_offset:+.2f}s")
+                            real_candle_time = real_candle_time - timedelta(seconds=latency_buffer)
+                            logger.info(f"⚡ Applied {latency_buffer:.2f}s compensation to real Pocket Option time")
+                        
+                        return real_candle_time
+                    else:
+                        logger.warning(f"⚠️ Real Pocket Option time unavailable, using fallback calculation")
+                except Exception as e:
+                    logger.warning(f"⚠️ Error fetching real Pocket Option time: {e}, using fallback")
+            
+            # FALLBACK: Local calculation
             if timeframe not in self.timeframe_seconds:
                 logger.warning(f"Unknown timeframe {timeframe}, using 5s default")
                 timeframe = '5s'
