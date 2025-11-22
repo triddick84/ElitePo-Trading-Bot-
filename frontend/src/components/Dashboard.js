@@ -197,6 +197,9 @@ const Dashboard = ({ botStatus, liveSignals, setLiveSignals, notificationSetting
         }}
       />
 
+      {/* Latency Adjustment - Prominent placement for easy access */}
+      <LatencyAdjustment compact={true} />
+
       {/* Flexible Trading System */}
       <Card className="p-6 glass-dark border-purple-500/30">
         <div className="mb-6">
