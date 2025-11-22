@@ -64,20 +64,20 @@ class ForceSignalGenerator:
                 primary_timeframe = user_timeframes[0]
                 logger.info(f"⏰ WAITING FOR NEXT {primary_timeframe.upper()} CANDLE FORMATION...")
                 
-                # Calculate next candle formation time WITHOUT latency compensation for wait timing
-                # We want to wait until the EXACT candle formation moment
+                # Calculate next candle formation time WITH latency compensation
+                # This provides 10-second advance notice for user preparation
                 chicago_time = pocket_option_sync.get_chicago_time()
                 next_candle_time = pocket_option_sync.get_next_candle_formation_time(
-                    primary_timeframe, "otc", apply_latency_compensation=False  # No compensation for wait timing
+                    primary_timeframe, "otc", apply_latency_compensation=True  # Apply 10s buffer for advance notice
                 )
                 
                 # Calculate wait time
                 wait_seconds = (next_candle_time - chicago_time).total_seconds()
                 
                 if wait_seconds > 0 and wait_seconds <= 300:  # Max 5 minutes wait
-                    logger.info(f"🕐 Waiting {wait_seconds:.1f} seconds for {primary_timeframe} candle formation at {next_candle_time.strftime('%H:%M:%S')} Chicago time")
+                    logger.info(f"🕐 Waiting {wait_seconds:.1f} seconds for {primary_timeframe} candle (signal will arrive 10s before entry)")
                     await asyncio.sleep(wait_seconds)
-                    logger.info(f"✅ CANDLE FORMED! Generating signal at perfect timing for {primary_timeframe}")
+                    logger.info(f"✅ SIGNAL READY! Generated 10 seconds before optimal entry for {primary_timeframe}")
                 else:
                     logger.info(f"⚠️ Wait time too long ({wait_seconds:.1f}s), proceeding immediately")
             
