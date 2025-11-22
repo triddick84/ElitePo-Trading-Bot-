@@ -49,12 +49,12 @@ class LatencyOptimizer:
         self.early_signal_buffer_seconds = self.total_latency_ms / 1000.0  # 3.0 seconds
         
         # Timeframe-specific buffers for optimal precision
-        # CRITICAL FIX: Reduced 5s buffer to prevent signals arriving too early
-        # User reported signals arriving 5s early, so reducing from 3.1s to minimal buffer
-        self.early_signal_buffer_5s = 0.5   # 0.5 seconds for 5s - minimal buffer for network latency only
-        self.early_signal_buffer_15s = 1.0  # 1.0 seconds for 15s - reduced buffer
-        self.early_signal_buffer_30s = 1.5  # 1.5 seconds for 30s - reduced buffer
-        self.early_signal_buffer_1m = 2.0   # 2.0 seconds for 1m - reduced buffer
+        # CRITICAL: 5s signals arrive 10 seconds early to provide countdown timer for entry preparation
+        # User requirement: 10 second timer until precise entry position on Pocket Option
+        self.early_signal_buffer_5s = 10.0  # 10 seconds for 5s - provides 10s countdown to entry
+        self.early_signal_buffer_15s = 10.0  # 10 seconds for 15s - provides 10s countdown to entry
+        self.early_signal_buffer_30s = 10.0  # 10 seconds for 30s - provides 10s countdown to entry
+        self.early_signal_buffer_1m = 10.0   # 10 seconds for 1m - provides 10s countdown to entry
         
         logger.info(f"📊 Latency Optimizer initialized: {self.total_latency_ms}ms total latency")
         logger.info(f"⏰ Early signal buffer: {self.early_signal_buffer_seconds:.2f}s")
