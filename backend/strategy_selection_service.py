@@ -22,6 +22,8 @@ class StrategySelectionService:
             {'id': '3ema_crossover', 'name': '3 EMA Crossover', 'description': 'EMA 3/8/20 crossover signals'},
             {'id': 'ema20_rsi14', 'name': 'EMA 20 + RSI 14', 'description': 'Momentum confirmation with EMA and RSI'},
             {'id': 'stochastic_divergence', 'name': 'Stochastic Divergence', 'description': 'Stochastic(14,3,14) with divergence confirmation - High win rate mean-reversion strategy'},
+            {'id': 'proven_bollinger', 'name': 'ProvenSignals Bollinger Bands', 'description': 'Period 50, Dev 1.5 - Scalping oversold/overbought reversals'},
+            {'id': 'proven_supertrend', 'name': 'ProvenSignals SuperTrend', 'description': 'ATR 10, Multiplier 5 - Trend following for trending markets'},
         ],
         '15s': [
             {'id': 'default', 'name': 'Default 15s Strategy', 'description': 'Fractal-based reversal strategy'},
