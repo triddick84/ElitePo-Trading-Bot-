@@ -175,6 +175,17 @@ const Dashboard = ({ botStatus, liveSignals, setLiveSignals, notificationSetting
         </Button>
       </div>
 
+      {/* Account Mode Toggle - Prominent at top */}
+      <AccountModeToggle 
+        compact={true} 
+        onModeChange={(mode) => {
+          setConfig(prev => ({
+            ...prev,
+            trading_mode: mode
+          }));
+        }}
+      />
+
       {/* Market Asset & Timeframe Selector */}
       <MarketAssetSelector 
         onSelectionChange={(selection) => {
