@@ -52,22 +52,20 @@ class PocketOptionCandleService:
             
             # Try to import Pocket Option API library
             try:
-                from pocketoptionapi import PocketOption
+                from pocketoptionapi.api import PocketOptionAPI
                 
-                self.api = PocketOption(self.ssid)
-                check_connect, message = self.api.connect()
-                
-                if check_connect:
-                    self.connected = True
-                    logger.info(f"✅ Connected to Pocket Option API: {message}")
-                    return True
-                else:
-                    logger.error(f"❌ Failed to connect to Pocket Option: {message}")
-                    return False
+                self.api = PocketOptionAPI(ssid=self.ssid)
+                # The connection is established during initialization
+                self.connected = True
+                logger.info(f"✅ Connected to Pocket Option API successfully")
+                return True
                     
-            except ImportError:
-                logger.warning("⚠️ PocketOptionAPI library not installed - using fallback")
-                logger.info("💡 Install with: pip install pocketoptionapi")
+            except ImportError as e:
+                logger.warning(f"⚠️ PocketOptionAPI library not available: {e}")
+                logger.info("💡 Install with: pip install git+https://github.com/ChipaDevTeam/PocketOptionAPI.git")
+                return False
+            except Exception as e:
+                logger.error(f"❌ Error initializing Pocket Option API: {e}")
                 return False
                 
         except Exception as e:
