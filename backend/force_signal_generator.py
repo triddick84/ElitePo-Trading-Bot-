@@ -64,10 +64,11 @@ class ForceSignalGenerator:
                 primary_timeframe = user_timeframes[0]
                 logger.info(f"⏰ WAITING FOR NEXT {primary_timeframe.upper()} CANDLE FORMATION...")
                 
-                # Calculate next candle formation time
+                # Calculate next candle formation time WITHOUT latency compensation for wait timing
+                # We want to wait until the EXACT candle formation moment
                 chicago_time = pocket_option_sync.get_chicago_time()
                 next_candle_time = pocket_option_sync.get_next_candle_formation_time(
-                    primary_timeframe, "otc"  # Default to OTC for 24/7 availability
+                    primary_timeframe, "otc", apply_latency_compensation=False  # No compensation for wait timing
                 )
                 
                 # Calculate wait time
