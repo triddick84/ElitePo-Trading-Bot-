@@ -102,6 +102,29 @@ const BotControls = ({ onStatusUpdate }) => {
     }
   };
 
+  const fetchLatencySettings = async () => {
+    try {
+      const response = await axios.get(`${API}/latency/settings`);
+      setLatencyOffset(response.data.latency_offset || 0);
+    } catch (error) {
+      console.error('Error fetching latency settings:', error);
+    }
+  };
+
+  const updateLatencyOffset = async (newOffset) => {
+    setIsLatencySaving(true);
+    try {
+      await axios.put(`${API}/latency/settings?latency_offset=${newOffset}`);
+      setLatencyOffset(newOffset);
+      toast.success(`✅ Latency offset updated to ${newOffset >= 0 ? '+' : ''}${newOffset.toFixed(1)}s`);
+    } catch (error) {
+      console.error('Error updating latency offset:', error);
+      toast.error('❌ Failed to update latency offset');
+    } finally {
+      setIsLatencySaving(false);
+    }
+  };
+
   const toggleCandleSync = async () => {
     if (!botStatus.is_running) {
       toast.error('⚠️ Please start the bot first before enabling candle synchronization');
