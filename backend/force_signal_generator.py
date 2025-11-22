@@ -1682,9 +1682,10 @@ class ForceSignalGenerator:
             # Get Chicago time for Pocket Option synchronization
             chicago_time = pocket_option_sync.get_chicago_time()
             
-            # Calculate next candle formation time for precise entry
-            optimal_entry_time = pocket_option_sync.get_next_candle_formation_time(
-                user_timeframes[0], market_type
+            # Calculate entry candle time that provides 10-second countdown timer
+            # This finds the candle that's approximately 10 seconds away
+            optimal_entry_time = pocket_option_sync.get_entry_candle_with_timer(
+                user_timeframes[0], target_timer_seconds=10.0
             )
             
             # Calculate Pocket Option optimized expiration time
