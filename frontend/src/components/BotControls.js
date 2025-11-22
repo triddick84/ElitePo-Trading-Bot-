@@ -37,12 +37,15 @@ const BotControls = ({ onStatusUpdate }) => {
   const [isSaving, setIsSaving] = useState(false);
   const [isAutoLoading, setIsAutoLoading] = useState(false);
   const [isCandleSyncLoading, setIsCandleSyncLoading] = useState(false);
+  const [latencyOffset, setLatencyOffset] = useState(0);
+  const [isLatencySaving, setIsLatencySaving] = useState(false);
 
   useEffect(() => {
     fetchCurrentConfig();
     fetchBotStatus();
     fetchAutoSignalStatus();
     fetchCandleSyncStatus();
+    fetchLatencySettings();
     
     // Poll candle sync status every 2 seconds for live countdown
     const interval = setInterval(() => {
