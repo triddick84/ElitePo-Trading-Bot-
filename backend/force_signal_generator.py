@@ -514,6 +514,34 @@ class ForceSignalGenerator:
                             result['selected_strategy'] = True
                             return result
                 
+                elif selected_strategy_id == 'stochastic_divergence':
+                    logger.info(f"🎯 Applying SELECTED: Stochastic Divergence for {symbol}")
+                    from strategy_5s_stochastic_divergence import execute_strategy as stoch_divergence
+                    
+                    from real_market_data_service import real_market_data_service
+                    market_data_list = await real_market_data_service.get_historical_data(symbol, interval='1m', periods=100)
+                    
+                    if market_data_list and len(market_data_list) >= 50:
+                        import pandas as pd
+                        df = pd.DataFrame([{
+                            'open': md.open_price,
+                            'high': md.high_price,
+                            'low': md.low_price,
+                            'close': md.close_price,
+                            'volume': md.volume if hasattr(md, 'volume') else 0
+                        } for md in market_data_list])
+                        
+                        current_price = market_data_list[-1].close_price
+                        result = await loop.run_in_executor(self.executor, stoch_divergence, symbol, df, current_price)
+                        
+                        if result:
+                            logger.info(f"✅ Stochastic Divergence 5s: {symbol} → {result['direction']} ({result['confidence']:.1f}%)")
+                            result['strategy'] = 'stochastic_divergence_5s'
+                            result['timeframe'] = timeframe
+                            result['chart_type'] = chart_type
+                            result['selected_strategy'] = True
+                            return result
+                
                 # DEFAULT or if selected strategy fails
                 logger.info(f"⚡ Applying DEFAULT 5-SECOND strategy (Ultra-Precision) for {symbol}")
                 
