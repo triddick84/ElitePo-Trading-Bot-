@@ -31,6 +31,23 @@ import high_accuracy_williams_macd_strategy
 import high_accuracy_smart_money_ict
 from signal_accuracy_optimizer import signal_optimizer
 
+# Import enhanced systems for improved quality and speed
+try:
+    from enhanced_signal_quality_optimizer import enhanced_signal_optimizer
+    QUALITY_OPTIMIZER_AVAILABLE = True
+    logger.info("✨ Enhanced Signal Quality Optimizer loaded")
+except ImportError:
+    QUALITY_OPTIMIZER_AVAILABLE = False
+    logger.warning("⚠️ Enhanced Signal Quality Optimizer not available")
+
+try:
+    from fast_realtime_data_service import fast_data_service
+    FAST_DATA_SERVICE_AVAILABLE = True
+    logger.info("⚡ Fast Realtime Data Service loaded")
+except ImportError:
+    FAST_DATA_SERVICE_AVAILABLE = False
+    logger.warning("⚠️ Fast Realtime Data Service not available")
+
 logger = logging.getLogger(__name__)
 
 class ForceSignalGenerator:
