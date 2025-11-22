@@ -2000,15 +2000,6 @@ async def health_check():
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
-@app.get("/api/health")
-async def api_health_check():
-    """API health check endpoint"""
-    return {
-        "status": "healthy",
-        "service": "GPT Signal Bot API",
-        "timestamp": datetime.now(timezone.utc).isoformat()
-    }
-
 # Include the router in the main app
 app.include_router(api_router)
 
