@@ -619,12 +619,14 @@ async def update_config(config: BotStartRequest):
 
 # Health Check
 @api_router.get("/health")
-async def health_check():
-    """Health check endpoint"""
+async def api_health_check():
+    """API health check endpoint with bot status"""
     return {
         "status": "healthy",
+        "service": "GPT Signal Bot API",
         "bot_running": trading_bot.is_running,
-        "timestamp": datetime.utcnow().isoformat()
+        "app_initialized": globals().get('app_initialized', False),
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
 # Platform Integration Endpoints
