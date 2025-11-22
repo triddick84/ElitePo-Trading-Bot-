@@ -30,6 +30,7 @@ class StrategySelectionService:
             {'id': 'rsi_volume', 'name': 'RSI + Volume Reversal', 'description': 'RSI(14) oversold/overbought with volume spikes'},
             {'id': 'bollinger_ema', 'name': 'Bollinger + EMA Breakout', 'description': 'BB(20,2) breakouts confirmed by EMA(20)'},
             {'id': 'macd_rsi', 'name': 'MACD + RSI Trend', 'description': 'MACD(12,26,9) with RSI trend confirmation'},
+            {'id': 'proven_rsi', 'name': 'ProvenSignals RSI', 'description': 'RSI Period 5 with divergence - Catches trend reversals with high accuracy'},
         ],
         '30s': [
             {'id': 'default', 'name': 'Default 30s Strategy', 'description': 'SuperTrend + MA Crossover'},
