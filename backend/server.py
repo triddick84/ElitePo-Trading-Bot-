@@ -1990,6 +1990,25 @@ async def update_latency_settings(latency_offset: float):
         logger.error(f"Error updating latency settings: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# Health check endpoint (responds immediately for Kubernetes readiness probes)
+@app.get("/health")
+async def health_check():
+    """Health check endpoint that always returns 200 OK during startup and runtime"""
+    return {
+        "status": "healthy",
+        "service": "GPT Signal Bot API",
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+
+@app.get("/api/health")
+async def api_health_check():
+    """API health check endpoint"""
+    return {
+        "status": "healthy",
+        "service": "GPT Signal Bot API",
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+
 # Include the router in the main app
 app.include_router(api_router)
 
