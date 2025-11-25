@@ -1965,7 +1965,43 @@ class ForceSignalGenerator:
                             synchronized_signal.technical_analysis['quality_rating'] = optimized_signal.get('quality_rating', 'HIGH')
                             synchronized_signal.technical_analysis['gates_passed'] = optimized_signal.get('gates_passed', 7)
                         
-                        # Update justification with quality badge
+                        # === APPLY 90%+ ACCURACY MAXIMIZER ===
+                        # Final validation layer for maximum accuracy
+                        if ACCURACY_MAXIMIZER_AVAILABLE:
+                            try:
+                                logger.info("🎯 Applying 90%+ Accuracy Validation...")
+                                validated_signal = signal_accuracy_maximizer.validate_signal_for_90_accuracy(
+                                    optimized_signal,
+                                    df,
+                                    f"{len(analysis_results)} strategies"
+                                )
+                                
+                                if validated_signal:
+                                    # Signal achieved 90%+ accuracy score!
+                                    logger.info(f"🏆 SIGNAL VALIDATED FOR 90%+ ACCURACY - Score: {validated_signal['accuracy_score']:.1f}%")
+                                    
+                                    # Update signal with validation data
+                                    synchronized_signal.probability = validated_signal['accuracy_score']
+                                    synchronized_signal.confidence_level = "HIGH"  # Always HIGH for 90%+ signals
+                                    
+                                    if synchronized_signal.technical_analysis:
+                                        synchronized_signal.technical_analysis['accuracy_validated'] = True
+                                        synchronized_signal.technical_analysis['accuracy_score'] = validated_signal['accuracy_score']
+                                        synchronized_signal.technical_analysis['validation_details'] = validated_signal.get('validation', {})
+                                    
+                                    # Update justification with accuracy badge
+                                    quality_badge = "🏆 90%+ ACCURACY VALIDATED"
+                                    synchronized_signal.justification = f"{quality_badge} | {synchronized_signal.justification}"
+                                    
+                                    return synchronized_signal
+                                else:
+                                    # Signal did not meet 90%+ accuracy criteria
+                                    logger.warning(f"❌ Signal rejected by 90%+ Accuracy Maximizer - does not meet criteria")
+                                    return None
+                            except Exception as acc_error:
+                                logger.warning(f"⚠️ Accuracy maximizer error: {acc_error}, using optimized signal")
+                        
+                        # If accuracy maximizer not available, use optimized signal
                         quality_badge = "🏆 PREMIUM QUALITY" if optimized_signal['confidence'] >= 90 else "⭐ HIGH QUALITY"
                         synchronized_signal.justification = f"{quality_badge} | {synchronized_signal.justification}"
                         
