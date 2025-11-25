@@ -36,6 +36,7 @@ logger = logging.getLogger(__name__)
 # Import enhanced systems for improved quality and speed
 QUALITY_OPTIMIZER_AVAILABLE = False
 FAST_DATA_SERVICE_AVAILABLE = False
+ACCURACY_MAXIMIZER_AVAILABLE = False
 
 try:
     from enhanced_signal_quality_optimizer import enhanced_signal_optimizer
@@ -46,6 +47,12 @@ except ImportError:
 try:
     from fast_realtime_data_service import fast_data_service
     FAST_DATA_SERVICE_AVAILABLE = True
+except ImportError:
+    pass
+
+try:
+    from signal_accuracy_maximizer import signal_accuracy_maximizer
+    ACCURACY_MAXIMIZER_AVAILABLE = True
 except ImportError:
     pass
 
