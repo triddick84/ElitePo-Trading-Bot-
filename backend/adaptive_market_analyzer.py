@@ -262,106 +262,149 @@ class AdaptiveMarketAnalyzer:
     
     def analyze_ranging_market(self, df: pd.DataFrame) -> Optional[Dict[str, Any]]:
         """
-        Analyze ranging/volatile market using RSI + Volume + Bollinger Bands
+        Analyze ranging/volatile market using user-selected indicators
         
         Strategy:
         - Mean-reversion
-        - Buy at oversold (RSI < 40)
-        - Sell at overbought (RSI > 60)
-        - Higher signal threshold to filter noise
+        - Buy at oversold
+        - Sell at overbought
+        - User-configurable signal threshold to filter noise
         """
         try:
-            # RSI Calculation
-            rsi = self._calculate_rsi(df['close'], 14)
-            current_rsi = rsi.iloc[-1]
-            
-            # Volume Analysis
-            if 'volume' in df.columns and df['volume'].sum() > 0:
-                volume_ma = df['volume'].rolling(20).mean()
-                current_volume = df['volume'].iloc[-1]
-                volume_ratio = current_volume / volume_ma.iloc[-1] if volume_ma.iloc[-1] > 0 else 1
-            else:
-                volume_ratio = 1.0
-            
-            # Bollinger Bands
-            bb_period = 20
-            bb_std = 2
-            bb_middle = df['close'].rolling(bb_period).mean()
-            bb_std_dev = df['close'].rolling(bb_period).std()
-            bb_upper = bb_middle + (bb_std_dev * bb_std)
-            bb_lower = bb_middle - (bb_std_dev * bb_std)
-            
             current_price = df['close'].iloc[-1]
-            current_bb_upper = bb_upper.iloc[-1]
-            current_bb_lower = bb_lower.iloc[-1]
-            current_bb_middle = bb_middle.iloc[-1]
-            
-            # EMA for additional confirmation
-            ema_20 = df['close'].ewm(span=20, adjust=False).mean()
-            
             signal_direction = None
             confidence = 50
             reason = ""
-            signal_threshold = 80  # Higher threshold for volatile markets
+            indicators_used = {}
+            confirmations = []
+            
+            # Calculate selected indicators
+            rsi_oversold = rsi_overbought = False
+            volume_spike = False
+            bb_lower_touch = bb_upper_touch = False
+            ema_support = ema_resistance = False
+            macd_divergence_bullish = macd_divergence_bearish = False
+            stoch_oversold = stoch_overbought = False
+            
+            if "RSI" in self.ranging_indicators:
+                rsi = self._calculate_rsi(df['close'], 14)
+                current_rsi = rsi.iloc[-1]
+                indicators_used['rsi'] = current_rsi
+                rsi_oversold = current_rsi < 40
+                rsi_overbought = current_rsi > 60
+            
+            if "Volume" in self.ranging_indicators:
+                if 'volume' in df.columns and df['volume'].sum() > 0:
+                    volume_ma = df['volume'].rolling(20).mean()
+                    current_volume = df['volume'].iloc[-1]
+                    volume_ratio = current_volume / volume_ma.iloc[-1] if volume_ma.iloc[-1] > 0 else 1
+                else:
+                    volume_ratio = 1.0
+                indicators_used['volume_ratio'] = volume_ratio
+                volume_spike = volume_ratio > 1.3
+            
+            if "Bollinger_Bands" in self.ranging_indicators:
+                bb_period = 20
+                bb_std = 2
+                bb_middle = df['close'].rolling(bb_period).mean()
+                bb_std_dev = df['close'].rolling(bb_period).std()
+                bb_upper = bb_middle + (bb_std_dev * bb_std)
+                bb_lower = bb_middle - (bb_std_dev * bb_std)
+                current_bb_upper = bb_upper.iloc[-1]
+                current_bb_lower = bb_lower.iloc[-1]
+                indicators_used['bb_upper'] = current_bb_upper
+                indicators_used['bb_lower'] = current_bb_lower
+                indicators_used['bb_middle'] = bb_middle.iloc[-1]
+                bb_lower_touch = current_price <= current_bb_lower * 1.005
+                bb_upper_touch = current_price >= current_bb_upper * 0.995
+            
+            if "EMA" in self.ranging_indicators:
+                ema_20 = df['close'].ewm(span=20, adjust=False).mean()
+                current_ema = ema_20.iloc[-1]
+                indicators_used['ema_20'] = current_ema
+                ema_support = current_price <= current_ema * 1.005
+                ema_resistance = current_price >= current_ema * 0.995
+            
+            if "MACD" in self.ranging_indicators:
+                ema_12 = df['close'].ewm(span=12, adjust=False).mean()
+                ema_26 = df['close'].ewm(span=26, adjust=False).mean()
+                macd = ema_12 - ema_26
+                macd_signal = macd.ewm(span=9, adjust=False).mean()
+                indicators_used['macd'] = macd.iloc[-1]
+                macd_divergence_bullish = macd.iloc[-1] > macd.iloc[-2] and current_price < df['close'].iloc[-2]
+                macd_divergence_bearish = macd.iloc[-1] < macd.iloc[-2] and current_price > df['close'].iloc[-2]
+            
+            if "Stochastic" in self.ranging_indicators:
+                stoch_k = self._calculate_stochastic(df)
+                current_stoch = stoch_k.iloc[-1] if len(stoch_k) > 0 else 50
+                indicators_used['stochastic'] = current_stoch
+                stoch_oversold = current_stoch < 30
+                stoch_overbought = current_stoch > 70
+            
+            # Determine signal - Oversold = BUY, Overbought = SELL
+            oversold_score = sum([rsi_oversold, bb_lower_touch, ema_support, macd_divergence_bullish, stoch_oversold])
+            overbought_score = sum([rsi_overbought, bb_upper_touch, ema_resistance, macd_divergence_bearish, stoch_overbought])
+            
+            # Build confirmation lists
+            if rsi_oversold:
+                confirmations.append("RSI oversold")
+            if bb_lower_touch:
+                confirmations.append("Price at BB lower")
+            if ema_support:
+                confirmations.append("EMA support")
+            if macd_divergence_bullish:
+                confirmations.append("MACD bullish divergence")
+            if stoch_oversold:
+                confirmations.append("Stochastic oversold")
+            if volume_spike:
+                confirmations.append("Volume spike")
+            
+            min_confirmations = max(2, len(self.ranging_indicators) // 2)
             
             # BUY Signal: Oversold conditions
-            if current_rsi < 40 and current_price <= current_bb_lower * 1.005:
+            if oversold_score >= min_confirmations:
                 signal_direction = "CALL"
-                confidence = 75
-                
-                # Volume confirmation
-                if volume_ratio > 1.3:
-                    confidence += 8
-                    reason = "Strong oversold reversal - RSI < 40 + Price at BB lower + Volume spike"
-                else:
-                    reason = "Oversold reversal - RSI < 40 + Price at BB lower band"
-                
-                # Deep oversold bonus
-                if current_rsi < 30:
+                confidence = 70 + (oversold_score * 4)
+                if volume_spike:
                     confidence += 5
-                    reason += " (deeply oversold)"
-                
+                reason = f"Oversold reversal - {', '.join(confirmations)}"
                 logger.info(f"🟢 RANGING BUY: {reason}")
             
             # SELL Signal: Overbought conditions
-            elif current_rsi > 60 and current_price >= current_bb_upper * 0.995:
+            elif overbought_score >= min_confirmations:
                 signal_direction = "PUT"
-                confidence = 75
-                
-                # Volume confirmation
-                if volume_ratio > 1.3:
-                    confidence += 8
-                    reason = "Strong overbought reversal - RSI > 60 + Price at BB upper + Volume spike"
-                else:
-                    reason = "Overbought reversal - RSI > 60 + Price at BB upper band"
-                
-                # Deep overbought bonus
-                if current_rsi > 70:
+                confidence = 70 + (overbought_score * 4)
+                overbought_confirmations = []
+                if rsi_overbought:
+                    overbought_confirmations.append("RSI overbought")
+                if bb_upper_touch:
+                    overbought_confirmations.append("Price at BB upper")
+                if ema_resistance:
+                    overbought_confirmations.append("EMA resistance")
+                if macd_divergence_bearish:
+                    overbought_confirmations.append("MACD bearish divergence")
+                if stoch_overbought:
+                    overbought_confirmations.append("Stochastic overbought")
+                if volume_spike:
+                    overbought_confirmations.append("Volume spike")
                     confidence += 5
-                    reason += " (deeply overbought)"
-                
+                reason = f"Overbought reversal - {', '.join(overbought_confirmations)}"
                 logger.info(f"🔴 RANGING SELL: {reason}")
             
-            # Only return signal if it meets higher threshold
-            if signal_direction and confidence >= signal_threshold:
+            # Only return signal if it meets user-configured threshold
+            if signal_direction and confidence >= self.ranging_signal_threshold:
                 return {
                     'direction': signal_direction,
-                    'confidence': confidence,
+                    'confidence': min(confidence, 95),
                     'reason': reason,
                     'strategy': 'Ranging Market Strategy',
-                    'execution_delay': 1.5,  # Shorter delay for mean-reversion
-                    'signal_threshold': signal_threshold,
-                    'indicators': {
-                        'rsi': current_rsi,
-                        'volume_ratio': volume_ratio,
-                        'bb_upper': current_bb_upper,
-                        'bb_middle': current_bb_middle,
-                        'bb_lower': current_bb_lower,
-                        'price_position': (current_price - current_bb_lower) / (current_bb_upper - current_bb_lower)
-                    }
+                    'execution_delay': self.ranging_execution_delay,
+                    'signal_threshold': self.ranging_signal_threshold,
+                    'indicators': indicators_used,
+                    'confirmations': confirmations if signal_direction == "CALL" else overbought_confirmations
                 }
             elif signal_direction:
-                logger.info(f"⏸️ Signal filtered: Confidence {confidence}% < threshold {signal_threshold}%")
+                logger.info(f"⏸️ Signal filtered: Confidence {confidence}% < threshold {self.ranging_signal_threshold}%")
             
             return None
             
