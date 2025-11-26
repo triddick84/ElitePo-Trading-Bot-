@@ -158,6 +158,7 @@ function App() {
     { id: "dashboard", label: "Dashboard", icon: "📊" },
     { id: "signals", label: "Signals", icon: "📡" },
     { id: "strategies", label: "Strategy Selector", icon: "🎯" },
+    { id: "adaptive", label: "Adaptive Strategy", icon: "🎯" },
     { id: "money", label: "Money Management", icon: "💰" },
     { id: "market", label: "Market Data", icon: "📈" },
     { id: "performance", label: "Performance", icon: "📉" },
