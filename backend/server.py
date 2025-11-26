@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from models import (
     TradingSignal, MarketData, TechnicalIndicators, TradingConfiguration,
     PerformanceMetrics, BacktestResult, TradingStrategy, TradingMode, AssetType, SignalDirection,
-    FlexibleStrategyRequest
+    FlexibleStrategyRequest, AdaptiveStrategyConfig, AdaptiveStrategyUpdateRequest
 )
 from trading_bot_service import TradingBotService
 from real_market_data_service import RealMarketDataService
@@ -27,6 +27,7 @@ from pocket_option_assets import pocket_option_assets
 from timezone_utils import get_chicago_time, utc_to_chicago, format_chicago_time
 from latency_accuracy_tester import latency_tester
 from live_accuracy_tester import live_accuracy_tester
+from adaptive_strategy_service import AdaptiveStrategyService
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
