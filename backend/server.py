@@ -2006,6 +2006,163 @@ async def health_check():
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
+
+# =====================================================
+# ADAPTIVE STRATEGY CONFIGURATION ENDPOINTS
+# =====================================================
+
+@api_router.get("/adaptive-strategy/config")
+async def get_adaptive_strategy_config():
+    """
+    Get current adaptive strategy configuration
+    Returns user's custom settings for market condition detection and indicator selection
+    """
+    try:
+        config = await adaptive_strategy_service_instance.get_config()
+        return {
+            "success": True,
+            "config": config.dict()
+        }
+    except Exception as e:
+        logger.error(f"Error getting adaptive strategy config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.put("/adaptive-strategy/config")
+async def update_adaptive_strategy_config(request: AdaptiveStrategyUpdateRequest):
+    """
+    Update adaptive strategy configuration
+    Allows users to customize indicators for trending and ranging markets
+    """
+    try:
+        updates = request.dict(exclude_none=True)
+        
+        # Validate indicators if provided
+        if 'trending_indicators' in updates:
+            if not adaptive_strategy_service_instance.validate_indicators(updates['trending_indicators']):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid trending indicators. Available: " + ", ".join(adaptive_strategy_service_instance.AVAILABLE_INDICATORS)
+                )
+        
+        if 'ranging_indicators' in updates:
+            if not adaptive_strategy_service_instance.validate_indicators(updates['ranging_indicators']):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid ranging indicators. Available: " + ", ".join(adaptive_strategy_service_instance.AVAILABLE_INDICATORS)
+                )
+        
+        # Update configuration
+        updated_config = await adaptive_strategy_service_instance.update_config("default_user", updates)
+        
+        if updated_config:
+            logger.info(f"✅ Updated adaptive strategy config: {updates}")
+            return {
+                "success": True,
+                "message": "Adaptive strategy configuration updated successfully",
+                "config": updated_config.dict()
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to update configuration")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating adaptive strategy config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/adaptive-strategy/available-indicators")
+async def get_available_indicators():
+    """
+    Get list of all available indicators for adaptive strategies
+    Users can select from these for trending and ranging markets
+    """
+    try:
+        indicators = adaptive_strategy_service_instance.get_available_indicators()
+        
+        # Provide descriptions for each indicator
+        indicator_info = {
+            "MACD": {
+                "name": "MACD",
+                "description": "Moving Average Convergence Divergence - Trend following momentum indicator",
+                "best_for": "trending"
+            },
+            "Parabolic_SAR": {
+                "name": "Parabolic SAR",
+                "description": "Stop and Reverse - Trend direction and reversal points",
+                "best_for": "trending"
+            },
+            "EMA": {
+                "name": "Exponential Moving Average",
+                "description": "Trend direction and support/resistance levels",
+                "best_for": "both"
+            },
+            "RSI": {
+                "name": "Relative Strength Index",
+                "description": "Overbought/oversold momentum oscillator",
+                "best_for": "ranging"
+            },
+            "Volume": {
+                "name": "Volume Analysis",
+                "description": "Trading volume spikes for confirmation",
+                "best_for": "ranging"
+            },
+            "Bollinger_Bands": {
+                "name": "Bollinger Bands",
+                "description": "Volatility bands for breakouts and reversals",
+                "best_for": "both"
+            },
+            "Stochastic": {
+                "name": "Stochastic Oscillator",
+                "description": "Momentum indicator comparing closing price to price range",
+                "best_for": "ranging"
+            }
+        }
+        
+        return {
+            "success": True,
+            "indicators": indicators,
+            "indicator_details": indicator_info
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting available indicators: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/adaptive-strategy/reset")
+async def reset_adaptive_strategy_config():
+    """
+    Reset adaptive strategy configuration to default values
+    """
+    try:
+        default_config = AdaptiveStrategyConfig(
+            user_id="default_user",
+            enabled=True,
+            adx_trending_threshold=25.0,
+            adx_ranging_threshold=20.0,
+            trending_indicators=["MACD", "Parabolic_SAR", "EMA"],
+            ranging_indicators=["RSI", "Volume", "Bollinger_Bands", "EMA"],
+            trending_execution_delay=3.0,
+            ranging_execution_delay=1.5,
+            ranging_signal_threshold=80.0
+        )
+        
+        await adaptive_strategy_service_instance.save_config(default_config)
+        
+        logger.info("✅ Reset adaptive strategy config to defaults")
+        return {
+            "success": True,
+            "message": "Adaptive strategy configuration reset to defaults",
+            "config": default_config.dict()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error resetting adaptive strategy config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
