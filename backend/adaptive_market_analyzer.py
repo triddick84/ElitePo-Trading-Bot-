@@ -556,6 +556,17 @@ class AdaptiveMarketAnalyzer:
         rs = gain / loss
         rsi = 100 - (100 / (1 + rs))
         return rsi
+    
+    def _calculate_stochastic(self, df: pd.DataFrame, period: int = 14) -> pd.Series:
+        """Calculate Stochastic %K"""
+        try:
+            low_min = df['low'].rolling(window=period).min()
+            high_max = df['high'].rolling(window=period).max()
+            stoch_k = 100 * (df['close'] - low_min) / (high_max - low_min)
+            return stoch_k.fillna(50)
+        except Exception as e:
+            logger.error(f"Error calculating Stochastic: {e}")
+            return pd.Series([50] * len(df))
 
 
 # Global instance
