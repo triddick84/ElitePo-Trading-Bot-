@@ -177,3 +177,47 @@ class FlexibleStrategyRequest(BaseModel):
     ao_short_period: int = Field(default=6, ge=1, le=50, description="Awesome Oscillator short period")
     ao_long_period: int = Field(default=12, ge=1, le=100, description="Awesome Oscillator long period")
 
+
+class AdaptiveStrategyConfig(BaseModel):
+    """Configuration for Adaptive Market Condition System"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str = Field(default="default_user")
+    
+    # Enable/Disable adaptive system
+    enabled: bool = Field(default=True, description="Enable adaptive market condition detection")
+    
+    # ADX Thresholds for market condition detection
+    adx_trending_threshold: float = Field(default=25.0, ge=15.0, le=50.0, description="ADX > this value = Trending market")
+    adx_ranging_threshold: float = Field(default=20.0, ge=10.0, le=30.0, description="ADX < this value = Ranging market")
+    
+    # Trending Market Indicators (user can select multiple)
+    trending_indicators: List[str] = Field(
+        default=["MACD", "Parabolic_SAR", "EMA"],
+        description="Indicators for trending markets. Options: MACD, Parabolic_SAR, EMA, RSI, Stochastic, Bollinger_Bands"
+    )
+    
+    # Ranging/Volatile Market Indicators (user can select multiple)
+    ranging_indicators: List[str] = Field(
+        default=["RSI", "Volume", "Bollinger_Bands", "EMA"],
+        description="Indicators for ranging/volatile markets. Options: RSI, Volume, Bollinger_Bands, EMA, MACD, Stochastic"
+    )
+    
+    # Strategy preferences
+    trending_execution_delay: float = Field(default=3.0, ge=0.5, le=10.0, description="Execution delay for trending markets (seconds)")
+    ranging_execution_delay: float = Field(default=1.5, ge=0.5, le=10.0, description="Execution delay for ranging markets (seconds)")
+    ranging_signal_threshold: float = Field(default=80.0, ge=70.0, le=95.0, description="Higher threshold for ranging markets to filter noise")
+    
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class AdaptiveStrategyUpdateRequest(BaseModel):
+    """Request model for updating adaptive strategy configuration"""
+    enabled: Optional[bool] = None
+    adx_trending_threshold: Optional[float] = Field(None, ge=15.0, le=50.0)
+    adx_ranging_threshold: Optional[float] = Field(None, ge=10.0, le=30.0)
+    trending_indicators: Optional[List[str]] = None
+    ranging_indicators: Optional[List[str]] = None
+    trending_execution_delay: Optional[float] = Field(None, ge=0.5, le=10.0)
+    ranging_execution_delay: Optional[float] = Field(None, ge=0.5, le=10.0)
+    ranging_signal_threshold: Optional[float] = Field(None, ge=70.0, le=95.0)
+
