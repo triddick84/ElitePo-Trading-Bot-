@@ -92,6 +92,9 @@ finnhub_key = os.environ.get('FINNHUB_API_KEY', '')
 alpha_vantage_key = os.environ.get('ALPHA_VANTAGE_API_KEY', os.environ.get('ALPHAVANTAGE_API_KEY', ''))
 realtime_market_hub = RealtimeMarketDataHub(finnhub_key, alpha_vantage_key)
 
+# Connect real-time hub to force signal generator
+force_signal_generator.set_realtime_hub(realtime_market_hub)
+
 # Create the main app without a prefix
 app = FastAPI(
     title="GPT Signal Bot API",
