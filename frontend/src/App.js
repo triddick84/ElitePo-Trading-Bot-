@@ -184,6 +184,8 @@ function App() {
         return <SignalsPanel />;
       case "strategies":
         return <StrategySelector />;
+      case "adaptive":
+        return <AdaptiveStrategyConfig />;
       case "market":
         return <MarketData />;
       case "performance":
@@ -192,8 +194,6 @@ function App() {
         return <BotControls onStatusUpdate={fetchBotStatus} />;
       case "backtest":
         return <BacktestPanel />;
-      case "strategies":
-        return <StrategySelector />;
       case "money":
         return <MoneyManagement />;
       case "integrations":
