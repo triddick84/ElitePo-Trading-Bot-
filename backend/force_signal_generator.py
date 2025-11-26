@@ -148,8 +148,28 @@ class ForceSignalGenerator:
             sentiment_data = results[1] if not isinstance(results[1], Exception) else {}
             economic_data = results[2] if not isinstance(results[2], Exception) else {}
             
+            # Update adaptive analyzer if config provided
+            if adaptive_config and adaptive_config.enabled:
+                self.set_adaptive_config(adaptive_config)
+            
             # Run comprehensive analysis using PRIMARY TIMEFRAME ONLY
             analysis_results = []
+            
+            # ADAPTIVE MARKET CONDITION ANALYSIS (if enabled and config provided)
+            # This runs for ALL timeframes including ultra-short
+            if adaptive_config and adaptive_config.enabled and self.adaptive_analyzer and primary_data and len(primary_data) > 50:
+                try:
+                    adaptive_signal = await asyncio.wait_for(
+                        self._adaptive_market_analysis(primary_data, symbol),
+                        timeout=3.0
+                    )
+                    if adaptive_signal:
+                        # Adaptive analysis gets high priority (40% weight for longer timeframes, 30% for ultra-short)
+                        weight = 0.30 if primary_timeframe in ['5s', '15s', '30s'] else 0.40
+                        analysis_results.append(('adaptive_strategy', adaptive_signal, weight))
+                        logger.info(f"🎯 Adaptive Market Strategy activated for {symbol} with {weight*100}% weight")
+                except asyncio.TimeoutError:
+                    logger.warning(f"⚠️ Adaptive analysis timeout, skipping")
             
             # SPEED OPTIMIZATION: Skip AI Ensemble for ultra-short timeframes to save time (3-5 seconds)
             # For ultra-short, use researched strategy exclusively
