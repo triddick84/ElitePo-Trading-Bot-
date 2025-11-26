@@ -2176,6 +2176,238 @@ async def reset_adaptive_strategy_config():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# =====================================================
+# REAL-TIME MARKET DATA ENDPOINTS
+# =====================================================
+
+@api_router.get("/market/realtime/{symbol}")
+async def get_realtime_market_data(symbol: str):
+    """
+    Get real-time market data for a symbol
+    Returns current price, bid, ask, volume with data quality metrics
+    """
+    try:
+        data = await realtime_market_hub.get_realtime_price(symbol)
+        
+        if data:
+            return {
+                "success": True,
+                "data": data,
+                "message": f"Real-time data from {data['source']}"
+            }
+        else:
+            return {
+                "success": False,
+                "error": "No real-time data available",
+                "message": f"Unable to fetch data for {symbol} from any source"
+            }
+    except Exception as e:
+        logger.error(f"Error getting real-time data for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/market/candles/{symbol}")
+async def get_market_candles(symbol: str, interval: str = "1m", limit: int = 100):
+    """
+    Get historical candlestick data
+    interval: 1m, 5m, 15m, 1h, 4h, 1d
+    limit: number of candles (default 100, max 1000)
+    """
+    try:
+        if limit > 1000:
+            limit = 1000
+        
+        candles = await realtime_market_hub.get_historical_candles(symbol, interval, limit)
+        
+        if candles:
+            return {
+                "success": True,
+                "symbol": symbol,
+                "interval": interval,
+                "count": len(candles),
+                "candles": [
+                    {
+                        'timestamp': c['timestamp'].isoformat(),
+                        'open': c['open'],
+                        'high': c['high'],
+                        'low': c['low'],
+                        'close': c['close'],
+                        'volume': c['volume']
+                    } for c in candles
+                ]
+            }
+        else:
+            return {
+                "success": False,
+                "error": "No candle data available",
+                "message": f"Unable to fetch candles for {symbol}"
+            }
+    except Exception as e:
+        logger.error(f"Error getting candles for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/market/depth/{symbol}")
+async def get_market_depth(symbol: str):
+    """
+    Get order book depth and volume analysis
+    Only available for cryptocurrencies
+    """
+    try:
+        depth = await realtime_market_hub.get_market_depth(symbol)
+        
+        if depth:
+            return {
+                "success": True,
+                "symbol": symbol,
+                "data": depth
+            }
+        else:
+            return {
+                "success": False,
+                "error": "Market depth not available",
+                "message": f"Order book data not available for {symbol}"
+            }
+    except Exception as e:
+        logger.error(f"Error getting market depth for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/market/analytics/{symbol}")
+async def get_market_analytics(symbol: str):
+    """
+    Get comprehensive market analytics
+    - Real-time price
+    - Recent candles with technical indicators
+    - Volume analysis
+    - Trend detection
+    """
+    try:
+        # Get real-time price
+        price_data = await realtime_market_hub.get_realtime_price(symbol)
+        
+        # Get recent candles for analysis
+        candles = await realtime_market_hub.get_historical_candles(symbol, '5m', 50)
+        
+        if not price_data or not candles:
+            return {
+                "success": False,
+                "error": "Insufficient data",
+                "message": "Unable to generate analytics"
+            }
+        
+        # Calculate technical indicators
+        df = pd.DataFrame(candles)
+        
+        # RSI
+        delta = df['close'].diff()
+        gain = delta.where(delta > 0, 0).rolling(14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
+        rs = gain / loss
+        rsi = 100 - (100 / (1 + rs))
+        
+        # Moving averages
+        ma20 = df['close'].rolling(20).mean()
+        ma50 = df['close'].rolling(50).mean() if len(df) >= 50 else None
+        
+        # Volume analysis
+        avg_volume = df['volume'].mean()
+        current_volume = df['volume'].iloc[-1]
+        volume_ratio = current_volume / avg_volume if avg_volume > 0 else 1
+        
+        # Trend detection
+        current_price = df['close'].iloc[-1]
+        trend = "bullish" if current_price > ma20.iloc[-1] else "bearish"
+        
+        # Volatility (ATR)
+        high_low = df['high'] - df['low']
+        atr = high_low.rolling(14).mean()
+        
+        analytics = {
+            "price": {
+                "current": price_data['price'],
+                "bid": price_data['bid'],
+                "ask": price_data['ask'],
+                "spread": price_data.get('spread', 0),
+                "quality": price_data.get('quality', 'unknown')
+            },
+            "indicators": {
+                "rsi": float(rsi.iloc[-1]) if not pd.isna(rsi.iloc[-1]) else None,
+                "ma20": float(ma20.iloc[-1]) if not pd.isna(ma20.iloc[-1]) else None,
+                "ma50": float(ma50.iloc[-1]) if ma50 is not None and not pd.isna(ma50.iloc[-1]) else None,
+                "atr": float(atr.iloc[-1]) if not pd.isna(atr.iloc[-1]) else None
+            },
+            "volume": {
+                "current": float(current_volume),
+                "average": float(avg_volume),
+                "ratio": float(volume_ratio),
+                "signal": "high" if volume_ratio > 1.5 else "normal" if volume_ratio > 0.7 else "low"
+            },
+            "trend": {
+                "direction": trend,
+                "strength": "strong" if abs(current_price - ma20.iloc[-1]) / ma20.iloc[-1] > 0.02 else "weak"
+            },
+            "data_source": price_data['source'],
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        
+        return {
+            "success": True,
+            "symbol": symbol,
+            "analytics": analytics
+        }
+        
+    except Exception as e:
+        logger.error(f"Error generating analytics for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/market/quality-report")
+async def get_data_quality_report():
+    """
+    Get data quality report
+    Shows API usage, cache status, and data source health
+    """
+    try:
+        report = realtime_market_hub.get_quality_report()
+        return {
+            "success": True,
+            "report": report
+        }
+    except Exception as e:
+        logger.error(f"Error getting quality report: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/market/multi-symbol")
+async def get_multi_symbol_data(symbols: str):
+    """
+    Get real-time data for multiple symbols
+    symbols: comma-separated list (e.g., "BTCUSD,ETHUSD,EURUSD")
+    """
+    try:
+        symbol_list = [s.strip() for s in symbols.split(',')]
+        
+        results = {}
+        tasks = [realtime_market_hub.get_realtime_price(symbol) for symbol in symbol_list]
+        data_list = await asyncio.gather(*tasks)
+        
+        for symbol, data in zip(symbol_list, data_list):
+            if data:
+                results[symbol] = data
+            else:
+                results[symbol] = {"error": "No data available"}
+        
+        return {
+            "success": True,
+            "count": len(results),
+            "data": results
+        }
+    except Exception as e:
+        logger.error(f"Error getting multi-symbol data: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
