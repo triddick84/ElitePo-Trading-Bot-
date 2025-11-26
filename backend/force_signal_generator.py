@@ -76,6 +76,11 @@ class ForceSignalGenerator:
         from adaptive_market_analyzer import AdaptiveMarketAnalyzer
         self.adaptive_analyzer = AdaptiveMarketAnalyzer(config)
         logger.info(f"🎯 Adaptive analyzer configured with custom indicators")
+    
+    def set_realtime_hub(self, hub):
+        """Set real-time market data hub"""
+        self.realtime_hub = hub
+        logger.info(f"📡 Real-time market data hub connected")
         
     async def force_generate_signal(self, symbol: str, market_data: MarketData, user_timeframes: List[str] = None, chart_type: str = 'japanese_candles', wait_for_candle: bool = True, adaptive_config=None) -> List[TradingSignal]:
         """
