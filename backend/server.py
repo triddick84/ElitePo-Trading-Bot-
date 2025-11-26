@@ -86,6 +86,12 @@ trading_bot = TradingBotService(db)
 # Initialize adaptive strategy service
 adaptive_strategy_service_instance = AdaptiveStrategyService(db)
 
+# Initialize Real-Time Market Data Hub
+from realtime_market_data_hub import RealtimeMarketDataHub
+finnhub_key = os.environ.get('FINNHUB_API_KEY', '')
+alpha_vantage_key = os.environ.get('ALPHA_VANTAGE_API_KEY', os.environ.get('ALPHAVANTAGE_API_KEY', ''))
+realtime_market_hub = RealtimeMarketDataHub(finnhub_key, alpha_vantage_key)
+
 # Create the main app without a prefix
 app = FastAPI(
     title="GPT Signal Bot API",
