@@ -182,6 +182,8 @@ function App() {
             setNotificationSettings={setGlobalNotificationSettings}
           />
         );
+      case "realtime":
+        return <RealtimeMarketDashboard />;
       case "signals":
         return <SignalsPanel />;
       case "strategies":
