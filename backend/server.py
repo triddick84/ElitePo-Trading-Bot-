@@ -1137,6 +1137,9 @@ async def force_generate_signal_for_asset(asset_symbol: str, wait_for_candle: bo
             user_timeframes = config_doc.get('selected_timeframes', ['5m']) if config_doc else ['5m']
             invert_signals = config_doc.get('invert_signals', False) if config_doc else False
             
+            # Load adaptive strategy configuration
+            adaptive_config = await adaptive_strategy_service_instance.get_config("default_user")
+            
             # If no timeframes are selected, use ultra-short default
             if not user_timeframes or len(user_timeframes) == 0:
                 user_timeframes = ['5s']  # Default to ultra-short 5 second timeframe
