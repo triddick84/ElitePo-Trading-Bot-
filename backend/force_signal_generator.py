@@ -2264,9 +2264,34 @@ class ForceSignalGenerator:
     
     # Helper methods for technical calculations
     def _fetch_deep_market_data(self, symbol: str, interval: str) -> List[Dict]:
-        """Fetch deep market data for specified interval with fallback logic"""
+        """
+        Fetch REAL market data from multi-source hub
+        NO SIMULATED DATA - Returns empty list if real data unavailable
+        """
         try:
-            # Try different symbol formats for yfinance
+            # PRIORITY 1: Try real-time hub if available
+            if self.realtime_hub:
+                logger.info(f"📡 Fetching REAL-TIME data for {symbol} ({interval})")
+                
+                # Use asyncio to call async method
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                
+                try:
+                    candles = loop.run_until_complete(
+                        self.realtime_hub.get_historical_candles(symbol, interval, 200)
+                    )
+                    
+                    if candles and len(candles) > 0:
+                        logger.info(f"✅ REAL DATA: {len(candles)} candles from {candles[0].get('source', 'multi-source')} for {symbol}")
+                        return candles
+                    else:
+                        logger.warning(f"⚠️ No real data available from real-time hub for {symbol}")
+                finally:
+                    loop.close()
+            
+            # FALLBACK: Try yfinance as last resort (still real data)
+            logger.info(f"📊 Falling back to yfinance for {symbol} ({interval})")
             symbol_variants = [symbol]
             
             # Add common yfinance symbol formats
@@ -2286,14 +2311,14 @@ class ForceSignalGenerator:
                         '5m': '5d',     # 5 days of 5-minute data
                         '15m': '1mo',   # 1 month of 15-minute data
                         '1h': '3mo',    # 3 months of hourly data
-                        '4h': '1y',     # 1 year of 4-hour data (if available)
+                        '4h': '1y',     # 1 year of 4-hour data
                         '1d': '2y'      # 2 years of daily data
                     }
                     
                     period = period_map.get(interval, '1mo')
                     hist = ticker.history(period=period, interval=interval)
                     
-                    if not hist.empty:
+                    if not hist.empty and len(hist) >= 10:  # Minimum 10 candles for valid analysis
                         data = []
                         for timestamp, row in hist.iterrows():
                             data.append({
@@ -2305,19 +2330,19 @@ class ForceSignalGenerator:
                                 'volume': float(row['Volume']) if 'Volume' in row else 0
                             })
                         
-                        logger.debug(f"Successfully fetched {len(data)} data points for {variant} ({interval})")
+                        logger.info(f"✅ YFINANCE: {len(data)} real candles for {variant} ({interval})")
                         return data
                         
                 except Exception as e:
-                    logger.debug(f"Failed to fetch data for {variant}: {e}")
+                    logger.debug(f"yfinance failed for {variant}: {e}")
                     continue
             
-            # If all variants fail, return empty list instead of raising exception
-            logger.warning(f"Could not fetch market data for {symbol} ({interval}) - using fallback analysis")
+            # CRITICAL: NO SIMULATED DATA - Return empty if no real data available
+            logger.error(f"❌ INSUFFICIENT REAL DATA for {symbol} ({interval}) - Cannot generate reliable signal")
             return []
             
         except Exception as e:
-            logger.error(f"Error fetching deep market data for {symbol} {interval}: {e}")
+            logger.error(f"Error fetching market data for {symbol} {interval}: {e}")
             return []
     
     def _fetch_market_sentiment(self, symbol: str) -> Dict:
