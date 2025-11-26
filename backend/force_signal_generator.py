@@ -1597,6 +1597,64 @@ class ForceSignalGenerator:
             logger.error(f"Error in deep sentiment analysis: {e}")
             return None
     
+    async def _adaptive_market_analysis(self, data: List[Dict], symbol: str) -> Optional[Dict]:
+        """
+        Adaptive market condition analysis
+        Automatically detects trending vs ranging markets and applies appropriate strategy
+        """
+        try:
+            if not self.adaptive_analyzer:
+                logger.warning("Adaptive analyzer not initialized")
+                return None
+            
+            # Convert data to DataFrame
+            df = pd.DataFrame(data)
+            if df.empty or len(df) < 50:
+                return None
+            
+            # Ensure required columns
+            required_cols = ['open', 'high', 'low', 'close']
+            if not all(col in df.columns for col in required_cols):
+                return None
+            
+            # Generate adaptive signal
+            loop = asyncio.get_event_loop()
+            adaptive_result = await loop.run_in_executor(
+                self.executor,
+                self.adaptive_analyzer.generate_adaptive_signal,
+                df
+            )
+            
+            if adaptive_result:
+                # Map direction to our format
+                direction_map = {
+                    'CALL': 'BUY',
+                    'PUT': 'SELL',
+                    'BUY': 'BUY',
+                    'SELL': 'SELL'
+                }
+                
+                direction = direction_map.get(adaptive_result['direction'], adaptive_result['direction'])
+                
+                logger.info(f"🎯 Adaptive Strategy: {adaptive_result['strategy']} - {direction} with {adaptive_result['confidence']}% confidence")
+                
+                return {
+                    'direction': direction,
+                    'confidence': adaptive_result['confidence'],
+                    'strategy': 'adaptive_market_condition',
+                    'market_condition': adaptive_result.get('market_condition', {}),
+                    'reason': adaptive_result.get('reason', ''),
+                    'indicators': adaptive_result.get('indicators', {}),
+                    'confirmations': adaptive_result.get('confirmations', []),
+                    'execution_delay': adaptive_result.get('execution_delay', 2.0)
+                }
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error in adaptive market analysis: {e}")
+            return None
+    
     async def _advanced_pattern_recognition(self, data: List[Dict], symbol: str) -> Optional[Dict]:
         """
         Advanced candlestick and chart pattern recognition
