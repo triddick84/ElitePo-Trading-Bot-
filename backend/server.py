@@ -83,6 +83,9 @@ def _convert_numpy_types(obj):
 # Initialize trading bot service
 trading_bot = TradingBotService(db)
 
+# Initialize adaptive strategy service
+adaptive_strategy_service_instance = AdaptiveStrategyService(db)
+
 # Create the main app without a prefix
 app = FastAPI(
     title="GPT Signal Bot API",
