@@ -67,8 +67,14 @@ class ForceSignalGenerator:
         self.executor = ThreadPoolExecutor(max_workers=10)
         self.min_force_confidence = 75.0  # Minimum for forced signals
         self.adaptive_analyzer = None  # Will be set from config
+    
+    def set_adaptive_config(self, config):
+        """Set or update adaptive market condition configuration"""
+        from adaptive_market_analyzer import AdaptiveMarketAnalyzer
+        self.adaptive_analyzer = AdaptiveMarketAnalyzer(config)
+        logger.info(f"🎯 Adaptive analyzer configured with custom indicators")
         
-    async def force_generate_signal(self, symbol: str, market_data: MarketData, user_timeframes: List[str] = None, chart_type: str = 'japanese_candles', wait_for_candle: bool = True) -> List[TradingSignal]:
+    async def force_generate_signal(self, symbol: str, market_data: MarketData, user_timeframes: List[str] = None, chart_type: str = 'japanese_candles', wait_for_candle: bool = True, adaptive_config=None) -> List[TradingSignal]:
         """
         Force generate a signal using maximum analysis depth
         Bypasses all normal thresholds and provides the best possible prediction
