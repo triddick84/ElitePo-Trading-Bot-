@@ -61,12 +61,15 @@ class ForceSignalGenerator:
     Advanced force signal generation system that bypasses all thresholds
     Uses maximum analysis depth and all available data sources to generate
     the highest possible confidence signal even in uncertain conditions
+    
+    CRITICAL: Uses ONLY REAL market data - NO simulated data
     """
     
     def __init__(self):
         self.executor = ThreadPoolExecutor(max_workers=10)
         self.min_force_confidence = 75.0  # Minimum for forced signals
         self.adaptive_analyzer = None  # Will be set from config
+        self.realtime_hub = None  # Will be set with real-time market data hub
     
     def set_adaptive_config(self, config):
         """Set or update adaptive market condition configuration"""
