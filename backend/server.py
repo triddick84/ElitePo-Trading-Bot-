@@ -904,7 +904,7 @@ async def force_generate_signal(wait_for_candle: bool = False):
             try:
                 forced_signals = await asyncio.wait_for(
                     force_signal_generator.force_generate_signal(
-                        base_symbol, target_asset, user_timeframes, chart_type=chart_type, wait_for_candle=wait_for_candle
+                        base_symbol, target_asset, user_timeframes, chart_type=chart_type, wait_for_candle=wait_for_candle, adaptive_config=adaptive_config
                     ),
                     timeout=timeout_seconds
                 )
