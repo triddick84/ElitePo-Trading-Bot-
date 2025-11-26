@@ -24,10 +24,45 @@ logger = logging.getLogger(__name__)
 class AdaptiveMarketAnalyzer:
     """Detects market conditions and applies optimal strategies"""
     
-    def __init__(self):
+    def __init__(self, config=None):
+        # Default thresholds
         self.trending_threshold = 25  # ADX-like value
+        self.ranging_threshold = 20  # Below this = ranging
         self.volatility_threshold = 1.5  # Volatility multiplier
-        logger.info("🎯 Adaptive Market Analyzer initialized")
+        
+        # User configuration (can be overridden)
+        self.config = config
+        
+        # Update thresholds from config if provided
+        if config:
+            self.trending_threshold = config.adx_trending_threshold
+            self.ranging_threshold = config.adx_ranging_threshold
+            self.trending_execution_delay = config.trending_execution_delay
+            self.ranging_execution_delay = config.ranging_execution_delay
+            self.ranging_signal_threshold = config.ranging_signal_threshold
+            self.trending_indicators = config.trending_indicators
+            self.ranging_indicators = config.ranging_indicators
+        else:
+            # Default values
+            self.trending_execution_delay = 3.0
+            self.ranging_execution_delay = 1.5
+            self.ranging_signal_threshold = 80.0
+            self.trending_indicators = ["MACD", "Parabolic_SAR", "EMA"]
+            self.ranging_indicators = ["RSI", "Volume", "Bollinger_Bands", "EMA"]
+        
+        logger.info(f"🎯 Adaptive Market Analyzer initialized - Trending: {self.trending_indicators}, Ranging: {self.ranging_indicators}")
+    
+    def update_config(self, config):
+        """Update analyzer configuration"""
+        self.config = config
+        self.trending_threshold = config.adx_trending_threshold
+        self.ranging_threshold = config.adx_ranging_threshold
+        self.trending_execution_delay = config.trending_execution_delay
+        self.ranging_execution_delay = config.ranging_execution_delay
+        self.ranging_signal_threshold = config.ranging_signal_threshold
+        self.trending_indicators = config.trending_indicators
+        self.ranging_indicators = config.ranging_indicators
+        logger.info(f"🔄 Updated adaptive config - ADX Trending>{self.trending_threshold}, Ranging<{self.ranging_threshold}")
     
     def detect_market_condition(self, df: pd.DataFrame) -> Dict[str, Any]:
         """
