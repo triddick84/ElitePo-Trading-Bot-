@@ -123,85 +123,135 @@ class AdaptiveMarketAnalyzer:
     
     def analyze_trending_market(self, df: pd.DataFrame, trend_direction: str) -> Optional[Dict[str, Any]]:
         """
-        Analyze trending market using MACD + Parabolic SAR + EMA
+        Analyze trending market using user-selected indicators
         
         Strategy:
         - Follow momentum
         - Detect breakouts
-        - Longer execution delay to avoid whipsaws
+        - User-configurable execution delay to avoid whipsaws
         """
         try:
-            # MACD Calculation
-            ema_12 = df['close'].ewm(span=12, adjust=False).mean()
-            ema_26 = df['close'].ewm(span=26, adjust=False).mean()
-            macd = ema_12 - ema_26
-            macd_signal = macd.ewm(span=9, adjust=False).mean()
-            macd_histogram = macd - macd_signal
-            
-            # Parabolic SAR
-            psar = self._calculate_parabolic_sar(df)
-            
-            # EMA for trend confirmation
-            ema_20 = df['close'].ewm(span=20, adjust=False).mean()
-            ema_50 = df['close'].ewm(span=50, adjust=False).mean()
-            
             current_price = df['close'].iloc[-1]
-            current_macd = macd.iloc[-1]
-            current_signal = macd_signal.iloc[-1]
-            current_psar = psar.iloc[-1]
-            
             signal_direction = None
             confidence = 50
             reason = ""
+            indicators_used = {}
+            confirmations = []
             
-            # BUY Signal: MACD bullish + Price above PSAR + EMA alignment
-            if (current_macd > current_signal and 
-                current_price > current_psar and
-                ema_20.iloc[-1] > ema_50.iloc[-1]):
-                
+            # Calculate selected indicators
+            macd_bullish = macd_bearish = False
+            psar_bullish = psar_bearish = False
+            ema_bullish = ema_bearish = False
+            rsi_bullish = rsi_bearish = False
+            stoch_bullish = stoch_bearish = False
+            bb_breakout_bullish = bb_breakout_bearish = False
+            
+            if "MACD" in self.trending_indicators:
+                ema_12 = df['close'].ewm(span=12, adjust=False).mean()
+                ema_26 = df['close'].ewm(span=26, adjust=False).mean()
+                macd = ema_12 - ema_26
+                macd_signal = macd.ewm(span=9, adjust=False).mean()
+                current_macd = macd.iloc[-1]
+                current_signal = macd_signal.iloc[-1]
+                indicators_used['macd'] = current_macd
+                indicators_used['macd_signal'] = current_signal
+                macd_bullish = current_macd > current_signal
+                macd_bearish = current_macd < current_signal
+            
+            if "Parabolic_SAR" in self.trending_indicators:
+                psar = self._calculate_parabolic_sar(df)
+                current_psar = psar.iloc[-1]
+                indicators_used['psar'] = current_psar
+                psar_bullish = current_price > current_psar
+                psar_bearish = current_price < current_psar
+            
+            if "EMA" in self.trending_indicators:
+                ema_20 = df['close'].ewm(span=20, adjust=False).mean()
+                ema_50 = df['close'].ewm(span=50, adjust=False).mean()
+                indicators_used['ema_20'] = ema_20.iloc[-1]
+                indicators_used['ema_50'] = ema_50.iloc[-1]
+                ema_bullish = ema_20.iloc[-1] > ema_50.iloc[-1]
+                ema_bearish = ema_20.iloc[-1] < ema_50.iloc[-1]
+            
+            if "RSI" in self.trending_indicators:
+                rsi = self._calculate_rsi(df['close'], 14)
+                current_rsi = rsi.iloc[-1]
+                indicators_used['rsi'] = current_rsi
+                rsi_bullish = current_rsi > 50 and current_rsi < 70
+                rsi_bearish = current_rsi < 50 and current_rsi > 30
+            
+            if "Stochastic" in self.trending_indicators:
+                stoch_k = self._calculate_stochastic(df)
+                current_stoch = stoch_k.iloc[-1] if len(stoch_k) > 0 else 50
+                indicators_used['stochastic'] = current_stoch
+                stoch_bullish = current_stoch > 50
+                stoch_bearish = current_stoch < 50
+            
+            if "Bollinger_Bands" in self.trending_indicators:
+                bb_period = 20
+                bb_middle = df['close'].rolling(bb_period).mean()
+                bb_std_dev = df['close'].rolling(bb_period).std()
+                bb_upper = bb_middle + (bb_std_dev * 2)
+                bb_lower = bb_middle - (bb_std_dev * 2)
+                indicators_used['bb_upper'] = bb_upper.iloc[-1]
+                indicators_used['bb_lower'] = bb_lower.iloc[-1]
+                bb_breakout_bullish = current_price > bb_upper.iloc[-1]
+                bb_breakout_bearish = current_price < bb_lower.iloc[-1]
+            
+            # Count confirmations for CALL
+            bullish_score = sum([macd_bullish, psar_bullish, ema_bullish, rsi_bullish, stoch_bullish, bb_breakout_bullish])
+            bearish_score = sum([macd_bearish, psar_bearish, ema_bearish, rsi_bearish, stoch_bearish, bb_breakout_bearish])
+            
+            # Build confirmation list for CALL
+            if macd_bullish:
+                confirmations.append("MACD bullish")
+            if psar_bullish:
+                confirmations.append("Price above PSAR")
+            if ema_bullish:
+                confirmations.append("EMA uptrend")
+            if rsi_bullish:
+                confirmations.append("RSI momentum")
+            if stoch_bullish:
+                confirmations.append("Stochastic up")
+            if bb_breakout_bullish:
+                confirmations.append("BB breakout")
+            
+            # Determine signal based on majority confirmation
+            min_confirmations = max(2, len(self.trending_indicators) // 2)  # At least 2 or half of indicators
+            
+            if bullish_score >= min_confirmations:
                 signal_direction = "CALL"
-                confidence = 85
-                
-                # Breakout detection bonus
-                if current_price > df['high'].rolling(20).max().iloc[-2]:
-                    confidence += 5
-                    reason = "Strong bullish breakout - MACD bullish + Price above PSAR + EMA uptrend"
-                else:
-                    reason = "Bullish momentum - MACD bullish + Price above PSAR + EMA uptrend"
-                
+                confidence = 75 + (bullish_score * 3)  # More confirmations = higher confidence
+                reason = f"Bullish trending - {', '.join(confirmations)}"
                 logger.info(f"🟢 TRENDING BUY: {reason}")
-            
-            # SELL Signal: MACD bearish + Price below PSAR + EMA alignment
-            elif (current_macd < current_signal and 
-                  current_price < current_psar and
-                  ema_20.iloc[-1] < ema_50.iloc[-1]):
-                
+            elif bearish_score >= min_confirmations:
                 signal_direction = "PUT"
-                confidence = 85
-                
-                # Breakdown detection bonus
-                if current_price < df['low'].rolling(20).min().iloc[-2]:
-                    confidence += 5
-                    reason = "Strong bearish breakdown - MACD bearish + Price below PSAR + EMA downtrend"
-                else:
-                    reason = "Bearish momentum - MACD bearish + Price below PSAR + EMA downtrend"
-                
+                confidence = 75 + (bearish_score * 3)
+                bearish_confirmations = []
+                if macd_bearish:
+                    bearish_confirmations.append("MACD bearish")
+                if psar_bearish:
+                    bearish_confirmations.append("Price below PSAR")
+                if ema_bearish:
+                    bearish_confirmations.append("EMA downtrend")
+                if rsi_bearish:
+                    bearish_confirmations.append("RSI momentum")
+                if stoch_bearish:
+                    bearish_confirmations.append("Stochastic down")
+                if bb_breakout_bearish:
+                    bearish_confirmations.append("BB breakdown")
+                reason = f"Bearish trending - {', '.join(bearish_confirmations)}"
                 logger.info(f"🔴 TRENDING SELL: {reason}")
             
             if signal_direction:
                 return {
                     'direction': signal_direction,
-                    'confidence': confidence,
+                    'confidence': min(confidence, 95),
                     'reason': reason,
                     'strategy': 'Trending Market Strategy',
-                    'execution_delay': 3.0,  # Slightly longer delay for whipsaw avoidance
-                    'indicators': {
-                        'macd': current_macd,
-                        'macd_signal': current_signal,
-                        'psar': current_psar,
-                        'ema_20': ema_20.iloc[-1],
-                        'ema_50': ema_50.iloc[-1]
-                    }
+                    'execution_delay': self.trending_execution_delay,
+                    'indicators': indicators_used,
+                    'confirmations': confirmations if signal_direction == "CALL" else bearish_confirmations
                 }
             
             return None
