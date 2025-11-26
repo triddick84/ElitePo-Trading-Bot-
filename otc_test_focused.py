@@ -8,7 +8,7 @@ import asyncio
 import aiohttp
 import json
 
-BACKEND_URL = "https://trade-signals-112.preview.emergentagent.com/api"
+BACKEND_URL = "https://gpt-tradingbot.preview.emergentagent.com/api"
 
 async def test_otc_market_functionality():
     """Test OTC market signal generation functionality"""
