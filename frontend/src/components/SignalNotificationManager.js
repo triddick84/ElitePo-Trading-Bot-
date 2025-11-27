@@ -127,24 +127,33 @@ const SignalNotificationManager = ({ signals = [], onSignalExecute, onSignalDism
     return () => clearInterval(cleanup);
   }, []);
 
+  console.log('🎨 SignalNotificationManager render - Active popups:', activePopups.length);
+
+  if (activePopups.length === 0) {
+    console.log('⚠️ No active popups to display');
+  }
+
   return (
     <div className="fixed top-0 right-0 z-50 pointer-events-none">
       <div className="pointer-events-auto space-y-4">
-        {activePopups.map((popup, index) => (
-          <div
-            key={popup.id}
-            style={{
-              transform: `translateY(${index * 20}px)`,
-              zIndex: 1000 - index
-            }}
-          >
-            <ImprovedSignalPopup
-              signals={popup.signals}
-              onClose={() => handleClosePopup(popup.id)}
-              onDismiss={handleDismissSignal}
-            />
-          </div>
-        ))}
+        {activePopups.map((popup, index) => {
+          console.log(`🎯 Rendering popup ${index}:`, popup.id, 'signals:', popup.signals.length);
+          return (
+            <div
+              key={popup.id}
+              style={{
+                transform: `translateY(${index * 20}px)`,
+                zIndex: 1000 - index
+              }}
+            >
+              <ImprovedSignalPopup
+                signals={popup.signals}
+                onClose={() => handleClosePopup(popup.id)}
+                onDismiss={handleDismissSignal}
+              />
+            </div>
+          );
+        })}
       </div>
     </div>
   );
