@@ -1827,34 +1827,40 @@ class ForceSignalGenerator:
             chicago_time = pocket_option_sync.get_chicago_time()
             
             # Calculate REAL entry candle time (the actual candle to trade on)
-            # Get the IMMEDIATE next candle (not 10s away, just the next one)
+            # TARGET: Find candle that's approximately 10 seconds away
+            
+            interval_seconds = pocket_option_sync.timeframe_seconds.get(user_timeframes[0], 60)
             next_candle = pocket_option_sync.get_next_candle_formation_time(
                 user_timeframes[0], market_type, apply_latency_compensation=True
             )
             
-            # Calculate how much time until next candle
-            time_until_candle = (next_candle - chicago_time).total_seconds()
+            # Keep checking candles until we find one that's ~10 seconds away
+            real_entry_time = next_candle
+            time_until_entry = (real_entry_time - chicago_time).total_seconds()
             
-            # If next candle is less than 10s away, use the one after that
-            # This ensures we always have at least 10 seconds countdown
-            if time_until_candle < 10.0:
-                interval_seconds = pocket_option_sync.timeframe_seconds.get(user_timeframes[0], 60)
-                real_entry_time = next_candle + timedelta(seconds=interval_seconds)
-            else:
-                real_entry_time = next_candle
+            # Find the candle closest to 10 seconds from now
+            while time_until_entry < 10.0:
+                real_entry_time = real_entry_time + timedelta(seconds=interval_seconds)
+                time_until_entry = (real_entry_time - chicago_time).total_seconds()
+            
+            # If we went too far over 10s, check if previous candle was closer
+            if time_until_entry > 15.0:  # More than 15s is too far
+                previous_candle = real_entry_time - timedelta(seconds=interval_seconds)
+                time_to_previous = (previous_candle - chicago_time).total_seconds()
+                # Use previous if it's at least 8 seconds away
+                if time_to_previous >= 8.0:
+                    real_entry_time = previous_candle
+                    time_until_entry = time_to_previous
             
             # For force generate: Display popup NOW, countdown shows time until entry
-            # Popup appears immediately when signal is generated
             popup_display_time = chicago_time  # Show NOW
-            
-            # Countdown duration is the time from now to entry (should be ~10 seconds)
-            countdown_seconds = (real_entry_time - chicago_time).total_seconds()
+            countdown_seconds = time_until_entry
             
             # Log timing details for verification
             logger.info(f"⏰ FORCE GENERATE TIMING:")
             logger.info(f"   Current time: {chicago_time.strftime('%H:%M:%S')}")
             logger.info(f"   Entry time: {real_entry_time.strftime('%H:%M:%S')}")
-            logger.info(f"   Countdown: {countdown_seconds:.1f} seconds")
+            logger.info(f"   Countdown: {countdown_seconds:.1f} seconds (target: 10s)")
             logger.info(f"   Popup shows: NOW (immediately)")
             
             # Use real_entry_time for actual trade
