@@ -1850,6 +1850,13 @@ class ForceSignalGenerator:
             # Countdown duration is the time from now to entry (should be ~10 seconds)
             countdown_seconds = (real_entry_time - chicago_time).total_seconds()
             
+            # Log timing details for verification
+            logger.info(f"⏰ FORCE GENERATE TIMING:")
+            logger.info(f"   Current time: {chicago_time.strftime('%H:%M:%S')}")
+            logger.info(f"   Entry time: {real_entry_time.strftime('%H:%M:%S')}")
+            logger.info(f"   Countdown: {countdown_seconds:.1f} seconds")
+            logger.info(f"   Popup shows: NOW (immediately)")
+            
             # Use real_entry_time for actual trade
             optimal_entry_time = real_entry_time
             
