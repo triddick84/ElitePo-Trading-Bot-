@@ -82,8 +82,15 @@ const Dashboard = ({ botStatus, liveSignals, setLiveSignals, notificationSetting
   useEffect(() => {
     fetchDashboardData();
     fetchConfiguration();
-    const interval = setInterval(fetchDashboardData, 10000); // Update every 10 seconds
-    return () => clearInterval(interval);
+    fetchCandleSyncStatus();
+    
+    const dataInterval = setInterval(fetchDashboardData, 10000);
+    const syncInterval = setInterval(fetchCandleSyncStatus, 2000); // Update sync status every 2s
+    
+    return () => {
+      clearInterval(dataInterval);
+      clearInterval(syncInterval);
+    };
   }, []);
 
   const fetchConfiguration = async () => {
