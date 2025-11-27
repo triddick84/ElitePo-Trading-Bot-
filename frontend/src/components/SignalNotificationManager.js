@@ -116,7 +116,7 @@ const SignalNotificationManager = ({ signals = [], onSignalExecute, onSignalDism
               zIndex: 1000 - index
             }}
           >
-            <ConsolidatedSignalPopup
+            <ImprovedSignalPopup
               signals={popup.signals}
               onClose={() => handleClosePopup(popup.id)}
               onExecute={handleExecuteSignal}
