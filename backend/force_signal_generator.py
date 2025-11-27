@@ -1982,6 +1982,21 @@ class ForceSignalGenerator:
                 except (ValueError, TypeError):
                     return 0.0
             
+            # Extract primary strategy name from analysis results
+            primary_strategy_name = "Hybrid Multi-Strategy"  # Default
+            if analysis_results:
+                for strategy_name, result in analysis_results:
+                    if result and isinstance(result, dict) and result.get('strategy'):
+                        primary_strategy_name = result['strategy']
+                        break  # Use the first (primary) strategy
+            
+            # Also check strategy_details for selected strategy marker
+            for strategy_name, signal_data in strategy_details.items():
+                if isinstance(signal_data, dict) and signal_data.get('selected_strategy'):
+                    primary_strategy_name = strategy_name
+                    logger.info(f"✅ Using SELECTED strategy name: {primary_strategy_name}")
+                    break
+            
             technical_analysis = {
                 'strategies_analyzed': len(analysis_results),
                 'buy_score': safe_float(buy_score),
@@ -1991,6 +2006,7 @@ class ForceSignalGenerator:
                 'confidence_boosters_applied': confidence_boosters,
                 'otc_boost_applied': confidence_boosters if market_type == 'otc' else 0.0,
                 'strategy_details': strategy_details,
+                'primary_strategy': primary_strategy_name,  # Add the actual strategy name
                 'forced_generation': True,
                 'override_mode': True,
                 'emergency_boost_applied': final_confidence < 85.0,
