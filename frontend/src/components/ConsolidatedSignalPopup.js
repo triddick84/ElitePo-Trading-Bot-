@@ -20,20 +20,38 @@ const ConsolidatedSignalPopup = ({ signals = [], onClose, onExecute }) => {
         let isExpired = false;
         
         try {
-          // Use backend's seconds_to_entry if available (Pocket Option synchronized)
-          if (signal?.seconds_to_entry !== undefined && signal.seconds_to_entry > 0) {
+          // PRIORITY 1: Use countdown_duration for force generate (shows popup 10s before entry)
+          if (signal?.countdown_duration !== undefined && signal?.popup_display_time) {
+            const popupTime = new Date(signal.popup_display_time);
+            const entryTime = new Date(signal.precision_entry_time);
+            const countdownMs = signal.countdown_duration * 1000;
+            
+            // Calculate time left in the countdown (from popup display to entry)
+            const timeSincePopup = now - popupTime.getTime();
+            timeLeft = (countdownMs - timeSincePopup) / 1000;
+            
+            // If countdown_duration is 0 (auto-generate), show immediate entry
+            if (signal.countdown_duration === 0) {
+              timeLeft = (entryTime.getTime() - now) / 1000;
+            }
+          }
+          // PRIORITY 2: Use backend's seconds_to_entry if available (Pocket Option synchronized)
+          else if (signal?.seconds_to_entry !== undefined && signal.seconds_to_entry > 0) {
             const backendCalculatedTime = signal._calculatedEntryTime || (Date.now() + (signal.seconds_to_entry * 1000));
             if (!signal._calculatedEntryTime) {
               signal._calculatedEntryTime = backendCalculatedTime;
             }
             const diffMs = signal._calculatedEntryTime - now;
             timeLeft = diffMs / 1000;
-          } else if (signal?.precision_entry_time) {
+          } 
+          // PRIORITY 3: Use precision_entry_time
+          else if (signal?.precision_entry_time) {
             const entryTime = new Date(signal.precision_entry_time);
             const diffMs = entryTime.getTime() - now;
             timeLeft = diffMs / 1000;
-          } else {
-            // Fallback: create entry time based on signal timestamp + timeframe delay
+          } 
+          // FALLBACK: create entry time based on signal timestamp + timeframe delay
+          else {
             const signalTime = signal?.timestamp ? new Date(signal.timestamp) : new Date();
             const entryDelays = {
               '5s': 25000, '15s': 30000, '30s': 35000,
