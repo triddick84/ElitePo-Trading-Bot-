@@ -46,6 +46,11 @@ const Dashboard = ({ botStatus, liveSignals, setLiveSignals, notificationSetting
   });
   const [flexibleLoading, setFlexibleLoading] = useState(false);
   const [flexibleResult, setFlexibleResult] = useState(null);
+  
+  // Candle Sync State
+  const [candleSyncEnabled, setCandleSyncEnabled] = useState(false);
+  const [candleSyncStatus, setCandleSyncStatus] = useState({ enabled: false, next_candle_times: {} });
+  const [isCandleSyncLoading, setIsCandleSyncLoading] = useState(false);
 
   const handleSignalExecute = (signal) => {
     console.log("Executing signal from dashboard:", signal);
