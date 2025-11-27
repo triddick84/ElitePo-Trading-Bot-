@@ -297,8 +297,22 @@ async def disable_candle_sync():
 async def get_candle_sync_status():
     """Get current candle synchronization status and next candle times"""
     try:
-        status = await trading_bot.get_candle_sync_status()
-        return status
+        # Get config setting
+        config_doc = await db.trading_configurations.find_one({"user_id": "default_user"})
+        candle_sync_enabled = config_doc.get("candle_sync_enabled", False) if config_doc else False
+        
+        # If bot is running, get detailed status from scheduler
+        if trading_bot.is_running and candle_sync_enabled:
+            status = await trading_bot.get_candle_sync_status()
+            return status
+        else:
+            # Bot not running or sync disabled, return basic status
+            return {
+                "enabled": candle_sync_enabled,
+                "bot_running": trading_bot.is_running,
+                "next_candle_times": {},
+                "message": "Candle sync ready for Force Generate" if candle_sync_enabled else "Disabled"
+            }
         
     except Exception as e:
         logging.error(f"Error getting candle sync status: {e}")
