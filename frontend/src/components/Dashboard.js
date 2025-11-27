@@ -125,14 +125,21 @@ const Dashboard = ({ botStatus, liveSignals, setLiveSignals, notificationSetting
     setIsCandleSyncLoading(true);
     try {
       if (candleSyncEnabled) {
-        await axios.post(`${API}/config/candle-sync/disable`);
+        // Disable candle sync
+        await axios.post(`${API}/bot/candle-sync/disable`);
+        console.log('✅ Candle sync disabled');
       } else {
-        await axios.post(`${API}/config/candle-sync/enable`);
+        // Enable candle sync
+        const response = await axios.post(`${API}/bot/candle-sync/enable`);
+        console.log('✅ Candle sync enabled:', response.data);
       }
+      
+      // Refresh status
       await fetchCandleSyncStatus();
       await fetchConfiguration();
     } catch (error) {
-      console.error('Error toggling candle sync:', error);
+      console.error('❌ Error toggling candle sync:', error);
+      alert('Failed to toggle candle synchronization. Error: ' + (error.response?.data?.detail || error.message));
     } finally {
       setIsCandleSyncLoading(false);
     }
