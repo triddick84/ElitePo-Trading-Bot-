@@ -1827,16 +1827,30 @@ class ForceSignalGenerator:
             chicago_time = pocket_option_sync.get_chicago_time()
             
             # Calculate REAL entry candle time (the actual candle to trade on)
-            # Find the optimal entry candle
-            real_entry_time = pocket_option_sync.get_entry_candle_with_timer(
-                user_timeframes[0], target_timer_seconds=10.0
+            # Get the IMMEDIATE next candle (not 10s away, just the next one)
+            next_candle = pocket_option_sync.get_next_candle_formation_time(
+                user_timeframes[0], market_type, apply_latency_compensation=True
             )
             
-            # For force generate: Display popup 10 seconds BEFORE real entry time
-            # This gives user time to prepare for the entry
-            popup_display_time = real_entry_time - timedelta(seconds=10)
+            # Calculate how much time until next candle
+            time_until_candle = (next_candle - chicago_time).total_seconds()
             
-            # Use popup_display_time for countdown timer, but real_entry_time for actual trade
+            # If next candle is less than 10s away, use the one after that
+            # This ensures we always have at least 10 seconds countdown
+            if time_until_candle < 10.0:
+                interval_seconds = pocket_option_sync.timeframe_seconds.get(user_timeframes[0], 60)
+                real_entry_time = next_candle + timedelta(seconds=interval_seconds)
+            else:
+                real_entry_time = next_candle
+            
+            # For force generate: Display popup NOW, countdown shows time until entry
+            # Popup appears immediately when signal is generated
+            popup_display_time = chicago_time  # Show NOW
+            
+            # Countdown duration is the time from now to entry (should be ~10 seconds)
+            countdown_seconds = (real_entry_time - chicago_time).total_seconds()
+            
+            # Use real_entry_time for actual trade
             optimal_entry_time = real_entry_time
             
             # Calculate Pocket Option optimized expiration time
