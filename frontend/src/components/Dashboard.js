@@ -568,8 +568,42 @@ const Dashboard = ({ botStatus, liveSignals, setLiveSignals, notificationSetting
           </div>
         </div>
 
+        {/* Candle Synchronization Toggle */}
+        <div className="mt-6 p-4 bg-gradient-to-r from-blue-900/20 to-emerald-900/20 rounded-lg border border-blue-500/30">
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-emerald-400">🕐 Pocket Option Candle Sync</span>
+                {candleSyncEnabled && (
+                  <Badge className="bg-green-500/20 text-green-400 border-green-500 animate-pulse">
+                    ACTIVE
+                  </Badge>
+                )}
+              </div>
+              <p className="text-xs text-slate-400 mt-1">
+                Synchronize signal generation with Pocket Option candle formation times for optimal entry
+              </p>
+              {candleSyncEnabled && candleSyncStatus.next_candle_times && Object.keys(candleSyncStatus.next_candle_times).length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {Object.entries(candleSyncStatus.next_candle_times).slice(0, 3).map(([timeframe, time]) => (
+                    <Badge key={timeframe} variant="outline" className="text-xs bg-slate-800/50">
+                      {timeframe}: {new Date(time).toLocaleTimeString()}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+            <Switch
+              checked={candleSyncEnabled}
+              onCheckedChange={toggleCandleSync}
+              disabled={isCandleSyncLoading}
+              className="data-[state=checked]:bg-emerald-500"
+            />
+          </div>
+        </div>
+
         {/* Force Signal Option */}
-        <div className="mt-6 p-4 bg-slate-800/30 rounded-lg border border-slate-700/50">
+        <div className="mt-4 p-4 bg-slate-800/30 rounded-lg border border-slate-700/50">
           <label className="flex items-center space-x-3 cursor-pointer">
             <input
               type="checkbox"
