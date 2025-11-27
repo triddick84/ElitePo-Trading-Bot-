@@ -21,6 +21,8 @@ const SignalNotificationManager = ({ signals = [], onSignalExecute, onSignalDism
     });
 
     if (newSignals.length > 0) {
+      console.log('📊 New signals detected:', newSignals.length, newSignals);
+      
       // Create ONE new popup containing ALL new signals
       const popupId = `popup_${Date.now()}`;
       const newPopup = {
@@ -32,8 +34,14 @@ const SignalNotificationManager = ({ signals = [], onSignalExecute, onSignalDism
         createdAt: Date.now()
       };
 
+      console.log('✅ Creating popup:', newPopup);
+
       // Add new popup (this will create a separate popup even if one is already showing)
-      setActivePopups(prev => [...prev, newPopup]);
+      setActivePopups(prev => {
+        const updated = [...prev, newPopup];
+        console.log('🔔 Active popups count:', updated.length);
+        return updated;
+      });
 
       // Mark signals as processed
       setProcessedSignalIds(prev => {
@@ -44,6 +52,7 @@ const SignalNotificationManager = ({ signals = [], onSignalExecute, onSignalDism
 
       // Play sound notification if enabled
       if (notificationSettings.soundEnabled) {
+        console.log('🔊 Playing notification sound');
         playNotificationSound();
       }
     }
