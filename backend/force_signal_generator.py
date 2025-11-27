@@ -485,7 +485,8 @@ class ForceSignalGenerator:
             
             selected_strategy_id = selected_strategies.get(timeframe_normalized, 'default')
             
-            logger.info(f"🎯 Selected strategy for {timeframe_normalized}: {selected_strategy_id}")
+            logger.info(f"🎯 USER SELECTED STRATEGY for {timeframe_normalized}: '{selected_strategy_id}'")
+            logger.info(f"📋 All selected strategies: {selected_strategies}")
             
             # Route to appropriate strategy based on timeframe
             if timeframe in ['5s', '5sec', '5 sec']:
