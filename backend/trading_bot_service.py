@@ -799,15 +799,19 @@ class TradingBotService:
                     if signals and len(signals) > 0:
                         # Process each generated signal
                         for signal in signals:
-                            # Update signal with precise candle formation timing
+                            # AUTO-GENERATE: Set precise entry time to NOW (immediate execution)
+                            # Signal generated at exact moment it should be entered
                             signal.precision_entry_time = candle_time
+                            signal.popup_display_time = candle_time  # Show immediately (no delay for auto)
+                            signal.countdown_duration = 0  # No countdown for auto-generate (immediate entry)
                             signal.timeframe = timeframe
                             
                             # Add candle sync metadata
                             if signal.technical_analysis:
                                 signal.technical_analysis['candle_sync'] = True
                                 signal.technical_analysis['candle_formation_time'] = candle_time.isoformat()
-                                signal.technical_analysis['generation_mode'] = 'candle_formation_synchronized'
+                                signal.technical_analysis['generation_mode'] = 'auto_generate_precise_timing'
+                                signal.technical_analysis['immediate_entry'] = True
                             
                             # Process the signal (save to DB, send to platforms)
                             await self._process_new_signal(signal)
