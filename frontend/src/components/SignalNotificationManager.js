@@ -93,6 +93,19 @@ const SignalNotificationManager = ({ signals = [], onSignalExecute, onSignalDism
     }
   };
 
+  const handleDismissSignal = (signalId) => {
+    // Remove signal from all popups
+    setActivePopups(prev => prev.map(popup => ({
+      ...popup,
+      signals: popup.signals.filter(s => s.id !== signalId)
+    })).filter(popup => popup.signals.length > 0)); // Remove empty popups
+    
+    // Call dismiss callback if provided
+    if (onSignalDismiss) {
+      onSignalDismiss(signalId);
+    }
+  };
+
   // Auto-cleanup old popups (after 10 minutes)
   useEffect(() => {
     const cleanup = setInterval(() => {
