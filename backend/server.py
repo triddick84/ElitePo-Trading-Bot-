@@ -272,11 +272,21 @@ async def enable_candle_sync():
 async def disable_candle_sync():
     """Disable candle formation synchronization mode"""
     try:
-        result = await trading_bot.disable_candle_synchronization()
+        # Update config
+        await db.trading_configurations.update_one(
+            {"user_id": "default_user"},
+            {"$set": {"candle_sync_enabled": False}},
+            upsert=True
+        )
+        
+        # If bot is running, also disable the scheduler
+        if trading_bot.is_running:
+            await trading_bot.disable_candle_synchronization()
         
         return {
             "status": "success",
-            "message": result.get("message")
+            "message": "Candle synchronization disabled",
+            "enabled": False
         }
         
     except Exception as e:
