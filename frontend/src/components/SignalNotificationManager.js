@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import ConsolidatedSignalPopup from './ConsolidatedSignalPopup';
+import ImprovedSignalPopup from './ImprovedSignalPopup';
 
 const SignalNotificationManager = ({ signals = [], onSignalExecute, onSignalDismiss, notificationSettings = {} }) => {
   const [activePopups, setActivePopups] = useState([]);
