@@ -2006,7 +2006,9 @@ class ForceSignalGenerator:
                               f"{'OTC market volatility considered. ' if market_type == 'otc' else 'Regular market conditions. '}"
                               f"Timed for {user_timeframes[0]} Pocket Option candle formation. Use proper risk management.",
                 suggested_stake=suggested_stake,
-                precision_entry_time=optimal_entry_time,  # Pocket Option synchronized time
+                precision_entry_time=optimal_entry_time,  # Real entry time for trade execution
+                popup_display_time=popup_display_time,  # When to show popup (10s before entry)
+                countdown_duration=10,  # Countdown timer duration in seconds
                 timestamp=chicago_time  # Use Chicago time for consistency
             )
             
