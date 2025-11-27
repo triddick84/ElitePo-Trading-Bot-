@@ -1826,11 +1826,18 @@ class ForceSignalGenerator:
             # Get Chicago time for Pocket Option synchronization
             chicago_time = pocket_option_sync.get_chicago_time()
             
-            # Calculate entry candle time that provides 10-second countdown timer
-            # This finds the candle that's approximately 10 seconds away
-            optimal_entry_time = pocket_option_sync.get_entry_candle_with_timer(
+            # Calculate REAL entry candle time (the actual candle to trade on)
+            # Find the optimal entry candle
+            real_entry_time = pocket_option_sync.get_entry_candle_with_timer(
                 user_timeframes[0], target_timer_seconds=10.0
             )
+            
+            # For force generate: Display popup 10 seconds BEFORE real entry time
+            # This gives user time to prepare for the entry
+            popup_display_time = real_entry_time - timedelta(seconds=10)
+            
+            # Use popup_display_time for countdown timer, but real_entry_time for actual trade
+            optimal_entry_time = real_entry_time
             
             # Calculate Pocket Option optimized expiration time
             expiration_minutes = pocket_option_sync.calculate_optimal_expiration_time(
