@@ -132,7 +132,7 @@ const SignalNotificationManager = ({ signals = [], onSignalExecute, onSignalDism
             <ImprovedSignalPopup
               signals={popup.signals}
               onClose={() => handleClosePopup(popup.id)}
-              onExecute={handleExecuteSignal}
+              onDismiss={handleDismissSignal}
             />
           </div>
         ))}
