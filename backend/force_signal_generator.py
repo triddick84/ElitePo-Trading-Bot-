@@ -2026,6 +2026,24 @@ class ForceSignalGenerator:
             technical_analysis['direct_analysis'] = True
             technical_analysis['accuracy_mode'] = 'maximum_precision'
             
+            # Determine strategy enum value based on primary strategy
+            # Try to match the strategy name to an enum, fallback to HYBRID
+            strategy_enum = TradingStrategy.HYBRID  # Default
+            strategy_name_lower = primary_strategy_name.lower()
+            
+            # Map common strategy names to enums
+            if 'keltner' in strategy_name_lower or 'fractal' in strategy_name_lower:
+                strategy_enum = TradingStrategy.HYBRID  # Use closest match
+            elif 'ema' in strategy_name_lower and 'crossover' in strategy_name_lower:
+                strategy_enum = TradingStrategy.HYBRID
+            elif 'stochastic' in strategy_name_lower:
+                strategy_enum = TradingStrategy.HYBRID
+            elif 'bollinger' in strategy_name_lower:
+                strategy_enum = TradingStrategy.HYBRID
+            elif 'rsi' in strategy_name_lower:
+                strategy_enum = TradingStrategy.HYBRID
+            # Keep as HYBRID for most cases (it's the most flexible enum value)
+            
             # Create initial signal
             signal = TradingSignal(
                 id=f"FORCE_{market_type.upper()}_{chicago_time.strftime('%Y%m%d_%H%M%S')}_{symbol}",
@@ -2038,12 +2056,13 @@ class ForceSignalGenerator:
                 market_type=market_type,
                 probability=min(final_confidence, 99.0),  # Cap at 99% for maximum confidence
                 confidence_level=confidence_level,
-                strategy_used=TradingStrategy.HYBRID,  # Use valid enum value
+                strategy_used=strategy_enum,  # Use enum but name comes from technical_analysis
                 technical_analysis=technical_analysis,
-                market_analysis_summary=f"Force signal generated for {market_type.upper()} market using {len(analysis_results)} advanced strategies. "
+                market_analysis_summary=f"Force signal generated using '{primary_strategy_name}' strategy. "
+                                      f"Market: {market_type.upper()}. "
                                       f"Buy score: {buy_score:.1f}, Sell score: {sell_score:.1f}. "
                                       f"{'OTC boost applied. ' if market_type == 'otc' else ''}"
-                                      f"Pocket Option synchronized timing for {user_timeframes[0]} timeframe.",
+                                      f"Synchronized timing for {user_timeframes[0]} timeframe.",
                 justification=f"🎯 PRECISION {market_type.upper()} SIGNAL - {len(analysis_results)} advanced strategies combined. "
                             f"Confidence: {final_confidence:.1f}% (Target: 90%+). "
                             f"{'📈 OTC Market - 24/7 availability. ' if market_type == 'otc' else '📊 Regular Market - Exchange hours. '}"
