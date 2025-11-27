@@ -6,9 +6,20 @@ const SignalNotificationManager = ({ signals = [], onSignalExecute, onSignalDism
   const [processedSignalIds, setProcessedSignalIds] = useState(new Set());
 
   useEffect(() => {
-    // Process new signals for popup notifications
-    if (!signals || !Array.isArray(signals)) return;
-    if (!notificationSettings.popupEnabled) return;
+    console.log('🔍 SignalNotificationManager useEffect triggered');
+    console.log('   Signals:', signals?.length);
+    console.log('   popupEnabled:', notificationSettings.popupEnabled);
+    
+    if (!signals || !Array.isArray(signals)) {
+      console.log('⚠️ No signals or not array');
+      return;
+    }
+    
+    if (!notificationSettings.popupEnabled) {
+      console.log('⚠️ Popup notifications are DISABLED in settings');
+      console.log('   Enable them in settings to see popups!');
+      return;
+    }
 
     // Find new high-priority signals that haven't been processed
     const newSignals = signals.filter(signal => {
@@ -16,6 +27,14 @@ const SignalNotificationManager = ({ signals = [], onSignalExecute, onSignalDism
       const isNewSignal = !processedSignalIds.has(signal.id);
       const isRecentSignal = signal.timestamp && 
         (Date.now() - new Date(signal.timestamp).getTime()) < 300000; // 5 minutes
+      
+      console.log(`   Signal ${signal.id}:`, {
+        probability: signal.probability,
+        forced: signal.forced_generation,
+        isHighPriority,
+        isNewSignal,
+        isRecentSignal
+      });
       
       return isHighPriority && isNewSignal && isRecentSignal;
     });
