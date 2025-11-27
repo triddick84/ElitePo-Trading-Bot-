@@ -20,18 +20,16 @@ const ConsolidatedSignalPopup = ({ signals = [], onClose, onExecute }) => {
         let isExpired = false;
         
         try {
-          // PRIORITY 1: Use countdown_duration for force generate (shows popup 10s before entry)
-          if (signal?.countdown_duration !== undefined && signal?.popup_display_time) {
-            const popupTime = new Date(signal.popup_display_time);
+          // PRIORITY 1: Use countdown_duration for force generate
+          if (signal?.countdown_duration !== undefined && signal?.precision_entry_time) {
             const entryTime = new Date(signal.precision_entry_time);
-            const countdownMs = signal.countdown_duration * 1000;
-            
-            // Calculate time left in the countdown (from popup display to entry)
-            const timeSincePopup = now - popupTime.getTime();
-            timeLeft = (countdownMs - timeSincePopup) / 1000;
             
             // If countdown_duration is 0 (auto-generate), show immediate entry
             if (signal.countdown_duration === 0) {
+              timeLeft = (entryTime.getTime() - now) / 1000;
+            } else {
+              // For force generate: Calculate time from NOW to entry time
+              // This ensures countdown shows actual remaining time
               timeLeft = (entryTime.getTime() - now) / 1000;
             }
           }
