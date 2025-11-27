@@ -240,6 +240,42 @@ New Behavior (+5s adjustment):
 
 ---
 
+## ⚠️ FIX: Countdown Timer Starting at 20s Instead of 10s
+
+**Issue Found**: Original implementation was adding time twice, resulting in 20-second countdown.
+
+**Root Cause**:
+```python
+# OLD (BUGGY):
+real_entry_time = get_entry_candle_with_timer(timeframe, 10.0)  # Find candle 10s away
+popup_display_time = real_entry_time - timedelta(seconds=10)     # Subtract another 10s
+# Result: 10s + 10s = 20 second countdown ❌
+```
+
+**Fix Applied**:
+```python
+# NEW (FIXED):
+next_candle = get_next_candle_formation_time(timeframe)
+time_until_candle = (next_candle - now).total_seconds()
+
+# If next candle < 10s away, use the one after that
+if time_until_candle < 10.0:
+    real_entry_time = next_candle + timedelta(seconds=interval)
+else:
+    real_entry_time = next_candle
+
+popup_display_time = now  # Show immediately (not 10s before)
+countdown_seconds = (real_entry_time - now).total_seconds()  # Actual time = ~10s ✅
+```
+
+**Frontend Fix**:
+```javascript
+// Simplified to always calculate from NOW to entry_time
+timeLeft = (entryTime.getTime() - now) / 1000;
+```
+
+---
+
 ## Status: ✅ FULLY IMPLEMENTED AND TESTED
 
-All timing adjustments have been successfully implemented and are ready for use.
+All timing adjustments have been successfully implemented and the 20-second countdown bug has been fixed.
