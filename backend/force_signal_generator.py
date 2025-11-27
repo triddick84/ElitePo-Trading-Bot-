@@ -601,6 +601,11 @@ class ForceSignalGenerator:
                             result['selected_strategy'] = True
                             return result
                 
+                # Check if we should use default or if strategy wasn't found
+                if selected_strategy_id != 'default':
+                    logger.warning(f"⚠️ Selected strategy '{selected_strategy_id}' not found or failed for 5s timeframe")
+                    logger.warning(f"   Available 5s strategies: keltner_fractal, 3ema_crossover, ema20_rsi14, stochastic_divergence, proven_bollinger, proven_supertrend")
+                
                 # DEFAULT or if selected strategy fails
                 logger.info(f"⚡ Applying DEFAULT 5-SECOND strategy (Ultra-Precision) for {symbol}")
                 
