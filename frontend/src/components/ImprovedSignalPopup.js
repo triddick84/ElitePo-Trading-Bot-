@@ -11,13 +11,12 @@ const ImprovedSignalPopup = ({ signals, onClose, onDismiss }) => {
   const [signalTimers, setSignalTimers] = useState({});
   const [expandedSignals, setExpandedSignals] = useState({});
 
-  // Safety check
-  if (!signals || !Array.isArray(signals) || signals.length === 0) {
-    console.warn('⚠️ ImprovedSignalPopup: No valid signals provided');
-    return null;
-  }
-
   useEffect(() => {
+    // Safety check inside useEffect
+    if (!signals || !Array.isArray(signals) || signals.length === 0) {
+      return;
+    }
+    
     const interval = setInterval(() => {
       const now = Date.now();
       const newTimers = {};
