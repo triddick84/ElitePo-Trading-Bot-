@@ -97,7 +97,7 @@ const ImprovedSignalPopup = ({ signals, onClose, onDismiss }) => {
     return 'bg-orange-500/20 text-orange-400 border-orange-500';
   };
 
-  if (!signals || signals.length === 0) return null;
+  console.log('✅ ImprovedSignalPopup: Rendering with', signals.length, 'signals');
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
