@@ -6,8 +6,16 @@ import { Button } from './ui/button';
 import { Progress } from './ui/progress';
 
 const ImprovedSignalPopup = ({ signals, onClose, onDismiss }) => {
+  console.log('🎨 ImprovedSignalPopup rendering with signals:', signals?.length);
+  
   const [signalTimers, setSignalTimers] = useState({});
   const [expandedSignals, setExpandedSignals] = useState({});
+
+  // Safety check
+  if (!signals || !Array.isArray(signals) || signals.length === 0) {
+    console.warn('⚠️ ImprovedSignalPopup: No valid signals provided');
+    return null;
+  }
 
   useEffect(() => {
     const interval = setInterval(() => {
