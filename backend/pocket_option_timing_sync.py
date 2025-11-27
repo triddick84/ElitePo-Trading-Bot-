@@ -270,9 +270,9 @@ class PocketOptionTimingSync:
                 except ImportError:
                     # Fallback if latency_optimizer not available
                     if timeframe == '5s':
-                        default_buffer = 2.0  # 2 seconds for 5s timeframe (moved 5s ahead)
+                        default_buffer = 7.0  # 7 seconds for 5s timeframe (5s + 2s original = +5s adjustment)
                     else:
-                        default_buffer = 4.0  # 4 seconds for other timeframes (moved 5s ahead)
+                        default_buffer = 4.0  # 4 seconds for other timeframes
                     chicago_time = chicago_time - timedelta(seconds=default_buffer)
                     logger.info(f"⚡ Default latency compensation: -{default_buffer}s for {timeframe}")
             
