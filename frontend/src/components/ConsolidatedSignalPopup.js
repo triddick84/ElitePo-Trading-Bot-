@@ -259,11 +259,11 @@ const ConsolidatedSignalPopup = ({ signals = [], onClose, onExecute }) => {
                       <div className="mt-1 p-2 bg-slate-800/50 rounded-lg border border-slate-600/50">
                     <div className="space-y-0.5 text-xs text-slate-300">
                       {/* Strategy Used */}
-                      {signal.strategy_used && (
+                      {(signal.technical_analysis?.primary_strategy || signal.strategy_used) && (
                         <div className="flex justify-between">
                           <span className="text-slate-400">Strategy:</span>
                           <span className="font-medium text-blue-300">
-                            {signal.strategy_used.replace('_', ' ').toUpperCase()}
+                            {signal.technical_analysis?.primary_strategy || signal.strategy_used.replace('_', ' ').toUpperCase()}
                           </span>
                         </div>
                       )}
