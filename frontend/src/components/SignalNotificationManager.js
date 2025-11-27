@@ -17,8 +17,15 @@ const SignalNotificationManager = ({ signals = [], onSignalExecute, onSignalDism
     
     if (!notificationSettings.popupEnabled) {
       console.log('⚠️ Popup notifications are DISABLED in settings');
-      console.log('   Enable them in settings to see popups!');
-      return;
+      
+      // However, still show forced generation signals (Force Generate button)
+      const hasForcedSignals = signals.some(s => s.forced_generation === true);
+      if (!hasForcedSignals) {
+        console.log('   Enable them in settings to see popups!');
+        return;
+      } else {
+        console.log('   But showing anyway because of forced generation signal');
+      }
     }
 
     // Find new high-priority signals that haven't been processed
