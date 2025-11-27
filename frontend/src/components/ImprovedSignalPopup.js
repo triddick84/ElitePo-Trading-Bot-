@@ -96,6 +96,12 @@ const ImprovedSignalPopup = ({ signals, onClose, onDismiss }) => {
     return 'bg-orange-500/20 text-orange-400 border-orange-500';
   };
 
+  // Safety check - AFTER all hooks
+  if (!signals || !Array.isArray(signals) || signals.length === 0) {
+    console.warn('⚠️ ImprovedSignalPopup: No valid signals provided');
+    return null;
+  }
+
   console.log('✅ ImprovedSignalPopup: Rendering with', signals.length, 'signals');
 
   return (
