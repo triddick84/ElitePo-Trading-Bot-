@@ -99,7 +99,9 @@ class TradingSignal(BaseModel):
     justification: str
     risk_assessment: str
     suggested_stake: float
-    precision_entry_time: Optional[datetime] = None  # Optimal entry timing in Chicago timezone
+    precision_entry_time: Optional[datetime] = None  # Real entry time for trade execution (Chicago timezone)
+    popup_display_time: Optional[datetime] = None  # When to show popup (10s before entry for force generate)
+    countdown_duration: Optional[int] = 10  # Countdown timer duration in seconds
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))  # Chicago timezone synchronized
     
     # Quality check fields
