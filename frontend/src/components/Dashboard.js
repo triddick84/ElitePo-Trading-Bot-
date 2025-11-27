@@ -102,10 +102,39 @@ const Dashboard = ({ botStatus, liveSignals, setLiveSignals, notificationSetting
         invert_signals: response.data.invert_signals || false,
         chart_type: response.data.chart_type || 'japanese_candles',
         chart_timeframe: response.data.chart_timeframe || '15s',
-        signal_timeframe: response.data.signal_timeframe || '5s'
+        signal_timeframe: response.data.signal_timeframe || '5s',
+        candle_sync_enabled: response.data.candle_sync_enabled || false
       });
+      setCandleSyncEnabled(response.data.candle_sync_enabled || false);
     } catch (error) {
       console.error('Error fetching config:', error);
+    }
+  };
+  
+  const fetchCandleSyncStatus = async () => {
+    try {
+      const response = await axios.get(`${API}/bot/candle-sync/status`);
+      setCandleSyncStatus(response.data);
+      setCandleSyncEnabled(response.data.enabled || false);
+    } catch (error) {
+      console.error('Error fetching candle sync status:', error);
+    }
+  };
+  
+  const toggleCandleSync = async () => {
+    setIsCandleSyncLoading(true);
+    try {
+      if (candleSyncEnabled) {
+        await axios.post(`${API}/config/candle-sync/disable`);
+      } else {
+        await axios.post(`${API}/config/candle-sync/enable`);
+      }
+      await fetchCandleSyncStatus();
+      await fetchConfiguration();
+    } catch (error) {
+      console.error('Error toggling candle sync:', error);
+    } finally {
+      setIsCandleSyncLoading(false);
     }
   };
 
