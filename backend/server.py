@@ -235,23 +235,35 @@ async def restart_bot():
 async def enable_candle_sync():
     """
     Enable candle formation synchronization mode
-    Signals will be generated precisely when new candles form on Pocket Option
+    Works for both auto-generate (bot running) and manual Force Generate
     """
     try:
-        result = await trading_bot.enable_candle_synchronization()
+        # Save candle sync setting to config (works without bot running)
+        await db.trading_configurations.update_one(
+            {"user_id": "default_user"},
+            {"$set": {"candle_sync_enabled": True}},
+            upsert=True
+        )
         
-        if result.get("success"):
+        # If bot is running, also enable the scheduler
+        if trading_bot.is_running:
+            result = await trading_bot.enable_candle_synchronization()
             return {
                 "status": "success",
-                "message": result.get("message"),
+                "message": "Candle sync enabled for auto-generate mode",
                 "timeframes": result.get("timeframes", []),
-                "assets_count": result.get("assets_count", 0)
+                "assets_count": result.get("assets_count", 0),
+                "enabled": True
             }
         else:
-            raise HTTPException(status_code=400, detail=result.get("message"))
+            # Bot not running, but config saved for manual Force Generate
+            return {
+                "status": "success",
+                "message": "Candle sync enabled for manual Force Generate",
+                "enabled": True,
+                "note": "Start bot for auto-generate sync"
+            }
         
-    except HTTPException:
-        raise
     except Exception as e:
         logging.error(f"Error enabling candle sync: {e}")
         raise HTTPException(status_code=500, detail=str(e))
