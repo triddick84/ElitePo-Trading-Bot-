@@ -188,7 +188,7 @@ class ForceSignalGenerator:
                     try:
                         ai_ensemble_signal = await asyncio.wait_for(
                             self._advanced_ai_ensemble_force_analysis(primary_data, symbol),
-                            timeout=4.0  # 4-second timeout for AI analysis
+                            timeout=2.5  # 2.5-second timeout for AI analysis
                         )
                         if ai_ensemble_signal:
                             analysis_results.append(('advanced_ai_ensemble', ai_ensemble_signal, 0.60))
