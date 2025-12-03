@@ -869,15 +869,14 @@ async def force_generate_signals(wait_for_candle: bool = Query(False)):
             user_timeframes = config_doc.get('selected_timeframes', []) if config_doc else []
             chart_type = config_doc.get('chart_type', 'japanese_candles') if config_doc else 'japanese_candles'
             invert_signals = config_doc.get('invert_signals', False) if config_doc else False
-            candle_sync_enabled = config_doc.get('candle_sync_enabled', False) if config_doc else False
             
             # Load adaptive strategy configuration
             adaptive_config = await adaptive_strategy_service_instance.get_config("default_user")
             logger.info(f"🎯 Adaptive Strategy: {'Enabled' if adaptive_config.enabled else 'Disabled'}")
             
-            # Use config setting if not explicitly set in request
-            if not wait_for_candle:
-                wait_for_candle = candle_sync_enabled
+            # FORCE GENERATE ALWAYS USES wait_for_candle=False for fast response (~10s target)
+            # User can explicitly pass wait_for_candle=true in query parameter if timing is critical
+            logger.info(f"⚡ Force generation mode: wait_for_candle={wait_for_candle} (target: fast ~10s response)")
             
             # If no assets selected, return error - require user to select assets
             if not selected_assets or len(selected_assets) == 0:
