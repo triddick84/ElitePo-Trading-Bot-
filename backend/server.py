@@ -943,8 +943,8 @@ async def force_generate_signals(wait_for_candle: bool = Query(False)):
             
             # Dynamic timeout based on candle synchronization setting
             # If waiting for candle, allow up to 65 seconds (max 60s wait + 5s processing)
-            # Otherwise use 12-second timeout for fast response
-            timeout_seconds = 65.0 if wait_for_candle else 12.0
+            # Otherwise use 10-second timeout for fast response (optimized)
+            timeout_seconds = 65.0 if wait_for_candle else 10.0
             
             try:
                 forced_signals = await asyncio.wait_for(
