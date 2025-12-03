@@ -139,11 +139,11 @@ class ForceSignalGenerator:
                 loop.run_in_executor(self.executor, self._fetch_economic_indicators, symbol)
             ]
             
-            # SPEED OPTIMIZATION: 8-second timeout for data fetching
+            # SPEED OPTIMIZATION: 2.5-second timeout for data fetching (Target: 10s total)
             try:
-                results = await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), timeout=8.0)
+                results = await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), timeout=2.5)
             except asyncio.TimeoutError:
-                logger.warning(f"⚠️ Data fetching timeout after 8s, using available data")
+                logger.warning(f"⚠️ Data fetching timeout after 2.5s, using available data")
                 # Cancel pending tasks
                 for task in tasks:
                     if not task.done():
