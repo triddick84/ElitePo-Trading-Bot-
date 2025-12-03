@@ -2351,8 +2351,9 @@ class ForceSignalGenerator:
                 
                 try:
                     # OPTIMIZED: Use asyncio.run() instead of creating new event loop
+                    # Fetch 100 candles (reduced from 200 for speed)
                     candles = asyncio.run(
-                        self.realtime_hub.get_historical_candles(symbol, interval, 200)
+                        self.realtime_hub.get_historical_candles(symbol, interval, 100)
                     )
                     
                     if candles and len(candles) > 0:
