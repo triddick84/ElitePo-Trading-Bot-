@@ -7,6 +7,7 @@ import { Progress } from './ui/progress';
 
 const ImprovedSignalPopup = ({ signals, onClose, onDismiss }) => {
   console.log('🎨 ImprovedSignalPopup rendering with signals:', signals?.length);
+  console.log('🎨 Full signals data:', JSON.stringify(signals, null, 2));
   
   const [signalTimers, setSignalTimers] = useState({});
   const [expandedSignals, setExpandedSignals] = useState({});
