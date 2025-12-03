@@ -104,9 +104,12 @@ const ImprovedSignalPopup = ({ signals, onClose, onDismiss }) => {
   }
 
   console.log('✅ ImprovedSignalPopup: Rendering with', signals.length, 'signals');
+  
+  // TEST: Add visual indicator that popup is rendering
+  console.log('🚀 POPUP IS RENDERING NOW - CHECK IF YOU SEE THIS!');
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <Card className="w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 border-2 border-emerald-500/50 shadow-2xl shadow-emerald-500/20">
         {/* Header */}
         <div className="sticky top-0 z-10 bg-gradient-to-r from-emerald-600 to-blue-600 p-4 flex items-center justify-between border-b border-emerald-500/30">
