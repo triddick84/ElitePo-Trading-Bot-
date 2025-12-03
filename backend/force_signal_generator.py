@@ -197,11 +197,11 @@ class ForceSignalGenerator:
                         logger.warning(f"⚠️ AI Ensemble timeout, skipping for speed")
             
             # Apply researched high-accuracy strategy based on timeframe
-            # SPEED OPTIMIZATION: 5-second timeout for strategy execution
+            # SPEED OPTIMIZATION: 3-second timeout for strategy execution
             try:
                 strategy_signal = await asyncio.wait_for(
                     self._apply_researched_strategy(symbol, primary_timeframe, chart_type),
-                    timeout=5.0  # 5-second timeout
+                    timeout=3.0  # 3-second timeout
                 )
             except asyncio.TimeoutError:
                 logger.warning(f"⚠️ Strategy execution timeout, using emergency fallback")
