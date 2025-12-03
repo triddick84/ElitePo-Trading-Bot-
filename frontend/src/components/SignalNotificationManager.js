@@ -71,6 +71,8 @@ const SignalNotificationManager = ({ signals = [], onSignalExecute, onSignalDism
       setActivePopups(prev => {
         const updated = [...prev, newPopup];
         console.log('🔔 Active popups count:', updated.length);
+        console.log('🔔 Updated popups array:', updated);
+        console.log('🔔 NEW POPUP ADDED - Should now render!');
         return updated;
       });
 
