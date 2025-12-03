@@ -152,8 +152,7 @@ class ForceSignalGenerator:
             
             # Extract data - only primary timeframe data needed
             primary_data = results[0] if results[0] and not isinstance(results[0], Exception) else None
-            sentiment_data = results[1] if not isinstance(results[1], Exception) else {}
-            economic_data = results[2] if not isinstance(results[2], Exception) else {}
+            # Skip sentiment/economic data for speed optimization (they were placeholders anyway)
             
             # Update adaptive analyzer if config provided
             if adaptive_config and adaptive_config.enabled:
