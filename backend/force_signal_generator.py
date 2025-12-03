@@ -2344,18 +2344,16 @@ class ForceSignalGenerator:
         """
         Fetch REAL market data from multi-source hub
         NO SIMULATED DATA - Returns empty list if real data unavailable
+        OPTIMIZED: Use asyncio.run() for faster execution
         """
         try:
             # PRIORITY 1: Try real-time hub if available
             if self.realtime_hub:
                 logger.info(f"📡 Fetching REAL-TIME data for {symbol} ({interval})")
                 
-                # Use asyncio to call async method
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                
                 try:
-                    candles = loop.run_until_complete(
+                    # OPTIMIZED: Use asyncio.run() instead of creating new event loop
+                    candles = asyncio.run(
                         self.realtime_hub.get_historical_candles(symbol, interval, 200)
                     )
                     
@@ -2364,8 +2362,8 @@ class ForceSignalGenerator:
                         return candles
                     else:
                         logger.warning(f"⚠️ No real data available from real-time hub for {symbol}")
-                finally:
-                    loop.close()
+                except Exception as e:
+                    logger.warning(f"⚠️ Real-time hub error for {symbol}: {e}")
             
             # FALLBACK: Try yfinance as last resort (still real data)
             logger.info(f"📊 Falling back to yfinance for {symbol} ({interval})")
