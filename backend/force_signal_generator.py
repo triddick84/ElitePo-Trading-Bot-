@@ -231,12 +231,12 @@ class ForceSignalGenerator:
                     if primary_data and len(primary_data) > 50:
                         supporting_tasks.append(('momentum', self._advanced_momentum_analysis(primary_data, symbol), 0.15))
                     
-                    # Execute supporting strategies in parallel with 3-second timeout
+                    # Execute supporting strategies in parallel with 1.5-second timeout
                     if supporting_tasks:
                         try:
                             supporting_results = await asyncio.wait_for(
                                 asyncio.gather(*[task[1] for task in supporting_tasks], return_exceptions=True),
-                                timeout=3.0
+                                timeout=1.5
                             )
                             for i, result in enumerate(supporting_results):
                                 if result and not isinstance(result, Exception):
