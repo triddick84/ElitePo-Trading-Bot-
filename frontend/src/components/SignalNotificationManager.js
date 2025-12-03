@@ -34,15 +34,18 @@ const SignalNotificationManager = ({ signals = [], onSignalExecute, onSignalDism
     const newSignals = signals.filter(signal => {
       const isHighPriority = signal.probability >= 85 || signal.forced_generation;
       const isNewSignal = !processedSignalIds.has(signal.id);
-      const isRecentSignal = signal.timestamp && 
-        (Date.now() - new Date(signal.timestamp).getTime()) < 300000; // 5 minutes
+      const signalTime = signal.timestamp ? new Date(signal.timestamp).getTime() : Date.now();
+      const ageMs = Date.now() - signalTime;
+      const isRecentSignal = signal.timestamp && ageMs < 300000; // 5 minutes
       
       console.log(`   Signal ${signal.id}:`, {
         probability: signal.probability,
         forced: signal.forced_generation,
         isHighPriority,
         isNewSignal,
-        isRecentSignal
+        isRecentSignal,
+        ageMs: ageMs,
+        signalTime: signal.timestamp
       });
       
       return isHighPriority && isNewSignal && isRecentSignal;
