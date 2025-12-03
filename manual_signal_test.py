@@ -7,7 +7,7 @@ import asyncio
 import aiohttp
 import json
 
-BACKEND_URL = "https://gpt-tradingbot.preview.emergentagent.com/api"
+BACKEND_URL = "https://signal-genius-19.preview.emergentagent.com/api"
 
 async def test_manual_signal_endpoints():
     """Test the manual signal generation endpoints in sequence"""
