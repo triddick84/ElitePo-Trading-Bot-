@@ -132,11 +132,10 @@ class ForceSignalGenerator:
             
             logger.info(f"📊 Fetching market data in {data_timeframe} timeframe for {primary_timeframe} signal")
             
-            # Fetch primary timeframe data + sentiment/economic indicators
+            # Fetch primary timeframe data ONLY (sentiment/economic are placeholders, skip for speed)
+            # SPEED OPTIMIZATION: Only fetch essential market data
             tasks = [
-                loop.run_in_executor(self.executor, self._fetch_deep_market_data, symbol, data_timeframe),
-                loop.run_in_executor(self.executor, self._fetch_market_sentiment, symbol),
-                loop.run_in_executor(self.executor, self._fetch_economic_indicators, symbol)
+                loop.run_in_executor(self.executor, self._fetch_deep_market_data, symbol, data_timeframe)
             ]
             
             # SPEED OPTIMIZATION: 2.5-second timeout for data fetching (Target: 10s total)
