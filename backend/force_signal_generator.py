@@ -169,7 +169,7 @@ class ForceSignalGenerator:
                 try:
                     adaptive_signal = await asyncio.wait_for(
                         self._adaptive_market_analysis(primary_data, symbol),
-                        timeout=3.0
+                        timeout=1.5
                     )
                     if adaptive_signal:
                         # Adaptive analysis gets high priority (40% weight for longer timeframes, 30% for ultra-short)
