@@ -8,7 +8,9 @@ const SignalNotificationManager = ({ signals = [], onSignalExecute, onSignalDism
   useEffect(() => {
     console.log('🔍 SignalNotificationManager useEffect triggered');
     console.log('   Signals:', signals?.length);
+    console.log('   Full signals array:', signals);
     console.log('   popupEnabled:', notificationSettings.popupEnabled);
+    console.log('   soundEnabled:', notificationSettings.soundEnabled);
     
     if (!signals || !Array.isArray(signals)) {
       console.log('⚠️ No signals or not array');
