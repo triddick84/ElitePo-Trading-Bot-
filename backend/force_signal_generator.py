@@ -115,7 +115,6 @@ class ForceSignalGenerator:
             # Wait for next candle formation if requested
             if wait_for_candle and user_expirations:
                 logger.info(f"⏰ WAITING FOR NEXT {primary_timeframe.upper()} CANDLE FORMATION...")
-                logger.info(f"⏰ WAITING FOR NEXT {primary_timeframe.upper()} CANDLE FORMATION...")
                 
                 # Calculate next candle formation time WITH latency compensation
                 # This provides 10-second advance notice for user preparation
@@ -133,9 +132,6 @@ class ForceSignalGenerator:
                     logger.info(f"✅ SIGNAL READY! Generated 10 seconds before optimal entry for {primary_timeframe}")
                 else:
                     logger.info(f"⚠️ Wait time too long ({wait_seconds:.1f}s), proceeding immediately")
-            
-            # Determine primary timeframe from user selection
-            primary_timeframe = user_timeframes[0] if user_timeframes else '5s'
             
             # CRITICAL: Fetch market data in the SAME timeframe as the signal
             # This ensures chart analysis timeframe = signal expiration timeframe
