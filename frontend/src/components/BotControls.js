@@ -19,7 +19,7 @@ const BotControls = ({ onStatusUpdate }) => {
     active_strategies: ['hybrid'],
     target_assets: ['forex', 'crypto'],
     selected_assets: ['EURUSD_regular', 'BTCUSD_regular'],
-    selected_timeframes: ['1m', '5m'],
+    selected_expirations: ['1m', '2m'],
     chart_type: 'japanese_candles',
     risk_tolerance: 'medium',
     max_stake_per_trade: 10.0,
