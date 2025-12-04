@@ -2074,7 +2074,7 @@ class ForceSignalGenerator:
                 direction=direction,
                 entry_price=current_price,
                 expiration_minutes=expiration_minutes,
-                timeframe=user_timeframes[0],  # Use user's selected timeframe
+                timeframe=user_expirations[0],  # Use user's selected expiration as timeframe
                 market_type=market_type,
                 probability=min(final_confidence, 99.0),  # Cap at 99% for maximum confidence
                 confidence_level=confidence_level,
