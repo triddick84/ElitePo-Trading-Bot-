@@ -866,7 +866,7 @@ async def force_generate_signals(wait_for_candle: bool = Query(False)):
         try:
             config_doc = await db.trading_configurations.find_one({"user_id": "default_user"})
             selected_assets = config_doc.get('selected_assets', []) if config_doc else []
-            user_timeframes = config_doc.get('selected_timeframes', []) if config_doc else []
+            user_expirations = config_doc.get('selected_expirations', []) if config_doc else []
             chart_type = config_doc.get('chart_type', 'japanese_candles') if config_doc else 'japanese_candles'
             invert_signals = config_doc.get('invert_signals', False) if config_doc else False
             
