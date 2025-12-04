@@ -1832,9 +1832,15 @@ class ForceSignalGenerator:
             # Calculate signal parameters
             current_price = market_data.price
             
-            # Use Pocket Option timing synchronization instead of hardcoded values
-            if not user_timeframes:
-                user_timeframes = ['5s']  # Default to 5s for ultra-short trading
+            # Use expiration times for trade duration
+            if not user_expirations:
+                user_expirations = ['1m']  # Default to 1m expiration
+            
+            # Map expiration to chart timeframe for interval calculation
+            def get_chart_tf(exp):
+                return '1m' if exp in ['5s', '15s', '30s', '1m', '2m', '3m'] else '5m'
+            
+            chart_tf = get_chart_tf(user_expirations[0])
             
             direction = direction_enum  # Keep enum for TradingSignal model
             
@@ -1844,9 +1850,9 @@ class ForceSignalGenerator:
             # Calculate REAL entry candle time (the actual candle to trade on)
             # TARGET: Find candle that's approximately 10 seconds away
             
-            interval_seconds = pocket_option_sync.timeframe_seconds.get(user_timeframes[0], 60)
+            interval_seconds = pocket_option_sync.timeframe_seconds.get(chart_tf, 60)
             next_candle = pocket_option_sync.get_next_candle_formation_time(
-                user_timeframes[0], market_type, apply_latency_compensation=True
+                chart_tf, market_type, apply_latency_compensation=True
             )
             
             # Keep checking candles until we find one that's ~10 seconds away
