@@ -2268,18 +2268,23 @@ class ForceSignalGenerator:
                 confidence = 75.0
                 logger.warning(f"⚠️ Using random signal for {symbol} - insufficient data")
             
-            # Use user's selected timeframe or default to ultra-short
-            if not user_timeframes or len(user_timeframes) == 0:
-                user_timeframes = ['5s']  # Default to ultra-short trading
+            # Use user's selected expiration or default  
+            if not user_expirations or len(user_expirations) == 0:
+                user_expirations = ['1m']  # Default to 1m expiration
             
-            timeframe = user_timeframes[0]
+            timeframe = user_expirations[0]
             
-            # Calculate expiration based on timeframe
-            timeframe_to_minutes = {
-                '5s': 1, '15s': 1, '30s': 1,
-                '1m': 2, '3m': 5, '5m': 10, '15m': 30, '30m': 60
+            # Convert expiration to minutes
+            expiration_map = {
+                '5s': 0.083,  # 5 seconds
+                '15s': 0.25,  # 15 seconds
+                '30s': 0.5,   # 30 seconds
+                '1m': 1,
+                '2m': 2,
+                '3m': 3,
+                '5m': 5
             }
-            expiration_minutes = timeframe_to_minutes.get(timeframe, 1)
+            expiration_minutes = expiration_map.get(timeframe, 1)
             
             # Market type specific adjustments
             if market_type == "otc":
