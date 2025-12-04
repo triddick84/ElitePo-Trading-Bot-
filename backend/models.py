@@ -137,7 +137,7 @@ class TradingConfiguration(BaseModel):
     active_strategies: List[TradingStrategy] = [TradingStrategy.HYBRID]
     target_assets: List[AssetType] = [AssetType.FOREX, AssetType.CRYPTO]
     selected_assets: List[str] = ['EURUSD_regular', 'BTCUSD_regular']  # Specific asset selections
-    selected_timeframes: List[str] = ['1m', '5m']  # Pocket Option timeframes
+    selected_expirations: List[str] = ['1m', '2m']  # Trade expiration times (5s, 15s, 30s, 1m, 2m, 3m, 5m)
     chart_type: ChartType = ChartType.JAPANESE_CANDLES  # Chart type for signal generation
     risk_tolerance: str = "medium"  # low, medium, high
     max_stake_per_trade: float = 10.0
