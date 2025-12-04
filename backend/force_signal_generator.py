@@ -82,7 +82,7 @@ class ForceSignalGenerator:
         self.realtime_hub = hub
         logger.info(f"📡 Real-time market data hub connected")
         
-    async def force_generate_signal(self, symbol: str, market_data: MarketData, user_timeframes: List[str] = None, chart_type: str = 'japanese_candles', wait_for_candle: bool = True, adaptive_config=None) -> List[TradingSignal]:
+    async def force_generate_signal(self, symbol: str, market_data: MarketData, user_expirations: List[str] = None, chart_type: str = 'japanese_candles', wait_for_candle: bool = True, adaptive_config=None) -> List[TradingSignal]:
         """
         Force generate a signal using maximum analysis depth
         Bypasses all normal thresholds and provides the best possible prediction
@@ -90,16 +90,31 @@ class ForceSignalGenerator:
         Args:
             symbol: Trading symbol
             market_data: Market data object
-            user_timeframes: List of timeframes to analyze
+            user_expirations: List of expiration times (5s, 15s, 30s, 1m, 2m, 3m, 5m)
             chart_type: Chart type for analysis ('japanese_candles', 'line', 'bars', 'heikin_ashi')
             wait_for_candle: Whether to wait for next candle formation for Pocket Option synchronization (default: True)
         """
         try:
-            logger.info(f"🚀 FORCE GENERATING SIGNAL for {symbol} using {chart_type} chart - Maximum analysis mode activated")
+            # Map expiration times to chart timeframes for analysis
+            # Ultra-short (5s, 15s, 30s) → analyze on 1m chart
+            # Short (1m, 2m, 3m) → analyze on 1m chart  
+            # Medium (5m) → analyze on 5m chart
+            def get_chart_timeframe(expiration):
+                if expiration in ['5s', '15s', '30s', '1m', '2m', '3m']:
+                    return '1m'
+                elif expiration in ['5m']:
+                    return '5m'
+                else:
+                    return '1m'  # Default
+            
+            primary_expiration = user_expirations[0] if user_expirations else '1m'
+            primary_timeframe = get_chart_timeframe(primary_expiration)
+            
+            logger.info(f"🚀 FORCE GENERATING SIGNAL for {symbol} - Expiration: {primary_expiration}, Chart: {primary_timeframe}, Type: {chart_type}")
             
             # Wait for next candle formation if requested
-            if wait_for_candle and user_timeframes:
-                primary_timeframe = user_timeframes[0]
+            if wait_for_candle and user_expirations:
+                logger.info(f"⏰ WAITING FOR NEXT {primary_timeframe.upper()} CANDLE FORMATION...")
                 logger.info(f"⏰ WAITING FOR NEXT {primary_timeframe.upper()} CANDLE FORMATION...")
                 
                 # Calculate next candle formation time WITH latency compensation
