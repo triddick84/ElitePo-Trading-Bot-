@@ -914,7 +914,7 @@ async def force_generate_signals(wait_for_candle: bool = Query(False)):
             )
         
         logger.info(f"📊 Force generating signals for {len(selected_assets)} selected assets: {selected_assets}")
-        logger.info(f"⏱️ Using timeframes: {user_timeframes}")
+        logger.info(f"⏱️ Using expirations: {user_expirations}")
         logger.info(f"🎴 Using chart type: {chart_type}")
         
         all_forced_signals = []
