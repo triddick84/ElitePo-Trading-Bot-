@@ -890,15 +890,15 @@ async def force_generate_signals(wait_for_candle: bool = Query(False)):
                     }
                 )
             
-            # If no timeframes are selected, return error - require user to select timeframe
-            if not user_timeframes or len(user_timeframes) == 0:
-                logger.warning("⚠️ No timeframes selected for force signal generation")
+            # If no expirations are selected, return error - require user to select expiration
+            if not user_expirations or len(user_expirations) == 0:
+                logger.warning("⚠️ No expirations selected for force signal generation")
                 return JSONResponse(
                     status_code=400,
                     content={
                         "success": False,
-                        "error": "No timeframes selected",
-                        "message": "⚠️ Please select at least one timeframe from the Trading Timeframes section on the Dashboard before generating signals."
+                        "error": "No expirations selected",
+                        "message": "⚠️ Please select at least one expiration time from the Trade Expiration section on the Dashboard before generating signals."
                     }
                 )
                 
