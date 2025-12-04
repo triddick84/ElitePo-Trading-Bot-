@@ -254,10 +254,10 @@ class ForceSignalGenerator:
                             logger.warning(f"⚠️ Supporting strategies timeout, skipping for speed")
             
             # Generate SINGLE best signal based on market type and accuracy
-            # PRIORITY 1: Ultra-short timeframes ALWAYS use OTC (24/7 availability)
-            if user_timeframes and user_timeframes[0] in ['5s', '15s', '30s']:
+            # PRIORITY 1: Ultra-short expirations ALWAYS use OTC (24/7 availability)
+            if user_expirations and user_expirations[0] in ['5s', '15s', '30s']:
                 preferred_market = "otc"
-                logger.info(f"🎯 ULTRA-SHORT TIMEFRAME {user_timeframes[0]} - FORCING OTC market for 24/7 availability")
+                logger.info(f"🎯 ULTRA-SHORT EXPIRATION {user_expirations[0]} - FORCING OTC market for 24/7 availability")
             # PRIORITY 2: Check symbol suffix
             elif "_OTC" in symbol or "_otc" in symbol:
                 preferred_market = "otc"
