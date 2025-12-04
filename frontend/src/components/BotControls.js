@@ -299,11 +299,11 @@ const BotControls = ({ onStatusUpdate }) => {
     handleConfigChange('target_assets', updated);
   };
 
-  const handleAssetSelectionChange = (selectedAssets, selectedTimeframes) => {
+  const handleAssetSelectionChange = (selectedAssets, selectedExpirations) => {
     setConfig(prev => ({
       ...prev,
       selected_assets: selectedAssets,
-      selected_timeframes: selectedTimeframes
+      selected_expirations: selectedExpirations
     }));
   };
 
