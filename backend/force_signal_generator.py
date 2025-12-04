@@ -283,16 +283,16 @@ class ForceSignalGenerator:
                 # Generate single emergency signal for preferred market using primary timeframe data
                 logger.warning(f"⚠️ Generating emergency {preferred_market.upper()} signal")
                 emergency_signal = self._generate_emergency_signal(
-                    symbol, market_data, primary_data or [market_data.dict()], preferred_market, user_timeframes
+                    symbol, market_data, primary_data or [market_data.dict()], preferred_market, user_expirations
                 )
                 return [emergency_signal]  # Return as list with ONE signal
             
         except Exception as e:
             logger.error(f"Error in force signal generation for {symbol}: {e}")
             # Generate single emergency fallback signal with same priority logic
-            if user_timeframes and user_timeframes[0] in ['5s', '15s', '30s']:
+            if user_expirations and user_expirations[0] in ['5s', '15s', '30s']:
                 preferred_market = "otc"
-                logger.warning(f"🚨 Emergency fallback - ULTRA-SHORT {user_timeframes[0]} - FORCING OTC")
+                logger.warning(f"🚨 Emergency fallback - ULTRA-SHORT {user_expirations[0]} - FORCING OTC")
             elif "_OTC" in symbol or "_otc" in symbol:
                 preferred_market = "otc"
             elif "_regular" in symbol:
