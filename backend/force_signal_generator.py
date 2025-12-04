@@ -300,7 +300,7 @@ class ForceSignalGenerator:
             else:
                 preferred_market = "otc"  # Default to OTC
             
-            emergency_signal = self._generate_emergency_signal(symbol, market_data, None, preferred_market, user_timeframes)
+            emergency_signal = self._generate_emergency_signal(symbol, market_data, None, preferred_market, user_expirations)
             return [emergency_signal]  # Return as list with ONE signal
     
     async def _advanced_ai_ensemble_force_analysis(self, data: List[Dict], symbol: str) -> Optional[Dict]:
