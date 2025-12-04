@@ -28,15 +28,14 @@ const MarketAssetSelector = ({ onSelectionChange }) => {
   });
   const [isLoading, setIsLoading] = useState(true);
 
-  const timeframes = [
+  const expirations = [
     { value: '5s', label: '5 Seconds', icon: '⚡' },
     { value: '15s', label: '15 Seconds', icon: '🔥' },
     { value: '30s', label: '30 Seconds', icon: '💨' },
     { value: '1m', label: '1 Minute', icon: '⏱️' },
+    { value: '2m', label: '2 Minutes', icon: '🕐' },
     { value: '3m', label: '3 Minutes', icon: '🕐' },
-    { value: '5m', label: '5 Minutes', icon: '🕔' },
-    { value: '15m', label: '15 Minutes', icon: '🕒' },
-    { value: '30m', label: '30 Minutes', icon: '🕞' }
+    { value: '5m', label: '5 Minutes', icon: '🕔' }
   ];
 
   useEffect(() => {
