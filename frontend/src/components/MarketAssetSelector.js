@@ -60,7 +60,7 @@ const MarketAssetSelector = ({ onSelectionChange }) => {
     try {
       const response = await axios.get(`${API}/config`);
       setSelectedAssets(response.data.selected_assets || []);
-      setSelectedTimeframes(response.data.selected_timeframes || []);
+      setSelectedExpirations(response.data.selected_expirations || []);
     } catch (error) {
       console.error('Error fetching config:', error);
     }
