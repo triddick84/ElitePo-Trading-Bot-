@@ -1757,14 +1757,14 @@ class ForceSignalGenerator:
     async def _force_combine_analysis(self, analysis_results: List[Tuple], 
                                     market_data: MarketData, symbol: str, 
                                     recent_data: List[Dict], market_type: str = "regular",
-                                    user_timeframes: List[str] = None) -> TradingSignal:
+                                    user_expirations: List[str] = None) -> TradingSignal:
         """
         Force combine all analysis with emergency fallback
         """
         try:
             if not analysis_results:
                 # Emergency analysis - force generate based on basic indicators
-                return self._generate_emergency_signal(symbol, market_data, recent_data, market_type, user_timeframes)
+                return self._generate_emergency_signal(symbol, market_data, recent_data, market_type, user_expirations)
             
             # Calculate weighted scores
             buy_score = 0.0
