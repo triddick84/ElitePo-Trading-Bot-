@@ -1887,10 +1887,17 @@ class ForceSignalGenerator:
             # Use real_entry_time for actual trade
             optimal_entry_time = real_entry_time
             
-            # Calculate Pocket Option optimized expiration time
-            expiration_minutes = pocket_option_sync.calculate_optimal_expiration_time(
-                user_timeframes[0], optimal_entry_time, market_type
-            )
+            # Convert expiration time to minutes
+            expiration_map = {
+                '5s': 0.083,  # 5 seconds = 0.083 minutes
+                '15s': 0.25,  # 15 seconds = 0.25 minutes
+                '30s': 0.5,   # 30 seconds = 0.5 minutes
+                '1m': 1,
+                '2m': 2,
+                '3m': 3,
+                '5m': 5
+            }
+            expiration_minutes = expiration_map.get(user_expirations[0], 1)
             
             # Risk-adjusted stake for forced signals
             suggested_stake = min(15.0, max(2.0, 8.0 * (final_confidence - 70) / 30))
