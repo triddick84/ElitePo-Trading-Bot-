@@ -171,7 +171,7 @@ const SignalNotificationManager = ({ signals = [], onSignalExecute, onSignalDism
       {activePopups.map((popup, index) => {
         console.log(`🎯 Rendering popup ${index}:`, popup.id, 'signals:', popup.signals.length);
         return (
-          <ImprovedSignalPopup
+          <CompactSignalPopup
             key={popup.id}
             signals={popup.signals}
             onClose={() => handleClosePopup(popup.id)}
