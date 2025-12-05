@@ -23,6 +23,9 @@ const LiveSignalsDisplay = ({
   const [autoGenerationActive, setAutoGenerationActive] = useState(false);
   const [currentThreshold, setCurrentThreshold] = useState(85);
   const [isForceGenerating, setIsForceGenerating] = useState(false);
+  const [autoForceGenerateActive, setAutoForceGenerateActive] = useState(false);
+  const [autoForceInterval, setAutoForceInterval] = useState('1m'); // Default 1 minute
+  const [autoForceTimer, setAutoForceTimer] = useState(null);
 
   // Fetch configuration on mount
   useEffect(() => {
