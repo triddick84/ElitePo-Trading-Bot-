@@ -1011,7 +1011,7 @@ async def force_generate_signals(wait_for_candle: bool = Query(False)):
                     "direction": signal.direction.value if hasattr(signal.direction, 'value') else str(signal.direction),
                     "entry_price": float(signal.entry_price),
                     "probability": float(signal.probability),
-                    "expiration_minutes": int(signal.expiration_minutes),
+                    "expiration_minutes": float(signal.expiration_minutes),  # Keep as float for sub-minute expirations
                     "timeframe": str(signal.timeframe),
                     "market_type": str(signal.market_type),
                     "suggested_stake": float(signal.suggested_stake),
@@ -1238,7 +1238,7 @@ async def force_generate_signal_for_asset(asset_symbol: str, wait_for_candle: bo
                     "direction": signal.direction.value if hasattr(signal.direction, 'value') else str(signal.direction),
                     "entry_price": float(signal.entry_price),
                     "probability": float(signal.probability),
-                    "expiration_minutes": int(signal.expiration_minutes),
+                    "expiration_minutes": float(signal.expiration_minutes),  # Keep as float for sub-minute expirations
                     "timeframe": str(signal.timeframe),
                     "market_type": str(signal.market_type),
                     "suggested_stake": float(signal.suggested_stake),
