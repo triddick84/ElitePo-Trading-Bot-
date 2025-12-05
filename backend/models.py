@@ -87,7 +87,7 @@ class TradingSignal(BaseModel):
     asset_type: AssetType
     direction: SignalDirection
     entry_price: float
-    expiration_minutes: int
+    expiration_minutes: float  # Supports fractional minutes for sub-minute expirations (e.g., 0.5 for 30s)
     timeframe: str = "1m"  # Pocket Option timeframe (5s, 15s, 30s, 1m, 2m, 3m, 5m, 10m, 15m, 30m)
     market_type: str = "regular"  # "regular" or "otc"
     probability: float  # 0 to 100
