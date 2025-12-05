@@ -509,14 +509,68 @@ const LiveSignalsDisplay = ({
         </div>
 
         {/* Force Generate Signal Button */}
-        <div className="mb-6">
+        <div className="mb-4">
           <Button
             onClick={handleForceGenerateSignal}
-            disabled={isForceGenerating}
+            disabled={isForceGenerating || autoForceGenerateActive}
             className="w-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-300 border border-purple-500/30 hover:from-purple-500/30 hover:to-pink-500/30 disabled:opacity-50 font-semibold py-3"
           >
             {isForceGenerating ? '⚡ Maximum Analysis in Progress...' : '🚀 FORCE GENERATE SIGNAL'}
           </Button>
+        </div>
+
+        {/* Auto Force Generate Section */}
+        <div className="mb-6 p-4 bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border border-indigo-500/30 rounded-lg">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h4 className="text-white font-semibold flex items-center gap-2">
+                <span>🤖</span>
+                <span>Auto Force Generate</span>
+              </h4>
+              <p className="text-slate-400 text-xs mt-1">
+                Automated signal generation at regular intervals
+              </p>
+            </div>
+            <Button
+              onClick={toggleAutoForceGenerate}
+              disabled={isForceGenerating}
+              className={`border font-semibold ${
+                autoForceGenerateActive 
+                  ? 'bg-red-500/20 text-red-400 border-red-500/30 hover:bg-red-500/30' 
+                  : 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30 hover:bg-indigo-500/30'
+              } disabled:opacity-50`}
+            >
+              {autoForceGenerateActive ? '⏹️ STOP' : '▶️ START'}
+            </Button>
+          </div>
+
+          {/* Interval Selector */}
+          <div className="mb-2">
+            <Label className="text-slate-300 text-sm mb-2 block">Generation Interval</Label>
+            <select
+              value={autoForceInterval}
+              onChange={(e) => setAutoForceInterval(e.target.value)}
+              disabled={autoForceGenerateActive}
+              className="w-full bg-slate-800 border border-slate-600 text-white rounded px-3 py-2 text-sm disabled:opacity-50"
+            >
+              <option value="15s">Every 15 Seconds ⚡</option>
+              <option value="30s">Every 30 Seconds 🔥</option>
+              <option value="1m">Every 1 Minute ⏱️</option>
+              <option value="2m">Every 2 Minutes 🕐</option>
+              <option value="3m">Every 3 Minutes 🕒</option>
+              <option value="5m">Every 5 Minutes 🕔</option>
+              <option value="15m">Every 15 Minutes 🕒</option>
+              <option value="30m">Every 30 Minutes 🕞</option>
+            </select>
+          </div>
+
+          {autoForceGenerateActive && (
+            <div className="mt-3 p-2 bg-indigo-500/20 border border-indigo-400/30 rounded text-center">
+              <div className="text-indigo-400 text-sm font-medium">
+                🔄 Auto-generating signals every {autoForceInterval}
+              </div>
+            </div>
+          )}
         </div>
 
         {isForceGenerating && (
