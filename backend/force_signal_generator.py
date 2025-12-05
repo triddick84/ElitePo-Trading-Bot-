@@ -2354,6 +2354,7 @@ class ForceSignalGenerator:
                 '5m': 5
             }
             expiration = expiration_map.get(timeframe, 1)
+            logger.info(f"🔍 ULTIMATE FALLBACK EXPIRATION DEBUG: timeframe={timeframe}, expiration={expiration}")
             
             # Balanced ultimate fallback - not biased towards BUY
             import random
