@@ -2334,8 +2334,24 @@ class ForceSignalGenerator:
             logger.error(f"Error generating emergency signal: {e}")
             # Ultimate fallback with market type support
             symbol_suffix = "_OTC" if market_type == "otc" else "_regular"
-            timeframe = "3m" if market_type == "otc" else "5m"
-            expiration = 8 if market_type == "otc" else 10
+            
+            # Use user's selected expiration or default
+            if not user_expirations or len(user_expirations) == 0:
+                user_expirations = ['1m']
+            
+            timeframe = user_expirations[0]
+            
+            # Convert expiration to minutes
+            expiration_map = {
+                '5s': 0.083,  # 5 seconds
+                '15s': 0.25,  # 15 seconds
+                '30s': 0.5,   # 30 seconds
+                '1m': 1,
+                '2m': 2,
+                '3m': 3,
+                '5m': 5
+            }
+            expiration = expiration_map.get(timeframe, 1)
             
             # Balanced ultimate fallback - not biased towards BUY
             import random
