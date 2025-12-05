@@ -2285,6 +2285,7 @@ class ForceSignalGenerator:
                 '5m': 5
             }
             expiration_minutes = expiration_map.get(timeframe, 1)
+            logger.info(f"🔍 EXPIRATION DEBUG: timeframe={timeframe}, expiration_minutes={expiration_minutes}")
             
             # Market type specific adjustments
             if market_type == "otc":
