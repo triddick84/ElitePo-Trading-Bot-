@@ -1898,6 +1898,7 @@ class ForceSignalGenerator:
                 '5m': 5
             }
             expiration_minutes = expiration_map.get(user_expirations[0], 1)
+            logger.info(f"🔍 FORCE EXPIRATION DEBUG: user_exp={user_expirations[0]}, exp_min={expiration_minutes}")
             
             # Risk-adjusted stake for forced signals
             suggested_stake = min(15.0, max(2.0, 8.0 * (final_confidence - 70) / 30))
