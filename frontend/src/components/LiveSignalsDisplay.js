@@ -335,6 +335,80 @@ const LiveSignalsDisplay = ({
     }
   };
 
+  // Auto Force Generate Toggle
+  const toggleAutoForceGenerate = () => {
+    if (autoForceGenerateActive) {
+      // Stop auto generation
+      if (autoForceTimer) {
+        clearInterval(autoForceTimer);
+        setAutoForceTimer(null);
+      }
+      setAutoForceGenerateActive(false);
+      console.log('🛑 Auto Force Generate stopped');
+    } else {
+      // Start auto generation
+      setAutoForceGenerateActive(true);
+      console.log(`🚀 Auto Force Generate started with ${autoForceInterval} interval`);
+      
+      // Generate immediately
+      handleForceGenerateSignal();
+      
+      // Set up interval
+      const intervalMs = {
+        '15s': 15000,
+        '30s': 30000,
+        '1m': 60000,
+        '2m': 120000,
+        '3m': 180000,
+        '5m': 300000,
+        '15m': 900000,
+        '30m': 1800000
+      }[autoForceInterval] || 60000;
+      
+      const timer = setInterval(() => {
+        console.log(`🔄 Auto Force Generate triggered (${autoForceInterval} interval)`);
+        handleForceGenerateSignal();
+      }, intervalMs);
+      
+      setAutoForceTimer(timer);
+    }
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (autoForceTimer) {
+        clearInterval(autoForceTimer);
+      }
+    };
+  }, [autoForceTimer]);
+
+  // Update interval when changed
+  useEffect(() => {
+    if (autoForceGenerateActive && autoForceTimer) {
+      // Restart with new interval
+      clearInterval(autoForceTimer);
+      
+      const intervalMs = {
+        '15s': 15000,
+        '30s': 30000,
+        '1m': 60000,
+        '2m': 120000,
+        '3m': 180000,
+        '5m': 300000,
+        '15m': 900000,
+        '30m': 1800000
+      }[autoForceInterval] || 60000;
+      
+      const timer = setInterval(() => {
+        console.log(`🔄 Auto Force Generate triggered (${autoForceInterval} interval)`);
+        handleForceGenerateSignal();
+      }, intervalMs);
+      
+      setAutoForceTimer(timer);
+    }
+  }, [autoForceInterval]);
+
   const getSignalColor = (direction) => {
     const isInverted = notificationSettings.signalInversion;
     const displayDirection = direction;
