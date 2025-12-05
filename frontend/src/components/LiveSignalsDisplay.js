@@ -40,9 +40,9 @@ const LiveSignalsDisplay = ({
       const config = await response.json();
       console.log('📊 Fetched configuration:', config);
       console.log('  - selected_assets:', config.selected_assets);
-      console.log('  - selected_timeframes:', config.selected_timeframes);
+      console.log('  - selected_expirations:', config.selected_expirations);
       setSelectedAssets(config.selected_assets || []);
-      setSelectedTimeframes(config.selected_timeframes || []);
+      setSelectedExpirations(config.selected_expirations || []);
       setCurrentThreshold(config.min_probability_threshold || 85);
     } catch (error) {
       console.error('Error fetching configuration:', error);
