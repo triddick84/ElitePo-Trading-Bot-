@@ -1847,6 +1847,49 @@ class ForceSignalGenerator:
             else:
                 direction_enum = SignalDirection.BUY if buy_score > sell_score else SignalDirection.SELL
             
+            # CRITICAL: Adjust signal based on Support/Resistance Analysis
+            if sr_analysis:
+                logger.info(f"🎯 Applying S/R analysis to signal...")
+                
+                # Check if price is near support or resistance
+                position = sr_analysis.get('price_position', 'neutral')
+                reversal_risk = sr_analysis.get('reversal_risk', 'low')
+                sr_recommendation = sr_analysis.get('trade_recommendation', 'wait')
+                
+                # HIGH REVERSAL RISK - Near support or resistance
+                if reversal_risk == 'high':
+                    logger.warning(f"⚠️ HIGH REVERSAL RISK detected at {position}")
+                    
+                    if position == 'near_resistance' and direction_enum == SignalDirection.BUY:
+                        # Trying to BUY near resistance = BAD (will likely bounce down)
+                        logger.warning(f"🔴 REVERSING SIGNAL: BUY near resistance → SELL (bounce expected)")
+                        direction_enum = SignalDirection.SELL
+                        final_confidence = min(final_confidence * 1.1, 95.0)  # Boost confidence in reversal
+                    
+                    elif position == 'near_support' and direction_enum == SignalDirection.SELL:
+                        # Trying to SELL near support = BAD (will likely bounce up)
+                        logger.warning(f"🔴 REVERSING SIGNAL: SELL near support → BUY (bounce expected)")
+                        direction_enum = SignalDirection.BUY
+                        final_confidence = min(final_confidence * 1.1, 95.0)  # Boost confidence in reversal
+                
+                # MEDIUM REVERSAL RISK - Adjust confidence
+                elif reversal_risk == 'medium':
+                    if position == 'near_resistance' and direction_enum == SignalDirection.BUY:
+                        logger.warning(f"⚠️ BUY near resistance - reducing confidence")
+                        final_confidence *= 0.9  # Reduce confidence by 10%
+                    elif position == 'near_support' and direction_enum == SignalDirection.SELL:
+                        logger.warning(f"⚠️ SELL near support - reducing confidence")
+                        final_confidence *= 0.9  # Reduce confidence by 10%
+                
+                # LOW RISK - Use S/R recommendation to boost confidence
+                else:
+                    if sr_recommendation == 'buy' and direction_enum == SignalDirection.BUY:
+                        logger.info(f"✅ S/R confirms BUY signal - boosting confidence")
+                        final_confidence = min(final_confidence * 1.05, 98.0)
+                    elif sr_recommendation == 'sell' and direction_enum == SignalDirection.SELL:
+                        logger.info(f"✅ S/R confirms SELL signal - boosting confidence")
+                        final_confidence = min(final_confidence * 1.05, 98.0)
+            
             # Calculate signal parameters
             current_price = market_data.price
             
