@@ -49,12 +49,12 @@ class LatencyOptimizer:
         self.early_signal_buffer_seconds = self.total_latency_ms / 1000.0  # 3.0 seconds
         
         # Timeframe-specific buffers for optimal precision  
-        # For ultra-short timeframes: Adjusted buffers based on user requirements
-        # 5s timeframe: +5 seconds latency adjustment for better timing
-        self.early_signal_buffer_5s = -5.0  # -5 seconds for 5s (negative = arrive earlier by 5s)
-        self.early_signal_buffer_15s = 0.0  # 0 seconds for 15s - signal at exact candle formation
-        self.early_signal_buffer_30s = 0.0  # 0 seconds for 30s - signal at exact candle formation
-        self.early_signal_buffer_1m = 0.0   # 0 seconds for 1m - signal at exact candle formation
+        # ALL TIMEFRAMES: 5-second latency offset (signals arrive 5s earlier)
+        # Negative value = signal arrives earlier to give user time to execute
+        self.early_signal_buffer_5s = -5.0   # -5 seconds for 5s
+        self.early_signal_buffer_15s = -5.0  # -5 seconds for 15s
+        self.early_signal_buffer_30s = -5.0  # -5 seconds for 30s
+        self.early_signal_buffer_1m = -5.0   # -5 seconds for 1m
         
         # User-adjustable latency offset (allows manual fine-tuning)
         # Positive = signals arrive later, Negative = signals arrive earlier
