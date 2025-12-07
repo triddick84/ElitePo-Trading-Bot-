@@ -2502,5 +2502,7 @@ async def startup_event():
 async def shutdown_db_client():
     # Stop trading bot
     await trading_bot.stop_bot()
+    # Cleanup signal validator
+    await signal_validator.cleanup()
     # Close database connection
     client.close()
