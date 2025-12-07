@@ -289,7 +289,7 @@ class ForceSignalGenerator:
             
             # Generate signal for preferred market type using primary timeframe data
             best_signal = await self._force_combine_analysis(
-                analysis_results, market_data, symbol, primary_data or [market_data.dict()], preferred_market, user_expirations
+                analysis_results, market_data, symbol, primary_data or [market_data.dict()], preferred_market, user_expirations, sr_analysis
             )
             
             # Return single best signal
