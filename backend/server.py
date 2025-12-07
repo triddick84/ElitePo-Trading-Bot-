@@ -2586,5 +2586,7 @@ async def shutdown_db_client():
     await trading_bot.stop_bot()
     # Cleanup signal validator
     await signal_validator.cleanup()
+    # Cleanup AI learning system
+    await ai_learning_system.cleanup()
     # Close database connection
     client.close()
