@@ -46,7 +46,8 @@ class LatencyOptimizer:
         )  # ~3000ms (3 seconds) total - optimized for candle sync
         
         # Early signal buffer (generate signal earlier to account for latency)
-        self.early_signal_buffer_seconds = self.total_latency_ms / 1000.0  # 3.0 seconds
+        # Updated: 5-second offset for all timeframes
+        self.early_signal_buffer_seconds = -5.0  # -5 seconds (signals arrive 5s earlier)
         
         # Timeframe-specific buffers for optimal precision  
         # ALL TIMEFRAMES: 5-second latency offset (signals arrive 5s earlier)
