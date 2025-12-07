@@ -185,6 +185,8 @@ function App() {
         );
       case "realtime":
         return <RealtimeMarketDashboard />;
+      case "statistics":
+        return <SignalStatistics />;
       case "signals":
         return <SignalsPanel />;
       case "strategies":
