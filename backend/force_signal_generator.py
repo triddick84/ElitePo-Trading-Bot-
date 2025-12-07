@@ -1873,19 +1873,26 @@ class ForceSignalGenerator:
                     real_entry_time = previous_candle
                     time_until_entry = time_to_previous
             
-            # For force generate: Display popup NOW, countdown shows time until entry
+            # APPLY 5-SECOND LATENCY OFFSET
+            # Subtract 5 seconds from entry time to give user more preparation time
+            LATENCY_OFFSET = 5.0  # seconds
+            adjusted_entry_time = real_entry_time - timedelta(seconds=LATENCY_OFFSET)
+            adjusted_countdown = time_until_entry + LATENCY_OFFSET  # More time on countdown
+            
+            # For force generate: Display popup NOW, countdown shows time until entry (with offset)
             popup_display_time = chicago_time  # Show NOW
-            countdown_seconds = time_until_entry
+            countdown_seconds = adjusted_countdown
             
             # Log timing details for verification
-            logger.info(f"⏰ FORCE GENERATE TIMING:")
+            logger.info(f"⏰ FORCE GENERATE TIMING (with 5s latency offset):")
             logger.info(f"   Current time: {chicago_time.strftime('%H:%M:%S')}")
-            logger.info(f"   Entry time: {real_entry_time.strftime('%H:%M:%S')}")
-            logger.info(f"   Countdown: {countdown_seconds:.1f} seconds (target: 10s)")
+            logger.info(f"   Original entry time: {real_entry_time.strftime('%H:%M:%S')}")
+            logger.info(f"   Adjusted entry time: {adjusted_entry_time.strftime('%H:%M:%S')} (5s earlier)")
+            logger.info(f"   Countdown: {countdown_seconds:.1f} seconds (target: 15s with offset)")
             logger.info(f"   Popup shows: NOW (immediately)")
             
-            # Use real_entry_time for actual trade
-            optimal_entry_time = real_entry_time
+            # Use adjusted entry time for actual trade (5 seconds earlier)
+            optimal_entry_time = adjusted_entry_time
             
             # Convert expiration time to minutes
             expiration_map = {
