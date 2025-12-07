@@ -28,6 +28,7 @@ from timezone_utils import get_chicago_time, utc_to_chicago, format_chicago_time
 from latency_accuracy_tester import latency_tester
 from live_accuracy_tester import live_accuracy_tester
 from adaptive_strategy_service import AdaptiveStrategyService
+from signal_validator import signal_validator
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
