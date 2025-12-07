@@ -166,6 +166,22 @@ class ForceSignalGenerator:
             primary_data = results[0] if results[0] and not isinstance(results[0], Exception) else None
             # Skip sentiment/economic data for speed optimization (they were placeholders anyway)
             
+            # CRITICAL: Analyze Support & Resistance Levels
+            sr_analysis = None
+            if primary_data and len(primary_data) >= 10:
+                try:
+                    sr_analysis = support_resistance_analyzer.analyze_levels(primary_data, primary_timeframe)
+                    logger.info(f"📊 S/R Analysis: Position={sr_analysis['price_position']}, Risk={sr_analysis['reversal_risk']}, Recommend={sr_analysis['trade_recommendation']}")
+                    
+                    # Log key levels
+                    if sr_analysis.get('nearest_support'):
+                        logger.info(f"   Support: ${sr_analysis['nearest_support']['price']:.5f} ({sr_analysis['distance_to_support']:.2f}% away)")
+                    if sr_analysis.get('nearest_resistance'):
+                        logger.info(f"   Resistance: ${sr_analysis['nearest_resistance']['price']:.5f} ({sr_analysis['distance_to_resistance']:.2f}% away)")
+                except Exception as e:
+                    logger.warning(f"⚠️ S/R analysis failed: {e}")
+                    sr_analysis = None
+            
             # Update adaptive analyzer if config provided
             if adaptive_config and adaptive_config.enabled:
                 self.set_adaptive_config(adaptive_config)
