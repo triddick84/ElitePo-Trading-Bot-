@@ -57,6 +57,22 @@ const SignalStatistics = () => {
     }
   };
 
+  const triggerAILearning = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.post(`${BACKEND_URL}/api/ai/learn`);
+      if (response.data.success) {
+        alert('✅ AI Learning completed! Strategies have been adjusted based on recent performance.');
+        fetchStatistics();
+      }
+    } catch (error) {
+      console.error('Error triggering AI learning:', error);
+      alert('❌ Error triggering AI learning');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getWinRateColor = (rate) => {
     if (rate >= 70) return 'text-green-400';
     if (rate >= 60) return 'text-yellow-400';
