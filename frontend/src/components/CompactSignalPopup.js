@@ -175,19 +175,51 @@ const CompactSignalPopup = ({ signals, onClose, onDismiss }) => {
                     </div>
                   </div>
 
-                  {/* Countdown Timer - Prominent */}
-                  <div className="text-center mb-2">
-                    <div className={`text-4xl font-bold ${
-                      timer.isOptimal ? 'text-green-400 animate-pulse' :
-                      timer.timeLeft < 0 ? 'text-red-400' :
-                      timer.timeLeft <= 5 ? 'text-yellow-400' :
-                      'text-white'
-                    }`}>
-                      {formatTime(timer.timeLeft)}
+                  {/* Countdown Timer - Prominent with Entry Point Effects */}
+                  <div className={`
+                    text-center mb-3 p-4 rounded-lg relative
+                    ${timer.isOptimal ? 'bg-gradient-to-r from-green-500/20 to-emerald-500/20 border-2 border-green-400 shadow-lg shadow-green-500/50' :
+                      timer.timeLeft < 0 ? 'bg-red-500/10 border border-red-500/30' :
+                      timer.timeLeft <= 5 ? 'bg-yellow-500/10 border border-yellow-500/30' :
+                      'bg-slate-700/50 border border-slate-600'}
+                  `}>
+                    {/* Pulsing Ring Effect at Entry Point */}
+                    {timer.isOptimal && (
+                      <>
+                        <div className="absolute inset-0 rounded-lg border-4 border-green-400 animate-ping opacity-75"></div>
+                        <div className="absolute inset-0 rounded-lg bg-green-400/20 animate-pulse"></div>
+                      </>
+                    )}
+                    
+                    <div className="relative z-10">
+                      <div className={`text-5xl font-black tracking-wider ${
+                        timer.isOptimal ? 'text-green-400 animate-bounce' :
+                        timer.timeLeft < 0 ? 'text-red-400' :
+                        timer.timeLeft <= 5 ? 'text-yellow-400 animate-pulse' :
+                        'text-white'
+                      }`}>
+                        {formatTime(timer.timeLeft)}
+                      </div>
+                      <div className={`text-sm font-bold mt-2 ${
+                        timer.isOptimal ? 'text-green-300 animate-pulse' :
+                        timer.timeLeft < 0 ? 'text-red-400' :
+                        'text-slate-400'
+                      }`}>
+                        {timer.isOptimal ? '🎯 ENTER TRADE NOW!' :
+                         timer.timeLeft < 0 ? '⏱️ Trade Window Closed' :
+                         timer.timeLeft <= 5 ? '⚡ Get Ready!' :
+                         '⏰ Time to Entry'}
+                      </div>
                     </div>
-                    <div className="text-xs text-slate-400 mt-1">
-                      {timer.timeLeft > 0 ? 'Time to Entry' : 'Expired'}
-                    </div>
+
+                    {/* Entry Point Visual Indicator */}
+                    {timer.isOptimal && (
+                      <div className="mt-2 flex justify-center gap-1">
+                        <span className="inline-block w-2 h-2 bg-green-400 rounded-full animate-ping"></span>
+                        <span className="inline-block w-2 h-2 bg-green-400 rounded-full animate-ping" style={{animationDelay: '0.2s'}}></span>
+                        <span className="inline-block w-2 h-2 bg-green-400 rounded-full animate-ping" style={{animationDelay: '0.4s'}}></span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Compact Stats Row */}
