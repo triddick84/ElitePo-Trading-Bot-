@@ -2388,7 +2388,7 @@ class ForceSignalGenerator:
                 justification=f"🆘 ULTIMATE {market_type.upper()} FALLBACK SIGNAL - System forced to generate signal",
                 risk_assessment="EXTREME RISK - Ultimate fallback with no analysis. Use only minimal stake.",
                 suggested_stake=1.0,
-                precision_entry_time=datetime.now(timezone.utc) + timedelta(seconds=10),
+                precision_entry_time=datetime.now(timezone.utc) + timedelta(seconds=15),  # +5s latency offset
                 timestamp=datetime.now(timezone.utc)
             )
     
