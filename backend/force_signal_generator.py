@@ -2304,9 +2304,10 @@ class ForceSignalGenerator:
                 symbol_suffix = "_regular"
                 market_description = "📊 Regular Market - Exchange hours"
             
-            # Enhanced emergency confidence
-            emergency_confidence = min(confidence + 5.0, 98.5)  # Boost emergency signals
-            emergency_conf_level = "MEDIUM" if emergency_confidence >= 82.0 else "LOW"
+            # Enhanced emergency confidence - Force-generated signals should have high confidence
+            # Even with limited data, forced signals are intentional and should reflect user's need
+            emergency_confidence = min(confidence + 15.0, 95.0)  # Significant boost for forced signals
+            emergency_conf_level = "HIGH" if emergency_confidence >= 88.0 else "MEDIUM"
             
             return TradingSignal(
                 id=f"EMERGENCY_{market_type.upper()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{symbol}",
