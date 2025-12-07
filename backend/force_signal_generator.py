@@ -30,6 +30,7 @@ import high_accuracy_1m_triple_confirmation
 import high_accuracy_williams_macd_strategy
 import high_accuracy_smart_money_ict
 from signal_accuracy_optimizer import signal_optimizer
+from support_resistance_analyzer import support_resistance_analyzer
 
 logger = logging.getLogger(__name__)
 
