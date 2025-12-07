@@ -2629,6 +2629,23 @@ async def startup_event():
     import asyncio
     asyncio.create_task(initialize_app())
     
+    # Start AI learning scheduler (runs every hour)
+    async def ai_learning_scheduler():
+        """Background task that runs AI learning every hour"""
+        await asyncio.sleep(60)  # Wait 1 minute after startup
+        while True:
+            try:
+                logger.info("🧠 Running scheduled AI learning cycle...")
+                await ai_learning_system.analyze_and_learn()
+                logger.info("✅ Scheduled AI learning completed")
+            except Exception as e:
+                logger.error(f"❌ Error in scheduled AI learning: {e}")
+            
+            # Wait 1 hour before next cycle
+            await asyncio.sleep(3600)
+    
+    asyncio.create_task(ai_learning_scheduler())
+    
     # Return immediately so server can start accepting health checks
     logger.info("⚡ Server startup complete - initialization running in background")
 
