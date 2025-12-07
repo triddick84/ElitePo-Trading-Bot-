@@ -1031,6 +1031,13 @@ async def force_generate_signals(wait_for_candle: bool = Query(False)):
                     await platform_integration.send_signal_to_all_platforms(signal)
                 except Exception as e:
                     logger.warning(f"Could not send forced signal to platforms: {e}")
+                
+                # Schedule signal validation (will check if signal was WIN/LOSS after expiration)
+                try:
+                    await signal_validator.schedule_signal_validation(stored_signals[-1])
+                    logger.info(f"📅 Scheduled validation for signal {signal.id}")
+                except Exception as e:
+                    logger.warning(f"Could not schedule signal validation: {e}")
             
             # Extract analysis details with OTC boost information
             analysis_details = forced_signals[0].technical_analysis if forced_signals else {}
