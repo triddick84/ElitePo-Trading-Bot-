@@ -67,7 +67,7 @@ class ForceSignalGenerator:
     
     def __init__(self):
         self.executor = ThreadPoolExecutor(max_workers=10)
-        self.min_force_confidence = 75.0  # Minimum for forced signals
+        self.min_force_confidence = 82.0  # Minimum for forced signals
         self.adaptive_analyzer = None  # Will be set from config
         self.realtime_hub = None  # Will be set with real-time market data hub
     
