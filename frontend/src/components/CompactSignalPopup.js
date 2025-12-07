@@ -46,10 +46,17 @@ const CompactSignalPopup = ({ signals, onClose, onDismiss }) => {
             timeLeft = 20 - ((now - signalTime.getTime()) / 1000);
           }
 
+          const isOptimal = timeLeft > 0 && timeLeft <= 3;
+          
+          // Play entry sound when reaching optimal entry window
+          if (isOptimal && !hasPlayedEntrySound[signal.id]) {
+            playEntrySound(signal.id);
+          }
+
           newTimers[signal.id] = {
             timeLeft: timeLeft,
             isExpired: timeLeft <= -10,  // Close at -10 seconds
-            isOptimal: timeLeft > 0 && timeLeft <= 3,
+            isOptimal: isOptimal,
             progress: Math.max(0, Math.min(100, ((20 - timeLeft) / 20) * 100))
           };
         } catch (error) {
