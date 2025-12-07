@@ -130,23 +130,48 @@ const CompactSignalPopup = ({ signals, onClose, onDismiss }) => {
               >
                 {/* Signal Info - Compact */}
                 <div className="p-3 bg-slate-800/60">
-                  <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <span className="text-xl font-bold text-white">{assetName}</span>
                       <Badge variant="outline" className="text-xs text-slate-300 border-slate-600">
                         {signal.timeframe}{marketType}
                       </Badge>
                     </div>
-                    <div className={`flex items-center gap-1 px-2 py-1 rounded ${
-                      signal.direction === 'BUY' || signal.direction === 'CALL' 
-                        ? 'bg-green-500/20 text-green-400' 
-                        : 'bg-red-500/20 text-red-400'
+                  </div>
+
+                  {/* BUY/SELL - Large & Prominent with Visual Effects */}
+                  <div className={`
+                    mb-3 p-4 rounded-lg text-center relative overflow-hidden
+                    ${signal.direction === 'BUY' || signal.direction === 'CALL' 
+                      ? 'bg-gradient-to-br from-green-600 to-emerald-600 shadow-lg shadow-green-500/50' 
+                      : 'bg-gradient-to-br from-red-600 to-rose-600 shadow-lg shadow-red-500/50'}
+                    ${timer.isOptimal ? 'animate-pulse' : ''}
+                  `}>
+                    {/* Animated Background Effect */}
+                    <div className={`absolute inset-0 opacity-30 ${
+                      timer.isOptimal ? 'animate-ping' : ''
                     }`}>
+                      <div className={`w-full h-full ${
+                        signal.direction === 'BUY' || signal.direction === 'CALL' 
+                          ? 'bg-green-400' 
+                          : 'bg-red-400'
+                      }`}></div>
+                    </div>
+                    
+                    {/* Direction Display */}
+                    <div className="relative z-10 flex flex-col items-center gap-2">
                       {signal.direction === 'BUY' || signal.direction === 'CALL' ? 
-                        <TrendingUp className="w-4 h-4" /> : 
-                        <TrendingDown className="w-4 h-4" />
+                        <TrendingUp className="w-12 h-12 text-white drop-shadow-lg" /> : 
+                        <TrendingDown className="w-12 h-12 text-white drop-shadow-lg" />
                       }
-                      <span className="font-bold text-sm">{signal.direction}</span>
+                      <div className="text-4xl font-black text-white drop-shadow-2xl tracking-wider">
+                        {signal.direction}
+                      </div>
+                      {timer.isOptimal && (
+                        <div className="text-xs font-bold text-white animate-bounce">
+                          🎯 OPTIMAL ENTRY NOW!
+                        </div>
+                      )}
                     </div>
                   </div>
 
