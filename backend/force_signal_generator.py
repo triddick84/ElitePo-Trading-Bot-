@@ -2335,7 +2335,7 @@ class ForceSignalGenerator:
                             f"This is a forced emergency signal when normal analysis fails.",
                 risk_assessment="HIGH RISK - Emergency fallback signal with limited analysis data. Use minimum stake.",
                 suggested_stake=5.0,
-                precision_entry_time=datetime.now(timezone.utc) + timedelta(seconds=20 if market_type == "otc" else 30),
+                precision_entry_time=datetime.now(timezone.utc) + timedelta(seconds=25 if market_type == "otc" else 35),  # +5s latency offset
                 timestamp=datetime.now(timezone.utc)
             )
             
