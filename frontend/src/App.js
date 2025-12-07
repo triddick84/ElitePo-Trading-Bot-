@@ -19,6 +19,7 @@ import StrategySelector from "./components/StrategySelector";
 import MoneyManagement from "./components/MoneyManagement";
 import AdaptiveStrategyConfig from "./components/AdaptiveStrategyConfig";
 import RealtimeMarketDashboard from "./components/RealtimeMarketDashboard";
+import SignalStatistics from "./components/SignalStatistics";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
 const API = BACKEND_URL ? `${BACKEND_URL}/api` : '';
