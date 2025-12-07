@@ -159,6 +159,7 @@ function App() {
   const navigation = [
     { id: "dashboard", label: "Dashboard", icon: "📊" },
     { id: "realtime", label: "Real-Time Market", icon: "📡" },
+    { id: "statistics", label: "Signal Performance", icon: "📈" },
     { id: "signals", label: "Signals", icon: "🔔" },
     { id: "strategies", label: "Strategy Selector", icon: "🎯" },
     { id: "adaptive", label: "Adaptive Strategy", icon: "🧠" },
