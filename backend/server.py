@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 import uuid
 from datetime import datetime, timezone
+import pandas as pd
 
 # Import our trading bot components
 from models import (
