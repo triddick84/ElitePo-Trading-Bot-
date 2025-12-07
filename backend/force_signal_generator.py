@@ -1774,7 +1774,8 @@ class ForceSignalGenerator:
     async def _force_combine_analysis(self, analysis_results: List[Tuple], 
                                     market_data: MarketData, symbol: str, 
                                     recent_data: List[Dict], market_type: str = "regular",
-                                    user_expirations: List[str] = None) -> TradingSignal:
+                                    user_expirations: List[str] = None,
+                                    sr_analysis: Dict = None) -> TradingSignal:
         """
         Force combine all analysis with emergency fallback
         """
