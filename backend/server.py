@@ -2527,6 +2527,58 @@ async def manually_validate_signal(signal_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# =====================================================
+# AI LEARNING SYSTEM ENDPOINTS
+# =====================================================
+
+@api_router.post("/ai/learn")
+async def trigger_ai_learning():
+    """
+    Manually trigger AI learning cycle
+    Analyzes recent validations and adjusts strategies
+    """
+    try:
+        await ai_learning_system.analyze_and_learn()
+        return {
+            "success": True,
+            "message": "AI learning cycle completed",
+            "adjustments": ai_learning_system.get_current_adjustments()
+        }
+    except Exception as e:
+        logger.error(f"Error in AI learning: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/ai/report")
+async def get_learning_report():
+    """
+    Get AI learning report with recommendations
+    """
+    try:
+        report = await ai_learning_system.generate_learning_report()
+        return {
+            "success": True,
+            "report": report
+        }
+    except Exception as e:
+        logger.error(f"Error generating AI report: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/ai/adjustments")
+async def get_current_adjustments():
+    """
+    Get current AI strategy adjustments
+    """
+    try:
+        adjustments = ai_learning_system.get_current_adjustments()
+        return {
+            "success": True,
+            "adjustments": adjustments
+        }
+    except Exception as e:
+        logger.error(f"Error getting adjustments: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
