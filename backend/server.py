@@ -2565,6 +2565,8 @@ async def startup_event():
             await trading_bot._load_config()
             # Initialize signal validator
             await signal_validator.initialize()
+            # Initialize AI learning system
+            await ai_learning_system.initialize()
             app_initialized = True
             logger.info("✅ Application initialization complete")
         except Exception as e:
