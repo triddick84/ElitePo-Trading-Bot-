@@ -2145,6 +2145,7 @@ class ForceSignalGenerator:
                 expiration_minutes=expiration_minutes,
                 timeframe=user_expirations[0],  # Use user's selected expiration as timeframe
                 market_type=market_type,
+                support_resistance=sr_analysis if sr_analysis else {},
                 probability=min(final_confidence, 99.0),  # Cap at 99% for maximum confidence
                 confidence_level=confidence_level,
                 strategy_used=strategy_enum,  # Use enum but name comes from technical_analysis
