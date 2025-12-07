@@ -1780,7 +1780,7 @@ class ForceSignalGenerator:
                     
                     # Ensure confidence is valid
                     if math.isnan(confidence) or math.isinf(confidence):
-                        confidence = 75.0
+                        confidence = 82.0  # Increased fallback confidence
                     
                     confidence = max(50.0, min(98.5, confidence))  # Clamp to valid range
                     
