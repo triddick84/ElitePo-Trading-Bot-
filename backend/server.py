@@ -29,6 +29,7 @@ from latency_accuracy_tester import latency_tester
 from live_accuracy_tester import live_accuracy_tester
 from adaptive_strategy_service import AdaptiveStrategyService
 from signal_validator import signal_validator
+from ai_learning_system import ai_learning_system
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
