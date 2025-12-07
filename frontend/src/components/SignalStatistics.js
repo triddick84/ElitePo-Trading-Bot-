@@ -106,16 +106,25 @@ const SignalStatistics = () => {
             Track win/loss rates and accuracy of generated signals
           </p>
         </div>
-        <Button
-          onClick={() => {
-            fetchStatistics();
-            fetchRecentValidations();
-          }}
-          className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30"
-        >
-          <RefreshCw className="w-4 h-4 mr-2" />
-          Refresh
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={triggerAILearning}
+            disabled={loading}
+            className="bg-purple-500/20 text-purple-400 border border-purple-500/30 hover:bg-purple-500/30"
+          >
+            🧠 AI Learn & Improve
+          </Button>
+          <Button
+            onClick={() => {
+              fetchStatistics();
+              fetchRecentValidations();
+            }}
+            className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30"
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
