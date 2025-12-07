@@ -2483,6 +2483,8 @@ async def startup_event():
             logger.info("🚀 Starting background initialization...")
             # Load trading bot configuration
             await trading_bot._load_config()
+            # Initialize signal validator
+            await signal_validator.initialize()
             app_initialized = True
             logger.info("✅ Application initialization complete")
         except Exception as e:
