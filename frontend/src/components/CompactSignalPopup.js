@@ -6,6 +6,21 @@ import { Button } from './ui/button';
 
 const CompactSignalPopup = ({ signals, onClose, onDismiss }) => {
   const [signalTimers, setSignalTimers] = useState({});
+  const [hasPlayedEntrySound, setHasPlayedEntrySound] = useState({});
+
+  // Play entry sound when optimal entry point is reached
+  const playEntrySound = (signalId) => {
+    if (hasPlayedEntrySound[signalId]) return;
+    
+    try {
+      const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIGGSz6+ibVBEKT6Lg8rpnIgU2kdbyw3AqBSd+zPDajzsIEly06uinUxELTqXh8rppIwU0kNbwyHEpBSd+zPDajzsIE1606uqmUxAKTqTi8rppJAU0j9bwyHEpBSh+zPDajzsIE1+06uqmUxELTaXh8rloJgU0kdXwyHEpBSh+zO/bjzsIFF+06uqmUhELTaXh8rloJgU0kdXwyHEpBSh+zO/bjzsIFF+06uqmUhELTaXh8rloJgU0kdXwyHEpBSh+zO/bjzsIFF+06uqmUhELTaXh8rloJgU0kdXwyHEpBSh+zO/bjzsIFF+06uqmUhELTaXh8rloJgU0kdXwyHEpBSh+zO/bjzsIFF+06uqmUhELTaXh8rloJgU0kdXwyHEpBSh+zO/bjzsIFF+06uqmUhELTaXh8rloJgU0kdXwyHEpBSh+zO/bjzsIFF+06uqmUhELTaXh8rloJgU0kdXwyHEpBSh+zO/bjzsIFF+06uqmUhELTaXh8rloJgU0kdXwyHEpBSh+zO/bjzsIFF+06uqmUhELTaXh8rloJgU0kdXwyHEpBSh+zO/bjzsIFF+06uqmUhELTaXh8rloJgU0kdXwyHEpBSh+zO/bjzsIFF+06uqmUhELTaXh8rloJgU0kdXwyHEpBSh+zO/bjzsIFF+06uqmUhELTaXh8rloJgU0kdXwyHEpBSh+zO/bjzsIFF+06uqmUhELTaXh8rloJgU0kdXwyHEpBSh+zO/bjzsIFF+06uqmUhELTaXh8rloJgU0kdXwyHEpBSh+zO/bjzsIFF+06uqmUhELTaXh8rloJgU0kdXwyHEpBSh+zO/bjzsIFF+06uqmUhELTaXh8rloJgU0kdXwyHEpBSh+zO/bjzsIFF+06uqmUhELTaXh8rloJgU0kdXwyHEpBSh+zO/bjzsIFF+06uqmUhELTaXh8rloJgU0kdXwyHEpBSh+zO/bjzsIFF+06uqmUhELTaXh8rloJgU0kdXwyHEpBSh+zO/bjzsIFF+06uqmUhELTaXh8rloJgU0kdXwyHEpBSh+zO/bjzsIFF+06uqmUhELTaXh8rloJgU0kdXwyHEpBSh+zO/bjzsIFF+06uqmUhELTaXh8rloJgU0kdXwyHEpBSh+zO/bjzsIFF+06uqmUhELTaXh8rloJgU0kdXwyHEpBSh+zO/bjzsIFF+06uqmUhELTaXh8rloJgU0kdXwyHEpBSh+zO/bjzsIFF+06uqmUhELTaXh8rloJgU0kdXwyHEpBSh+zO/bjzsIFF+06uqmUhELTaXh8rloJgU0kdXwyHEpBSh+zO/bjzsIFF+06uqmUhELTaXh8rloJg==');
+      audio.volume = 0.5;
+      audio.play().catch(e => console.log('Entry sound play failed:', e));
+      setHasPlayedEntrySound(prev => ({ ...prev, [signalId]: true }));
+    } catch (e) {
+      console.log('Entry sound error:', e);
+    }
+  };
 
   useEffect(() => {
     if (!signals || !Array.isArray(signals) || signals.length === 0) {
