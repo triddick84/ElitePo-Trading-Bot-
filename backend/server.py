@@ -2454,6 +2454,78 @@ async def get_multi_symbol_data(symbols: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# =====================================================
+# SIGNAL VALIDATION ENDPOINTS
+# =====================================================
+
+@api_router.get("/signals/statistics")
+async def get_signal_statistics(
+    timeframe: Optional[str] = Query(None, description="Filter by timeframe (5s, 1m, etc.)"),
+    hours: int = Query(24, description="Look back period in hours")
+):
+    """
+    Get signal validation statistics
+    Shows win/loss rate, accuracy, etc.
+    """
+    try:
+        stats = await signal_validator.get_signal_statistics(timeframe=timeframe, hours=hours)
+        return {
+            "success": True,
+            "statistics": stats
+        }
+    except Exception as e:
+        logger.error(f"Error getting signal statistics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/signals/validations/recent")
+async def get_recent_validations(limit: int = Query(20, description="Number of results")):
+    """
+    Get recent signal validation results
+    """
+    try:
+        validations = await signal_validator.get_recent_validations(limit=limit)
+        return {
+            "success": True,
+            "count": len(validations),
+            "validations": validations
+        }
+    except Exception as e:
+        logger.error(f"Error getting recent validations: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/signals/{signal_id}/validate")
+async def manually_validate_signal(signal_id: str):
+    """
+    Manually trigger validation for a specific signal
+    """
+    try:
+        # Fetch signal from database
+        signal = await db.trading_signals.find_one({'id': signal_id}, {'_id': 0})
+        
+        if not signal:
+            raise HTTPException(status_code=404, detail="Signal not found")
+        
+        # Validate the signal
+        result = await signal_validator.validate_signal(signal)
+        
+        if result:
+            return {
+                "success": True,
+                "validation": result
+            }
+        else:
+            return {
+                "success": False,
+                "message": "Could not validate signal - insufficient data"
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error manually validating signal: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
