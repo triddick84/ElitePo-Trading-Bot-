@@ -1199,15 +1199,15 @@ async def force_generate_signal_for_asset(asset_symbol: str, wait_for_candle: bo
                 user_expirations = ['5s']  # Default to ultra-short 5 second expiration
                 logger.info("No expirations selected, using ultra-short 5s default")
         except Exception as e:
-            logger.warning(f"Could not get user timeframes, using default: {e}")
-            user_timeframes = ['5s']
+            logger.warning(f"Could not get user expirations, using default: {e}")
+            user_expirations = ['5s']
             invert_signals = False
         
-        logger.info(f"Using user selected timeframes for {asset_symbol}: {user_timeframes}")
+        logger.info(f"Using user selected expirations for {asset_symbol}: {user_expirations}")
         
         # Force generate signals (both regular and OTC)
         forced_signals = await force_signal_generator.force_generate_signal(
-            target_data.symbol, target_data, user_timeframes, wait_for_candle=wait_for_candle, adaptive_config=adaptive_config
+            target_data.symbol, target_data, user_expirations, wait_for_candle=wait_for_candle, adaptive_config=adaptive_config
         )
         
         if forced_signals:
