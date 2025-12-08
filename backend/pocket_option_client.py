@@ -8,7 +8,7 @@ import logging
 from typing import List, Dict, Optional, Any
 from datetime import datetime, timezone
 import os
-from pocketoptionapi_async import PocketOptionAsync, OrderDirection
+from pocketoptionapi_async import AsyncPocketOptionClient, OrderDirection
 
 logger = logging.getLogger(__name__)
 
