@@ -43,7 +43,8 @@ class PocketOptionClient:
         # Initialize API client
         self.client = AsyncPocketOptionClient(
             ssid=self.ssid,
-            demo=self.is_demo
+            is_demo=self.is_demo,
+            enable_logging=True
         )
         
         self.connected = False
