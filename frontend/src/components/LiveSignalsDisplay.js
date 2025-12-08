@@ -395,6 +395,32 @@ const LiveSignalsDisplay = ({
     };
   }, [autoForceTimer]);
 
+  // Update countdown every second
+  useEffect(() => {
+    if (autoForceGenerateActive) {
+      const intervalMs = {
+        '15s': 15000,
+        '30s': 30000,
+        '1m': 60000,
+        '2m': 120000,
+        '3m': 180000,
+        '5m': 300000,
+        '15m': 900000,
+        '30m': 1800000
+      }[autoForceInterval] || 60000;
+      
+      const countdownTimer = setInterval(() => {
+        setAutoForceCountdown(prev => {
+          const newVal = Math.max(0, prev - 1);
+          setAutoForceProgress(((intervalMs / 1000 - newVal) / (intervalMs / 1000)) * 100);
+          return newVal;
+        });
+      }, 1000);
+      
+      return () => clearInterval(countdownTimer);
+    }
+  }, [autoForceGenerateActive, autoForceInterval]);
+
   // Update interval when changed
   useEffect(() => {
     if (autoForceGenerateActive && autoForceTimer) {
@@ -412,9 +438,16 @@ const LiveSignalsDisplay = ({
         '30m': 1800000
       }[autoForceInterval] || 60000;
       
+      // Reset countdown
+      setAutoForceCountdown(intervalMs / 1000);
+      setAutoForceProgress(0);
+      
       const timer = setInterval(() => {
         console.log(`🔄 Auto Force Generate triggered (${autoForceInterval} interval)`);
         handleForceGenerateSignal();
+        // Reset countdown after generation
+        setAutoForceCountdown(intervalMs / 1000);
+        setAutoForceProgress(0);
       }, intervalMs);
       
       setAutoForceTimer(timer);
