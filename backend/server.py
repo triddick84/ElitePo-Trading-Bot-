@@ -31,6 +31,9 @@ from live_accuracy_tester import live_accuracy_tester
 from adaptive_strategy_service import AdaptiveStrategyService
 from signal_validator import signal_validator
 from ai_learning_system import ai_learning_system
+from pocket_option_client import get_pocket_option_client, pocket_option_client
+from multi_timeframe_analyzer import multi_timeframe_analyzer
+from ai_lstm_predictor import lstm_predictor
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
