@@ -1185,19 +1185,19 @@ async def force_generate_signal_for_asset(asset_symbol: str, wait_for_candle: bo
         
         logger.info(f"🚀 FORCE GENERATING SIGNAL for specific asset: {asset_symbol}")
         
-        # Get user's selected timeframes from current configuration
+        # Get user's selected expirations from current configuration
         try:
             config_doc = await db.trading_configurations.find_one({"user_id": "default_user"})
-            user_timeframes = config_doc.get('selected_timeframes', ['5m']) if config_doc else ['5m']
+            user_expirations = config_doc.get('selected_expirations', ['5s']) if config_doc else ['5s']
             invert_signals = config_doc.get('invert_signals', False) if config_doc else False
             
             # Load adaptive strategy configuration
             adaptive_config = await adaptive_strategy_service_instance.get_config("default_user")
             
-            # If no timeframes are selected, use ultra-short default
-            if not user_timeframes or len(user_timeframes) == 0:
-                user_timeframes = ['5s']  # Default to ultra-short 5 second timeframe
-                logger.info("No timeframes selected, using ultra-short 5s default")
+            # If no expirations are selected, use ultra-short default
+            if not user_expirations or len(user_expirations) == 0:
+                user_expirations = ['5s']  # Default to ultra-short 5 second expiration
+                logger.info("No expirations selected, using ultra-short 5s default")
         except Exception as e:
             logger.warning(f"Could not get user timeframes, using default: {e}")
             user_timeframes = ['5s']
