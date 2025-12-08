@@ -245,53 +245,45 @@ const CompactSignalPopup = ({ signals, onClose, onDismiss }) => {
                   </div>
 
                   {/* Compact Stats Row */}
-                  <div className="grid grid-cols-3 gap-2 text-center text-xs mb-2">
-                    <div>
-                      <div className="text-slate-400">Probability</div>
-                      <div className="text-white font-bold">{signal.probability?.toFixed(1)}%</div>
+                  <div className="grid grid-cols-3 gap-1.5 text-center text-[10px] mb-2">
+                    <div className="bg-slate-900/50 rounded p-1">
+                      <div className="text-slate-400">Prob.</div>
+                      <div className="text-white font-bold text-xs">{signal.probability?.toFixed(0)}%</div>
                     </div>
-                    <div>
-                      <div className="text-slate-400">Confidence</div>
-                      <div className="text-white font-bold">{signal.confidence_level}</div>
+                    <div className="bg-slate-900/50 rounded p-1">
+                      <div className="text-slate-400">Conf.</div>
+                      <div className="text-white font-bold text-xs">{signal.confidence_level}</div>
                     </div>
-                    <div>
+                    <div className="bg-slate-900/50 rounded p-1">
                       <div className="text-slate-400">Stake</div>
-                      <div className="text-white font-bold">${signal.suggested_stake?.toFixed(1)}</div>
+                      <div className="text-white font-bold text-xs">${signal.suggested_stake?.toFixed(1)}</div>
                     </div>
                   </div>
 
-                  {/* Signal Strength Heatmap */}
-                  <div className="mt-3 p-2 bg-slate-900/50 rounded-lg border border-slate-700">
-                    <div className="text-xs text-slate-400 mb-1 text-center">Signal Strength</div>
-                    <div className="flex items-center gap-2">
+                  {/* Signal Strength Heatmap - Compact */}
+                  <div className="p-1.5 bg-slate-900/50 rounded border border-slate-700">
+                    <div className="flex items-center gap-1.5">
                       {/* Heatmap Bar */}
-                      <div className="flex-1 h-6 bg-slate-700 rounded-full overflow-hidden">
+                      <div className="flex-1 h-4 bg-slate-700 rounded-full overflow-hidden">
                         <div 
                           className={`h-full ${getHeatmapColor(strength)} transition-all duration-500 flex items-center justify-center`}
                           style={{ width: `${strength}%` }}
                         >
-                          <span className="text-xs font-bold text-white drop-shadow-lg">
+                          <span className="text-[10px] font-bold text-white drop-shadow-lg">
                             {strength.toFixed(0)}%
                           </span>
                         </div>
                       </div>
                       {/* Strength Label */}
-                      <div className="text-xs font-bold whitespace-nowrap">
+                      <div className="text-[10px] font-bold whitespace-nowrap">
                         {getStrengthLabel(strength)}
                       </div>
-                    </div>
-                    
-                    {/* Mini Legend */}
-                    <div className="flex justify-between mt-2 text-xs text-slate-500">
-                      <span>Weak</span>
-                      <span>Moderate</span>
-                      <span className="text-emerald-400">Strong</span>
                     </div>
                   </div>
 
                   {/* Strategy Badge */}
-                  <div className="mt-2 text-xs text-slate-400 text-center">
-                    Strategy: <span className="text-emerald-400">{signal.strategy_used?.replace('TradingStrategy.', '')}</span>
+                  <div className="mt-1.5 text-[10px] text-slate-400 text-center">
+                    <span className="text-emerald-400">{signal.strategy_used?.replace('TradingStrategy.', '')}</span>
                   </div>
                 </div>
               </div>
