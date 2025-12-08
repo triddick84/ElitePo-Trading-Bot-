@@ -197,9 +197,9 @@ const CompactSignalPopup = ({ signals, onClose, onDismiss }) => {
                     </div>
                   </div>
 
-                  {/* Countdown Timer - Prominent with Entry Point Effects */}
+                  {/* Countdown Timer - Compact with Entry Point Effects */}
                   <div className={`
-                    text-center mb-3 p-4 rounded-lg relative
+                    text-center mb-2 p-2.5 rounded-lg relative
                     ${timer.isOptimal ? 'bg-gradient-to-r from-green-500/20 to-emerald-500/20 border-2 border-green-400 shadow-lg shadow-green-500/50' :
                       timer.timeLeft < 0 ? 'bg-red-500/10 border border-red-500/30' :
                       timer.timeLeft <= 5 ? 'bg-yellow-500/10 border border-yellow-500/30' :
@@ -214,7 +214,7 @@ const CompactSignalPopup = ({ signals, onClose, onDismiss }) => {
                     )}
                     
                     <div className="relative z-10">
-                      <div className={`text-5xl font-black tracking-wider ${
+                      <div className={`text-3xl font-black tracking-wider ${
                         timer.isOptimal ? 'text-green-400 animate-bounce' :
                         timer.timeLeft < 0 ? 'text-red-400' :
                         timer.timeLeft <= 5 ? 'text-yellow-400 animate-pulse' :
@@ -222,24 +222,24 @@ const CompactSignalPopup = ({ signals, onClose, onDismiss }) => {
                       }`}>
                         {formatTime(timer.timeLeft)}
                       </div>
-                      <div className={`text-sm font-bold mt-2 ${
+                      <div className={`text-xs font-bold mt-1 ${
                         timer.isOptimal ? 'text-green-300 animate-pulse' :
                         timer.timeLeft < 0 ? 'text-red-400' :
                         'text-slate-400'
                       }`}>
-                        {timer.isOptimal ? '🎯 ENTER TRADE NOW!' :
-                         timer.timeLeft < 0 ? '⏱️ Trade Window Closed' :
-                         timer.timeLeft <= 5 ? '⚡ Get Ready!' :
-                         '⏰ Time to Entry'}
+                        {timer.isOptimal ? '🎯 ENTER NOW!' :
+                         timer.timeLeft < 0 ? '⏱️ Closed' :
+                         timer.timeLeft <= 5 ? '⚡ Ready!' :
+                         '⏰ Entry'}
                       </div>
                     </div>
 
                     {/* Entry Point Visual Indicator */}
                     {timer.isOptimal && (
-                      <div className="mt-2 flex justify-center gap-1">
-                        <span className="inline-block w-2 h-2 bg-green-400 rounded-full animate-ping"></span>
-                        <span className="inline-block w-2 h-2 bg-green-400 rounded-full animate-ping" style={{animationDelay: '0.2s'}}></span>
-                        <span className="inline-block w-2 h-2 bg-green-400 rounded-full animate-ping" style={{animationDelay: '0.4s'}}></span>
+                      <div className="mt-1.5 flex justify-center gap-1">
+                        <span className="inline-block w-1.5 h-1.5 bg-green-400 rounded-full animate-ping"></span>
+                        <span className="inline-block w-1.5 h-1.5 bg-green-400 rounded-full animate-ping" style={{animationDelay: '0.2s'}}></span>
+                        <span className="inline-block w-1.5 h-1.5 bg-green-400 rounded-full animate-ping" style={{animationDelay: '0.4s'}}></span>
                       </div>
                     )}
                   </div>
