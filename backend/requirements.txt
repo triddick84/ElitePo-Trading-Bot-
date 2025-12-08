@@ -178,3 +178,5 @@ yfinance==0.2.66
 zipp==3.23.0
 TA-Lib==0.6.2
 git+https://github.com/ChipaDevTeam/PocketOptionAPI.git
+pocketoptionapi-async @ git+https://github.com/ChipaDevTeam/PocketOptionAPI.git@7bcff51f4ad0c768f7b6870ae8daeecd11ded134
+scikit-learn==1.7.2
