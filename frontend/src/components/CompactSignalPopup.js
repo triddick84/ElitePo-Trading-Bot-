@@ -115,25 +115,25 @@ const CompactSignalPopup = ({ signals, onClose, onDismiss }) => {
   }
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <Card className="w-full max-w-md bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 border-2 border-emerald-500/50 shadow-2xl shadow-emerald-500/20">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4 bg-black/70 backdrop-blur-sm">
+      <Card className="w-full max-w-sm bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 border-2 border-emerald-500/50 shadow-2xl shadow-emerald-500/20">
         {/* Compact Header */}
-        <div className="bg-gradient-to-r from-emerald-600 to-blue-600 p-3 flex items-center justify-between border-b border-emerald-500/30">
-          <div className="flex items-center gap-2">
-            <Zap className="w-5 h-5 text-white" />
-            <h2 className="text-lg font-bold text-white">Signal Ready</h2>
+        <div className="bg-gradient-to-r from-emerald-600 to-blue-600 p-2 flex items-center justify-between border-b border-emerald-500/30">
+          <div className="flex items-center gap-1.5">
+            <Zap className="w-4 h-4 text-white" />
+            <h2 className="text-base font-bold text-white">Signal Ready</h2>
           </div>
           <Button
             onClick={onClose}
             variant="ghost"
-            className="text-white hover:bg-white/20 rounded-full p-1 h-8 w-8"
+            className="text-white hover:bg-white/20 rounded-full p-1 h-7 w-7"
           >
-            <X className="w-4 h-4" />
+            <X className="w-3.5 h-3.5" />
           </Button>
         </div>
 
         {/* Compact Signals */}
-        <div className="p-4 space-y-3">
+        <div className="p-3 space-y-2">
           {signals.map((signal) => {
             const timer = signalTimers[signal.id] || { timeLeft: 0, isExpired: false, isOptimal: false, progress: 0 };
             const assetName = signal.symbol?.replace('_regular', '')?.replace('_OTC', '') || 'Unknown';
