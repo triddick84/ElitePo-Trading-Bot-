@@ -347,6 +347,8 @@ const LiveSignalsDisplay = ({
         setAutoForceTimer(null);
       }
       setAutoForceGenerateActive(false);
+      setAutoForceCountdown(0);
+      setAutoForceProgress(0);
       console.log('🛑 Auto Force Generate stopped');
     } else {
       // Start auto generation
@@ -368,9 +370,16 @@ const LiveSignalsDisplay = ({
         '30m': 1800000
       }[autoForceInterval] || 60000;
       
+      // Set initial countdown
+      setAutoForceCountdown(intervalMs / 1000);
+      setAutoForceProgress(0);
+      
       const timer = setInterval(() => {
         console.log(`🔄 Auto Force Generate triggered (${autoForceInterval} interval)`);
         handleForceGenerateSignal();
+        // Reset countdown after generation
+        setAutoForceCountdown(intervalMs / 1000);
+        setAutoForceProgress(0);
       }, intervalMs);
       
       setAutoForceTimer(timer);
