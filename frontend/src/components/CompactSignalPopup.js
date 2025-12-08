@@ -292,8 +292,8 @@ const CompactSignalPopup = ({ signals, onClose, onDismiss }) => {
         </div>
 
         {/* Footer Note */}
-        <div className="px-4 pb-3 text-xs text-slate-400 text-center">
-          Popup auto-closes at -10s • {signals.length} signal{signals.length > 1 ? 's' : ''}
+        <div className="px-3 pb-2 text-[10px] text-slate-400 text-center">
+          Auto-closes at -10s • {signals.length} signal{signals.length > 1 ? 's' : ''}
         </div>
       </Card>
     </div>
