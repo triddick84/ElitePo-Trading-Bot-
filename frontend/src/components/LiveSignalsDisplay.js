@@ -610,9 +610,25 @@ const LiveSignalsDisplay = ({
           </div>
 
           {autoForceGenerateActive && (
-            <div className="mt-3 p-2 bg-indigo-500/20 border border-indigo-400/30 rounded text-center">
-              <div className="text-indigo-400 text-sm font-medium">
-                🔄 Auto-generating signals every {autoForceInterval}
+            <div className="mt-3 space-y-2">
+              {/* Countdown Timer Display */}
+              <div className="p-3 bg-gradient-to-r from-indigo-600/20 to-purple-600/20 border-2 border-indigo-400/40 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-slate-300 text-sm font-medium">⏱️ Next Signal In:</span>
+                  <span className="text-2xl font-bold text-indigo-300 tabular-nums">
+                    {Math.floor(autoForceCountdown / 60)}:{String(Math.floor(autoForceCountdown % 60)).padStart(2, '0')}
+                  </span>
+                </div>
+                {/* Progress Bar */}
+                <div className="w-full bg-slate-700 rounded-full h-2 overflow-hidden">
+                  <div 
+                    className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-1000 ease-linear"
+                    style={{ width: `${autoForceProgress}%` }}
+                  />
+                </div>
+                <div className="text-center mt-2 text-xs text-indigo-400">
+                  🔄 Auto-generating every {autoForceInterval}
+                </div>
               </div>
             </div>
           )}
