@@ -165,15 +165,15 @@ class SignalValidator:
         Uses real-time market data hub or historical data
         """
         try:
-            # Try to get from real-time market data hub
-            from realtime_market_data_hub import realtime_market_data_hub
+            # Try to get from real-time market data hub from server.py
+            from server import realtime_market_hub
             
             # Clean symbol (remove _OTC or _regular suffix)
             clean_symbol = symbol.replace('_OTC', '').replace('_regular', '')
             
             # Get historical candles around the target time
             # We need data from target time ± 5 minutes
-            candles = await realtime_market_data_hub.get_historical_candles(
+            candles = await realtime_market_hub.get_historical_candles(
                 clean_symbol,
                 interval='1m',
                 limit=10
