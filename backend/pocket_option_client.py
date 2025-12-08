@@ -41,10 +41,9 @@ class PocketOptionClient:
             return
         
         # Initialize API client
-        self.client = PocketOptionAsync(
+        self.client = AsyncPocketOptionClient(
             ssid=self.ssid,
-            is_demo=self.is_demo,
-            enable_logging=True
+            demo=self.is_demo
         )
         
         self.connected = False
