@@ -2583,6 +2583,214 @@ async def get_current_adjustments():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ==================== POCKET OPTION API ENDPOINTS ====================
+
+@api_router.get("/pocket-option/status")
+async def get_pocket_option_status():
+    """
+    Check Pocket Option API connection status
+    """
+    try:
+        client = await get_pocket_option_client(is_demo=True)
+        if not client:
+            return {
+                "success": False,
+                "connected": False,
+                "message": "Pocket Option credentials not configured"
+            }
+        
+        health = await client.health_check()
+        return {
+            "success": True,
+            **health
+        }
+    except Exception as e:
+        logger.error(f"Error checking Pocket Option status: {e}")
+        return {
+            "success": False,
+            "connected": False,
+            "error": str(e)
+        }
+
+
+@api_router.get("/pocket-option/balance")
+async def get_pocket_option_balance():
+    """Get current Pocket Option account balance"""
+    try:
+        client = await get_pocket_option_client(is_demo=True)
+        if not client or not client.is_connected():
+            raise HTTPException(status_code=503, detail="Pocket Option not connected")
+        
+        balance = await client.get_balance()
+        return {
+            "success": True,
+            "balance": balance,
+            "currency": "USD",
+            "account_type": "DEMO" if client.is_demo else "LIVE"
+        }
+    except Exception as e:
+        logger.error(f"Error getting balance: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/pocket-option/order")
+async def place_pocket_option_order(
+    asset: str,
+    direction: str,
+    amount: float,
+    duration: int
+):
+    """
+    Place a binary options order on Pocket Option
+    
+    Args:
+        asset: Asset symbol (e.g., EURUSD)
+        direction: BUY/CALL or SELL/PUT
+        amount: Investment amount
+        duration: Trade duration in seconds
+    """
+    try:
+        client = await get_pocket_option_client(is_demo=True)
+        if not client or not client.is_connected():
+            raise HTTPException(status_code=503, detail="Pocket Option not connected")
+        
+        result = await client.place_order(asset, direction, amount, duration)
+        
+        if 'error' in result:
+            raise HTTPException(status_code=400, detail=result['error'])
+        
+        return {
+            "success": True,
+            **result
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error placing order: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/pocket-option/candles/{asset}")
+async def get_pocket_option_candles(
+    asset: str,
+    timeframe: int = 60,
+    count: int = 100
+):
+    """
+    Get real-time candles from Pocket Option
+    
+    Args:
+        asset: Asset symbol
+        timeframe: Timeframe in seconds (60, 300, 900, 3600)
+        count: Number of candles to retrieve
+    """
+    try:
+        client = await get_pocket_option_client(is_demo=True)
+        if not client or not client.is_connected():
+            raise HTTPException(status_code=503, detail="Pocket Option not connected")
+        
+        candles = await client.get_candles(asset, timeframe, count)
+        
+        return {
+            "success": True,
+            "asset": asset,
+            "timeframe": timeframe,
+            "count": len(candles),
+            "candles": candles
+        }
+    except Exception as e:
+        logger.error(f"Error getting candles: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== MULTI-TIMEFRAME ANALYSIS ENDPOINTS ====================
+
+@api_router.post("/analysis/multi-timeframe")
+async def analyze_multi_timeframe(asset: str):
+    """
+    Perform multi-timeframe analysis for an asset
+    
+    Args:
+        asset: Asset symbol (e.g., EURUSD)
+    """
+    try:
+        client = await get_pocket_option_client(is_demo=True)
+        if not client or not client.is_connected():
+            raise HTTPException(status_code=503, detail="Pocket Option not connected")
+        
+        # Fetch candles for multiple timeframes
+        timeframes = {
+            '1m': 60,
+            '5m': 300,
+            '15m': 900,
+            '1h': 3600
+        }
+        
+        candles_data = {}
+        for tf_label, tf_seconds in timeframes.items():
+            candles = await client.get_candles(asset, tf_seconds, 100)
+            candles_data[tf_label] = candles
+        
+        # Perform analysis
+        analysis = await multi_timeframe_analyzer.analyze_multi_timeframe(candles_data)
+        
+        return {
+            "success": True,
+            "asset": asset,
+            **analysis
+        }
+    except Exception as e:
+        logger.error(f"Error in multi-timeframe analysis: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== LSTM AI PREDICTOR ENDPOINTS ====================
+
+@api_router.post("/ai/lstm/predict")
+async def lstm_predict(asset: str, timeframe: int = 60):
+    """
+    Get LSTM AI prediction for price direction
+    
+    Args:
+        asset: Asset symbol
+        timeframe: Timeframe in seconds
+    """
+    try:
+        client = await get_pocket_option_client(is_demo=True)
+        if not client or not client.is_connected():
+            raise HTTPException(status_code=503, detail="Pocket Option not connected")
+        
+        # Get candles
+        candles = await client.get_candles(asset, timeframe, 100)
+        
+        if not candles:
+            raise HTTPException(status_code=404, detail="No candle data available")
+        
+        # Get LSTM prediction
+        prediction = lstm_predictor.predict(candles)
+        
+        return {
+            "success": True,
+            "asset": asset,
+            "timeframe": timeframe,
+            **prediction
+        }
+    except Exception as e:
+        logger.error(f"Error in LSTM prediction: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/ai/lstm/status")
+async def get_lstm_status():
+    """Get LSTM model training status"""
+    return {
+        "success": True,
+        "is_trained": lstm_predictor.is_trained,
+        "model_path": lstm_predictor.model_path,
+        "sequence_length": lstm_predictor.sequence_length
+    }
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
