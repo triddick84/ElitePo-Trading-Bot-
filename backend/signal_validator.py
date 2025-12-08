@@ -205,7 +205,7 @@ class SignalValidator:
             
             # Fallback: Use current price if we can't get historical
             logger.warning(f"⚠️ Using fallback price method for {symbol}")
-            current_data = await realtime_market_data_hub.get_latest_price(clean_symbol)
+            current_data = await realtime_market_hub.get_realtime_price(clean_symbol)
             if current_data:
                 return current_data.get('price')
             
