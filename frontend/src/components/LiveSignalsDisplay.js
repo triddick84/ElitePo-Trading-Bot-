@@ -27,6 +27,8 @@ const LiveSignalsDisplay = ({
   const [autoForceGenerateActive, setAutoForceGenerateActive] = useState(false);
   const [autoForceInterval, setAutoForceInterval] = useState('1m'); // Default 1 minute
   const [autoForceTimer, setAutoForceTimer] = useState(null);
+  const [autoForceCountdown, setAutoForceCountdown] = useState(0);
+  const [autoForceProgress, setAutoForceProgress] = useState(0);
 
   // Fetch configuration on mount
   useEffect(() => {
