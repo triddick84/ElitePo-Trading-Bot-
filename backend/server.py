@@ -2586,6 +2586,46 @@ async def get_current_adjustments():
 
 # ==================== POCKET OPTION API ENDPOINTS ====================
 
+@api_router.post("/pocket-option/auto-login")
+async def pocket_option_auto_login():
+    """
+    Automatically login to Pocket Option and extract SSID
+    Uses Selenium to automate browser login
+    """
+    try:
+        logger.info("🔐 Starting auto-login to Pocket Option...")
+        
+        # Run in executor to avoid blocking
+        import asyncio
+        loop = asyncio.get_event_loop()
+        ssid = await loop.run_in_executor(None, auto_login_and_get_ssid)
+        
+        if ssid:
+            # Update the global client with new SSID
+            global pocket_option_client
+            pocket_option_client = None  # Reset so it creates new instance
+            
+            return {
+                "success": True,
+                "message": "Successfully logged in and extracted SSID",
+                "ssid_preview": f"{ssid[:20]}...",
+                "ssid_length": len(ssid)
+            }
+        else:
+            return {
+                "success": False,
+                "error": "Failed to extract SSID - check credentials or reCAPTCHA"
+            }
+    except Exception as e:
+        logger.error(f"Error during auto-login: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
 @api_router.get("/pocket-option/status")
 async def get_pocket_option_status():
     """
