@@ -35,9 +35,11 @@ class PocketOptionV2:
     
     # WebSocket URLs for different regions
     WS_URLS = {
-        'demo': 'wss://demo-api-eu.po.market/socket.io/?EIO=4&transport=websocket',
+        'demo': 'wss://api-us-north.po.market/socket.io/?EIO=4&transport=websocket',
+        'demo_eu': 'wss://demo-api-eu.po.market/socket.io/?EIO=4&transport=websocket',
         'demo2': 'wss://try-demo-eu.po.market/socket.io/?EIO=4&transport=websocket',
-        'live': 'wss://api-eu.po.market/socket.io/?EIO=4&transport=websocket'
+        'live': 'wss://api-eu.po.market/socket.io/?EIO=4&transport=websocket',
+        'live_us': 'wss://api-us-north.po.market/socket.io/?EIO=4&transport=websocket'
     }
     
     def __init__(self, ssid: str, is_demo: bool = True):
