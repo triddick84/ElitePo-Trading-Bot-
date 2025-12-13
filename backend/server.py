@@ -2840,7 +2840,8 @@ async def get_lstm_status():
 async def generate_advanced_signal(
     asset: str,
     timeframe: int = 60,
-    strategy: str = 'ENSEMBLE'
+    strategy: str = 'ENSEMBLE',
+    invert_signals: bool = None
 ):
     """
     Generate signal using advanced strategies from top-performing bots
@@ -2849,11 +2850,17 @@ async def generate_advanced_signal(
         asset: Asset symbol
         timeframe: Timeframe in seconds  
         strategy: Strategy type ('TREND_MOMENTUM', 'VOLATILITY', 'ML', 'MULTI', 'ENSEMBLE')
+        invert_signals: Invert signal direction (optional, uses config if not provided)
     
     Returns:
         Advanced signal with multiple strategy analysis
     """
     try:
+        # Get invert_signals from config if not provided
+        if invert_signals is None:
+            config_doc = await db.trading_configurations.find_one({"user_id": "default_user"})
+            invert_signals = config_doc.get('invert_signals', False) if config_doc else False
+        
         # Try PocketOptionV2 first (if connected)
         client = await get_pocket_option_v2_client()
         
@@ -2872,7 +2879,7 @@ async def generate_advanced_signal(
             raise HTTPException(status_code=404, detail="No candle data available")
         
         # Generate signal with advanced strategies
-        signal = advanced_signal_generator.generate_signal(candles, strategy)
+        signal = advanced_signal_generator.generate_signal(candles, strategy, invert_signals)
         
         return {
             "success": True,
