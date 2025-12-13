@@ -2835,6 +2835,81 @@ async def get_lstm_status():
     }
 
 
+# ==================== ENHANCED SUPPORT & RESISTANCE ENDPOINTS ====================
+
+@api_router.post("/analysis/support-resistance/enhanced")
+async def analyze_sr_levels(asset: str, timeframe: int = 60):
+    """
+    Advanced Support & Resistance analysis with bounce and reversal detection
+    
+    Args:
+        asset: Asset symbol
+        timeframe: Timeframe in seconds
+    
+    Returns:
+        Complete S/R analysis with signals
+    """
+    try:
+        # Get candles
+        client = await get_pocket_option_v2_client()
+        
+        if not client or not client.is_connected():
+            candles = await realtime_market_hub.get_historical_candles(
+                asset.replace('_otc', '').replace('_regular', ''),
+                interval='1m',
+                limit=200
+            )
+        else:
+            candles = await client.get_candles(asset, timeframe, 200)
+        
+        if not candles or len(candles) < 20:
+            raise HTTPException(status_code=404, detail="Insufficient candle data")
+        
+        # Perform enhanced S/R analysis
+        analysis = enhanced_sr_analyzer.analyze(candles)
+        
+        return {
+            "success": True,
+            "asset": asset,
+            "timeframe": timeframe,
+            **analysis
+        }
+    
+    except Exception as e:
+        logger.error(f"Enhanced S/R analysis error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/analysis/support-resistance/levels/{asset}")
+async def get_sr_levels(asset: str):
+    """Quick S/R levels summary"""
+    try:
+        candles = await realtime_market_hub.get_historical_candles(
+            asset.replace('_otc', '').replace('_regular', ''),
+            interval='1m',
+            limit=100
+        )
+        
+        if not candles:
+            raise HTTPException(status_code=404, detail="No candle data")
+        
+        analysis = enhanced_sr_analyzer.analyze(candles)
+        
+        return {
+            "success": True,
+            "asset": asset,
+            "current_price": analysis['current_price'],
+            "nearest_support": analysis['nearest_support'],
+            "nearest_resistance": analysis['nearest_resistance'],
+            "levels": analysis['levels'][:5],  # Top 5 levels
+            "summary": analysis['summary']
+        }
+    
+    except Exception as e:
+        logger.error(f"S/R levels error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ==================== ADVANCED SIGNAL GENERATOR ENDPOINTS ====================
 
 @api_router.post("/signals/advanced/generate")
