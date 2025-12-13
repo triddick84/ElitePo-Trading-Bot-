@@ -521,13 +521,22 @@ class AdvancedSignalGenerator:
             'bearish_score': bearish_score
         }
     
-    def generate_signal(self, candles: List[Dict], strategy: str = 'ENSEMBLE') -> Dict:
+    def _invert_direction(self, direction: str) -> str:
+        """Invert signal direction"""
+        if direction == 'CALL' or direction == 'BUY':
+            return 'PUT'
+        elif direction == 'PUT' or direction == 'SELL':
+            return 'CALL'
+        return direction
+    
+    def generate_signal(self, candles: List[Dict], strategy: str = 'ENSEMBLE', invert_signals: bool = False) -> Dict:
         """
         Generate trading signal using specified strategy
         
         Args:
             candles: List of OHLCV candles
             strategy: Strategy to use ('TREND_MOMENTUM', 'VOLATILITY', 'ML', 'MULTI', 'ENSEMBLE')
+            invert_signals: Invert the signal direction (CALL↔PUT)
         
         Returns:
             Comprehensive signal dict
