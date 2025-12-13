@@ -34,6 +34,7 @@ from ai_learning_system import ai_learning_system
 from pocket_option_client import get_pocket_option_client, pocket_option_client
 from multi_timeframe_analyzer import multi_timeframe_analyzer
 from ai_lstm_predictor import lstm_predictor
+from pocket_option_auth import auto_login_and_get_ssid
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
