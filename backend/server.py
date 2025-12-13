@@ -37,6 +37,7 @@ from ai_lstm_predictor import lstm_predictor
 from pocket_option_auth import auto_login_and_get_ssid
 from advanced_signal_generator import advanced_signal_generator
 from pocket_option_v2 import get_pocket_option_v2_client
+from enhanced_sr_analyzer import enhanced_sr_analyzer
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
