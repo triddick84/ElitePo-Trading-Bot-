@@ -695,9 +695,9 @@ class TradingBotService:
             # Register callback for signal generation
             self.candle_scheduler.set_signal_callback(self._generate_signals_on_candle_formation)
             
-            # Start monitoring configured timeframes
+            # Start monitoring configured expirations
             await self.candle_scheduler.start(
-                timeframes=self.config.selected_timeframes,
+                timeframes=self.config.selected_expirations,
                 selected_assets=self.config.selected_assets
             )
             
@@ -707,7 +707,7 @@ class TradingBotService:
             return {
                 "success": True,
                 "message": "Candle synchronization enabled",
-                "timeframes": self.config.selected_timeframes,
+                "timeframes": self.config.selected_expirations,
                 "assets_count": len(self.config.selected_assets)
             }
             
