@@ -586,23 +586,31 @@ class AdvancedSignalGenerator:
             else:
                 final_direction = 'NEUTRAL'
             
+            # Apply inversion if requested
+            if invert_signals and final_direction != 'NEUTRAL':
+                final_direction = self._invert_direction(final_direction)
+                reason_suffix = ' (INVERTED)'
+            else:
+                reason_suffix = ''
+            
             return {
                 'direction': final_direction,
                 'confidence': avg_confidence,
-                'reason': f'{call_votes} CALL votes, {put_votes} PUT votes from 4 strategies',
+                'reason': f'{call_votes} CALL votes, {put_votes} PUT votes from 4 strategies{reason_suffix}',
                 'strategy': 'ENSEMBLE',
                 'strategies': strategies,
+                'inverted': invert_signals,
                 'timestamp': datetime.now(timezone.utc).isoformat()
             }
         
         elif strategy == 'TREND_MOMENTUM':
-            return {**self.strategy_trend_momentum(df), 'timestamp': datetime.now(timezone.utc).isoformat()}
+            result = {**self.strategy_trend_momentum(df), 'timestamp': datetime.now(timezone.utc).isoformat()}
         elif strategy == 'VOLATILITY':
-            return {**self.strategy_volatility_breakout(df), 'timestamp': datetime.now(timezone.utc).isoformat()}
+            result = {**self.strategy_volatility_breakout(df), 'timestamp': datetime.now(timezone.utc).isoformat()}
         elif strategy == 'ML':
-            return {**self.strategy_ml_prediction(candles), 'timestamp': datetime.now(timezone.utc).isoformat()}
+            result = {**self.strategy_ml_prediction(candles), 'timestamp': datetime.now(timezone.utc).isoformat()}
         elif strategy == 'MULTI':
-            return {**self.strategy_multi_indicator_combo(df), 'timestamp': datetime.now(timezone.utc).isoformat()}
+            result = {**self.strategy_multi_indicator_combo(df), 'timestamp': datetime.now(timezone.utc).isoformat()}
         else:
             return {
                 'direction': 'NEUTRAL',
@@ -610,6 +618,16 @@ class AdvancedSignalGenerator:
                 'reason': f'Unknown strategy: {strategy}',
                 'timestamp': datetime.now(timezone.utc).isoformat()
             }
+        
+        # Apply inversion for single strategies
+        if invert_signals and result.get('direction') != 'NEUTRAL':
+            result['direction'] = self._invert_direction(result['direction'])
+            result['reason'] = result.get('reason', '') + ' (INVERTED)'
+            result['inverted'] = True
+        else:
+            result['inverted'] = False
+        
+        return result
 
 
 # Global instance
