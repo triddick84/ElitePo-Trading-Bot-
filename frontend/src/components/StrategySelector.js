@@ -258,6 +258,7 @@ const StrategySelector = ({ onStrategySelect, onAutoGenerateToggle }) => {
                       <span>{strategy.name}</span>
                       <span className="text-xs text-green-400">({strategy.accuracy})</span>
                       {strategy.recommended && <span className="text-xs text-yellow-400">🔥 Recommended</span>}
+                      {strategy.note && <span className="text-xs text-blue-400">{strategy.note}</span>}
                     </div>
                   </SelectItem>
                 ))}
