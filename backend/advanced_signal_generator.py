@@ -14,8 +14,15 @@ from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timezone
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
+
+# Try to import sklearn, use fallback if not available
+try:
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.model_selection import train_test_split
+    SKLEARN_AVAILABLE = True
+except ImportError:
+    SKLEARN_AVAILABLE = False
+    logger.warning("⚠️ sklearn not available - ML predictions will use fallback mode")
 
 logger = logging.getLogger(__name__)
 
