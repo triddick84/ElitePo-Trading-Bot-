@@ -42,15 +42,17 @@ class PocketOptionV2:
         'live_us': 'wss://api-us-north.po.market/socket.io/?EIO=4&transport=websocket'
     }
     
-    def __init__(self, ssid: str, is_demo: bool = True):
+    def __init__(self, ssid: str, uid: int = None, is_demo: bool = True):
         """
-        Initialize client with SSID
+        Initialize client with SSID and UID
         
         Args:
-            ssid: Session ID (just the token part, e.g., 'ALAtqhJkRG4FAQwt4')
+            ssid: Session ID (e.g., 'A4zP7dZSXxYCq0X5z')
+            uid: User ID (e.g., 53953294)
             is_demo: Use demo or live account
         """
         self.ssid = ssid
+        self.uid = uid or 0
         self.is_demo = is_demo
         self.ws = None
         self.connected = False
@@ -85,11 +87,11 @@ class PocketOptionV2:
             conn_msg = await self.ws.recv()
             logger.info(f"📨 Connection: {conn_msg}")
             
-            # Step 4: Send auth message
+            # Step 4: Send auth message with exact format from user
             auth_payload = {
                 "session": self.ssid,
                 "isDemo": 1 if self.is_demo else 0,
-                "uid": 0,  # Will be updated after auth
+                "uid": self.uid,
                 "platform": 1
             }
             
@@ -262,12 +264,13 @@ class PocketOptionV2:
 pocket_option_v2_client = None
 
 
-async def get_pocket_option_v2_client(ssid: str = None, is_demo: bool = True) -> Optional[PocketOptionV2]:
+async def get_pocket_option_v2_client(ssid: str = None, uid: int = None, is_demo: bool = True) -> Optional[PocketOptionV2]:
     """
     Get or create PocketOptionV2 client
     
     Args:
         ssid: Session ID (optional, uses env if not provided)
+        uid: User ID (optional, uses env if not provided)
         is_demo: Demo or live account
     
     Returns:
@@ -276,13 +279,14 @@ async def get_pocket_option_v2_client(ssid: str = None, is_demo: bool = True) ->
     global pocket_option_v2_client
     
     ssid = ssid or os.getenv('POCKET_OPTION_SSID')
+    uid = uid or int(os.getenv('POCKET_OPTION_UID', '0'))
     
     if not ssid:
         logger.error("❌ No SSID provided")
         return None
     
     if pocket_option_v2_client is None or not pocket_option_v2_client.is_connected():
-        pocket_option_v2_client = PocketOptionV2(ssid, is_demo)
+        pocket_option_v2_client = PocketOptionV2(ssid, uid, is_demo)
         await pocket_option_v2_client.connect()
     
     return pocket_option_v2_client
@@ -291,9 +295,10 @@ async def get_pocket_option_v2_client(ssid: str = None, is_demo: bool = True) ->
 # Test function
 async def test_connection():
     """Test the connection"""
-    ssid = os.getenv('POCKET_OPTION_SSID', 'ALAtqhJkRG4FAQwt4')
+    ssid = os.getenv('POCKET_OPTION_SSID', 'A4zP7dZSXxYCq0X5z')
+    uid = int(os.getenv('POCKET_OPTION_UID', '53953294'))
     
-    client = PocketOptionV2(ssid, is_demo=True)
+    client = PocketOptionV2(ssid, uid, is_demo=True)
     
     if await client.connect():
         print("✅ Connected!")
