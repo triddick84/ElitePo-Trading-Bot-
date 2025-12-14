@@ -33,6 +33,7 @@ import {
 import { toast } from 'sonner';
 import MarketAssetSelector from './MarketAssetSelector';
 import ImprovedSignalPopup from './ImprovedSignalPopup';
+import LatencyAdjustment from './LatencyAdjustment';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -458,8 +459,8 @@ const DashboardRestructured = ({
         </Card>
       </div>
 
-      {/* Bottom Section: Candle Sync & Strategy Display */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Bottom Section: Candle Sync, Strategy Display & Latency */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Candle Synchronization */}
         <Card className="bg-slate-800/50 border-purple-500/30 backdrop-blur-sm p-6">
           <div className="flex items-center justify-between mb-4">
@@ -533,6 +534,11 @@ const DashboardRestructured = ({
             )}
           </div>
         </Card>
+
+        {/* Signal Timing/Latency Adjustment */}
+        <div className="lg:col-span-1">
+          <LatencyAdjustment compact={true} />
+        </div>
       </div>
     </div>
   );
