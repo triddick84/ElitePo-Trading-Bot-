@@ -247,6 +247,18 @@ const StrategySelector = ({ onStrategySelect, onAutoGenerateToggle }) => {
             <Label className="text-white font-semibold mb-2 block">
               2. Select Strategy for {timeframes.find(t => t.value === selectedTimeframe)?.label}
             </Label>
+            {selectedTimeframe === '5s' && (
+              <div className="mb-3 bg-blue-900/20 border border-blue-600/50 rounded-lg p-3">
+                <div className="flex items-center gap-2 text-blue-300 text-sm">
+                  <Clock className="w-4 h-4" />
+                  <span className="font-semibold">5-Second Timeframe Notice:</span>
+                </div>
+                <p className="text-blue-200 text-xs mt-1">
+                  Signals for 5-second trades include a 10-second processing delay for improved stability and accuracy.
+                  This prevents false signals in ultra-fast timeframes.
+                </p>
+              </div>
+            )}
             <Select value={selectedStrategy} onValueChange={handleStrategyChange}>
               <SelectTrigger className="w-full bg-gray-800/50 border-gray-700 text-white">
                 <SelectValue placeholder="Choose strategy..." />
