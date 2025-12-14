@@ -42,8 +42,8 @@ const StrategySelector = ({ onStrategySelect, onAutoGenerateToggle }) => {
   // Strategy configurations by timeframe
   const strategiesByTimeframe = {
     '5s': [
-      { value: 'ultra_v2_5s', name: 'Ultra Precision 5s V2', accuracy: '90%+' },
-      { value: 'reversal_5s', name: '5s Reversal Strategy', accuracy: '85%+' }
+      { value: 'ultra_v2_5s', name: 'Ultra Precision 5s V2', accuracy: '90%+', note: '⏳ 10s latency applied' },
+      { value: 'reversal_5s', name: '5s Reversal Strategy', accuracy: '85%+', note: '⏳ 10s latency applied' }
     ],
     '15s': [
       { value: 'fractal_15s', name: '15s Fractal Strategy', accuracy: '85%+' }
