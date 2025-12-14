@@ -521,6 +521,52 @@ class ForceSignalGenerator:
             logger.info(f"🎯 USER SELECTED STRATEGY for {timeframe_normalized}: '{selected_strategy_id}'")
             logger.info(f"📋 All selected strategies: {selected_strategies}")
             
+            # ===== NEW STRATEGY REGISTRY INTEGRATION =====
+            # Try to execute from strategy registry first
+            try:
+                if selected_strategy_id != 'default':
+                    logger.info(f"🔍 Checking strategy registry for '{selected_strategy_id}'")
+                    
+                    # Get market data for strategy execution
+                    from real_market_data_service import real_market_data_service
+                    market_data_list = await real_market_data_service.get_historical_data(symbol, interval='1m', periods=100)
+                    
+                    if market_data_list and len(market_data_list) >= 30:
+                        # Convert to DataFrame
+                        df = pd.DataFrame([{
+                            'open': md.open_price,
+                            'high': md.high_price,
+                            'low': md.low_price,
+                            'close': md.close_price,
+                            'volume': md.volume if hasattr(md, 'volume') else 0
+                        } for md in market_data_list])
+                        
+                        # Try to execute from registry
+                        result = await loop.run_in_executor(
+                            self.executor,
+                            strategy_registry.execute_strategy,
+                            selected_strategy_id,
+                            df
+                        )
+                        
+                        if result and result.get('direction') != 'NEUTRAL':
+                            logger.info(f"✅ Strategy Registry: {selected_strategy_id} → {result['direction']} ({result['confidence']:.1f}%)")
+                            
+                            # Apply 10s latency for 5s timeframe
+                            if timeframe in ['5s', '5sec', '5 sec']:
+                                logger.info(f"⏳ Applying 10-second latency for 5s timeframe signal stability...")
+                                await asyncio.sleep(10)
+                            
+                            result['timeframe'] = timeframe
+                            result['chart_type'] = chart_type
+                            result['selected_strategy'] = True
+                            return result
+                        else:
+                            logger.info(f"⚠️ Strategy registry returned NEUTRAL or not found for '{selected_strategy_id}'")
+            except Exception as e:
+                logger.warning(f"⚠️ Strategy registry execution failed: {e}")
+            # ===== END REGISTRY INTEGRATION =====
+            
             # Route to appropriate strategy based on timeframe
             if timeframe in ['5s', '5sec', '5 sec']:
                 # APPLY SELECTED STRATEGY FROM STRATEGY SELECTOR
