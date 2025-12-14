@@ -22,7 +22,8 @@ import {
   BarChart, 
   Sliders,
   Info,
-  CheckCircle
+  CheckCircle,
+  Save
 } from 'lucide-react';
 import { toast } from 'sonner';
 import SignalSetupGuideModal from './SignalSetupGuideModal';
