@@ -858,6 +858,93 @@ async def start_auto_signal_generation():
         logging.error(f"Error starting auto signal generation: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@api_router.post("/signals/auto-generate/enhanced")
+async def enhanced_auto_generate(
+    scan_all_assets: bool = False,
+    selected_assets: Optional[List[str]] = None,
+    min_payout: float = 80.0,
+    min_accuracy: float = 75.0,
+    max_signals: int = 5
+):
+    """
+    Enhanced auto-generate with asset scanning and filtering
+    
+    Args:
+        scan_all_assets: If True, scan all available assets
+        selected_assets: List of specific assets to scan (used if scan_all_assets=False)
+        min_payout: Minimum payout percentage to consider
+        min_accuracy: Minimum accuracy threshold for signal generation
+        max_signals: Maximum number of signals to generate
+    """
+    try:
+        from pocket_option_assets import pocket_option_assets
+        
+        # Determine which assets to scan
+        assets_to_scan = []
+        if scan_all_assets:
+            # Get all assets from pocket_option_assets
+            all_assets = pocket_option_assets.get_all_assets()
+            # Filter by payout
+            assets_to_scan = [
+                asset['id'] for asset in all_assets 
+                if asset.get('payout', 0) >= min_payout
+            ]
+        elif selected_assets:
+            assets_to_scan = selected_assets
+        else:
+            # Use configured assets
+            config_doc = await db.trading_configurations.find_one({"user_id": "default_user"})
+            assets_to_scan = config_doc.get("selected_assets", []) if config_doc else []
+        
+        if not assets_to_scan:
+            return {
+                "success": False,
+                "message": "No assets to scan",
+                "signals": []
+            }
+        
+        # Generate signals for each asset
+        generated_signals = []
+        for asset_id in assets_to_scan[:20]:  # Limit to 20 assets to avoid timeout
+            try:
+                # Parse asset (format: SYMBOL_market)
+                if '_' in asset_id:
+                    symbol, market_type = asset_id.rsplit('_', 1)
+                else:
+                    symbol, market_type = asset_id, 'regular'
+                
+                # Generate signal for this asset
+                signal_result = await force_signal_generator.generate_force_signal(
+                    asset_symbol=symbol,
+                    market_type=market_type,
+                    selected_timeframe='1m',
+                    selected_strategy='enhanced_rsi_bb_volume',
+                    force_signal=False  # Don't force, only generate if conditions met
+                )
+                
+                # Check if signal meets accuracy threshold
+                if signal_result.get('signal') and signal_result['signal'].get('probability', 0) >= min_accuracy:
+                    generated_signals.append(signal_result['signal'])
+                    
+                    # Stop if we've reached max signals
+                    if len(generated_signals) >= max_signals:
+                        break
+                        
+            except Exception as e:
+                logging.error(f"Error generating signal for {asset_id}: {e}")
+                continue
+        
+        return {
+            "success": True,
+            "message": f"Generated {len(generated_signals)} signals from {len(assets_to_scan)} assets scanned",
+            "signals": generated_signals,
+            "assets_scanned": len(assets_to_scan)
+        }
+        
+    except Exception as e:
+        logging.error(f"Error in enhanced auto-generate: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @api_router.post("/signals/auto-generate/stop")
 async def stop_auto_signal_generation():
     """Stop automated signal generation mode"""
