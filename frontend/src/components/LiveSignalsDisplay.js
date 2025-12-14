@@ -856,6 +856,25 @@ const LiveSignalsDisplay = ({
           </div>
         </div>
       </Card>
+      
+      {/* Setup Guide Modal */}
+      {showSetupGuideModal && pendingSignal && (
+        <SignalSetupGuideModal
+          signal={pendingSignal}
+          onClose={() => {
+            setShowSetupGuideModal(false);
+            setPendingSignal(null);
+          }}
+          onConfirm={(confirmedSignal) => {
+            console.log('✅ Signal setup confirmed, ready to trade:', confirmedSignal.id);
+            toast.success('Setup confirmed! Execute trade on Pocket Option now.');
+            // Optionally trigger auto-execution here if enabled
+            if (onSignalExecute) {
+              onSignalExecute(confirmedSignal);
+            }
+          }}
+        />
+      )}
     </div>
   );
 };
