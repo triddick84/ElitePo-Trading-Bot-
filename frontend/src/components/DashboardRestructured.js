@@ -282,9 +282,9 @@ const DashboardRestructured = ({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Trading Expirations */}
             <div className="space-y-2">
-              <Label className="text-purple-300">Trading Expirations</Label>
+              <Label className="text-purple-300">Trading Expirations / Timeframes</Label>
               <div className="flex flex-wrap gap-2">
-                {['30s', '1m', '2m', '3m', '5m', '15m'].map(exp => (
+                {['5s', '15s', '30s', '1m', '2m', '3m', '5m', '15m', '30m', '1h'].map(exp => (
                   <Button
                     key={exp}
                     size="sm"
@@ -303,6 +303,11 @@ const DashboardRestructured = ({
                   </Button>
                 ))}
               </div>
+              {config.selected_expirations.includes('5s') && (
+                <div className="mt-2 text-xs text-blue-300 bg-blue-900/20 border border-blue-600/30 rounded px-2 py-1">
+                  ⏳ Note: 5-second signals include 10-second built-in latency for stability
+                </div>
+              )}
             </div>
 
             {/* Market Assets Selection */}
