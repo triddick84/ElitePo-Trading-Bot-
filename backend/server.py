@@ -33,7 +33,12 @@ from signal_validator import signal_validator
 from ai_learning_system import ai_learning_system
 from pocket_option_client import get_pocket_option_client, pocket_option_client
 from multi_timeframe_analyzer import multi_timeframe_analyzer
-from ai_lstm_predictor import lstm_predictor
+# Import LSTM predictor (optional - will use fallback if ML not available)
+try:
+    from ai_lstm_predictor import lstm_predictor
+except ImportError as e:
+    logger.warning(f"LSTM predictor not available: {e}")
+    lstm_predictor = None
 from pocket_option_auth import auto_login_and_get_ssid
 from advanced_signal_generator import advanced_signal_generator
 from pocket_option_v2 import get_pocket_option_v2_client
