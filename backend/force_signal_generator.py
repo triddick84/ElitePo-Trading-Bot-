@@ -2728,6 +2728,61 @@ class ForceSignalGenerator:
             return False
             
         return body / full_range < 0.1
+    
+    def _get_market_data_sync(self, symbol: str, timeframe: str = '1m') -> Optional[pd.DataFrame]:
+        """
+        Synchronously fetch market data for strategy analysis
+        
+        Args:
+            symbol: Trading symbol
+            timeframe: Data timeframe (1m, 5m, etc.)
+        
+        Returns:
+            DataFrame with OHLCV data or None
+        """
+        try:
+            # Convert symbol for yfinance
+            yf_symbol = symbol
+            if '_OTC' in symbol or '_regular' in symbol:
+                yf_symbol = symbol.replace('_OTC', '').replace('_otc', '').replace('_regular', '')
+            
+            # Add =X for forex pairs
+            if len(yf_symbol) == 6 and yf_symbol.isalpha():
+                yf_symbol = f"{yf_symbol}=X"
+            
+            # Fetch data
+            ticker = yf.Ticker(yf_symbol)
+            interval_map = {
+                '1m': '1m',
+                '2m': '2m',
+                '5m': '5m',
+                '15m': '15m',
+                '30m': '30m',
+                '1h': '1h'
+            }
+            
+            interval = interval_map.get(timeframe, '1m')
+            df = ticker.history(period="1d", interval=interval)
+            
+            if df.empty or len(df) < 20:
+                logger.warning(f"Insufficient market data for {symbol}")
+                return None
+            
+            # Normalize column names
+            df = df.rename(columns={
+                'Open': 'open',
+                'High': 'high',
+                'Low': 'low',
+                'Close': 'close',
+                'Volume': 'volume'
+            })
+            
+            return df
+            
+        except Exception as e:
+            logger.error(f"Error fetching market data for {symbol}: {e}")
+            return None
+
 
 
 # Global instance
