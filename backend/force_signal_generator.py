@@ -37,6 +37,7 @@ from signal_setup_validator import signal_setup_validator
 import high_accuracy_smart_money_ict
 from signal_accuracy_optimizer import signal_optimizer
 from support_resistance_analyzer import support_resistance_analyzer
+from strategy_registry import strategy_registry
 
 logger = logging.getLogger(__name__)
 
