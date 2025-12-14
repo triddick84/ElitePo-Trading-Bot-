@@ -422,7 +422,41 @@ class AdvancedSignalGenerator:
             
         except Exception as e:
             logger.error(f"ML prediction error: {e}")
-            return {'direction': 'NEUTRAL', 'confidence': 0, 'reason': f'ML error: {str(e)}'}
+            return self._fallback_ml_prediction(candles)
+    
+    def _fallback_ml_prediction(self, candles: List[Dict]) -> Dict:
+        """Fallback prediction when sklearn is not available"""
+        if len(candles) < 10:
+            return {'direction': 'NEUTRAL', 'confidence': 50, 'reason': 'Insufficient data for fallback prediction'}
+        
+        # Simple momentum-based prediction
+        recent_closes = [c.get('close', 0) for c in candles[-10:]]
+        price_change = (recent_closes[-1] - recent_closes[0]) / recent_closes[0]
+        
+        if price_change > 0.002:  # More than 0.2% increase
+            return {
+                'direction': 'CALL',
+                'confidence': min(70 + abs(price_change * 1000), 85),
+                'reason': 'Fallback: Upward momentum detected',
+                'strategy': 'ML-Fallback',
+                'model_accuracy': 0.0
+            }
+        elif price_change < -0.002:  # More than 0.2% decrease
+            return {
+                'direction': 'PUT',
+                'confidence': min(70 + abs(price_change * 1000), 85),
+                'reason': 'Fallback: Downward momentum detected',
+                'strategy': 'ML-Fallback',
+                'model_accuracy': 0.0
+            }
+        else:
+            return {
+                'direction': 'NEUTRAL',
+                'confidence': 55,
+                'reason': 'Fallback: No clear momentum',
+                'strategy': 'ML-Fallback',
+                'model_accuracy': 0.0
+            }
     
     def strategy_multi_indicator_combo(self, df: pd.DataFrame) -> Dict:
         """
