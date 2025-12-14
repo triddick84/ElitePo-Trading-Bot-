@@ -9,6 +9,12 @@ from typing import List, Dict, Optional, Tuple
 from datetime import datetime
 import os
 
+# Force CPU-only mode BEFORE importing TensorFlow
+try:
+    import ml_config  # This sets CPU-only env vars
+except ImportError:
+    pass
+
 logger = logging.getLogger(__name__)
 
 # Try to import tensorflow, but don't fail if not available
@@ -16,10 +22,16 @@ try:
     import tensorflow as tf
     from tensorflow import keras
     from tensorflow.keras import layers
+    # Disable GPU explicitly
+    tf.config.set_visible_devices([], 'GPU')
     TENSORFLOW_AVAILABLE = True
+    logger.info("✅ TensorFlow loaded in CPU-only mode")
 except ImportError:
     TENSORFLOW_AVAILABLE = False
     logger.warning("⚠️ TensorFlow not available - LSTM predictor will use fallback mode")
+except Exception as e:
+    TENSORFLOW_AVAILABLE = False
+    logger.warning(f"⚠️ TensorFlow initialization error: {e} - using fallback mode")
 
 
 class LSTMPredictor:
