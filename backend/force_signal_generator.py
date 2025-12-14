@@ -545,6 +545,8 @@ class ForceSignalGenerator:
                         
                         if result:
                             logger.info(f"✅ Keltner+Fractal 5s: {symbol} → {result['direction']} ({result['confidence']:.1f}%)")
+                            logger.info(f"⏳ Applying 10-second latency for 5s timeframe signal stability...")
+                            await asyncio.sleep(10)  # 10-second delay for 5s signals
                             result['strategy'] = 'keltner_fractal_5s'
                             result['timeframe'] = timeframe
                             result['chart_type'] = chart_type
@@ -572,6 +574,8 @@ class ForceSignalGenerator:
                         
                         if result:
                             logger.info(f"✅ 3-EMA Crossover 5s: {symbol} → {result['direction']} ({result['confidence']:.1f}%)")
+                            logger.info(f"⏳ Applying 10-second latency for 5s timeframe signal stability...")
+                            await asyncio.sleep(10)  # 10-second delay for 5s signals
                             result['strategy'] = '3ema_crossover_5s'
                             result['timeframe'] = timeframe
                             result['chart_type'] = chart_type
@@ -599,6 +603,8 @@ class ForceSignalGenerator:
                         
                         if result:
                             logger.info(f"✅ EMA20+RSI14 5s: {symbol} → {result['direction']} ({result['confidence']:.1f}%)")
+                            logger.info(f"⏳ Applying 10-second latency for 5s timeframe signal stability...")
+                            await asyncio.sleep(10)  # 10-second delay for 5s signals
                             result['strategy'] = 'ema20_rsi14_5s'
                             result['timeframe'] = timeframe
                             result['chart_type'] = chart_type
