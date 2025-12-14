@@ -6,6 +6,7 @@ import { Switch } from './ui/switch';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { toast } from 'sonner';
+import SignalSetupGuideModal from './SignalSetupGuideModal';
 // AssetSelectorDropdown removed - using MarketAssetSelector in Dashboard instead
 
 const LiveSignalsDisplay = ({ 
