@@ -8,6 +8,7 @@ import SignalNotificationManager from "./components/SignalNotificationManager";
 
 // Components
 import Dashboard from "./components/Dashboard";
+import DashboardRestructured from "./components/DashboardRestructured";
 import SignalsPanel from "./components/SignalsPanel";
 import MarketData from "./components/MarketData";
 import PerformanceMetrics from "./components/PerformanceMetrics";
@@ -16,6 +17,7 @@ import BacktestPanel from "./components/BacktestPanel";
 import ApiConfiguration from "./components/ApiConfiguration";
 import IntegrationPage from "./components/IntegrationPage";
 import StrategySelector from "./components/StrategySelector";
+import StrategySelectorEnhanced from "./components/StrategySelectorEnhanced";
 import MoneyManagement from "./components/MoneyManagement";
 import AdaptiveStrategyConfig from "./components/AdaptiveStrategyConfig";
 import RealtimeMarketDashboard from "./components/RealtimeMarketDashboard";
@@ -176,7 +178,7 @@ function App() {
     switch (activeView) {
       case "dashboard":
         return (
-          <Dashboard 
+          <DashboardRestructured 
             botStatus={botStatus} 
             liveSignals={liveSignals} 
             setLiveSignals={setLiveSignals}
@@ -191,7 +193,7 @@ function App() {
       case "signals":
         return <SignalsPanel />;
       case "strategies":
-        return <StrategySelector />;
+        return <StrategySelectorEnhanced />;
       case "adaptive":
         return <AdaptiveStrategyConfig />;
       case "market":
