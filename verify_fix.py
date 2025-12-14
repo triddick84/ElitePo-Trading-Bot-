@@ -9,7 +9,7 @@ import aiohttp
 import json
 from datetime import datetime, timezone
 
-BACKEND_URL = "https://tradepro-39.preview.emergentagent.com/api"
+BACKEND_URL = "https://tradefox-1.preview.emergentagent.com/api"
 
 async def verify_auto_generation_fix():
     """Verify the auto signal generation fix is working"""
