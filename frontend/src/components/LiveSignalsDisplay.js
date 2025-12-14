@@ -301,6 +301,16 @@ const LiveSignalsDisplay = ({
           timestamp: new Date().toISOString()
         }));
         
+        // Check if any signal has setup guide requirements
+        const signalWithSetupGuide = newSignals.find(s => s.requires_setup_confirmation && s.setup_guide);
+        
+        if (signalWithSetupGuide) {
+          // Show setup guide modal for first signal with requirements
+          setPendingSignal(signalWithSetupGuide);
+          setShowSetupGuideModal(true);
+          console.log('📋 Setup guide required for signal:', signalWithSetupGuide.id);
+        }
+        
         // Update live signals with new force-generated signals
         setLiveSignals(prev => [...newSignals, ...prev].slice(0, 20)); // Keep last 20 signals
         
