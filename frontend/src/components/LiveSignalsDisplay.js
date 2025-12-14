@@ -6,7 +6,6 @@ import { Switch } from './ui/switch';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { toast } from 'sonner';
-import SignalSetupGuideModal from './SignalSetupGuideModal';
 // AssetSelectorDropdown removed - using MarketAssetSelector in Dashboard instead
 
 const LiveSignalsDisplay = ({ 
@@ -30,10 +29,6 @@ const LiveSignalsDisplay = ({
   const [autoForceTimer, setAutoForceTimer] = useState(null);
   const [autoForceCountdown, setAutoForceCountdown] = useState(0);
   const [autoForceProgress, setAutoForceProgress] = useState(0);
-  
-  // NEW: Setup Guide Modal
-  const [showSetupGuideModal, setShowSetupGuideModal] = useState(false);
-  const [pendingSignal, setPendingSignal] = useState(null);
 
   // Fetch configuration on mount
   useEffect(() => {
@@ -300,16 +295,6 @@ const LiveSignalsDisplay = ({
           forced_generation: true,
           timestamp: new Date().toISOString()
         }));
-        
-        // Check if any signal has setup guide requirements
-        const signalWithSetupGuide = newSignals.find(s => s.requires_setup_confirmation && s.setup_guide);
-        
-        if (signalWithSetupGuide) {
-          // Show setup guide modal for first signal with requirements
-          setPendingSignal(signalWithSetupGuide);
-          setShowSetupGuideModal(true);
-          console.log('📋 Setup guide required for signal:', signalWithSetupGuide.id);
-        }
         
         // Update live signals with new force-generated signals
         setLiveSignals(prev => [...newSignals, ...prev].slice(0, 20)); // Keep last 20 signals
@@ -856,25 +841,6 @@ const LiveSignalsDisplay = ({
           </div>
         </div>
       </Card>
-      
-      {/* Setup Guide Modal */}
-      {showSetupGuideModal && pendingSignal && (
-        <SignalSetupGuideModal
-          signal={pendingSignal}
-          onClose={() => {
-            setShowSetupGuideModal(false);
-            setPendingSignal(null);
-          }}
-          onConfirm={(confirmedSignal) => {
-            console.log('✅ Signal setup confirmed, ready to trade:', confirmedSignal.id);
-            toast.success('Setup confirmed! Execute trade on Pocket Option now.');
-            // Optionally trigger auto-execution here if enabled
-            if (onSignalExecute) {
-              onSignalExecute(confirmedSignal);
-            }
-          }}
-        />
-      )}
     </div>
   );
 };
