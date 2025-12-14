@@ -33,6 +33,7 @@ from live_accuracy_tester import live_accuracy_tester
 from ultra_precision_90_enhancer import ultra_precision_90
 import high_accuracy_1m_triple_confirmation
 import high_accuracy_williams_macd_strategy
+from signal_setup_validator import signal_setup_validator
 import high_accuracy_smart_money_ict
 from signal_accuracy_optimizer import signal_optimizer
 from support_resistance_analyzer import support_resistance_analyzer
