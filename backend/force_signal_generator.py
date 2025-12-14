@@ -2785,6 +2785,47 @@ class ForceSignalGenerator:
         except Exception as e:
             logger.error(f"Error fetching market data for {symbol}: {e}")
             return None
+    
+    def add_setup_guide_to_signal(
+        self,
+        signal: Dict,
+        symbol: str,
+        chart_type: str,
+        timeframe: str,
+        expiration: str
+    ) -> Dict:
+        """
+        Add comprehensive setup guide to signal
+        Ensures users have exact settings to match signal generation
+        """
+        try:
+            # Determine market type
+            market_type = 'otc' if '_OTC' in symbol or '_otc' in symbol else 'regular'
+            
+            # Generate setup guide
+            setup_guide = signal_setup_validator.generate_setup_guide(
+                signal=signal,
+                symbol=symbol.replace('_OTC', '').replace('_otc', '').replace('_regular', ''),
+                chart_type=chart_type,
+                timeframe=timeframe,
+                expiration=expiration,
+                market_type=market_type
+            )
+            
+            # Add setup guide to signal
+            signal['setup_guide'] = setup_guide
+            signal['requires_setup_confirmation'] = True
+            signal['optimal_entry_timing'] = setup_guide['timing_settings']
+            
+            logger.info(f"✅ Setup guide added to signal - Next candle in {setup_guide['timing_settings']['seconds_to_next_candle']}s")
+            
+            return signal
+            
+        except Exception as e:
+            logger.error(f"Error adding setup guide: {e}")
+            signal['setup_guide_error'] = str(e)
+            return signal
+
 
 
 
