@@ -1035,6 +1035,11 @@ async def force_generate_signals(wait_for_candle: bool = Query(False)):
                     chicago_time = pocket_option_sync.get_chicago_time()
                     seconds_to_entry = max(0, (signal.precision_entry_time - chicago_time).total_seconds())
                 
+                # Extract setup guide if present
+                setup_guide = None
+                if signal.technical_analysis and 'setup_guide' in signal.technical_analysis:
+                    setup_guide = signal.technical_analysis['setup_guide']
+                
                 stored_signals.append({
                     "id": str(signal.id),
                     "symbol": str(signal.symbol),
@@ -1051,6 +1056,8 @@ async def force_generate_signals(wait_for_candle: bool = Query(False)):
                     "precision_entry_time": signal.precision_entry_time.isoformat() if signal.precision_entry_time else None,
                     "seconds_to_entry": float(seconds_to_entry),  # For countdown timer synchronization
                     "technical_analysis": _convert_numpy_types(signal.technical_analysis) if signal.technical_analysis else {},
+                    "setup_guide": setup_guide,  # NEW: Complete setup instructions
+                    "requires_setup_confirmation": setup_guide is not None,
                     "forced_generation": True,
                     "timestamp": signal.timestamp.isoformat()
                 })
