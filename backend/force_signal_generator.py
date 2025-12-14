@@ -633,6 +633,8 @@ class ForceSignalGenerator:
                         
                         if result:
                             logger.info(f"✅ Stochastic Divergence 5s: {symbol} → {result['direction']} ({result['confidence']:.1f}%)")
+                            logger.info(f"⏳ Applying 10-second latency for 5s timeframe signal stability...")
+                            await asyncio.sleep(10)  # 10-second delay for 5s signals
                             result['strategy'] = 'stochastic_divergence_5s'
                             result['timeframe'] = timeframe
                             result['chart_type'] = chart_type
@@ -657,6 +659,8 @@ class ForceSignalGenerator:
                 
                 if result_ultra_precision:
                     logger.info(f"✅ Ultra-Precision 5S: {symbol} → {result_ultra_precision['direction']} ({result_ultra_precision['confidence']:.1f}%) [{result_ultra_precision['technical_analysis']['confirmations']}/5 confirmations]")
+                    logger.info(f"⏳ Applying 10-second latency for 5s timeframe signal stability...")
+                    await asyncio.sleep(10)  # 10-second delay for 5s signals
                     return {
                         'direction': result_ultra_precision['direction'],
                         'confidence': result_ultra_precision['confidence'],
@@ -684,6 +688,8 @@ class ForceSignalGenerator:
                 
                 if result_ultra_v2:
                     logger.info(f"✅ 5s Ultra V2 strategy: {symbol} → {result_ultra_v2.get('signal', 'N/A')} ({result_ultra_v2.get('confidence', 0):.1f}%)")
+                    logger.info(f"⏳ Applying 10-second latency for 5s timeframe signal stability...")
+                    await asyncio.sleep(10)  # 10-second delay for 5s signals
                     return {
                         'direction': result_ultra_v2['signal'],
                         'confidence': result_ultra_v2['confidence'],
