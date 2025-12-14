@@ -166,12 +166,12 @@ const DashboardRestructured = ({
     }
   };
 
-  // Auto-clear when signals exceed 10
+  // Auto-clear when signals exceed 10 (silent - no notification)
   useEffect(() => {
     if (liveSignals.length > 10) {
       const signalsToKeep = liveSignals.slice(0, 10);
       setLiveSignals(signalsToKeep);
-      toast.info('Auto-cleared old signals (keeping latest 10)');
+      // Removed toast notification to prevent frequent popups
     }
   }, [liveSignals]);
 
