@@ -45,9 +45,17 @@ class StrategyRegistry:
             from strategies.strategy_2m_support_resistance import strategy_2m_support_resistance
             self.strategies['2m_support_resistance'] = strategy_2m_support_resistance
             
+            # 3-minute strategies
+            from strategies.strategy_3m_volume_profile import strategy_3m_volume_profile
+            self.strategies['3m_volume_profile'] = strategy_3m_volume_profile
+            
             # 5-minute strategies
             from strategies.strategy_5m_trend_following import strategy_5m_trend_following
             self.strategies['5m_trend_following'] = strategy_5m_trend_following
+            
+            # 15-minute strategies
+            from strategies.strategy_15m_multi_timeframe import strategy_15m_multi_timeframe
+            self.strategies['15m_multi_timeframe'] = strategy_15m_multi_timeframe
             
             # Legacy strategies (keep for backward compatibility)
             self.strategies['enhanced_rsi_bb_volume'] = None  # Placeholder
