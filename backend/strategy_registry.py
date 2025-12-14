@@ -27,35 +27,63 @@ class StrategyRegistry:
         try:
             # 5-second strategies
             from strategies.strategy_5s_momentum_breakout import strategy_5s_momentum_breakout
+            from strategies.strategy_5s_price_action import strategy_5s_price_action
             self.strategies['5s_momentum_breakout'] = strategy_5s_momentum_breakout
+            self.strategies['5s_price_action'] = strategy_5s_price_action
             
             # 15-second strategies
             from strategies.strategy_15s_ema_crossover import strategy_15s_ema_crossover
+            from strategies.strategy_15s_rsi_stochastic import strategy_15s_rsi_stochastic
             self.strategies['15s_ema_crossover'] = strategy_15s_ema_crossover
+            self.strategies['15s_rsi_stochastic'] = strategy_15s_rsi_stochastic
             
             # 30-second strategies
             from strategies.strategy_30s_bollinger_rsi import strategy_30s_bollinger_rsi
+            from strategies.strategy_30s_macd_keltner import strategy_30s_macd_keltner
             self.strategies['30s_bollinger_rsi'] = strategy_30s_bollinger_rsi
+            self.strategies['30s_macd_keltner'] = strategy_30s_macd_keltner
             
             # 1-minute strategies
             from strategies.strategy_1m_rsi_divergence import strategy_1m_rsi_divergence
+            from strategies.strategy_1m_triple_ema import strategy_1m_triple_ema
             self.strategies['1m_rsi_divergence'] = strategy_1m_rsi_divergence
+            self.strategies['1m_triple_ema'] = strategy_1m_triple_ema
             
             # 2-minute strategies
             from strategies.strategy_2m_support_resistance import strategy_2m_support_resistance
+            from strategies.strategy_2m_trend_momentum import strategy_2m_trend_momentum
             self.strategies['2m_support_resistance'] = strategy_2m_support_resistance
+            self.strategies['2m_trend_momentum'] = strategy_2m_trend_momentum
             
             # 3-minute strategies
             from strategies.strategy_3m_volume_profile import strategy_3m_volume_profile
+            from strategies.strategy_3m_price_action import strategy_3m_price_action
             self.strategies['3m_volume_profile'] = strategy_3m_volume_profile
+            self.strategies['3m_price_action'] = strategy_3m_price_action
             
             # 5-minute strategies
             from strategies.strategy_5m_trend_following import strategy_5m_trend_following
+            from strategies.strategy_5m_breakout import strategy_5m_breakout
             self.strategies['5m_trend_following'] = strategy_5m_trend_following
+            self.strategies['5m_breakout'] = strategy_5m_breakout
             
             # 15-minute strategies
             from strategies.strategy_15m_multi_timeframe import strategy_15m_multi_timeframe
+            from strategies.strategy_15m_swing_trading import strategy_15m_swing_trading
             self.strategies['15m_multi_timeframe'] = strategy_15m_multi_timeframe
+            self.strategies['15m_swing_trading'] = strategy_15m_swing_trading
+            
+            # 30-minute strategies
+            from strategies.strategy_30m_ichimoku import strategy_30m_ichimoku
+            from strategies.strategy_30m_position_trading import strategy_30m_position_trading
+            self.strategies['30m_ichimoku'] = strategy_30m_ichimoku
+            self.strategies['30m_position_trading'] = strategy_30m_position_trading
+            
+            # 1-hour strategies
+            from strategies.strategy_1h_wyckoff import strategy_1h_wyckoff
+            from strategies.strategy_1h_daily_bias import strategy_1h_daily_bias
+            self.strategies['1h_wyckoff'] = strategy_1h_wyckoff
+            self.strategies['1h_daily_bias'] = strategy_1h_daily_bias
             
             # Legacy strategies (keep for backward compatibility)
             self.strategies['enhanced_rsi_bb_volume'] = None  # Placeholder
