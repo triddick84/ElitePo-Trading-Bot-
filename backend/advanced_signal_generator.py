@@ -374,6 +374,10 @@ class AdvancedSignalGenerator:
             return {'direction': 'NEUTRAL', 'confidence': 0, 'reason': 'Not enough features for ML'}
         
         try:
+            if not SKLEARN_AVAILABLE:
+                # Return fallback prediction if sklearn not available
+                return self._fallback_ml_prediction(candles)
+            
             # Train model
             X = np.array(features)
             y = np.array(labels)
