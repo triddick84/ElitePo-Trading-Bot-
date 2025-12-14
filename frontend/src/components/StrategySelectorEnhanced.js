@@ -34,6 +34,8 @@ const StrategySelectorEnhanced = ({ onStrategySelect, onConfigChange }) => {
   const [selectedTimeframe, setSelectedTimeframe] = useState('1m');
   const [selectedStrategy, setSelectedStrategy] = useState('');
   const [showSetupModal, setShowSetupModal] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   
   // Chart Configuration
   const [chartConfig, setChartConfig] = useState({
@@ -136,9 +138,98 @@ const StrategySelectorEnhanced = ({ onStrategySelect, onConfigChange }) => {
     { id: 'line', name: 'Line Chart', icon: '📈' }
   ];
 
-  // Notify parent of configuration changes
+  // Load saved configuration on mount
   useEffect(() => {
-    if (onConfigChange) {
+    fetchSavedConfiguration();
+  }, []);
+
+  const fetchSavedConfiguration = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${API}/config`);
+      const data = await response.json();
+      
+      if (data) {
+        // Load saved strategy selection
+        if (data.selected_timeframe) {
+          setSelectedTimeframe(data.selected_timeframe);
+        }
+        if (data.selected_strategy) {
+          setSelectedStrategy(data.selected_strategy);
+        }
+        
+        // Load chart configuration
+        if (data.chart_config) {
+          setChartConfig(data.chart_config);
+        }
+        
+        // Load flexible configuration
+        if (data.flexible_config) {
+          setFlexibleConfig(data.flexible_config);
+        }
+        
+        toast.success('✅ Loaded saved configuration');
+      }
+    } catch (error) {
+      console.error('Error loading configuration:', error);
+      toast.error('Failed to load saved configuration');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSaveConfiguration = async () => {
+    if (!selectedStrategy || !selectedTimeframe) {
+      toast.error('Please select both timeframe and strategy before saving');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const configToSave = {
+        selected_timeframe: selectedTimeframe,
+        selected_strategy: selectedStrategy,
+        chart_config: chartConfig,
+        flexible_config: flexibleConfig
+      };
+
+      const response = await fetch(`${API}/config`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(configToSave)
+      });
+
+      const data = await response.json();
+      
+      if (response.ok) {
+        toast.success('✅ Configuration saved successfully!');
+        
+        // Notify parent components
+        if (onConfigChange) {
+          onConfigChange({
+            timeframe: selectedTimeframe,
+            strategy: selectedStrategy,
+            chartConfig,
+            flexibleConfig
+          });
+        }
+        if (onStrategySelect) {
+          onStrategySelect(selectedTimeframe, selectedStrategy);
+        }
+      } else {
+        throw new Error(data.message || 'Failed to save configuration');
+      }
+    } catch (error) {
+      console.error('Error saving configuration:', error);
+      toast.error('Failed to save configuration');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Notify parent of configuration changes (but don't auto-save)
+  useEffect(() => {
+    if (onConfigChange && !isLoading) {
       onConfigChange({
         timeframe: selectedTimeframe,
         strategy: selectedStrategy,
@@ -146,14 +237,14 @@ const StrategySelectorEnhanced = ({ onStrategySelect, onConfigChange }) => {
         flexibleConfig
       });
     }
-  }, [selectedTimeframe, selectedStrategy, chartConfig, flexibleConfig]);
+  }, [selectedTimeframe, selectedStrategy, chartConfig, flexibleConfig, isLoading]);
 
   // Notify parent of strategy selection
   useEffect(() => {
-    if (onStrategySelect && selectedStrategy) {
+    if (onStrategySelect && selectedStrategy && !isLoading) {
       onStrategySelect(selectedTimeframe, selectedStrategy);
     }
-  }, [selectedTimeframe, selectedStrategy]);
+  }, [selectedTimeframe, selectedStrategy, isLoading]);
 
   const handleTimeframeChange = (value) => {
     setSelectedTimeframe(value);
@@ -197,6 +288,17 @@ const StrategySelectorEnhanced = ({ onStrategySelect, onConfigChange }) => {
   };
 
   const availableStrategies = strategiesByTimeframe[selectedTimeframe] || [];
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
+          <p className="text-white">Loading configuration...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -433,6 +535,77 @@ const StrategySelectorEnhanced = ({ onStrategySelect, onConfigChange }) => {
               </p>
             </div>
           )}
+        </div>
+      </Card>
+
+      {/* Save Configuration Button */}
+      <Card className="bg-gradient-to-r from-purple-900/50 to-blue-900/50 border-purple-500/50 backdrop-blur-sm p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-xl font-bold text-white mb-2">Save Configuration</h3>
+            <p className="text-sm text-gray-300">
+              Save your strategy selection, timeframe, and settings for future use
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          {/* Current Configuration Summary */}
+          <div className="bg-slate-800/50 rounded-lg p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-400">Timeframe:</span>
+              <span className="text-sm font-semibold text-purple-300">
+                {selectedTimeframe ? timeframes.find(t => t.value === selectedTimeframe)?.label : 'Not selected'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-400">Strategy:</span>
+              <span className="text-sm font-semibold text-purple-300">
+                {selectedStrategy ? availableStrategies.find(s => s.value === selectedStrategy)?.name : 'Not selected'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-400">Chart Type:</span>
+              <span className="text-sm font-semibold text-purple-300">
+                {chartTypes.find(t => t.id === chartConfig.chartType)?.name}
+              </span>
+            </div>
+          </div>
+
+          {/* Save Button */}
+          <Button
+            onClick={handleSaveConfiguration}
+            disabled={isSaving || !selectedStrategy || !selectedTimeframe}
+            className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold py-3"
+          >
+            {isSaving ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                Saving Configuration...
+              </>
+            ) : (
+              <>
+                <CheckCircle className="w-5 h-5 mr-2" />
+                Save Configuration
+              </>
+            )}
+          </Button>
+
+          {/* Info Notice */}
+          <div className="bg-blue-900/20 border border-blue-600/30 rounded-lg p-3">
+            <div className="flex items-start gap-2">
+              <Info className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" />
+              <div className="text-xs text-blue-200">
+                <p className="font-semibold mb-1">Configuration will be saved for:</p>
+                <ul className="list-disc list-inside space-y-1 text-blue-300">
+                  <li>Strategy selection and timeframe</li>
+                  <li>Chart type and configuration</li>
+                  <li>Flexible trading system settings</li>
+                  <li>Dashboard will use saved configuration</li>
+                </ul>
+              </div>
+            </div>
+          </div>
         </div>
       </Card>
 
