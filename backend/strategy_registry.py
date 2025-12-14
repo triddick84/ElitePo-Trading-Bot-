@@ -29,9 +29,21 @@ class StrategyRegistry:
             from strategies.strategy_5s_momentum_breakout import strategy_5s_momentum_breakout
             self.strategies['5s_momentum_breakout'] = strategy_5s_momentum_breakout
             
+            # 15-second strategies
+            from strategies.strategy_15s_ema_crossover import strategy_15s_ema_crossover
+            self.strategies['15s_ema_crossover'] = strategy_15s_ema_crossover
+            
+            # 30-second strategies
+            from strategies.strategy_30s_bollinger_rsi import strategy_30s_bollinger_rsi
+            self.strategies['30s_bollinger_rsi'] = strategy_30s_bollinger_rsi
+            
             # 1-minute strategies
             from strategies.strategy_1m_rsi_divergence import strategy_1m_rsi_divergence
             self.strategies['1m_rsi_divergence'] = strategy_1m_rsi_divergence
+            
+            # 2-minute strategies
+            from strategies.strategy_2m_support_resistance import strategy_2m_support_resistance
+            self.strategies['2m_support_resistance'] = strategy_2m_support_resistance
             
             # 5-minute strategies
             from strategies.strategy_5m_trend_following import strategy_5m_trend_following
