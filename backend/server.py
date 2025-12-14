@@ -1,3 +1,9 @@
+# Force CPU-only mode for ML libraries BEFORE any imports
+try:
+    import ml_config  # This must be imported FIRST to set env vars
+except ImportError:
+    pass
+
 from fastapi import FastAPI, APIRouter, HTTPException, BackgroundTasks, Query
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
