@@ -2590,6 +2590,102 @@ async def get_current_adjustments():
 
 # ==================== POCKET OPTION API ENDPOINTS ====================
 
+
+class QuickAuthTestRequest(BaseModel):
+    auth_message: str
+    
+@api_router.post("/pocket-option/quick-auth-test")
+async def quick_auth_test(request: QuickAuthTestRequest):
+    """
+    Quick test of Pocket Option authentication using fresh auth message from browser
+    
+    Usage:
+    1. Open Pocket Option in browser
+    2. Open DevTools (F12) -> Network -> WS
+    3. Copy the auth message: 42["auth",{"session":"...","isDemo":1,"uid":...,"platform":1}]
+    4. Send it here for immediate testing
+    """
+    try:
+        import json
+        import re
+        
+        logger.info("🧪 Quick Auth Test Starting...")
+        logger.info(f"📋 Received message: {request.auth_message[:100]}...")
+        
+        # Extract auth data from message
+        # Expected format: 42["auth",{"session":"...","isDemo":1,"uid":...,"platform":1}]
+        match = re.search(r'42\["auth",(\{.*?\})\]', request.auth_message)
+        
+        if not match:
+            return {
+                "success": False,
+                "error": "Invalid auth message format",
+                "expected": '42["auth",{"session":"...","isDemo":1,"uid":...,"platform":1}]',
+                "received": request.auth_message
+            }
+        
+        auth_data = json.loads(match.group(1))
+        ssid = auth_data.get('session')
+        uid = auth_data.get('uid', 0)
+        is_demo = auth_data.get('isDemo', 1) == 1
+        
+        logger.info(f"✅ Extracted auth data:")
+        logger.info(f"   SSID: {ssid}")
+        logger.info(f"   UID: {uid}")
+        logger.info(f"   Demo: {is_demo}")
+        
+        # Test connection with extracted data
+        from pocket_option_v2 import PocketOptionV2
+        client = PocketOptionV2(ssid, uid, is_demo)
+        
+        logger.info("🔌 Attempting connection...")
+        connected = await client.connect()
+        
+        if connected:
+            logger.info("✅ Connection successful!")
+            
+            # Get balance
+            balance = await client.get_balance()
+            
+            # Test candle data
+            candles = await client.get_candles('EURUSD_otc', 60, 5)
+            
+            await client.disconnect()
+            
+            return {
+                "success": True,
+                "message": "✅ Pocket Option connection SUCCESSFUL!",
+                "connection": {
+                    "ssid": ssid,
+                    "uid": uid,
+                    "is_demo": is_demo,
+                    "balance": balance,
+                    "candles_retrieved": len(candles) if candles else 0
+                }
+            }
+        else:
+            return {
+                "success": False,
+                "error": "Connection failed - SSID might have expired",
+                "recommendation": "Get a fresh auth message from browser (within 1-2 minutes)",
+                "extracted_data": {
+                    "ssid": ssid,
+                    "uid": uid,
+                    "is_demo": is_demo
+                }
+            }
+            
+    except Exception as e:
+        logger.error(f"Error in quick auth test: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+
 @api_router.post("/pocket-option/auto-login")
 async def pocket_option_auto_login():
     """
