@@ -59,6 +59,12 @@ const DashboardRestructured = ({
   const [autoGenerateActive, setAutoGenerateActive] = useState(false);
   const [autoGenerateMode, setAutoGenerateMode] = useState('selected'); // 'selected' or 'scan'
   
+  // Auto Force Generate State
+  const [autoForceActive, setAutoForceActive] = useState(false);
+  const [autoForceInterval, setAutoForceInterval] = useState(60); // seconds
+  const [autoForceCountdown, setAutoForceCountdown] = useState(0);
+  const [autoForceIntervalId, setAutoForceIntervalId] = useState(null);
+  
   // Enhanced Auto-Generate Settings
   const [enhancedSettings, setEnhancedSettings] = useState({
     scanAllAssets: false,
@@ -91,8 +97,24 @@ const DashboardRestructured = ({
     return () => {
       clearInterval(perfInterval);
       clearInterval(syncInterval);
+      if (autoForceIntervalId) {
+        clearInterval(autoForceIntervalId);
+      }
     };
   }, []);
+
+  // Auto Force Generate Countdown
+  useEffect(() => {
+    if (autoForceActive && autoForceCountdown > 0) {
+      const timer = setTimeout(() => {
+        setAutoForceCountdown(autoForceCountdown - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    } else if (autoForceActive && autoForceCountdown === 0) {
+      // Generate signal and reset countdown
+      handleAutoForceGenerate();
+    }
+  }, [autoForceActive, autoForceCountdown]);
 
   const fetchConfiguration = async () => {
     try {
@@ -209,6 +231,57 @@ const DashboardRestructured = ({
       toast.error('Failed to generate signals');
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  // Auto Force Generate
+  const handleAutoForceGenerate = async () => {
+    if (!config.selected_assets || config.selected_assets.length === 0) {
+      toast.error('Please select at least one asset');
+      setAutoForceActive(false);
+      return;
+    }
+
+    try {
+      const asset = config.selected_assets[Math.floor(Math.random() * config.selected_assets.length)];
+      const [symbol, market] = asset.includes('_') ? asset.split('_') : [asset, 'regular'];
+      
+      const response = await axios.post(`${API}/signals/force-generate`, {
+        asset_symbol: symbol,
+        market_type: market,
+        selected_timeframe: config.selected_timeframe || '1m',
+        selected_strategy: config.selected_strategy || 'enhanced_rsi_bb_volume'
+      });
+
+      if (response.data.success && response.data.signal) {
+        setLiveSignals(prev => [response.data.signal, ...prev]);
+        toast.success(`✅ Auto-generated signal for ${symbol}`);
+      }
+      
+      // Reset countdown
+      setAutoForceCountdown(autoForceInterval);
+    } catch (error) {
+      console.error('Error in auto force generate:', error);
+      toast.error('Auto-generate failed');
+    }
+  };
+
+  // Toggle Auto Force Generate
+  const handleToggleAutoForce = () => {
+    if (!autoForceActive) {
+      if (!config.selected_assets || config.selected_assets.length === 0) {
+        toast.error('Please select at least one asset first');
+        return;
+      }
+      // Start auto force generate
+      setAutoForceActive(true);
+      setAutoForceCountdown(autoForceInterval);
+      toast.success(`🚀 Auto force generate started (every ${autoForceInterval}s)`);
+    } else {
+      // Stop auto force generate
+      setAutoForceActive(false);
+      setAutoForceCountdown(0);
+      toast.info('⏸️ Auto force generate stopped');
     }
   };
 
@@ -338,7 +411,7 @@ const DashboardRestructured = ({
               
               <Button
                 onClick={handleSingleGenerate}
-                disabled={isGenerating}
+                disabled={isGenerating || autoForceActive}
                 className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
               >
                 {isGenerating ? (
@@ -350,6 +423,68 @@ const DashboardRestructured = ({
                   <>
                     <Zap className="w-4 h-4 mr-2" />
                     Force Generate Signal
+                  </>
+                )}
+              </Button>
+            </div>
+
+            <div className="border-t border-purple-500/30 pt-4" />
+
+            {/* Auto Force Generate */}
+            <div className="space-y-3">
+              <Label className="text-purple-300 font-semibold">Auto Force Generate</Label>
+              
+              <div className="space-y-2">
+                <Label className="text-sm text-gray-300">Generate Every:</Label>
+                <Select 
+                  value={autoForceInterval.toString()} 
+                  onValueChange={(val) => setAutoForceInterval(parseInt(val))}
+                  disabled={autoForceActive}
+                >
+                  <SelectTrigger className="w-full bg-slate-700/50 border-purple-500/30 text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="30">30 seconds</SelectItem>
+                    <SelectItem value="60">1 minute</SelectItem>
+                    <SelectItem value="120">2 minutes</SelectItem>
+                    <SelectItem value="180">3 minutes</SelectItem>
+                    <SelectItem value="300">5 minutes</SelectItem>
+                    <SelectItem value="600">10 minutes</SelectItem>
+                    <SelectItem value="900">15 minutes</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {autoForceActive && (
+                <div className="bg-blue-900/20 border border-blue-600/30 rounded-lg p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-blue-300">Next signal in:</span>
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-blue-400 animate-pulse" />
+                      <span className="text-lg font-bold text-blue-200 font-mono">
+                        {Math.floor(autoForceCountdown / 60)}:{String(autoForceCountdown % 60).padStart(2, '0')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <Button
+                onClick={handleToggleAutoForce}
+                className={`w-full ${autoForceActive 
+                  ? 'bg-red-600 hover:bg-red-700' 
+                  : 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700'}`}
+              >
+                {autoForceActive ? (
+                  <>
+                    <Square className="w-4 h-4 mr-2" />
+                    Stop Auto Generate
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-4 h-4 mr-2" />
+                    Start Auto Generate
                   </>
                 )}
               </Button>
