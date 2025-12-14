@@ -30,6 +30,10 @@ const LiveSignalsDisplay = ({
   const [autoForceTimer, setAutoForceTimer] = useState(null);
   const [autoForceCountdown, setAutoForceCountdown] = useState(0);
   const [autoForceProgress, setAutoForceProgress] = useState(0);
+  
+  // NEW: Setup Guide Modal
+  const [showSetupGuideModal, setShowSetupGuideModal] = useState(false);
+  const [pendingSignal, setPendingSignal] = useState(null);
 
   // Fetch configuration on mount
   useEffect(() => {
