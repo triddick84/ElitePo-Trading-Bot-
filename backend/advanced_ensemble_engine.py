@@ -5,18 +5,27 @@ from typing import Dict, List, Optional, Tuple, Any
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import logging
-from sklearn.ensemble import VotingClassifier, GradientBoostingClassifier, RandomForestClassifier
-from sklearn.linear_model import LogisticRegression
-from sklearn.svm import SVC
-import xgboost as xgb
-import lightgbm as lgb
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
-from sklearn.model_selection import cross_val_score
-from sklearn.metrics import accuracy_score, precision_score, recall_score
 import warnings
 warnings.filterwarnings('ignore')
 
 logger = logging.getLogger(__name__)
+
+# Try to import ML libraries, use fallback if not available
+ML_AVAILABLE = False
+try:
+    from sklearn.ensemble import VotingClassifier, GradientBoostingClassifier, RandomForestClassifier
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.svm import SVC
+    import xgboost as xgb
+    import lightgbm as lgb
+    from sklearn.preprocessing import StandardScaler, MinMaxScaler
+    from sklearn.model_selection import cross_val_score
+    from sklearn.metrics import accuracy_score, precision_score, recall_score
+    ML_AVAILABLE = True
+    logger.info("✅ ML libraries loaded successfully")
+except ImportError as e:
+    logger.warning(f"⚠️ ML libraries not available: {e} - using fallback mode")
+    ML_AVAILABLE = False
 
 class AdvancedEnsembleEngine:
     """
