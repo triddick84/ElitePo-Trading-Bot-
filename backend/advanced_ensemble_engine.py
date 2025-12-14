@@ -35,6 +35,14 @@ class AdvancedEnsembleEngine:
     
     def __init__(self):
         self.executor = ThreadPoolExecutor(max_workers=8)
+        self.ml_available = ML_AVAILABLE
+        
+        if not ML_AVAILABLE:
+            logger.warning("⚠️ AdvancedEnsembleEngine in fallback mode - ML libraries not available")
+            self.scalers = {}
+            self.base_models = {}
+            return
+        
         self.scalers = {
             'standard': StandardScaler(),
             'minmax': MinMaxScaler()
