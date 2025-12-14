@@ -141,6 +141,10 @@ class BotStartRequest(BaseModel):
     auto_trading_enabled: bool = False
     invert_signals: bool = False
     sound_alerts_enabled: bool = True
+    selected_timeframe: Optional[str] = '1m'
+    selected_strategy: Optional[str] = ''
+    chart_config: Optional[Dict[str, Any]] = None
+    flexible_config: Optional[Dict[str, Any]] = None
 
 class BotStatusResponse(BaseModel):
     is_running: bool
@@ -680,6 +684,7 @@ async def get_config():
 async def update_config(config: BotStartRequest):
     """Update bot configuration"""
     try:
+        # Update main trading configuration
         new_config = TradingConfiguration(
             trading_mode=config.trading_mode,
             active_strategies=config.active_strategies,
@@ -698,7 +703,36 @@ async def update_config(config: BotStartRequest):
         trading_bot.config = new_config
         await trading_bot._save_config()
         
-        return {"status": "success", "message": "Configuration updated"}
+        # Also save strategy-specific configuration to database
+        config_doc = {
+            "user_id": "default_user",
+            "selected_timeframe": config.selected_timeframe,
+            "selected_strategy": config.selected_strategy,
+            "chart_config": config.chart_config or {},
+            "flexible_config": config.flexible_config or {},
+            "selected_assets": config.selected_assets,
+            "selected_expirations": config.selected_expirations,
+            "min_probability_threshold": config.min_probability_threshold,
+            "updated_at": datetime.now(timezone.utc)
+        }
+        
+        # Upsert configuration to database
+        await db.trading_configurations.update_one(
+            {"user_id": "default_user"},
+            {"$set": config_doc},
+            upsert=True
+        )
+        
+        logger.info(f"✅ Configuration saved: timeframe={config.selected_timeframe}, strategy={config.selected_strategy}")
+        
+        return {
+            "status": "success", 
+            "message": "Configuration updated and saved",
+            "saved_config": {
+                "timeframe": config.selected_timeframe,
+                "strategy": config.selected_strategy
+            }
+        }
         
     except Exception as e:
         logging.error(f"Error updating config: {e}")
