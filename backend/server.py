@@ -968,10 +968,29 @@ async def force_generate_signals(wait_for_candle: bool = Query(False)):
                 forced_signals = None
             
             if forced_signals:
-                # Tag signals with the selected asset info
+                # Tag signals with the selected asset info and add setup guides
                 for signal in forced_signals:
                     signal.symbol = asset  # Use full asset name with suffix
                     signal.market_type = market_type
+                    
+                    # Add setup guide to each signal
+                    try:
+                        signal_dict = signal.dict()
+                        signal_with_guide = force_signal_generator.add_setup_guide_to_signal(
+                            signal=signal_dict,
+                            symbol=asset,
+                            chart_type=chart_type,
+                            timeframe=str(signal.timeframe),
+                            expiration=user_expirations[0] if user_expirations else '1m'
+                        )
+                        # Update signal with guide
+                        if 'setup_guide' in signal_with_guide:
+                            signal.technical_analysis = signal.technical_analysis or {}
+                            signal.technical_analysis['setup_guide'] = signal_with_guide['setup_guide']
+                            logger.info(f"✅ Setup guide added to signal for {asset}")
+                    except Exception as e:
+                        logger.warning(f"Could not add setup guide to signal: {e}")
+                
                 all_forced_signals.extend(forced_signals)
                 logger.info(f"✅ Generated {len(forced_signals)} signals for {asset}")
             else:
