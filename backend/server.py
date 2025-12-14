@@ -506,6 +506,22 @@ async def get_active_signals():
         logging.error(f"Error getting active signals: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@api_router.delete("/signals/clear-all")
+async def clear_all_signals():
+    """Clear all generated signals from database"""
+    try:
+        result = await db.trading_signals.delete_many({})
+        
+        return {
+            "status": "success",
+            "message": f"Cleared {result.deleted_count} signals",
+            "deleted_count": result.deleted_count
+        }
+        
+    except Exception as e:
+        logging.error(f"Error clearing signals: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @api_router.get("/signals/history")
 async def get_signal_history(limit: int = 100):
     """Get historical trading signals"""
