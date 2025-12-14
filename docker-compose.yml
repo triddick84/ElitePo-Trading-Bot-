@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  # MongoDB Database
+  mongodb:
+    image: mongo:7.0
+    container_name: pocket-option-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: trading_signals
+    networks:
+      - pocket-option-network
+    restart: unless-stopped
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: pocket-option-backend
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./backend:/app/backend
+    environment:
+      - MONGO_URL=mongodb://mongodb:27017
+      - DB_NAME=trading_signals
+      - DEBUG=True
+    depends_on:
+      - mongodb
+    networks:
+      - pocket-option-network
+    restart: unless-stopped
+    command: uvicorn server:app --reload --host 0.0.0.0 --port 8001
+
+  # React Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: pocket-option-frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app/frontend
+      - /app/frontend/node_modules
+    environment:
+      - REACT_APP_BACKEND_URL=http://localhost:8001
+      - REACT_APP_WS_URL=ws://localhost:8001/ws
+      - REACT_APP_ENV=development
+    depends_on:
+      - backend
+    networks:
+      - pocket-option-network
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+    command: yarn start
+
+volumes:
+  mongodb_data:
+    driver: local
+
+networks:
+  pocket-option-network:
+    driver: bridge
