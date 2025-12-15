@@ -141,6 +141,7 @@ class BotStartRequest(BaseModel):
     auto_trading_enabled: bool = False
     invert_signals: bool = False
     sound_alerts_enabled: bool = True
+    popup_notifications: bool = True
     selected_timeframe: Optional[str] = '1m'
     selected_strategy: Optional[str] = ''
     chart_config: Optional[Dict[str, Any]] = None
@@ -713,6 +714,10 @@ async def update_config(config: BotStartRequest):
             "selected_assets": config.selected_assets,
             "selected_expirations": config.selected_expirations,
             "min_probability_threshold": config.min_probability_threshold,
+            "trading_mode": config.trading_mode.value if hasattr(config.trading_mode, 'value') else config.trading_mode,
+            "invert_signals": config.invert_signals,
+            "sound_alerts_enabled": config.sound_alerts_enabled,
+            "popup_notifications": config.popup_notifications,
             "updated_at": datetime.now(timezone.utc)
         }
         
