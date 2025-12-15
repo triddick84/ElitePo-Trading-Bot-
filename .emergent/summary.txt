@@ -1,187 +1,409 @@
 <analysis>**original_problem_statement:**
-The user's primary goal is to create a highly accurate GPT Signal Bot for the Pocket Option trading platform.
-
-**Core Feature Requests from Start:**
-*   **Live Broker Integration**: Connect the bot to a real Pocket Option account using the provided credentials for real-time data and automated trading. (BLOCKED)
-*   **Maximum Accuracy AI**: Develop a signal generation algorithm with the highest possible accuracy by analyzing everything, comparing models, and using strategies from other high-performing bots.
-*   **Adaptive Market System**: Differentiate between Trending and Ranging markets.
-*   **Advanced Analysis**: Enhance Support & Resistance (S/R) and implement a candlestick pattern analyzer.
-*   **Signal Inversion**: Invert all generated signals (BUY becomes SELL and vice-versa).
-
-**New Feature Requests This Session:**
-*   Research and implement two new high-accuracy 1-minute trading strategies.
-*   Enhance the new strategies to achieve an 85-89% win rate using advanced filters.
-*   Implement a Setup Guide popup that appears when a strategy is selected, providing detailed instructions for configuring the Pocket Option chart and indicators to match the signal's conditions.
-*   Create a complete local development environment setup to run the project in Visual Studio Code.
-*   Add a 10-second latency delay specifically for 5-second timeframe signals.
-*   Implement a money management system with trading sessions and display the calculated stake amount in the signal popup.
+The user's primary goal is to create a GPT Signal Bot for Pocket Option. The project has evolved significantly, with recent requests including:
+- Researching and implementing 3 new high-accuracy trading strategies for 9 different timeframes (5s, 15s, 30s, 1m, 2m, 3m, 5m, 15m, 30m, 1h).
+- Building a custom strategy creator tool where users can define their own rules using a wide array of technical indicators.
+- A complete UI/UX overhaul of the dashboard for better organization and navigation.
+- Adding numerous features like a clear signals button, enhanced auto-generation with asset filtering, Demo/Real account modes, and toggles for notifications, sound alerts, and signal inversion.
+- Implementing a save configuration feature for strategy selections to persist between sessions.
+- Adding a feature to dynamically update a signal's direction during the countdown timer if market conditions change.
+- Adding an auto force generate feature with a configurable time interval.
+- Fixing the long-standing Pocket Option API connection issue (which remains a critical blocker).
 
 **PRODUCT REQUIREMENTS:**
--   The application must use the user-provided Pocket Option account ID, SSID, email, and password for live integration.
--   The signal generation logic must incorporate multi-timeframe analysis, S/R levels, candlestick patterns, and multiple selectable strategies.
--   The system must provide clear, strategy-specific setup instructions to the user.
--   The project must be runnable in a local VS Code development environment.
+- The application must provide a wide range of pre-built, high-winrate trading strategies.
+- The UI must be intuitive, allowing users to configure, select, and save complex trading setups.
+- The system must support both manual and multiple forms of automated signal generation (auto, auto-force, enhanced auto).
+- All signal generation must eventually use live data from the Pocket Option platform once the connection is fixed.
+- The application must allow for deep customization, including building strategies from scratch.
+- Settings like account type, signal inversion, and notification preferences must be configurable and persistent.
 
 **User's preferred language**: English
 
 **what currently exists?**
-The application is a full-stack signal generation bot with a React frontend and a FastAPI backend.
--   **Frontend**: The UI now includes a comprehensive  component, which allows users to choose a timeframe and a specific trading strategy. It triggers a  popup with detailed instructions for that strategy. A notice about a 10-second delay for 5s signals has also been added.
--   **Backend**: The backend has been significantly expanded with new trading strategies.
-    -   **New Strategies**: Two new 1-minute strategies (, ) and their enhanced V2 versions with advanced filters (, ) have been created and integrated into the .
-    -   **Latency Delay**: A 10-second delay has been implemented for all signals generated on the 5-second timeframe.
-    -   **Pocket Option Integration (Still Blocked)**: While the connection is still failing, a new endpoint () and a user guide () have been created to streamline the process of testing fresh authentication tokens.
--   **Local Development**: A complete local development setup has been created, including Docker files, docker-compose, VS Code configurations (), and setup scripts (, ).
+The application is a full-stack signal generation bot with a heavily modified React frontend and FastAPI backend.
+-   **Frontend**: A restructured dashboard () provides a centralized view for trading configuration. An enhanced strategy selector () allows users to pick from dozens of new strategies and save their entire configuration (timeframes, strategies, chart types, etc.). The UI includes controls for Demo/Real accounts, signal inversion, and alerts. An auto force generate feature with a timer has been added. The signal popup () can now dynamically update a signal's direction during the entry countdown.
+-   **Backend**: A major deployment issue was resolved by removing heavy ML dependencies (, , etc.) and implementing conditional imports, allowing the server to run in a lighter environment. A new  and  directory structure dynamically loads over 20 new strategy files. The main configuration endpoint () has been expanded to save and load all the new UI settings.
+-   **Core Functionality Status**: The live Pocket Option integration remains **BLOCKED**. The auto generate signals feature was recently reported as **BROKEN**. The application is currently using Finnhub and Alpha Vantage for market data as a fallback.
 
 **Last working item**:
-The agent was about to begin work on implementing a money management system, as per the user's latest request.
+The agent had just received a user report that the auto generate signals feature is not working and was about to begin debugging it.
 
--   **Last item agent was working**: Implementing a money management system with trading sessions and displaying the correct stake amount on the signal popup.
--   **Status**: NOT STARTED
+-   **Last item agent was working**: Investigating and fixing the broken auto generate signals feature.
+-   **Status**: IN PROGRESS
 -   **Agent Testing Done**: N
 -   **Which testing method agent to use?**: both
--   **User Testing Done**: N
+-   **User Testing Done**: N (User reported the bug, initiating the work).
 
 **All Pending/In progress Issue list**:
--   Issue 1: Pocket Option API Connection Failure (P0 - CRITICAL BLOCKER)
+-   Issue 1: Auto generate signals is not working (P0 - HIGHEST PRIORITY)
+-   Issue 2: Pocket Option API Connection Failure (P0 - CRITICAL BLOCKER)
+-   Issue 3: Adaptive strategy section is not working properly (P2)
 
 **Issues Detail**:
--   **Issue 1: Pocket Option API Connection Failure**
-    -   **Attempted fixes**: The agent attempted to connect using a user-provided auth string () but received an auth error , indicating the session token had expired. Previous attempts using Selenium,  IDs, and other SSIDs have all failed.
+-   **Issue 1: Auto generate signals is not working**
+    -   **Attempted fixes**: None yet. The agent was about to begin the investigation when the job was forked.
     -   **Next debug checklist**:
-        1.  Do NOT attempt previous failed methods.
-        2.  **Prompt the user to follow the  to get a brand new, fresh WebSocket authentication message from their browser's developer tools.**
-        3.  Immediately use the new  endpoint to test the provided auth message. This avoids service restarts and provides instant feedback.
-        4.  Once a working auth message format is confirmed, integrate it into the main connection logic in .
-    -   **Why fix this issue and what will be achieved with the fix?**: This is the user's absolute core requirement. Resolving this will unblock the entire project, enabling live data, trade execution, and accurate signal validation against a real broker account.
+        1.  Check the browser's developer console for frontend errors when trying to start auto-generation in .
+        2.  Inspect the network tab to see if the correct API call (e.g.,  or ) is being made and what its response is.
+        3.  Examine the backend logs for errors immediately after the request is made: ==> /var/log/supervisor/backend.err.log <==
+2025-12-15 10:45:48,995 - force_signal_generator - INFO - 🚨 Emergency AI Ensemble Signal: AUDCAD → PUT (85.0%)
+2025-12-15 10:45:48,996 - force_signal_generator - INFO - 🤖 Advanced AI Ensemble activated for AUDCAD
+2025-12-15 10:45:48,996 - force_signal_generator - INFO - 🎯 USER SELECTED STRATEGY for 1m: 'default'
+2025-12-15 10:45:48,996 - force_signal_generator - INFO - 📋 All selected strategies: {'5s': 'default', '1m': 'default', '15s': 'default', '30s': 'psar_stochastic', '3m': 'default', '5m': 'default'}
+2025-12-15 10:45:48,996 - force_signal_generator - INFO - ⚡ Applying RESEARCHED HIGH-ACCURACY 1M strategies for AUDCAD (2024-2025 90%+ Target)
+2025-12-15 10:45:48,996 - force_signal_generator - ERROR - Error with research-backed strategies: cannot import name 'real_market_data_service' from 'real_market_data_service' (/app/backend/real_market_data_service.py)
+2025-12-15 10:45:48,996 - high_accuracy_1m_donchian_stc - INFO - 🎯 Generating Donchian-STC 1M signal for AUDCAD
+2025-12-15 10:45:49,174 - yfinance - ERROR - $AUDCAD: possibly delisted; no price data found  (period=1d) (Yahoo error = "No data found, symbol may be delisted")
+2025-12-15 10:45:49,175 - high_accuracy_1m_donchian_stc - WARNING - Insufficient data for AUDCAD
+2025-12-15 10:45:49,175 - high_accuracy_1m_3m_rsi_bb_macd - INFO - 🎯 Generating RSI-BB-MACD 1m signal for AUDCAD
+2025-12-15 10:45:49,475 - yfinance - ERROR - $AUDCAD: possibly delisted; no price data found  (period=1d) (Yahoo error = "No data found, symbol may be delisted")
+2025-12-15 10:45:49,475 - high_accuracy_1m_3m_rsi_bb_macd - WARNING - Insufficient data for AUDCAD
+2025-12-15 10:45:49,475 - force_signal_generator - INFO - ⚡ Trying RSI+BB+Volume strategy for AUDCAD
+2025-12-15 10:45:49,606 - pocket_option_1m_rsi_bb_volume - INFO - 📊 AUDCAD RSI+BB+Vol Analysis:
+2025-12-15 10:45:49,606 - pocket_option_1m_rsi_bb_volume - INFO -    Price=0.91505, RSI-14=49.6
+2025-12-15 10:45:49,606 - pocket_option_1m_rsi_bb_volume - INFO -    BB Position=46.04% (Lower=0.91488, Upper=0.91525)
+2025-12-15 10:45:49,606 - pocket_option_1m_rsi_bb_volume - INFO -    Volume Ratio=nanx (Spike=NO)
+2025-12-15 10:45:49,606 - pocket_option_1m_rsi_bb_volume - INFO -    BB Width=0.000 (volatility)
+2025-12-15 10:45:49,606 - pocket_option_1m_rsi_bb_volume - INFO - ⏸️ No signal: RSI=49.6, BB Position=46.0%
+2025-12-15 10:45:49,606 - force_signal_generator - INFO - ⚡ Trying Stochastic+MACD+Pattern strategy for AUDCAD
+2025-12-15 10:45:49,607 - pocket_option_1m_stoch_macd_pattern - INFO - 📊 AUDCAD Stoch+MACD+Pattern Analysis:
+2025-12-15 10:45:49,607 - pocket_option_1m_stoch_macd_pattern - INFO -    Price=0.91505
+2025-12-15 10:45:49,607 - pocket_option_1m_stoch_macd_pattern - INFO -    Stochastic: K=83.4, D=82.0
+2025-12-15 10:45:49,607 - pocket_option_1m_stoch_macd_pattern - INFO -    MACD Histogram=-0.00000
+2025-12-15 10:45:49,607 - pocket_option_1m_stoch_macd_pattern - INFO -    Patterns: Bullish=[], Bearish=[]
+2025-12-15 10:45:49,607 - pocket_option_1m_stoch_macd_pattern - INFO -    S/R: Support=0.91402, Resistance=0.91532
+2025-12-15 10:45:49,607 - pocket_option_1m_stoch_macd_pattern - INFO - ⏸️ No signal: Stoch=83.4, MACD Hist=-0.00000
+2025-12-15 10:45:49,607 - force_signal_generator - INFO -    Falling back to original 1M strategy for AUDCAD
+2025-12-15 10:45:49,630 - chart_transformations - ERROR - Missing required OHLC columns in dataframe
+2025-12-15 10:45:49,630 - market_quality_filter - INFO - 🔍 MARKET QUALITY CHECK (1m)...
+2025-12-15 10:45:49,631 - market_quality_filter - WARNING - ❌ MARKET QUALITY REJECTED: TOO QUIET: 14th percentile (need more movement), CHOPPY MARKET: Trend strength 0.10 (need >0.40)
+2025-12-15 10:45:49,631 - pocket_option_1m_strategy - WARNING - ⛔ SIGNAL REJECTED: Poor market quality for AUDCAD
+2025-12-15 10:45:49,631 - force_signal_generator - WARNING - ⚠️ No signal from 1m strategy for AUDCAD
+2025-12-15 10:45:49,632 - force_signal_generator - INFO - 📍 No suffix detected - Defaulting to OTC market
+2025-12-15 10:45:49,632 - force_signal_generator - INFO - 🎯 Applying S/R analysis to signal...
+2025-12-15 10:45:49,632 - force_signal_generator - WARNING - ⚠️ HIGH REVERSAL RISK detected at near_support
+2025-12-15 10:45:49,632 - force_signal_generator - WARNING - 🔴 REVERSING SIGNAL: SELL near support → BUY (bounce expected)
+2025-12-15 10:45:49,632 - pocket_option_timing_sync - INFO - ⚡ Pocket Option Sync: -0.00s compensation for 1m candle
+2025-12-15 10:45:49,632 - pocket_option_timing_sync - INFO - 📊 1m candle CLOSES in 10.37s: UTC 10:46:00.000, Chicago 04:46:00
+2025-12-15 10:45:49,632 - force_signal_generator - INFO - ⏰ FORCE GENERATE TIMING (with 5s latency offset):
+2025-12-15 10:45:49,632 - force_signal_generator - INFO -    Current time: 04:45:49
+2025-12-15 10:45:49,632 - force_signal_generator - INFO -    Original entry time: 04:46:00
+2025-12-15 10:45:49,632 - force_signal_generator - INFO -    Adjusted entry time: 04:45:55 (5s earlier)
+2025-12-15 10:45:49,632 - force_signal_generator - INFO -    Countdown: 15.4 seconds (target: 15s with offset)
+2025-12-15 10:45:49,632 - force_signal_generator - INFO -    Popup shows: NOW (immediately)
+2025-12-15 10:45:49,632 - force_signal_generator - INFO - 🔍 FORCE EXPIRATION DEBUG: user_exp=1m, exp_min=1
+2025-12-15 10:45:49,632 - force_signal_generator - INFO -    🚀 OTC Boost: +3.0%
+2025-12-15 10:45:49,632 - force_signal_generator - ERROR - Error in force combine analysis: name 'user_timeframes' is not defined
+2025-12-15 10:45:49,634 - force_signal_generator - INFO - 🔍 EXPIRATION DEBUG: timeframe=1m, expiration_minutes=1
+2025-12-15 10:45:49,634 - force_signal_generator - INFO - ✅ Generated SINGLE OTC signal with 94.0% confidence
+2025-12-15 10:45:49,634 - server - INFO - ✅ Generated 1 signals for AUDCAD
+2025-12-15 10:45:49,635 - server - INFO - Signal EMERGENCY_OTC_20251215_104549_AUDCAD stored successfully in database
+2025-12-15 10:45:50,150 - platform_integrations - INFO - Signal sent to Telegram successfully: EMERGENCY_OTC_20251215_104549_AUDCAD
+2025-12-15 10:45:50,464 - platform_integrations - INFO - Signal sent to AutobotSignal.io: EMERGENCY_OTC_20251215_104549_AUDCAD with Chicago timezone
+2025-12-15 10:45:50,465 - platform_integrations - WARNING - Pocket Option API not initialized
+2025-12-15 10:45:50,465 - platform_integrations - INFO - Signal EMERGENCY_OTC_20251215_104549_AUDCAD sent to all platforms
+2025-12-15 10:45:50,465 - signal_validator - INFO - 📅 Scheduled validation for signal EMERGENCY_OTC_20251215_104549_AUDCAD in 90 seconds
+2025-12-15 10:45:50,465 - server - INFO - 📅 Scheduled validation for signal EMERGENCY_OTC_20251215_104549_AUDCAD
+2025-12-15 10:46:12,437 - signal_validator - INFO - 🔍 Validating signal EMERGENCY_OTC_20251215_104441_AUDCAD: BUY AUDCAD @ 1.05
+2025-12-15 10:46:12,578 - realtime_market_data_hub - WARNING - ⚠️ No candle data available for AUDCAD 1m
+2025-12-15 10:46:12,578 - signal_validator - WARNING - ⚠️ Using fallback price method for AUDCAD
+2025-12-15 10:46:13,671 - signal_validator - INFO - 💾 Stored validation result for signal EMERGENCY_OTC_20251215_104441_AUDCAD
+2025-12-15 10:46:13,675 - signal_validator - INFO - 📝 Updated signal EMERGENCY_OTC_20251215_104441_AUDCAD with result: LOSS
+2025-12-15 10:46:13,675 - signal_validator - INFO - ✅ Signal EMERGENCY_OTC_20251215_104441_AUDCAD - LOSS: Entry $1.05000 → Exit $0.91590 (-12.77%)
+2025-12-15 10:46:13,675 - signal_validator - INFO - ✅ Signal EMERGENCY_OTC_20251215_104441_AUDCAD validated: LOSS
+2025-12-15 10:47:20,466 - signal_validator - INFO - 🔍 Validating signal EMERGENCY_OTC_20251215_104549_AUDCAD: BUY AUDCAD @ 1.05
+2025-12-15 10:47:20,574 - realtime_market_data_hub - WARNING - ⚠️ No candle data available for AUDCAD 1m
+2025-12-15 10:47:20,575 - signal_validator - WARNING - ⚠️ Using fallback price method for AUDCAD
+2025-12-15 10:47:22,967 - signal_validator - INFO - 💾 Stored validation result for signal EMERGENCY_OTC_20251215_104549_AUDCAD
+2025-12-15 10:47:22,971 - signal_validator - INFO - 📝 Updated signal EMERGENCY_OTC_20251215_104549_AUDCAD with result: LOSS
+2025-12-15 10:47:22,971 - signal_validator - INFO - ✅ Signal EMERGENCY_OTC_20251215_104549_AUDCAD - LOSS: Entry $1.05000 → Exit $0.91590 (-12.77%)
+2025-12-15 10:47:22,971 - signal_validator - INFO - ✅ Signal EMERGENCY_OTC_20251215_104549_AUDCAD validated: LOSS
+INFO:     Will watch for changes in these directories: ['/app/backend']
+INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
+INFO:     Started reloader process [28] using WatchFiles
+INFO:     Started server process [73]
+INFO:     Waiting for application startup.
+2025-12-15 13:47:33,178 - server - INFO - ⚡ Server startup complete - initialization running in background
+2025-12-15 13:47:33,178 - server - INFO - 🚀 Starting background initialization...
+INFO:     Application startup complete.
+2025-12-15 13:47:33,184 - trading_bot_service - ERROR - Error loading configuration: fromisoformat: argument must be str
+2025-12-15 13:47:33,186 - signal_validator - INFO - ✅ Signal Validator initialized
+2025-12-15 13:47:33,188 - trading_bot_service - ERROR - Error loading configuration: fromisoformat: argument must be str
+2025-12-15 13:47:33,197 - ai_learning_system - INFO - 📚 Loaded AI learning state from database
+2025-12-15 13:47:33,197 - ai_learning_system - INFO - ✅ AI Learning System initialized
+2025-12-15 13:47:33,197 - server - INFO - ✅ Application initialization complete
+2025-12-15 13:48:33,180 - server - INFO - 🧠 Running scheduled AI learning cycle...
+2025-12-15 13:48:33,180 - ai_learning_system - INFO - 🧠 AI Learning System: Starting analysis...
+2025-12-15 13:48:33,186 - ai_learning_system - INFO - 📈 Current Performance: 0.3% win rate
+2025-12-15 13:48:33,186 - ai_learning_system - INFO - 🔧 Adjusting BUY signal threshold: 6.50% stricter
+2025-12-15 13:48:33,186 - ai_learning_system - INFO - 🔧 Increased RSI weight by 5%
+2025-12-15 13:48:33,186 - ai_learning_system - INFO - 🔧 Increased confidence boost by 10%
+2025-12-15 13:48:33,186 - ai_learning_system - INFO - ⚠️ Timeframe 5s underperforming: 39.5%
+2025-12-15 13:48:33,186 - ai_learning_system - INFO - ⚠️ Timeframe 1m underperforming: 0.0%
+2025-12-15 13:48:33,187 - ai_learning_system - INFO - 💾 Saved AI learning adjustments
+2025-12-15 13:48:33,187 - ai_learning_system - INFO - ✅ AI Learning: Applied 3 adjustments
+2025-12-15 13:48:33,187 - server - INFO - ✅ Scheduled AI learning completed
+INFO:     Will watch for changes in these directories: ['/app/backend']
+INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
+INFO:     Started reloader process [28] using WatchFiles
+
+==> /var/log/supervisor/backend.out.log <==
+INFO:     10.64.129.7:40912 - "GET /api/signals/active HTTP/1.1" 200 OK
+INFO:     10.64.156.79:50004 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.129.19:48330 - "GET /api/bot/status HTTP/1.1" 200 OK
+INFO:     10.64.129.7:40912 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.129.7:40912 - "GET /api/signals/active HTTP/1.1" 200 OK
+INFO:     10.64.156.79:50004 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.129.7:40912 - "GET /api/bot/status HTTP/1.1" 200 OK
+INFO:     10.64.156.79:50004 - "GET /api/signals/active HTTP/1.1" 200 OK
+INFO:     10.64.129.19:48332 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.129.19:48332 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.156.79:50004 - "GET /api/performance/metrics HTTP/1.1" 200 OK
+INFO:     10.64.129.7:40912 - "GET /api/signals/active HTTP/1.1" 200 OK
+INFO:     10.64.156.79:50004 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.129.7:40912 - "GET /api/bot/status HTTP/1.1" 200 OK
+INFO:     10.64.129.7:40912 - "GET /api/signals/active HTTP/1.1" 200 OK
+INFO:     10.64.129.19:39280 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.129.19:48332 - "POST /api/signals/force-generate HTTP/1.1" 200 OK
+INFO:     10.64.129.19:48332 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.156.79:50004 - "GET /api/signals/active HTTP/1.1" 200 OK
+INFO:     10.64.156.79:50004 - "GET /api/bot/status HTTP/1.1" 200 OK
+INFO:     10.64.156.79:50004 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.156.79:50004 - "GET /api/signals/active HTTP/1.1" 200 OK
+INFO:     10.64.156.79:50004 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.129.7:55358 - "GET /api/performance/metrics HTTP/1.1" 200 OK
+INFO:     10.64.129.7:55358 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.129.7:55358 - "GET /api/bot/status HTTP/1.1" 200 OK
+INFO:     10.64.129.19:52766 - "GET /api/signals/active HTTP/1.1" 200 OK
+INFO:     10.64.129.7:55358 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.129.19:52766 - "GET /api/signals/active HTTP/1.1" 200 OK
+INFO:     10.64.156.79:40306 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.129.7:55358 - "GET /api/bot/status HTTP/1.1" 200 OK
+INFO:     10.64.129.19:52766 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.129.7:55358 - "GET /api/signals/active HTTP/1.1" 200 OK
+INFO:     10.64.129.19:36732 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.129.19:52766 - "GET /api/performance/metrics HTTP/1.1" 200 OK
+INFO:     10.64.129.7:55358 - "GET /api/signals/active HTTP/1.1" 200 OK
+INFO:     10.64.129.19:52766 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.156.79:40318 - "GET /api/bot/status HTTP/1.1" 200 OK
+INFO:     10.64.129.7:55358 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.129.19:52766 - "GET /api/signals/active HTTP/1.1" 200 OK
+INFO:     10.64.129.19:52766 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.129.7:55358 - "GET /api/bot/status HTTP/1.1" 200 OK
+INFO:     10.64.156.79:40318 - "GET /api/signals/active HTTP/1.1" 200 OK
+INFO:     10.64.129.7:55358 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.129.19:52766 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.156.79:40318 - "GET /api/performance/metrics HTTP/1.1" 200 OK
+INFO:     10.64.129.19:52766 - "GET /api/signals/active HTTP/1.1" 200 OK
+INFO:     10.64.129.19:52766 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.156.79:40318 - "GET /api/bot/status HTTP/1.1" 200 OK
+INFO:     10.64.156.79:40318 - "GET /api/signals/active HTTP/1.1" 200 OK
+INFO:     10.64.156.79:40318 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.129.7:48062 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.129.7:48062 - "GET /api/signals/active HTTP/1.1" 200 OK
+INFO:     10.64.156.79:40318 - "GET /api/bot/status HTTP/1.1" 200 OK
+INFO:     10.64.129.7:48062 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.129.7:48062 - "GET /api/signals/active HTTP/1.1" 200 OK
+INFO:     10.64.129.7:48062 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.129.19:54312 - "GET /api/performance/metrics HTTP/1.1" 200 OK
+INFO:     10.64.129.7:48062 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.129.19:54312 - "GET /api/bot/status HTTP/1.1" 200 OK
+INFO:     10.64.129.7:48062 - "GET /api/signals/active HTTP/1.1" 200 OK
+INFO:     10.64.129.7:48062 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.156.79:50374 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.156.79:50374 - "GET /api/signals/active HTTP/1.1" 200 OK
+INFO:     10.64.156.79:50360 - "GET /api/bot/status HTTP/1.1" 200 OK
+INFO:     10.64.129.19:54322 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.129.19:54322 - "GET /api/signals/active HTTP/1.1" 200 OK
+INFO:     10.64.156.79:50360 - "GET /api/performance/metrics HTTP/1.1" 200 OK
+INFO:     10.64.156.79:50374 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.156.79:50374 - "GET /api/signals/active HTTP/1.1" 200 OK
+INFO:     10.64.156.79:50374 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.129.7:40228 - "GET /api/bot/status HTTP/1.1" 200 OK
+INFO:     10.64.129.7:40228 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.129.19:41416 - "GET /api/signals/active HTTP/1.1" 200 OK
+INFO:     10.64.129.7:40228 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.129.7:40228 - "GET /api/signals/active HTTP/1.1" 200 OK
+INFO:     10.64.129.19:41416 - "GET /api/bot/status HTTP/1.1" 200 OK
+INFO:     10.64.156.79:53722 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.129.19:59116 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.129.19:41416 - "GET /api/performance/metrics HTTP/1.1" 200 OK
+INFO:     10.64.129.19:41416 - "GET /api/signals/active HTTP/1.1" 200 OK
+INFO:     10.64.129.7:40228 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.156.79:53722 - "GET /api/bot/status HTTP/1.1" 200 OK
+INFO:     10.64.156.79:53722 - "GET /api/signals/active HTTP/1.1" 200 OK
+INFO:     10.64.129.7:40228 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.129.7:40228 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.129.19:59120 - "GET /api/signals/active HTTP/1.1" 200 OK
+INFO:     10.64.129.19:59120 - "GET /api/bot/status HTTP/1.1" 200 OK
+INFO:     10.64.129.7:40228 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.156.79:49464 - "POST /api/signals/auto-generate/enhanced HTTP/1.1" 422 Unprocessable Entity
+INFO:     10.64.129.19:59120 - "GET /api/signals/active HTTP/1.1" 200 OK
+INFO:     10.64.129.19:59120 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.129.19:39886 - "GET /api/performance/metrics HTTP/1.1" 200 OK
+INFO:     10.64.129.7:40228 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.129.19:39886 - "GET /api/signals/active HTTP/1.1" 200 OK
+INFO:     10.64.156.79:49464 - "GET /api/bot/status HTTP/1.1" 200 OK
+INFO:     10.64.162.106:38582 - "GET /api/bot/candle-sync/status HTTP/1.1" 200 OK
+INFO:     10.64.162.106:38592 - "GET /api/signals/active HTTP/1.1" 200 OK
+INFO:     10.64.128.44:51384 - "GET /api/performance/metrics HTTP/1.1" 200 OK
+INFO:     10.64.162.106:38608 - "GET /api/bot/status HTTP/1.1" 200 OK.
+        4.  Review the implementation of the auto-generation background task in  and any related services (e.g., ).
+    -   **Why fix this issue and what will be achieved with the fix?**: This is a core feature for unattended trading. Fixing it is the user's current top priority.
+    -   **Status**: IN PROGRESS
+    -   **Is recurring issue?**: N
+    -   **Should Test frontend/backend/both after fix?**: both
+    -   **Blocked on other issue**: None
+
+-   **Issue 2: Pocket Option API Connection Failure**
+    -   **Attempted fixes**: Numerous failed attempts were made in previous sessions. A helper guide () and a dedicated test endpoint () were created to streamline testing new credentials. The project is currently using fallback data APIs.
+    -   **Next debug checklist**:
+        1.  Do NOT attempt any of the previously failed connection methods.
+        2.  **Prompt the user to follow  to get a brand new WebSocket authentication message.**
+        3.  Use the  endpoint to immediately test the new auth message without a server restart.
+        4.  If a working message is found, integrate it into the primary connection logic.
+    -   **Why fix this issue and what will be achieved with the fix?**: This is the user's primary, long-standing goal. Fixing it will enable live data, trade execution, and accurate backtesting.
     -   **Status**: BLOCKED
     -   **Is recurring issue?**: Y
     -   **Should Test frontend/backend/both after fix?**: backend
-    -   **Blocked on other issue**: None. This is the main blocker for all other features that depend on live data.
+    -   **Blocked on other issue**: None. This is the main blocker for the entire project's core purpose.
+
+-   **Issue 3: Adaptive strategy section is not working properly**
+    -   **Attempted fixes**: The agent performed a cursory check of the component and endpoints but did not debug the functionality.
+    -   **Next debug checklist**:
+        1.  Ask the user for specific steps to reproduce the issue, as not working properly is ambiguous.
+        2.  Review the frontend code in  and its state management.
+        3.  Manually test the  endpoints using  to verify the backend logic.
+    -   **Why fix this issue and what will be achieved with the fix?**: To complete a user-requested feature that allows the bot to adapt to different market conditions.
+    -   **Status**: NOT STARTED
+    -   **Is recurring issue?**: N
+    -   **Should Test frontend/backend/both after fix?**: both
+    -   **Blocked on other issue**: None
 
 **In progress Task List**:
--   Task 1: Implement Money Management System (P0)
-
-**Task Detail**:
--   **Task 1: Implement Money Management System**
-    -   **Where to resume**: This task has not been started. The next step is to plan the implementation. This will likely involve:
-        1.  Creating a new backend service/module for money management logic (e.g., Martingale, fixed percentage).
-        2.  Creating a new DB collection to store session state (e.g., current stake, win/loss streak).
-        3.  Modifying the signal generation flow to calculate and include the .
-        4.  Updating the  or a similar frontend component to display this new .
-    -   **What will be achieved with this?**: It will provide users with dynamic trade amount suggestions based on a selected strategy and recent performance, a key feature for disciplined trading.
-    -   **Status**: NOT STARTED
-    -   **Should Test frontend/backend/both after fix?**: both
-    -   **Blocked on something**: None.
+None. The current focus is on the auto generate signals bug fix.
 
 **Upcoming and Future Tasks**
 -   **Upcoming Tasks**:
-    -   **(P1) Finalize and Test Advanced Signal Generator**: Once the Pocket Option connection is live, fully test the  with real broker data.
-    -   **(P2) Implement LSTM Predictor**: Develop the  file into a functional prediction model.
+    -   **(P1) Phase 2: Custom Strategy Builder**: Begin the implementation of the custom strategy creation tool. This involves creating a UI with dropdowns for all supported indicators and their parameters, and a backend to interpret and execute these user-defined strategies.
 -   **Future Tasks**:
-    -   **(P2) Full Verification of AI Learning Loop**: The 's end-to-end effectiveness has not been confirmed with live data.
+    -   **(P2) Money Management System**: Implement a system (e.g., Martingale, fixed percentage) to calculate and display the recommended stake amount.
     -   **(P3) Extend Latency Slider Range**: Implement the overlooked user request to increase the latency slider's range in .
+    -   **(P3) Refactor  and **: Break down these large files into smaller, more manageable modules/routers.
+    -   **(P3) Re-enable ML Features**: Once the core application is stable and if the deployment environment allows, investigate re-introducing the ML models (, , etc.) that were disabled.
 
 **Completed work in this session**
--   **New 1-Minute Strategies**: Researched, created, and integrated two new high-winrate strategies (RSI+BB+Volume, Stochastic+MACD+Patterns) and their enhanced V2 versions with advanced filters (ADX, ATR, Volume Profile).
--   **Signal Setup Guide System**: Implemented a system where selecting a strategy from the new  component triggers a modal popup () with detailed instructions on how to configure the Pocket Option chart and indicators.
--   **5s Latency Implementation**: Added a 10-second processing delay for all signals generated on the 5-second timeframe to improve stability, and added a UI notice for the user.
--   **Local Development Environment**: Created a complete setup for running and debugging the full-stack application locally in VS Code, including Docker configurations, VS Code tasks/launch files, and setup scripts.
--   **Pocket Option Auth Helper**: Created a user guide () and a backend test endpoint () to streamline fixing the primary connection blocker.
--   **UI Enhancement**: Overhauled the  component to be a central hub for selecting timeframes, strategies, and bot controls, integrating the new setup guide popup.
+-   **Deployment Failure Fixed**: Resolved critical deployment errors by removing heavy ML dependencies (, , , etc.) and adding graceful fallbacks in the Python code, making the application lighter.
+-   **Phase 1 Complete (Strategy Implementation)**: Researched and implemented over 20 new strategies for 9 different timeframes, organizing them into a dynamic  directory managed by a .
+-   **Phase 3 Complete (Dashboard & UI)**: Executed a major UI/UX overhaul, creating . Moved several configuration components into an  page.
+-   **Configuration Persistence**: Implemented a Save Configuration feature that allows users to save their chosen strategies, timeframes, and other settings to the database and load them automatically.
+-   **New Dashboard Controls**: Added UI toggles for Demo/Real account, invert signals, popup notifications, and sound alerts. All settings are saved to the backend.
+-   **Dynamic Signal Popup**: The signal notification popup now re-validates the signal during the entry countdown and visually indicates if the signal direction has changed.
+-   **Auto Force Generate Feature**: Added a new UI section and backend logic for automatically generating signals at a user-selected time interval (e.g., every 1 minute).
+-   **Auto-Clear Toast Removed**: Fixed a UI annoyance by removing the spammy toast notification that appeared every time the signal list was auto-cleared.
 
 **Earlier issues found/mentioned but not fixed**
 -   **Issue 1: Latency slider range needs an extended range.**
-    -   **Debug checklist**: In , increase the  and  props of the slider component. Verify the backend can handle the new range.
-    -   **Why to solve this issue and what will be achieved with this?**: This was an original user request that was overlooked. It gives the user more control over timing.
+    -   **Debug checklist**: In , increase the  and  props of the slider component.
+    -   **Why to solve this issue and what will be achieved with this?**: This was an original user request that was overlooked. It gives the user more control over signal timing.
     -   **Should Test frontend/backend/both after fix**: frontend
     -   **Is recurring issue?**: N
 
 **Known issue recurrence from previous fork**
--   None. The previous recurring issue with candle sync was resolved and has not reappeared.
+-   **Issue recurrence in previous fork**: Pocket Option API Connection Failure.
+-   **Recurrence count**: High (present across multiple forks).
+-   **Status**: BLOCKED
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
--   **Full-Stack**: React frontend, FastAPI backend.
--   **Trading Strategies**: The system now orchestrates multiple, complex trading strategies based on user selection, combining indicators like RSI, Bollinger Bands, MACD, Stochastic, and advanced filters like ADX and ATR.
--   **Dynamic UI**: The frontend dynamically generates setup guides and UI notices based on user selections (strategy, timeframe).
--   **Local Development Containerization**: Using Docker, Docker Compose, and VS Code Remote - Containers for a reproducible development environment.
+-   **Dynamic Module Loading**: The  uses Python's  and  modules to dynamically discover and load all trading strategy files from the  directory, making the system highly extensible.
+-   **Conditional Imports & Feature Flags**: The application uses a central  file and  blocks around imports like  to gracefully disable heavy ML features, allowing it to run in resource-constrained environments.
+-   **Persistent UI State**: Frontend configuration (strategy choices, toggles) is saved to the backend via a  endpoint and stored in MongoDB, ensuring user settings are preserved across sessions.
+-   **Background Tasks (APScheduler)**: The backend uses scheduled jobs to handle auto-generation features. The current auto-generate not working bug is likely located within this system.
 
 **key DB schema**
--   No changes were made to the database schema in this session.
+-   **trading_configurations**: This collection in MongoDB was expanded to store new user preference fields, including:
+    -   : A dictionary mapping timeframes to selected strategy IDs.
+    -   : The user's preferred chart visualization.
+    -   : demo or real.
+    -   : boolean
+    -   : boolean
+    -   : boolean
 
 **changes in tech stack**
--   No new libraries or packages were installed.
+-   **Dependencies Removed**: , , , , , and  were removed from  to fix deployment failures. The code now contains fallbacks for their absence.
 
 **All files of reference**
--   **New Files Created**:
-    -   
-    -   
-    -   
-    -   
-    -   
-    -   
-    -   
-    -   
-    -   All local dev files (, , , , , )
--   **Key Files Updated**:
-    -   : Added  endpoint, removed setup guide from signal response.
-    -   : Integrated all new strategies, added 10s latency for 5s timeframe.
-    -   : Modified to use the new  and removed the automatic signal popup logic.
-    -   : Overwritten with comprehensive local setup instructions.
+-   **Key Modified/Created Files**:
+    -   : Major updates to add new endpoints (, , etc.) and update configuration models to handle new frontend settings.
+    -   : The new, primary dashboard component.
+    -   : The new strategy selection page with save/load functionality.
+    -   : Contains the logic for dynamically re-checking signals during the countdown.
+    -   : New file that acts as the central coordinator for all dynamically loaded strategies.
+    -    (directory): Contains all ~20+ new strategy implementation files.
+    -   : Significantly cleaned up to remove ML dependencies.
+    -   : Routing logic updated to render the new  component.
 
 **Areas that need refactoring**:
--    has grown extremely large and complex. It should be broken down. The strategy selection logic could be extracted into a separate strategy router module.
--   The multiple failed Pocket Option integration files (, , ) from previous sessions should be consolidated into one working client or deleted once the connection is stable.
+-   : Has grown excessively large and handles too many distinct concerns. It should be broken up into multiple FastAPI  files (e.g., , ).
+-   : While some logic was offloaded, this file still contains a lot of complex integration code and could be simplified further.
+-   The various obsolete Pocket Option connection files (, etc.) should be consolidated or removed once a stable connection method is achieved.
 
 **key api endpoints**
--   : Main endpoint to get a signal. Its response no longer includes the .
--   : (New) Accepts a JSON payload with auth data to quickly test a Pocket Option connection.
+-   : Central endpoint for saving and loading all user-configurable settings from the frontend.
+-   : New endpoint for the advanced auto-generation feature.
+-   : The original endpoint for starting the bot; may be related to the current bug.
+-   : New endpoint to clear the list of generated signals.
+-   : Helper endpoint for rapidly testing new Pocket Option authentication tokens.
 
 **Critical Info for New Agent**
-1.  **Pocket Option Auth is the #1 Blocker**: Do not work on other features until you attempt to solve this. Your immediate first action should be to ask the user for a fresh authentication message, guiding them with . Use the  endpoint for fast verification.
-2.  **Last User Request**: The user's most recent request was to implement a money management system. This should be your priority *after* addressing the Pocket Option connection.
-3.  **User is Highly Engaged**: The user provides frequent, iterative feedback. Be prepared to implement a feature, have the user refine the requirements, and then refactor your implementation. The Setup Guide feature is a prime example of this workflow.
+1.  **Auto Generate is Broken**: Your immediate priority is to fix the auto generate signals feature. The user just reported this. Start by examining the frontend request and backend logs to trace the failure.
+2.  **Pocket Option is Still the Main Blocker**: Do not attempt to fix the Pocket Option connection using old methods. The only viable next step is to ask the user for a fresh authentication message (from browser developer tools) and use the  endpoint to validate it.
+3.  **ML Features are Intentionally Disabled**: Heavy ML libraries like TensorFlow were removed to fix deployment issues. The code has fallbacks, so do not try to reinstall them. Advanced AI functionality is currently non-operational by design.
+4.  **Follow the Phased Plan**: After fixing the auto-generate bug, the next major task is **Phase 2: The Custom Strategy Builder**. Do not get sidetracked by other future tasks until the current bug is resolved and this next phase is started.
 
 **documents created in this job**
 -   
 -   
--   
--   
--   
+-   Multiple Phase 1 progress summaries.
 
 **Last 10 User Messages and any pending user messages**
-1.  **User**: only have the popup for setup guide on the strategy selection tool... - **Status**: COMPLETED. The agent refactored the UI to move the popup from signal generation to strategy selection.
-2.  **User**: create all proper files and code to run this build on desktop visual studio code also. - **Status**: COMPLETED. Agent created a full local dev environment setup.
-3.  **User**: on the strategy selection tool page it still needs to be like the old or previous selection tool... - **Status**: COMPLETED. Agent updated the  component to be more comprehensive.
-4.  **User**: on 5 sec timeframe make signals generated 10 seconds later... - **Status**: COMPLETED. Agent added a 10-second delay for 5s signals and a UI notice.
-5.  **User**: on the signals popup notification display have the stake display what trade amounts the money Management System is showing... - **Status**: PENDING. This is the current 
-wtmp begins Sun Dec 14 00:21:52 2025. The agent has acknowledged it but not started implementation.
+1.  **User**: Add save function to strategy selector page. (COMPLETED)
+2.  **User**: Remove spammy toast notification for auto-clearing signals. (COMPLETED)
+3.  **User**: Add Demo/Real account toggles and controls for notifications/sound/inversion. (COMPLETED)
+4.  **User**: Make signal popups update dynamically if the signal changes during countdown. (COMPLETED)
+5.  **User**: auto generate signals is not working (PENDING - CURRENT TASK)
 
 **Project Health Check:**
--   **Broken**: The core feature, live Pocket Option API integration, remains completely non-functional due to authentication failures.
--   **Mocked**: All signal generation and analysis still rely on third-party data APIs (Finnhub, etc.), not the live broker data feed.
+-   **Broken**:
+    -   Pocket Option live integration (the project's core goal).
+    -   The Auto Generate Signals feature (as per the last user message).
+-   **Mocked**:
+    -   All market data is sourced from Finnhub/Alpha Vantage as a fallback, not the live broker.
+    -   Advanced AI/ML signal generation is disabled via feature flags due to the removal of heavy dependencies.
 
 **3rd Party Integrations**
--   Finnhub — requires User API Key
--   Alpha Vantage — requires User API Key
--   Binance (for crypto) — no key required
+-   Finnhub — requires User API Key (in use)
+-   Alpha Vantage — requires User API Key (in use)
 -   Pocket Option API (via ) — **Integration is broken/blocked.**
--   TensorFlow/Keras (for future AI models) — Installed, not yet used.
+-   TensorFlow/Keras/XGBoost etc. — **Dependencies removed, features disabled in code.**
 
 **Testing status**
 -   **Testing agent used after significant changes**: NO
 -   **Troubleshoot agent used after agent stuck in loop**: NO
--   **Test files created**:
-    -    (though this script is now less useful than the new API endpoint)
--   **Known regressions**: None.
+-   **Test files created**: None in this session.
+-   **Known regressions**: The auto generate signals feature is a new regression.
 
 **Credentials to test flow:**
 -   **Pocket Option Email**: 
 -   **Pocket Option Password**: 
 -   **Pocket Option UID**: 
+-   **Finnhub API Key**: 
+-   **Alpha Vantage API Key**: 
 
 **What agent forgot to execute**
--   The user's original request to **extend the range of the latency slider** () is still pending and has been carried over from the previous session.</analysis>
+-   The user's request to **extend the range of the latency slider** is still pending from a previous session.
+-   The user's request to fix the **adaptive strategy section** is pending.
+-   The user's request to implement the **money management system** is pending.</analysis>

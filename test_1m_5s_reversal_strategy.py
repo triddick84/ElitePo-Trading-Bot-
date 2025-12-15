@@ -11,7 +11,7 @@ import sys
 from datetime import datetime, timezone
 
 # Test configuration
-BACKEND_URL = "https://tradefox-1.preview.emergentagent.com/api"
+BACKEND_URL = "https://pocket-bot-5.preview.emergentagent.com/api"
 
 class ReversalStrategyTester:
     def __init__(self):
