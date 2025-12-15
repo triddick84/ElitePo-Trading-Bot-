@@ -1,66 +1,77 @@
-# 🔐 Pocket Option Authentication Guide
+# 🔐 Pocket Option Authentication Guide (CORRECTED)
 
 ## The Problem
-Your SSID (Session ID) expires very quickly - usually within **5-10 minutes** or even less. This is why all previous connection attempts have failed.
+Your SSID (Session ID) is needed for API authentication. The SSID is a **cookie value**, not a WebSocket message.
 
-## ✅ Solution: Get Fresh Auth Data
+## ✅ CORRECT Method: Get SSID from Cookies
 
 ### Step-by-Step Instructions:
 
-1. **Open Pocket Option** in your browser (Chrome or Firefox recommended)
+1. **Open Pocket Option** in your browser (Chrome or Brave recommended)
    - Go to: https://pocketoption.com/
    - **Log in to your account**
 
 2. **Open Developer Tools** 
    - Press `F12` or `Right-click` → `Inspect`
-   - Click on the **"Network"** tab
+   - Click on the **"Application"** tab (NOT Network!)
 
-3. **Filter for WebSocket connections**
-   - In the Network tab, click the **"WS"** filter button
-   - This shows only WebSocket connections
+3. **Navigate to Cookies**
+   - In the left-hand menu, under **"Storage"**, expand **"Cookies"**
+   - Click on **"https://pocketoption.com"**
 
-4. **Find the active connection**
-   - Look for a connection to: `wss://api-us-north.po.market` or similar
-   - Click on that connection
+4. **Find the SSID Cookie**
+   - In the list of cookies, look for the entry named **"ssid"** (lowercase)
+   - You should see columns: Name, Value, Domain, Path, Expires, etc.
 
-5. **View Messages**
-   - Click the **"Messages"** tab (or "Frames" in some browsers)
-   - Scroll through the messages
+5. **Copy the SSID Value**
+   - Click on the **"ssid"** row
+   - In the "Value" column, you'll see a long string like: `A4zP7dZSXxYCq0X5z` or similar
+   - **Copy this entire value** (it's usually 17-20 characters)
 
-6. **Find the Auth Message**
-   - Look for a message that starts with: `42["auth",{`
-   - It will look exactly like this:
-   ```
-   42["auth",{"session":"YOUR_SSID_HERE","isDemo":1,"uid":53953294,"platform":1}]
-   ```
+6. **If You Don't See SSID**:
+   - Refresh the Pocket Option page
+   - Navigate to your trading profile or dashboard
+   - Disable any ad blockers
+   - Make sure you're fully logged in
 
-7. **Copy the ENTIRE message**
-   - Copy the complete message including `42["auth",` and the closing `]`
-   - Provide it to me **immediately** (within 1-2 minutes)
+## 📝 What to Send Me:
+
+Just the SSID value (cookie value), for example:
+```
+A4zP7dZSXxYCq0X5z
+```
+
+NOT the WebSocket message! Just the cookie value.
+
+## 🔧 How to Test It:
+
+Once you provide the SSID, I'll test it with:
+```bash
+curl -X POST "YOUR_API_URL/api/pocket-option/quick-auth-test" \
+  -H "Content-Type: application/json" \
+  -d '{"auth_message": "42[\"auth\",{\"session\":\"YOUR_SSID_HERE\",\"isDemo\":1,\"uid\":53953294,\"platform\":1}]"}'
+```
+
+Or you can update it directly in `/app/backend/.env`:
+```
+POCKET_OPTION_SSID=YOUR_NEW_SSID_HERE
+```
 
 ## ⚠️ Important Notes:
 
-- **Timing is critical**: The SSID expires quickly, so provide the message within 1-2 minutes
-- **Stay logged in**: Keep your Pocket Option browser tab open
+- **Cookie-based SSID** may have longer validity than WebSocket tokens
+- **Stay logged in**: Keep your Pocket Option browser tab open to maintain the session
 - **Demo vs Live**: Make sure you're logged into the correct account type
-  - `"isDemo":1` = Demo account
-  - `"isDemo":0` = Live account
+- **Refresh regularly**: SSID still expires eventually, but may last longer than WebSocket tokens
 
-## 🎯 What I'll Do With It:
+## 🎯 What Happens Next:
 
-Once you provide the fresh auth message:
-1. I'll extract the session and credentials
+Once you provide the fresh SSID:
+1. I'll update it in the environment
 2. Test the connection immediately
-3. Implement live data streaming
-4. Enable real-time order execution
-
-## 📝 Example of What to Send Me:
-
-Just copy and paste the entire line:
-```
-42["auth",{"session":"A1B2C3D4E5F6G7H8","isDemo":1,"uid":53953294,"platform":1}]
-```
+3. The auto-refresh system will use Selenium to get new SSIDs automatically
+4. Enable real-time data streaming and order execution
 
 ---
 
-**Ready?** Get that fresh auth message and send it to me right away! ⚡
+**Ready?** Get the SSID from **Application → Cookies → ssid** and send it to me! ⚡
