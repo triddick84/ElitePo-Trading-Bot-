@@ -108,21 +108,25 @@ class PocketOptionAuthenticator:
                 except NoSuchElementException:
                     pass
             
-            # Extract SSID cookie
+            # Extract SSID cookie (lowercase 'ssid', not 'SSID')
             logger.info("🍪 Extracting SSID cookie...")
             cookies = self.driver.get_cookies()
             
             ssid = None
             for cookie in cookies:
-                if cookie['name'] == 'ssid':
+                # Check both lowercase and uppercase variants
+                if cookie['name'].lower() == 'ssid':
                     ssid = cookie['value']
-                    logger.info(f"✅ SSID extracted successfully: {ssid[:20]}...")
+                    logger.info(f"✅ SSID extracted successfully: {ssid}")
+                    logger.info(f"   Cookie name: {cookie['name']}")
+                    logger.info(f"   Domain: {cookie.get('domain', 'N/A')}")
+                    logger.info(f"   Expires: {cookie.get('expiry', 'Session')}")
                     break
             
             if not ssid:
                 logger.warning("⚠️ SSID cookie not found. Available cookies:")
                 for cookie in cookies:
-                    logger.info(f"  - {cookie['name']}")
+                    logger.info(f"  - {cookie['name']}: {cookie['value'][:30]}... (domain: {cookie.get('domain', 'N/A')})")
             
             return ssid
         
