@@ -2751,13 +2751,21 @@ class QuickAuthTestRequest(BaseModel):
 @api_router.post("/pocket-option/quick-auth-test")
 async def quick_auth_test(request: QuickAuthTestRequest):
     """
-    Quick test of Pocket Option authentication using fresh auth message from browser
+    Quick test of Pocket Option authentication
     
-    Usage:
+    Accepts TWO formats:
+    1. Full WebSocket message: 42["auth",{"session":"...","isDemo":1,"uid":...}]
+    2. Simple cookie SSID: A4zP7dZSXxYCq0X5z
+    
+    Usage Option 1 (WebSocket message):
     1. Open Pocket Option in browser
-    2. Open DevTools (F12) -> Network -> WS
-    3. Copy the auth message: 42["auth",{"session":"...","isDemo":1,"uid":...,"platform":1}]
-    4. Send it here for immediate testing
+    2. DevTools (F12) -> Network -> WS -> Messages
+    3. Copy the auth message: 42["auth",{"session":"...","isDemo":1,"uid":...}]
+    
+    Usage Option 2 (Cookie):
+    1. Open Pocket Option in browser  
+    2. DevTools (F12) -> Application -> Cookies
+    3. Copy the "ssid" cookie value
     """
     try:
         import json
@@ -2766,43 +2774,65 @@ async def quick_auth_test(request: QuickAuthTestRequest):
         logger.info("🧪 Quick Auth Test Starting...")
         logger.info(f"📋 Received message: {request.auth_message[:100]}...")
         
-        # Extract auth data from message
-        # Expected format: 42["auth",{"session":"...","isDemo":1,"uid":...,"platform":1}]
-        match = re.search(r'42\["auth",(\{.*?\})\]', request.auth_message)
+        # Check if it's the full WebSocket message or simple SSID
+        if request.auth_message.startswith('42["auth"'):
+            # Format 1: Full WebSocket message
+            match = re.search(r'42\["auth",(\{.*?\})\]', request.auth_message)
+            
+            if not match:
+                return {
+                    "success": False,
+                    "error": "Invalid WebSocket auth message format",
+                    "expected": '42["auth",{"session":"...","isDemo":1,"uid":...}]',
+                    "received": request.auth_message
+                }
+            
+            auth_data = json.loads(match.group(1))
+            ssid = auth_data.get('session')
+            uid = auth_data.get('uid', 0)
+            is_demo = auth_data.get('isDemo', 1) == 1
+            
+            logger.info(f"✅ Extracted from WebSocket message:")
+            logger.info(f"   SSID: {ssid[:50]}...")
+            logger.info(f"   UID: {uid}")
+            logger.info(f"   Demo: {is_demo}")
+        else:
+            # Format 2: Simple cookie SSID
+            ssid = request.auth_message.strip()
+            uid = int(os.getenv('POCKET_OPTION_UID', '0'))
+            is_demo = True  # Default to demo
+            
+            logger.info(f"✅ Using simple SSID format:")
+            logger.info(f"   SSID: {ssid}")
+            logger.info(f"   UID: {uid} (from env)")
+            logger.info(f"   Demo: {is_demo} (default)")
         
-        if not match:
-            return {
-                "success": False,
-                "error": "Invalid auth message format",
-                "expected": '42["auth",{"session":"...","isDemo":1,"uid":...,"platform":1}]',
-                "received": request.auth_message
-            }
+        # Test connection using AsyncPocketOptionClient (simpler, more stable)
+        from pocketoptionapi_async import AsyncPocketOptionClient
+        client = AsyncPocketOptionClient(
+            ssid=ssid,
+            is_demo=is_demo,
+            uid=uid,
+            enable_logging=True
+        )
         
-        auth_data = json.loads(match.group(1))
-        ssid = auth_data.get('session')
-        uid = auth_data.get('uid', 0)
-        is_demo = auth_data.get('isDemo', 1) == 1
-        
-        logger.info(f"✅ Extracted auth data:")
-        logger.info(f"   SSID: {ssid}")
-        logger.info(f"   UID: {uid}")
-        logger.info(f"   Demo: {is_demo}")
-        
-        # Test connection with extracted data
-        from pocket_option_v2 import PocketOptionV2
-        client = PocketOptionV2(ssid, uid, is_demo)
-        
-        logger.info("🔌 Attempting connection...")
+        logger.info("🔌 Attempting connection with AsyncPocketOptionClient...")
         connected = await client.connect()
         
         if connected:
             logger.info("✅ Connection successful!")
             
             # Get balance
-            balance = await client.get_balance()
+            try:
+                balance = await client.get_balance()
+            except:
+                balance = 0
             
             # Test candle data
-            candles = await client.get_candles('EURUSD_otc', 60, 5)
+            try:
+                candles = await client.get_candles('EURUSD_otc', 60, 5)
+            except:
+                candles = []
             
             await client.disconnect()
             
@@ -2810,7 +2840,8 @@ async def quick_auth_test(request: QuickAuthTestRequest):
                 "success": True,
                 "message": "✅ Pocket Option connection SUCCESSFUL!",
                 "connection": {
-                    "ssid": ssid,
+                    "ssid_format": "websocket_message" if request.auth_message.startswith('42[') else "simple_cookie",
+                    "ssid_preview": ssid[:20] + "..." if len(ssid) > 20 else ssid,
                     "uid": uid,
                     "is_demo": is_demo,
                     "balance": balance,
@@ -2820,10 +2851,11 @@ async def quick_auth_test(request: QuickAuthTestRequest):
         else:
             return {
                 "success": False,
-                "error": "Connection failed - SSID might have expired",
-                "recommendation": "Get a fresh auth message from browser (within 1-2 minutes)",
+                "error": "Connection failed - SSID might be expired or invalid",
+                "recommendation": "Get a fresh SSID:\n1. WebSocket: Network→WS→Messages\n2. Cookie: Application→Cookies→ssid",
                 "extracted_data": {
-                    "ssid": ssid,
+                    "ssid_format": "websocket_message" if request.auth_message.startswith('42[') else "simple_cookie",
+                    "ssid_preview": ssid[:20] + "...",
                     "uid": uid,
                     "is_demo": is_demo
                 }
