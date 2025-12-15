@@ -19,6 +19,11 @@ class PocketOptionV2:
     """
     Simplified Pocket Option client using direct WebSocket
     Compatible with the SSID format from markosgiassa1 repo
+    
+    Features:
+    - Auto-reconnection on disconnection
+    - SSID refresh mechanism
+    - Connection health monitoring
     """
     
     # All available assets
@@ -42,7 +47,7 @@ class PocketOptionV2:
         'live_us': 'wss://api-us-north.po.market/socket.io/?EIO=4&transport=websocket'
     }
     
-    def __init__(self, ssid: str, uid: int = None, is_demo: bool = True):
+    def __init__(self, ssid: str, uid: int = None, is_demo: bool = True, auto_refresh: bool = True):
         """
         Initialize client with SSID and UID
         
@@ -50,23 +55,71 @@ class PocketOptionV2:
             ssid: Session ID (e.g., 'A4zP7dZSXxYCq0X5z')
             uid: User ID (e.g., 53953294)
             is_demo: Use demo or live account
+            auto_refresh: Enable automatic SSID refresh on expiration
         """
         self.ssid = ssid
         self.uid = uid or 0
         self.is_demo = is_demo
+        self.auto_refresh = auto_refresh
         self.ws = None
         self.connected = False
         self.sid = None
         self.balance = 0.0
         self.account_id = None
+        self.last_heartbeat = None
+        self.reconnect_attempts = 0
+        self.max_reconnect_attempts = 3
         
-    async def connect(self) -> bool:
-        """Connect to Pocket Option WebSocket"""
+    async def _refresh_ssid(self) -> Optional[str]:
+        """
+        Refresh SSID using Selenium authenticator
+        
+        Returns:
+            New SSID if successful, None otherwise
+        """
+        if not self.auto_refresh:
+            logger.warning("⚠️ Auto-refresh disabled")
+            return None
+        
+        try:
+            logger.info("🔄 Attempting to refresh SSID...")
+            from pocket_option_auth import auto_login_and_get_ssid
+            
+            email = os.getenv('POCKET_OPTION_EMAIL')
+            password = os.getenv('POCKET_OPTION_PASSWORD')
+            
+            if not email or not password:
+                logger.error("❌ Missing email/password for SSID refresh")
+                return None
+            
+            new_ssid = auto_login_and_get_ssid(email, password)
+            
+            if new_ssid:
+                logger.info("✅ SSID refreshed successfully")
+                self.ssid = new_ssid
+                return new_ssid
+            else:
+                logger.error("❌ Failed to refresh SSID")
+                return None
+        except Exception as e:
+            logger.error(f"❌ Error refreshing SSID: {e}")
+            return None
+    
+    async def connect(self, retry_on_auth_fail: bool = True) -> bool:
+        """
+        Connect to Pocket Option WebSocket
+        
+        Args:
+            retry_on_auth_fail: If True, attempt SSID refresh on auth failure
+        
+        Returns:
+            True if connected successfully
+        """
         try:
             # Select URL based on mode
             url = self.WS_URLS['demo'] if self.is_demo else self.WS_URLS['live']
             
-            logger.info(f"🔌 Connecting to {url}...")
+            logger.info(f"🔌 Connecting to {url}... (Attempt {self.reconnect_attempts + 1})")
             
             self.ws = await websockets.connect(url)
             
@@ -96,16 +149,18 @@ class PocketOptionV2:
             }
             
             auth_msg = f'42["auth",{json.dumps(auth_payload)}]'
-            logger.info(f"🔐 Sending auth: {auth_msg}")
+            logger.info(f"🔐 Sending auth: {auth_msg[:50]}...")
             await self.ws.send(auth_msg)
             
             # Step 5: Wait for auth response
             auth_response = await asyncio.wait_for(self.ws.recv(), timeout=10)
-            logger.info(f"📨 Auth response: {auth_response}")
+            logger.info(f"📨 Auth response: {auth_response[:100]}...")
             
             # Check if authenticated
             if 'profile' in auth_response or 'balance' in auth_response:
                 self.connected = True
+                self.reconnect_attempts = 0  # Reset on success
+                self.last_heartbeat = datetime.now()
                 logger.info("✅ Successfully authenticated!")
                 
                 # Parse response
@@ -121,12 +176,36 @@ class PocketOptionV2:
                     logger.warning(f"Could not parse auth response: {e}")
                 
                 return True
+            elif 'error' in auth_response.lower() or 'unauthorized' in auth_response.lower():
+                logger.error(f"❌ Authentication failed - SSID likely expired")
+                
+                # Try to refresh SSID if enabled
+                if retry_on_auth_fail and self.reconnect_attempts < self.max_reconnect_attempts:
+                    self.reconnect_attempts += 1
+                    logger.info("🔄 Attempting to refresh SSID and reconnect...")
+                    
+                    new_ssid = await self._refresh_ssid()
+                    if new_ssid:
+                        await self.disconnect()
+                        await asyncio.sleep(2)  # Brief delay before retry
+                        return await self.connect(retry_on_auth_fail=False)  # Retry once with new SSID
+                
+                return False
             else:
-                logger.error(f"❌ Authentication failed: {auth_response}")
+                logger.error(f"❌ Unexpected auth response: {auth_response}")
                 return False
                 
         except asyncio.TimeoutError:
             logger.error("❌ Auth timeout - SSID might be invalid or expired")
+            
+            # Try to refresh SSID if this is first timeout
+            if retry_on_auth_fail and self.reconnect_attempts < self.max_reconnect_attempts:
+                self.reconnect_attempts += 1
+                new_ssid = await self._refresh_ssid()
+                if new_ssid:
+                    await asyncio.sleep(2)
+                    return await self.connect(retry_on_auth_fail=False)
+            
             return False
         except Exception as e:
             logger.error(f"❌ Connection error: {e}")
