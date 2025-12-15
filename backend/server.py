@@ -2840,6 +2840,78 @@ async def quick_auth_test(request: QuickAuthTestRequest):
         }
 
 
+@api_router.post("/pocket-option/update-ssid")
+async def update_pocket_option_ssid(ssid: str):
+    """
+    Update the Pocket Option SSID (from browser cookies)
+    
+    Args:
+        ssid: The SSID value from Application → Cookies → ssid
+    
+    Example:
+        curl -X POST "URL/api/pocket-option/update-ssid?ssid=A4zP7dZSXxYCq0X5z"
+    """
+    try:
+        logger.info(f"🔄 Updating SSID to: {ssid}")
+        
+        # Update .env file
+        env_path = '/app/backend/.env'
+        with open(env_path, 'r') as f:
+            lines = f.readlines()
+        
+        # Update or add SSID line
+        updated = False
+        for i, line in enumerate(lines):
+            if line.startswith('POCKET_OPTION_SSID='):
+                lines[i] = f'POCKET_OPTION_SSID={ssid}\n'
+                updated = True
+                break
+        
+        if not updated:
+            lines.append(f'POCKET_OPTION_SSID={ssid}\n')
+        
+        with open(env_path, 'w') as f:
+            f.writelines(lines)
+        
+        logger.info("✅ SSID updated in .env file")
+        
+        # Test the new SSID immediately
+        from pocket_option_v2 import PocketOptionV2
+        uid = int(os.getenv('POCKET_OPTION_UID', '0'))
+        
+        client = PocketOptionV2(ssid=ssid, uid=uid, is_demo=True, auto_refresh=False)
+        connected = await client.connect()
+        
+        if connected:
+            balance = await client.get_balance()
+            await client.disconnect()
+            
+            return {
+                "success": True,
+                "message": "✅ SSID updated and tested successfully!",
+                "ssid_preview": f"{ssid[:10]}...",
+                "connection": {
+                    "connected": True,
+                    "balance": balance
+                }
+            }
+        else:
+            return {
+                "success": False,
+                "message": "SSID updated but connection failed",
+                "error": "SSID might be expired or invalid",
+                "recommendation": "Get a fresh SSID from browser cookies (Application → Cookies → ssid)"
+            }
+            
+    except Exception as e:
+        logger.error(f"Error updating SSID: {e}")
+        import traceback
+        return {
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
 @api_router.post("/pocket-option/test-auto-refresh")
 async def test_pocket_option_auto_refresh():
     """
