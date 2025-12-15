@@ -316,9 +316,29 @@ const DashboardRestructured = ({
   // Update configuration helper
   const updateConfiguration = async (updates) => {
     try {
-      const newConfig = { ...config, ...updates };
+      // Normalize enum values to lowercase for backend
+      const normalizedUpdates = { ...updates };
+      
+      // Convert trading_mode "real" to "live" for backend
+      if (normalizedUpdates.trading_mode === 'real') {
+        normalizedUpdates.trading_mode = 'live';
+      }
+      
+      // Ensure all enum arrays are lowercase
+      if (normalizedUpdates.active_strategies) {
+        normalizedUpdates.active_strategies = normalizedUpdates.active_strategies.map(s => 
+          typeof s === 'string' ? s.toLowerCase() : s
+        );
+      }
+      if (normalizedUpdates.target_assets) {
+        normalizedUpdates.target_assets = normalizedUpdates.target_assets.map(a => 
+          typeof a === 'string' ? a.toLowerCase() : a
+        );
+      }
+      
+      const newConfig = { ...config, ...normalizedUpdates };
       await axios.put(`${API}/config`, newConfig);
-      setConfig(newConfig);
+      setConfig({ ...config, ...updates }); // Use original updates for frontend state
       return true;
     } catch (error) {
       console.error('Error updating configuration:', error);
