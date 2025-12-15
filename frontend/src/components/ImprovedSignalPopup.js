@@ -221,9 +221,14 @@ const ImprovedSignalPopup = ({ signals, onClose, onDismiss }) => {
         {/* Signals */}
         <div className="p-4 space-y-3">
           {signals.map((signal) => {
+            // Use updated signal if available, otherwise use original
+            const currentSignal = updatedSignals[signal.id] || signal;
+            const signalChange = signalChanges[signal.id];
+            const hasChanged = !!signalChange;
+            
             const timer = signalTimers[signal.id] || { timeLeft: 0, isExpired: false, isOptimal: false, progress: 0 };
-            const assetName = signal.symbol?.replace('_regular', '')?.replace('_OTC', '') || 'Unknown';
-            const marketType = signal.market_type === 'otc' ? ' (OTC)' : '';
+            const assetName = currentSignal.symbol?.replace('_regular', '')?.replace('_OTC', '') || 'Unknown';
+            const marketType = currentSignal.market_type === 'otc' ? ' (OTC)' : '';
             const isExpanded = expandedSignals[signal.id];
             
             return (
@@ -255,24 +260,34 @@ const ImprovedSignalPopup = ({ signals, onClose, onDismiss }) => {
                       </div>
                     </div>
 
-                    {/* Direction Badge */}
-                    <div className={`
-                      px-6 py-3 rounded-xl font-bold text-lg flex items-center gap-2 shadow-lg
-                      ${signal.direction === 'BUY' || signal.direction === 'CALL' 
-                        ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-green-500/50' 
-                        : 'bg-gradient-to-r from-red-500 to-rose-500 text-white shadow-red-500/50'}
-                    `}>
-                      {signal.direction === 'BUY' || signal.direction === 'CALL' ? (
-                        <>
-                          <TrendingUp className="w-5 h-5" />
-                          <span>CALL</span>
-                        </>
-                      ) : (
-                        <>
-                          <TrendingDown className="w-5 h-5" />
-                          <span>PUT</span>
-                        </>
+                    {/* Direction Badge with Change Indicator */}
+                    <div className="flex flex-col items-end gap-2">
+                      {hasChanged && (
+                        <div className="bg-yellow-500/20 border border-yellow-500/50 rounded-lg px-3 py-1 flex items-center gap-2 animate-pulse">
+                          <span className="text-xs font-semibold text-yellow-400">
+                            🔄 Signal Changed: {signalChange.from} → {signalChange.to}
+                          </span>
+                        </div>
                       )}
+                      <div className={`
+                        px-6 py-3 rounded-xl font-bold text-lg flex items-center gap-2 shadow-lg
+                        ${hasChanged ? 'animate-bounce' : ''}
+                        ${currentSignal.direction === 'BUY' || currentSignal.direction === 'CALL' 
+                          ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-green-500/50' 
+                          : 'bg-gradient-to-r from-red-500 to-rose-500 text-white shadow-red-500/50'}
+                      `}>
+                        {currentSignal.direction === 'BUY' || currentSignal.direction === 'CALL' ? (
+                          <>
+                            <TrendingUp className="w-5 h-5" />
+                            <span>CALL</span>
+                          </>
+                        ) : (
+                          <>
+                            <TrendingDown className="w-5 h-5" />
+                            <span>PUT</span>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
 
