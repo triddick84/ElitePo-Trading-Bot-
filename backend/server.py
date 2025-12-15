@@ -2840,6 +2840,70 @@ async def quick_auth_test(request: QuickAuthTestRequest):
         }
 
 
+@api_router.post("/pocket-option/test-auto-refresh")
+async def test_pocket_option_auto_refresh():
+    """
+    Test the automatic SSID refresh and reconnection feature
+    """
+    try:
+        logger.info("🧪 Testing Pocket Option auto-refresh feature...")
+        
+        # Get current SSID from env
+        current_ssid = os.getenv('POCKET_OPTION_SSID')
+        uid = int(os.getenv('POCKET_OPTION_UID', '0'))
+        
+        if not current_ssid:
+            return {
+                "success": False,
+                "error": "No SSID found in environment"
+            }
+        
+        # Create client with auto-refresh enabled
+        from pocket_option_v2 import PocketOptionV2
+        client = PocketOptionV2(
+            ssid=current_ssid,
+            uid=uid,
+            is_demo=True,
+            auto_refresh=True  # Enable auto-refresh
+        )
+        
+        # Try to connect (will auto-refresh if SSID is expired)
+        logger.info("🔌 Attempting connection with auto-refresh enabled...")
+        connected = await client.connect()
+        
+        if connected:
+            logger.info("✅ Connection successful!")
+            balance = await client.get_balance()
+            candles = await client.get_candles('EURUSD_otc', 60, 5)
+            await client.disconnect()
+            
+            return {
+                "success": True,
+                "message": "✅ Connection successful with auto-refresh",
+                "connection": {
+                    "ssid": client.ssid[:20] + "...",
+                    "balance": balance,
+                    "candles_retrieved": len(candles) if candles else 0,
+                    "auto_refresh_enabled": True
+                }
+            }
+        else:
+            return {
+                "success": False,
+                "error": "Connection failed even with auto-refresh",
+                "recommendation": "Check if Selenium/Chrome is properly installed and credentials are correct",
+                "reconnect_attempts": client.reconnect_attempts
+            }
+            
+    except Exception as e:
+        logger.error(f"Error testing auto-refresh: {e}")
+        import traceback
+        return {
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
 @api_router.post("/pocket-option/auto-login")
 async def pocket_option_auto_login():
     """
