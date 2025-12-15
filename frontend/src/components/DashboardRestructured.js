@@ -51,7 +51,11 @@ const DashboardRestructured = ({
     selected_expirations: ['1m', '2m'],
     min_probability_threshold: 85,
     selected_strategy: '',
-    selected_timeframe: '1m'
+    selected_timeframe: '1m',
+    trading_mode: 'demo', // 'demo' or 'real'
+    invert_signals: true, // true for demo, false for real
+    popup_notifications: true,
+    sound_alerts: true
   });
   
   // Signal Generation State
@@ -123,7 +127,11 @@ const DashboardRestructured = ({
         ...prev,
         ...response.data,
         selected_strategy: response.data.selected_strategy || '',
-        selected_timeframe: response.data.selected_timeframe || '1m'
+        selected_timeframe: response.data.selected_timeframe || '1m',
+        trading_mode: response.data.trading_mode || 'demo',
+        invert_signals: response.data.invert_signals !== undefined ? response.data.invert_signals : true,
+        popup_notifications: response.data.popup_notifications !== undefined ? response.data.popup_notifications : true,
+        sound_alerts: response.data.sound_alerts_enabled !== undefined ? response.data.sound_alerts_enabled : true
       }));
     } catch (error) {
       console.error('Error fetching configuration:', error);
@@ -305,18 +313,57 @@ const DashboardRestructured = ({
     }
   };
 
+  // Update configuration helper
+  const updateConfiguration = async (updates) => {
+    try {
+      const newConfig = { ...config, ...updates };
+      await axios.put(`${API}/config`, newConfig);
+      setConfig(newConfig);
+      return true;
+    } catch (error) {
+      console.error('Error updating configuration:', error);
+      toast.error('Failed to update configuration');
+      return false;
+    }
+  };
+
   // Update expiration configuration
   const handleExpirationChange = async (newExpirations) => {
-    try {
-      await axios.put(`${API}/config`, {
-        ...config,
-        selected_expirations: newExpirations
-      });
-      setConfig(prev => ({ ...prev, selected_expirations: newExpirations }));
-      toast.success('Expirations updated');
-    } catch (error) {
-      console.error('Error updating expirations:', error);
-      toast.error('Failed to update expirations');
+    const success = await updateConfiguration({ selected_expirations: newExpirations });
+    if (success) toast.success('Expirations updated');
+  };
+
+  // Handle account type change
+  const handleAccountTypeChange = async (accountType) => {
+    const invertSignals = accountType === 'demo'; // Demo = inverted, Real = normal
+    const success = await updateConfiguration({ 
+      trading_mode: accountType,
+      invert_signals: invertSignals
+    });
+    if (success) {
+      toast.success(`Switched to ${accountType.toUpperCase()} account${invertSignals ? ' (signals inverted)' : ' (normal signals)'}`);
+    }
+  };
+
+  // Handle toggle switches
+  const handleToggleInvertSignals = async (enabled) => {
+    const success = await updateConfiguration({ invert_signals: enabled });
+    if (success) {
+      toast.success(enabled ? 'Signals inverted' : 'Normal signals');
+    }
+  };
+
+  const handleTogglePopupNotifications = async (enabled) => {
+    const success = await updateConfiguration({ popup_notifications: enabled });
+    if (success) {
+      toast.success(enabled ? 'Popup notifications enabled' : 'Popup notifications disabled');
+    }
+  };
+
+  const handleToggleSoundAlerts = async (enabled) => {
+    const success = await updateConfiguration({ sound_alerts_enabled: enabled });
+    if (success) {
+      toast.success(enabled ? 'Sound alerts enabled' : 'Sound alerts disabled');
     }
   };
 
@@ -339,6 +386,82 @@ const DashboardRestructured = ({
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-6">
+      {/* Top Bar: Account Type Selection */}
+      <div className="mb-4">
+        <Card className="bg-slate-800/50 border-purple-500/30 backdrop-blur-sm p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <Label className="text-white font-semibold">Account Type:</Label>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant={config.trading_mode === 'demo' ? "default" : "outline"}
+                  onClick={() => handleAccountTypeChange('demo')}
+                  className={config.trading_mode === 'demo'
+                    ? "bg-blue-600 hover:bg-blue-700"
+                    : "border-blue-500/50 text-blue-300"}
+                >
+                  🎮 Demo Account
+                </Button>
+                <Button
+                  size="sm"
+                  variant={config.trading_mode === 'real' ? "default" : "outline"}
+                  onClick={() => handleAccountTypeChange('real')}
+                  className={config.trading_mode === 'real'
+                    ? "bg-green-600 hover:bg-green-700"
+                    : "border-green-500/50 text-green-300"}
+                >
+                  💰 Real Account
+                </Button>
+              </div>
+              {config.trading_mode === 'demo' && (
+                <Badge variant="outline" className="text-blue-400 border-blue-500/50">
+                  Signals Inverted by Default
+                </Badge>
+              )}
+            </div>
+
+            <div className="flex items-center gap-4">
+              {/* Invert Signals Toggle */}
+              <div className="flex items-center gap-2">
+                <Label className="text-sm text-gray-300">Invert Signals:</Label>
+                <Switch
+                  checked={config.invert_signals}
+                  onCheckedChange={handleToggleInvertSignals}
+                />
+                <span className={`text-xs font-semibold ${config.invert_signals ? 'text-blue-400' : 'text-gray-400'}`}>
+                  {config.invert_signals ? 'ON' : 'OFF'}
+                </span>
+              </div>
+
+              {/* Popup Notifications Toggle */}
+              <div className="flex items-center gap-2">
+                <Label className="text-sm text-gray-300">Popup Notifications:</Label>
+                <Switch
+                  checked={config.popup_notifications}
+                  onCheckedChange={handleTogglePopupNotifications}
+                />
+                <span className={`text-xs font-semibold ${config.popup_notifications ? 'text-green-400' : 'text-gray-400'}`}>
+                  {config.popup_notifications ? 'ON' : 'OFF'}
+                </span>
+              </div>
+
+              {/* Sound Alerts Toggle */}
+              <div className="flex items-center gap-2">
+                <Label className="text-sm text-gray-300">Sound Alerts:</Label>
+                <Switch
+                  checked={config.sound_alerts}
+                  onCheckedChange={handleToggleSoundAlerts}
+                />
+                <span className={`text-xs font-semibold ${config.sound_alerts ? 'text-yellow-400' : 'text-gray-400'}`}>
+                  {config.sound_alerts ? 'ON' : 'OFF'}
+                </span>
+              </div>
+            </div>
+          </div>
+        </Card>
+      </div>
+
       {/* Header: Trading Configuration */}
       <div className="mb-6 space-y-4">
         <Card className="bg-slate-800/50 border-purple-500/30 backdrop-blur-sm p-6">
@@ -347,9 +470,14 @@ const DashboardRestructured = ({
               <Target className="w-6 h-6 text-purple-400" />
               <h2 className="text-2xl font-bold text-white">Trading Configuration</h2>
             </div>
-            <Badge variant={botStatus?.is_running ? "success" : "secondary"}>
-              {botStatus?.is_running ? "Bot Active" : "Bot Stopped"}
-            </Badge>
+            <div className="flex items-center gap-3">
+              <Badge variant={botStatus?.is_running ? "success" : "secondary"}>
+                {botStatus?.is_running ? "Bot Active" : "Bot Stopped"}
+              </Badge>
+              <Badge variant="outline" className={config.trading_mode === 'demo' ? 'text-blue-400' : 'text-green-400'}>
+                {config.trading_mode === 'demo' ? '🎮 Demo Mode' : '💰 Real Mode'}
+              </Badge>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
