@@ -5,13 +5,19 @@ import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Progress } from './ui/progress';
 
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const API = `${BACKEND_URL}/api`;
+
 const ImprovedSignalPopup = ({ signals, onClose, onDismiss }) => {
   console.log('🎨 ImprovedSignalPopup rendering with signals:', signals?.length);
   console.log('🎨 Full signals data:', JSON.stringify(signals, null, 2));
   
   const [signalTimers, setSignalTimers] = useState({});
   const [expandedSignals, setExpandedSignals] = useState({});
+  const [updatedSignals, setUpdatedSignals] = useState({});
+  const [signalChanges, setSignalChanges] = useState({});
 
+  // Timer update effect
   useEffect(() => {
     // Safety check inside useEffect
     if (!signals || !Array.isArray(signals) || signals.length === 0) {
@@ -69,6 +75,87 @@ const ImprovedSignalPopup = ({ signals, onClose, onDismiss }) => {
 
     return () => clearInterval(interval);
   }, [signals]);
+
+  // Dynamic signal re-check effect
+  useEffect(() => {
+    if (!signals || !Array.isArray(signals) || signals.length === 0) {
+      return;
+    }
+
+    const recheckSignal = async (signal) => {
+      try {
+        // Only recheck if countdown hasn't expired
+        const timer = signalTimers[signal.id];
+        if (!timer || timer.isExpired || timer.timeLeft <= 0) {
+          return;
+        }
+
+        // Extract asset info
+        const asset = signal.asset || signal.symbol || 'EURUSD';
+        const [symbol, market] = asset.includes('_') ? asset.split('_') : [asset, 'regular'];
+        
+        // Re-generate signal with same parameters
+        const response = await fetch(`${API}/signals/force-generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            asset_symbol: symbol,
+            market_type: market,
+            selected_timeframe: signal.timeframe || '1m',
+            selected_strategy: signal.strategy || 'enhanced_rsi_bb_volume',
+            force_signal: false // Don't force, just check current conditions
+          })
+        });
+
+        const data = await response.json();
+        
+        if (data.success && data.signal) {
+          const newSignal = data.signal;
+          const originalDirection = signal.direction;
+          const newDirection = newSignal.direction;
+
+          // Check if direction changed
+          if (originalDirection !== newDirection && newDirection !== 'NEUTRAL') {
+            console.log(`🔄 Signal direction changed: ${originalDirection} → ${newDirection}`);
+            
+            // Update signal with new data
+            setUpdatedSignals(prev => ({
+              ...prev,
+              [signal.id]: {
+                ...newSignal,
+                id: signal.id, // Keep original ID
+                originalDirection: originalDirection,
+                changedAt: new Date().toISOString()
+              }
+            }));
+
+            // Track change for visual indicator
+            setSignalChanges(prev => ({
+              ...prev,
+              [signal.id]: {
+                from: originalDirection,
+                to: newDirection,
+                timestamp: new Date().toISOString()
+              }
+            }));
+          }
+        }
+      } catch (error) {
+        console.error('Error rechecking signal:', error);
+      }
+    };
+
+    // Set up interval to recheck signals every 5 seconds
+    const recheckInterval = setInterval(() => {
+      signals.forEach(signal => {
+        if (signal && signal.id) {
+          recheckSignal(signal);
+        }
+      });
+    }, 5000); // Check every 5 seconds
+
+    return () => clearInterval(recheckInterval);
+  }, [signals, signalTimers]);
 
   const toggleExpanded = (signalId) => {
     setExpandedSignals(prev => ({
