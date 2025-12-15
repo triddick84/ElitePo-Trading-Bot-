@@ -307,6 +307,14 @@ class PersistentPocketOptionConnection:
         if self.uptime_start:
             uptime = (datetime.now(timezone.utc) - self.uptime_start).total_seconds()
         
+        # Get client stats (not async!)
+        client_stats = {}
+        if self.client:
+            try:
+                client_stats = self.client.get_connection_stats()
+            except:
+                pass
+        
         return {
             "is_running": self.is_running,
             "is_connected": self.client.is_connected if self.client else False,
@@ -315,15 +323,16 @@ class PersistentPocketOptionConnection:
             "uptime_seconds": uptime,
             "last_ping": self.last_ping.isoformat() if self.last_ping else None,
             "last_pong": self.last_pong.isoformat() if self.last_pong else None,
+            "client_stats": client_stats
         }
     
     async def get_balance(self) -> float:
         """Get account balance"""
         if self.client and self.client.is_connected:
             try:
-                balance = await self.client.get_balance()
+                balance_obj = await self.client.get_balance()
                 self.last_pong = datetime.now(timezone.utc)
-                return balance
+                return balance_obj.balance  # Access .balance attribute from object
             except Exception as e:
                 logger.error(f"Error getting balance: {e}")
                 await self._handle_disconnection()
@@ -347,7 +356,16 @@ class PersistentPocketOptionConnection:
         """Place a trade"""
         if self.client and self.client.is_connected:
             try:
-                result = await self.client.buy(asset, amount, direction, duration)
+                # Convert string direction to OrderDirection enum
+                from pocketoptionapi_async import OrderDirection
+                dir_enum = OrderDirection.CALL if direction.lower() in ['call', 'buy'] else OrderDirection.PUT
+                
+                result = await self.client.place_order(
+                    asset=asset,
+                    amount=amount,
+                    direction=dir_enum,
+                    duration=duration
+                )
                 self.last_pong = datetime.now(timezone.utc)
                 return result
             except Exception as e:
