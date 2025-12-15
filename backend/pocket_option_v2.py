@@ -216,9 +216,38 @@ class PocketOptionV2:
     async def disconnect(self):
         """Disconnect from WebSocket"""
         if self.ws:
-            await self.ws.close()
+            try:
+                await self.ws.close()
+            except:
+                pass
             self.connected = False
+            self.ws = None
             logger.info("👋 Disconnected")
+    
+    async def ensure_connected(self) -> bool:
+        """
+        Ensure connection is active, reconnect if needed
+        
+        Returns:
+            True if connected (or successfully reconnected)
+        """
+        if not self.connected or self.ws is None or self.ws.closed:
+            logger.warning("⚠️ Connection lost, attempting to reconnect...")
+            return await self.connect()
+        
+        # Check if heartbeat is stale (no activity for 5 minutes)
+        if self.last_heartbeat:
+            time_since_heartbeat = (datetime.now() - self.last_heartbeat).total_seconds()
+            if time_since_heartbeat > 300:  # 5 minutes
+                logger.warning(f"⚠️ Stale connection ({time_since_heartbeat:.0f}s since last activity)")
+                await self.disconnect()
+                return await self.connect()
+        
+        return True
+    
+    def update_heartbeat(self):
+        """Update last heartbeat timestamp"""
+        self.last_heartbeat = datetime.now()
     
     async def get_candles(self, asset: str, timeframe: int, count: int = 100) -> List[Dict]:
         """
@@ -232,17 +261,20 @@ class PocketOptionV2:
         Returns:
             List of candle dictionaries
         """
-        if not self.connected:
-            logger.error("❌ Not connected")
+        # Ensure connection is active
+        if not await self.ensure_connected():
+            logger.error("❌ Failed to establish connection")
             return []
         
         try:
             # Send candles request
             request = f'42["history",["{asset}",{timeframe}]]'
             await self.ws.send(request)
+            self.update_heartbeat()
             
             # Receive response
             response = await asyncio.wait_for(self.ws.recv(), timeout=10)
+            self.update_heartbeat()
             
             if response.startswith('42'):
                 data = json.loads(response[2:])
@@ -255,6 +287,8 @@ class PocketOptionV2:
             
         except Exception as e:
             logger.error(f"❌ Error getting candles: {e}")
+            # Mark connection as failed
+            self.connected = False
             return []
     
     async def place_order(
@@ -276,8 +310,9 @@ class PocketOptionV2:
         Returns:
             Order result
         """
-        if not self.connected:
-            return {"error": "Not connected"}
+        # Ensure connection is active
+        if not await self.ensure_connected():
+            return {"error": "Failed to establish connection"}
         
         try:
             # Normalize direction
@@ -292,9 +327,11 @@ class PocketOptionV2:
             order = f'42["{action}",["{asset}",{amount},{duration}]]'
             logger.info(f"📤 Placing order: {order}")
             await self.ws.send(order)
+            self.update_heartbeat()
             
             # Wait for response
             response = await asyncio.wait_for(self.ws.recv(), timeout=10)
+            self.update_heartbeat()
             logger.info(f"📨 Order response: {response}")
             
             return {
@@ -308,19 +345,22 @@ class PocketOptionV2:
             
         except Exception as e:
             logger.error(f"❌ Error placing order: {e}")
+            self.connected = False
             return {"error": str(e)}
     
     async def get_balance(self) -> float:
         """Get current balance"""
-        if not self.connected:
+        if not await self.ensure_connected():
             return 0.0
         
         try:
             # Send balance request
             await self.ws.send('42["balance"]')
+            self.update_heartbeat()
             
             # Wait for response
             response = await asyncio.wait_for(self.ws.recv(), timeout=5)
+            self.update_heartbeat()
             
             if response.startswith('42'):
                 data = json.loads(response[2:])
@@ -332,6 +372,7 @@ class PocketOptionV2:
             
         except Exception as e:
             logger.error(f"Error getting balance: {e}")
+            self.connected = False
             return self.balance
     
     def is_connected(self) -> bool:
