@@ -2875,53 +2875,96 @@ async def quick_auth_test(request: QuickAuthTestRequest):
 @api_router.post("/pocket-option/update-ssid")
 async def update_pocket_option_ssid(ssid: str):
     """
-    Update the Pocket Option SSID (from browser cookies)
+    Update the Pocket Option SSID
+    
+    Accepts TWO formats:
+    1. Simple cookie value: A4zP7dZSXxYCq0X5z
+    2. Full WebSocket message: 42["auth",{"session":"...","isDemo":1,"uid":123}]
     
     Args:
-        ssid: The SSID value from Application → Cookies → ssid
+        ssid: Either the cookie value OR the full WebSocket auth message
     
-    Example:
+    Examples:
+        # Simple cookie:
         curl -X POST "URL/api/pocket-option/update-ssid?ssid=A4zP7dZSXxYCq0X5z"
+        
+        # Full message (URL encode the quotes):
+        curl -X POST "URL/api/pocket-option/update-ssid" --data-urlencode 'ssid=42["auth",...'
     """
     try:
-        logger.info(f"🔄 Updating SSID to: {ssid}")
+        import json
+        import re
         
-        # Update .env file
+        logger.info(f"🔄 Updating SSID (format: {ssid[:20]}...)")
+        
+        # Parse the SSID format
+        actual_ssid = ssid
+        uid = int(os.getenv('POCKET_OPTION_UID', '0'))
+        is_demo = True
+        
+        if ssid.startswith('42["auth"'):
+            # Extract from WebSocket message
+            match = re.search(r'42\["auth",(\{.*?\})\]', ssid)
+            if match:
+                auth_data = json.loads(match.group(1))
+                actual_ssid = auth_data.get('session', ssid)
+                uid = auth_data.get('uid', uid)
+                is_demo = auth_data.get('isDemo', 1) == 1
+                logger.info(f"📨 Extracted from WebSocket: uid={uid}, demo={is_demo}")
+        
+        # Update .env file with the actual SSID
         env_path = '/app/backend/.env'
         with open(env_path, 'r') as f:
             lines = f.readlines()
         
-        # Update or add SSID line
-        updated = False
+        # Update SSID and UID
+        updated_ssid = False
+        updated_uid = False
         for i, line in enumerate(lines):
             if line.startswith('POCKET_OPTION_SSID='):
-                lines[i] = f'POCKET_OPTION_SSID={ssid}\n'
-                updated = True
-                break
+                lines[i] = f'POCKET_OPTION_SSID={actual_ssid}\n'
+                updated_ssid = True
+            elif line.startswith('POCKET_OPTION_UID='):
+                lines[i] = f'POCKET_OPTION_UID={uid}\n'
+                updated_uid = True
         
-        if not updated:
-            lines.append(f'POCKET_OPTION_SSID={ssid}\n')
+        if not updated_ssid:
+            lines.append(f'POCKET_OPTION_SSID={actual_ssid}\n')
+        if not updated_uid:
+            lines.append(f'POCKET_OPTION_UID={uid}\n')
         
         with open(env_path, 'w') as f:
             f.writelines(lines)
         
         logger.info("✅ SSID updated in .env file")
         
-        # Test the new SSID immediately
-        from pocket_option_v2 import PocketOptionV2
-        uid = int(os.getenv('POCKET_OPTION_UID', '0'))
+        # Test the new SSID immediately using AsyncPocketOptionClient
+        from pocketoptionapi_async import AsyncPocketOptionClient
         
-        client = PocketOptionV2(ssid=ssid, uid=uid, is_demo=True, auto_refresh=False)
+        client = AsyncPocketOptionClient(
+            ssid=actual_ssid,
+            uid=uid,
+            is_demo=is_demo,
+            enable_logging=True
+        )
+        
+        logger.info("🧪 Testing connection...")
         connected = await client.connect()
         
         if connected:
-            balance = await client.get_balance()
+            try:
+                balance = await client.get_balance()
+            except:
+                balance = 0
             await client.disconnect()
             
             return {
                 "success": True,
                 "message": "✅ SSID updated and tested successfully!",
-                "ssid_preview": f"{ssid[:10]}...",
+                "ssid_format": "websocket_message" if ssid.startswith('42[') else "simple_cookie",
+                "ssid_preview": f"{actual_ssid[:15]}...",
+                "uid": uid,
+                "is_demo": is_demo,
                 "connection": {
                     "connected": True,
                     "balance": balance
@@ -2930,9 +2973,9 @@ async def update_pocket_option_ssid(ssid: str):
         else:
             return {
                 "success": False,
-                "message": "SSID updated but connection failed",
+                "message": "SSID updated in .env but connection test failed",
                 "error": "SSID might be expired or invalid",
-                "recommendation": "Get a fresh SSID from browser cookies (Application → Cookies → ssid)"
+                "recommendation": "Try getting a fresh SSID:\n1. Cookie: Application→Cookies→ssid\n2. WebSocket: Network→WS→Messages"
             }
             
     except Exception as e:
