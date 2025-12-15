@@ -3051,6 +3051,115 @@ async def test_pocket_option_auto_refresh():
             "traceback": traceback.format_exc()
         }
 
+@api_router.post("/pocket-option/persistent/start")
+async def start_persistent_connection():
+    """
+    Start persistent Pocket Option connection with auto-reconnection
+    and keep-alive features
+    """
+    try:
+        logger.info("🚀 Starting persistent Pocket Option connection...")
+        
+        from pocket_option_persistent import PersistentPocketOptionConnection
+        
+        ssid = os.getenv('POCKET_OPTION_SSID')
+        uid = int(os.getenv('POCKET_OPTION_UID', '0'))
+        
+        if not ssid:
+            return {
+                "success": False,
+                "error": "No SSID configured in environment"
+            }
+        
+        # Store in global state for reuse
+        global persistent_po_connection
+        
+        if 'persistent_po_connection' in globals() and persistent_po_connection:
+            await persistent_po_connection.stop()
+        
+        persistent_po_connection = PersistentPocketOptionConnection(
+            ssid=ssid,
+            uid=uid,
+            is_demo=True,
+            ping_interval=25,
+            enable_auto_refresh=True
+        )
+        
+        started = await persistent_po_connection.start()
+        
+        if started:
+            # Get initial balance
+            balance = await persistent_po_connection.get_balance()
+            
+            return {
+                "success": True,
+                "message": "✅ Persistent connection started",
+                "connection": {
+                    "ssid_preview": ssid[:20] + "...",
+                    "uid": uid,
+                    "is_demo": True,
+                    "balance": balance,
+                    "ping_interval": 25,
+                    "auto_refresh_enabled": True
+                }
+            }
+        else:
+            return {
+                "success": False,
+                "error": "Failed to start persistent connection"
+            }
+            
+    except Exception as e:
+        logger.error(f"Error starting persistent connection: {e}")
+        import traceback
+        return {
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+@api_router.get("/pocket-option/persistent/stats")
+async def get_persistent_connection_stats():
+    """Get statistics about the persistent connection"""
+    try:
+        if 'persistent_po_connection' not in globals() or not persistent_po_connection:
+            return {
+                "success": False,
+                "error": "Persistent connection not started"
+            }
+        
+        stats = persistent_po_connection.get_stats()
+        return {
+            "success": True,
+            "stats": stats
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+@api_router.post("/pocket-option/persistent/stop")
+async def stop_persistent_connection():
+    """Stop the persistent connection"""
+    try:
+        if 'persistent_po_connection' in globals() and persistent_po_connection:
+            await persistent_po_connection.stop()
+            return {
+                "success": True,
+                "message": "✅ Persistent connection stopped"
+            }
+        else:
+            return {
+                "success": False,
+                "error": "No persistent connection running"
+            }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
 @api_router.post("/pocket-option/auto-login")
 async def pocket_option_auto_login():
     """
