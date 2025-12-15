@@ -2903,8 +2903,8 @@ async def update_pocket_option_ssid(ssid: str):
         is_demo = True
         
         if ssid.startswith('42["auth"'):
-            # Extract from WebSocket message
-            match = re.search(r'42\["auth",(\{.*?\})\]', ssid)
+            # Extract from WebSocket message (greedy match to capture all JSON)
+            match = re.search(r'42\["auth",(\{.*\})\]', ssid)
             if match:
                 auth_data = json.loads(match.group(1))
                 actual_ssid = auth_data.get('session', ssid)
