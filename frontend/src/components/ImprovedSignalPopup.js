@@ -322,34 +322,36 @@ const ImprovedSignalPopup = ({ signals, onClose, onDismiss }) => {
 
                   {/* Accuracy & Confidence */}
                   <div className="grid grid-cols-2 gap-3 mb-3">
-                    <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700">
+                    <div className={`bg-slate-900/50 p-3 rounded-lg border ${hasChanged ? 'border-yellow-500/50 animate-pulse' : 'border-slate-700'}`}>
                       <div className="flex items-center gap-2 mb-1">
                         <Target className="w-4 h-4 text-emerald-400" />
                         <span className="text-xs text-slate-400">Accuracy</span>
+                        {hasChanged && <span className="text-xs text-yellow-400">🔄 Updated</span>}
                       </div>
-                      <div className={`text-2xl font-bold ${getAccuracyColor(signal.probability || 0)}`}>
-                        {typeof signal.probability === 'number' ? signal.probability.toFixed(1) : '0.0'}%
+                      <div className={`text-2xl font-bold ${getAccuracyColor(currentSignal.probability || 0)}`}>
+                        {typeof currentSignal.probability === 'number' ? currentSignal.probability.toFixed(1) : '0.0'}%
                       </div>
                     </div>
                     
-                    <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700">
+                    <div className={`bg-slate-900/50 p-3 rounded-lg border ${hasChanged ? 'border-yellow-500/50 animate-pulse' : 'border-slate-700'}`}>
                       <div className="flex items-center gap-2 mb-1">
                         <Zap className="w-4 h-4 text-blue-400" />
                         <span className="text-xs text-slate-400">Confidence</span>
+                        {hasChanged && <span className="text-xs text-yellow-400">🔄</span>}
                       </div>
-                      <Badge variant="outline" className={getConfidenceColor(signal.confidence_level || 'MEDIUM')}>
-                        {signal.confidence_level || 'MEDIUM'}
+                      <Badge variant="outline" className={getConfidenceColor(currentSignal.confidence_level || 'MEDIUM')}>
+                        {currentSignal.confidence_level || 'MEDIUM'}
                       </Badge>
                     </div>
                   </div>
 
                   {/* Strategy Display */}
-                  {signal.technical_analysis?.primary_strategy && (
+                  {currentSignal.technical_analysis?.primary_strategy && (
                     <div className="bg-blue-900/20 border border-blue-500/30 p-2 rounded-lg mb-3">
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-slate-400">Strategy:</span>
                         <span className="text-sm font-semibold text-blue-300">
-                          {signal.technical_analysis.primary_strategy}
+                          {currentSignal.technical_analysis.primary_strategy}
                         </span>
                       </div>
                     </div>
