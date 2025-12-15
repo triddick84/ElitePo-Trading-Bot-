@@ -108,6 +108,9 @@ trading_bot = TradingBotService(db)
 # Initialize adaptive strategy service
 adaptive_strategy_service_instance = AdaptiveStrategyService(db)
 
+# Persistent Pocket Option connection
+persistent_po_connection = None
+
 # Initialize Real-Time Market Data Hub
 from realtime_market_data_hub import RealtimeMarketDataHub
 finnhub_key = os.environ.get('FINNHUB_API_KEY', '')
