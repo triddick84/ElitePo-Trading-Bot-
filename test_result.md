@@ -594,10 +594,10 @@
 
 ## test_plan:
   current_focus:
-    - "Auto Signal Generation Feature Testing"
+    - "Enhanced Auto Generate Feature Testing"
+    - "RealMarketDataService Method Verification"
     - "Signal Quality Verification"
-    - "Multi-Timeframe Signal Generation"
-    - "Primary Timeframe Data Fetching"
+    - "Database Signal Storage Testing"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
