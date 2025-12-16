@@ -359,7 +359,7 @@ class Advanced5sAIEnsemble:
         if signal is None and abs(price_velocity) > 0.002:
             if price_velocity > 0:
                 signal = "PUT"
-                confidence = I 90
+                confidence = 90
                 reasoning.append(f"🚀 Strong upward momentum ({price_velocity:.3%})")
             else:
                 signal = "CALL"
