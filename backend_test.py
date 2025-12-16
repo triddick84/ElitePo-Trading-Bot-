@@ -10358,8 +10358,80 @@ async def main_asset_system():
         print("   Check the failed tests above for root cause analysis")
         return 1
 
+async def main_enhanced_auto_generate():
+    """Main function for Enhanced Auto Generate testing"""
+    tester = BackendTester()
+    
+    try:
+        await tester.setup()
+        
+        print("🚀 ENHANCED AUTO GENERATE COMPREHENSIVE TESTING")
+        print("=" * 60)
+        print("Testing Enhanced Auto Generate feature as requested in review")
+        print("Current Issue: 'RealMarketDataService' object has no attribute 'get_real_market_data'")
+        print("=" * 60)
+        
+        # Run the specific tests for Enhanced Auto Generate
+        tests = [
+            ("Health Check", tester.test_health_check),
+            ("RealMarketDataService Methods", tester.test_real_market_data_service_methods),
+            ("Enhanced Auto Generate Endpoint", tester.test_enhanced_auto_generate_endpoint),
+            ("Enhanced Auto Generate with Timeframe", tester.test_enhanced_auto_generate_with_timeframe),
+            ("Force Generate Single Asset", tester.test_force_generate_single_asset),
+            ("Database Signal Storage", tester.test_database_signal_storage),
+        ]
+        
+        passed_tests = 0
+        total_tests = len(tests)
+        
+        for test_name, test_func in tests:
+            success = await tester.run_test(test_name, test_func)
+            if success:
+                passed_tests += 1
+        
+        print(f"\n📊 ENHANCED AUTO GENERATE TEST RESULTS")
+        print(f"=" * 50)
+        print(f"✅ Passed: {passed_tests}/{total_tests}")
+        print(f"❌ Failed: {total_tests - passed_tests}/{total_tests}")
+        
+        if tester.failed_tests:
+            print(f"\n❌ Failed Tests:")
+            for failed_test in tester.failed_tests:
+                print(f"   - {failed_test}")
+        
+        # Provide specific analysis for the reported issue
+        print(f"\n🔍 ROOT CAUSE ANALYSIS:")
+        if "RealMarketDataService Methods" in tester.failed_tests:
+            print("   ❌ CONFIRMED: RealMarketDataService missing 'get_real_market_data' method")
+            print("   💡 SOLUTION: Update code to use 'get_real_time_data' or 'get_market_data' instead")
+        else:
+            print("   ✅ RealMarketDataService methods are correctly named")
+        
+        if "Enhanced Auto Generate Endpoint" in tester.failed_tests:
+            print("   ❌ Enhanced Auto Generate endpoint has issues")
+            print("   💡 CHECK: Backend logs for specific error details")
+        else:
+            print("   ✅ Enhanced Auto Generate endpoint is working")
+        
+        success = passed_tests == total_tests
+        
+        if success:
+            print("\n✅ Enhanced Auto Generate testing completed successfully!")
+            print("   All Enhanced Auto Generate functionality is working correctly")
+        else:
+            print("\n❌ Enhanced Auto Generate testing found issues!")
+            print("   Check the failed tests above for root cause analysis")
+        
+        return 0 if success else 1
+        
+    except Exception as e:
+        print(f"\n❌ Enhanced Auto Generate testing failed with error: {e}")
+        return 1
+    finally:
+        await tester.cleanup()
+
 if __name__ == "__main__":
     import sys
-    # Run the asset system tests as requested
-    result = asyncio.run(main_asset_system())
+    # Run the Enhanced Auto Generate tests as requested
+    result = asyncio.run(main_enhanced_auto_generate())
     sys.exit(result)
