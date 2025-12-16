@@ -742,7 +742,7 @@ class ForceSignalGenerator:
                         'confidence': result_ultra_v2['confidence'],
                         'probability': result_ultra_v2['confidence'],
                         'reasoning': ' | '.join(result_ultra_v2.get('reasoning', ['Ultra V2 analysis'])[:3]),
-                        'strategy': 'pocket_option_5s_ultra_v2',
+                        'strategy': 'pocket_option_5s_strategy',
                         'timeframe': timeframe,
                         'chart_type': chart_type,
                         'researched_strategy': True,
