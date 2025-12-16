@@ -32,7 +32,7 @@ from platform_integrations import platform_integration
 from force_signal_generator import force_signal_generator
 from pocket_option_assets import pocket_option_assets
 from timezone_utils import get_chicago_time, utc_to_chicago, format_chicago_time
-from latency_accuracy_tester import latency_tester
+from latency_optimizer import latency_optimizer
 from live_accuracy_tester import live_accuracy_tester
 from adaptive_strategy_service import AdaptiveStrategyService
 from signal_validator import signal_validator
