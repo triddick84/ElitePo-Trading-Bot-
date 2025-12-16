@@ -1215,19 +1215,32 @@ class BackendTester:
         try:
             print("   🎯 Testing Enhanced Auto Generate Endpoint")
             
-            # Test parameters as specified in the review request
-            test_params = {
-                "scan_all_assets": False,
+            # Test parameters as specified in the review request (using query parameters)
+            params = {
+                "scan_all_assets": "false",
                 "selected_assets": ["EURUSD", "GBPUSD", "BTCUSD"],
                 "min_payout": 80,
                 "min_accuracy": 85,
                 "max_signals": 5
             }
             
-            print(f"   📊 Testing with parameters: {test_params}")
+            print(f"   📊 Testing with parameters: {params}")
+            
+            # Build URL with query parameters
+            url = f"{BACKEND_URL}/signals/auto-generate/enhanced"
+            url += f"?scan_all_assets={params['scan_all_assets']}"
+            url += f"&min_payout={params['min_payout']}"
+            url += f"&min_accuracy={params['min_accuracy']}"
+            url += f"&max_signals={params['max_signals']}"
+            
+            # Add selected_assets as multiple query parameters
+            for asset in params['selected_assets']:
+                url += f"&selected_assets={asset}"
+            
+            print(f"   🔗 Request URL: {url}")
             
             # Test the enhanced auto generate endpoint
-            async with self.session.post(f"{BACKEND_URL}/signals/auto-generate/enhanced", json=test_params) as response:
+            async with self.session.post(url) as response:
                 print(f"   📡 Response status: {response.status}")
                 
                 if response.status == 200:
@@ -1255,14 +1268,20 @@ class BackendTester:
                             symbol = signal.get('symbol', 'Unknown')
                             print(f"   Signal {i+1}: {symbol} - {accuracy}% accuracy")
                             
-                            if accuracy < test_params['min_accuracy']:
-                                print(f"   ⚠️ Signal accuracy {accuracy}% below threshold {test_params['min_accuracy']}%")
+                            if accuracy < params['min_accuracy']:
+                                print(f"   ⚠️ Signal accuracy {accuracy}% below threshold {params['min_accuracy']}%")
                     
                     return True
                 else:
                     error_text = await response.text()
                     print(f"   ❌ Enhanced auto generate failed: {response.status}")
                     print(f"   Error details: {error_text}")
+                    
+                    # Check if it's the method error we're looking for
+                    if "get_real_market_data" in error_text:
+                        print(f"   🔍 FOUND THE ISSUE: 'get_real_market_data' method error detected!")
+                        print(f"   This confirms the method name issue in RealMarketDataService")
+                    
                     return False
                     
         except Exception as e:
