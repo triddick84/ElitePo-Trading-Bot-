@@ -624,6 +624,7 @@
 
 ## test_plan:
   current_focus:
+    - "Comprehensive Bot Testing & AI Training Data Collection"
     - "Enhanced Auto Generate Feature Testing"
     - "RealMarketDataService Method Verification"
     - "Signal Quality Verification"
