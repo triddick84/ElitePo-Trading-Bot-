@@ -779,7 +779,7 @@ class TradingBotService:
             for asset in selected_assets:
                 try:
                     # Fetch fresh market data for this asset
-                    market_data = await self.market_service.get_real_market_data(asset)
+                    market_data = await self.market_service.get_real_time_data(asset)
                     
                     if not market_data:
                         logger.warning(f"   ⚠️ {asset}: No market data available")
