@@ -14,7 +14,7 @@ import math
 import requests
 from textblob import TextBlob
 from pocket_option_5s_elite_strategy import pocket_option_5s_elite_strategy
-from pocket_option_5s_ultra_v2 import pocket_option_5s_ultra_v2
+from pocket_option_5s_strategy import pocket_option_5s_strategy
 from pocket_option_15s_strategy import pocket_option_15s_strategy
 from pocket_option_30s_supertrend_ma import pocket_option_30s_supertrend_ma
 from pocket_option_1m_strategy import pocket_option_1m_strategy
