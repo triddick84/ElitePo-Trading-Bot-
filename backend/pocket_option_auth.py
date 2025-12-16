@@ -48,7 +48,7 @@ class PocketOptionAuthenticator:
         chrome_options.add_argument('--window-size=1920,1080')
         
         # Use system ChromeDriver (avoid webdriver-manager architecture issues)
-        service = Service('/usr/bin/chromedriver')
+        service = Service('/usr/lib/chromium/chromedriver')
         driver = webdriver.Chrome(service=service, options=chrome_options)
         return driver
     
