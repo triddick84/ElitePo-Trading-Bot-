@@ -43,14 +43,17 @@ class BackendTester:
             if result:
                 print(f"✅ {test_name}: PASSED")
                 self.test_results.append({"test": test_name, "status": "PASSED", "details": result})
+                return True
             else:
                 print(f"❌ {test_name}: FAILED")
                 self.failed_tests.append(test_name)
                 self.test_results.append({"test": test_name, "status": "FAILED", "details": "Test returned False"})
+                return False
         except Exception as e:
             print(f"❌ {test_name}: ERROR - {str(e)}")
             self.failed_tests.append(test_name)
             self.test_results.append({"test": test_name, "status": "ERROR", "details": str(e)})
+            return False
             
     async def test_health_check(self) -> bool:
         """Test basic health check endpoint"""
