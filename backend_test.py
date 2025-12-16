@@ -1205,6 +1205,310 @@ class BackendTester:
             print(f"   Enhanced signal performance test error: {e}")
             return False
 
+    # ========== ENHANCED AUTO GENERATE TESTING ==========
+    
+    async def test_enhanced_auto_generate_endpoint(self) -> bool:
+        """
+        Test the Enhanced Auto Generate endpoint with specific parameters
+        Tests /api/signals/auto-generate/enhanced endpoint
+        """
+        try:
+            print("   🎯 Testing Enhanced Auto Generate Endpoint")
+            
+            # Test parameters as specified in the review request
+            test_params = {
+                "scan_all_assets": False,
+                "selected_assets": ["EURUSD", "GBPUSD", "BTCUSD"],
+                "min_payout": 80,
+                "min_accuracy": 85,
+                "max_signals": 5
+            }
+            
+            print(f"   📊 Testing with parameters: {test_params}")
+            
+            # Test the enhanced auto generate endpoint
+            async with self.session.post(f"{BACKEND_URL}/signals/auto-generate/enhanced", json=test_params) as response:
+                print(f"   📡 Response status: {response.status}")
+                
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Enhanced auto generate response received")
+                    print(f"   Success: {data.get('success')}")
+                    print(f"   Message: {data.get('message')}")
+                    print(f"   Assets scanned: {data.get('assets_scanned', 0)}")
+                    
+                    signals = data.get('signals', [])
+                    print(f"   Signals generated: {len(signals)}")
+                    
+                    # Verify response structure
+                    required_fields = ['success', 'message', 'signals']
+                    missing_fields = [field for field in required_fields if field not in data]
+                    
+                    if missing_fields:
+                        print(f"   ❌ Missing required fields: {missing_fields}")
+                        return False
+                    
+                    # Check if signals meet accuracy criteria
+                    if signals:
+                        for i, signal in enumerate(signals):
+                            accuracy = signal.get('probability', 0)
+                            symbol = signal.get('symbol', 'Unknown')
+                            print(f"   Signal {i+1}: {symbol} - {accuracy}% accuracy")
+                            
+                            if accuracy < test_params['min_accuracy']:
+                                print(f"   ⚠️ Signal accuracy {accuracy}% below threshold {test_params['min_accuracy']}%")
+                    
+                    return True
+                else:
+                    error_text = await response.text()
+                    print(f"   ❌ Enhanced auto generate failed: {response.status}")
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   ❌ Enhanced auto generate test error: {e}")
+            return False
+
+    async def test_real_market_data_service_methods(self) -> bool:
+        """
+        Test RealMarketDataService for correct method names
+        Addresses the 'get_real_market_data' method issue
+        """
+        try:
+            print("   🔍 Testing RealMarketDataService Methods")
+            
+            # Import and inspect the service
+            import sys
+            sys.path.append('/app/backend')
+            
+            try:
+                from real_market_data_service import RealMarketDataService
+                print("   ✅ RealMarketDataService imported successfully")
+                
+                # Create service instance
+                service = RealMarketDataService()
+                
+                # Check available methods
+                available_methods = [method for method in dir(service) if not method.startswith('_')]
+                print(f"   📋 Available methods: {available_methods}")
+                
+                # Check for the problematic method name
+                if hasattr(service, 'get_real_market_data'):
+                    print("   ✅ get_real_market_data method exists")
+                else:
+                    print("   ❌ get_real_market_data method NOT found")
+                    
+                # Check for alternative methods
+                if hasattr(service, 'get_real_time_data'):
+                    print("   ✅ get_real_time_data method exists")
+                else:
+                    print("   ❌ get_real_time_data method NOT found")
+                    
+                if hasattr(service, 'get_market_data'):
+                    print("   ✅ get_market_data method exists")
+                else:
+                    print("   ❌ get_market_data method NOT found")
+                
+                # Test a method call
+                try:
+                    # Test get_real_time_data method
+                    result = service.get_real_time_data('EURUSD=X', 'forex')
+                    if result:
+                        print(f"   ✅ get_real_time_data working: {result.get('symbol')} at {result.get('price')}")
+                    else:
+                        print("   ⚠️ get_real_time_data returned None (may be normal)")
+                except Exception as method_error:
+                    print(f"   ❌ Method call error: {method_error}")
+                
+                return True
+                
+            except ImportError as e:
+                print(f"   ❌ Failed to import RealMarketDataService: {e}")
+                return False
+                
+        except Exception as e:
+            print(f"   ❌ RealMarketDataService test error: {e}")
+            return False
+
+    async def test_force_generate_single_asset(self) -> bool:
+        """
+        Test Force Generate for a single asset
+        Tests /api/signals/force-generate/asset/{asset} endpoint
+        """
+        try:
+            print("   🎯 Testing Force Generate Single Asset")
+            
+            # Test assets from the review request
+            test_assets = ["EURUSD", "GBPUSD", "BTCUSD"]
+            
+            for asset in test_assets:
+                print(f"   🚀 Testing force generate for {asset}")
+                
+                # Test the force generate endpoint for specific asset
+                async with self.session.post(f"{BACKEND_URL}/signals/force-generate/asset/{asset}") as response:
+                    print(f"   📡 Response status for {asset}: {response.status}")
+                    
+                    if response.status == 200:
+                        data = await response.json()
+                        print(f"   ✅ Force generate response for {asset}")
+                        print(f"   Success: {data.get('success')}")
+                        print(f"   Message: {data.get('message')}")
+                        
+                        signal = data.get('signal')
+                        if signal:
+                            print(f"   Signal ID: {signal.get('id')}")
+                            print(f"   Symbol: {signal.get('symbol')}")
+                            print(f"   Direction: {signal.get('direction')}")
+                            print(f"   Probability: {signal.get('probability')}%")
+                            print(f"   Market Type: {signal.get('market_type')}")
+                            print(f"   Timeframe: {signal.get('timeframe')}")
+                        else:
+                            print(f"   ⚠️ No signal generated for {asset}")
+                            
+                    else:
+                        error_text = await response.text()
+                        print(f"   ❌ Force generate failed for {asset}: {response.status}")
+                        print(f"   Error details: {error_text}")
+                        return False
+            
+            return True
+            
+        except Exception as e:
+            print(f"   ❌ Force generate single asset test error: {e}")
+            return False
+
+    async def test_database_signal_storage(self) -> bool:
+        """
+        Test that generated signals are stored in the database
+        Checks /api/signals/history endpoint for signal count
+        """
+        try:
+            print("   🗄️ Testing Database Signal Storage")
+            
+            # Get initial signal count
+            async with self.session.get(f"{BACKEND_URL}/signals/history?limit=100") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    initial_count = len(data.get('signals', []))
+                    print(f"   📊 Initial signal count: {initial_count}")
+                else:
+                    print(f"   ❌ Failed to get initial signal count: {response.status}")
+                    return False
+            
+            # Generate a new signal
+            print("   🚀 Generating new signal to test storage...")
+            async with self.session.post(f"{BACKEND_URL}/signals/force-generate/asset/EURUSD") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if data.get('success') and data.get('signal'):
+                        generated_signal_id = data['signal'].get('id')
+                        print(f"   ✅ Signal generated with ID: {generated_signal_id}")
+                    else:
+                        print("   ⚠️ Signal generation returned success=False")
+                        return True  # Not a storage test failure
+                else:
+                    print(f"   ❌ Signal generation failed: {response.status}")
+                    return False
+            
+            # Wait a moment for database write
+            await asyncio.sleep(2)
+            
+            # Check updated signal count
+            async with self.session.get(f"{BACKEND_URL}/signals/history?limit=100") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    final_count = len(data.get('signals', []))
+                    print(f"   📊 Final signal count: {final_count}")
+                    
+                    if final_count > initial_count:
+                        print(f"   ✅ Signal count increased by {final_count - initial_count}")
+                        
+                        # Verify the specific signal exists
+                        signals = data.get('signals', [])
+                        found_signal = False
+                        for signal in signals:
+                            if signal.get('id') == generated_signal_id:
+                                found_signal = True
+                                print(f"   ✅ Generated signal found in database")
+                                print(f"   Signal details: {signal.get('symbol')} {signal.get('direction')} {signal.get('probability')}%")
+                                break
+                        
+                        if not found_signal:
+                            print(f"   ⚠️ Generated signal ID {generated_signal_id} not found in database")
+                        
+                        return True
+                    else:
+                        print(f"   ❌ Signal count did not increase (expected increase)")
+                        return False
+                else:
+                    print(f"   ❌ Failed to get final signal count: {response.status}")
+                    return False
+            
+        except Exception as e:
+            print(f"   ❌ Database signal storage test error: {e}")
+            return False
+
+    async def test_enhanced_auto_generate_with_timeframe(self) -> bool:
+        """
+        Test Enhanced Auto Generate with 1m timeframe as specified in review request
+        """
+        try:
+            print("   ⏱️ Testing Enhanced Auto Generate with 1m Timeframe")
+            
+            # Test parameters with 1m timeframe as specified
+            test_params = {
+                "scan_all_assets": False,
+                "selected_assets": ["EURUSD", "GBPUSD", "BTCUSD"],
+                "min_payout": 80,
+                "min_accuracy": 85,
+                "timeframe": "1m",  # As specified in review request
+                "max_signals": 3
+            }
+            
+            print(f"   📊 Testing with 1m timeframe: {test_params}")
+            
+            # Test the enhanced auto generate endpoint
+            async with self.session.post(f"{BACKEND_URL}/signals/auto-generate/enhanced", json=test_params) as response:
+                print(f"   📡 Response status: {response.status}")
+                
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Enhanced auto generate with 1m timeframe successful")
+                    print(f"   Success: {data.get('success')}")
+                    print(f"   Message: {data.get('message')}")
+                    
+                    signals = data.get('signals', [])
+                    print(f"   Signals generated: {len(signals)}")
+                    
+                    # Verify timeframe in generated signals
+                    for i, signal in enumerate(signals):
+                        timeframe = signal.get('timeframe', 'Unknown')
+                        symbol = signal.get('symbol', 'Unknown')
+                        accuracy = signal.get('probability', 0)
+                        print(f"   Signal {i+1}: {symbol} - {timeframe} timeframe - {accuracy}% accuracy")
+                        
+                        # Check if timeframe matches expected
+                        if timeframe != "1m":
+                            print(f"   ⚠️ Signal timeframe {timeframe} doesn't match expected 1m")
+                    
+                    return True
+                else:
+                    error_text = await response.text()
+                    print(f"   ❌ Enhanced auto generate with timeframe failed: {response.status}")
+                    print(f"   Error details: {error_text}")
+                    
+                    # Check if it's a method error (the main issue we're investigating)
+                    if "get_real_market_data" in error_text:
+                        print(f"   🔍 FOUND THE ISSUE: 'get_real_market_data' method error detected!")
+                        print(f"   This confirms the method name issue in RealMarketDataService")
+                        return False
+                    
+                    return False
+                    
+        except Exception as e:
+            print(f"   ❌ Enhanced auto generate timeframe test error: {e}")
+            return False
+
     # ========== TIMEFRAME ALIGNMENT & CANDLE SYNCHRONIZATION TESTING ==========
     
     async def test_timeframe_alignment_verification(self) -> bool:
