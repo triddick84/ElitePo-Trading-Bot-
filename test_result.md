@@ -581,6 +581,7 @@
 
 ## test_plan:
   current_focus:
+    - "Auto Signal Generation Feature Testing"
     - "Signal Quality Verification"
     - "Multi-Timeframe Signal Generation"
     - "Primary Timeframe Data Fetching"
