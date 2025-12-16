@@ -727,7 +727,7 @@ class ForceSignalGenerator:
                 logger.info(f"   Trying Ultra V2 fallback for {symbol}")
                 result_ultra_v2 = await loop.run_in_executor(
                     self.executor,
-                    pocket_option_5s_ultra_v2.analyze,
+                    pocket_option_5s_strategy.analyze,
                     symbol,
                     chart_type,
                     '5s'
