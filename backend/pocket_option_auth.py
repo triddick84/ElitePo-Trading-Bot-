@@ -47,8 +47,8 @@ class PocketOptionAuthenticator:
         chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
         chrome_options.add_argument('--window-size=1920,1080')
         
-        # Use webdriver-manager to auto-download chromedriver
-        service = Service(ChromeDriverManager().install())
+        # Use system ChromeDriver (avoid webdriver-manager architecture issues)
+        service = Service('/usr/bin/chromedriver')
         driver = webdriver.Chrome(service=service, options=chrome_options)
         return driver
     
