@@ -220,15 +220,24 @@ const DashboardRestructured = ({
   const handleEnhancedAutoGenerate = async () => {
     setIsGenerating(true);
     try {
-      const response = await axios.post(`${API}/signals/auto-generate/enhanced`, {
+      // Build query parameters (backend expects query params, not JSON body)
+      const params = new URLSearchParams({
         scan_all_assets: enhancedSettings.scanAllAssets,
-        selected_assets: !enhancedSettings.scanAllAssets ? config.selected_assets : null,
         min_payout: enhancedSettings.minPayout,
         min_accuracy: enhancedSettings.minAccuracy,
         max_signals: enhancedSettings.maxSignals
       });
+      
+      // Add selected assets if not scanning all
+      if (!enhancedSettings.scanAllAssets && config.selected_assets) {
+        config.selected_assets.forEach(asset => {
+          params.append('selected_assets', asset);
+        });
+      }
+      
+      const response = await axios.post(`${API}/signals/auto-generate/enhanced?${params.toString()}`);
 
-      if (response.data.success && response.data.signals.length > 0) {
+      if (response.data.success && response.data.signals && response.data.signals.length > 0) {
         setLiveSignals(prev => [...response.data.signals, ...prev]);
         toast.success(`✅ Generated ${response.data.signals.length} signals from ${response.data.assets_scanned} assets`);
       } else {
