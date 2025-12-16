@@ -1404,12 +1404,17 @@ class BackendTester:
         try:
             print("   🗄️ Testing Database Signal Storage")
             
-            # Get initial signal count
-            async with self.session.get(f"{BACKEND_URL}/signals/history?limit=100") as response:
+            # Get initial signal count with a smaller limit to avoid hitting the database limit
+            async with self.session.get(f"{BACKEND_URL}/signals/history?limit=10") as response:
                 if response.status == 200:
                     data = await response.json()
-                    initial_count = len(data.get('signals', []))
-                    print(f"   📊 Initial signal count: {initial_count}")
+                    initial_signals = data.get('signals', [])
+                    initial_count = len(initial_signals)
+                    print(f"   📊 Initial signal count (last 10): {initial_count}")
+                    
+                    # Get the most recent signal ID for comparison
+                    latest_signal_id = initial_signals[0].get('id') if initial_signals else None
+                    print(f"   🔍 Latest signal ID: {latest_signal_id}")
                 else:
                     print(f"   ❌ Failed to get initial signal count: {response.status}")
                     return False
@@ -1430,34 +1435,39 @@ class BackendTester:
                     return False
             
             # Wait a moment for database write
-            await asyncio.sleep(2)
+            await asyncio.sleep(3)
             
-            # Check updated signal count
-            async with self.session.get(f"{BACKEND_URL}/signals/history?limit=100") as response:
+            # Check if the new signal appears in the database
+            async with self.session.get(f"{BACKEND_URL}/signals/history?limit=10") as response:
                 if response.status == 200:
                     data = await response.json()
-                    final_count = len(data.get('signals', []))
-                    print(f"   📊 Final signal count: {final_count}")
+                    final_signals = data.get('signals', [])
+                    final_count = len(final_signals)
+                    print(f"   📊 Final signal count (last 10): {final_count}")
                     
-                    if final_count > initial_count:
-                        print(f"   ✅ Signal count increased by {final_count - initial_count}")
-                        
-                        # Verify the specific signal exists
-                        signals = data.get('signals', [])
-                        found_signal = False
-                        for signal in signals:
-                            if signal.get('id') == generated_signal_id:
-                                found_signal = True
-                                print(f"   ✅ Generated signal found in database")
-                                print(f"   Signal details: {signal.get('symbol')} {signal.get('direction')} {signal.get('probability')}%")
-                                break
-                        
-                        if not found_signal:
-                            print(f"   ⚠️ Generated signal ID {generated_signal_id} not found in database")
-                        
+                    # Check if the new signal is in the latest signals
+                    found_signal = False
+                    new_latest_signal_id = final_signals[0].get('id') if final_signals else None
+                    
+                    # Check if the latest signal ID changed (indicating a new signal was added)
+                    if new_latest_signal_id != latest_signal_id:
+                        print(f"   ✅ New latest signal detected: {new_latest_signal_id}")
+                        found_signal = True
+                    
+                    # Also check if our specific signal ID is in the list
+                    for signal in final_signals:
+                        if signal.get('id') == generated_signal_id:
+                            found_signal = True
+                            print(f"   ✅ Generated signal found in database")
+                            print(f"   Signal details: {signal.get('symbol')} {signal.get('direction')} {signal.get('probability')}%")
+                            break
+                    
+                    if found_signal:
                         return True
                     else:
-                        print(f"   ❌ Signal count did not increase (expected increase)")
+                        print(f"   ❌ Generated signal not found in recent signals")
+                        print(f"   Expected ID: {generated_signal_id}")
+                        print(f"   Recent signal IDs: {[s.get('id') for s in final_signals[:3]]}")
                         return False
                 else:
                     print(f"   ❌ Failed to get final signal count: {response.status}")
