@@ -579,6 +579,19 @@
         - agent: "testing"
         - comment: "✅ ERROR HANDLING EDGE CASES TESTING COMPLETED - Comprehensive testing of edge cases and error scenarios achieved 100% success rate. Key findings: 1) ✅ Idempotent Operations: Clear all sessions can be called multiple times safely (3 consecutive calls all succeed), stop bot succeeds gracefully when already stopped, restart works correctly from any initial state, 2) ✅ State Transition Handling: Restart succeeds when bot is stopped (starts fresh), restart succeeds when bot is running (clean stop first), multiple restart cycles work correctly (2 consecutive restarts successful), 3) ✅ Graceful Error Recovery: Operations continue even if some cleanup steps fail, proper error messages returned while maintaining system stability, no system crashes or undefined states during edge cases, 4) ✅ Concurrent Operation Safety: Multiple operations can be performed in sequence safely, proper state locking prevents race conditions, consistent behavior across rapid operation sequences, 5) ✅ Resource Management: No memory leaks during repeated operations, proper cleanup of background processes, efficient resource utilization during edge case scenarios. Error handling for clear all sessions and restart functionality is production-ready and robust."
 
+## frontend:
+  - task: "Auto Signal Generation Feature Testing"
+    implemented: true
+    working: false
+    file: "/app/frontend/src/components/BotControls.js"
+    stuck_count: 1
+    priority: "critical"
+    needs_retesting: false
+    status_history:
+        - working: false
+        - agent: "testing"
+        - comment: "🔍 AUTO SIGNAL GENERATION TESTING COMPLETED - Comprehensive testing of Auto Signal Generation feature on Bot Controls page revealed critical functionality issues. TESTING RESULTS: ✅ WORKING COMPONENTS (6/9): 1) ✅ Application Loading: GPT Signal Bot loads correctly with proper header and navigation, 2) ✅ Bot Status Verification: Bot status shows 'Active' in top right header as required, 3) ✅ Navigation: Successfully navigated to Bot Controls page with proper page title verification, 4) ✅ UI Components: Auto Signal Generation section found with proper status display 'Status: Auto Generation Stopped', 5) ✅ Button Interaction: 'Start Auto Generation' button is clickable and responsive, 6) ✅ Signals Page: Successfully navigated to Signals page showing existing signals (50+ signals found). ❌ CRITICAL ISSUES (3/9): 1) ❌ Status Change Failure: After clicking 'Start Auto Generation' button, status does NOT change from 'Auto Generation Stopped' to 'Auto Generation Active' even after 5+ seconds wait, 2) ❌ Button Text Update Failure: Button text does NOT change from 'Start Auto Generation' to 'Stop Auto Generation' indicating the toggle functionality is not working, 3) ❌ Auto Generation Not Activating: The auto signal generation feature is not actually starting despite button clicks - this is the core functionality failure. 🔧 ROOT CAUSE ANALYSIS NEEDED: The Auto Signal Generation start functionality appears to have a backend integration issue. The frontend button click is working but the backend is not responding properly to activate auto generation. This could be related to API endpoint issues, bot status validation, or auto generation service initialization problems. RECOMMENDATION: Main agent should investigate the backend auto generation start endpoint (/api/signals/auto-generate/start) and verify the integration between frontend button clicks and backend auto generation activation."
+
 ## test_plan:
   current_focus:
     - "Auto Signal Generation Feature Testing"
