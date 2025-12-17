@@ -421,6 +421,12 @@ const DashboardRestructured = ({
       }
       
       // Ensure all required fields are present with defaults
+      // Convert config's trading_mode from frontend format ('real') to backend format ('live')
+      const normalizedConfig = { ...config };
+      if (normalizedConfig.trading_mode === 'real') {
+        normalizedConfig.trading_mode = 'live';
+      }
+      
       const fullConfig = {
         trading_mode: 'demo',
         selected_expirations: ['1m'],
@@ -434,7 +440,7 @@ const DashboardRestructured = ({
         sound_alerts_enabled: true,
         popup_notifications: true,
         invert_signals: false,
-        ...config,  // Current config
+        ...normalizedConfig,  // Current config (with trading_mode converted)
         ...normalizedUpdates  // New updates
       };
       
