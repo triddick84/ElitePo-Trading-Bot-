@@ -227,16 +227,16 @@ const DashboardRestructured = ({
     }
   };
 
-  // Enhanced Auto-Generate
-  const handleEnhancedAutoGenerate = async () => {
-    setIsGenerating(true);
+  // Single scan function (used by both one-time and continuous scanning)
+  const performSingleScan = async () => {
     try {
       // Build query parameters (backend expects query params, not JSON body)
       const params = new URLSearchParams({
         scan_all_assets: enhancedSettings.scanAllAssets,
         min_payout: enhancedSettings.minPayout,
         min_accuracy: enhancedSettings.minAccuracy,
-        max_signals: enhancedSettings.maxSignals
+        max_signals: enhancedSettings.maxSignals,
+        continuous: false  // Single scan, not backend continuous mode
       });
       
       // Add selected assets if not scanning all
@@ -250,17 +250,81 @@ const DashboardRestructured = ({
 
       if (response.data.success && response.data.signals && response.data.signals.length > 0) {
         setLiveSignals(prev => [...response.data.signals, ...prev]);
-        toast.success(`✅ Generated ${response.data.signals.length} signals from ${response.data.assets_scanned} assets`);
-      } else {
-        toast.warning('No signals met the criteria');
+        return { success: true, count: response.data.signals.length, assets: response.data.assets_scanned };
       }
+      return { success: false, count: 0, assets: response.data.assets_scanned || 0 };
     } catch (error) {
-      console.error('Error in enhanced auto-generate:', error);
-      toast.error('Failed to generate signals');
-    } finally {
-      setIsGenerating(false);
+      console.error('Error in scan:', error);
+      return { success: false, count: 0, assets: 0, error: true };
     }
   };
+
+  // Enhanced Auto-Generate with continuous scanning
+  const handleEnhancedAutoGenerate = async () => {
+    // If already scanning, stop it
+    if (isScanning) {
+      stopContinuousScanning();
+      return;
+    }
+    
+    // Start continuous scanning
+    setIsScanning(true);
+    setScanCount(0);
+    setIsGenerating(true);
+    toast.info('🔍 Starting continuous market scan...');
+    
+    // Perform first scan immediately
+    const firstResult = await performSingleScan();
+    setScanCount(1);
+    
+    if (firstResult.success) {
+      toast.success(`✅ Scan #1: Found ${firstResult.count} signals from ${firstResult.assets} assets`);
+    } else if (!firstResult.error) {
+      toast.info(`🔍 Scan #1: No signals met criteria, continuing to scan...`);
+    }
+    
+    setIsGenerating(false);
+    
+    // Set up interval for continuous scanning (every 60 seconds)
+    const intervalId = setInterval(async () => {
+      setScanCount(prev => {
+        const newCount = prev + 1;
+        console.log(`🔍 Performing scan #${newCount}...`);
+        return newCount;
+      });
+      
+      setIsGenerating(true);
+      const result = await performSingleScan();
+      setIsGenerating(false);
+      
+      if (result.success) {
+        toast.success(`✅ Scan: Found ${result.count} signals!`);
+      }
+      // Don't show toast for every failed scan to avoid spam
+    }, 60000); // Scan every 60 seconds
+    
+    setScanIntervalId(intervalId);
+  };
+  
+  // Stop continuous scanning
+  const stopContinuousScanning = () => {
+    if (scanIntervalId) {
+      clearInterval(scanIntervalId);
+      setScanIntervalId(null);
+    }
+    setIsScanning(false);
+    setIsGenerating(false);
+    toast.info(`⏹️ Scanning stopped after ${scanCount} scans`);
+  };
+  
+  // Cleanup interval on unmount
+  useEffect(() => {
+    return () => {
+      if (scanIntervalId) {
+        clearInterval(scanIntervalId);
+      }
+    };
+  }, [scanIntervalId]);
 
   // Auto Force Generate
   const handleAutoForceGenerate = async () => {
