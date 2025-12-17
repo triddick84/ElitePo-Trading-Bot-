@@ -609,6 +609,21 @@
         - agent: "testing"
         - comment: "✅ ENHANCED AUTO GENERATE COMPREHENSIVE TESTING COMPLETED - All functionality working correctly with 100% test success rate (6/6 tests passed). 🔍 ROOT CAUSE IDENTIFIED: The reported error 'get_real_market_data' method missing is CONFIRMED - this method does NOT exist in RealMarketDataService. However, the correct methods 'get_real_time_data' and 'get_market_data' DO exist and are working properly. ✅ KEY FINDINGS: 1) ✅ Enhanced Auto Generate Endpoint Working: POST /api/signals/auto-generate/enhanced responds correctly with parameters (asset_filter: ['EURUSD', 'GBPUSD', 'BTCUSD'], min_payout: 80, min_accuracy: 85, timeframe: 1m), returns success with proper response structure, scans 2 assets successfully, 2) ✅ RealMarketDataService Methods Verified: Available methods include get_real_time_data, get_market_data, get_yahoo_finance_data, get_all_market_data - all working correctly, get_real_time_data tested successfully (EURUSD=X at 1.1755), 3) ✅ Force Generate Single Asset: All test assets (EURUSD, GBPUSD, BTCUSD) generate signals successfully, proper signal structure with ID, symbol, direction, probability (94-95%), market_type=otc, timeframe=1m, 4) ✅ Database Signal Storage: Signals properly stored and retrieved from database, new signals appear in /api/signals/history endpoint, signal persistence verified across operations, 5) ✅ Signal Quality: Generated signals meet accuracy requirements (85%+ threshold), proper technical analysis and metadata included, Chicago timezone synchronization working. 💡 SOLUTION: Any code referencing 'get_real_market_data' should be updated to use 'get_real_time_data' or 'get_market_data' instead. The Enhanced Auto Generate feature is fully functional and production-ready."
 
+  - task: "Critical Fixes Testing - Real Account Mode & Enhanced Auto-Generate"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py, /app/backend/models.py"
+    stuck_count: 0
+    priority: "critical"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+        - agent: "main"
+        - comment: "Testing critical fixes for GPT Signal Bot: 1) Real Account Mode Persistence, 2) Expiration Time Changes in Real Account Mode, 3) Enhanced Auto-Generate Endpoint with query parameters."
+        - working: true
+        - agent: "testing"
+        - comment: "✅ CRITICAL FIXES TESTING COMPLETED - All three critical fixes are working perfectly with 100% success rate (4/4 tests passed). COMPREHENSIVE TESTING RESULTS: 1) ✅ Real Account Mode Persistence: GET /api/config shows initial trading_mode, PUT /api/config with trading_mode='live' successfully updates configuration, GET /api/config confirms trading_mode persisted as 'live', all required fields (selected_expirations: ['5s', '1m'], min_probability_threshold: 85.0) properly stored and retrieved from database, 2) ✅ Expiration Time Changes in Live Mode: Set trading_mode to 'live' via PUT /api/config, successfully changed selected_expirations to ['15s', '30s'] while maintaining trading_mode='live', both values persist correctly via GET /api/config verification, configuration updates work seamlessly in live mode, 3) ✅ Enhanced Auto-Generate Endpoint: POST /api/signals/auto-generate/enhanced endpoint working correctly with query parameters (scan_all_assets=false, min_payout=80, min_accuracy=75, max_signals=5, continuous=false), returns proper response structure with success=True, message describes operation, scans 2 assets successfully, respects all parameter constraints, 4) ✅ Health Check: Backend service healthy and responding correctly. ALL CRITICAL REQUIREMENTS MET: Real account mode persistence working flawlessly, expiration time changes in live mode functioning properly, enhanced auto-generate endpoint fully operational with all query parameters. The GPT Signal Bot critical fixes are production-ready and meet all specified requirements."
+
 ## frontend:
   - task: "Auto Signal Generation Feature Testing"
     implemented: true
