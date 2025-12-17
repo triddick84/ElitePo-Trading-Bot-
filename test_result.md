@@ -1243,3 +1243,27 @@ The `/api/signals/force-generate` endpoint was timing out after 120+ seconds, ma
 - Fix signal timing and candle synchronization
 - Fix user-selected strategy not being used
 - Restore popup notification functionality
+
+  - task: "Real Account Mode Persistence Fix"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/components/DashboardRestructured.js, /app/backend/trading_bot_service.py"
+    stuck_count: 0
+    priority: "critical"
+    needs_retesting: false
+    status_history:
+        - working: true
+        - agent: "main"
+        - comment: "✅ FIXED: Real Account mode now persists after page refresh. Root causes identified and fixed: 1) Backend fromisoformat error - updated_at field was stored as datetime object but code tried to parse it as string, 2) Frontend live/real mode mapping - backend returns 'live' but frontend expected 'real' for display. Fixes: Added type check before fromisoformat call in trading_bot_service.py, added live->real conversion in fetchConfiguration in DashboardRestructured.js. Verified with screenshots showing Real Account selection persists across page refresh."
+
+  - task: "Continuous Scanning for Auto-Generate Signals"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/components/DashboardRestructured.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+        - agent: "main"
+        - comment: "✅ IMPLEMENTED: Continuous scanning feature for Auto-Generate Signals. Features: 1) New state variables isScanning, scanIntervalId, scanCount, 2) performSingleScan function for individual scans, 3) handleEnhancedAutoGenerate now toggles between start/stop, 4) Button changes to red 'Stop Scanning (N scans)' when active, 5) Scans every 60 seconds automatically, 6) Shows toast notifications for found signals and scan status, 7) Cleanup on component unmount. Verified with screenshots showing button state changes and toast notifications during scanning."
