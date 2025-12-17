@@ -779,7 +779,9 @@ class TradingBotService:
             for asset in selected_assets:
                 try:
                     # Fetch fresh market data for this asset
-                    market_data = await self.market_service.get_real_time_data(asset)
+                    # Determine asset type from asset name
+                    asset_type = 'crypto' if 'BTC' in asset or 'ETH' in asset or 'LTC' in asset else 'forex'
+                    market_data = await self.market_service.get_real_time_data(asset, asset_type)
                     
                     if not market_data:
                         logger.warning(f"   ⚠️ {asset}: No market data available")
