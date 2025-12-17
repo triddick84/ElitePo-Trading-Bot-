@@ -639,14 +639,13 @@
 
 ## test_plan:
   current_focus:
-    - "Comprehensive Bot Testing & AI Training Data Collection"
-    - "Enhanced Auto Generate Feature Testing"
-    - "RealMarketDataService Method Verification"
-    - "Signal Quality Verification"
-    - "Database Signal Storage Testing"
+    - "Critical Fixes Testing - Real Account Mode & Enhanced Auto-Generate"
+    - "Configuration Persistence Verification"
+    - "Enhanced Auto-Generate Endpoint Testing"
+    - "Live Mode Functionality Testing"
   stuck_tasks: []
   test_all: false
-  test_priority: "high_first"
+  test_priority: "critical_first"
 
 ## backend:
   - task: "Timeframe Alignment System - Chart = Expiration"
