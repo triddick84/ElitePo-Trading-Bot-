@@ -111,6 +111,10 @@ adaptive_strategy_service_instance = AdaptiveStrategyService(db)
 # Persistent Pocket Option connection
 persistent_po_connection = None
 
+# Initialize continuous scanner
+from continuous_scanner import ContinuousMarketScanner
+continuous_scanner = ContinuousMarketScanner(force_signal_generator, db)
+
 # Initialize Real-Time Market Data Hub
 from realtime_market_data_hub import RealtimeMarketDataHub
 finnhub_key = os.environ.get('FINNHUB_API_KEY', '')
@@ -777,7 +781,8 @@ async def enhanced_auto_generate(
     selected_assets: Optional[List[str]] = None,
     min_payout: float = 80.0,
     min_accuracy: float = 75.0,
-    max_signals: int = 5
+    max_signals: int = 5,
+    continuous: bool = True  # NEW: Enable continuous scanning
 ):
     """
     Enhanced auto-generate with asset scanning and filtering
@@ -788,6 +793,7 @@ async def enhanced_auto_generate(
         min_payout: Minimum payout percentage to consider
         min_accuracy: Minimum accuracy threshold for signal generation
         max_signals: Maximum number of signals to generate
+        continuous: If True, keep scanning until signals are found (up to 100 cycles)
     """
     try:
         # Define available assets (common trading pairs)
@@ -819,43 +825,54 @@ async def enhanced_auto_generate(
                 "signals": []
             }
         
-        # Generate signals for each asset
-        generated_signals = []
-        for asset_id in assets_to_scan[:20]:  # Limit to 20 assets to avoid timeout
-            try:
-                # Parse asset (format: SYMBOL_market)
-                if '_' in asset_id:
-                    symbol, market_type = asset_id.rsplit('_', 1)
-                else:
-                    symbol, market_type = asset_id, 'regular'
-                
-                # Generate signal for this asset
-                signal_result = await force_signal_generator.generate_force_signal(
-                    asset_symbol=symbol,
-                    market_type=market_type,
-                    selected_timeframe='1m',
-                    selected_strategy='enhanced_rsi_bb_volume',
-                    force_signal=False  # Don't force, only generate if conditions met
-                )
-                
-                # Check if signal meets accuracy threshold
-                if signal_result.get('signal') and signal_result['signal'].get('probability', 0) >= min_accuracy:
-                    generated_signals.append(signal_result['signal'])
+        # Use continuous scanner if enabled
+        if continuous:
+            result = await continuous_scanner.start_continuous_scan(
+                assets=assets_to_scan[:20],  # Limit to 20 assets
+                min_accuracy=min_accuracy,
+                max_signals=max_signals,
+                scan_interval=60,  # Scan every 60 seconds
+                max_scans=100  # Up to 100 scan cycles
+            )
+            return result
+        else:
+            # Single-pass scan (legacy behavior)
+            generated_signals = []
+            for asset_id in assets_to_scan[:20]:  # Limit to 20 assets to avoid timeout
+                try:
+                    # Parse asset (format: SYMBOL_market)
+                    if '_' in asset_id:
+                        symbol, market_type = asset_id.rsplit('_', 1)
+                    else:
+                        symbol, market_type = asset_id, 'regular'
                     
-                    # Stop if we've reached max signals
-                    if len(generated_signals) >= max_signals:
-                        break
+                    # Generate signal for this asset
+                    signal_result = await force_signal_generator.generate_force_signal(
+                        asset_symbol=symbol,
+                        market_type=market_type,
+                        selected_timeframe='1m',
+                        selected_strategy='enhanced_rsi_bb_volume',
+                        force_signal=False  # Don't force, only generate if conditions met
+                    )
+                    
+                    # Check if signal meets accuracy threshold
+                    if signal_result.get('signal') and signal_result['signal'].get('probability', 0) >= min_accuracy:
+                        generated_signals.append(signal_result['signal'])
                         
-            except Exception as e:
-                logging.error(f"Error generating signal for {asset_id}: {e}")
-                continue
-        
-        return {
-            "success": True,
-            "message": f"Generated {len(generated_signals)} signals from {len(assets_to_scan)} assets scanned",
-            "signals": generated_signals,
-            "assets_scanned": len(assets_to_scan)
-        }
+                        # Stop if we've reached max signals
+                        if len(generated_signals) >= max_signals:
+                            break
+                            
+                except Exception as e:
+                    logging.error(f"Error generating signal for {asset_id}: {e}")
+                    continue
+            
+            return {
+                "success": True,
+                "message": f"Generated {len(generated_signals)} signals from {len(assets_to_scan)} assets scanned",
+                "signals": generated_signals,
+                "assets_scanned": len(assets_to_scan)
+            }
         
     except Exception as e:
         logging.error(f"Error in enhanced auto-generate: {e}")
