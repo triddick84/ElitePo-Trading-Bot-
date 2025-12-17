@@ -10938,9 +10938,20 @@ class BackendTester:
             ("Configuration Endpoints", self.test_config_endpoints),
         ]
         
-        # Run all tests
-        for test_name, test_func in tests:
+        # Run critical tests first
+        print("\n🔥 RUNNING CRITICAL FIXES TESTS (PRIORITY 1)")
+        print("=" * 50)
+        for test_name, test_func in critical_tests:
             await self.run_test(test_name, test_func)
+        
+        # Run core tests (selected subset for efficiency)
+        print("\n🔧 RUNNING CORE FUNCTIONALITY TESTS (PRIORITY 2)")
+        print("=" * 50)
+        for test_name, test_func in core_tests:
+            await self.run_test(test_name, test_func)
+        
+        # Combine all tests for summary
+        all_tests = critical_tests + core_tests
             
         await self.cleanup()
         
