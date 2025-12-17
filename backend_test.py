@@ -10960,7 +10960,7 @@ class BackendTester:
         print("🏁 BACKEND TESTING SUMMARY")
         print("=" * 70)
         
-        total_tests = len(tests)
+        total_tests = len(all_tests)
         passed_tests = total_tests - len(self.failed_tests)
         
         print(f"Total Tests: {total_tests}")
