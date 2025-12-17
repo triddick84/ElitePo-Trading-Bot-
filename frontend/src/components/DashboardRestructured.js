@@ -77,6 +77,11 @@ const DashboardRestructured = ({
     maxSignals: 5
   });
   
+  // Continuous Scanning State
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanIntervalId, setScanIntervalId] = useState(null);
+  const [scanCount, setScanCount] = useState(0);
+  
   // Candle Sync State
   const [candleSyncEnabled, setCandleSyncEnabled] = useState(false);
   const [candleSyncStatus, setCandleSyncStatus] = useState({ 
