@@ -345,8 +345,25 @@ const DashboardRestructured = ({
         );
       }
       
-      const newConfig = { ...config, ...normalizedUpdates };
-      await axios.put(`${API}/config`, newConfig);
+      // Ensure all required fields are present with defaults
+      const fullConfig = {
+        trading_mode: 'demo',
+        selected_expirations: ['1m'],
+        active_strategies: ['hybrid'],
+        target_assets: ['forex'],
+        risk_tolerance: 'medium',
+        max_stake_per_trade: 10.0,
+        max_daily_trades: 50,
+        min_probability_threshold: 85.0,
+        auto_trading_enabled: false,
+        sound_alerts_enabled: true,
+        popup_notifications: true,
+        invert_signals: false,
+        ...config,  // Current config
+        ...normalizedUpdates  // New updates
+      };
+      
+      await axios.put(`${API}/config`, fullConfig);
       setConfig({ ...config, ...updates }); // Use original updates for frontend state
       return true;
     } catch (error) {
