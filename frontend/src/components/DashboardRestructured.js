@@ -935,7 +935,7 @@ const DashboardRestructured = ({
 
             {performanceData && (
               <div className="flex items-center justify-between pt-2 border-t border-purple-500/30">
-                <span className="text-gray-400">Today's Win Rate:</span>
+                <span className="text-gray-400">Today&apos;s Win Rate:</span>
                 <Badge variant={performanceData.win_rate >= 70 ? "success" : "secondary"}>
                   {performanceData.win_rate?.toFixed(1) || 0}%
                 </Badge>
