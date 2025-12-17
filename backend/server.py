@@ -790,18 +790,21 @@ async def enhanced_auto_generate(
         max_signals: Maximum number of signals to generate
     """
     try:
-        from pocket_option_assets import pocket_option_assets
+        # Define available assets (common trading pairs)
+        ALL_AVAILABLE_ASSETS = [
+            'EURUSD', 'EURUSD_otc', 'GBPUSD', 'GBPUSD_otc', 
+            'USDJPY', 'USDJPY_otc', 'AUDUSD', 'AUDUSD_otc',
+            'USDCAD', 'USDCAD_otc', 'USDCHF', 'USDCHF_otc',
+            'BTCUSD', 'ETHUSD', 'LTCUSD',
+            'EURJPY', 'EURJPY_otc', 'GBPJPY', 'GBPJPY_otc',
+            'AUDJPY', 'AUDJPY_otc', 'NZDUSD', 'NZDUSD_otc'
+        ]
         
         # Determine which assets to scan
         assets_to_scan = []
         if scan_all_assets:
-            # Get all assets from pocket_option_assets
-            all_assets = pocket_option_assets.get_all_assets()
-            # Filter by payout
-            assets_to_scan = [
-                asset['id'] for asset in all_assets 
-                if asset.get('payout', 0) >= min_payout
-            ]
+            # Use all available assets (payout filtering not implemented - would need broker API)
+            assets_to_scan = ALL_AVAILABLE_ASSETS
         elif selected_assets:
             assets_to_scan = selected_assets
         else:
