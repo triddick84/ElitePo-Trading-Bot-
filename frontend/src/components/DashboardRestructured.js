@@ -53,7 +53,7 @@ const DashboardRestructured = ({
     selected_strategy: '',
     selected_timeframe: '1m',
     trading_mode: 'demo', // 'demo' or 'real'
-    invert_signals: true, // true for demo, false for real
+    invert_signals: false, // Independent of account type
     popup_notifications: true,
     sound_alerts: true
   });
@@ -129,7 +129,7 @@ const DashboardRestructured = ({
         selected_strategy: response.data.selected_strategy || '',
         selected_timeframe: response.data.selected_timeframe || '1m',
         trading_mode: response.data.trading_mode || 'demo',
-        invert_signals: response.data.invert_signals !== undefined ? response.data.invert_signals : true,
+        invert_signals: response.data.invert_signals !== undefined ? response.data.invert_signals : false,
         popup_notifications: response.data.popup_notifications !== undefined ? response.data.popup_notifications : true,
         sound_alerts: response.data.sound_alerts_enabled !== undefined ? response.data.sound_alerts_enabled : true
       }));
@@ -381,13 +381,14 @@ const DashboardRestructured = ({
 
   // Handle account type change
   const handleAccountTypeChange = async (accountType) => {
-    const invertSignals = accountType === 'demo'; // Demo = inverted, Real = normal
     const success = await updateConfiguration({ 
-      trading_mode: accountType,
-      invert_signals: invertSignals
+      trading_mode: accountType
+      // Do NOT change invert_signals - keep it independent
     });
     if (success) {
-      toast.success(`Switched to ${accountType.toUpperCase()} account${invertSignals ? ' (signals inverted)' : ' (normal signals)'}`);
+      const mode = accountType === 'demo' ? 'DEMO' : 'REAL';
+      const invertStatus = config.invert_signals ? '(Signals Inverted)' : '(Normal Signals)';
+      toast.success(`Switched to ${mode} account ${invertStatus}`);
     }
   };
 
