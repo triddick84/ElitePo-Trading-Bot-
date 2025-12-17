@@ -436,6 +436,18 @@
         - agent: "testing"
         - comment: "✅ VERIFIED: Manual Signal Generation frontend implementation fully functional. Comprehensive testing completed with all features working correctly: 1) ✅ Manual Signal Generation section prominently displayed with emerald border card styling, 2) ✅ Generate Single Signal button (🎯) present and functional with proper loading states ('⏳ Generating...'), 3) ✅ Auto Generation toggle button working correctly (🔄 Start Auto Generation / ⏹️ Stop Auto Generation), 4) ✅ Button states correctly respond to bot status (disabled when bot stopped, enabled when running), 5) ✅ Status messages display appropriately ('Bot Not Running' warning with yellow styling, 'Auto Generation Active' status with green styling), 6) ✅ Button color changes working (green for start, red for stop), 7) ✅ Emoji icons properly implemented (🎯, 🔄, ⏹️), 8) ✅ Mobile responsive design confirmed - all buttons visible and functional on mobile viewport, 9) ✅ Backend API integration confirmed (POST /api/signals/generate/single, POST /api/signals/auto-generate/start, POST /api/signals/auto-generate/stop), 10) ✅ Proper integration with existing Dashboard components and LiveSignalsDisplay. All primary testing objectives achieved - Manual Signal Generation features are production-ready."
 
+  - task: "Critical Frontend Fixes Testing"
+    implemented: true
+    working: false
+    file: "/app/frontend/src/components/DashboardRestructured.js"
+    stuck_count: 0
+    priority: "critical"
+    needs_retesting: false
+    status_history:
+        - working: false
+        - agent: "testing"
+        - comment: "✅ CRITICAL FRONTEND FIXES TESTING COMPLETED - Comprehensive testing of Real Account Mode Persistence, Expiration Time Changes, and Continuous Scanning Feature achieved 85% success rate (6/7 tests passed). MAJOR BREAKTHROUGH: Real Account Mode persistence working perfectly with proper state management and toast notifications. Key findings: 1) ✅ Real Account Mode Persistence: FULLY WORKING - Real Account button successfully clicked, shows proper toast notification 'Switched to REAL account (Normal Signals)', maintains active state with bg-green-600 styling, persists correctly after page refresh, Mode indicator correctly shows 'Mode: live' both before and after refresh, 2) ⚠️ Expiration Time Changes: PARTIALLY WORKING - 30s expiration button works correctly (gets purple bg-purple-600 styling when selected), 5s expiration button fails to get selected styling, CRITICAL ISSUE: Both buttons show 'Failed to update configuration' toast messages indicating backend configuration API issue, 3) ✅ Continuous Scanning Feature: MOSTLY WORKING - 'Start Continuous Scan' button found and functional, button click triggers proper toast notification 'Scan #1: No signals met criteria, continuing to scan...', button has correct initial styling (bg-gradient-to-r from-green-600 to-emerald-600), scanning process initiates successfully. CRITICAL BACKEND ISSUE: Configuration update API failing for expiration changes - this prevents proper expiration time persistence and may affect signal generation. All UI elements present and functional, Real Account persistence working perfectly, Continuous scanning initiates correctly. RECOMMENDATION: Fix backend configuration API endpoint to resolve expiration time update failures."
+
   - task: "Improved Configuration Saving UI"
     implemented: true
     working: false
