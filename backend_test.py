@@ -10794,14 +10794,21 @@ class BackendTester:
             return False
 
     async def run_all_tests(self):
-        """Run all backend tests focusing on Pocket Option timing synchronization system"""
-        print("🚀 Starting Pocket Option Timing Synchronization Testing for GPT Signal Bot")
+        """Run all backend tests focusing on critical fixes for GPT Signal Bot"""
+        print("🚀 Starting Critical Fixes Testing for GPT Signal Bot")
         print("=" * 80)
         
         await self.setup()
         
-        # Define test suite focused on Ultra-Short Timeframe Testing
-        tests = [
+        # PRIORITY 1: Critical fixes from review request
+        critical_tests = [
+            ("Real Account Mode Persistence", self.test_real_account_mode_persistence),
+            ("Expiration Time Changes in Live Mode", self.test_expiration_time_changes_in_live_mode),
+            ("Enhanced Auto-Generate with Query Parameters", self.test_enhanced_auto_generate_with_query_params),
+        ]
+        
+        # PRIORITY 2: Core functionality tests
+        core_tests = [
             ("Health Check", self.test_health_check),
             ("Environment Variables", self.test_environment_variables),
             
