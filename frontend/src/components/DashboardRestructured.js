@@ -123,12 +123,18 @@ const DashboardRestructured = ({
   const fetchConfiguration = async () => {
     try {
       const response = await axios.get(`${API}/config`);
+      // Convert backend 'live' mode back to frontend 'real' for display
+      let tradingMode = response.data.trading_mode || 'demo';
+      if (tradingMode === 'live') {
+        tradingMode = 'real';
+      }
+      
       setConfig(prev => ({
         ...prev,
         ...response.data,
         selected_strategy: response.data.selected_strategy || '',
         selected_timeframe: response.data.selected_timeframe || '1m',
-        trading_mode: response.data.trading_mode || 'demo',
+        trading_mode: tradingMode,
         invert_signals: response.data.invert_signals !== undefined ? response.data.invert_signals : false,
         popup_notifications: response.data.popup_notifications !== undefined ? response.data.popup_notifications : true,
         sound_alerts: response.data.sound_alerts_enabled !== undefined ? response.data.sound_alerts_enabled : true

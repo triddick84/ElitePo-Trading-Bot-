@@ -627,9 +627,11 @@ class TradingBotService:
                 # Remove MongoDB _id field
                 saved_config.pop('_id', None)
                 
-                # Convert updated_at back to datetime
+                # Convert updated_at back to datetime if it's a string
                 if 'updated_at' in saved_config:
-                    saved_config['updated_at'] = datetime.fromisoformat(saved_config['updated_at'])
+                    if isinstance(saved_config['updated_at'], str):
+                        saved_config['updated_at'] = datetime.fromisoformat(saved_config['updated_at'].replace('Z', '+00:00'))
+                    # If it's already a datetime, keep it as-is
                 
                 # Create new configuration from saved data
                 self.config = TradingConfiguration(**saved_config)
