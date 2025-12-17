@@ -796,11 +796,24 @@ const DashboardRestructured = ({
 
               <Button
                 onClick={handleEnhancedAutoGenerate}
-                disabled={isGenerating}
-                className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
+                disabled={isGenerating && !isScanning}
+                className={`w-full ${
+                  isScanning 
+                    ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700' 
+                    : 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700'
+                }`}
               >
-                {isGenerating ? 'Generating...' : 'Auto-Generate Signals'}
+                {isScanning 
+                  ? `⏹️ Stop Scanning (${scanCount} scans)` 
+                  : isGenerating 
+                    ? '🔍 Scanning...' 
+                    : '🔄 Start Continuous Scan'}
               </Button>
+              {isScanning && (
+                <p className="text-xs text-gray-400 mt-1 text-center">
+                  Scanning every 60 seconds until signals found
+                </p>
+              )}
             </div>
           </div>
         </Card>
