@@ -240,14 +240,14 @@ class ProvenHighAccuracy5sStrategy:
         bb_pos = indicators['bb_position']
         
         if bb_pos == 'at_lower' and rejection['bullish_rejection']:
-            buy_confirmations.append(f"Price at lower BB with bullish rejection wick")
+            buy_confirmations.append("Price at lower BB with bullish rejection wick")
         elif bb_pos == 'at_lower':
-            buy_confirmations.append(f"Price touching lower Bollinger Band")
+            buy_confirmations.append("Price touching lower Bollinger Band")
         
         if bb_pos == 'at_upper' and rejection['bearish_rejection']:
-            sell_confirmations.append(f"Price at upper BB with bearish rejection wick")
+            sell_confirmations.append("Price at upper BB with bearish rejection wick")
         elif bb_pos == 'at_upper':
-            sell_confirmations.append(f"Price touching upper Bollinger Band")
+            sell_confirmations.append("Price touching upper Bollinger Band")
         
         # === INDICATOR 4: EMA 20 ===
         ema = indicators['ema20']
@@ -256,11 +256,11 @@ class ProvenHighAccuracy5sStrategy:
             if current_price < ema and indicators['price_vs_ema'] == 'below':
                 # Price below EMA - potential bounce setup
                 if rsi < 50:  # Momentum still weak
-                    buy_confirmations.append(f"Price below EMA20, potential bounce")
+                    buy_confirmations.append("Price below EMA20, potential bounce")
             elif current_price > ema and indicators['price_vs_ema'] == 'above':
                 # Price above EMA - potential rejection setup
                 if rsi > 50:  # Momentum still strong
-                    sell_confirmations.append(f"Price above EMA20, potential rejection")
+                    sell_confirmations.append("Price above EMA20, potential rejection")
         
         # === INDICATOR 5: Support/Resistance Levels ===
         sr_buy = self.sr_detector.get_sr_confirmation(current_price, 'BUY')
