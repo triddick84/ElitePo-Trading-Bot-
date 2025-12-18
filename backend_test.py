@@ -1502,12 +1502,23 @@ class BackendTester:
                             print(f"   ✅ S/R analysis structure verified")
                         
                         # Check confidence meets 80% minimum threshold
-                        confidence = signal.get('confidence_level') or signal.get('confidence') or signal.get('probability')
+                        confidence = signal.get('probability') or signal.get('confidence')
+                        confidence_level = signal.get('confidence_level')
+                        
                         if confidence is None:
                             print(f"   ❌ No confidence/probability field found")
                             return False
                         
-                        confidence_num = float(confidence) if isinstance(confidence, str) else confidence
+                        # Handle confidence parsing (could be numeric or string like 'HIGH')
+                        try:
+                            confidence_num = float(confidence) if isinstance(confidence, str) and confidence.replace('.', '').isdigit() else confidence
+                        except (ValueError, AttributeError):
+                            # If confidence is a string like 'HIGH', try to get numeric value from probability
+                            if isinstance(confidence, str):
+                                print(f"   ℹ️ Confidence is string '{confidence}', using probability field")
+                                confidence_num = signal.get('probability', 0)
+                            else:
+                                confidence_num = confidence
                         print(f"   📊 Signal confidence: {confidence_num}%")
                         
                         if confidence_num < 80.0:
