@@ -15,6 +15,7 @@ import requests
 from textblob import TextBlob
 from pocket_option_5s_elite_strategy import pocket_option_5s_elite_strategy
 from pocket_option_5s_strategy import pocket_option_5s_strategy
+from proven_5s_strategy import get_proven_5s_strategy, generate_proven_5s_signal
 from pocket_option_15s_strategy import pocket_option_15s_strategy
 from pocket_option_30s_supertrend_ma import pocket_option_30s_supertrend_ma
 from pocket_option_1m_strategy import pocket_option_1m_strategy
