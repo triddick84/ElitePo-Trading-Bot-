@@ -1489,17 +1489,17 @@ class BackendTester:
                                 print(f"   📊 Strategy: {strategy_used}")
                                 return False
                             
-                            print(f"   ✅ Support/Resistance field present in PROVEN strategy signal")
-                        
-                        # Verify S/R analysis structure
-                        sr_data = tech_analysis['support_resistance']
-                        sr_fields = ['nearest_support', 'nearest_resistance', 'support_distance_pct', 'resistance_distance_pct']
-                        for field in sr_fields:
-                            if field not in sr_data:
-                                print(f"   ❌ Missing S/R field: {field}")
-                                return False
-                        
-                        print(f"   ✅ S/R analysis structure verified")
+                                print(f"   ✅ Support/Resistance field present in PROVEN strategy signal")
+                            
+                            # Verify S/R analysis structure for non-emergency signals
+                            sr_data = tech_analysis['support_resistance']
+                            sr_fields = ['nearest_support', 'nearest_resistance', 'support_distance_pct', 'resistance_distance_pct']
+                            for field in sr_fields:
+                                if field not in sr_data:
+                                    print(f"   ❌ Missing S/R field: {field}")
+                                    return False
+                            
+                            print(f"   ✅ S/R analysis structure verified")
                         
                         # Check confidence meets 80% minimum threshold
                         confidence = signal.get('confidence_level') or signal.get('confidence') or signal.get('probability')
