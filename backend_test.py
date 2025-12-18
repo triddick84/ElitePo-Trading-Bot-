@@ -11587,8 +11587,64 @@ async def main_enhanced_auto_generate():
     finally:
         await tester.cleanup()
 
+async def main_proven_5s_strategy():
+    """Main function to run PROVEN 5-Second High-Accuracy Strategy tests"""
+    tester = BackendTester()
+    
+    try:
+        print("🎯 PROVEN 5-SECOND HIGH-ACCURACY STRATEGY TESTING")
+        print("=" * 60)
+        print("Testing new PROVEN 5s Strategy with Support/Resistance integration")
+        print("=" * 60)
+        
+        await tester.setup()
+        
+        # Define the PROVEN 5s strategy tests
+        proven_5s_tests = [
+            ("Support/Resistance Module", tester.test_support_resistance_module),
+            ("Proven 5s Strategy Module", tester.test_proven_5s_strategy_module),
+            ("API Integration - Force Signal 5s", tester.test_api_integration_force_signal_5s),
+            ("Configuration - Minimum Probability Threshold", tester.test_configuration_minimum_probability_threshold),
+        ]
+        
+        total_tests = len(proven_5s_tests)
+        passed_tests = 0
+        
+        # Run each test
+        for test_name, test_func in proven_5s_tests:
+            success = await tester.run_test(test_name, test_func)
+            if success:
+                passed_tests += 1
+        
+        print(f"\n📊 PROVEN 5S STRATEGY TEST RESULTS")
+        print(f"=" * 50)
+        print(f"✅ Passed: {passed_tests}/{total_tests}")
+        print(f"❌ Failed: {total_tests - passed_tests}/{total_tests}")
+        
+        if tester.failed_tests:
+            print(f"\n❌ Failed Tests:")
+            for failed_test in tester.failed_tests:
+                print(f"   - {failed_test}")
+        
+        success = passed_tests == total_tests
+        
+        if success:
+            print("\n✅ PROVEN 5s Strategy testing completed successfully!")
+            print("   All PROVEN 5s Strategy functionality is working correctly")
+        else:
+            print("\n❌ PROVEN 5s Strategy testing found issues!")
+            print("   Check the failed tests above for details")
+        
+        return 0 if success else 1
+        
+    except Exception as e:
+        print(f"\n❌ PROVEN 5s Strategy testing failed with error: {e}")
+        return 1
+    finally:
+        await tester.cleanup()
+
 if __name__ == "__main__":
     import sys
-    # Run the Enhanced Auto Generate tests as requested
-    result = asyncio.run(main_enhanced_auto_generate())
+    # Run the PROVEN 5s Strategy tests as requested
+    result = asyncio.run(main_proven_5s_strategy())
     sys.exit(result)
