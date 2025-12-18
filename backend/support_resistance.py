@@ -96,7 +96,6 @@ class SupportResistanceDetector:
         low = candle['low']
         close = candle['close']
         
-        body = abs(close - open_price)
         candle_range = high - low
         
         if candle_range == 0:
