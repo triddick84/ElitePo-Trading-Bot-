@@ -73,7 +73,7 @@ class ContinuousMarketScanner:
                             symbol, market_type = asset_id, 'regular'
                         
                         # Generate signal
-                        signal_result = await self.force_signal_generator.generate_force_signal(
+                        signal_result = await self.force_signal_generator.force_generate_signal(
                             asset_symbol=symbol,
                             market_type=market_type,
                             selected_timeframe='1m',
