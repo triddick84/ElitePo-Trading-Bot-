@@ -11336,6 +11336,12 @@ class BackendTester:
         for test_name, test_func in critical_tests:
             await self.run_test(test_name, test_func)
         
+        # Run PROVEN 5s strategy tests
+        print("\n🎯 RUNNING PROVEN 5-SECOND HIGH-ACCURACY STRATEGY TESTS (PRIORITY 1A)")
+        print("=" * 60)
+        for test_name, test_func in proven_5s_tests:
+            await self.run_test(test_name, test_func)
+        
         # Run core tests (selected subset for efficiency)
         print("\n🔧 RUNNING CORE FUNCTIONALITY TESTS (PRIORITY 2)")
         print("=" * 50)
