@@ -142,7 +142,7 @@ class TradingConfiguration(BaseModel):
     risk_tolerance: str = "medium"  # low, medium, high
     max_stake_per_trade: float = 10.0
     max_daily_trades: int = 50
-    min_probability_threshold: float = Field(default=85.0, ge=50.0, le=99.0)
+    min_probability_threshold: float = Field(default=80.0, ge=50.0, le=99.0)
     auto_trading_enabled: bool = False
     invert_signals: bool = False  # Global invert signals setting
     sound_alerts_enabled: bool = True  # Sound alerts for new signals
