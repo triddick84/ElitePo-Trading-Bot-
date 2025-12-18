@@ -11191,6 +11191,14 @@ class BackendTester:
             ("Enhanced Auto-Generate with Query Parameters", self.test_enhanced_auto_generate_with_query_params),
         ]
         
+        # PRIORITY 1A: PROVEN 5-Second High-Accuracy Strategy Tests (NEW)
+        proven_5s_tests = [
+            ("Support/Resistance Module", self.test_support_resistance_module),
+            ("Proven 5s Strategy Module", self.test_proven_5s_strategy_module),
+            ("API Integration - Force Signal 5s", self.test_api_integration_force_signal_5s),
+            ("Configuration - Minimum Probability Threshold", self.test_configuration_minimum_probability_threshold),
+        ]
+        
         # PRIORITY 2: Core functionality tests
         core_tests = [
             ("Health Check", self.test_health_check),
