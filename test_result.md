@@ -681,6 +681,7 @@
 
 ## test_plan:
   current_focus:
+    - "Enhanced Breakout Predictor with Alerts System"
     - "Critical Fixes Testing - Real Account Mode & Enhanced Auto-Generate"
     - "Configuration Persistence Verification"
     - "Enhanced Auto-Generate Endpoint Testing"
