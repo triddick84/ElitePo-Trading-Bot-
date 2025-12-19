@@ -42,8 +42,13 @@ const StrategySelector = ({ onStrategySelect, onAutoGenerateToggle }) => {
   // Strategy configurations by timeframe
   const strategiesByTimeframe = {
     '5s': [
+      { value: 'enhanced_breakout', name: '🚀 Enhanced Breakout Predictor', accuracy: '80%+', note: '⏳ 10s latency | S/R Levels', recommended: true },
+      { value: 'proven_5s', name: '🎯 Proven RSI+Stoch+BB+EMA', accuracy: '80%+', note: '⏳ 10s latency | 4+ confirmations', recommended: true },
       { value: 'ultra_v2_5s', name: 'Ultra Precision 5s V2', accuracy: '90%+', note: '⏳ 10s latency applied' },
-      { value: 'reversal_5s', name: '5s Reversal Strategy', accuracy: '85%+', note: '⏳ 10s latency applied' }
+      { value: 'reversal_5s', name: '5s Reversal Strategy', accuracy: '85%+', note: '⏳ 10s latency applied' },
+      { value: 'keltner_fractal', name: 'Keltner Channel + Fractal', accuracy: '85%+', note: '⏳ 10s latency applied' },
+      { value: '3ema_crossover', name: '3 EMA Crossover', accuracy: '82%+', note: '⏳ 10s latency applied' },
+      { value: 'stochastic_divergence', name: 'Stochastic Divergence', accuracy: '83%+', note: '⏳ 10s latency applied' }
     ],
     '15s': [
       { value: 'fractal_15s', name: '15s Fractal Strategy', accuracy: '85%+' }
