@@ -4,7 +4,7 @@ try:
 except ImportError:
     pass
 
-from fastapi import FastAPI, APIRouter, HTTPException, BackgroundTasks, Query
+from fastapi import FastAPI, APIRouter, HTTPException, BackgroundTasks, Query, Request
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
