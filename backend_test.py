@@ -11979,6 +11979,12 @@ class BackendTester:
         for test_name, test_func in proven_5s_tests:
             await self.run_test(test_name, test_func)
         
+        # Run Enhanced Breakout Predictor tests
+        print("\n🚀 RUNNING ENHANCED BREAKOUT PREDICTOR WITH ALERTS TESTS (PRIORITY 1B)")
+        print("=" * 65)
+        for test_name, test_func in breakout_predictor_tests:
+            await self.run_test(test_name, test_func)
+        
         # Run core tests (selected subset for efficiency)
         print("\n🔧 RUNNING CORE FUNCTIONALITY TESTS (PRIORITY 2)")
         print("=" * 50)
