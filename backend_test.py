@@ -11827,6 +11827,15 @@ class BackendTester:
             ("Configuration - Minimum Probability Threshold", self.test_configuration_minimum_probability_threshold),
         ]
         
+        # PRIORITY 1B: Enhanced Breakout Predictor with Alerts Tests (NEW)
+        breakout_predictor_tests = [
+            ("Breakout Predictor Module", self.test_breakout_predictor_module),
+            ("Five Second Breakout Strategy", self.test_five_second_breakout_strategy),
+            ("Breakout Alert Service", self.test_breakout_alert_service),
+            ("Breakout API Endpoints", self.test_breakout_api_endpoints),
+            ("Breakout Performance Requirements", self.test_breakout_performance_requirements),
+        ]
+        
         # PRIORITY 2: Core functionality tests
         core_tests = [
             ("Health Check", self.test_health_check),
