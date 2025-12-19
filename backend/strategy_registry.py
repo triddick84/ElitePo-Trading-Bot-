@@ -31,6 +31,14 @@ class StrategyRegistry:
             self.strategies['5s_momentum_breakout'] = strategy_5s_momentum_breakout
             self.strategies['5s_price_action'] = strategy_5s_price_action
             
+            # Enhanced Breakout Predictor - 5s optimized
+            try:
+                from strategies.five_second_breakout import get_breakout_strategy
+                self.strategies['5s_enhanced_breakout'] = get_breakout_strategy()
+                logger.info("✅ Loaded Enhanced Breakout Predictor for 5s")
+            except Exception as e:
+                logger.warning(f"Could not load Enhanced Breakout Predictor: {e}")
+            
             # 15-second strategies
             from strategies.strategy_15s_ema_crossover import strategy_15s_ema_crossover
             from strategies.strategy_15s_rsi_stochastic import strategy_15s_rsi_stochastic
