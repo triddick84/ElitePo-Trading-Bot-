@@ -510,8 +510,8 @@ class EnhancedBreakoutPredictor:
             confidence_score=confidence,
             breakout_type=breakout['type'],
             strength=round(strength, 3),
-            support_levels=[round(l, 5) for l in support_levels],
-            resistance_levels=[round(l, 5) for l in resistance_levels],
+            support_levels=[round(level, 5) for level in support_levels],
+            resistance_levels=[round(level, 5) for level in resistance_levels],
             win_probability=confidence / 100,
             processing_time_ms=round(processing_time, 2)
         )
