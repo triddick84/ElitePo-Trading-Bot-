@@ -691,10 +691,47 @@ class ForceSignalGenerator:
                             result['selected_strategy'] = True
                             return result
                 
+                elif selected_strategy_id == 'enhanced_breakout':
+                    logger.info(f"🎯 Applying SELECTED: Enhanced Breakout Predictor for {symbol}")
+                    
+                    from real_market_data_service import real_market_data_service
+                    market_data_list = await real_market_data_service.get_historical_data(symbol, interval='1m', periods=100)
+                    
+                    if market_data_list and len(market_data_list) >= 30:
+                        import pandas as pd
+                        df = pd.DataFrame([{
+                            'open': md.open_price,
+                            'high': md.high_price,
+                            'low': md.low_price,
+                            'close': md.close_price,
+                            'volume': md.volume if hasattr(md, 'volume') else 0
+                        } for md in market_data_list])
+                        
+                        breakout_strategy = get_breakout_strategy()
+                        result = await loop.run_in_executor(
+                            self.executor,
+                            breakout_strategy.generate_signal,
+                            symbol,
+                            chart_type,
+                            [timeframe]
+                        )
+                        
+                        if result and result.get('confidence', 0) >= 75:
+                            logger.info(f"✅ Enhanced Breakout 5s: {symbol} → {result['direction']} ({result['confidence']:.1f}%)")
+                            logger.info(f"   Breakout Type: {result.get('breakout_type')}, Strength: {result.get('strength')}")
+                            logger.info(f"   S/R Levels - Support: {result.get('support_levels', [])[:2]}, Resistance: {result.get('resistance_levels', [])[:2]}")
+                            logger.info(f"⏳ Applying 10-second latency for 5s timeframe signal stability...")
+                            await asyncio.sleep(10)
+                            result['strategy'] = 'enhanced_breakout_5s'
+                            result['timeframe'] = timeframe
+                            result['chart_type'] = chart_type
+                            result['selected_strategy'] = True
+                            return result
+                
                 # Check if we should use default or if strategy wasn't found
                 if selected_strategy_id != 'default':
                     logger.warning(f"⚠️ Selected strategy '{selected_strategy_id}' not found or failed for 5s timeframe")
-                    logger.warning(f"   Available 5s strategies: keltner_fractal, 3ema_crossover, ema20_rsi14, stochastic_divergence, proven_bollinger, proven_supertrend")
+                    logger.warning(f"   Available 5s strategies: keltner_fractal, 3ema_crossover, ema20_rsi14, stochastic_divergence, proven_bollinger, proven_supertrend, enhanced_breakout")
                 
                 # DEFAULT or if selected strategy fails
                 logger.info(f"⚡ Applying DEFAULT 5-SECOND strategy (PROVEN HIGH-ACCURACY) for {symbol}")
