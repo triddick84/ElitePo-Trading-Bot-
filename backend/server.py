@@ -3557,6 +3557,174 @@ async def backtest_strategy(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
+# ============================================================================
+# ENHANCED BREAKOUT PREDICTOR ENDPOINTS
+# ============================================================================
+
+@api_router.post("/breakout/signal")
+async def generate_breakout_signal_endpoint(request: Request):
+    """
+    Generate breakout signal for a symbol
+    
+    Body:
+    - symbol: Trading symbol (e.g., "EURUSD_otc")
+    - timeframe: Optional timeframe (default "5s")
+    """
+    try:
+        data = await request.json()
+        symbol = data.get('symbol', 'EURUSD_otc')
+        timeframe = data.get('timeframe', '5s')
+        
+        from strategies.five_second_breakout import get_breakout_strategy
+        strategy = get_breakout_strategy()
+        
+        signal = strategy.generate_signal(symbol)
+        
+        if signal:
+            return {
+                "success": True,
+                "signal": signal,
+                "message": f"Breakout signal generated for {symbol}"
+            }
+        else:
+            return {
+                "success": False,
+                "signal": None,
+                "message": f"No breakout signal detected for {symbol}"
+            }
+    except Exception as e:
+        logger.error(f"Breakout signal generation error: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.get("/breakout/levels/{symbol}")
+async def get_breakout_levels(symbol: str, price: float = None):
+    """
+    Get current support/resistance levels for breakout analysis
+    """
+    try:
+        from indicators.breakout_predictor import get_breakout_predictor_5s
+        predictor = get_breakout_predictor_5s()
+        
+        if price is None:
+            # Try to get current price from market data
+            try:
+                import yfinance as yf
+                yf_symbol = symbol.replace('_OTC', '').replace('_otc', '').replace('_regular', '')
+                if len(yf_symbol) == 6 and yf_symbol.isalpha():
+                    yf_symbol = f"{yf_symbol}=X"
+                ticker = yf.Ticker(yf_symbol)
+                price = ticker.fast_info.get('lastPrice', ticker.history(period='1d')['Close'].iloc[-1])
+            except Exception:
+                price = 1.0  # Default
+        
+        levels = predictor.get_current_levels(symbol, price)
+        return {
+            "success": True,
+            "levels": levels
+        }
+    except Exception as e:
+        logger.error(f"Error getting breakout levels: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.get("/breakout/performance")
+async def get_breakout_performance():
+    """
+    Get breakout predictor performance metrics
+    """
+    try:
+        from strategies.five_second_breakout import get_breakout_strategy
+        strategy = get_breakout_strategy()
+        
+        metrics = strategy.get_performance_metrics()
+        return {
+            "success": True,
+            "metrics": metrics
+        }
+    except Exception as e:
+        logger.error(f"Error getting breakout performance: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.post("/breakout/config")
+async def update_breakout_config(request: Request):
+    """
+    Update breakout predictor configuration
+    """
+    try:
+        data = await request.json()
+        
+        from strategies.five_second_breakout import get_breakout_strategy
+        strategy = get_breakout_strategy()
+        
+        success = strategy.update_config(data)
+        return {
+            "success": success,
+            "message": "Breakout configuration updated",
+            "config": strategy.config
+        }
+    except Exception as e:
+        logger.error(f"Error updating breakout config: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.get("/breakout/alerts/history")
+async def get_breakout_alert_history(limit: int = 50):
+    """
+    Get recent breakout alert history
+    """
+    try:
+        from alerts.breakout_alerts import get_alert_manager
+        manager = get_alert_manager()
+        
+        history = manager.get_alert_history(limit)
+        stats = manager.get_statistics()
+        
+        return {
+            "success": True,
+            "alerts": history,
+            "statistics": stats
+        }
+    except Exception as e:
+        logger.error(f"Error getting alert history: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.post("/breakout/webhook/register")
+async def register_breakout_webhook(request: Request):
+    """
+    Register a webhook URL for breakout alerts
+    
+    Body:
+    - url: Webhook URL
+    - format: "json", "mt4", or "tradingview"
+    - name: Optional webhook name
+    """
+    try:
+        data = await request.json()
+        url = data.get('url', '')
+        format_type = data.get('format', 'json')
+        name = data.get('name', 'default')
+        
+        if not url:
+            return {"success": False, "error": "Webhook URL required"}
+        
+        from alerts.breakout_alerts import get_alert_manager
+        manager = get_alert_manager()
+        
+        success = manager.register_webhook(url, format_type, name)
+        return {
+            "success": success,
+            "message": f"Webhook '{name}' registered successfully"
+        }
+    except Exception as e:
+        logger.error(f"Error registering webhook: {e}")
+        return {"success": False, "error": str(e)}
+
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
