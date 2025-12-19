@@ -799,6 +799,56 @@ class ForceSignalGenerator:
                         'suggested_stake': 2.0
                     }
                 
+                # Fallback: Try Enhanced Breakout Strategy
+                logger.info(f"   Trying Enhanced Breakout fallback for {symbol}")
+                
+                try:
+                    from real_market_data_service import real_market_data_service
+                    market_data_list = await real_market_data_service.get_historical_data(symbol, interval='1m', periods=100)
+                    
+                    if market_data_list and len(market_data_list) >= 30:
+                        df = pd.DataFrame([{
+                            'open': md.open_price,
+                            'high': md.high_price,
+                            'low': md.low_price,
+                            'close': md.close_price,
+                            'volume': md.volume if hasattr(md, 'volume') else 0
+                        } for md in market_data_list])
+                        
+                        breakout_strategy = get_breakout_strategy()
+                        result_breakout = await loop.run_in_executor(
+                            self.executor,
+                            breakout_strategy.generate_signal,
+                            symbol,
+                            chart_type,
+                            [timeframe]
+                        )
+                        
+                        if result_breakout and result_breakout.get('confidence', 0) >= 75:
+                            logger.info(f"✅ Enhanced Breakout 5s: {symbol} → {result_breakout['direction']} ({result_breakout['confidence']:.1f}%)")
+                            logger.info(f"   Breakout: {result_breakout.get('breakout_type')}, Strength: {result_breakout.get('strength')}")
+                            logger.info(f"⏳ Applying 10-second latency for 5s timeframe signal stability...")
+                            await asyncio.sleep(10)
+                            return {
+                                'direction': result_breakout['direction'],
+                                'confidence': result_breakout['confidence'],
+                                'probability': result_breakout['confidence'],
+                                'reasoning': result_breakout.get('reasoning', 'Breakout signal'),
+                                'strategy': 'enhanced_breakout_5s',
+                                'timeframe': timeframe,
+                                'chart_type': chart_type,
+                                'breakout_strategy': True,
+                                'breakout_type': result_breakout.get('breakout_type'),
+                                'breakout_level': result_breakout.get('breakout_level'),
+                                'strength': result_breakout.get('strength'),
+                                'support_levels': result_breakout.get('support_levels', []),
+                                'resistance_levels': result_breakout.get('resistance_levels', []),
+                                'technical_details': result_breakout.get('technical_analysis', {}),
+                                'suggested_stake': 2.0
+                            }
+                except Exception as e:
+                    logger.warning(f"   Breakout fallback error: {e}")
+                
                 # Fallback: Try Ultra V2 Strategy
                 logger.info(f"   Trying Ultra V2 fallback for {symbol}")
                 result_ultra_v2 = await loop.run_in_executor(
