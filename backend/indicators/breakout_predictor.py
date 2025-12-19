@@ -226,8 +226,6 @@ class ProbabilityScoringEngine:
         
         # 3. Candle body strength
         body = abs(current['close'] - current['open'])
-        wick_upper = current['high'] - max(current['close'], current['open'])
-        wick_lower = min(current['close'], current['open']) - current['low']
         total_range = current['high'] - current['low']
         
         if total_range > 0:
