@@ -1,0 +1,68 @@
+# Enhanced Breakout Predictor Configuration
+# Optimized for 5-second timeframe trading
+
+breakout_predictor:
+  default_timeframe: "5s"
+  enabled: true
+  
+  # Detection settings
+  lookback_period: 15
+  percentage_step: 0.5
+  number_of_lines: 3
+  min_breakout_strength: 0.4
+  confirmation_bars: 1
+  
+  # Alert settings
+  alerts:
+    enabled: true
+    sound: true
+    popup: true
+    bullish_alerts: true
+    bearish_alerts: true
+    
+  # Webhook integration
+  webhook:
+    enabled: false
+    url: ""
+    format: "json"  # json, mt4, tradingview
+    timeout_ms: 100
+    retry_attempts: 3
+    
+  # MT4/MT5 Integration
+  mt_integration:
+    enabled: false
+    bridge_port: 5555
+    message_format: "SIGNAL|{signal}|SYMBOL|{ticker}|PRICE|{price}|BREAKOUT|{breakout_level}|CONF|{confidence}"
+    
+  # Performance optimization
+  optimization:
+    buffer_size: 3000
+    max_bars: 5000
+    processing_delay_ms: 100
+    
+  # Multi-timeframe settings
+  multi_timeframe:
+    enabled: false
+    confirmation_timeframe: "1m"
+    trend_alignment_boost: 5
+    
+  # Confidence thresholds
+  thresholds:
+    min_confidence: 75
+    high_confidence: 85
+    ultra_confidence: 90
+    min_strength: 0.4
+    
+  # Signal output
+  signal_format:
+    include_ticker: true
+    include_price: true
+    include_timestamp: true
+    include_confidence: true
+    include_sr_levels: true
+    
+  # Logging
+  logging:
+    level: "INFO"
+    log_signals: true
+    log_performance: true
