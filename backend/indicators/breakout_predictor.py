@@ -374,7 +374,7 @@ class EnhancedBreakoutPredictor:
         # Performance tracking
         self.processing_times: deque = deque(maxlen=100)
         
-        logger.info(f"🚀 Enhanced Breakout Predictor initialized")
+        logger.info("🚀 Enhanced Breakout Predictor initialized")
         logger.info(f"   Lookback: {self.breakout_settings.lookback_period}")
         logger.info(f"   Buffer size: {self.breakout_settings.buffer_size}")
         logger.info(f"   Min strength: {self.breakout_settings.min_breakout_strength}")

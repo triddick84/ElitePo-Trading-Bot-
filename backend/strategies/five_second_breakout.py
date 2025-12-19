@@ -186,7 +186,7 @@ class FiveSecondBreakoutStrategy:
                (signal_direction == 'SELL' and trend_bearish):
                 signal['confidence'] = min(signal['confidence'] + 5, 95)
                 signal['multi_timeframe_aligned'] = True
-                logger.info(f"✅ Multi-timeframe aligned: +5% confidence boost")
+                logger.info("✅ Multi-timeframe aligned: +5% confidence boost")
             else:
                 signal['multi_timeframe_aligned'] = False
                 # Optional: reduce confidence for counter-trend
