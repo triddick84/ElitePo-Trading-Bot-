@@ -12407,6 +12407,12 @@ class BackendTester:
         for test_name, test_func in critical_tests:
             await self.run_test(test_name, test_func)
         
+        # Run Pocket Option Live Bridge Connection tests
+        print("\n🌉 RUNNING POCKET OPTION LIVE BRIDGE CONNECTION TESTS (PRIORITY 1C)")
+        print("=" * 65)
+        for test_name, test_func in bridge_tests:
+            await self.run_test(test_name, test_func)
+        
         # Run PROVEN 5s strategy tests
         print("\n🎯 RUNNING PROVEN 5-SECOND HIGH-ACCURACY STRATEGY TESTS (PRIORITY 1A)")
         print("=" * 60)
