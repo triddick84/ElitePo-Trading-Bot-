@@ -3999,144 +3999,6 @@ async def register_breakout_webhook(request: Request):
 # =============================================================================
 
 # ========== SSID AUTO-REFRESH SERVICE ENDPOINTS ==========
-                "ssid_status": service.status.to_dict()
-            }
-        else:
-            return {
-                "success": False,
-                "message": "❌ SSID refresh failed",
-                "error": service.status.last_refresh_error
-            }
-    except Exception as e:
-        logger.error(f"Manual SSID refresh error: {e}")
-        return {
-            "success": False,
-            "message": f"❌ Error: {str(e)}"
-        }
-
-
-# =============================================================================
-# TELEGRAM NOTIFICATION ENDPOINTS
-# =============================================================================
-
-@api_router.get("/telegram/status")
-async def get_telegram_status():
-    """
-    Get Telegram notifier status and configuration
-    """
-    notifier = get_telegram_notifier()
-    
-    return {
-        "success": True,
-        **notifier.get_status()
-    }
-
-
-@api_router.post("/telegram/test")
-async def test_telegram_notification():
-    """
-    Send a test notification to Telegram
-    """
-    notifier = get_telegram_notifier()
-    
-    if not notifier.config.is_valid():
-        return {
-            "success": False,
-            "message": "❌ Telegram not configured - missing bot_token or chat_id in .env"
-        }
-    
-    try:
-        success = await notifier.send_status(
-            "🧪 Test Notification",
-            {
-                "Bot": "@ElitePocket_bot",
-                "Status": "Connected",
-                "Test": "Successful"
-            }
-        )
-        
-        if success:
-            return {
-                "success": True,
-                "message": "✅ Test notification sent successfully!"
-            }
-        else:
-            return {
-                "success": False,
-                "message": "❌ Failed to send test notification"
-            }
-    except Exception as e:
-        logger.error(f"Telegram test error: {e}")
-        return {
-            "success": False,
-            "message": f"❌ Error: {str(e)}"
-        }
-
-
-@api_router.post("/telegram/send-signal")
-async def send_signal_to_telegram(signal_id: str = None):
-    """
-    Send a specific signal to Telegram
-    
-    Args:
-        signal_id: Optional signal ID to send. If not provided, sends the latest signal.
-    """
-    notifier = get_telegram_notifier()
-    
-    if not notifier.config.is_valid():
-        return {
-            "success": False,
-            "message": "❌ Telegram not configured"
-        }
-    
-    try:
-        # Get signal from trading bot or generate one
-        if signal_id:
-            # Try to find signal in current signals
-            signals = trading_bot.current_signals
-            signal = next((s for s in signals if s.get('id') == signal_id), None)
-        else:
-            # Get latest signal
-            signals = trading_bot.current_signals
-            signal = signals[-1] if signals else None
-        
-        if not signal:
-            return {
-                "success": False,
-                "message": "❌ No signal found to send"
-            }
-        
-        success = await notifier.send_signal(signal)
-        
-        if success:
-            return {
-                "success": True,
-                "message": "✅ Signal sent to Telegram",
-                "signal": {
-                    "symbol": signal.get('symbol'),
-                    "direction": signal.get('direction'),
-                    "probability": signal.get('probability')
-                }
-            }
-        else:
-            return {
-                "success": False,
-                "message": "❌ Failed to send signal to Telegram"
-            }
-    except Exception as e:
-        logger.error(f"Send signal to Telegram error: {e}")
-        return {
-            "success": False,
-            "message": f"❌ Error: {str(e)}"
-        }
-
-
-
-# =============================================================================
-# INTEGRATED POCKET OPTION + TELEGRAM SIGNAL FLOW
-# =============================================================================
-
-# ========== SSID AUTO-REFRESH SERVICE ENDPOINTS ==========
 
 @api_router.get("/ssid/status")
 async def get_ssid_status():
@@ -4198,6 +4060,197 @@ async def start_ssid_auto_refresh():
         else:
             return {
                 "success": False,
+                "message": "Failed to start SSID auto-refresh service (missing credentials or Selenium not available)"
+            }
+    except Exception as e:
+        logger.error(f"Error starting SSID auto-refresh: {e}")
+        return {
+            "success": False,
+            "message": f"Error starting SSID auto-refresh: {str(e)}"
+        }
+
+@api_router.post("/ssid/stop-auto-refresh")
+async def stop_ssid_auto_refresh():
+    """
+    Stop the SSID auto-refresh service
+    """
+    try:
+        ssid_service = get_ssid_service()
+        if ssid_service:
+            await ssid_service.stop()
+        
+        return {
+            "success": True,
+            "message": "SSID auto-refresh service stopped"
+        }
+    except Exception as e:
+        logger.error(f"Error stopping SSID auto-refresh: {e}")
+        return {
+            "success": False,
+            "message": f"Error stopping SSID auto-refresh: {str(e)}"
+        }
+
+# ========== TELEGRAM NOTIFICATION SERVICE ENDPOINTS ==========
+
+@api_router.get("/telegram/status")
+async def get_telegram_status():
+    """
+    Get Telegram notifier status
+    Should show configured=true, chat_id=6434316177
+    """
+    try:
+        telegram_notifier = get_telegram_notifier()
+        status = telegram_notifier.get_status()
+        return status
+    except Exception as e:
+        logger.error(f"Error getting Telegram status: {e}")
+        return {
+            "configured": False,
+            "error": str(e)
+        }
+
+@api_router.post("/telegram/test")
+async def test_telegram_notification():
+    """
+    Send a test notification to Telegram
+    Should return success=true if sent successfully
+    """
+    try:
+        telegram_notifier = get_telegram_notifier()
+        
+        test_message = """
+🧪 *TEST NOTIFICATION* 🧪
+━━━━━━━━━━━━━━━━━━━━━━
+
+✅ Telegram integration is working!
+📱 Bot: @ElitePocket_bot
+🕐 Time: """ + datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC') + """
+
+━━━━━━━━━━━━━━━━━━━━━━
+"""
+        
+        success = await telegram_notifier.send_message(test_message)
+        
+        return {
+            "success": success,
+            "message": "Test notification sent successfully" if success else "Failed to send test notification"
+        }
+    except Exception as e:
+        logger.error(f"Error sending test Telegram notification: {e}")
+        return {
+            "success": False,
+            "message": f"Error sending test notification: {str(e)}"
+        }
+
+@api_router.put("/telegram/config")
+async def update_telegram_config(config_update: dict):
+    """
+    Update Telegram notification configuration
+    Update config options like enabled, send_signals, etc.
+    """
+    try:
+        telegram_notifier = get_telegram_notifier()
+        telegram_notifier.update_config(**config_update)
+        
+        # Return updated status
+        updated_status = telegram_notifier.get_status()
+        updated_status["success"] = True
+        updated_status["message"] = "✅ Telegram configuration updated"
+        
+        return updated_status
+    except Exception as e:
+        logger.error(f"Error updating Telegram config: {e}")
+        return {
+            "success": False,
+            "message": f"Error updating Telegram config: {str(e)}"
+        }
+
+# ========== INTEGRATED SIGNAL + TELEGRAM FLOW ENDPOINTS ==========
+
+@api_router.post("/signals/generate-and-notify")
+async def generate_and_notify_signal(
+    asset: str = Query(..., description="Asset symbol (e.g., EURUSD_OTC)"),
+    timeframe: str = Query("5s", description="Timeframe (e.g., 5s, 1m)"),
+    send_telegram: bool = Query(True, description="Send signal to Telegram")
+):
+    """
+    Generate a trading signal and send to Telegram in one call
+    Should generate a signal and send to Telegram (telegram_sent=true)
+    """
+    try:
+        # Parse asset
+        if '_' in asset:
+            symbol, market_type = asset.rsplit('_', 1)
+        else:
+            symbol, market_type = asset, 'regular'
+        
+        logger.info(f"🚀 Generating signal for {asset} ({timeframe}) with Telegram: {send_telegram}")
+        
+        # Generate signal using force signal generator
+        signal_result = await force_signal_generator.generate_force_signal(
+            asset_symbol=symbol,
+            market_type=market_type,
+            selected_timeframe=timeframe,
+            selected_strategy='enhanced_rsi_bb_volume',
+            force_signal=True  # Force generation for this endpoint
+        )
+        
+        telegram_sent = False
+        
+        if signal_result.get('success') and signal_result.get('signal'):
+            signal = signal_result['signal']
+            
+            # Store signal in database
+            try:
+                signal_dict = signal.dict() if hasattr(signal, 'dict') else signal
+                signal_dict['timestamp'] = signal_dict['timestamp'].isoformat() if hasattr(signal_dict['timestamp'], 'isoformat') else signal_dict['timestamp']
+                signal_dict['precision_entry_time'] = signal_dict['precision_entry_time'].isoformat() if signal_dict.get('precision_entry_time') and hasattr(signal_dict['precision_entry_time'], 'isoformat') else signal_dict.get('precision_entry_time')
+                signal_dict = _convert_numpy_types(signal_dict)
+                await db.trading_signals.insert_one(signal_dict)
+                logger.info(f"Signal stored in database: {signal_dict.get('id')}")
+            except Exception as e:
+                logger.warning(f"Could not store signal in database: {e}")
+            
+            # Send to Telegram if requested
+            if send_telegram:
+                try:
+                    telegram_notifier = get_telegram_notifier()
+                    telegram_sent = await telegram_notifier.send_signal(signal_dict)
+                    logger.info(f"Telegram notification {'sent' if telegram_sent else 'failed'}")
+                except Exception as e:
+                    logger.warning(f"Could not send Telegram notification: {e}")
+                    telegram_sent = False
+            
+            return {
+                "success": True,
+                "message": f"Signal generated for {asset}",
+                "signal": {
+                    "id": str(signal_dict.get('id')),
+                    "symbol": str(signal_dict.get('symbol')),
+                    "direction": signal_dict.get('direction'),
+                    "probability": float(signal_dict.get('probability', 0)),
+                    "timeframe": str(signal_dict.get('timeframe')),
+                    "market_type": str(signal_dict.get('market_type')),
+                    "timestamp": signal_dict.get('timestamp')
+                },
+                "telegram_sent": telegram_sent
+            }
+        else:
+            return {
+                "success": False,
+                "message": f"Could not generate signal for {asset}",
+                "signal": None,
+                "telegram_sent": False
+            }
+            
+    except Exception as e:
+        logger.error(f"Error in generate-and-notify: {e}")
+        return {
+            "success": False,
+            "message": f"Error generating signal: {str(e)}",
+            "signal": None,
+            "telegram_sent": False
+        }
                 "message": "Failed to start SSID auto-refresh service (missing credentials or Selenium not available)"
             }
     except Exception as e:
