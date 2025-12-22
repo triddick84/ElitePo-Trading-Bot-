@@ -4118,16 +4118,9 @@ async def test_telegram_notification():
     try:
         telegram_notifier = get_telegram_notifier()
         
-        test_message = """🧪 TEST NOTIFICATION 🧪
-━━━━━━━━━━━━━━━━━━━━━━
-
-✅ Telegram integration is working!
-📱 Bot: @ElitePocket_bot
-🕐 Time: """ + datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC') + """
-
-━━━━━━━━━━━━━━━━━━━━━━"""
+        test_message = "🧪 TEST NOTIFICATION 🧪\n\n✅ Telegram integration is working!\n📱 Bot: @ElitePocket_bot\n🕐 Time: " + datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
         
-        success = await telegram_notifier.send_message(test_message)
+        success = await telegram_notifier.send_message(test_message, parse_mode=None)
         
         return {
             "success": success,
