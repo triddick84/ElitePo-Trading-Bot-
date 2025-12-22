@@ -103,3 +103,30 @@
 ✅ All critical endpoints return expected responses
 ✅ Telegram bot successfully sends notifications to chat ID 6434316177
 ✅ Signal generation produces valid trading signals with proper metadata
+
+## Fast Supertrend Catch Strategy Implementation
+
+### Strategy Details:
+- **Name**: Fast Supertrend Catch
+- **Timeframe**: 5 seconds chart, 5 seconds expiration
+- **Indicators**:
+  - Supertrend: ATR Period 100, Multiplier 1
+  - EMA: Period 15
+
+### Signal Logic (CONTRARIAN):
+- Price ABOVE 15 EMA + Supertrend BUY → Generate SELL
+- Price BELOW 15 EMA + Supertrend SELL → Generate BUY
+- At Support/Resistance levels → NO SIGNAL (wait for confirmation)
+
+### Files Created:
+- `/app/backend/strategies/fast_supertrend_catch.py` - Main strategy implementation
+
+### API Endpoints:
+- POST /api/strategy/fast-supertrend-catch/signal - Generate signal
+- GET /api/strategy/fast-supertrend-catch/config - Get strategy config
+
+### Frontend Updates:
+- Added to StrategySelector.js
+- Added to StrategySelectorEnhanced.js
+- Shows in 5s timeframe strategy list
+
