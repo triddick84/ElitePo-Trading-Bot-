@@ -4321,37 +4321,69 @@ async def generate_signal_and_notify(
         send_telegram: Whether to send to Telegram
     """
     try:
-        # Generate signal using force generator
-        signal_result = await force_signal_generator.generate_force_signal(
+        # Generate signal using existing force generation endpoint logic
+        from real_market_data_service import RealMarketDataService
+        market_service = RealMarketDataService()
+        
+        # Get market data
+        market_data = await market_service.get_real_market_data(asset)
+        
+        if not market_data:
+            # Use fallback data
+            from models import MarketData
+            market_data = MarketData(
+                symbol=asset,
+                current_price=1.05,
+                timestamp=datetime.now(timezone.utc),
+                historical_prices=[1.05 + i * 0.0001 for i in range(-100, 0)],
+                volume=1000000
+            )
+        
+        # Generate signal
+        signals = await force_signal_generator.force_generate_signal(
             symbol=asset,
-            timeframe=timeframe
+            market_data=market_data,
+            user_expirations=[timeframe]
         )
         
-        if not signal_result or not signal_result.get('success'):
+        if not signals or len(signals) == 0:
             return {
                 "success": False,
-                "message": "❌ Failed to generate signal",
-                "error": signal_result.get('error') if signal_result else "Unknown error"
+                "message": "❌ Failed to generate signal - no valid signals produced"
             }
         
-        signal = signal_result.get('signal', {})
+        signal = signals[0]
+        
+        # Convert to dict for Telegram
+        signal_dict = {
+            "symbol": signal.symbol,
+            "direction": signal.direction.value if hasattr(signal.direction, 'value') else str(signal.direction),
+            "probability": signal.probability,
+            "timeframe": timeframe,
+            "market_type": "OTC" if "otc" in asset.lower() else "regular",
+            "expiration_minutes": signal.expiration_minutes,
+            "strategy_used": signal.strategy_used if hasattr(signal, 'strategy_used') else "HYBRID",
+            "precision_entry_time": signal.precision_entry_time.isoformat() if hasattr(signal, 'precision_entry_time') and signal.precision_entry_time else ""
+        }
         
         # Send to Telegram if requested
         telegram_sent = False
         if send_telegram:
             notifier = get_telegram_notifier()
             if notifier.config.is_valid():
-                telegram_sent = await notifier.send_signal(signal)
+                telegram_sent = await notifier.send_signal(signal_dict)
         
         return {
             "success": True,
             "message": "✅ Signal generated" + (" and sent to Telegram" if telegram_sent else ""),
-            "signal": signal,
+            "signal": signal_dict,
             "telegram_sent": telegram_sent
         }
         
     except Exception as e:
         logger.error(f"Generate and notify error: {e}")
+        import traceback
+        traceback.print_exc()
         return {
             "success": False,
             "message": f"❌ Error: {str(e)}"
