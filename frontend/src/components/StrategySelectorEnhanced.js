@@ -79,6 +79,7 @@ const StrategySelectorEnhanced = ({ onStrategySelect, onConfigChange }) => {
   // Strategy configurations by timeframe (will be expanded with new strategies)
   const strategiesByTimeframe = {
     '5s': [
+      { value: 'fast_supertrend_catch', name: '⚡ Fast Supertrend Catch', accuracy: '85%+', note: 'Supertrend ATR100 + 15 EMA Contrarian | S/R Filter', recommended: true },
       { value: 'enhanced_breakout', name: '🚀 Enhanced Breakout Predictor', accuracy: '80%+', note: '⏳ 10s latency | S/R Levels', recommended: true },
       { value: 'proven_5s', name: '🎯 Proven RSI+Stoch+BB+EMA', accuracy: '80%+', note: '⏳ 10s latency | 4+ confirmations', recommended: true },
       { value: 'ultra_v2_5s', name: 'Ultra Precision 5s V2', accuracy: '90%+', note: '⏳ 10s latency applied' },
