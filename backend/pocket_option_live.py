@@ -353,7 +353,7 @@ class PocketOptionDataParser:
         
         return result
     
-    def get_candles_dataframe(self, asset: str) -> Optional['pd.DataFrame']:
+    def get_candles_dataframe(self, asset: str):
         """Get candles as pandas DataFrame"""
         try:
             import pandas as pd
