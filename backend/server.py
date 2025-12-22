@@ -4184,18 +4184,28 @@ async def generate_and_notify_signal(
         
         logger.info(f"🚀 Generating signal for {asset} ({timeframe}) with Telegram: {send_telegram}")
         
-        # Generate signal using force signal generator
-        signal_result = await force_signal_generator.force_generate_signal(
+        # Create market data object
+        from models import MarketData, AssetType
+        market_data = MarketData(
             symbol=symbol,
-            market_data=None,  # Will be fetched internally
+            price=1.0500,  # Default price - will be fetched by strategy
+            timestamp=datetime.now(timezone.utc),
+            asset_type=AssetType.FOREX,  # Will be determined by symbol
+            volume=0
+        )
+        
+        # Generate signal using force signal generator
+        signals = await force_signal_generator.force_generate_signal(
+            symbol=symbol,
+            market_data=market_data,
             user_expirations=[timeframe],
-            force_signal=True  # This parameter doesn't exist, remove it
+            wait_for_candle=False  # Fast generation
         )
         
         telegram_sent = False
         
-        if signal_result.get('success') and signal_result.get('signal'):
-            signal = signal_result['signal']
+        if signals and len(signals) > 0:
+            signal = signals[0]  # Get first signal
             
             # Store signal in database
             try:
