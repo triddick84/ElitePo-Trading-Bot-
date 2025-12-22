@@ -4444,5 +4444,9 @@ async def shutdown_db_client():
     await signal_validator.cleanup()
     # Cleanup AI learning system
     await ai_learning_system.cleanup()
+    # Shutdown SSID service
+    await shutdown_ssid_service()
+    # Shutdown Telegram notifier
+    await shutdown_telegram_notifier()
     # Close database connection
     client.close()
