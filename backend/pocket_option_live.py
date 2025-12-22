@@ -498,7 +498,7 @@ class PocketOptionBridge:
         
         return [c.to_dict() for c in self.parser.assets[asset].candles]
     
-    def get_dataframe(self, asset: str) -> Optional['pd.DataFrame']:
+    def get_dataframe(self, asset: str):
         """Get candles as DataFrame for strategy analysis"""
         return self.parser.get_candles_dataframe(asset)
     
