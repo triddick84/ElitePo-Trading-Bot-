@@ -4403,6 +4403,9 @@ async def startup_event():
             await signal_validator.initialize()
             # Initialize AI learning system
             await ai_learning_system.initialize()
+            # Initialize Telegram notifier
+            await initialize_telegram_notifier()
+            logger.info("📱 Telegram notifier initialized")
             app_initialized = True
             logger.info("✅ Application initialization complete")
         except Exception as e:
