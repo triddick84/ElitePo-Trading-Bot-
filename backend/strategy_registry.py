@@ -31,6 +31,14 @@ class StrategyRegistry:
             self.strategies['5s_momentum_breakout'] = strategy_5s_momentum_breakout
             self.strategies['5s_price_action'] = strategy_5s_price_action
             
+            # Fast Supertrend Catch - 5s contrarian strategy
+            try:
+                from strategies.fast_supertrend_catch import get_fast_supertrend_strategy
+                self.strategies['5s_fast_supertrend_catch'] = get_fast_supertrend_strategy()
+                logger.info("✅ Loaded Fast Supertrend Catch Strategy for 5s")
+            except Exception as e:
+                logger.warning(f"Could not load Fast Supertrend Catch: {e}")
+            
             # Enhanced Breakout Predictor - 5s optimized
             try:
                 from strategies.five_second_breakout import get_breakout_strategy
