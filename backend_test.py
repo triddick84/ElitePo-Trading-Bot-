@@ -12546,7 +12546,18 @@ class BackendTester:
             ("Enhanced Auto-Generate with Query Parameters", self.test_enhanced_auto_generate_with_query_params),
         ]
         
-        # PRIORITY 1C: Pocket Option Live Bridge Connection Tests (NEW)
+        # PRIORITY 1C: SSID Auto-Refresh & Telegram Integration Tests (NEW)
+        ssid_telegram_tests = [
+            ("SSID Status Endpoint", self.test_ssid_status_endpoint),
+            ("SSID Start Auto-Refresh", self.test_ssid_start_auto_refresh),
+            ("SSID Stop Auto-Refresh", self.test_ssid_stop_auto_refresh),
+            ("Telegram Status Endpoint", self.test_telegram_status_endpoint),
+            ("Telegram Test Notification", self.test_telegram_test_notification),
+            ("Telegram Config Update", self.test_telegram_config_update),
+            ("Generate and Notify Signal", self.test_generate_and_notify_signal),
+        ]
+        
+        # PRIORITY 1D: Pocket Option Live Bridge Connection Tests (NEW)
         bridge_tests = [
             ("Bridge Status Endpoint", self.test_bridge_status_endpoint),
             ("Bridge Script Generation", self.test_bridge_script_generation),
