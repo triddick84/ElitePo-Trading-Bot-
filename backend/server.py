@@ -3998,34 +3998,6 @@ async def register_breakout_webhook(request: Request):
 # SSID AUTO-REFRESH ENDPOINTS
 # =============================================================================
 
-@api_router.get("/ssid/status")
-async def get_ssid_status():
-    """
-    Get SSID auto-refresh service status
-    
-    Returns current SSID status, expiration time, and service state
-    """
-    service = get_ssid_service()
-    
-    if not service:
-        return {
-            "success": True,
-            "service_running": False,
-            "message": "SSID auto-refresh service not initialized",
-            "ssid_status": {
-                "ssid_preview": os.getenv('POCKET_OPTION_SSID', '')[:20] + '...',
-                "is_valid": bool(os.getenv('POCKET_OPTION_SSID')),
-                "service_available": False
-            }
-        }
-    
-    return {
-        "success": True,
-        "service_running": service.is_running,
-        **service.get_status()
-    }
-
-
 @api_router.post("/ssid/start-auto-refresh")
 async def start_ssid_auto_refresh(refresh_interval: int = 45):
     """
