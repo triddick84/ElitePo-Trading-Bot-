@@ -4006,16 +4006,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Import SSID and Telegram services
-from ssid_auto_refresh_service import (
-    SSIDAutoRefreshService, get_ssid_service, 
-    initialize_ssid_service, shutdown_ssid_service
-)
-from telegram_signal_notifier import (
-    TelegramSignalNotifier, get_telegram_notifier,
-    initialize_telegram_notifier, shutdown_telegram_notifier
-)
-
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
