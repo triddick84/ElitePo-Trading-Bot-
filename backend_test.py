@@ -1260,6 +1260,372 @@ class BackendTester:
             print(f"   Telegram config update test error: {e}")
             return False
     
+    # ========== FAST SUPERTREND CATCH STRATEGY TESTS ==========
+    
+    async def test_fast_supertrend_config_endpoint(self) -> bool:
+        """
+        Test Fast Supertrend Catch Strategy Config Endpoint
+        Test GET /api/strategy/fast-supertrend-catch/config:
+        - Should return strategy configuration with expected values
+        """
+        try:
+            print("   ⚡ Testing Fast Supertrend Catch config endpoint")
+            
+            async with self.session.get(f"{BACKEND_URL}/strategy/fast-supertrend-catch/config") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Fast Supertrend config endpoint accessible")
+                    
+                    # Check success field
+                    success = data.get('success')
+                    if not success:
+                        print(f"   ❌ Config endpoint returned success=false")
+                        return False
+                    
+                    # Verify expected configuration values
+                    expected_config = {
+                        'name': 'Fast Supertrend Catch',
+                        'timeframe': '5s',
+                        'expiration_seconds': 5,
+                        'signal_logic': 'Contrarian - trades against Supertrend when confirmed by EMA position',
+                        'sr_filter': 'Enabled - no signals at Support/Resistance levels'
+                    }
+                    
+                    for key, expected_value in expected_config.items():
+                        actual_value = data.get(key)
+                        if actual_value != expected_value:
+                            print(f"   ❌ Config mismatch - {key}: expected '{expected_value}', got '{actual_value}'")
+                            return False
+                        print(f"   ✅ {key}: {actual_value}")
+                    
+                    # Check indicators configuration
+                    indicators = data.get('indicators', {})
+                    supertrend = indicators.get('supertrend', {})
+                    ema = indicators.get('ema', {})
+                    
+                    if supertrend.get('atr_period') != 100:
+                        print(f"   ❌ Supertrend ATR period: expected 100, got {supertrend.get('atr_period')}")
+                        return False
+                    
+                    if supertrend.get('multiplier') != 1.0:
+                        print(f"   ❌ Supertrend multiplier: expected 1.0, got {supertrend.get('multiplier')}")
+                        return False
+                    
+                    if ema.get('period') != 15:
+                        print(f"   ❌ EMA period: expected 15, got {ema.get('period')}")
+                        return False
+                    
+                    print(f"   ✅ Supertrend ATR Period: {supertrend.get('atr_period')}")
+                    print(f"   ✅ Supertrend Multiplier: {supertrend.get('multiplier')}")
+                    print(f"   ✅ EMA Period: {ema.get('period')}")
+                    
+                    return True
+                else:
+                    print(f"   ❌ Fast Supertrend config endpoint failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Fast Supertrend config test error: {e}")
+            return False
+    
+    async def test_fast_supertrend_signal_eurusd(self) -> bool:
+        """
+        Test Fast Supertrend Signal Generation for EURUSD_OTC
+        Test POST /api/strategy/fast-supertrend-catch/signal?symbol=EURUSD_OTC&send_telegram=false
+        """
+        try:
+            print("   📊 Testing Fast Supertrend signal generation for EURUSD_OTC")
+            
+            params = {
+                "symbol": "EURUSD_OTC",
+                "send_telegram": "false"
+            }
+            
+            async with self.session.post(f"{BACKEND_URL}/strategy/fast-supertrend-catch/signal", params=params) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Fast Supertrend signal endpoint accessible")
+                    
+                    success = data.get('success')
+                    message = data.get('message')
+                    signal = data.get('signal')
+                    strategy_config = data.get('strategy_config')
+                    telegram_sent = data.get('telegram_sent')
+                    
+                    print(f"   📊 Success: {success}")
+                    print(f"   📊 Message: {message}")
+                    print(f"   📊 Telegram Sent: {telegram_sent}")
+                    
+                    # Verify telegram_sent is False since we set send_telegram=false
+                    if telegram_sent is not False:
+                        print(f"   ❌ Expected telegram_sent=False, got {telegram_sent}")
+                        return False
+                    
+                    # Verify strategy config is returned
+                    if not strategy_config:
+                        print(f"   ❌ Strategy config not returned")
+                        return False
+                    
+                    if success:
+                        # Signal was generated - verify structure
+                        if not signal:
+                            print(f"   ❌ Success=True but no signal returned")
+                            return False
+                        
+                        # Verify signal structure
+                        required_fields = ['symbol', 'direction', 'probability', 'timeframe', 'expiration_seconds', 'strategy']
+                        for field in required_fields:
+                            if field not in signal:
+                                print(f"   ❌ Missing signal field: {field}")
+                                return False
+                        
+                        print(f"   📊 Signal Symbol: {signal.get('symbol')}")
+                        print(f"   📊 Signal Direction: {signal.get('direction')}")
+                        print(f"   📊 Signal Probability: {signal.get('probability')}%")
+                        print(f"   📊 Signal Timeframe: {signal.get('timeframe')}")
+                        print(f"   📊 Signal Expiration: {signal.get('expiration_seconds')}s")
+                        
+                        # Verify direction is valid
+                        direction = signal.get('direction')
+                        if direction not in ['BUY', 'SELL']:
+                            print(f"   ❌ Invalid signal direction: {direction}")
+                            return False
+                        
+                        # Verify timeframe is 5s
+                        if signal.get('timeframe') != '5s':
+                            print(f"   ❌ Expected timeframe 5s, got {signal.get('timeframe')}")
+                            return False
+                        
+                        # Verify expiration is 5 seconds
+                        if signal.get('expiration_seconds') != 5:
+                            print(f"   ❌ Expected expiration 5s, got {signal.get('expiration_seconds')}")
+                            return False
+                        
+                        print(f"   ✅ Valid signal generated with correct parameters")
+                    else:
+                        # No signal generated - this is valid (conditions not met or at S/R level)
+                        print(f"   ✅ No signal generated - strategy working correctly (conditions not met)")
+                    
+                    return True
+                else:
+                    print(f"   ❌ Fast Supertrend signal endpoint failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Fast Supertrend EURUSD signal test error: {e}")
+            return False
+    
+    async def test_fast_supertrend_signal_gbpusd(self) -> bool:
+        """
+        Test Fast Supertrend Signal Generation for GBPUSD_OTC
+        """
+        try:
+            print("   📊 Testing Fast Supertrend signal generation for GBPUSD_OTC")
+            
+            params = {
+                "symbol": "GBPUSD_OTC",
+                "send_telegram": "false"
+            }
+            
+            async with self.session.post(f"{BACKEND_URL}/strategy/fast-supertrend-catch/signal", params=params) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    success = data.get('success')
+                    signal = data.get('signal')
+                    
+                    print(f"   📊 GBPUSD Success: {success}")
+                    
+                    if success and signal:
+                        print(f"   📊 GBPUSD Signal: {signal.get('direction')} at {signal.get('probability')}%")
+                        
+                        # Verify it's contrarian logic
+                        indicators = signal.get('indicators', {})
+                        supertrend_dir = indicators.get('supertrend_direction')
+                        signal_dir = signal.get('direction')
+                        
+                        print(f"   📊 Supertrend Direction: {supertrend_dir}")
+                        print(f"   📊 Signal Direction: {signal_dir}")
+                        
+                        # Contrarian logic: if Supertrend says BUY, signal should be SELL (and vice versa)
+                        if supertrend_dir == 'BUY' and signal_dir != 'SELL':
+                            print(f"   ❌ Contrarian logic failed: Supertrend BUY should generate SELL signal")
+                            return False
+                        elif supertrend_dir == 'SELL' and signal_dir != 'BUY':
+                            print(f"   ❌ Contrarian logic failed: Supertrend SELL should generate BUY signal")
+                            return False
+                        
+                        print(f"   ✅ Contrarian logic working correctly")
+                    else:
+                        print(f"   ✅ No signal for GBPUSD (conditions not met)")
+                    
+                    return True
+                else:
+                    print(f"   ❌ GBPUSD signal test failed: {response.status}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Fast Supertrend GBPUSD signal test error: {e}")
+            return False
+    
+    async def test_fast_supertrend_signal_btcusd(self) -> bool:
+        """
+        Test Fast Supertrend Signal Generation for BTCUSD_OTC
+        """
+        try:
+            print("   📊 Testing Fast Supertrend signal generation for BTCUSD_OTC")
+            
+            params = {
+                "symbol": "BTCUSD_OTC",
+                "send_telegram": "false"
+            }
+            
+            async with self.session.post(f"{BACKEND_URL}/strategy/fast-supertrend-catch/signal", params=params) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    success = data.get('success')
+                    signal = data.get('signal')
+                    
+                    print(f"   📊 BTCUSD Success: {success}")
+                    
+                    if success and signal:
+                        print(f"   📊 BTCUSD Signal: {signal.get('direction')} at {signal.get('probability')}%")
+                        
+                        # Verify reasoning contains contrarian logic
+                        reasoning = signal.get('reasoning', '')
+                        if 'Contrarian' not in reasoning:
+                            print(f"   ❌ Signal reasoning should mention 'Contrarian': {reasoning}")
+                            return False
+                        
+                        print(f"   ✅ Contrarian reasoning: {reasoning[:100]}...")
+                    else:
+                        print(f"   ✅ No signal for BTCUSD (conditions not met)")
+                    
+                    return True
+                else:
+                    print(f"   ❌ BTCUSD signal test failed: {response.status}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Fast Supertrend BTCUSD signal test error: {e}")
+            return False
+    
+    async def test_fast_supertrend_telegram_integration(self) -> bool:
+        """
+        Test Fast Supertrend Signal with Telegram Integration
+        Test POST /api/strategy/fast-supertrend-catch/signal?symbol=EURUSD_OTC&send_telegram=true
+        """
+        try:
+            print("   📱 Testing Fast Supertrend with Telegram integration")
+            
+            params = {
+                "symbol": "EURUSD_OTC",
+                "send_telegram": "true"
+            }
+            
+            async with self.session.post(f"{BACKEND_URL}/strategy/fast-supertrend-catch/signal", params=params) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    success = data.get('success')
+                    signal = data.get('signal')
+                    telegram_sent = data.get('telegram_sent')
+                    
+                    print(f"   📊 Success: {success}")
+                    print(f"   📊 Telegram Sent: {telegram_sent}")
+                    
+                    if success and signal:
+                        # Signal was generated, check if Telegram was attempted
+                        if telegram_sent is True:
+                            print(f"   ✅ Signal sent to Telegram successfully")
+                        elif telegram_sent is False:
+                            print(f"   ⚠️ Signal generated but Telegram send failed (acceptable)")
+                        else:
+                            print(f"   ❌ telegram_sent should be boolean, got {type(telegram_sent)}")
+                            return False
+                        
+                        print(f"   📊 Signal sent: {signal.get('direction')} {signal.get('symbol')}")
+                    else:
+                        print(f"   ✅ No signal generated - Telegram not attempted")
+                    
+                    return True
+                else:
+                    print(f"   ❌ Telegram integration test failed: {response.status}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Fast Supertrend Telegram integration test error: {e}")
+            return False
+    
+    async def test_fast_supertrend_strategy_logic_verification(self) -> bool:
+        """
+        Test Fast Supertrend Strategy Logic Verification
+        Generate multiple signals and verify contrarian logic is working
+        """
+        try:
+            print("   🧠 Testing Fast Supertrend contrarian strategy logic")
+            
+            test_symbols = ["EURUSD_OTC", "GBPUSD_OTC", "BTCUSD_OTC"]
+            contrarian_signals_found = 0
+            total_signals_generated = 0
+            
+            for symbol in test_symbols:
+                params = {
+                    "symbol": symbol,
+                    "send_telegram": "false"
+                }
+                
+                async with self.session.post(f"{BACKEND_URL}/strategy/fast-supertrend-catch/signal", params=params) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        success = data.get('success')
+                        signal = data.get('signal')
+                        
+                        if success and signal:
+                            total_signals_generated += 1
+                            
+                            # Check contrarian logic
+                            indicators = signal.get('indicators', {})
+                            supertrend_dir = indicators.get('supertrend_direction')
+                            signal_dir = signal.get('direction')
+                            price_vs_ema = indicators.get('price_vs_ema')
+                            
+                            print(f"   📊 {symbol}: ST={supertrend_dir}, Signal={signal_dir}, Price vs EMA={price_vs_ema}")
+                            
+                            # Verify contrarian logic
+                            if ((price_vs_ema == 'ABOVE' and supertrend_dir == 'BUY' and signal_dir == 'SELL') or
+                                (price_vs_ema == 'BELOW' and supertrend_dir == 'SELL' and signal_dir == 'BUY')):
+                                contrarian_signals_found += 1
+                                print(f"   ✅ Contrarian logic verified for {symbol}")
+                            else:
+                                print(f"   ❌ Contrarian logic failed for {symbol}")
+                                return False
+                        else:
+                            print(f"   ℹ️ No signal for {symbol} (conditions not met or at S/R level)")
+                    else:
+                        print(f"   ❌ Failed to test {symbol}: {response.status}")
+                        return False
+            
+            print(f"   📊 Total signals generated: {total_signals_generated}")
+            print(f"   📊 Contrarian signals verified: {contrarian_signals_found}")
+            
+            if total_signals_generated > 0:
+                if contrarian_signals_found == total_signals_generated:
+                    print(f"   ✅ All generated signals follow contrarian logic correctly")
+                    return True
+                else:
+                    print(f"   ❌ Some signals don't follow contrarian logic")
+                    return False
+            else:
+                print(f"   ✅ No signals generated - strategy is being conservative (acceptable)")
+                return True
+                
+        except Exception as e:
+            print(f"   Fast Supertrend strategy logic test error: {e}")
+            return False
+    
     # ========== INTEGRATED SIGNAL + TELEGRAM FLOW TESTS ==========
     
     async def test_generate_and_notify_signal(self) -> bool:
