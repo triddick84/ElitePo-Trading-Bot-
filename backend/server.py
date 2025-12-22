@@ -4258,47 +4258,6 @@ async def send_signal_to_telegram(signal_id: str = None):
         }
 
 
-@api_router.put("/telegram/config")
-async def update_telegram_config(
-    enabled: bool = None,
-    send_signals: bool = None,
-    send_errors: bool = None,
-    send_status_updates: bool = None,
-    send_ssid_alerts: bool = None
-):
-    """
-    Update Telegram notification configuration
-    
-    Args:
-        enabled: Enable/disable all notifications
-        send_signals: Send signal notifications
-        send_errors: Send error notifications
-        send_status_updates: Send status update notifications
-        send_ssid_alerts: Send SSID refresh notifications
-    """
-    notifier = get_telegram_notifier()
-    
-    updates = {}
-    if enabled is not None:
-        updates['enabled'] = enabled
-    if send_signals is not None:
-        updates['send_signals'] = send_signals
-    if send_errors is not None:
-        updates['send_errors'] = send_errors
-    if send_status_updates is not None:
-        updates['send_status_updates'] = send_status_updates
-    if send_ssid_alerts is not None:
-        updates['send_ssid_alerts'] = send_ssid_alerts
-    
-    if updates:
-        notifier.update_config(**updates)
-    
-    return {
-        "success": True,
-        "message": "✅ Telegram configuration updated",
-        **notifier.get_status()
-    }
-
 
 # =============================================================================
 # INTEGRATED POCKET OPTION + TELEGRAM SIGNAL FLOW
