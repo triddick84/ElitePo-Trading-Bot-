@@ -4547,11 +4547,12 @@ async def update_telegram_config(config_update: dict):
         telegram_notifier = get_telegram_notifier()
         telegram_notifier.update_config(**config_update)
         
-        return {
-            "success": True,
-            "message": "Telegram configuration updated successfully",
-            "updated_config": config_update
-        }
+        # Return updated status
+        updated_status = telegram_notifier.get_status()
+        updated_status["success"] = True
+        updated_status["message"] = "✅ Telegram configuration updated"
+        
+        return updated_status
     except Exception as e:
         logger.error(f"Error updating Telegram config: {e}")
         return {
