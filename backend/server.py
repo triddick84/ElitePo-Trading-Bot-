@@ -4323,14 +4323,17 @@ async def generate_signal_and_notify(
     try:
         # Generate signal using existing force generation endpoint logic
         from real_market_data_service import RealMarketDataService
+        from models import MarketData, AssetType
         market_service = RealMarketDataService()
         
+        # Determine asset type
+        asset_type = AssetType.FOREX if 'usd' in asset.lower() or 'eur' in asset.lower() else AssetType.CRYPTO
+        
         # Get market data
-        market_data = await market_service.get_real_market_data(asset)
+        market_data = await market_service.get_market_data(asset, asset_type)
         
         if not market_data:
             # Use fallback data
-            from models import MarketData
             market_data = MarketData(
                 symbol=asset,
                 current_price=1.05,
