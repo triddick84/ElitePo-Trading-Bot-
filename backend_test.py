@@ -12722,8 +12722,14 @@ class BackendTester:
         for test_name, test_func in critical_tests:
             await self.run_test(test_name, test_func)
         
+        # Run SSID Auto-Refresh & Telegram Integration tests
+        print("\n🔑📱 RUNNING SSID AUTO-REFRESH & TELEGRAM INTEGRATION TESTS (PRIORITY 1C)")
+        print("=" * 70)
+        for test_name, test_func in ssid_telegram_tests:
+            await self.run_test(test_name, test_func)
+        
         # Run Pocket Option Live Bridge Connection tests
-        print("\n🌉 RUNNING POCKET OPTION LIVE BRIDGE CONNECTION TESTS (PRIORITY 1C)")
+        print("\n🌉 RUNNING POCKET OPTION LIVE BRIDGE CONNECTION TESTS (PRIORITY 1D)")
         print("=" * 65)
         for test_name, test_func in bridge_tests:
             await self.run_test(test_name, test_func)
