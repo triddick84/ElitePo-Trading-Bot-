@@ -16,7 +16,7 @@ import time
 from datetime import datetime, timezone
 
 # Test configuration
-BACKEND_URL = "https://signalhub-15.preview.emergentagent.com/api"
+BACKEND_URL = "https://tradingbot-dash-11.preview.emergentagent.com/api"
 
 class ComprehensiveBotTester:
     def __init__(self):

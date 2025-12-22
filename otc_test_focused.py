@@ -8,7 +8,7 @@ import asyncio
 import aiohttp
 import json
 
-BACKEND_URL = "https://signalhub-15.preview.emergentagent.com/api"
+BACKEND_URL = "https://tradingbot-dash-11.preview.emergentagent.com/api"
 
 async def test_otc_market_functionality():
     """Test OTC market signal generation functionality"""

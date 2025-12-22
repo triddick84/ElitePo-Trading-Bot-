@@ -518,7 +518,7 @@ def generate_bridge_script(app_url: str) -> str:
     Generate the browser bridge script to paste in Pocket Option console
     
     Args:
-        app_url: The URL of our trading app (e.g., https://your-app.preview.emergentagent.com)
+        app_url: The URL of our trading app (e.g., https://tradingbot-dash-11.preview.emergentagent.com)
     
     Returns:
         JavaScript code to paste in browser console
@@ -682,5 +682,5 @@ def get_bridge_script(app_url: str = None) -> str:
     """Get the browser bridge script"""
     if app_url is None:
         # Default to placeholder - will be replaced with actual URL
-        app_url = "https://YOUR-APP-URL.preview.emergentagent.com"
+        app_url = "https://tradingbot-dash-11.preview.emergentagent.com"
     return generate_bridge_script(app_url)
