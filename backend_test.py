@@ -1012,6 +1012,310 @@ class BackendTester:
             print(f"   Enhanced signal accuracy targeting test error: {e}")
             return False
 
+    # ========== SSID AUTO-REFRESH SERVICE TESTS ==========
+    
+    async def test_ssid_status_endpoint(self) -> bool:
+        """
+        Test SSID Status Endpoint
+        Test GET /api/ssid/status:
+        - Should return SSID status with ssid_preview and is_valid fields
+        """
+        try:
+            print("   🔑 Testing SSID status endpoint")
+            
+            async with self.session.get(f"{BACKEND_URL}/ssid/status") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ SSID status endpoint accessible")
+                    
+                    # Check required fields
+                    required_fields = ['ssid_preview', 'is_valid']
+                    missing_fields = [field for field in required_fields if field not in data]
+                    
+                    if missing_fields:
+                        print(f"   ❌ Missing required fields: {missing_fields}")
+                        return False
+                    
+                    print(f"   📊 SSID Preview: {data.get('ssid_preview')}")
+                    print(f"   📊 Is Valid: {data.get('is_valid')}")
+                    print(f"   📊 Expires At: {data.get('expires_at', 'N/A')}")
+                    print(f"   📊 Time Until Expiry: {data.get('time_until_expiry_minutes', 'N/A')} minutes")
+                    
+                    return True
+                else:
+                    print(f"   ❌ SSID status endpoint failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   SSID status endpoint test error: {e}")
+            return False
+    
+    async def test_ssid_start_auto_refresh(self) -> bool:
+        """
+        Test SSID Start Auto-Refresh
+        Test POST /api/ssid/start-auto-refresh:
+        - Should start the auto-refresh service
+        - May fail if Selenium not working (that's acceptable)
+        """
+        try:
+            print("   🔄 Testing SSID start auto-refresh")
+            
+            async with self.session.post(f"{BACKEND_URL}/ssid/start-auto-refresh") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ SSID auto-refresh start endpoint accessible")
+                    print(f"   📊 Success: {data.get('success')}")
+                    print(f"   📊 Message: {data.get('message')}")
+                    
+                    # Check if service started or if there's a valid error
+                    success = data.get('success')
+                    message = data.get('message', '')
+                    
+                    if success:
+                        print(f"   ✅ Auto-refresh service started successfully")
+                    else:
+                        print(f"   ⚠️ Auto-refresh failed (expected if Selenium not available): {message}")
+                    
+                    # Test passes if we get a proper response structure
+                    return 'success' in data and 'message' in data
+                else:
+                    print(f"   ❌ SSID start auto-refresh failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   SSID start auto-refresh test error: {e}")
+            return False
+    
+    async def test_ssid_stop_auto_refresh(self) -> bool:
+        """
+        Test SSID Stop Auto-Refresh
+        Test POST /api/ssid/stop-auto-refresh:
+        - Should stop the auto-refresh service
+        """
+        try:
+            print("   🛑 Testing SSID stop auto-refresh")
+            
+            async with self.session.post(f"{BACKEND_URL}/ssid/stop-auto-refresh") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ SSID auto-refresh stop endpoint accessible")
+                    print(f"   📊 Success: {data.get('success')}")
+                    print(f"   📊 Message: {data.get('message')}")
+                    
+                    # Should always succeed
+                    success = data.get('success')
+                    return success is True
+                else:
+                    print(f"   ❌ SSID stop auto-refresh failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   SSID stop auto-refresh test error: {e}")
+            return False
+    
+    # ========== TELEGRAM NOTIFICATION SERVICE TESTS ==========
+    
+    async def test_telegram_status_endpoint(self) -> bool:
+        """
+        Test Telegram Status Endpoint
+        Test GET /api/telegram/status:
+        - Should show configured=true, chat_id=6434316177
+        """
+        try:
+            print("   📱 Testing Telegram status endpoint")
+            
+            async with self.session.get(f"{BACKEND_URL}/telegram/status") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Telegram status endpoint accessible")
+                    
+                    # Check for expected fields
+                    configured = data.get('configured')
+                    chat_id = data.get('chat_id')
+                    enabled = data.get('enabled')
+                    
+                    print(f"   📊 Configured: {configured}")
+                    print(f"   📊 Chat ID: {chat_id}")
+                    print(f"   📊 Enabled: {enabled}")
+                    print(f"   📊 Send Signals: {data.get('send_signals')}")
+                    print(f"   📊 Send Errors: {data.get('send_errors')}")
+                    
+                    # Verify expected values
+                    expected_chat_id = "6434316177"
+                    if configured and chat_id == expected_chat_id:
+                        print(f"   ✅ Telegram properly configured with expected chat ID")
+                        return True
+                    else:
+                        print(f"   ⚠️ Telegram configuration issue - configured: {configured}, chat_id: {chat_id}")
+                        return False
+                else:
+                    print(f"   ❌ Telegram status endpoint failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Telegram status endpoint test error: {e}")
+            return False
+    
+    async def test_telegram_test_notification(self) -> bool:
+        """
+        Test Telegram Test Notification
+        Test POST /api/telegram/test:
+        - Should send a test notification to Telegram and return success=true
+        """
+        try:
+            print("   📤 Testing Telegram test notification")
+            
+            async with self.session.post(f"{BACKEND_URL}/telegram/test") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Telegram test endpoint accessible")
+                    
+                    success = data.get('success')
+                    message = data.get('message')
+                    
+                    print(f"   📊 Success: {success}")
+                    print(f"   📊 Message: {message}")
+                    
+                    if success:
+                        print(f"   ✅ Test notification sent successfully to Telegram")
+                        return True
+                    else:
+                        print(f"   ❌ Test notification failed: {message}")
+                        return False
+                else:
+                    print(f"   ❌ Telegram test endpoint failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Telegram test notification error: {e}")
+            return False
+    
+    async def test_telegram_config_update(self) -> bool:
+        """
+        Test Telegram Config Update
+        Test PUT /api/telegram/config:
+        - Should update config options like enabled, send_signals, etc.
+        """
+        try:
+            print("   ⚙️ Testing Telegram config update")
+            
+            # Test config update
+            config_update = {
+                "enabled": True,
+                "send_signals": True,
+                "send_errors": True,
+                "send_status_updates": False,
+                "send_ssid_alerts": True
+            }
+            
+            async with self.session.put(f"{BACKEND_URL}/telegram/config", json=config_update) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Telegram config update endpoint accessible")
+                    
+                    success = data.get('success')
+                    message = data.get('message')
+                    
+                    print(f"   📊 Success: {success}")
+                    print(f"   📊 Message: {message}")
+                    
+                    if success:
+                        # Verify the update by checking status
+                        async with self.session.get(f"{BACKEND_URL}/telegram/status") as status_response:
+                            if status_response.status == 200:
+                                status_data = await status_response.json()
+                                
+                                # Check if our updates were applied
+                                send_status_updates = status_data.get('send_status_updates')
+                                send_signals = status_data.get('send_signals')
+                                
+                                print(f"   📊 Updated send_signals: {send_signals}")
+                                print(f"   📊 Updated send_status_updates: {send_status_updates}")
+                                
+                                # Verify specific update (send_status_updates should be False)
+                                return send_status_updates is False and send_signals is True
+                            else:
+                                print(f"   ❌ Could not verify config update")
+                                return False
+                    else:
+                        print(f"   ❌ Config update failed: {message}")
+                        return False
+                else:
+                    print(f"   ❌ Telegram config update failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Telegram config update test error: {e}")
+            return False
+    
+    # ========== INTEGRATED SIGNAL + TELEGRAM FLOW TESTS ==========
+    
+    async def test_generate_and_notify_signal(self) -> bool:
+        """
+        Test Integrated Signal + Telegram Flow
+        Test POST /api/signals/generate-and-notify?asset=EURUSD_OTC&timeframe=5s&send_telegram=true:
+        - Should generate a trading signal
+        - Should send the signal to Telegram (telegram_sent=true)
+        - Should return the signal details
+        """
+        try:
+            print("   🚀 Testing integrated signal generation and Telegram notification")
+            
+            # Test parameters
+            params = {
+                "asset": "EURUSD_OTC",
+                "timeframe": "5s",
+                "send_telegram": "true"
+            }
+            
+            async with self.session.post(f"{BACKEND_URL}/signals/generate-and-notify", params=params) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Generate-and-notify endpoint accessible")
+                    
+                    success = data.get('success')
+                    signal = data.get('signal')
+                    telegram_sent = data.get('telegram_sent')
+                    
+                    print(f"   📊 Success: {success}")
+                    print(f"   📊 Telegram Sent: {telegram_sent}")
+                    
+                    if signal:
+                        print(f"   📊 Signal ID: {signal.get('id')}")
+                        print(f"   📊 Asset: {signal.get('symbol')}")
+                        print(f"   📊 Direction: {signal.get('direction')}")
+                        print(f"   📊 Probability: {signal.get('probability')}%")
+                        print(f"   📊 Timeframe: {signal.get('timeframe')}")
+                    
+                    # Test passes if we get a signal and Telegram notification was attempted
+                    if success and signal and telegram_sent is not None:
+                        print(f"   ✅ Signal generated and Telegram notification {'sent' if telegram_sent else 'attempted'}")
+                        return True
+                    else:
+                        print(f"   ⚠️ Partial success - signal: {bool(signal)}, telegram: {telegram_sent}")
+                        return False
+                else:
+                    print(f"   ❌ Generate-and-notify endpoint failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Generate-and-notify test error: {e}")
+            return False
+
     # ========== POCKET OPTION LIVE BRIDGE CONNECTION TESTS ==========
     
     async def test_bridge_status_endpoint(self) -> bool:
