@@ -13088,6 +13088,22 @@ class BackendTester:
         for test_name, test_func in critical_tests:
             await self.run_test(test_name, test_func)
         
+        # PRIORITY 1E: Fast Supertrend Catch Strategy Tests (NEW)
+        fast_supertrend_tests = [
+            ("Fast Supertrend Config Endpoint", self.test_fast_supertrend_config_endpoint),
+            ("Fast Supertrend Signal EURUSD", self.test_fast_supertrend_signal_eurusd),
+            ("Fast Supertrend Signal GBPUSD", self.test_fast_supertrend_signal_gbpusd),
+            ("Fast Supertrend Signal BTCUSD", self.test_fast_supertrend_signal_btcusd),
+            ("Fast Supertrend Telegram Integration", self.test_fast_supertrend_telegram_integration),
+            ("Fast Supertrend Strategy Logic Verification", self.test_fast_supertrend_strategy_logic_verification),
+        ]
+        
+        # Run Fast Supertrend Catch Strategy tests
+        print("\n⚡ RUNNING FAST SUPERTREND CATCH STRATEGY TESTS (PRIORITY 1E)")
+        print("=" * 65)
+        for test_name, test_func in fast_supertrend_tests:
+            await self.run_test(test_name, test_func)
+        
         # Run SSID Auto-Refresh & Telegram Integration tests
         print("\n🔑📱 RUNNING SSID AUTO-REFRESH & TELEGRAM INTEGRATION TESTS (PRIORITY 1C)")
         print("=" * 70)
