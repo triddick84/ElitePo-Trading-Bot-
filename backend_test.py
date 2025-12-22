@@ -12242,6 +12242,17 @@ class BackendTester:
             ("Enhanced Auto-Generate with Query Parameters", self.test_enhanced_auto_generate_with_query_params),
         ]
         
+        # PRIORITY 1C: Pocket Option Live Bridge Connection Tests (NEW)
+        bridge_tests = [
+            ("Bridge Status Endpoint", self.test_bridge_status_endpoint),
+            ("Bridge Script Generation", self.test_bridge_script_generation),
+            ("Bridge Data Reception", self.test_bridge_data_reception),
+            ("Get Candles for Asset", self.test_get_candles_for_asset),
+            ("Get All Bridge Assets", self.test_get_all_bridge_assets),
+            ("Bridge Config Update", self.test_bridge_config_update),
+            ("Bridge Integration Status", self.test_bridge_integration_status),
+        ]
+        
         # PRIORITY 1A: PROVEN 5-Second High-Accuracy Strategy Tests (NEW)
         proven_5s_tests = [
             ("Support/Resistance Module", self.test_support_resistance_module),
