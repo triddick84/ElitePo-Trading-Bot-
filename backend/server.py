@@ -50,6 +50,15 @@ from advanced_signal_generator import advanced_signal_generator
 from pocket_option_client import get_pocket_option_client
 from enhanced_sr_analyzer import enhanced_sr_analyzer
 from candlestick_analyzer import candlestick_analyzer
+# Import SSID and Telegram services
+from ssid_auto_refresh_service import (
+    SSIDAutoRefreshService, get_ssid_service, 
+    initialize_ssid_service, shutdown_ssid_service
+)
+from telegram_signal_notifier import (
+    TelegramSignalNotifier, get_telegram_notifier,
+    initialize_telegram_notifier, shutdown_telegram_notifier
+)
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
