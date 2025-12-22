@@ -3997,12 +3997,389 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Import SSID and Telegram services
+from ssid_auto_refresh_service import (
+    SSIDAutoRefreshService, get_ssid_service, 
+    initialize_ssid_service, shutdown_ssid_service
+)
+from telegram_signal_notifier import (
+    TelegramSignalNotifier, get_telegram_notifier,
+    initialize_telegram_notifier, shutdown_telegram_notifier
+)
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# SSID AUTO-REFRESH ENDPOINTS
+# =============================================================================
+
+@api_router.get("/ssid/status")
+async def get_ssid_status():
+    """
+    Get SSID auto-refresh service status
+    
+    Returns current SSID status, expiration time, and service state
+    """
+    service = get_ssid_service()
+    
+    if not service:
+        return {
+            "success": True,
+            "service_running": False,
+            "message": "SSID auto-refresh service not initialized",
+            "ssid_status": {
+                "ssid_preview": os.getenv('POCKET_OPTION_SSID', '')[:20] + '...',
+                "is_valid": bool(os.getenv('POCKET_OPTION_SSID')),
+                "service_available": False
+            }
+        }
+    
+    return {
+        "success": True,
+        "service_running": service.is_running,
+        **service.get_status()
+    }
+
+
+@api_router.post("/ssid/start-auto-refresh")
+async def start_ssid_auto_refresh(refresh_interval: int = 45):
+    """
+    Start the SSID auto-refresh service
+    
+    Args:
+        refresh_interval: Minutes between refreshes (default 45)
+    
+    Returns:
+        Service status
+    """
+    global _ssid_service
+    
+    # Initialize Telegram notifier for callbacks
+    telegram = get_telegram_notifier()
+    
+    async def on_ssid_refreshed(ssid: str):
+        logger.info(f"📱 Notifying Telegram of SSID refresh")
+        await telegram.send_ssid_refreshed(ssid)
+    
+    async def on_ssid_failed(error: str):
+        logger.warning(f"📱 Notifying Telegram of SSID refresh failure")
+        await telegram.send_ssid_failed(error)
+    
+    # Create sync wrappers for callbacks
+    def sync_on_refreshed(ssid):
+        asyncio.create_task(on_ssid_refreshed(ssid))
+    
+    def sync_on_failed(error):
+        asyncio.create_task(on_ssid_failed(error))
+    
+    try:
+        service = await initialize_ssid_service(
+            on_ssid_refreshed=sync_on_refreshed,
+            on_refresh_failed=sync_on_failed
+        )
+        
+        if service.is_running:
+            return {
+                "success": True,
+                "message": f"✅ SSID auto-refresh started (every {refresh_interval} min)",
+                **service.get_status()
+            }
+        else:
+            return {
+                "success": False,
+                "message": "❌ Failed to start SSID auto-refresh - check credentials",
+                "error": "Missing POCKET_OPTION_EMAIL or POCKET_OPTION_PASSWORD in .env"
+            }
+    except Exception as e:
+        logger.error(f"Error starting SSID service: {e}")
+        return {
+            "success": False,
+            "message": f"❌ Error: {str(e)}"
+        }
+
+
+@api_router.post("/ssid/stop-auto-refresh")
+async def stop_ssid_auto_refresh():
+    """
+    Stop the SSID auto-refresh service
+    """
+    try:
+        await shutdown_ssid_service()
+        return {
+            "success": True,
+            "message": "✅ SSID auto-refresh service stopped"
+        }
+    except Exception as e:
+        logger.error(f"Error stopping SSID service: {e}")
+        return {
+            "success": False,
+            "message": f"❌ Error: {str(e)}"
+        }
+
+
+@api_router.post("/ssid/refresh-now")
+async def refresh_ssid_now():
+    """
+    Trigger an immediate SSID refresh
+    
+    Uses Selenium to login and extract fresh SSID
+    """
+    service = get_ssid_service()
+    
+    if not service:
+        # Create temporary service for one-time refresh
+        from ssid_auto_refresh_service import SSIDAutoRefreshService
+        service = SSIDAutoRefreshService()
+    
+    try:
+        logger.info("🔄 Manual SSID refresh triggered...")
+        success = await service.refresh_ssid()
+        
+        if success:
+            # Notify via Telegram
+            telegram = get_telegram_notifier()
+            await telegram.send_ssid_refreshed(service.get_current_ssid())
+            
+            return {
+                "success": True,
+                "message": "✅ SSID refreshed successfully",
+                "ssid_preview": service.get_current_ssid()[:20] + "...",
+                "ssid_status": service.status.to_dict()
+            }
+        else:
+            return {
+                "success": False,
+                "message": "❌ SSID refresh failed",
+                "error": service.status.last_refresh_error
+            }
+    except Exception as e:
+        logger.error(f"Manual SSID refresh error: {e}")
+        return {
+            "success": False,
+            "message": f"❌ Error: {str(e)}"
+        }
+
+
+# =============================================================================
+# TELEGRAM NOTIFICATION ENDPOINTS
+# =============================================================================
+
+@api_router.get("/telegram/status")
+async def get_telegram_status():
+    """
+    Get Telegram notifier status and configuration
+    """
+    notifier = get_telegram_notifier()
+    
+    return {
+        "success": True,
+        **notifier.get_status()
+    }
+
+
+@api_router.post("/telegram/test")
+async def test_telegram_notification():
+    """
+    Send a test notification to Telegram
+    """
+    notifier = get_telegram_notifier()
+    
+    if not notifier.config.is_valid():
+        return {
+            "success": False,
+            "message": "❌ Telegram not configured - missing bot_token or chat_id in .env"
+        }
+    
+    try:
+        success = await notifier.send_status(
+            "🧪 Test Notification",
+            {
+                "Bot": "@ElitePocket_bot",
+                "Status": "Connected",
+                "Test": "Successful"
+            }
+        )
+        
+        if success:
+            return {
+                "success": True,
+                "message": "✅ Test notification sent successfully!"
+            }
+        else:
+            return {
+                "success": False,
+                "message": "❌ Failed to send test notification"
+            }
+    except Exception as e:
+        logger.error(f"Telegram test error: {e}")
+        return {
+            "success": False,
+            "message": f"❌ Error: {str(e)}"
+        }
+
+
+@api_router.post("/telegram/send-signal")
+async def send_signal_to_telegram(signal_id: str = None):
+    """
+    Send a specific signal to Telegram
+    
+    Args:
+        signal_id: Optional signal ID to send. If not provided, sends the latest signal.
+    """
+    notifier = get_telegram_notifier()
+    
+    if not notifier.config.is_valid():
+        return {
+            "success": False,
+            "message": "❌ Telegram not configured"
+        }
+    
+    try:
+        # Get signal from trading bot or generate one
+        if signal_id:
+            # Try to find signal in current signals
+            signals = trading_bot.current_signals
+            signal = next((s for s in signals if s.get('id') == signal_id), None)
+        else:
+            # Get latest signal
+            signals = trading_bot.current_signals
+            signal = signals[-1] if signals else None
+        
+        if not signal:
+            return {
+                "success": False,
+                "message": "❌ No signal found to send"
+            }
+        
+        success = await notifier.send_signal(signal)
+        
+        if success:
+            return {
+                "success": True,
+                "message": "✅ Signal sent to Telegram",
+                "signal": {
+                    "symbol": signal.get('symbol'),
+                    "direction": signal.get('direction'),
+                    "probability": signal.get('probability')
+                }
+            }
+        else:
+            return {
+                "success": False,
+                "message": "❌ Failed to send signal to Telegram"
+            }
+    except Exception as e:
+        logger.error(f"Send signal to Telegram error: {e}")
+        return {
+            "success": False,
+            "message": f"❌ Error: {str(e)}"
+        }
+
+
+@api_router.put("/telegram/config")
+async def update_telegram_config(
+    enabled: bool = None,
+    send_signals: bool = None,
+    send_errors: bool = None,
+    send_status_updates: bool = None,
+    send_ssid_alerts: bool = None
+):
+    """
+    Update Telegram notification configuration
+    
+    Args:
+        enabled: Enable/disable all notifications
+        send_signals: Send signal notifications
+        send_errors: Send error notifications
+        send_status_updates: Send status update notifications
+        send_ssid_alerts: Send SSID refresh notifications
+    """
+    notifier = get_telegram_notifier()
+    
+    updates = {}
+    if enabled is not None:
+        updates['enabled'] = enabled
+    if send_signals is not None:
+        updates['send_signals'] = send_signals
+    if send_errors is not None:
+        updates['send_errors'] = send_errors
+    if send_status_updates is not None:
+        updates['send_status_updates'] = send_status_updates
+    if send_ssid_alerts is not None:
+        updates['send_ssid_alerts'] = send_ssid_alerts
+    
+    if updates:
+        notifier.update_config(**updates)
+    
+    return {
+        "success": True,
+        "message": "✅ Telegram configuration updated",
+        **notifier.get_status()
+    }
+
+
+# =============================================================================
+# INTEGRATED POCKET OPTION + TELEGRAM SIGNAL FLOW
+# =============================================================================
+
+@api_router.post("/signals/generate-and-notify")
+async def generate_signal_and_notify(
+    asset: str = "EURUSD_OTC",
+    timeframe: str = "5s",
+    send_telegram: bool = True
+):
+    """
+    Generate a trading signal and optionally send to Telegram
+    
+    This endpoint combines signal generation with Telegram notification.
+    
+    Args:
+        asset: Asset symbol
+        timeframe: Timeframe for analysis
+        send_telegram: Whether to send to Telegram
+    """
+    try:
+        # Generate signal using force generator
+        signal_result = await force_signal_generator.generate_force_signal(
+            symbol=asset,
+            timeframe=timeframe
+        )
+        
+        if not signal_result or not signal_result.get('success'):
+            return {
+                "success": False,
+                "message": "❌ Failed to generate signal",
+                "error": signal_result.get('error') if signal_result else "Unknown error"
+            }
+        
+        signal = signal_result.get('signal', {})
+        
+        # Send to Telegram if requested
+        telegram_sent = False
+        if send_telegram:
+            notifier = get_telegram_notifier()
+            if notifier.config.is_valid():
+                telegram_sent = await notifier.send_signal(signal)
+        
+        return {
+            "success": True,
+            "message": "✅ Signal generated" + (" and sent to Telegram" if telegram_sent else ""),
+            "signal": signal,
+            "telegram_sent": telegram_sent
+        }
+        
+    except Exception as e:
+        logger.error(f"Generate and notify error: {e}")
+        return {
+            "success": False,
+            "message": f"❌ Error: {str(e)}"
+        }
 
 # Track initialization status
 app_initialized = False
