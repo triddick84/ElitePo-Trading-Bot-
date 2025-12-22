@@ -3559,6 +3559,267 @@ async def backtest_strategy(
 
 
 # ============================================================================
+# POCKET OPTION LIVE BRIDGE ENDPOINTS
+# ============================================================================
+
+@api_router.post("/bridge/ws-stream")
+async def receive_bridge_ws_stream(request: Request):
+    """
+    Receive WebSocket data from browser bridge
+    
+    This endpoint receives forwarded WebSocket messages from the
+    Pocket Option browser extension/bridge script
+    """
+    try:
+        data = await request.json()
+        
+        from pocket_option_live import get_pocket_option_bridge
+        bridge = get_pocket_option_bridge()
+        
+        result = bridge.receive_message(data)
+        return result
+        
+    except Exception as e:
+        logger.error(f"Bridge stream error: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.post("/bridge/connected")
+async def bridge_connected_notification(request: Request):
+    """Notification when bridge WebSocket connects"""
+    try:
+        data = await request.json()
+        logger.info(f"🔗 Bridge connected from: {data.get('url', 'unknown')}")
+        return {"success": True, "message": "Connection acknowledged"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@api_router.post("/bridge/heartbeat")
+async def bridge_heartbeat(request: Request):
+    """Bridge keepalive heartbeat"""
+    try:
+        data = await request.json()
+        
+        from pocket_option_live import get_pocket_option_bridge
+        bridge = get_pocket_option_bridge()
+        bridge.last_message_time = datetime.now(timezone.utc)
+        bridge.is_connected = True
+        
+        return {
+            "success": True,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "messages_received": bridge.message_count
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@api_router.get("/bridge/status")
+async def get_bridge_status():
+    """Get bridge connection status"""
+    try:
+        from pocket_option_live import get_pocket_option_bridge
+        bridge = get_pocket_option_bridge()
+        
+        return {
+            "success": True,
+            **bridge.get_status()
+        }
+    except Exception as e:
+        logger.error(f"Bridge status error: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.get("/bridge/script")
+async def get_bridge_script():
+    """
+    Get the browser bridge script to paste in Pocket Option console
+    """
+    try:
+        from pocket_option_live import get_bridge_script
+        
+        # Get the app URL from environment
+        import os
+        app_url = os.environ.get('REACT_APP_BACKEND_URL', '')
+        
+        if not app_url:
+            # Try to read from frontend .env
+            try:
+                with open('/app/frontend/.env', 'r') as f:
+                    for line in f:
+                        if line.startswith('REACT_APP_BACKEND_URL='):
+                            app_url = line.split('=')[1].strip()
+                            break
+            except:
+                pass
+        
+        script = get_bridge_script(app_url)
+        
+        return {
+            "success": True,
+            "script": script,
+            "instructions": [
+                "1. Open Pocket Option in your browser and log in",
+                "2. Navigate to the trading interface",
+                "3. Open Developer Tools (F12 or Right-click → Inspect)",
+                "4. Go to the Console tab",
+                "5. Paste the entire script below and press Enter",
+                "6. You should see '✅ Bridge script installed!'",
+                "7. Navigate to different assets to load their data"
+            ],
+            "app_url": app_url
+        }
+    except Exception as e:
+        logger.error(f"Bridge script error: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.get("/bridge/candles/{asset}")
+async def get_bridge_candles(asset: str, limit: int = 100):
+    """Get candles for an asset from the bridge"""
+    try:
+        from pocket_option_live import get_pocket_option_bridge
+        bridge = get_pocket_option_bridge()
+        
+        candles = bridge.get_candles(asset)
+        
+        if candles is None:
+            return {
+                "success": False,
+                "error": f"No data for asset {asset}",
+                "available_assets": list(bridge.parser.assets.keys())
+            }
+        
+        return {
+            "success": True,
+            "asset": asset,
+            "candles": candles[-limit:] if limit else candles,
+            "total_candles": len(candles)
+        }
+    except Exception as e:
+        logger.error(f"Bridge candles error: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.get("/bridge/assets")
+async def get_bridge_assets():
+    """Get all assets tracked by the bridge"""
+    try:
+        from pocket_option_live import get_pocket_option_bridge
+        bridge = get_pocket_option_bridge()
+        
+        return {
+            "success": True,
+            "assets": bridge.parser.get_asset_summary()
+        }
+    except Exception as e:
+        logger.error(f"Bridge assets error: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.post("/bridge/signal")
+async def get_bridge_live_signal(request: Request):
+    """
+    Generate signal using live Pocket Option data
+    
+    Body:
+    - asset: Asset symbol (e.g., "EURUSD_otc")
+    """
+    try:
+        data = await request.json()
+        asset = data.get('asset', 'EURUSD_otc')
+        
+        from pocket_option_live_strategy import get_signal_integration
+        integration = get_signal_integration()
+        
+        signal = integration.get_live_signal(asset)
+        
+        if signal:
+            return {
+                "success": True,
+                "signal": signal
+            }
+        else:
+            return {
+                "success": False,
+                "message": f"No signal for {asset} - bridge may not be connected or no trading opportunity"
+            }
+    except Exception as e:
+        logger.error(f"Bridge signal error: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.get("/bridge/signals/all")
+async def get_all_bridge_signals():
+    """Get signals from all tracked assets"""
+    try:
+        from pocket_option_live_strategy import get_signal_integration
+        integration = get_signal_integration()
+        
+        signals = integration.get_all_live_signals()
+        
+        return {
+            "success": True,
+            "signals": signals,
+            "count": len(signals)
+        }
+    except Exception as e:
+        logger.error(f"Bridge signals error: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.post("/bridge/config")
+async def update_bridge_config(request: Request):
+    """
+    Update live strategy configuration
+    
+    Body:
+    - fast_ma: Fast MA period (default 3)
+    - fast_ma_type: SMA/EMA/WMA (default SMA)
+    - slow_ma: Slow MA period (default 8)
+    - slow_ma_type: SMA/EMA/WMA (default SMA)
+    - rsi_enabled: Enable RSI confirmation (default true)
+    - rsi_period: RSI period (default 14)
+    - rsi_upper: RSI upper threshold (default 70)
+    - vice_versa: Invert signals (default false)
+    """
+    try:
+        data = await request.json()
+        
+        from pocket_option_live_strategy import get_live_strategy
+        strategy = get_live_strategy()
+        
+        strategy.update_config(data)
+        
+        return {
+            "success": True,
+            "config": strategy.config
+        }
+    except Exception as e:
+        logger.error(f"Bridge config error: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.get("/bridge/integration/status")
+async def get_integration_status():
+    """Get full integration status"""
+    try:
+        from pocket_option_live_strategy import get_signal_integration
+        integration = get_signal_integration()
+        
+        return {
+            "success": True,
+            **integration.get_status()
+        }
+    except Exception as e:
+        logger.error(f"Integration status error: {e}")
+        return {"success": False, "error": str(e)}
+
+
+
+
+# ============================================================================
 # ENHANCED BREAKOUT PREDICTOR ENDPOINTS
 # ============================================================================
 
