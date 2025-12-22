@@ -4185,12 +4185,11 @@ async def generate_and_notify_signal(
         logger.info(f"🚀 Generating signal for {asset} ({timeframe}) with Telegram: {send_telegram}")
         
         # Generate signal using force signal generator
-        signal_result = await force_signal_generator.generate_force_signal(
-            asset_symbol=symbol,
-            market_type=market_type,
-            selected_timeframe=timeframe,
-            selected_strategy='enhanced_rsi_bb_volume',
-            force_signal=True  # Force generation for this endpoint
+        signal_result = await force_signal_generator.force_generate_signal(
+            symbol=symbol,
+            market_data=None,  # Will be fetched internally
+            user_expirations=[timeframe],
+            force_signal=True  # This parameter doesn't exist, remove it
         )
         
         telegram_sent = False
