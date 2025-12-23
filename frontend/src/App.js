@@ -188,6 +188,8 @@ function App() {
             setNotificationSettings={setGlobalNotificationSettings}
           />
         );
+      case "pocket-option":
+        return <PocketOptionSettings />;
       case "realtime":
         return <RealtimeMarketDashboard />;
       case "statistics":
