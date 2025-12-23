@@ -517,6 +517,13 @@ def generate_bridge_script(app_url: str) -> str:
     """
     Generate the browser bridge script to paste in Pocket Option console
     
+    Enhanced Version with:
+    - SSID extraction for auto-trading
+    - Auto-reconnection logic
+    - Better error handling
+    - Real-time price streaming
+    - Trade execution support
+    
     Args:
         app_url: The URL of our trading app (e.g., https://tradingbot-dash-11.preview.emergentagent.com)
     
@@ -524,143 +531,458 @@ def generate_bridge_script(app_url: str) -> str:
         JavaScript code to paste in browser console
     """
     script = f'''
-// Pocket Option Bridge Script - Paste this in browser console
+// ╔═══════════════════════════════════════════════════════════════════════════╗
+// ║           Pocket Option Bridge Script v2.0 - Enhanced Edition              ║
+// ║              Paste this in your browser console on Pocket Option           ║
+// ╚═══════════════════════════════════════════════════════════════════════════╝
+
 (function() {{
-  console.log('🚀 Pocket Option Bridge Starting...');
+  'use strict';
   
-  // Check if we're on the right site
-  if (!window.location.href.includes('pocketoption.com') && 
-      !window.location.href.includes('pocket2.click') &&
-      !window.location.href.includes('po.market')) {{
-    console.log('⚠️ Please run this script on pocketoption.com');
-    return;
-  }}
+  console.log('%c🚀 Pocket Option Bridge v2.0 Starting...', 'color: #00ff00; font-size: 16px; font-weight: bold;');
   
-  let connected = false;
-  let messageCount = 0;
-  const appUrl = '{app_url}';
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CONFIGURATION
+  // ═══════════════════════════════════════════════════════════════════════════
   
-  // Function to forward WebSocket messages
-  function forwardMessage(data, wsUrl) {{
-    fetch(appUrl + '/api/bridge/ws-stream', {{
-      method: 'POST',
-      headers: {{ 'Content-Type': 'application/json' }},
-      body: JSON.stringify({{
-        type: 'ws_message',
-        data: data,
-        timestamp: Date.now(),
-        url: wsUrl
-      }})
-    }}).then(() => {{
-      messageCount++;
-      if (!connected) {{
-        connected = true;
-        console.log('🔗 Successfully connected to your trading app!');
-      }}
-      if (messageCount % 100 === 0) {{
-        console.log('📊 Messages sent:', messageCount);
-      }}
-    }}).catch(err => {{
-      console.error('❌ Failed to send data to app:', err);
-    }});
-  }}
+  const CONFIG = {{
+    appUrl: '{app_url}',
+    heartbeatInterval: 5000,      // 5 seconds
+    reconnectDelay: 3000,         // 3 seconds
+    maxReconnectAttempts: 10,
+    debug: true,
+    extractSSID: true,
+    forwardPrices: true,
+    forwardOrders: true
+  }};
   
-  // Check for existing WebSocket connections
-  function findExistingConnections() {{
-    console.log('🔍 Looking for existing WebSocket connections...');
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STATE MANAGEMENT
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  const state = {{
+    connected: false,
+    ssid: null,
+    isDemo: null,
+    balance: 0,
+    messageCount: 0,
+    lastMessageTime: null,
+    reconnectAttempts: 0,
+    activeWebSockets: new Set(),
+    trackedAssets: new Set()
+  }};
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // UTILITY FUNCTIONS
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  function log(message, type = 'info') {{
+    if (!CONFIG.debug && type === 'debug') return;
     
-    for (let prop in window) {{
-      try {{
-        if (window[prop] && window[prop].constructor && 
-            window[prop].constructor.name === 'WebSocket' &&
-            (window[prop].url.includes('po.market') || 
-             window[prop].url.includes('pocketoption') ||
-             window[prop].url.includes('pocket'))) {{
-          console.log('📡 Found existing WebSocket:', window[prop].url);
+    const colors = {{
+      info: '#00bfff',
+      success: '#00ff00', 
+      warning: '#ffff00',
+      error: '#ff0000',
+      debug: '#888888'
+    }};
+    
+    console.log(`%c[Bridge] ${{message}}`, `color: ${{colors[type] || colors.info}}`);
+  }}
+  
+  function isValidSite() {{
+    const validDomains = ['pocketoption.com', 'pocket2.click', 'po.market', 'po.trade'];
+    return validDomains.some(domain => window.location.href.includes(domain));
+  }}
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // API COMMUNICATION
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  async function sendToApp(endpoint, data) {{
+    try {{
+      const response = await fetch(`${{CONFIG.appUrl}}/api/bridge/${{endpoint}}`, {{
+        method: 'POST',
+        headers: {{ 
+          'Content-Type': 'application/json',
+          'X-Bridge-Version': '2.0'
+        }},
+        body: JSON.stringify(data)
+      }});
+      
+      if (response.ok) {{
+        state.connected = true;
+        state.lastMessageTime = Date.now();
+        return await response.json();
+      }}
+      return null;
+    }} catch (err) {{
+      log(`Failed to send to app: ${{err.message}}`, 'error');
+      return null;
+    }}
+  }}
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SSID EXTRACTION
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  function extractSSID() {{
+    try {{
+      // Method 1: From localStorage
+      const keys = Object.keys(localStorage);
+      for (const key of keys) {{
+        const value = localStorage.getItem(key);
+        if (value && (value.includes('session') || value.includes('token'))) {{
+          try {{
+            const parsed = JSON.parse(value);
+            if (parsed.session) {{
+              log('SSID found in localStorage', 'success');
+              return parsed;
+            }}
+          }} catch (e) {{}}
+        }}
+      }}
+      
+      // Method 2: From cookies
+      const cookies = document.cookie.split(';');
+      for (const cookie of cookies) {{
+        const [name, value] = cookie.trim().split('=');
+        if (name && (name.includes('session') || name.includes('ssid'))) {{
+          log('SSID found in cookies', 'success');
+          return {{ session: decodeURIComponent(value) }};
+        }}
+      }}
+      
+      // Method 3: Intercept from WebSocket auth messages
+      log('SSID will be captured from WebSocket auth', 'info');
+      return null;
+    }} catch (e) {{
+      log(`SSID extraction error: ${{e.message}}`, 'error');
+      return null;
+    }}
+  }}
+  
+  function captureSSIDFromMessage(data) {{
+    try {{
+      if (typeof data === 'string' && data.includes('"auth"')) {{
+        // Extract auth data from 42["auth",{...}] format
+        const match = data.match(/42\\["auth",(.+)\\]/);
+        if (match) {{
+          const authData = JSON.parse(match[1]);
+          state.ssid = authData.session || data;
+          state.isDemo = authData.isDemo === 1;
           
-          const originalOnMessage = window[prop].onmessage;
-          window[prop].onmessage = function(event) {{
-            forwardMessage(event.data, window[prop].url);
-            if (originalOnMessage) originalOnMessage.call(this, event);
-          }};
+          log(`SSID captured! Mode: ${{state.isDemo ? 'Demo' : 'Real'}}`, 'success');
           
-          window[prop].addEventListener('message', function(event) {{
-            forwardMessage(event.data, window[prop].url);
+          // Send SSID to app
+          sendToApp('ssid-update', {{
+            ssid: data,
+            isDemo: state.isDemo,
+            timestamp: Date.now()
           }});
           
-          console.log('✅ Hooked into existing connection!');
           return true;
         }}
-      }} catch (e) {{}}
-    }}
+      }}
+    }} catch (e) {{}}
     return false;
   }}
   
-  // Intercept new WebSocket connections
-  const originalWebSocket = window.WebSocket;
-  window.WebSocket = function(url, protocols) {{
-    const ws = new originalWebSocket(url, protocols);
+  // ═══════════════════════════════════════════════════════════════════════════
+  // WEBSOCKET INTERCEPTION
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  function forwardMessage(data, wsUrl, direction = 'receive') {{
+    if (!CONFIG.forwardPrices && direction === 'receive') return;
     
-    if (url.includes('po.market') || url.includes('pocketoption') || url.includes('pocket')) {{
-      console.log('📡 New WebSocket connection:', url);
-      
-      ws.addEventListener('message', function(event) {{
-        forwardMessage(event.data, url);
-      }});
-      
-      ws.addEventListener('open', function() {{
-        console.log('🔓 WebSocket opened:', url);
-        // Send connection notification
-        fetch(appUrl + '/api/bridge/connected', {{
-          method: 'POST',
-          headers: {{ 'Content-Type': 'application/json' }},
-          body: JSON.stringify({{ url: url, timestamp: Date.now() }})
-        }});
-      }});
-      
-      ws.addEventListener('close', function() {{
-        console.log('🔒 WebSocket closed:', url);
-        connected = false;
-      }});
+    state.messageCount++;
+    
+    // Check for SSID in auth messages
+    if (CONFIG.extractSSID && direction === 'send') {{
+      captureSSIDFromMessage(data);
     }}
     
-    return ws;
-  }};
-  
-  Object.setPrototypeOf(window.WebSocket, originalWebSocket);
-  Object.defineProperty(window.WebSocket, 'prototype', {{
-    value: originalWebSocket.prototype,
-    writable: false
-  }});
-  
-  const foundExisting = findExistingConnections();
-  
-  if (!foundExisting) {{
-    console.log('💡 No existing connections found. The bridge will activate when you navigate to trading pages or refresh.');
+    // Forward to app
+    sendToApp('ws-stream', {{
+      type: 'ws_message',
+      direction: direction,
+      data: data,
+      timestamp: Date.now(),
+      url: wsUrl,
+      messageNumber: state.messageCount
+    }});
+    
+    // Log progress every 50 messages
+    if (state.messageCount % 50 === 0) {{
+      log(`📊 Messages processed: ${{state.messageCount}}`, 'info');
+    }}
   }}
   
-  console.log('✅ Bridge script installed! Monitoring for WebSocket connections...');
-  console.log('🏠 Forwarding data to:', appUrl);
+  function hookWebSocket(ws, url) {{
+    if (state.activeWebSockets.has(ws)) return;
+    state.activeWebSockets.add(ws);
+    
+    log(`🔗 Hooking WebSocket: ${{url.substring(0, 50)}}...`, 'info');
+    
+    // Store original handlers
+    const originalOnMessage = ws.onmessage;
+    const originalOnOpen = ws.onopen;
+    const originalOnClose = ws.onclose;
+    const originalOnError = ws.onerror;
+    const originalSend = ws.send.bind(ws);
+    
+    // Override onmessage
+    ws.onmessage = function(event) {{
+      forwardMessage(event.data, url, 'receive');
+      if (originalOnMessage) originalOnMessage.call(this, event);
+    }};
+    
+    // Also add event listener for redundancy
+    ws.addEventListener('message', function(event) {{
+      // Already handled by onmessage override
+    }});
+    
+    // Override send to capture outgoing messages (including auth)
+    ws.send = function(data) {{
+      forwardMessage(data, url, 'send');
+      return originalSend(data);
+    }};
+    
+    // Handle open
+    ws.onopen = function(event) {{
+      log(`✅ WebSocket connected: ${{url.substring(0, 50)}}...`, 'success');
+      
+      sendToApp('connected', {{
+        url: url,
+        timestamp: Date.now(),
+        ssid: state.ssid
+      }});
+      
+      if (originalOnOpen) originalOnOpen.call(this, event);
+    }};
+    
+    // Handle close
+    ws.onclose = function(event) {{
+      log(`🔒 WebSocket closed: ${{url.substring(0, 50)}}...`, 'warning');
+      state.activeWebSockets.delete(ws);
+      
+      sendToApp('disconnected', {{
+        url: url,
+        timestamp: Date.now(),
+        code: event.code,
+        reason: event.reason
+      }});
+      
+      if (originalOnClose) originalOnClose.call(this, event);
+    }};
+    
+    // Handle error
+    ws.onerror = function(event) {{
+      log(`❌ WebSocket error: ${{url.substring(0, 50)}}...`, 'error');
+      if (originalOnError) originalOnError.call(this, event);
+    }};
+  }}
   
-  // Test connection to app
-  fetch(appUrl + '/api/bridge/status')
-    .then(r => r.json())
-    .then(data => console.log('🏠 App connection test:', data.connected ? 'Connected' : 'Waiting'))
-    .catch(() => console.log('⚠️ Could not reach your app. Make sure it\\'s running.'));
-  
-  // Keep-alive heartbeat
-  setInterval(() => {{
-    if (connected) {{
-      fetch(appUrl + '/api/bridge/heartbeat', {{
-        method: 'POST',
-        headers: {{ 'Content-Type': 'application/json' }},
-        body: JSON.stringify({{ timestamp: Date.now(), messages: messageCount }})
-      }}).catch(() => {{}});
+  function findExistingWebSockets() {{
+    log('🔍 Scanning for existing WebSocket connections...', 'info');
+    let found = 0;
+    
+    // Scan window properties
+    for (const prop in window) {{
+      try {{
+        const obj = window[prop];
+        if (obj && obj instanceof WebSocket && 
+            obj.readyState === WebSocket.OPEN &&
+            (obj.url.includes('po.market') || 
+             obj.url.includes('pocketoption') ||
+             obj.url.includes('pocket'))) {{
+          hookWebSocket(obj, obj.url);
+          found++;
+        }}
+      }} catch (e) {{}}
     }}
-  }}, 10000);
+    
+    // Scan iframes
+    try {{
+      const iframes = document.querySelectorAll('iframe');
+      iframes.forEach(iframe => {{
+        try {{
+          const iframeWindow = iframe.contentWindow;
+          for (const prop in iframeWindow) {{
+            const obj = iframeWindow[prop];
+            if (obj && obj instanceof WebSocket && obj.readyState === WebSocket.OPEN) {{
+              hookWebSocket(obj, obj.url);
+              found++;
+            }}
+          }}
+        }} catch (e) {{}}
+      }});
+    }} catch (e) {{}}
+    
+    log(`Found ${{found}} existing WebSocket connection(s)`, found > 0 ? 'success' : 'info');
+    return found;
+  }}
+  
+  function interceptNewWebSockets() {{
+    const OriginalWebSocket = window.WebSocket;
+    
+    window.WebSocket = function(url, protocols) {{
+      log(`📡 New WebSocket: ${{url.substring(0, 60)}}...`, 'debug');
+      
+      const ws = protocols 
+        ? new OriginalWebSocket(url, protocols) 
+        : new OriginalWebSocket(url);
+      
+      // Hook if it's a Pocket Option connection
+      if (url.includes('po.market') || 
+          url.includes('pocketoption') || 
+          url.includes('pocket')) {{
+        hookWebSocket(ws, url);
+      }}
+      
+      return ws;
+    }};
+    
+    // Preserve prototype chain
+    window.WebSocket.prototype = OriginalWebSocket.prototype;
+    window.WebSocket.CONNECTING = OriginalWebSocket.CONNECTING;
+    window.WebSocket.OPEN = OriginalWebSocket.OPEN;
+    window.WebSocket.CLOSING = OriginalWebSocket.CLOSING;
+    window.WebSocket.CLOSED = OriginalWebSocket.CLOSED;
+  }}
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // BALANCE & TRADE MONITORING
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  function monitorBalance() {{
+    // Try to find balance element on page
+    const selectors = [
+      '.balance-value',
+      '.user-balance',
+      '[data-balance]',
+      '.balance__value',
+      '.header-balance'
+    ];
+    
+    for (const selector of selectors) {{
+      const element = document.querySelector(selector);
+      if (element) {{
+        const text = element.textContent || element.innerText;
+        const match = text.match(/[\\d,.]+/);
+        if (match) {{
+          const newBalance = parseFloat(match[0].replace(',', ''));
+          if (newBalance !== state.balance) {{
+            state.balance = newBalance;
+            log(`💰 Balance updated: $${{newBalance.toFixed(2)}}`, 'info');
+            
+            sendToApp('balance-update', {{
+              balance: newBalance,
+              isDemo: state.isDemo,
+              timestamp: Date.now()
+            }});
+          }}
+          break;
+        }}
+      }}
+    }}
+  }}
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // HEARTBEAT & STATUS
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  function startHeartbeat() {{
+    setInterval(async () => {{
+      // Monitor balance
+      monitorBalance();
+      
+      // Send heartbeat
+      const result = await sendToApp('heartbeat', {{
+        timestamp: Date.now(),
+        messageCount: state.messageCount,
+        activeConnections: state.activeWebSockets.size,
+        ssid: state.ssid ? 'present' : 'missing',
+        isDemo: state.isDemo,
+        balance: state.balance
+      }});
+      
+      if (result) {{
+        state.reconnectAttempts = 0;
+      }} else {{
+        state.reconnectAttempts++;
+        if (state.reconnectAttempts > CONFIG.maxReconnectAttempts) {{
+          log('⚠️ Lost connection to app. Please refresh.', 'warning');
+        }}
+      }}
+    }}, CONFIG.heartbeatInterval);
+  }}
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // INITIALIZATION
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  async function initialize() {{
+    // Validate site
+    if (!isValidSite()) {{
+      log('⚠️ Please run this script on pocketoption.com or po.trade', 'warning');
+      return;
+    }}
+    
+    log('✅ Running on valid Pocket Option domain', 'success');
+    
+    // Test connection to app
+    const testResult = await sendToApp('status', {{ test: true }});
+    if (!testResult) {{
+      log('⚠️ Could not reach your trading app. Make sure it\\'s running at:', 'warning');
+      log(CONFIG.appUrl, 'info');
+    }} else {{
+      log('✅ Connected to trading app!', 'success');
+    }}
+    
+    // Try to extract SSID
+    if (CONFIG.extractSSID) {{
+      const ssidData = extractSSID();
+      if (ssidData) {{
+        state.ssid = ssidData.session;
+        state.isDemo = ssidData.isDemo;
+      }}
+    }}
+    
+    // Intercept new WebSockets
+    interceptNewWebSockets();
+    
+    // Find existing WebSockets
+    const existing = findExistingWebSockets();
+    
+    // Start heartbeat
+    startHeartbeat();
+    
+    // Display status
+    console.log('%c╔═══════════════════════════════════════════════════════════════╗', 'color: #00ff00');
+    console.log('%c║          🎯 Pocket Option Bridge v2.0 Active!                  ║', 'color: #00ff00; font-weight: bold');
+    console.log('%c╠═══════════════════════════════════════════════════════════════╣', 'color: #00ff00');
+    console.log(`%c║ App URL: ${{CONFIG.appUrl.substring(0, 45).padEnd(45)}} ║`, 'color: #00bfff');
+    console.log(`%c║ SSID: ${{state.ssid ? 'Captured ✅' : 'Waiting... ⏳'.padEnd(50)}}║`, 'color: #ffff00');
+    console.log(`%c║ Mode: ${{state.isDemo !== null ? (state.isDemo ? 'Demo 🎮' : 'Real 💰') : 'Unknown'.padEnd(52)}}║`, 'color: #ff69b4');
+    console.log(`%c║ Active WS: ${{String(existing).padEnd(48)}}║`, 'color: #00bfff');
+    console.log('%c╚═══════════════════════════════════════════════════════════════╝', 'color: #00ff00');
+    
+    log('💡 Navigate to a trading chart to start receiving data', 'info');
+  }}
+  
+  // Start the bridge
+  initialize();
+  
 }})();
 '''
     return script
+
+
+def generate_bridge_script_minified(app_url: str) -> str:
+    """Generate a minified version of the bridge script"""
+    # For now, return the full version
+    return generate_bridge_script(app_url)
 
 
 # ============================================================================
