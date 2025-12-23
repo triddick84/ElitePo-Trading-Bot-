@@ -14339,51 +14339,6 @@ async def main_proven_5s_strategy():
     finally:
         await tester.cleanup()
 
-    async def check_backend_logs(self):
-        """Check backend logs for Socket.IO handshake sequence"""
-        try:
-            print("   🔍 Checking backend logs for Socket.IO handshake sequence...")
-            
-            # Check supervisor backend logs
-            import subprocess
-            result = subprocess.run(['tail', '-n', '100', '/var/log/supervisor/backend.err.log'], 
-                                  capture_output=True, text=True)
-            
-            if result.returncode == 0:
-                logs = result.stdout
-                
-                # Look for Socket.IO handshake indicators
-                handshake_indicators = [
-                    'Engine.IO OPEN',
-                    'Socket.IO CONNECT',
-                    '40',  # Socket.IO namespace connect packet
-                    'auth',
-                    'WebSocket',
-                    'handshake'
-                ]
-                
-                found_indicators = []
-                for indicator in handshake_indicators:
-                    if indicator.lower() in logs.lower():
-                        found_indicators.append(indicator)
-                
-                if found_indicators:
-                    print(f"   ✅ Found Socket.IO handshake indicators: {found_indicators}")
-                else:
-                    print("   ℹ️ No specific Socket.IO handshake indicators found in recent logs")
-                
-                # Look for connection attempts
-                if 'pocket option' in logs.lower() or 'websocket' in logs.lower():
-                    print("   ✅ Found Pocket Option/WebSocket connection attempts in logs")
-                else:
-                    print("   ℹ️ No Pocket Option connection attempts found in recent logs")
-                    
-            else:
-                print("   ⚠️ Could not read backend logs")
-                
-        except Exception as e:
-            print(f"   ⚠️ Error checking backend logs: {e}")
-
 async def run_socket_io_handshake_tests():
     """Run specific tests for Socket.IO handshake fixes as requested in review"""
     tester = BackendTester()
