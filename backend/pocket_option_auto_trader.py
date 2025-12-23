@@ -496,57 +496,135 @@ class PocketOptionWebSocket:
             logger.error(f"Failed to send ping: {e}")
     
     async def _handle_message(self, message: str):
-        """Handle incoming WebSocket message with Socket.IO protocol"""
+        """Handle incoming WebSocket message with Socket.IO protocol
+        
+        Engine.IO packet types:
+        - 0: OPEN (contains pingInterval, pingTimeout, sid)
+        - 1: CLOSE
+        - 2: PING (server→client, respond with 3)
+        - 3: PONG (response to ping)
+        - 4: MESSAGE (Socket.IO packet follows)
+        
+        Socket.IO packet types (prefix after '4'):
+        - 0: CONNECT (namespace connection)
+        - 1: DISCONNECT
+        - 2: EVENT (42["event", data])
+        - 3: ACK
+        - 4: ERROR
+        """
         try:
             if not message:
                 return
             
             packet_type = message[0] if message else ''
             
-            # Socket.IO protocol handling
+            logger.debug(f"📥 Received packet type: {packet_type}, length: {len(message)}")
+            
+            # Engine.IO protocol handling
             if packet_type == self.PACKET_OPEN:
-                # Connection established - parse settings
+                # Engine.IO OPEN - parse settings and initiate Socket.IO namespace connection
                 try:
                     settings = json.loads(message[1:])
+                    self.socket_io_sid = settings.get('sid', '')
                     self.ping_interval = settings.get('pingInterval', 25000) / 1000
                     self.ping_timeout = settings.get('pingTimeout', 60000) / 1000
-                    logger.info(f"📡 Socket.IO connected (ping: {self.ping_interval}s, timeout: {self.ping_timeout}s)")
-                except:
-                    pass
+                    logger.info(f"📡 Engine.IO OPEN received (sid: {self.socket_io_sid[:10]}..., ping: {self.ping_interval}s)")
+                    
+                    # CRITICAL: Send Socket.IO CONNECT to default namespace
+                    # This is the '40' packet that initiates namespace connection
+                    await self.websocket.send('40')
+                    logger.info("📤 Sent Socket.IO CONNECT (40) to default namespace")
+                    
+                except Exception as e:
+                    logger.error(f"Failed to parse open packet: {e}")
                 return
             
             elif packet_type == self.PACKET_CLOSE:
-                logger.warning("🔒 Server requested close")
+                logger.warning("🔒 Server requested close (Engine.IO CLOSE)")
                 return
             
             elif packet_type == self.PACKET_PING:
-                # Server ping - respond with pong
-                await self.websocket.send(self.PACKET_PONG)
-                logger.debug("💓 Pong sent (server ping)")
+                # Engine.IO PING from server - respond with PONG
+                if self.websocket:
+                    await self.websocket.send(self.PACKET_PONG)
+                    logger.debug("💓 Sent PONG response to server PING")
                 return
             
             elif packet_type == self.PACKET_PONG:
-                # Pong response to our ping
+                # PONG response to our PING
                 self.last_pong_time = time.time()
-                logger.debug("💓 Pong received")
+                logger.debug("💓 Received PONG")
                 return
             
             elif packet_type == self.PACKET_MESSAGE:
-                # Socket.IO message - parse event
-                await self._handle_socketio_message(message[1:])
+                # Socket.IO message - parse packet type
+                socketio_data = message[1:]  # Remove '4' prefix
+                await self._handle_socketio_packet(socketio_data)
                 return
             
             elif packet_type == self.PACKET_NOOP:
                 return
             
-            # Handle non-standard messages
+            # Handle legacy/non-standard messages (42[...] without 4 prefix)
             if message.startswith('42'):
-                await self._handle_socketio_message(message[2:])
+                await self._handle_socketio_event(message[2:])
             elif message.startswith('43'):
                 await self._handle_ack(message[2:])
+            elif message.startswith('40'):
+                # Socket.IO CONNECT response (namespace connected)
+                await self._handle_namespace_connect(message[2:])
+            elif message.startswith('41'):
+                # Socket.IO DISCONNECT
+                logger.warning("🔌 Socket.IO DISCONNECT received (41)")
                 
         except Exception as e:
             logger.error(f"Message handling error: {e}")
+    
+    async def _handle_socketio_packet(self, data: str):
+        """Handle Socket.IO packet (after removing Engine.IO '4' prefix)"""
+        if not data:
+            return
+            
+        socketio_type = data[0] if data else ''
+        payload = data[1:] if len(data) > 1 else ''
+        
+        if socketio_type == '0':
+            # Socket.IO CONNECT response
+            await self._handle_namespace_connect(payload)
+        elif socketio_type == '1':
+            # Socket.IO DISCONNECT
+            logger.warning("🔌 Socket.IO namespace disconnected")
+        elif socketio_type == '2':
+            # Socket.IO EVENT
+            await self._handle_socketio_event(payload)
+        elif socketio_type == '3':
+            # Socket.IO ACK
+            await self._handle_ack(payload)
+        elif socketio_type == '4':
+            # Socket.IO CONNECT_ERROR
+            logger.error(f"❌ Socket.IO connect error: {payload}")
+    
+    async def _handle_namespace_connect(self, data: str):
+        """Handle Socket.IO namespace connection response (40{...})"""
+        try:
+            self.namespace_connected = True
+            logger.info("✅ Socket.IO namespace connected successfully")
+            
+            # Parse any additional data
+            if data:
+                try:
+                    ns_data = json.loads(data)
+                    self.socket_io_sid = ns_data.get('sid', self.socket_io_sid)
+                    logger.debug(f"Namespace data: {ns_data}")
+                except:
+                    pass
+            
+            # Signal that handshake is complete
+            if self._handshake_event:
+                self._handshake_event.set()
+                
+        except Exception as e:
+            logger.error(f"Namespace connect error: {e}")
     
     async def _handle_socketio_message(self, data: str):
         """Handle Socket.IO event message"""
