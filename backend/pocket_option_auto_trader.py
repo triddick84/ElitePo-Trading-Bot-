@@ -592,10 +592,14 @@ class PocketOptionWebSocket:
         except Exception as e:
             logger.error(f"Message handling error: {e}")
     
-    async def _handle_socketio_packet(self, data: str):
+    async def _handle_socketio_packet(self, data):
         """Handle Socket.IO packet (after removing Engine.IO '4' prefix)"""
         if not data:
             return
+        
+        # Ensure we're working with a string
+        if isinstance(data, bytes):
+            data = data.decode('utf-8')
             
         socketio_type = data[0] if data else ''
         payload = data[1:] if len(data) > 1 else ''
