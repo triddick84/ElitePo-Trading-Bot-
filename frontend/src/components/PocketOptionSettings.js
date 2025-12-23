@@ -892,15 +892,18 @@ const PocketOptionSettings = () => {
           </div>
           <div className="flex gap-3">
             <Button
-              onClick={() => toast.info('ℹ️ Use bridge script for best results')}
+              onClick={() => setShowGuide(true)}
               variant="outline"
               className="border-slate-600"
             >
-              ❓ Help
+              📖 Setup Guide
             </Button>
           </div>
         </div>
       </Card>
+
+      {/* Bridge Script Guide Modal */}
+      <BridgeScriptGuide isOpen={showGuide} onClose={() => setShowGuide(false)} />
     </div>
   );
 };
