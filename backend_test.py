@@ -13561,6 +13561,70 @@ async def main_enhanced_auto_generate():
     finally:
         await tester.cleanup()
 
+async def main_auto_trading_integration():
+    """
+    Main function to run Auto Trading Integration tests
+    """
+    tester = BackendTester()
+    
+    try:
+        await tester.setup()
+        print("🚀 Starting Auto Trading Integration Backend Testing")
+        print("=" * 60)
+        
+        # Define the Auto Trading Integration tests
+        auto_trading_tests = [
+            # CRITICAL Auto Trading Endpoints
+            ("Auto Trade Status (CRITICAL)", tester.test_auto_trade_status_endpoint),
+            ("Auto Trade Settings Update (CRITICAL)", tester.test_auto_trade_settings_update),
+            ("Auto Trade History", tester.test_auto_trade_history_endpoint),
+            ("Auto Trade Connect (May fail due to network)", tester.test_auto_trade_connect_endpoint),
+            
+            # Fast Supertrend Catch Strategy (Verify still working)
+            ("Fast Supertrend Config", tester.test_fast_supertrend_config_endpoint),
+            ("Fast Supertrend Signal EURUSD", tester.test_fast_supertrend_signal_eurusd),
+            
+            # Telegram Integration (Verify still working)
+            ("Telegram Status", tester.test_telegram_status_endpoint),
+            ("Telegram Test Notification", tester.test_telegram_test_notification),
+        ]
+        
+        total_tests = len(auto_trading_tests)
+        passed_tests = 0
+        
+        # Run each test
+        for test_name, test_func in auto_trading_tests:
+            success = await tester.run_test(test_name, test_func)
+            if success:
+                passed_tests += 1
+        
+        print(f"\n📊 AUTO TRADING INTEGRATION TEST RESULTS")
+        print(f"=" * 50)
+        print(f"✅ Passed: {passed_tests}/{total_tests}")
+        print(f"❌ Failed: {total_tests - passed_tests}/{total_tests}")
+        
+        if tester.failed_tests:
+            print(f"\n❌ Failed Tests:")
+            for failed_test in tester.failed_tests:
+                print(f"   - {failed_test}")
+        
+        success = passed_tests == total_tests
+        
+        if success:
+            print("\n✅ Auto Trading Integration testing completed successfully!")
+            print("   All Auto Trading Integration functionality is working correctly")
+        else:
+            print("\n❌ Auto Trading Integration testing found issues!")
+            print("   Check the failed tests above for details")
+        
+        return 0 if success else 1
+        
+    except Exception as e:
+        print(f"\n❌ Auto Trading Integration testing failed with error: {e}")
+        return 1
+    finally:
+        await tester.cleanup()
+
 async def main_proven_5s_strategy():
     """Main function to run PROVEN 5-Second High-Accuracy Strategy tests"""
     tester = BackendTester()
