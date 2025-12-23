@@ -844,16 +844,23 @@ const PocketOptionSettings = () => {
                 <p className="text-xl font-bold text-white">{bridgeStatus?.message_count || 0}</p>
               </div>
               <Button 
+                onClick={() => setShowGuide(true)}
+                className="w-full bg-purple-600 hover:bg-purple-700"
+              >
+                📖 How to Use Bridge Script
+              </Button>
+              <Button 
                 onClick={() => {
                   window.open(`${API}/bridge/script`, '_blank');
                   toast.success('📋 Script opened in new tab!');
                 }}
-                className="w-full bg-purple-600 hover:bg-purple-700"
+                variant="outline"
+                className="w-full border-slate-600 hover:bg-slate-700"
               >
-                📥 Get Bridge Script
+                📥 Open Script in New Tab
               </Button>
               <p className="text-xs text-slate-500 text-center">
-                Paste the script in Pocket Option's browser console
+                Click "How to Use" for step-by-step instructions
               </p>
             </div>
           </Card>
