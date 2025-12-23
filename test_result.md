@@ -130,3 +130,44 @@
 - Added to StrategySelectorEnhanced.js
 - Shows in 5s timeframe strategy list
 
+
+## Pocket Option Auto Trading Integration (Based on Pocket_Option_v4)
+
+### Implementation Status: COMPLETE (WebSocket connectivity requires user environment)
+
+### Files Created:
+- `/app/backend/pocket_option_auto_trader.py` - Main auto trading service
+
+### API Endpoints Created:
+1. `GET /api/auto-trade/status` - Get service status
+2. `POST /api/auto-trade/connect` - Connect to Pocket Option WebSocket
+3. `POST /api/auto-trade/disconnect` - Disconnect
+4. `POST /api/auto-trade/enable` - Enable/disable auto trading
+5. `POST /api/auto-trade/execute-signal` - Execute a manual signal
+6. `POST /api/auto-trade/execute-ai-signal` - Generate AI signal and execute
+7. `PUT /api/auto-trade/settings` - Update trading settings
+8. `GET /api/auto-trade/history` - Get trade history
+
+### Features Implemented:
+- WebSocket connection management
+- SSID-based authentication (Demo/Real auto-detection)
+- Trade order placement (CALL/PUT)
+- Balance tracking
+- Trade statistics (wins/losses/profit)
+- Rate limiting
+- Integration with Telegram notifications
+- Integration with AI signal generation
+
+### Known Issue:
+The Pocket Option WebSocket servers (wss://demo-api-eu.po.market and wss://api-l.po.market) 
+are not reachable from this cloud environment. This is likely due to:
+1. Network/firewall restrictions
+2. IP-based access control by Pocket Option
+3. Geographic restrictions
+
+### Recommended Solution:
+The user should run the auto-trading component on their LOCAL machine where they can:
+1. Access Pocket Option through their browser
+2. Have a valid session SSID
+3. Not be blocked by IP restrictions
+
