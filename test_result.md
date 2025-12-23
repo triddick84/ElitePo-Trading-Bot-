@@ -570,3 +570,5 @@ status_history:
 agent_communication:
   - agent: "testing"
     message: "✅ POCKET OPTION SETTINGS PAGE TESTING COMPLETE - All functionality working perfectly. The page successfully loads, displays all required sections, integrates properly with backend APIs, and provides excellent user experience. No critical issues found. Ready for production use."
+  - agent: "testing"
+    message: "🧪 BRIDGE SCRIPT GUIDE MODAL TESTING ATTEMPTED - Encountered technical issues with Playwright script execution preventing full modal testing. However, visual inspection confirms the Pocket Option page navigation is working and the page structure appears correct. The Bridge Script Guide modal functionality needs to be tested manually or with a different approach due to script execution limitations in the current environment."
