@@ -362,9 +362,23 @@ class PocketOptionWebSocket:
         
         while self.connection_state not in [ConnectionState.DISCONNECTED, ConnectionState.ERROR]:
             try:
-                if self.websocket is None or self.websocket.closed:
-                    logger.warning("WebSocket closed in receive loop")
+                if self.websocket is None:
+                    logger.warning("WebSocket is None in receive loop")
                     break
+                
+                # Check if websocket is still open (compatible with websockets v15+)
+                try:
+                    if hasattr(self.websocket, 'closed'):
+                        if self.websocket.closed:
+                            logger.warning("WebSocket closed in receive loop")
+                            break
+                    elif hasattr(self.websocket, 'state'):
+                        import websockets.protocol
+                        if self.websocket.state == websockets.protocol.State.CLOSED:
+                            logger.warning("WebSocket closed in receive loop")
+                            break
+                except:
+                    pass
                 
                 message = await asyncio.wait_for(
                     self.websocket.recv(),
@@ -379,8 +393,11 @@ class PocketOptionWebSocket:
                 logger.warning(f"⚠️ WebSocket closed: {e.code} - {e.reason}")
                 break
             except Exception as e:
+                if "closed" in str(e).lower() or "connection" in str(e).lower():
+                    logger.warning(f"⚠️ Connection lost: {e}")
+                    break
                 logger.error(f"Receive error: {e}")
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(0.5)
         
         logger.info("📡 Receive loop ended")
         self._set_connection_state(ConnectionState.DISCONNECTED)
