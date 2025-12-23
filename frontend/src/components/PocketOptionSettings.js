@@ -8,6 +8,7 @@
  * - Trade history and statistics
  * - SSID management
  * - Trading parameters configuration
+ * - Bridge Script Guide
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -19,6 +20,274 @@ import { toast } from 'sonner';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
+
+// Bridge Script Guide Component
+const BridgeScriptGuide = ({ isOpen, onClose }) => {
+  const [bridgeScript, setBridgeScript] = useState('');
+  const [isCopied, setIsCopied] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      // Fetch the bridge script
+      axios.get(`${API}/bridge/script`)
+        .then(res => setBridgeScript(res.data.script || ''))
+        .catch(() => setBridgeScript('// Error loading script'));
+    }
+  }, [isOpen]);
+
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(bridgeScript);
+      setIsCopied(true);
+      toast.success('✅ Script copied to clipboard!');
+      setTimeout(() => setIsCopied(false), 3000);
+    } catch (err) {
+      toast.error('❌ Failed to copy script');
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-slate-900 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden border border-slate-700 shadow-2xl">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-purple-900/50 to-blue-900/50 p-6 border-b border-slate-700">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-bold text-white flex items-center gap-3">
+                <span className="text-3xl">📋</span>
+                Bridge Script Guide
+              </h2>
+              <p className="text-slate-400 mt-1">Connect your Pocket Option browser to the trading bot</p>
+            </div>
+            <Button onClick={onClose} variant="ghost" className="text-slate-400 hover:text-white">
+              ✕
+            </Button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
+          {/* What is the Bridge Script */}
+          <div className="mb-8">
+            <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+              <span>🤔</span> What is the Bridge Script?
+            </h3>
+            <p className="text-slate-300 leading-relaxed">
+              The Bridge Script is a JavaScript code that runs in your browser's console while you're on the 
+              Pocket Option website. It captures real-time market data and your trading session information, 
+              then sends it to our trading bot for automated signal execution.
+            </p>
+          </div>
+
+          {/* Step by Step Guide */}
+          <div className="mb-8">
+            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+              <span>📝</span> Step-by-Step Instructions
+            </h3>
+            
+            <div className="space-y-4">
+              {/* Step 1 */}
+              <div className="flex gap-4 p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+                <div className="flex-shrink-0 w-10 h-10 bg-emerald-600 rounded-full flex items-center justify-center text-white font-bold">
+                  1
+                </div>
+                <div>
+                  <h4 className="text-white font-medium mb-1">Open Pocket Option</h4>
+                  <p className="text-slate-400 text-sm">
+                    Go to <span className="text-emerald-400 font-mono">pocketoption.com</span> or{' '}
+                    <span className="text-emerald-400 font-mono">po.trade</span> and log into your account.
+                    Make sure you're on the trading page where you can see the charts.
+                  </p>
+                </div>
+              </div>
+
+              {/* Step 2 */}
+              <div className="flex gap-4 p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+                <div className="flex-shrink-0 w-10 h-10 bg-emerald-600 rounded-full flex items-center justify-center text-white font-bold">
+                  2
+                </div>
+                <div>
+                  <h4 className="text-white font-medium mb-1">Open Developer Console</h4>
+                  <p className="text-slate-400 text-sm mb-2">
+                    Press the keyboard shortcut to open the browser's developer console:
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="px-3 py-1 bg-slate-700 rounded text-xs text-white">
+                      <strong>Windows/Linux:</strong> F12 or Ctrl + Shift + J
+                    </span>
+                    <span className="px-3 py-1 bg-slate-700 rounded text-xs text-white">
+                      <strong>Mac:</strong> Cmd + Option + J
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 3 */}
+              <div className="flex gap-4 p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+                <div className="flex-shrink-0 w-10 h-10 bg-emerald-600 rounded-full flex items-center justify-center text-white font-bold">
+                  3
+                </div>
+                <div>
+                  <h4 className="text-white font-medium mb-1">Go to Console Tab</h4>
+                  <p className="text-slate-400 text-sm">
+                    In the Developer Tools window, click on the <span className="text-emerald-400 font-semibold">"Console"</span> tab.
+                    This is where you'll paste the bridge script.
+                  </p>
+                </div>
+              </div>
+
+              {/* Step 4 */}
+              <div className="flex gap-4 p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+                <div className="flex-shrink-0 w-10 h-10 bg-emerald-600 rounded-full flex items-center justify-center text-white font-bold">
+                  4
+                </div>
+                <div>
+                  <h4 className="text-white font-medium mb-1">Copy the Bridge Script</h4>
+                  <p className="text-slate-400 text-sm mb-2">
+                    Click the button below to copy the entire bridge script to your clipboard:
+                  </p>
+                  <Button 
+                    onClick={copyToClipboard}
+                    className={`${isCopied ? 'bg-emerald-600' : 'bg-purple-600 hover:bg-purple-700'}`}
+                  >
+                    {isCopied ? '✅ Copied!' : '📋 Copy Bridge Script'}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Step 5 */}
+              <div className="flex gap-4 p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+                <div className="flex-shrink-0 w-10 h-10 bg-emerald-600 rounded-full flex items-center justify-center text-white font-bold">
+                  5
+                </div>
+                <div>
+                  <h4 className="text-white font-medium mb-1">Paste and Run</h4>
+                  <p className="text-slate-400 text-sm">
+                    Paste the script into the Console (Ctrl+V or Cmd+V) and press <span className="text-emerald-400 font-semibold">Enter</span> to run it.
+                    You should see green messages confirming the bridge is active.
+                  </p>
+                </div>
+              </div>
+
+              {/* Step 6 */}
+              <div className="flex gap-4 p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+                <div className="flex-shrink-0 w-10 h-10 bg-emerald-600 rounded-full flex items-center justify-center text-white font-bold">
+                  6
+                </div>
+                <div>
+                  <h4 className="text-white font-medium mb-1">Verify Connection</h4>
+                  <p className="text-slate-400 text-sm">
+                    Come back to this page and check the <span className="text-emerald-400 font-semibold">"Browser Bridge"</span> status. 
+                    It should change from "Inactive" to "Active" with a green indicator.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Important Notes */}
+          <div className="mb-8">
+            <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+              <span>⚠️</span> Important Notes
+            </h3>
+            <div className="space-y-3">
+              <div className="flex items-start gap-3 p-3 bg-yellow-900/20 border border-yellow-500/30 rounded-lg">
+                <span className="text-yellow-400 text-xl">💡</span>
+                <p className="text-yellow-200 text-sm">
+                  <strong>Keep the tab open:</strong> The bridge only works while the Pocket Option tab is open and active.
+                  Don't close or minimize it.
+                </p>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-blue-900/20 border border-blue-500/30 rounded-lg">
+                <span className="text-blue-400 text-xl">🔄</span>
+                <p className="text-blue-200 text-sm">
+                  <strong>Re-run after refresh:</strong> If you refresh the Pocket Option page, you'll need to paste 
+                  and run the script again.
+                </p>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-emerald-900/20 border border-emerald-500/30 rounded-lg">
+                <span className="text-emerald-400 text-xl">🔐</span>
+                <p className="text-emerald-200 text-sm">
+                  <strong>SSID Capture:</strong> The script automatically captures your session ID (SSID) and sends it
+                  to enable auto-trading features.
+                </p>
+              </div>
+              <div className="flex items-start gap-3 p-3 bg-purple-900/20 border border-purple-500/30 rounded-lg">
+                <span className="text-purple-400 text-xl">📊</span>
+                <p className="text-purple-200 text-sm">
+                  <strong>Real-time data:</strong> Once connected, you'll receive live price data and can execute trades
+                  automatically based on AI signals.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Troubleshooting */}
+          <div className="mb-8">
+            <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+              <span>🔧</span> Troubleshooting
+            </h3>
+            <div className="space-y-3">
+              <div className="p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+                <h4 className="text-white font-medium mb-2">❓ Script shows error when pasting?</h4>
+                <p className="text-slate-400 text-sm">
+                  Some browsers block pasting in console. Type <code className="bg-slate-700 px-1 rounded">allow pasting</code> first,
+                  then try pasting again.
+                </p>
+              </div>
+              <div className="p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+                <h4 className="text-white font-medium mb-2">❓ Bridge not connecting?</h4>
+                <p className="text-slate-400 text-sm">
+                  Make sure you're on the actual trading page (not the homepage). Try refreshing Pocket Option
+                  and running the script again.
+                </p>
+              </div>
+              <div className="p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+                <h4 className="text-white font-medium mb-2">❓ Not receiving market data?</h4>
+                <p className="text-slate-400 text-sm">
+                  Navigate to different trading pairs on Pocket Option. The script hooks into WebSocket connections
+                  as they're created.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Script Preview */}
+          <div>
+            <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+              <span>👁️</span> Script Preview
+            </h3>
+            <div className="bg-slate-950 rounded-lg p-4 border border-slate-700 max-h-48 overflow-y-auto">
+              <pre className="text-xs text-slate-400 font-mono whitespace-pre-wrap">
+                {bridgeScript.substring(0, 500)}...
+              </pre>
+            </div>
+            <p className="text-xs text-slate-500 mt-2 text-center">
+              Showing first 500 characters. Full script is ~15KB.
+            </p>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="p-4 border-t border-slate-700 bg-slate-800/50 flex items-center justify-between">
+          <p className="text-sm text-slate-400">
+            Need help? Check the console for detailed logs after running the script.
+          </p>
+          <div className="flex gap-3">
+            <Button onClick={copyToClipboard} className="bg-purple-600 hover:bg-purple-700">
+              {isCopied ? '✅ Copied!' : '📋 Copy Script'}
+            </Button>
+            <Button onClick={onClose} variant="outline" className="border-slate-600">
+              Close
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const PocketOptionSettings = () => {
   // Connection states
@@ -41,6 +310,9 @@ const PocketOptionSettings = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  
+  // Guide modal state
+  const [showGuide, setShowGuide] = useState(false);
 
   // Fetch all status data
   const fetchAllStatus = useCallback(async () => {
