@@ -13417,6 +13417,21 @@ class BackendTester:
             ("Bridge Integration Status", self.test_bridge_integration_status),
         ]
         
+        # PRIORITY 1E: Latency Slider Enhancement Tests (NEW)
+        latency_tests = [
+            ("Latency Settings GET", self.test_latency_settings_get),
+            ("Latency Settings Extended Range", self.test_latency_settings_extended_range),
+        ]
+        
+        # PRIORITY 1F: Bridge Script v2.0 Tests (NEW)
+        bridge_v2_tests = [
+            ("Bridge Script v2.0 Endpoint", self.test_bridge_script_v2_endpoint),
+            ("Bridge SSID Update Endpoint", self.test_bridge_ssid_update_endpoint),
+            ("Bridge Balance Update Endpoint", self.test_bridge_balance_update_endpoint),
+            ("Bridge Disconnected Endpoint", self.test_bridge_disconnected_endpoint),
+            ("Bridge Status v2.0 Endpoint", self.test_bridge_status_v2_endpoint),
+        ]
+        
         # PRIORITY 1A: PROVEN 5-Second High-Accuracy Strategy Tests (NEW)
         proven_5s_tests = [
             ("Support/Resistance Module", self.test_support_resistance_module),
