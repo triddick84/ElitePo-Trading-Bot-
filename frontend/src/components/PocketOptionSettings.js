@@ -452,20 +452,35 @@ const PocketOptionSettings = () => {
 
   // Get connection status color and text
   const getConnectionStatus = () => {
+    const connectionState = autoTradeStatus?.connection_state || 'disconnected';
     const isConnected = autoTradeStatus?.is_connected || false;
     const isRunning = autoTradeStatus?.is_running || false;
+    const reconnectAttempts = autoTradeStatus?.reconnect_attempts || 0;
     
-    if (isConnected && isRunning) {
-      return { color: 'text-emerald-400', bg: 'bg-emerald-500', text: 'Connected', icon: '🟢' };
-    } else if (isRunning) {
-      return { color: 'text-yellow-400', bg: 'bg-yellow-500', text: 'Connecting...', icon: '🟡' };
+    switch (connectionState) {
+      case 'authenticated':
+        return { color: 'text-emerald-400', bg: 'bg-emerald-500', text: 'Connected', icon: '🟢', pulse: false };
+      case 'connected':
+      case 'authenticating':
+        return { color: 'text-blue-400', bg: 'bg-blue-500', text: 'Authenticating...', icon: '🔵', pulse: true };
+      case 'connecting':
+        return { color: 'text-yellow-400', bg: 'bg-yellow-500', text: 'Connecting...', icon: '🟡', pulse: true };
+      case 'reconnecting':
+        return { color: 'text-orange-400', bg: 'bg-orange-500', text: `Reconnecting (${reconnectAttempts})...`, icon: '🟠', pulse: true };
+      case 'error':
+        return { color: 'text-red-400', bg: 'bg-red-500', text: 'Connection Error', icon: '🔴', pulse: false };
+      default:
+        if (isConnected && isRunning) {
+          return { color: 'text-emerald-400', bg: 'bg-emerald-500', text: 'Connected', icon: '🟢', pulse: false };
+        }
+        return { color: 'text-red-400', bg: 'bg-red-500', text: 'Disconnected', icon: '🔴', pulse: false };
     }
-    return { color: 'text-red-400', bg: 'bg-red-500', text: 'Disconnected', icon: '🔴' };
   };
 
   const connectionStatus = getConnectionStatus();
   const isDemo = autoTradeStatus?.is_demo ?? true;
   const balance = autoTradeStatus?.balance || 0;
+  const connectionState = autoTradeStatus?.connection_state || 'disconnected';
 
   if (isLoading) {
     return (
