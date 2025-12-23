@@ -4112,6 +4112,401 @@ async def get_fast_supertrend_config():
 
 
 # =============================================================================
+# AUTO TRADING SERVICE ENDPOINTS
+# =============================================================================
+
+@api_router.get("/auto-trade/status")
+async def get_auto_trade_status():
+    """
+    Get auto trading service status
+    
+    Returns connection state, balance, and trading statistics
+    """
+    try:
+        service = get_auto_trading_service()
+        return {
+            "success": True,
+            **service.get_status()
+        }
+    except Exception as e:
+        logger.error(f"Auto trade status error: {e}")
+        return {
+            "success": False,
+            "message": f"❌ Error: {str(e)}"
+        }
+
+
+@api_router.post("/auto-trade/connect")
+async def connect_auto_trade(ssid: str = None):
+    """
+    Connect to Pocket Option for auto trading
+    
+    Args:
+        ssid: SSID authentication string. If not provided, uses stored SSID from .env
+    
+    Returns:
+        Connection status
+    """
+    try:
+        # Get SSID from parameter or environment
+        if not ssid:
+            ssid = os.getenv('POCKET_OPTION_SSID', '')
+        
+        if not ssid:
+            return {
+                "success": False,
+                "message": "❌ No SSID provided. Please provide SSID or configure in .env"
+            }
+        
+        # Connect
+        service = get_auto_trading_service()
+        success = await service.connect(ssid)
+        
+        if success:
+            return {
+                "success": True,
+                "message": "✅ Connected to Pocket Option",
+                "is_demo": service.ws_client.is_demo if service.ws_client else True,
+                **service.get_status()
+            }
+        else:
+            return {
+                "success": False,
+                "message": "❌ Failed to connect to Pocket Option"
+            }
+            
+    except Exception as e:
+        logger.error(f"Auto trade connect error: {e}")
+        return {
+            "success": False,
+            "message": f"❌ Error: {str(e)}"
+        }
+
+
+@api_router.post("/auto-trade/disconnect")
+async def disconnect_auto_trade():
+    """
+    Disconnect from Pocket Option
+    """
+    try:
+        service = get_auto_trading_service()
+        await service.disconnect()
+        
+        return {
+            "success": True,
+            "message": "✅ Disconnected from Pocket Option"
+        }
+    except Exception as e:
+        logger.error(f"Auto trade disconnect error: {e}")
+        return {
+            "success": False,
+            "message": f"❌ Error: {str(e)}"
+        }
+
+
+@api_router.post("/auto-trade/enable")
+async def enable_auto_trade(enabled: bool = True):
+    """
+    Enable or disable auto trading
+    
+    Args:
+        enabled: Whether to enable auto trading
+    """
+    try:
+        service = get_auto_trading_service()
+        service.enable_auto_trade(enabled)
+        
+        return {
+            "success": True,
+            "message": f"✅ Auto trading {'enabled' if enabled else 'disabled'}",
+            "is_auto_trade_enabled": service.is_auto_trade_enabled
+        }
+    except Exception as e:
+        logger.error(f"Enable auto trade error: {e}")
+        return {
+            "success": False,
+            "message": f"❌ Error: {str(e)}"
+        }
+
+
+@api_router.post("/auto-trade/execute-signal")
+async def execute_signal_auto_trade(
+    symbol: str = "EURUSD_otc",
+    direction: str = "CALL",
+    amount: float = 1.0,
+    expiration: int = 60,
+    probability: float = 80.0,
+    strategy: str = "manual",
+    send_telegram: bool = True
+):
+    """
+    Execute a trading signal via auto trade
+    
+    Args:
+        symbol: Asset symbol
+        direction: Trade direction (CALL/PUT)
+        amount: Trade amount
+        expiration: Expiration in seconds
+        probability: Signal probability/confidence
+        strategy: Strategy name
+        send_telegram: Send notification to Telegram
+    
+    Returns:
+        Trade execution result
+    """
+    try:
+        service = get_auto_trading_service()
+        
+        if not service.is_running:
+            return {
+                "success": False,
+                "message": "❌ Auto trading service not connected. Call /auto-trade/connect first."
+            }
+        
+        # Create signal dict
+        signal = {
+            "symbol": symbol,
+            "direction": direction,
+            "amount": amount,
+            "expiration_seconds": expiration,
+            "probability": probability,
+            "strategy": strategy
+        }
+        
+        # Execute
+        trade = await service.execute_signal(signal)
+        
+        if trade:
+            # Send to Telegram if requested
+            if send_telegram:
+                notifier = get_telegram_notifier()
+                if notifier.config.is_valid():
+                    await notifier.send_signal({
+                        "symbol": symbol,
+                        "direction": direction,
+                        "probability": probability,
+                        "timeframe": f"{expiration}s",
+                        "market_type": "OTC" if "_otc" in symbol.lower() else "regular",
+                        "expiration_minutes": expiration / 60,
+                        "strategy_used": strategy,
+                        "precision_entry_time": datetime.now(timezone.utc).isoformat()
+                    })
+            
+            return {
+                "success": True,
+                "message": "✅ Trade executed successfully",
+                "trade": trade.to_dict(),
+                "telegram_sent": send_telegram
+            }
+        else:
+            return {
+                "success": False,
+                "message": "❌ Failed to execute trade"
+            }
+            
+    except Exception as e:
+        logger.error(f"Execute signal error: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False,
+            "message": f"❌ Error: {str(e)}"
+        }
+
+
+@api_router.post("/auto-trade/execute-ai-signal")
+async def execute_ai_signal_auto_trade(
+    asset: str = "EURUSD_OTC",
+    strategy: str = "fast_supertrend_catch",
+    amount: float = 1.0,
+    send_telegram: bool = True
+):
+    """
+    Generate an AI signal and automatically execute it
+    
+    This combines signal generation with trade execution in one call.
+    
+    Args:
+        asset: Asset symbol
+        strategy: Strategy to use for signal generation
+        amount: Trade amount
+        send_telegram: Send notification to Telegram
+    """
+    try:
+        service = get_auto_trading_service()
+        
+        if not service.is_running:
+            return {
+                "success": False,
+                "message": "❌ Auto trading service not connected. Call /auto-trade/connect first."
+            }
+        
+        # Generate signal based on strategy
+        signal = None
+        
+        if strategy == "fast_supertrend_catch":
+            from strategies.fast_supertrend_catch import get_fast_supertrend_strategy
+            from real_market_data_service import RealMarketDataService
+            
+            strat = get_fast_supertrend_strategy()
+            market_service = RealMarketDataService()
+            
+            # Get market data
+            yahoo_data = market_service.get_yahoo_finance_data(asset.replace('_OTC', '').replace('_otc', ''))
+            
+            if yahoo_data:
+                candle_data = []
+                prices = yahoo_data.get('historical_prices', [])
+                for p in prices:
+                    candle_data.append({
+                        'open': p * 0.999,
+                        'high': p * 1.001,
+                        'low': p * 0.998,
+                        'close': p,
+                        'volume': 10000
+                    })
+                signal = strat.analyze(asset, candle_data)
+        else:
+            # Use force signal generator
+            from real_market_data_service import RealMarketDataService
+            from models import MarketData, AssetType
+            
+            market_service = RealMarketDataService()
+            asset_type = AssetType.FOREX if 'usd' in asset.lower() or 'eur' in asset.lower() else AssetType.CRYPTO
+            market_data = await market_service.get_market_data(asset, asset_type)
+            
+            if not market_data:
+                market_data = MarketData(
+                    symbol=asset,
+                    current_price=1.05,
+                    timestamp=datetime.now(timezone.utc),
+                    historical_prices=[1.05 + i * 0.0001 for i in range(-100, 0)],
+                    volume=1000000
+                )
+            
+            signals = await force_signal_generator.force_generate_signal(
+                symbol=asset,
+                market_data=market_data,
+                user_expirations=['5s']
+            )
+            
+            if signals:
+                s = signals[0]
+                signal = {
+                    "symbol": s.symbol,
+                    "direction": s.direction.value if hasattr(s.direction, 'value') else str(s.direction),
+                    "probability": s.probability,
+                    "expiration_seconds": 5,
+                    "strategy": strategy
+                }
+        
+        if not signal:
+            return {
+                "success": False,
+                "message": "❌ Could not generate signal - conditions not met"
+            }
+        
+        # Add amount to signal
+        signal['amount'] = amount
+        
+        # Execute the signal
+        trade = await service.execute_signal(signal)
+        
+        if trade:
+            # Send to Telegram
+            if send_telegram:
+                notifier = get_telegram_notifier()
+                if notifier.config.is_valid():
+                    await notifier.send_signal(signal)
+            
+            return {
+                "success": True,
+                "message": "✅ AI signal generated and executed",
+                "signal": signal,
+                "trade": trade.to_dict(),
+                "telegram_sent": send_telegram
+            }
+        else:
+            return {
+                "success": False,
+                "message": "❌ Signal generated but trade execution failed",
+                "signal": signal
+            }
+            
+    except Exception as e:
+        logger.error(f"Execute AI signal error: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False,
+            "message": f"❌ Error: {str(e)}"
+        }
+
+
+@api_router.put("/auto-trade/settings")
+async def update_auto_trade_settings(
+    amount: float = None,
+    min_probability: float = None,
+    max_trades_per_minute: int = None
+):
+    """
+    Update auto trading settings
+    
+    Args:
+        amount: Default trade amount
+        min_probability: Minimum signal probability to execute
+        max_trades_per_minute: Rate limit for trades
+    """
+    try:
+        service = get_auto_trading_service()
+        
+        if amount is not None:
+            service.set_trade_amount(amount)
+        
+        if min_probability is not None:
+            service.set_min_probability(min_probability)
+        
+        if max_trades_per_minute is not None:
+            service.max_trades_per_minute = max(1, min(60, max_trades_per_minute))
+        
+        return {
+            "success": True,
+            "message": "✅ Settings updated",
+            **service.get_status()
+        }
+    except Exception as e:
+        logger.error(f"Update settings error: {e}")
+        return {
+            "success": False,
+            "message": f"❌ Error: {str(e)}"
+        }
+
+
+@api_router.get("/auto-trade/history")
+async def get_auto_trade_history(limit: int = 50):
+    """
+    Get auto trade history
+    
+    Args:
+        limit: Maximum number of trades to return
+    """
+    try:
+        service = get_auto_trading_service()
+        
+        return {
+            "success": True,
+            "trades": service.get_trade_history(limit),
+            "stats": service.stats.to_dict()
+        }
+    except Exception as e:
+        logger.error(f"Get history error: {e}")
+        return {
+            "success": False,
+            "message": f"❌ Error: {str(e)}"
+        }
+
+
+# =============================================================================
 # SSID AUTO-REFRESH ENDPOINTS
 # =============================================================================
 
