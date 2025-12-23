@@ -420,10 +420,22 @@ class PocketOptionWebSocket:
     async def _send_ping(self):
         """Send Socket.IO ping packet"""
         try:
-            if self.websocket and not self.websocket.closed:
-                await self.websocket.send(self.PACKET_PING)
-                self.last_ping_time = time.time()
-                logger.debug("💓 Ping sent")
+            if self.websocket:
+                # Check if websocket is still open (compatible with websockets v15+)
+                is_open = True
+                try:
+                    if hasattr(self.websocket, 'closed'):
+                        is_open = not self.websocket.closed
+                    elif hasattr(self.websocket, 'state'):
+                        import websockets.protocol
+                        is_open = self.websocket.state != websockets.protocol.State.CLOSED
+                except:
+                    pass
+                
+                if is_open:
+                    await self.websocket.send(self.PACKET_PING)
+                    self.last_ping_time = time.time()
+                    logger.debug("💓 Ping sent")
         except Exception as e:
             logger.error(f"Failed to send ping: {e}")
     
