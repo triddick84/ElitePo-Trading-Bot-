@@ -3604,7 +3604,99 @@ async def bridge_connected_notification(request: Request):
     try:
         data = await request.json()
         logger.info(f"🔗 Bridge connected from: {data.get('url', 'unknown')}")
+        
+        # If SSID is provided, update the auto-trader
+        if data.get('ssid'):
+            service = get_auto_trading_service()
+            if not service.is_running:
+                logger.info("📱 Attempting to connect auto-trader with bridge SSID...")
+        
         return {"success": True, "message": "Connection acknowledged"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@api_router.post("/bridge/disconnected")
+async def bridge_disconnected_notification(request: Request):
+    """Notification when bridge WebSocket disconnects"""
+    try:
+        data = await request.json()
+        logger.warning(f"🔌 Bridge disconnected: {data.get('url', 'unknown')} - Code: {data.get('code')}")
+        return {"success": True, "message": "Disconnection acknowledged"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@api_router.post("/bridge/ssid-update")
+async def bridge_ssid_update(request: Request):
+    """
+    Receive SSID update from browser bridge
+    This allows auto-trading to use the captured SSID
+    """
+    try:
+        data = await request.json()
+        ssid = data.get('ssid')
+        is_demo = data.get('isDemo', True)
+        
+        if not ssid:
+            return {"success": False, "message": "No SSID provided"}
+        
+        logger.info(f"🔑 SSID received from bridge (Demo: {is_demo})")
+        
+        # Store in environment
+        os.environ['POCKET_OPTION_SSID'] = ssid
+        
+        # Try to connect auto-trader with new SSID
+        service = get_auto_trading_service()
+        if not service.is_running:
+            success = await service.connect(ssid)
+            if success:
+                logger.info("✅ Auto-trader connected with bridge SSID!")
+                
+                # Notify via Telegram
+                notifier = get_telegram_notifier()
+                if notifier.config.is_valid():
+                    await notifier.send_status(
+                        "🔗 Bridge Connected",
+                        {
+                            "Mode": "Demo" if is_demo else "Real",
+                            "Auto-Trade": "Ready"
+                        }
+                    )
+                
+                return {
+                    "success": True,
+                    "message": "✅ SSID received and auto-trader connected",
+                    "auto_trade_status": service.get_status()
+                }
+        
+        return {
+            "success": True,
+            "message": "✅ SSID received and stored",
+            "is_demo": is_demo
+        }
+        
+    except Exception as e:
+        logger.error(f"SSID update error: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.post("/bridge/balance-update")
+async def bridge_balance_update(request: Request):
+    """Receive balance update from browser bridge"""
+    try:
+        data = await request.json()
+        balance = data.get('balance', 0)
+        is_demo = data.get('isDemo', True)
+        
+        logger.info(f"💰 Balance update from bridge: ${balance:.2f} ({'Demo' if is_demo else 'Real'})")
+        
+        # Update auto-trader balance if connected
+        service = get_auto_trading_service()
+        if service.ws_client:
+            service.ws_client.balance = balance
+        
+        return {"success": True, "balance": balance}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
@@ -3619,6 +3711,12 @@ async def bridge_heartbeat(request: Request):
         bridge = get_pocket_option_bridge()
         bridge.last_message_time = datetime.now(timezone.utc)
         bridge.is_connected = True
+        
+        # Update connection status with bridge data
+        bridge.connection_status['active_connections'] = data.get('activeConnections', 0)
+        bridge.connection_status['ssid_present'] = data.get('ssid') == 'present'
+        bridge.connection_status['is_demo'] = data.get('isDemo')
+        bridge.connection_status['balance'] = data.get('balance', 0)
         
         return {
             "success": True,
