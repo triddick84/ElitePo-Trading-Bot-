@@ -514,12 +514,12 @@ const PocketOptionSettings = () => {
       <Card className={`p-6 ${isDemo ? 'bg-gradient-to-r from-blue-900/50 to-purple-900/50 border-blue-500/50' : 'bg-gradient-to-r from-emerald-900/50 to-teal-900/50 border-emerald-500/50'}`}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-6">
-            <div className={`w-20 h-20 rounded-full ${connectionStatus.bg}/20 flex items-center justify-center`}>
+            <div className={`w-20 h-20 rounded-full ${connectionStatus.bg}/20 flex items-center justify-center ${connectionStatus.pulse ? 'animate-pulse' : ''}`}>
               <span className="text-5xl">{connectionStatus.icon}</span>
             </div>
             <div>
               <div className="flex items-center gap-3">
-                <h2 className={`text-2xl font-bold ${connectionStatus.color}`}>
+                <h2 className={`text-2xl font-bold ${connectionStatus.color} ${connectionStatus.pulse ? 'animate-pulse' : ''}`}>
                   {connectionStatus.text}
                 </h2>
                 <span className={`px-3 py-1 rounded-full text-sm font-semibold ${isDemo ? 'bg-blue-600 text-blue-100' : 'bg-emerald-600 text-emerald-100'}`}>
@@ -528,6 +528,9 @@ const PocketOptionSettings = () => {
               </div>
               <p className="text-slate-400 mt-1">
                 Pocket Option Trading Account
+                {connectionState && connectionState !== 'disconnected' && (
+                  <span className="ml-2 text-xs">({connectionState})</span>
+                )}
               </p>
               {balance > 0 && (
                 <p className="text-2xl font-bold text-white mt-2">
@@ -536,8 +539,8 @@ const PocketOptionSettings = () => {
               )}
             </div>
           </div>
-          <div className="flex gap-3">
-            {autoTradeStatus?.is_running ? (
+          <div className="flex flex-col gap-2">
+            {autoTradeStatus?.is_running || connectionState === 'reconnecting' ? (
               <Button 
                 onClick={handleDisconnect}
                 variant="destructive"
@@ -548,15 +551,21 @@ const PocketOptionSettings = () => {
             ) : (
               <Button 
                 onClick={handleConnect}
-                disabled={isConnecting}
+                disabled={isConnecting || connectionState === 'connecting'}
                 className="bg-emerald-600 hover:bg-emerald-700"
               >
-                {isConnecting ? '⏳ Connecting...' : '🔗 Connect'}
+                {isConnecting || connectionState === 'connecting' ? '⏳ Connecting...' : '🔗 Connect'}
               </Button>
+            )}
+            {connectionState === 'reconnecting' && (
+              <p className="text-xs text-orange-400 text-center">
+                Auto-reconnecting...
+              </p>
             )}
           </div>
         </div>
       </Card>
+
 
       {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
