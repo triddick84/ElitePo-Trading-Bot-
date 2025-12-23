@@ -229,15 +229,28 @@ class PocketOptionWebSocket:
         try:
             logger.info(f"🔌 Connecting to {self.ws_url}...")
             
-            # Use websockets.connect with compatible parameters
-            self.websocket = await websockets.connect(
-                self.ws_url,
-                additional_headers={
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-                },
-                ping_interval=25,
-                ping_timeout=60,
-                close_timeout=10
+            # Create SSL context
+            import ssl
+            ssl_context = ssl.create_default_context()
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+            
+            # Use websockets.connect with SSL and timeout
+            self.websocket = await asyncio.wait_for(
+                websockets.connect(
+                    self.ws_url,
+                    ssl=ssl_context,
+                    additional_headers={
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                        "Origin": "https://po.trade",
+                        "Accept-Language": "en-US,en;q=0.9"
+                    },
+                    ping_interval=25,
+                    ping_timeout=60,
+                    close_timeout=10,
+                    max_size=2**24  # 16MB max message size
+                ),
+                timeout=15.0
             )
             
             self.is_connected = True
@@ -247,7 +260,7 @@ class PocketOptionWebSocket:
             self._receive_task = asyncio.create_task(self._receive_loop())
             
             # Wait for initial handshake
-            await asyncio.sleep(1)
+            await asyncio.sleep(2)
             
             # Authenticate
             await self._authenticate()
@@ -255,8 +268,14 @@ class PocketOptionWebSocket:
             logger.info("✅ WebSocket connected and authenticated")
             return True
             
+        except asyncio.TimeoutError:
+            logger.error("❌ Connection timeout - server may be unreachable")
+            self.is_connected = False
+            return False
         except Exception as e:
             logger.error(f"❌ Connection failed: {e}")
+            import traceback
+            traceback.print_exc()
             self.is_connected = False
             return False
     
