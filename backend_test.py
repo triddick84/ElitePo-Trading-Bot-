@@ -14294,8 +14294,101 @@ async def main_proven_5s_strategy():
     finally:
         await tester.cleanup()
 
-if __name__ == "__main__":
-    import sys
-    # Run the Auto Trading Integration tests as requested
-    result = asyncio.run(main_auto_trading_integration())
-    sys.exit(result)
+    async def check_backend_logs(self):
+        """Check backend logs for Socket.IO handshake sequence"""
+        try:
+            print("   🔍 Checking backend logs for Socket.IO handshake sequence...")
+            
+            # Check supervisor backend logs
+            import subprocess
+            result = subprocess.run(['tail', '-n', '100', '/var/log/supervisor/backend.err.log'], 
+                                  capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                logs = result.stdout
+                
+                # Look for Socket.IO handshake indicators
+                handshake_indicators = [
+                    'Engine.IO OPEN',
+                    'Socket.IO CONNECT',
+                    '40',  # Socket.IO namespace connect packet
+                    'auth',
+                    'WebSocket',
+                    'handshake'
+                ]
+                
+                found_indicators = []
+                for indicator in handshake_indicators:
+                    if indicator.lower() in logs.lower():
+                        found_indicators.append(indicator)
+                
+                if found_indicators:
+                    print(f"   ✅ Found Socket.IO handshake indicators: {found_indicators}")
+                else:
+                    print("   ℹ️ No specific Socket.IO handshake indicators found in recent logs")
+                
+                # Look for connection attempts
+                if 'pocket option' in logs.lower() or 'websocket' in logs.lower():
+                    print("   ✅ Found Pocket Option/WebSocket connection attempts in logs")
+                else:
+                    print("   ℹ️ No Pocket Option connection attempts found in recent logs")
+                    
+            else:
+                print("   ⚠️ Could not read backend logs")
+                
+        except Exception as e:
+            print(f"   ⚠️ Error checking backend logs: {e}")
+
+async def run_socket_io_handshake_tests():
+    """Run specific tests for Socket.IO handshake fixes as requested in review"""
+    tester = BackendTester()
+    
+    try:
+        await tester.setup()
+        
+        print("🚀 Testing Pocket Option Auto Trading Integration - Socket.IO Handshake Fixes")
+        print("=" * 80)
+        
+        # Specific tests mentioned in the review request
+        tests = [
+            ("Auto-Trade Status Endpoint", tester.test_auto_trade_status_endpoint),
+            ("Auto-Trade Connect Endpoint", tester.test_auto_trade_connect_endpoint),
+            ("Auto-Trade Settings Endpoint", tester.test_auto_trade_settings_endpoint),
+            ("Bridge Script Endpoint", tester.test_bridge_script_endpoint),
+            ("Bridge Status Endpoint", tester.test_bridge_status_endpoint),
+            ("Latency Settings GET Endpoint", tester.test_latency_settings_get_endpoint),
+            ("Latency Settings Extended Range", tester.test_latency_settings_extended_range),
+        ]
+        
+        passed = 0
+        total = len(tests)
+        
+        for test_name, test_func in tests:
+            success = await tester.run_test(test_name, test_func)
+            if success:
+                passed += 1
+        
+        print("\n" + "=" * 80)
+        print(f"🏁 Socket.IO Handshake Testing Complete: {passed}/{total} tests passed")
+        
+        if tester.failed_tests:
+            print(f"\n❌ Failed Tests ({len(tester.failed_tests)}):")
+            for failed_test in tester.failed_tests:
+                print(f"   - {failed_test}")
+        else:
+            print("\n🎉 All Socket.IO handshake tests passed!")
+        
+        print(f"\n📊 Success Rate: {(passed/total)*100:.1f}%")
+        
+        # Check backend logs for Socket.IO handshake sequence
+        print("\n🔍 Checking backend logs for Socket.IO handshake sequence...")
+        await tester.check_backend_logs()
+        
+        return passed, total, tester.failed_tests
+        
+    finally:
+        await tester.cleanup()
+
+async def main():
+    """Main test runner - run Socket.IO handshake tests"""
+    return await run_socket_io_handshake_tests()
