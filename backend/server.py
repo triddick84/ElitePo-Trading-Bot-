@@ -2084,17 +2084,17 @@ async def update_latency_settings(latency_offset: float):
     Update user latency adjustment offset
     
     Args:
-        latency_offset: Latency offset in seconds (-10 to +10)
-            - Negative values: signals arrive earlier
-            - Positive values: signals arrive later
+        latency_offset: Latency offset in seconds (-30 to +30)
+            - Negative values: signals arrive earlier (for early entry)
+            - Positive values: signals arrive later (for confirmation)
             - 0: automatic timing (default)
     """
     try:
-        # Validate range
-        if latency_offset < -10 or latency_offset > 10:
+        # Validate extended range (-30 to +30)
+        if latency_offset < -30 or latency_offset > 30:
             raise HTTPException(
                 status_code=400,
-                detail="Latency offset must be between -10 and +10 seconds"
+                detail="Latency offset must be between -30 and +30 seconds"
             )
         
         # Update latency optimizer with new offset
