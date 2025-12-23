@@ -1,16 +1,14 @@
 """
-Pocket Option Auto Trading Integration
-======================================
-Integrates Pocket_Option_v4 WebSocket API with our AI Signal Generation system
-for fully automated trading execution.
+Pocket Option Auto Trading Integration - Stable Version
+========================================================
+Integrates with Pocket Option WebSocket API for automated trading.
 
-Features:
-- WebSocket connection to Pocket Option
-- SSID-based authentication with auto-detection of Demo/Real
-- Automatic trade execution based on AI signals
-- Real-time balance tracking
-- Trade history and statistics
-- Integration with Telegram notifications
+Key improvements:
+- Proper Socket.IO protocol handling
+- Auto-reconnection with exponential backoff
+- Heartbeat/ping management
+- Connection state monitoring
+- Graceful error recovery
 
 Based on: https://github.com/Rufus011/Pocket_Option_v4
 """
@@ -20,7 +18,6 @@ import json
 import time
 import asyncio
 import logging
-import threading
 import websockets
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Callable, Any
@@ -32,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# GLOBAL VALUES (Similar to Pocket_Option_v4 global_value.py)
+# GLOBAL VALUES
 # =============================================================================
 
 class GlobalState:
@@ -80,6 +77,16 @@ class TradeStatus(Enum):
     LOSE = "lose"
     DRAW = "draw"
     CANCELLED = "cancelled"
+
+
+class ConnectionState(Enum):
+    DISCONNECTED = "disconnected"
+    CONNECTING = "connecting"
+    CONNECTED = "connected"
+    AUTHENTICATING = "authenticating"
+    AUTHENTICATED = "authenticated"
+    RECONNECTING = "reconnecting"
+    ERROR = "error"
 
 
 @dataclass
@@ -134,7 +141,7 @@ class TradingStats:
             self.total_profit += trade.profit
         elif trade.status == TradeStatus.LOSE:
             self.losses += 1
-            self.total_profit += trade.profit  # Will be negative
+            self.total_profit += trade.profit
         else:
             self.draws += 1
         
@@ -153,79 +160,117 @@ class TradingStats:
 
 
 # =============================================================================
-# WEBSOCKET CLIENT
+# STABLE WEBSOCKET CLIENT
 # =============================================================================
 
 class PocketOptionWebSocket:
     """
-    WebSocket client for Pocket Option API
-    Based on Pocket_Option_v4 implementation
+    Stable WebSocket client for Pocket Option API
+    With proper Socket.IO protocol handling and auto-reconnection
     """
     
     # WebSocket URLs
     DEMO_WS_URL = "wss://demo-api-eu.po.market/socket.io/?EIO=4&transport=websocket"
     REAL_WS_URL = "wss://api-l.po.market/socket.io/?EIO=4&transport=websocket"
     
+    # Socket.IO protocol constants
+    PACKET_OPEN = '0'
+    PACKET_CLOSE = '1'
+    PACKET_PING = '2'
+    PACKET_PONG = '3'
+    PACKET_MESSAGE = '4'
+    PACKET_UPGRADE = '5'
+    PACKET_NOOP = '6'
+    
     def __init__(self, ssid: str):
-        """
-        Initialize WebSocket client
-        
-        Args:
-            ssid: SSID authentication string
-        """
+        """Initialize WebSocket client"""
         self.ssid = ssid
         self.is_demo = self._parse_demo_status(ssid)
         self.ws_url = self.DEMO_WS_URL if self.is_demo else self.REAL_WS_URL
         
         self.websocket: Optional[websockets.WebSocketClientProtocol] = None
+        self.connection_state = ConnectionState.DISCONNECTED
         self.is_connected = False
         self.is_authenticated = False
+        
+        # Reconnection settings
+        self.auto_reconnect = True
+        self.reconnect_attempts = 0
+        self.max_reconnect_attempts = 10
+        self.reconnect_delay = 2  # Start with 2 seconds
+        self.max_reconnect_delay = 60  # Max 60 seconds
+        
+        # Heartbeat settings
+        self.ping_interval = 25  # Send ping every 25 seconds
+        self.ping_timeout = 60
+        self.last_ping_time = None
+        self.last_pong_time = None
         
         # Callbacks
         self.on_message_callback: Optional[Callable] = None
         self.on_balance_update: Optional[Callable] = None
         self.on_order_update: Optional[Callable] = None
         self.on_candle_update: Optional[Callable] = None
+        self.on_connection_change: Optional[Callable] = None
         
         # State
         self.balance = 0.0
         self.balance_id = None
         self.pending_orders: Dict[str, TradeOrder] = {}
-        self.message_queue = asyncio.Queue()
         
-        # Keep-alive
-        self._ping_task: Optional[asyncio.Task] = None
+        # Tasks
         self._receive_task: Optional[asyncio.Task] = None
+        self._ping_task: Optional[asyncio.Task] = None
+        self._reconnect_task: Optional[asyncio.Task] = None
+        
+        # Message tracking
+        self.message_id = 0
+        self.pending_responses: Dict[str, asyncio.Future] = {}
         
         logger.info(f"🔧 PocketOptionWebSocket initialized ({'Demo' if self.is_demo else 'Real'} mode)")
     
     def _parse_demo_status(self, ssid: str) -> bool:
-        """
-        Parse SSID to determine if it's a demo account
-        
-        Args:
-            ssid: SSID string like '42["auth",{"session":"...","isDemo":1...}]'
-        
-        Returns:
-            True for demo account, False for real account
-        """
+        """Parse SSID to determine if it's a demo account"""
         try:
             if '["auth",' in ssid:
                 json_part = ssid.split('["auth",', 1)[1].strip(']')
                 data = json.loads(json_part)
-                return bool(data.get('isDemo', 0))
-            return True  # Default to demo for safety
+                return bool(data.get('isDemo', 1))
+            return True
+        except:
+            return True
+    
+    def _set_connection_state(self, state: ConnectionState):
+        """Update connection state and notify"""
+        old_state = self.connection_state
+        self.connection_state = state
+        
+        self.is_connected = state in [ConnectionState.CONNECTED, ConnectionState.AUTHENTICATED]
+        global_state.websocket_is_connected = self.is_connected
+        
+        if old_state != state:
+            logger.info(f"🔄 Connection state: {old_state.value} → {state.value}")
+            if self.on_connection_change:
+                asyncio.create_task(self._safe_callback(self.on_connection_change, state))
+    
+    async def _safe_callback(self, callback, *args):
+        """Safely execute a callback"""
+        try:
+            if asyncio.iscoroutinefunction(callback):
+                await callback(*args)
+            else:
+                callback(*args)
         except Exception as e:
-            logger.error(f"Error parsing SSID: {e}")
-            return True  # Default to demo for safety
+            logger.error(f"Callback error: {e}")
     
     async def connect(self) -> bool:
-        """
-        Establish WebSocket connection
+        """Establish WebSocket connection with proper Socket.IO handshake"""
+        if self.connection_state in [ConnectionState.CONNECTING, ConnectionState.CONNECTED]:
+            logger.warning("Already connecting/connected")
+            return self.is_connected
         
-        Returns:
-            True if connected successfully
-        """
+        self._set_connection_state(ConnectionState.CONNECTING)
+        
         try:
             logger.info(f"🔌 Connecting to {self.ws_url}...")
             
@@ -235,59 +280,63 @@ class PocketOptionWebSocket:
             ssl_context.check_hostname = False
             ssl_context.verify_mode = ssl.CERT_NONE
             
-            # Use websockets.connect with SSL and timeout
+            # Connect with proper settings
             self.websocket = await asyncio.wait_for(
                 websockets.connect(
                     self.ws_url,
                     ssl=ssl_context,
                     additional_headers={
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
                         "Origin": "https://po.trade",
-                        "Accept-Language": "en-US,en;q=0.9"
                     },
-                    ping_interval=25,
-                    ping_timeout=60,
+                    ping_interval=None,  # We handle pings manually
+                    ping_timeout=None,
                     close_timeout=10,
-                    max_size=2**24  # 16MB max message size
+                    max_size=2**24
                 ),
                 timeout=15.0
             )
             
-            self.is_connected = True
-            global_state.websocket_is_connected = True
+            self._set_connection_state(ConnectionState.CONNECTED)
             
             # Start receive loop
             self._receive_task = asyncio.create_task(self._receive_loop())
             
-            # Wait for initial handshake
-            await asyncio.sleep(2)
+            # Wait for Socket.IO open packet
+            await asyncio.sleep(0.5)
+            
+            # Start ping task
+            self._ping_task = asyncio.create_task(self._ping_loop())
             
             # Authenticate
+            self._set_connection_state(ConnectionState.AUTHENTICATING)
             await self._authenticate()
+            
+            self._set_connection_state(ConnectionState.AUTHENTICATED)
+            self.reconnect_attempts = 0
+            self.reconnect_delay = 2
             
             logger.info("✅ WebSocket connected and authenticated")
             return True
             
         except asyncio.TimeoutError:
-            logger.error("❌ Connection timeout - server may be unreachable")
-            self.is_connected = False
+            logger.error("❌ Connection timeout")
+            self._set_connection_state(ConnectionState.ERROR)
+            await self._schedule_reconnect()
             return False
         except Exception as e:
             logger.error(f"❌ Connection failed: {e}")
-            import traceback
-            traceback.print_exc()
-            self.is_connected = False
+            self._set_connection_state(ConnectionState.ERROR)
+            await self._schedule_reconnect()
             return False
     
     async def _authenticate(self):
-        """Send authentication message with SSID"""
+        """Send authentication message"""
         try:
-            # Format SSID properly for Pocket Option
-            # If SSID is just the session token, wrap it in the auth message format
+            # Format SSID properly
             if self.ssid.startswith('42["auth"'):
                 auth_message = self.ssid
             else:
-                # Create proper auth message format
                 auth_data = {
                     "session": self.ssid,
                     "isDemo": 1 if self.is_demo else 0,
@@ -297,7 +346,6 @@ class PocketOptionWebSocket:
                 auth_message = f'42["auth",{json.dumps(auth_data)}]'
             
             await self.websocket.send(auth_message)
-            
             self.is_authenticated = True
             global_state.SSID = self.ssid
             global_state.DEMO = self.is_demo
@@ -310,65 +358,123 @@ class PocketOptionWebSocket:
     
     async def _receive_loop(self):
         """Background task to receive messages"""
-        while self.is_connected:
+        logger.info("📡 Receive loop started")
+        
+        while self.connection_state not in [ConnectionState.DISCONNECTED, ConnectionState.ERROR]:
             try:
-                if self.websocket is None:
+                if self.websocket is None or self.websocket.closed:
+                    logger.warning("WebSocket closed in receive loop")
                     break
-                    
-                message = await self.websocket.recv()
+                
+                message = await asyncio.wait_for(
+                    self.websocket.recv(),
+                    timeout=self.ping_timeout + 10
+                )
                 await self._handle_message(message)
                 
-            except websockets.ConnectionClosed:
-                logger.warning("⚠️ WebSocket connection closed")
-                self.is_connected = False
+            except asyncio.TimeoutError:
+                logger.warning("⏰ Receive timeout - sending ping")
+                await self._send_ping()
+            except websockets.ConnectionClosed as e:
+                logger.warning(f"⚠️ WebSocket closed: {e.code} - {e.reason}")
                 break
             except Exception as e:
                 logger.error(f"Receive error: {e}")
                 await asyncio.sleep(0.1)
+        
+        logger.info("📡 Receive loop ended")
+        self._set_connection_state(ConnectionState.DISCONNECTED)
+        await self._schedule_reconnect()
+    
+    async def _ping_loop(self):
+        """Send periodic pings to keep connection alive"""
+        logger.info("💓 Ping loop started")
+        
+        while self.connection_state in [ConnectionState.CONNECTED, ConnectionState.AUTHENTICATING, ConnectionState.AUTHENTICATED]:
+            try:
+                await asyncio.sleep(self.ping_interval)
+                await self._send_ping()
+            except Exception as e:
+                logger.error(f"Ping error: {e}")
+                break
+        
+        logger.info("💓 Ping loop ended")
+    
+    async def _send_ping(self):
+        """Send Socket.IO ping packet"""
+        try:
+            if self.websocket and not self.websocket.closed:
+                await self.websocket.send(self.PACKET_PING)
+                self.last_ping_time = time.time()
+                logger.debug("💓 Ping sent")
+        except Exception as e:
+            logger.error(f"Failed to send ping: {e}")
     
     async def _handle_message(self, message: str):
-        """
-        Handle incoming WebSocket message
-        
-        Args:
-            message: Raw message string
-        """
+        """Handle incoming WebSocket message with Socket.IO protocol"""
         try:
-            # Handle Socket.IO protocol messages
-            if message.startswith('0'):
-                # Connection established
-                logger.debug("Socket.IO connection established")
+            if not message:
                 return
-            elif message.startswith('2'):
-                # Ping - respond with pong
-                await self.websocket.send('3')
+            
+            packet_type = message[0] if message else ''
+            
+            # Socket.IO protocol handling
+            if packet_type == self.PACKET_OPEN:
+                # Connection established - parse settings
+                try:
+                    settings = json.loads(message[1:])
+                    self.ping_interval = settings.get('pingInterval', 25000) / 1000
+                    self.ping_timeout = settings.get('pingTimeout', 60000) / 1000
+                    logger.info(f"📡 Socket.IO connected (ping: {self.ping_interval}s, timeout: {self.ping_timeout}s)")
+                except:
+                    pass
                 return
-            elif message.startswith('3'):
-                # Pong response
+            
+            elif packet_type == self.PACKET_CLOSE:
+                logger.warning("🔒 Server requested close")
                 return
-            elif message.startswith('40'):
-                # Namespace connection
-                logger.debug("Namespace connected")
+            
+            elif packet_type == self.PACKET_PING:
+                # Server ping - respond with pong
+                await self.websocket.send(self.PACKET_PONG)
+                logger.debug("💓 Pong sent (server ping)")
                 return
-            elif message.startswith('42'):
-                # Event message
-                await self._handle_event(message[2:])
+            
+            elif packet_type == self.PACKET_PONG:
+                # Pong response to our ping
+                self.last_pong_time = time.time()
+                logger.debug("💓 Pong received")
+                return
+            
+            elif packet_type == self.PACKET_MESSAGE:
+                # Socket.IO message - parse event
+                await self._handle_socketio_message(message[1:])
+                return
+            
+            elif packet_type == self.PACKET_NOOP:
+                return
+            
+            # Handle non-standard messages
+            if message.startswith('42'):
+                await self._handle_socketio_message(message[2:])
             elif message.startswith('43'):
-                # Ack message
                 await self._handle_ack(message[2:])
                 
         except Exception as e:
             logger.error(f"Message handling error: {e}")
     
-    async def _handle_event(self, data: str):
+    async def _handle_socketio_message(self, data: str):
         """Handle Socket.IO event message"""
         try:
+            if not data or data == '':
+                return
+                
             event_data = json.loads(data)
-            if not isinstance(event_data, list) or len(event_data) < 2:
+            if not isinstance(event_data, list) or len(event_data) < 1:
                 return
             
             event_name = event_data[0]
-            event_payload = event_data[1]
+            event_payload = event_data[1] if len(event_data) > 1 else {}
             
             logger.debug(f"📩 Event: {event_name}")
             
@@ -382,27 +488,25 @@ class PocketOptionWebSocket:
             elif event_name == 'deals':
                 await self._handle_deals(event_payload)
             elif event_name == 'successauth':
-                logger.info("✅ Successfully authenticated")
+                logger.info("✅ Successfully authenticated by server")
                 self.is_authenticated = True
+            elif event_name == 'auth':
+                logger.info("🔐 Auth event received")
             elif event_name == 'error':
                 logger.error(f"❌ Server error: {event_payload}")
             
-            # Call custom callback if set
+            # Custom callback
             if self.on_message_callback:
-                await self.on_message_callback(event_name, event_payload)
+                await self._safe_callback(self.on_message_callback, event_name, event_payload)
                 
         except json.JSONDecodeError:
-            logger.warning(f"Invalid JSON in event: {data[:100]}")
+            logger.debug(f"Non-JSON message: {data[:100]}")
         except Exception as e:
             logger.error(f"Event handling error: {e}")
     
     async def _handle_ack(self, data: str):
-        """Handle Socket.IO acknowledgment message"""
-        try:
-            # Ack format: id[data]
-            pass
-        except Exception as e:
-            logger.error(f"Ack handling error: {e}")
+        """Handle Socket.IO acknowledgment"""
+        pass
     
     async def _handle_balance_update(self, data: Dict):
         """Handle balance update event"""
@@ -414,19 +518,19 @@ class PocketOptionWebSocket:
             global_state.balance_id = self.balance_id
             global_state.balance_updated = True
             
-            logger.info(f"💰 Balance updated: ${self.balance:.2f}")
+            logger.info(f"💰 Balance: ${self.balance:.2f}")
             
             if self.on_balance_update:
-                await self.on_balance_update(self.balance)
+                await self._safe_callback(self.on_balance_update, self.balance)
                 
         except Exception as e:
             logger.error(f"Balance update error: {e}")
     
     async def _handle_stream_update(self, data: Dict):
-        """Handle real-time price stream update"""
+        """Handle real-time price stream"""
         try:
             if self.on_candle_update:
-                await self.on_candle_update(data)
+                await self._safe_callback(self.on_candle_update, data)
         except Exception as e:
             logger.error(f"Stream update error: {e}")
     
@@ -438,17 +542,15 @@ class PocketOptionWebSocket:
             error = data.get('error')
             
             global_state.order_data = data
-            global_state.result = result
+            global_state.result = not error
             
             if error:
                 logger.error(f"❌ Order error: {error}")
-                global_state.result = False
             else:
                 logger.info(f"✅ Order placed: {order_id}")
-                global_state.result = True
             
             if self.on_order_update:
-                await self.on_order_update(data)
+                await self._safe_callback(self.on_order_update, data)
                 
         except Exception as e:
             logger.error(f"Order result error: {e}")
@@ -472,15 +574,29 @@ class PocketOptionWebSocket:
         except Exception as e:
             logger.error(f"Deals handling error: {e}")
     
-    async def send_message(self, event: str, data: Any):
-        """
-        Send a message to the WebSocket server
+    async def _schedule_reconnect(self):
+        """Schedule reconnection with exponential backoff"""
+        if not self.auto_reconnect:
+            return
         
-        Args:
-            event: Event name
-            data: Event data
-        """
-        if not self.is_connected or self.websocket is None:
+        if self.reconnect_attempts >= self.max_reconnect_attempts:
+            logger.error(f"❌ Max reconnection attempts ({self.max_reconnect_attempts}) reached")
+            return
+        
+        self._set_connection_state(ConnectionState.RECONNECTING)
+        self.reconnect_attempts += 1
+        
+        delay = min(self.reconnect_delay * (2 ** (self.reconnect_attempts - 1)), self.max_reconnect_delay)
+        logger.info(f"🔄 Reconnecting in {delay}s (attempt {self.reconnect_attempts}/{self.max_reconnect_attempts})")
+        
+        await asyncio.sleep(delay)
+        
+        if self.connection_state == ConnectionState.RECONNECTING:
+            await self.connect()
+    
+    async def send_message(self, event: str, data: Any) -> bool:
+        """Send a Socket.IO message"""
+        if not self.is_connected or self.websocket is None or self.websocket.closed:
             logger.error("❌ Cannot send - not connected")
             return False
         
@@ -495,18 +611,7 @@ class PocketOptionWebSocket:
     
     async def place_order(self, symbol: str, direction: TradeDirection, 
                           amount: float, expiration: int) -> Optional[str]:
-        """
-        Place a trading order
-        
-        Args:
-            symbol: Asset symbol (e.g., "EURUSD_otc")
-            direction: Trade direction (CALL/PUT)
-            amount: Trade amount
-            expiration: Expiration time in seconds
-        
-        Returns:
-            Order ID if successful, None otherwise
-        """
+        """Place a trading order"""
         try:
             request_id = f"order_{int(time.time() * 1000)}"
             
@@ -520,17 +625,15 @@ class PocketOptionWebSocket:
                 "time": expiration
             }
             
-            # Reset global state for this order
             global_state.order_data = None
             global_state.result = None
             
-            # Send order
             await self.send_message("openOrder", order_data)
             
-            # Wait for response with timeout
+            # Wait for response
             start_time = time.time()
             while global_state.result is None:
-                if time.time() - start_time > 5:
+                if time.time() - start_time > 10:
                     logger.error("⏰ Order timeout")
                     return None
                 await asyncio.sleep(0.1)
@@ -538,7 +641,6 @@ class PocketOptionWebSocket:
             if global_state.result:
                 order_id = global_state.order_data.get('id')
                 
-                # Track the order
                 order = TradeOrder(
                     id=order_id,
                     symbol=symbol,
@@ -552,7 +654,7 @@ class PocketOptionWebSocket:
                 logger.info(f"✅ Order placed: {order_id}")
                 return order_id
             else:
-                error = global_state.order_data.get('error', 'Unknown error')
+                error = global_state.order_data.get('error', 'Unknown error') if global_state.order_data else 'No response'
                 logger.error(f"❌ Order failed: {error}")
                 return None
                 
@@ -562,24 +664,32 @@ class PocketOptionWebSocket:
     
     async def disconnect(self):
         """Disconnect from WebSocket"""
-        self.is_connected = False
+        self.auto_reconnect = False
+        self._set_connection_state(ConnectionState.DISCONNECTED)
         
-        if self._receive_task:
-            self._receive_task.cancel()
+        # Cancel tasks
+        for task in [self._receive_task, self._ping_task, self._reconnect_task]:
+            if task:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
         
+        # Close websocket
         if self.websocket:
-            await self.websocket.close()
-            
-        global_state.websocket_is_connected = False
+            try:
+                await self.websocket.close()
+            except:
+                pass
+        
         logger.info("🔌 WebSocket disconnected")
     
     def get_balance(self) -> float:
-        """Get current balance"""
         return self.balance
     
     def is_ready(self) -> bool:
-        """Check if client is ready for trading"""
-        return self.is_connected and self.is_authenticated
+        return self.connection_state == ConnectionState.AUTHENTICATED
 
 
 # =============================================================================
@@ -587,9 +697,7 @@ class PocketOptionWebSocket:
 # =============================================================================
 
 class AutoTradingService:
-    """
-    Automated trading service that integrates AI signals with Pocket Option
-    """
+    """Automated trading service with stable connection management"""
     
     def __init__(self):
         self.ws_client: Optional[PocketOptionWebSocket] = None
@@ -612,25 +720,23 @@ class AutoTradingService:
         # Callbacks
         self.on_trade_executed: Optional[Callable] = None
         self.on_trade_result: Optional[Callable] = None
+        self.on_connection_change: Optional[Callable] = None
         
         logger.info("🤖 AutoTradingService initialized")
     
     async def connect(self, ssid: str) -> bool:
-        """
-        Connect to Pocket Option
-        
-        Args:
-            ssid: SSID authentication string
-        
-        Returns:
-            True if connected successfully
-        """
+        """Connect to Pocket Option"""
         try:
+            # Disconnect existing connection
+            if self.ws_client:
+                await self.ws_client.disconnect()
+            
             self.ws_client = PocketOptionWebSocket(ssid)
             
             # Set callbacks
             self.ws_client.on_order_update = self._on_order_update
             self.ws_client.on_balance_update = self._on_balance_update
+            self.ws_client.on_connection_change = self._on_connection_change
             
             success = await self.ws_client.connect()
             
@@ -654,27 +760,34 @@ class AutoTradingService:
         
         logger.info("🛑 AutoTradingService disconnected")
     
+    async def _on_connection_change(self, state: ConnectionState):
+        """Handle connection state changes"""
+        logger.info(f"🔄 Connection state changed: {state.value}")
+        
+        self.is_running = state == ConnectionState.AUTHENTICATED
+        
+        if self.on_connection_change:
+            try:
+                await self.on_connection_change(state)
+            except:
+                pass
+    
     async def _on_order_update(self, data: Dict):
-        """Handle order update from WebSocket"""
+        """Handle order update"""
         try:
             order_id = data.get('id')
             profit = data.get('profit')
             
             if order_id and profit is not None:
-                # Find and update the trade
                 for trade in self.trade_history:
                     if trade.id == order_id:
                         trade.profit = profit
                         trade.status = TradeStatus.WIN if profit > 0 else TradeStatus.LOSE
                         trade.closed_at = datetime.now(timezone.utc)
-                        
-                        # Update stats
                         self.stats.update(trade)
                         
-                        # Call callback
                         if self.on_trade_result:
                             await self.on_trade_result(trade)
-                        
                         break
         except Exception as e:
             logger.error(f"Order update error: {e}")
@@ -684,25 +797,14 @@ class AutoTradingService:
         logger.info(f"💰 Balance: ${balance:.2f}")
     
     def _can_trade(self) -> bool:
-        """Check if we can place a new trade (rate limiting)"""
+        """Check rate limiting"""
         now = time.time()
-        
-        # Remove old trades from recent_trades
         while self.recent_trades and now - self.recent_trades[0] > 60:
             self.recent_trades.popleft()
-        
         return len(self.recent_trades) < self.max_trades_per_minute
     
     async def execute_signal(self, signal: Dict) -> Optional[TradeOrder]:
-        """
-        Execute a trading signal
-        
-        Args:
-            signal: Signal dictionary with symbol, direction, probability, etc.
-        
-        Returns:
-            TradeOrder if executed, None otherwise
-        """
+        """Execute a trading signal"""
         if not self.is_running or not self.ws_client or not self.ws_client.is_ready():
             logger.warning("⚠️ Not ready to trade")
             return None
@@ -712,7 +814,6 @@ class AutoTradingService:
             return None
         
         try:
-            # Extract signal info
             symbol = signal.get('symbol', signal.get('asset', 'EURUSD_otc'))
             direction_str = signal.get('direction', 'CALL').upper()
             probability = signal.get('probability', signal.get('confidence', 0))
@@ -721,33 +822,20 @@ class AutoTradingService:
             strategy = signal.get('strategy', signal.get('strategy_used', 'AI'))
             signal_id = signal.get('id', signal.get('signal_id', ''))
             
-            # Validate probability
             if probability < self.min_probability:
                 logger.info(f"⏭️ Signal skipped - low probability: {probability}%")
                 return None
             
-            # Parse direction
-            if direction_str in ['CALL', 'BUY', 'UP']:
-                direction = TradeDirection.CALL
-            else:
-                direction = TradeDirection.PUT
+            direction = TradeDirection.CALL if direction_str in ['CALL', 'BUY', 'UP'] else TradeDirection.PUT
             
-            # Normalize symbol
             if not symbol.endswith('_otc') and '_otc' not in symbol.lower():
                 symbol = f"{symbol}_otc"
             
-            logger.info(f"🎯 Executing signal: {symbol} {direction.value} ${amount} ({probability}%)")
+            logger.info(f"🎯 Executing: {symbol} {direction.value} ${amount} ({probability}%)")
             
-            # Place order
-            order_id = await self.ws_client.place_order(
-                symbol=symbol,
-                direction=direction,
-                amount=amount,
-                expiration=expiration
-            )
+            order_id = await self.ws_client.place_order(symbol, direction, amount, expiration)
             
             if order_id:
-                # Create trade record
                 trade = TradeOrder(
                     id=order_id,
                     symbol=symbol,
@@ -762,7 +850,6 @@ class AutoTradingService:
                 self.trade_history.append(trade)
                 self.recent_trades.append(time.time())
                 
-                # Call callback
                 if self.on_trade_executed:
                     await self.on_trade_executed(trade)
                 
@@ -777,25 +864,24 @@ class AutoTradingService:
             return None
     
     def enable_auto_trade(self, enabled: bool = True):
-        """Enable or disable auto trading"""
         self.is_auto_trade_enabled = enabled
         logger.info(f"🤖 Auto-trade {'enabled' if enabled else 'disabled'}")
     
     def set_trade_amount(self, amount: float):
-        """Set default trade amount"""
         self.default_amount = max(1.0, amount)
-        logger.info(f"💵 Trade amount set to ${self.default_amount}")
+        logger.info(f"💵 Trade amount: ${self.default_amount}")
     
     def set_min_probability(self, probability: float):
-        """Set minimum probability threshold"""
         self.min_probability = max(0, min(100, probability))
-        logger.info(f"📊 Min probability set to {self.min_probability}%")
+        logger.info(f"📊 Min probability: {self.min_probability}%")
     
     def get_status(self) -> Dict:
-        """Get service status"""
+        connection_state = self.ws_client.connection_state.value if self.ws_client else 'disconnected'
+        
         return {
             'is_running': self.is_running,
             'is_connected': self.ws_client.is_ready() if self.ws_client else False,
+            'connection_state': connection_state,
             'is_auto_trade_enabled': self.is_auto_trade_enabled,
             'is_demo': self.ws_client.is_demo if self.ws_client else True,
             'balance': self.ws_client.get_balance() if self.ws_client else 0,
@@ -803,11 +889,11 @@ class AutoTradingService:
             'min_probability': self.min_probability,
             'max_trades_per_minute': self.max_trades_per_minute,
             'stats': self.stats.to_dict(),
-            'recent_trades_count': len(self.recent_trades)
+            'recent_trades_count': len(self.recent_trades),
+            'reconnect_attempts': self.ws_client.reconnect_attempts if self.ws_client else 0
         }
     
     def get_trade_history(self, limit: int = 50) -> List[Dict]:
-        """Get recent trade history"""
         return [t.to_dict() for t in self.trade_history[-limit:]]
 
 
@@ -819,7 +905,7 @@ _auto_trading_service: Optional[AutoTradingService] = None
 
 
 def get_auto_trading_service() -> AutoTradingService:
-    """Get the global auto trading service instance"""
+    """Get global auto trading service instance"""
     global _auto_trading_service
     if _auto_trading_service is None:
         _auto_trading_service = AutoTradingService()
