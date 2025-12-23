@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 sys.path.append('/app/backend')
 
 # Test configuration
-BACKEND_URL = "https://tradingbot-dash-11.preview.emergentagent.com/api"
+BACKEND_URL = "https://signalhub-16.preview.emergentagent.com/api"
 
 class ClearAllRestartTester:
     def __init__(self):
