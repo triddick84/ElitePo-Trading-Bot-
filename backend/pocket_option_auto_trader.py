@@ -229,9 +229,10 @@ class PocketOptionWebSocket:
         try:
             logger.info(f"🔌 Connecting to {self.ws_url}...")
             
+            # Use websockets.connect with compatible parameters
             self.websocket = await websockets.connect(
                 self.ws_url,
-                extra_headers={
+                additional_headers={
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
                 },
                 ping_interval=25,
