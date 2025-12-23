@@ -13614,6 +13614,18 @@ class BackendTester:
         for test_name, test_func in bridge_tests:
             await self.run_test(test_name, test_func)
         
+        # Run Latency Slider Enhancement tests
+        print("\n⏱️ RUNNING LATENCY SLIDER ENHANCEMENT TESTS (PRIORITY 1E)")
+        print("=" * 55)
+        for test_name, test_func in latency_tests:
+            await self.run_test(test_name, test_func)
+        
+        # Run Bridge Script v2.0 tests
+        print("\n🌉 RUNNING BRIDGE SCRIPT V2.0 TESTS (PRIORITY 1F)")
+        print("=" * 50)
+        for test_name, test_func in bridge_v2_tests:
+            await self.run_test(test_name, test_func)
+        
         # Run PROVEN 5s strategy tests
         print("\n🎯 RUNNING PROVEN 5-SECOND HIGH-ACCURACY STRATEGY TESTS (PRIORITY 1A)")
         print("=" * 60)
