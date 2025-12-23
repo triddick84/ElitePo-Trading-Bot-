@@ -13619,6 +13619,6 @@ async def main_proven_5s_strategy():
 
 if __name__ == "__main__":
     import sys
-    # Run the PROVEN 5s Strategy tests as requested
-    result = asyncio.run(main_proven_5s_strategy())
+    # Run the Auto Trading Integration tests as requested
+    result = asyncio.run(main_auto_trading_integration())
     sys.exit(result)
