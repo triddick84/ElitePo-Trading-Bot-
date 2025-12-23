@@ -59,6 +59,11 @@ from telegram_signal_notifier import (
     TelegramSignalNotifier, get_telegram_notifier,
     initialize_telegram_notifier, shutdown_telegram_notifier
 )
+# Import Auto Trading Service
+from pocket_option_auto_trader import (
+    get_auto_trading_service, initialize_auto_trading, 
+    shutdown_auto_trading, TradeDirection
+)
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
