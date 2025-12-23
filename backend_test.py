@@ -14392,3 +14392,6 @@ async def run_socket_io_handshake_tests():
 async def main():
     """Main test runner - run Socket.IO handshake tests"""
     return await run_socket_io_handshake_tests()
+
+if __name__ == "__main__":
+    asyncio.run(main())
