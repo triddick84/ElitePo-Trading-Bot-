@@ -295,3 +295,28 @@ The user should run the auto-trading component on their LOCAL machine where they
 2. Have a valid session SSID
 3. Not be blocked by IP restrictions
 
+
+## Latency Slider Enhancement & Bridge Script v2.0
+
+### Latency Slider Enhancements:
+- **Range Extended**: -30s to +30s (was -10s to +10s)
+- **Step Size**: 0.5s for precise control
+- **Preset Buttons**: Fast (-5s), Normal (0s), Delayed (+5s), Conservative (+10s), Aggressive (-10s)
+- **Quick Adjust Buttons**: -5s, -1s, Reset, +1s, +5s
+- **Color Coding**: Different colors for different ranges (red for very early, yellow for very late)
+- **Descriptive Labels**: Clear explanations for each timing range
+
+### Bridge Script v2.0 Features:
+- **SSID Auto-Extraction**: From localStorage, cookies, and WebSocket auth messages
+- **Balance Monitoring**: Real-time balance tracking from UI elements  
+- **Auto-Reconnection**: Up to 10 reconnect attempts
+- **Better Error Handling**: Detailed logging with color-coded messages
+- **Multiple Domain Support**: pocketoption.com, pocket2.click, po.market, po.trade
+- **WebSocket Interception**: Hooks into both existing and new connections
+- **Heartbeat System**: 5-second keepalive with status reporting
+
+### New Bridge API Endpoints:
+- POST /api/bridge/ssid-update - Receive SSID from bridge
+- POST /api/bridge/balance-update - Receive balance updates
+- POST /api/bridge/disconnected - Handle disconnection events
+
