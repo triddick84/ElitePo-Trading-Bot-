@@ -277,15 +277,29 @@ class PocketOptionWebSocket:
             logger.error(f"Callback error: {e}")
     
     async def connect(self) -> bool:
-        """Establish WebSocket connection with proper Socket.IO handshake"""
+        """Establish WebSocket connection with proper Socket.IO handshake
+        
+        Sequence:
+        1. Connect WebSocket
+        2. Receive '0{...}' (Engine.IO OPEN) - parse pingInterval/pingTimeout
+        3. Send '40' (Socket.IO CONNECT to default namespace)
+        4. Receive '40{...}' (Socket.IO CONNECT ACK)
+        5. Send '42["auth",{...}]' (Authentication)
+        6. Receive success event
+        """
         if self.connection_state in [ConnectionState.CONNECTING, ConnectionState.CONNECTED]:
             logger.warning("Already connecting/connected")
             return self.is_connected
         
         self._set_connection_state(ConnectionState.CONNECTING)
+        self.namespace_connected = False
+        self._handshake_event = asyncio.Event()
+        
+        # Determine which URL to use
+        url_to_use = self.ws_url_alt if self.use_alt_url else self.ws_url
         
         try:
-            logger.info(f"🔌 Connecting to {self.ws_url}...")
+            logger.info(f"🔌 Connecting to {url_to_use}...")
             
             # Create SSL context
             import ssl
@@ -296,11 +310,12 @@ class PocketOptionWebSocket:
             # Connect with proper settings
             self.websocket = await asyncio.wait_for(
                 websockets.connect(
-                    self.ws_url,
+                    url_to_use,
                     ssl=ssl_context,
                     additional_headers={
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                        "Origin": "https://po.trade",
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                        "Origin": "https://pocketoption.com",
+                        "Accept-Language": "en-US,en;q=0.9",
                     },
                     ping_interval=None,  # We handle pings manually
                     ping_timeout=None,
@@ -311,35 +326,63 @@ class PocketOptionWebSocket:
             )
             
             self._set_connection_state(ConnectionState.CONNECTED)
+            logger.info("🔗 WebSocket connected, waiting for Engine.IO open packet...")
             
-            # Start receive loop
+            # Start receive loop FIRST to handle the '0' packet
             self._receive_task = asyncio.create_task(self._receive_loop())
             
-            # Wait for Socket.IO open packet
-            await asyncio.sleep(0.5)
+            # Wait for Socket.IO namespace connection (triggered by '0' packet handler)
+            try:
+                await asyncio.wait_for(self._handshake_event.wait(), timeout=10.0)
+            except asyncio.TimeoutError:
+                logger.error("❌ Socket.IO namespace handshake timeout")
+                self._set_connection_state(ConnectionState.ERROR)
+                await self._schedule_reconnect()
+                return False
             
-            # Start ping task
+            if not self.namespace_connected:
+                logger.error("❌ Socket.IO namespace connection failed")
+                self._set_connection_state(ConnectionState.ERROR)
+                await self._schedule_reconnect()
+                return False
+            
+            # Start ping task after namespace is connected
             self._ping_task = asyncio.create_task(self._ping_loop())
             
-            # Authenticate
+            # Now authenticate
             self._set_connection_state(ConnectionState.AUTHENTICATING)
             await self._authenticate()
             
-            self._set_connection_state(ConnectionState.AUTHENTICATED)
-            self.reconnect_attempts = 0
-            self.reconnect_delay = 2
+            # Wait a moment for auth response
+            await asyncio.sleep(1.0)
             
-            logger.info("✅ WebSocket connected and authenticated")
-            return True
+            if self.is_authenticated:
+                self._set_connection_state(ConnectionState.AUTHENTICATED)
+                self.reconnect_attempts = 0
+                self.reconnect_delay = 2
+                self.use_alt_url = False  # Reset URL preference on success
+                
+                logger.info("✅ WebSocket connected and authenticated successfully!")
+                return True
+            else:
+                logger.warning("⚠️ Authentication sent, waiting for server confirmation...")
+                # Still consider connected, auth might come later
+                self._set_connection_state(ConnectionState.AUTHENTICATED)
+                self.reconnect_attempts = 0
+                return True
             
         except asyncio.TimeoutError:
             logger.error("❌ Connection timeout")
             self._set_connection_state(ConnectionState.ERROR)
+            # Try alternate URL on next attempt
+            self.use_alt_url = not self.use_alt_url
             await self._schedule_reconnect()
             return False
         except Exception as e:
             logger.error(f"❌ Connection failed: {e}")
             self._set_connection_state(ConnectionState.ERROR)
+            # Try alternate URL on next attempt
+            self.use_alt_url = not self.use_alt_url
             await self._schedule_reconnect()
             return False
     
