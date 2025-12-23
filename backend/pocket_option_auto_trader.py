@@ -193,11 +193,18 @@ class PocketOptionWebSocket:
         self.ssid = ssid
         self.is_demo = self._parse_demo_status(ssid)
         self.ws_url = self.DEMO_WS_URL if self.is_demo else self.REAL_WS_URL
+        self.ws_url_alt = self.DEMO_WS_URL_ALT  # Fallback URL
+        self.use_alt_url = False  # Track which URL is being used
         
         self.websocket: Optional[websockets.WebSocketClientProtocol] = None
         self.connection_state = ConnectionState.DISCONNECTED
         self.is_connected = False
         self.is_authenticated = False
+        
+        # Socket.IO handshake state
+        self.socket_io_sid = None  # Server-assigned session ID
+        self.namespace_connected = False  # Track if '40' handshake completed
+        self._handshake_event = None  # Event to wait for namespace connection
         
         # Reconnection settings
         self.auto_reconnect = True
@@ -206,8 +213,8 @@ class PocketOptionWebSocket:
         self.reconnect_delay = 2  # Start with 2 seconds
         self.max_reconnect_delay = 60  # Max 60 seconds
         
-        # Heartbeat settings
-        self.ping_interval = 25  # Send ping every 25 seconds
+        # Heartbeat settings - will be updated from server open packet
+        self.ping_interval = 25  # Default 25 seconds, updated from server
         self.ping_timeout = 60
         self.last_ping_time = None
         self.last_pong_time = None
