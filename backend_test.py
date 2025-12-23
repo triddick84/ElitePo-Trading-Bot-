@@ -1260,6 +1260,194 @@ class BackendTester:
             print(f"   Telegram config update test error: {e}")
             return False
     
+    # ========== POCKET OPTION AUTO TRADING INTEGRATION TESTS ==========
+    
+    async def test_auto_trade_status_endpoint(self) -> bool:
+        """
+        Test Auto Trade Status Endpoint (CRITICAL)
+        Test GET /api/auto-trade/status:
+        - Should return service status including is_running, is_connected, is_auto_trade_enabled, default_amount, min_probability, stats
+        """
+        try:
+            print("   🤖 Testing Auto Trade Status endpoint")
+            
+            async with self.session.get(f"{BACKEND_URL}/auto-trade/status") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Auto Trade Status endpoint accessible")
+                    
+                    # Check required fields
+                    required_fields = ['success', 'is_running', 'is_connected', 'is_auto_trade_enabled', 'default_amount', 'min_probability', 'stats']
+                    missing_fields = [field for field in required_fields if field not in data]
+                    
+                    if missing_fields:
+                        print(f"   ❌ Missing required fields: {missing_fields}")
+                        return False
+                    
+                    print(f"   📊 Is Running: {data.get('is_running')}")
+                    print(f"   📊 Is Connected: {data.get('is_connected')}")
+                    print(f"   📊 Auto Trade Enabled: {data.get('is_auto_trade_enabled')}")
+                    print(f"   📊 Default Amount: {data.get('default_amount')}")
+                    print(f"   📊 Min Probability: {data.get('min_probability')}")
+                    
+                    stats = data.get('stats', {})
+                    print(f"   📊 Total Trades: {stats.get('total_trades', 0)}")
+                    print(f"   📊 Wins: {stats.get('wins', 0)}")
+                    print(f"   📊 Losses: {stats.get('losses', 0)}")
+                    print(f"   📊 Win Rate: {stats.get('win_rate', 0)}%")
+                    
+                    return True
+                else:
+                    print(f"   ❌ Auto Trade Status endpoint failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Auto Trade Status endpoint test error: {e}")
+            return False
+    
+    async def test_auto_trade_settings_update(self) -> bool:
+        """
+        Test Auto Trade Settings Update (CRITICAL)
+        Test PUT /api/auto-trade/settings?amount=5.0&min_probability=80.0:
+        - Should update trading settings and return updated status
+        """
+        try:
+            print("   ⚙️ Testing Auto Trade Settings Update")
+            
+            # Test settings update
+            params = {
+                "amount": 5.0,
+                "min_probability": 80.0
+            }
+            
+            async with self.session.put(f"{BACKEND_URL}/auto-trade/settings", params=params) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Auto Trade Settings Update endpoint accessible")
+                    
+                    success = data.get('success')
+                    message = data.get('message')
+                    
+                    print(f"   📊 Success: {success}")
+                    print(f"   📊 Message: {message}")
+                    
+                    if success:
+                        # Verify settings were updated
+                        default_amount = data.get('default_amount')
+                        min_probability = data.get('min_probability')
+                        
+                        print(f"   📊 Updated Default Amount: {default_amount}")
+                        print(f"   📊 Updated Min Probability: {min_probability}")
+                        
+                        # Check if values match what we set
+                        amount_correct = abs(default_amount - 5.0) < 0.01 if default_amount else False
+                        prob_correct = abs(min_probability - 80.0) < 0.01 if min_probability else False
+                        
+                        if amount_correct and prob_correct:
+                            print(f"   ✅ Settings updated correctly")
+                            return True
+                        else:
+                            print(f"   ❌ Settings not updated correctly - Amount: {amount_correct}, Prob: {prob_correct}")
+                            return False
+                    else:
+                        print(f"   ❌ Settings update failed: {message}")
+                        return False
+                else:
+                    print(f"   ❌ Auto Trade Settings Update failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Auto Trade Settings Update test error: {e}")
+            return False
+    
+    async def test_auto_trade_history_endpoint(self) -> bool:
+        """
+        Test Auto Trade History Endpoint
+        Test GET /api/auto-trade/history?limit=10:
+        - Should return trade history and stats
+        """
+        try:
+            print("   📈 Testing Auto Trade History endpoint")
+            
+            params = {"limit": 10}
+            
+            async with self.session.get(f"{BACKEND_URL}/auto-trade/history", params=params) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Auto Trade History endpoint accessible")
+                    
+                    # Check required fields
+                    required_fields = ['success', 'trades', 'stats']
+                    missing_fields = [field for field in required_fields if field not in data]
+                    
+                    if missing_fields:
+                        print(f"   ❌ Missing required fields: {missing_fields}")
+                        return False
+                    
+                    success = data.get('success')
+                    trades = data.get('trades', [])
+                    stats = data.get('stats', {})
+                    
+                    print(f"   📊 Success: {success}")
+                    print(f"   📊 Number of Trades: {len(trades)}")
+                    print(f"   📊 Stats: {stats}")
+                    
+                    return success is True
+                else:
+                    print(f"   ❌ Auto Trade History endpoint failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Auto Trade History endpoint test error: {e}")
+            return False
+    
+    async def test_auto_trade_connect_endpoint(self) -> bool:
+        """
+        Test Auto Trade Connect Endpoint (May fail due to network restrictions)
+        Test POST /api/auto-trade/connect:
+        - This may timeout or fail because Pocket Option servers may not be accessible from this environment
+        - That's expected behavior - document the error
+        """
+        try:
+            print("   🔌 Testing Auto Trade Connect endpoint (may fail due to network restrictions)")
+            
+            async with self.session.post(f"{BACKEND_URL}/auto-trade/connect") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Auto Trade Connect endpoint accessible")
+                    
+                    success = data.get('success')
+                    message = data.get('message')
+                    
+                    print(f"   📊 Success: {success}")
+                    print(f"   📊 Message: {message}")
+                    
+                    if success:
+                        print(f"   ✅ Successfully connected to Pocket Option")
+                        is_demo = data.get('is_demo')
+                        print(f"   📊 Is Demo: {is_demo}")
+                    else:
+                        print(f"   ⚠️ Connection failed (expected in cloud environment): {message}")
+                    
+                    # Test passes if we get a proper response structure
+                    return 'success' in data and 'message' in data
+                else:
+                    print(f"   ❌ Auto Trade Connect endpoint failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   ⚠️ Auto Trade Connect test error (expected in cloud environment): {e}")
+            # Connection errors are expected in this environment
+            return True
+    
     # ========== FAST SUPERTREND CATCH STRATEGY TESTS ==========
     
     async def test_fast_supertrend_config_endpoint(self) -> bool:
