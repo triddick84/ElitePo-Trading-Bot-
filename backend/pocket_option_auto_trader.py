@@ -261,8 +261,13 @@ class PocketOptionWebSocket:
         self.is_connected = state in [ConnectionState.CONNECTED, ConnectionState.AUTHENTICATED]
         global_state.websocket_is_connected = self.is_connected
         
+        # Reset namespace state on disconnect
+        if state == ConnectionState.DISCONNECTED:
+            self.namespace_connected = False
+            self.is_authenticated = False
+        
         if old_state != state:
-            logger.info(f"🔄 Connection state: {old_state.value} → {state.value}")
+            logger.info(f"🔄 Connection state changed: {state.value}")
             if self.on_connection_change:
                 asyncio.create_task(self._safe_callback(self.on_connection_change, state))
     
