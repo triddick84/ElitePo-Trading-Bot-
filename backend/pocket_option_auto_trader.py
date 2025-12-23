@@ -626,12 +626,13 @@ class PocketOptionWebSocket:
         except Exception as e:
             logger.error(f"Namespace connect error: {e}")
     
-    async def _handle_socketio_message(self, data: str):
-        """Handle Socket.IO event message"""
+    async def _handle_socketio_event(self, data: str):
+        """Handle Socket.IO event message (42["eventName", data])"""
         try:
             if not data or data == '':
                 return
-                
+            
+            # Parse JSON array
             event_data = json.loads(data)
             if not isinstance(event_data, list) or len(event_data) < 1:
                 return
@@ -651,19 +652,24 @@ class PocketOptionWebSocket:
             elif event_name == 'deals':
                 await self._handle_deals(event_payload)
             elif event_name == 'successauth':
-                logger.info("✅ Successfully authenticated by server")
+                logger.info("✅ Authentication successful (successauth event)")
                 self.is_authenticated = True
             elif event_name == 'auth':
                 logger.info("🔐 Auth event received")
             elif event_name == 'error':
                 logger.error(f"❌ Server error: {event_payload}")
+            elif event_name == 'timeSync':
+                # Server time synchronization
+                logger.debug(f"⏰ Time sync: {event_payload}")
+            elif event_name == 'candle':
+                await self._handle_stream_update(event_payload)
             
             # Custom callback
             if self.on_message_callback:
                 await self._safe_callback(self.on_message_callback, event_name, event_payload)
                 
         except json.JSONDecodeError:
-            logger.debug(f"Non-JSON message: {data[:100]}")
+            logger.debug(f"Non-JSON event data: {data[:100]}")
         except Exception as e:
             logger.error(f"Event handling error: {e}")
     
