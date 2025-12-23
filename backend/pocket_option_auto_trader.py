@@ -625,8 +625,23 @@ class PocketOptionWebSocket:
     
     async def send_message(self, event: str, data: Any) -> bool:
         """Send a Socket.IO message"""
-        if not self.is_connected or self.websocket is None or self.websocket.closed:
+        if not self.is_connected or self.websocket is None:
             logger.error("❌ Cannot send - not connected")
+            return False
+        
+        # Check if websocket is still open
+        is_open = True
+        try:
+            if hasattr(self.websocket, 'closed'):
+                is_open = not self.websocket.closed
+            elif hasattr(self.websocket, 'state'):
+                import websockets.protocol
+                is_open = self.websocket.state != websockets.protocol.State.CLOSED
+        except:
+            pass
+        
+        if not is_open:
+            logger.error("❌ Cannot send - websocket closed")
             return False
         
         try:
