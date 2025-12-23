@@ -701,13 +701,40 @@ const PocketOptionSettings = () => {
                   <span className="text-2xl">🌐</span>
                   <div>
                     <p className="text-white font-medium">WebSocket</p>
-                    <p className="text-xs text-slate-400">Direct API connection</p>
+                    <p className="text-xs text-slate-400">
+                      {connectionState === 'reconnecting' ? 'Reconnecting...' : 'Direct API connection'}
+                    </p>
                   </div>
                 </div>
-                <span className={autoTradeStatus?.is_connected ? 'text-emerald-400' : 'text-red-400'}>
-                  {autoTradeStatus?.is_connected ? '🟢 Connected' : '🔴 Offline'}
-                </span>
+                <div className="text-right">
+                  <span className={
+                    connectionState === 'authenticated' ? 'text-emerald-400' :
+                    connectionState === 'reconnecting' ? 'text-orange-400 animate-pulse' :
+                    connectionState === 'connecting' ? 'text-yellow-400 animate-pulse' :
+                    'text-red-400'
+                  }>
+                    {connectionState === 'authenticated' ? '🟢 Connected' :
+                     connectionState === 'reconnecting' ? '🟠 Reconnecting' :
+                     connectionState === 'connecting' ? '🟡 Connecting' :
+                     '🔴 Offline'}
+                  </span>
+                  {autoTradeStatus?.reconnect_attempts > 0 && (
+                    <p className="text-xs text-orange-400">
+                      Attempt {autoTradeStatus.reconnect_attempts}
+                    </p>
+                  )}
+                </div>
               </div>
+              
+              {/* Connection Tips */}
+              {connectionState === 'reconnecting' && (
+                <div className="p-3 bg-orange-900/20 border border-orange-500/30 rounded-lg">
+                  <p className="text-xs text-orange-300">
+                    💡 <strong>Tip:</strong> For best stability, use the <strong>Browser Bridge</strong> method. 
+                    Click "How to Use Bridge Script" below.
+                  </p>
+                </div>
+              )}
               
               {/* Bridge Connection */}
               <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg">
