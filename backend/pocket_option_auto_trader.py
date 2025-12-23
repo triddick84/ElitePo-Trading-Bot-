@@ -503,7 +503,7 @@ class PocketOptionWebSocket:
         except Exception as e:
             logger.error(f"Failed to send ping: {e}")
     
-    async def _handle_message(self, message: str):
+    async def _handle_message(self, message):
         """Handle incoming WebSocket message with Socket.IO protocol
         
         Engine.IO packet types:
@@ -523,6 +523,10 @@ class PocketOptionWebSocket:
         try:
             if not message:
                 return
+            
+            # Ensure we're working with a string
+            if isinstance(message, bytes):
+                message = message.decode('utf-8')
             
             packet_type = message[0] if message else ''
             
