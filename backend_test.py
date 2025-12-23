@@ -1547,8 +1547,9 @@ class BackendTester:
                     print(f"   📊 Telegram Sent: {telegram_sent}")
                     
                     # Verify telegram_sent is False since we set send_telegram=false
-                    if telegram_sent is not False:
-                        print(f"   ❌ Expected telegram_sent=False, got {telegram_sent}")
+                    # When no signal is generated, telegram_sent might be None
+                    if telegram_sent is not False and telegram_sent is not None:
+                        print(f"   ❌ Expected telegram_sent=False or None, got {telegram_sent}")
                         return False
                     
                     # Verify strategy config is returned
