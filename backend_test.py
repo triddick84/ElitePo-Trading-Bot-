@@ -13087,6 +13087,300 @@ class BackendTester:
             print(f"   ❌ 1M timeframe SELL bias fix test error: {e}")
             return False
 
+    # ========== LATENCY SLIDER ENHANCEMENT TESTS ==========
+    
+    async def test_latency_settings_get(self) -> bool:
+        """
+        Test Latency Settings GET Endpoint
+        Test GET /api/latency/settings:
+        - Should return current latency offset
+        """
+        try:
+            print("   ⏱️ Testing latency settings GET endpoint")
+            
+            async with self.session.get(f"{BACKEND_URL}/latency/settings") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Latency settings GET endpoint accessible")
+                    
+                    # Check required fields
+                    required_fields = ['success', 'latency_offset']
+                    missing_fields = [field for field in required_fields if field not in data]
+                    
+                    if missing_fields:
+                        print(f"   ❌ Missing required fields: {missing_fields}")
+                        return False
+                    
+                    latency_offset = data.get('latency_offset')
+                    print(f"   📊 Current Latency Offset: {latency_offset}s")
+                    
+                    return True
+                else:
+                    print(f"   ❌ Latency settings GET failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Latency settings GET test error: {e}")
+            return False
+    
+    async def test_latency_settings_extended_range(self) -> bool:
+        """
+        Test Latency Settings Extended Range
+        Test PUT /api/latency/settings with extended range (-30 to +30):
+        - Should accept values up to ±30 seconds
+        - Should reject values outside this range
+        """
+        try:
+            print("   ⏱️ Testing latency settings extended range")
+            
+            # Test cases: [value, should_succeed]
+            test_cases = [
+                (15.0, True),   # Within new extended range
+                (-25.0, True),  # Within new extended negative range
+                (0, True),      # Reset to default
+                (30.0, True),   # Maximum positive
+                (-30.0, True),  # Maximum negative
+                (35.0, False),  # Should fail - outside range
+                (-35.0, False)  # Should fail - outside range
+            ]
+            
+            all_tests_passed = True
+            
+            for latency_offset, should_succeed in test_cases:
+                print(f"   Testing latency offset: {latency_offset}s (should {'succeed' if should_succeed else 'fail'})")
+                
+                async with self.session.put(f"{BACKEND_URL}/latency/settings?latency_offset={latency_offset}") as response:
+                    if should_succeed:
+                        if response.status == 200:
+                            data = await response.json()
+                            print(f"   ✅ Latency offset {latency_offset}s accepted")
+                            print(f"   📊 Response: {data.get('message')}")
+                        else:
+                            print(f"   ❌ Expected success but got status {response.status} for {latency_offset}s")
+                            all_tests_passed = False
+                    else:
+                        if response.status == 400:
+                            print(f"   ✅ Latency offset {latency_offset}s correctly rejected")
+                        else:
+                            print(f"   ❌ Expected 400 error but got status {response.status} for {latency_offset}s")
+                            all_tests_passed = False
+            
+            return all_tests_passed
+                    
+        except Exception as e:
+            print(f"   Latency settings extended range test error: {e}")
+            return False
+    
+    # ========== BRIDGE SCRIPT V2.0 TESTS ==========
+    
+    async def test_bridge_script_v2_endpoint(self) -> bool:
+        """
+        Test Bridge Script v2.0 Endpoint
+        Test GET /api/bridge/script:
+        - Should return enhanced v2.0 script with SSID extraction, balance monitoring, heartbeat system
+        """
+        try:
+            print("   🌉 Testing bridge script v2.0 endpoint")
+            
+            async with self.session.get(f"{BACKEND_URL}/bridge/script") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Bridge script endpoint accessible")
+                    
+                    script = data.get('script', '')
+                    version = data.get('version', '')
+                    
+                    print(f"   📊 Script Version: {version}")
+                    print(f"   📊 Script Length: {len(script)} characters")
+                    
+                    # Check for v2.0 features in the script
+                    v2_features = [
+                        'SSID extraction',
+                        'balance monitoring', 
+                        'heartbeat',
+                        'multiple domain support',
+                        'WebSocket interception'
+                    ]
+                    
+                    features_found = []
+                    for feature in v2_features:
+                        # Check for keywords related to each feature
+                        if feature == 'SSID extraction' and ('ssid' in script.lower() or 'localStorage' in script):
+                            features_found.append(feature)
+                        elif feature == 'balance monitoring' and 'balance' in script.lower():
+                            features_found.append(feature)
+                        elif feature == 'heartbeat' and 'heartbeat' in script.lower():
+                            features_found.append(feature)
+                        elif feature == 'multiple domain support' and ('pocketoption.com' in script or 'po.market' in script):
+                            features_found.append(feature)
+                        elif feature == 'WebSocket interception' and 'WebSocket' in script:
+                            features_found.append(feature)
+                    
+                    print(f"   📊 v2.0 Features Found: {len(features_found)}/{len(v2_features)}")
+                    for feature in features_found:
+                        print(f"   ✅ {feature}")
+                    
+                    # Test passes if script is returned and has v2.0 features
+                    return len(script) > 1000 and len(features_found) >= 3
+                else:
+                    print(f"   ❌ Bridge script endpoint failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Bridge script v2.0 test error: {e}")
+            return False
+    
+    async def test_bridge_ssid_update_endpoint(self) -> bool:
+        """
+        Test Bridge SSID Update Endpoint
+        Test POST /api/bridge/ssid-update:
+        - Should accept SSID updates from bridge script
+        """
+        try:
+            print("   🔑 Testing bridge SSID update endpoint")
+            
+            test_data = {
+                "ssid": "test_ssid_12345",
+                "isDemo": True
+            }
+            
+            async with self.session.post(f"{BACKEND_URL}/bridge/ssid-update", json=test_data) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Bridge SSID update endpoint accessible")
+                    
+                    success = data.get('success')
+                    message = data.get('message', '')
+                    
+                    print(f"   📊 Success: {success}")
+                    print(f"   📊 Message: {message}")
+                    
+                    return success is True
+                else:
+                    print(f"   ❌ Bridge SSID update failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Bridge SSID update test error: {e}")
+            return False
+    
+    async def test_bridge_balance_update_endpoint(self) -> bool:
+        """
+        Test Bridge Balance Update Endpoint
+        Test POST /api/bridge/balance-update:
+        - Should accept balance updates from bridge script
+        """
+        try:
+            print("   💰 Testing bridge balance update endpoint")
+            
+            test_data = {
+                "balance": 1000.00,
+                "isDemo": True
+            }
+            
+            async with self.session.post(f"{BACKEND_URL}/bridge/balance-update", json=test_data) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Bridge balance update endpoint accessible")
+                    
+                    success = data.get('success')
+                    message = data.get('message', '')
+                    
+                    print(f"   📊 Success: {success}")
+                    print(f"   📊 Message: {message}")
+                    
+                    return success is True
+                else:
+                    print(f"   ❌ Bridge balance update failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Bridge balance update test error: {e}")
+            return False
+    
+    async def test_bridge_disconnected_endpoint(self) -> bool:
+        """
+        Test Bridge Disconnected Endpoint
+        Test POST /api/bridge/disconnected:
+        - Should handle disconnection events from bridge script
+        """
+        try:
+            print("   🔌 Testing bridge disconnected endpoint")
+            
+            test_data = {
+                "url": "test_url",
+                "code": 1000
+            }
+            
+            async with self.session.post(f"{BACKEND_URL}/bridge/disconnected", json=test_data) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Bridge disconnected endpoint accessible")
+                    
+                    success = data.get('success')
+                    message = data.get('message', '')
+                    
+                    print(f"   📊 Success: {success}")
+                    print(f"   📊 Message: {message}")
+                    
+                    return success is True
+                else:
+                    print(f"   ❌ Bridge disconnected failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Bridge disconnected test error: {e}")
+            return False
+    
+    async def test_bridge_status_v2_endpoint(self) -> bool:
+        """
+        Test Bridge Status v2.0 Endpoint
+        Test GET /api/bridge/status:
+        - Should return enhanced bridge connection status with v2.0 features
+        """
+        try:
+            print("   📊 Testing bridge status v2.0 endpoint")
+            
+            async with self.session.get(f"{BACKEND_URL}/bridge/status") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Bridge status endpoint accessible")
+                    
+                    success = data.get('success')
+                    is_connected = data.get('is_connected')
+                    last_message_time = data.get('last_message_time')
+                    
+                    print(f"   📊 Success: {success}")
+                    print(f"   📊 Is Connected: {is_connected}")
+                    print(f"   📊 Last Message Time: {last_message_time}")
+                    
+                    # Check for additional status fields
+                    if 'connection_status' in data:
+                        conn_status = data['connection_status']
+                        print(f"   📊 Active Connections: {conn_status.get('active_connections', 0)}")
+                        print(f"   📊 SSID Present: {conn_status.get('ssid_present', False)}")
+                    
+                    return success is True
+                else:
+                    print(f"   ❌ Bridge status failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Bridge status test error: {e}")
+            return False
+
     async def run_all_tests(self):
         """Run all backend tests focusing on critical fixes for GPT Signal Bot"""
         print("🚀 Starting Critical Fixes Testing for GPT Signal Bot")
