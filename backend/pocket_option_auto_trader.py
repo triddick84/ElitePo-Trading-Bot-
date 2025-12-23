@@ -263,8 +263,20 @@ class PocketOptionWebSocket:
     async def _authenticate(self):
         """Send authentication message with SSID"""
         try:
-            # Send SSID for authentication
-            auth_message = self.ssid
+            # Format SSID properly for Pocket Option
+            # If SSID is just the session token, wrap it in the auth message format
+            if self.ssid.startswith('42["auth"'):
+                auth_message = self.ssid
+            else:
+                # Create proper auth message format
+                auth_data = {
+                    "session": self.ssid,
+                    "isDemo": 1 if self.is_demo else 0,
+                    "uid": os.getenv('POCKET_OPTION_UID', ''),
+                    "platform": 2
+                }
+                auth_message = f'42["auth",{json.dumps(auth_data)}]'
+            
             await self.websocket.send(auth_message)
             
             self.is_authenticated = True
