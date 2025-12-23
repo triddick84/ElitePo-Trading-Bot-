@@ -167,20 +167,26 @@ class PocketOptionWebSocket:
     """
     Stable WebSocket client for Pocket Option API
     With proper Socket.IO protocol handling and auto-reconnection
+    
+    Socket.IO v4 Handshake Sequence:
+    1. Connect → Receive "0{...}" (Engine.IO OPEN)
+    2. Send "40" → Receive "40{...}" (Socket.IO CONNECT to namespace)
+    3. Send '42["auth",{...}]' → Receive "41" or success event
     """
     
-    # WebSocket URLs
-    DEMO_WS_URL = "wss://demo-api-eu.po.market/socket.io/?EIO=4&transport=websocket"
+    # WebSocket URLs - Use different servers for better stability
+    DEMO_WS_URL = "wss://api-c.po.market/socket.io/?EIO=4&transport=websocket"  # OTC/Demo
+    DEMO_WS_URL_ALT = "wss://demo-api-eu.po.market/socket.io/?EIO=4&transport=websocket"
     REAL_WS_URL = "wss://api-l.po.market/socket.io/?EIO=4&transport=websocket"
     
-    # Socket.IO protocol constants
-    PACKET_OPEN = '0'
-    PACKET_CLOSE = '1'
-    PACKET_PING = '2'
-    PACKET_PONG = '3'
-    PACKET_MESSAGE = '4'
-    PACKET_UPGRADE = '5'
-    PACKET_NOOP = '6'
+    # Socket.IO Engine.IO protocol constants
+    PACKET_OPEN = '0'      # Engine.IO open
+    PACKET_CLOSE = '1'     # Engine.IO close
+    PACKET_PING = '2'      # Engine.IO ping
+    PACKET_PONG = '3'      # Engine.IO pong
+    PACKET_MESSAGE = '4'   # Engine.IO message (Socket.IO packet)
+    PACKET_UPGRADE = '5'   # Engine.IO upgrade
+    PACKET_NOOP = '6'      # Engine.IO noop
     
     def __init__(self, ssid: str):
         """Initialize WebSocket client"""
