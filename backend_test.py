@@ -1306,6 +1306,297 @@ class BackendTester:
         except Exception as e:
             print(f"   Auto Trade Status endpoint test error: {e}")
             return False
+
+    async def test_auto_trade_connect_endpoint(self) -> bool:
+        """
+        Test Auto Trade Connect Endpoint
+        Test POST /api/auto-trade/connect:
+        - Should attempt connection to Pocket Option WebSocket
+        - Check backend logs for Socket.IO handshake sequence
+        """
+        try:
+            print("   🔗 Testing Auto Trade Connect endpoint")
+            
+            async with self.session.post(f"{BACKEND_URL}/auto-trade/connect") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Auto Trade Connect endpoint accessible")
+                    
+                    success = data.get('success')
+                    message = data.get('message', '')
+                    
+                    print(f"   📊 Success: {success}")
+                    print(f"   📊 Message: {message}")
+                    
+                    # Connection may fail due to network restrictions, but endpoint should work
+                    if success:
+                        print(f"   ✅ Connection attempt successful")
+                    else:
+                        print(f"   ⚠️ Connection failed (expected in cloud environment): {message}")
+                    
+                    # Test passes if we get a proper response structure
+                    return 'success' in data and 'message' in data
+                else:
+                    print(f"   ❌ Auto Trade Connect endpoint failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Auto Trade Connect endpoint test error: {e}")
+            return False
+
+    async def test_auto_trade_settings_endpoint(self) -> bool:
+        """
+        Test Auto Trade Settings Endpoint
+        Test PUT /api/auto-trade/settings:
+        - Test updating trade amount to 5.0
+        - Test updating min_probability to 80.0
+        - Verify settings persist
+        """
+        try:
+            print("   ⚙️ Testing Auto Trade Settings endpoint")
+            
+            # Test updating settings
+            params = {
+                'amount': 5.0,
+                'min_probability': 80.0
+            }
+            
+            async with self.session.put(f"{BACKEND_URL}/auto-trade/settings", params=params) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Auto Trade Settings endpoint accessible")
+                    
+                    success = data.get('success')
+                    message = data.get('message', '')
+                    
+                    print(f"   📊 Success: {success}")
+                    print(f"   📊 Message: {message}")
+                    
+                    if success:
+                        # Verify settings by checking status
+                        async with self.session.get(f"{BACKEND_URL}/auto-trade/status") as status_response:
+                            if status_response.status == 200:
+                                status_data = await status_response.json()
+                                
+                                default_amount = status_data.get('default_amount')
+                                min_probability = status_data.get('min_probability')
+                                
+                                print(f"   📊 Updated Default Amount: {default_amount}")
+                                print(f"   📊 Updated Min Probability: {min_probability}")
+                                
+                                # Verify settings were updated
+                                amount_updated = default_amount == 5.0
+                                probability_updated = min_probability == 80.0
+                                
+                                if amount_updated and probability_updated:
+                                    print(f"   ✅ Settings updated and persisted correctly")
+                                    return True
+                                else:
+                                    print(f"   ❌ Settings not updated correctly")
+                                    return False
+                            else:
+                                print(f"   ❌ Could not verify settings update")
+                                return False
+                    else:
+                        print(f"   ❌ Settings update failed: {message}")
+                        return False
+                else:
+                    print(f"   ❌ Auto Trade Settings endpoint failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Auto Trade Settings endpoint test error: {e}")
+            return False
+
+    async def test_bridge_script_endpoint(self) -> bool:
+        """
+        Test Bridge Script Endpoint
+        Test GET /api/bridge/script:
+        - Verify the script is returned
+        - Check script length > 10000 characters
+        - Verify v2.0 features are present
+        """
+        try:
+            print("   🌉 Testing Bridge Script endpoint")
+            
+            async with self.session.get(f"{BACKEND_URL}/bridge/script") as response:
+                if response.status == 200:
+                    script_content = await response.text()
+                    print(f"   ✅ Bridge Script endpoint accessible")
+                    
+                    script_length = len(script_content)
+                    print(f"   📊 Script Length: {script_length} characters")
+                    
+                    # Check minimum length requirement
+                    if script_length > 10000:
+                        print(f"   ✅ Script length meets requirement (>10000 chars)")
+                    else:
+                        print(f"   ❌ Script too short: {script_length} chars")
+                        return False
+                    
+                    # Check for v2.0 features
+                    v2_features = [
+                        'SSID extraction',
+                        'balance monitoring', 
+                        'heartbeat',
+                        'pocketoption.com',
+                        'po.market'
+                    ]
+                    
+                    features_found = 0
+                    for feature in v2_features:
+                        if feature.lower() in script_content.lower():
+                            features_found += 1
+                            print(f"   ✅ v2.0 feature found: {feature}")
+                        else:
+                            print(f"   ⚠️ v2.0 feature not found: {feature}")
+                    
+                    print(f"   📊 v2.0 features found: {features_found}/{len(v2_features)}")
+                    
+                    # Test passes if script is long enough and has most v2.0 features
+                    return script_length > 10000 and features_found >= 3
+                else:
+                    print(f"   ❌ Bridge Script endpoint failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Bridge Script endpoint test error: {e}")
+            return False
+
+    async def test_bridge_status_endpoint(self) -> bool:
+        """
+        Test Bridge Status Endpoint
+        Test GET /api/bridge/status:
+        - Check is_connected status
+        - Verify last_message_time field
+        """
+        try:
+            print("   🌉 Testing Bridge Status endpoint")
+            
+            async with self.session.get(f"{BACKEND_URL}/bridge/status") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Bridge Status endpoint accessible")
+                    
+                    # Check required fields
+                    required_fields = ['success', 'is_connected', 'last_message_time']
+                    missing_fields = [field for field in required_fields if field not in data]
+                    
+                    if missing_fields:
+                        print(f"   ❌ Missing required fields: {missing_fields}")
+                        return False
+                    
+                    print(f"   📊 Success: {data.get('success')}")
+                    print(f"   📊 Is Connected: {data.get('is_connected')}")
+                    print(f"   📊 Last Message Time: {data.get('last_message_time')}")
+                    
+                    return True
+                else:
+                    print(f"   ❌ Bridge Status endpoint failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Bridge Status endpoint test error: {e}")
+            return False
+
+    async def test_latency_settings_extended_range(self) -> bool:
+        """
+        Test Latency Settings Extended Range
+        Test PUT /api/latency/settings:
+        - Test setting latency to 15.0 (should succeed - extended range)
+        - Test setting latency to -25.0 (should succeed - extended range)
+        - Test setting latency to 35.0 (should fail - outside range)
+        - Test setting latency to 0 (reset)
+        """
+        try:
+            print("   ⏱️ Testing Latency Settings Extended Range")
+            
+            # Test cases: (value, should_succeed, description)
+            test_cases = [
+                (15.0, True, "positive extended range"),
+                (-25.0, True, "negative extended range"),
+                (0, True, "reset to default"),
+                (35.0, False, "outside positive range"),
+                (-35.0, False, "outside negative range")
+            ]
+            
+            all_tests_passed = True
+            
+            for latency_value, should_succeed, description in test_cases:
+                print(f"   🧪 Testing latency {latency_value}s ({description})")
+                
+                params = {'latency_offset': latency_value}
+                
+                async with self.session.put(f"{BACKEND_URL}/latency/settings", params=params) as response:
+                    if should_succeed:
+                        if response.status == 200:
+                            data = await response.json()
+                            success = data.get('success')
+                            if success:
+                                print(f"   ✅ {latency_value}s accepted as expected")
+                            else:
+                                print(f"   ❌ {latency_value}s rejected unexpectedly: {data.get('message')}")
+                                all_tests_passed = False
+                        else:
+                            print(f"   ❌ {latency_value}s rejected unexpectedly: {response.status}")
+                            all_tests_passed = False
+                    else:
+                        if response.status == 400:
+                            error_data = await response.json()
+                            print(f"   ✅ {latency_value}s correctly rejected: {error_data.get('detail', 'Bad Request')}")
+                        else:
+                            print(f"   ❌ {latency_value}s should have been rejected but got: {response.status}")
+                            all_tests_passed = False
+            
+            return all_tests_passed
+                    
+        except Exception as e:
+            print(f"   Latency Settings Extended Range test error: {e}")
+            return False
+
+    async def test_latency_settings_get_endpoint(self) -> bool:
+        """
+        Test Latency Settings GET Endpoint
+        Test GET /api/latency/settings:
+        - Verify it returns current latency offset
+        """
+        try:
+            print("   ⏱️ Testing Latency Settings GET endpoint")
+            
+            async with self.session.get(f"{BACKEND_URL}/latency/settings") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Latency Settings GET endpoint accessible")
+                    
+                    # Check required fields
+                    required_fields = ['success', 'latency_offset']
+                    missing_fields = [field for field in required_fields if field not in data]
+                    
+                    if missing_fields:
+                        print(f"   ❌ Missing required fields: {missing_fields}")
+                        return False
+                    
+                    print(f"   📊 Success: {data.get('success')}")
+                    print(f"   📊 Latency Offset: {data.get('latency_offset')}s")
+                    
+                    return True
+                else:
+                    print(f"   ❌ Latency Settings GET endpoint failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Latency Settings GET endpoint test error: {e}")
+            return False
     
     async def test_auto_trade_settings_update(self) -> bool:
         """
