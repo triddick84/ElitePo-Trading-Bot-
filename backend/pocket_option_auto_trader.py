@@ -445,6 +445,9 @@ class PocketOptionWebSocket:
                     self.websocket.recv(),
                     timeout=self.ping_timeout + 10
                 )
+                # Ensure message is string (websockets v15+ may return bytes)
+                if isinstance(message, bytes):
+                    message = message.decode('utf-8')
                 await self._handle_message(message)
                 
             except asyncio.TimeoutError:
