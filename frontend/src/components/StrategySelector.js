@@ -42,6 +42,7 @@ const StrategySelector = ({ onStrategySelect, onAutoGenerateToggle }) => {
   // Strategy configurations by timeframe
   const strategiesByTimeframe = {
     '5s': [
+      { value: 'candlestick_bible', name: '📕 Candlestick Bible', accuracy: '72%+', note: 'Pattern recognition at key S/R levels | 2:1 R:R', recommended: true },
       { value: 'fast_supertrend_catch', name: '⚡ Fast Supertrend Catch', accuracy: '85%+', note: 'Supertrend ATR100 + 15 EMA Contrarian | S/R Filter', recommended: true },
       { value: 'enhanced_breakout', name: '🚀 Enhanced Breakout Predictor', accuracy: '80%+', note: '⏳ 10s latency | S/R Levels', recommended: true },
       { value: 'proven_5s', name: '🎯 Proven RSI+Stoch+BB+EMA', accuracy: '80%+', note: '⏳ 10s latency | 4+ confirmations', recommended: true },
@@ -52,12 +53,15 @@ const StrategySelector = ({ onStrategySelect, onAutoGenerateToggle }) => {
       { value: 'stochastic_divergence', name: 'Stochastic Divergence', accuracy: '83%+', note: '⏳ 10s latency applied' }
     ],
     '15s': [
+      { value: 'candlestick_bible', name: '📕 Candlestick Bible', accuracy: '72%+', note: 'Pattern recognition at key S/R levels' },
       { value: 'fractal_15s', name: '15s Fractal Strategy', accuracy: '85%+' }
     ],
     '30s': [
+      { value: 'candlestick_bible', name: '📕 Candlestick Bible', accuracy: '72%+', note: 'Pattern recognition at key S/R levels' },
       { value: 'supertrend_30s', name: '30s Supertrend Strategy', accuracy: '80%+' }
     ],
     '1m': [
+      { value: 'candlestick_bible', name: '📕 Candlestick Bible', accuracy: '72%+', note: 'Engulfing, Hammer, Morning Star, Inside Bar patterns', recommended: true },
       { value: 'rsi_bb_volume', name: 'RSI + BB + Volume', accuracy: '70%+' },
       { value: 'stoch_macd_pattern', name: 'Stochastic + MACD + Pattern', accuracy: '75-80%' },
       { value: 'enhanced_rsi_bb_volume', name: 'Enhanced RSI + BB + Volume V2', accuracy: '85-89%', recommended: true },
@@ -67,15 +71,19 @@ const StrategySelector = ({ onStrategySelect, onAutoGenerateToggle }) => {
       { value: 'triple_confirmation', name: 'RSI + BB + MACD Triple', accuracy: '73-90%' }
     ],
     '2m': [
+      { value: 'candlestick_bible', name: '📕 Candlestick Bible', accuracy: '72%+', note: 'Pattern recognition at key S/R levels' },
       { value: 'multi_layer_2m', name: '2m Multi-Layer Strategy', accuracy: '75%+' }
     ],
     '3m': [
+      { value: 'candlestick_bible', name: '📕 Candlestick Bible', accuracy: '72%+', note: 'Pattern recognition at key S/R levels' },
       { value: 'multi_layer_3m', name: '3m Multi-Layer Strategy', accuracy: '75%+' }
     ],
     '5m': [
+      { value: 'candlestick_bible', name: '📕 Candlestick Bible', accuracy: '72%+', note: 'Pattern recognition at key S/R levels' },
       { value: 'trend_5m', name: '5m Trend Following', accuracy: '80%+' }
     ],
     '15m': [
+      { value: 'candlestick_bible', name: '📕 Candlestick Bible', accuracy: '72%+', note: 'Pattern recognition at key S/R levels' },
       { value: 'swing_15m', name: '15m Swing Trading', accuracy: '80%+' }
     ]
   };
