@@ -157,6 +157,46 @@ const StrategySelector = ({ onStrategySelect, onAutoGenerateToggle }) => {
       callSignal: ['Stochastic < 15 turning up', 'MACD bullish crossover', 'Bullish pattern', 'ADX > 30', '5m bullish', 'Near support/pivot'],
       putSignal: ['Stochastic > 85 turning down', 'MACD bearish crossover', 'Bearish pattern', 'ADX > 30', '5m bearish', 'Near resistance/pivot'],
       tips: ['Need 4+ confirmations', 'Three Black Crows = 84% accuracy', 'Rejection candles +5%', 'Multi-timeframe mandatory']
+    },
+    'candlestick_bible': {
+      name: 'Candlestick Bible Strategy (Based on The Candlestick Trading Bible)',
+      timeframe: 'Multi-timeframe (5s to 15m)',
+      chartType: 'Japanese Candlesticks (Required)',
+      assets: 'All major pairs - EUR/USD, GBP/USD, BTC/USD, etc.',
+      expiry: 'Based on timeframe',
+      accuracy: '65-72% (pattern dependent)',
+      indicators: [
+        { name: 'Candlestick Patterns', settings: 'Automated pattern recognition', purpose: 'Primary signal generator' },
+        { name: 'Support/Resistance', settings: 'Swing high/low detection', purpose: 'Key level confirmation (+15% accuracy)' },
+        { name: 'Trend Analysis', settings: 'Higher highs/lows detection', purpose: 'Trend alignment filter' }
+      ],
+      callSignal: [
+        '📗 Bullish Engulfing at support (68%)',
+        '🔨 Hammer (Pin Bar) at downtrend end (65%)',
+        '⭐ Morning Star (3-candle reversal) (72%)',
+        '🐉 Dragonfly Doji at support (60%)',
+        '🔧 Tweezers Bottom (62%)',
+        '👶 Bullish Harami at bottom (55%)',
+        '📦 Inside Bar Bullish Breakout (65%)'
+      ],
+      putSignal: [
+        '📕 Bearish Engulfing at resistance (68%)',
+        '💫 Shooting Star at uptrend end (65%)',
+        '🌙 Evening Star (3-candle reversal) (72%)',
+        '🪦 Gravestone Doji at resistance (60%)',
+        '🔧 Tweezers Top (62%)',
+        '👶 Bearish Harami at top (55%)',
+        '📦 Inside Bar Bearish Breakout (65%)'
+      ],
+      tips: [
+        '🎯 Trade ONLY at key support/resistance levels for +10-15% accuracy',
+        '📊 Minimum 1:2 risk/reward ratio (TP = 2x Stop Loss)',
+        '🔄 Trade WITH the trend for highest probability',
+        '📕 Morning/Evening Star = Highest accuracy (72%)',
+        '⚠️ Counter-trend patterns need key level confirmation',
+        '🚫 Avoid choppy markets - no clear higher/lower highs/lows',
+        '💡 Pattern at key level + trend alignment = STRONG signal'
+      ]
     }
   };
 
