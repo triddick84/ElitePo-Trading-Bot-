@@ -282,6 +282,24 @@ class ForceSignalGenerator:
                         except asyncio.TimeoutError:
                             logger.warning(f"⚠️ Supporting strategies timeout, skipping for speed")
             
+            # CANDLESTICK BIBLE PATTERN ANALYSIS (Based on The Candlestick Trading Bible)
+            # High-priority pattern recognition with confluence analysis
+            if CANDLESTICK_BIBLE_AVAILABLE and primary_data and len(primary_data) >= 10:
+                try:
+                    candlestick_signal = await asyncio.wait_for(
+                        self._candlestick_bible_analysis(primary_data, symbol),
+                        timeout=1.0  # Fast pattern detection
+                    )
+                    if candlestick_signal:
+                        # High weight for candlestick patterns at key levels
+                        weight = 0.35 if candlestick_signal.get('at_key_level') else 0.25
+                        analysis_results.append(('candlestick_bible', candlestick_signal, weight))
+                        logger.info(f"📕 Candlestick Bible pattern detected: {candlestick_signal.get('pattern')} ({candlestick_signal.get('confidence')}% confidence)")
+                except asyncio.TimeoutError:
+                    logger.debug(f"⚠️ Candlestick Bible analysis timeout")
+                except Exception as e:
+                    logger.debug(f"⚠️ Candlestick Bible analysis error: {e}")
+            
             # Generate SINGLE best signal based on market type and accuracy
             # PRIORITY 1: Ultra-short expirations ALWAYS use OTC (24/7 availability)
             if user_expirations and user_expirations[0] in ['5s', '15s', '30s']:
