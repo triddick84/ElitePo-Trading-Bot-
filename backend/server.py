@@ -4210,6 +4210,159 @@ async def get_fast_supertrend_config():
 
 
 # =============================================================================
+# CANDLESTICK BIBLE STRATEGY ENDPOINTS
+# =============================================================================
+
+@api_router.post("/strategy/candlestick-bible/signal")
+async def generate_candlestick_bible_signal(symbol: str = Query("EURUSD_OTC")):
+    """
+    Generate signal using Candlestick Bible pattern recognition
+    
+    Based on "The Candlestick Trading Bible" patterns:
+    - Bullish: Engulfing, Hammer, Morning Star, Dragonfly Doji, Tweezers Bottom, Harami
+    - Bearish: Engulfing, Shooting Star, Evening Star, Gravestone Doji, Tweezers Top, Harami
+    - Inside Bar false breakouts
+    
+    Args:
+        symbol: Trading symbol (e.g., EURUSD_OTC, BTCUSD, etc.)
+    """
+    try:
+        from strategies.candlestick_bible_strategy import candlestick_bible_strategy, analyze_candles
+        import yfinance as yf
+        
+        # Parse symbol
+        base_symbol = symbol.replace('_OTC', '').replace('_otc', '').replace('_regular', '')
+        
+        # Convert to yfinance format
+        yf_symbol = base_symbol
+        if base_symbol in ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCHF', 'USDCAD', 'NZDUSD']:
+            yf_symbol = f'{base_symbol}=X'
+        elif base_symbol == 'BTCUSD':
+            yf_symbol = 'BTC-USD'
+        elif base_symbol == 'ETHUSD':
+            yf_symbol = 'ETH-USD'
+        
+        # Fetch recent candle data
+        ticker = yf.Ticker(yf_symbol)
+        hist = ticker.history(period="1d", interval="1m")
+        
+        if hist.empty or len(hist) < 20:
+            return {
+                "success": False,
+                "message": f"Insufficient data for {symbol}",
+                "signal": None
+            }
+        
+        # Convert to candle format
+        candles = []
+        for idx, row in hist.iterrows():
+            candles.append({
+                'open': float(row['Open']),
+                'high': float(row['High']),
+                'low': float(row['Low']),
+                'close': float(row['Close']),
+                'volume': float(row['Volume'])
+            })
+        
+        # Analyze patterns
+        pattern_result = analyze_candles(candles)
+        
+        if pattern_result is None:
+            return {
+                "success": True,
+                "message": f"No significant candlestick pattern detected for {symbol}",
+                "signal": None,
+                "telegram_sent": False
+            }
+        
+        # Send to Telegram if pattern found
+        telegram_sent = False
+        try:
+            if telegram_notifier and pattern_result['confidence'] >= 70:
+                signal_msg = f"📕 CANDLESTICK BIBLE SIGNAL\n\n"
+                signal_msg += f"📊 Pattern: {pattern_result['pattern'].upper()}\n"
+                signal_msg += f"💹 Asset: {symbol}\n"
+                signal_msg += f"📈 Signal: {'🟢 BUY/CALL' if pattern_result['signal'] == 'BUY' else '🔴 SELL/PUT'}\n"
+                signal_msg += f"🎯 Confidence: {pattern_result['confidence']:.1f}%\n"
+                signal_msg += f"💪 Strength: {pattern_result['strength']}\n"
+                signal_msg += f"📍 At Key Level: {'✅ Yes' if pattern_result['at_key_level'] else '❌ No'}\n"
+                signal_msg += f"📊 Trend Aligned: {'✅ Yes' if pattern_result['trend_alignment'] else '❌ No'}\n"
+                signal_msg += f"💰 Risk/Reward: {pattern_result['risk_reward_ratio']:.2f}\n\n"
+                signal_msg += f"📝 {pattern_result['description']}"
+                
+                await telegram_notifier.send_notification(signal_msg)
+                telegram_sent = True
+        except Exception as e:
+            logger.warning(f"Telegram notification failed: {e}")
+        
+        return {
+            "success": True,
+            "message": f"📕 {pattern_result['pattern'].upper()} pattern detected for {symbol}",
+            "signal": pattern_result,
+            "telegram_sent": telegram_sent
+        }
+        
+    except Exception as e:
+        logger.error(f"Candlestick Bible signal error: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "signal": None
+        }
+
+
+@api_router.get("/strategy/candlestick-bible/config")
+async def get_candlestick_bible_config():
+    """Get Candlestick Bible strategy configuration and pattern list"""
+    try:
+        return {
+            "success": True,
+            "name": "Candlestick Bible Strategy",
+            "description": "Based on 'The Candlestick Trading Bible' - Advanced pattern recognition with confluence analysis",
+            "timeframe": "multi",
+            "min_risk_reward": 2.0,
+            "bullish_patterns": [
+                "bullish_engulfing",
+                "hammer",
+                "morning_star",
+                "dragonfly_doji",
+                "tweezers_bottom",
+                "bullish_harami",
+                "bullish_inside_bar_breakout"
+            ],
+            "bearish_patterns": [
+                "bearish_engulfing",
+                "shooting_star",
+                "evening_star",
+                "gravestone_doji",
+                "tweezers_top",
+                "bearish_harami",
+                "bearish_inside_bar_breakout"
+            ],
+            "pattern_probabilities": {
+                "engulfing": "68%",
+                "hammer_shooting_star": "65%",
+                "morning_evening_star": "72%",
+                "doji_patterns": "60%",
+                "tweezers": "62%",
+                "harami": "55%",
+                "inside_bar_breakout": "65%"
+            },
+            "key_rules": [
+                "Trade with confluence (trend + level + signal)",
+                "Minimum 1:2 risk/reward ratio",
+                "Pattern must form at key support/resistance levels",
+                "Trend confirmation required for high-probability trades"
+            ]
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+# =============================================================================
 # AUTO TRADING SERVICE ENDPOINTS
 # =============================================================================
 
