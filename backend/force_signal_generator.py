@@ -41,6 +41,7 @@ import high_accuracy_smart_money_ict
 from signal_accuracy_optimizer import signal_optimizer
 from support_resistance_analyzer import support_resistance_analyzer
 from strategy_registry import strategy_registry
+from strategies.candlestick_bible_strategy import candlestick_bible_strategy, analyze_candles
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,7 @@ logger = logging.getLogger(__name__)
 QUALITY_OPTIMIZER_AVAILABLE = False
 FAST_DATA_SERVICE_AVAILABLE = False
 ACCURACY_MAXIMIZER_AVAILABLE = False
+CANDLESTICK_BIBLE_AVAILABLE = True
 
 try:
     from enhanced_signal_quality_optimizer import enhanced_signal_optimizer
