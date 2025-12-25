@@ -1533,6 +1533,81 @@ class ForceSignalGenerator:
                 'market_type': 'otc'
             }
     
+    async def _candlestick_bible_analysis(self, data: List[Dict], symbol: str) -> Optional[Dict]:
+        """
+        Candlestick Bible Pattern Analysis
+        Based on "The Candlestick Trading Bible" by Munehisa Homma
+        
+        Implements:
+        - Bullish: Engulfing, Hammer, Morning Star, Dragonfly Doji, Tweezers Bottom, Harami
+        - Bearish: Engulfing, Shooting Star, Evening Star, Gravestone Doji, Tweezers Top, Harami
+        - Inside Bar false breakouts
+        - Support/Resistance confluence
+        - Trend alignment confirmation
+        
+        Returns high-probability signals when patterns form at key levels
+        """
+        try:
+            if not data or len(data) < 10:
+                return None
+            
+            # Prepare candle data for pattern analysis
+            candles = []
+            for item in data:
+                candle = {
+                    'open': float(item.get('open', item.get('Open', 0))),
+                    'high': float(item.get('high', item.get('High', 0))),
+                    'low': float(item.get('low', item.get('Low', 0))),
+                    'close': float(item.get('close', item.get('Close', 0))),
+                    'volume': float(item.get('volume', item.get('Volume', 0)))
+                }
+                if candle['open'] > 0 and candle['high'] > 0 and candle['low'] > 0 and candle['close'] > 0:
+                    candles.append(candle)
+            
+            if len(candles) < 10:
+                return None
+            
+            # Analyze patterns using the Candlestick Bible Strategy
+            pattern_result = analyze_candles(candles)
+            
+            if pattern_result is None:
+                return None
+            
+            # Convert pattern signal to standard format
+            signal_direction = pattern_result['signal']  # 'BUY' or 'SELL'
+            confidence = pattern_result['confidence']
+            
+            # Only return high-probability patterns
+            min_confidence = 60 if pattern_result['at_key_level'] else 70
+            if confidence < min_confidence:
+                logger.debug(f"📕 Pattern {pattern_result['pattern']} confidence {confidence}% below threshold")
+                return None
+            
+            # Build analysis result
+            result = {
+                'direction': signal_direction,
+                'confidence': confidence,
+                'reasoning': pattern_result['description'],
+                'strategy': f"candlestick_bible_{pattern_result['pattern']}",
+                'pattern': pattern_result['pattern'],
+                'strength': pattern_result['strength'],
+                'at_key_level': pattern_result['at_key_level'],
+                'trend_alignment': pattern_result['trend_alignment'],
+                'entry_price': pattern_result['entry_price'],
+                'stop_loss': pattern_result['stop_loss'],
+                'take_profit': pattern_result['take_profit'],
+                'risk_reward_ratio': pattern_result['risk_reward_ratio'],
+                'timeframe': 'multi'  # Works across timeframes
+            }
+            
+            logger.info(f"📕 Candlestick Bible: {pattern_result['pattern']} → {signal_direction} ({confidence}% confidence, RR: {pattern_result['risk_reward_ratio']:.2f})")
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error in Candlestick Bible analysis: {e}")
+            return None
+    
     async def _ultra_precision_scalping_analysis(self, data: List[Dict], symbol: str) -> Optional[Dict]:
         """
         Ultra-precision 1-minute scalping analysis for maximum accuracy
