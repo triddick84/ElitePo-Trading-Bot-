@@ -1057,6 +1057,469 @@ class BackendTester:
             print(f"   Enhanced signal accuracy targeting test error: {e}")
             return False
 
+    # ========== AI ML TRADING SYSTEM TESTS ==========
+    
+    async def test_ai_ml_status_endpoint(self) -> bool:
+        """
+        Test AI ML Status Endpoint
+        Test GET /api/ai-ml/status:
+        - Should return all 3 models (LSTM, RandomForest, Emergent LLM)
+        """
+        try:
+            print("   🤖 Testing AI ML status endpoint")
+            
+            async with self.session.get(f"{BACKEND_URL}/ai-ml/status") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ AI ML status endpoint accessible")
+                    
+                    # Check required fields
+                    required_fields = ['success', 'system_name', 'models']
+                    missing_fields = [field for field in required_fields if field not in data]
+                    
+                    if missing_fields:
+                        print(f"   ❌ Missing required fields: {missing_fields}")
+                        return False
+                    
+                    models = data.get('models', {})
+                    expected_models = ['lstm', 'random_forest', 'emergent_llm']
+                    
+                    print(f"   📊 System Name: {data.get('system_name')}")
+                    
+                    for model_name in expected_models:
+                        if model_name in models:
+                            model_info = models[model_name]
+                            available = model_info.get('available', False)
+                            trained = model_info.get('trained', False)
+                            description = model_info.get('description', 'N/A')
+                            
+                            print(f"   📊 {model_name.upper()}: Available={available}, Trained={trained}")
+                            print(f"      Description: {description}")
+                        else:
+                            print(f"   ❌ Missing model: {model_name}")
+                            return False
+                    
+                    # Check if at least one model is available
+                    available_models = sum(1 for model in models.values() if model.get('available', False))
+                    print(f"   📊 Available Models: {available_models}/3")
+                    
+                    return available_models >= 1  # At least one model should be available
+                else:
+                    print(f"   ❌ AI ML status endpoint failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   AI ML status endpoint test error: {e}")
+            return False
+    
+    async def test_ai_ml_predict_endpoint(self) -> bool:
+        """
+        Test AI ML Predict Endpoint
+        Test POST /api/ai-ml/predict?symbol=EURUSD_OTC:
+        - Should return prediction with final_direction, final_confidence, individual_predictions
+        - Check that models_used >= 1
+        """
+        try:
+            print("   🎯 Testing AI ML predict endpoint")
+            
+            test_symbol = "EURUSD_OTC"
+            async with self.session.post(f"{BACKEND_URL}/ai-ml/predict?symbol={test_symbol}") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ AI ML predict endpoint accessible")
+                    
+                    # Check required fields
+                    required_fields = ['success', 'symbol', 'prediction', 'models_used']
+                    missing_fields = [field for field in required_fields if field not in data]
+                    
+                    if missing_fields:
+                        print(f"   ❌ Missing required fields: {missing_fields}")
+                        return False
+                    
+                    success = data.get('success')
+                    symbol = data.get('symbol')
+                    prediction = data.get('prediction')
+                    models_used = data.get('models_used', 0)
+                    
+                    print(f"   📊 Success: {success}")
+                    print(f"   📊 Symbol: {symbol}")
+                    print(f"   📊 Models Used: {models_used}")
+                    
+                    if not success:
+                        print(f"   ⚠️ Prediction failed: {data.get('error', 'Unknown error')}")
+                        return False
+                    
+                    if models_used < 1:
+                        print(f"   ❌ No models used in prediction")
+                        return False
+                    
+                    if prediction:
+                        # Check prediction structure
+                        pred_fields = ['final_direction', 'final_confidence', 'individual_predictions']
+                        missing_pred_fields = [field for field in pred_fields if field not in prediction]
+                        
+                        if missing_pred_fields:
+                            print(f"   ❌ Missing prediction fields: {missing_pred_fields}")
+                            return False
+                        
+                        final_direction = prediction.get('final_direction')
+                        final_confidence = prediction.get('final_confidence')
+                        individual_predictions = prediction.get('individual_predictions', [])
+                        
+                        print(f"   📊 Final Direction: {final_direction}")
+                        print(f"   📊 Final Confidence: {final_confidence}%")
+                        print(f"   📊 Individual Predictions: {len(individual_predictions)}")
+                        
+                        # Validate direction
+                        if final_direction not in ['BUY', 'SELL', 'HOLD']:
+                            print(f"   ❌ Invalid direction: {final_direction}")
+                            return False
+                        
+                        # Validate confidence
+                        if not (0 <= final_confidence <= 100):
+                            print(f"   ❌ Invalid confidence: {final_confidence}")
+                            return False
+                        
+                        return True
+                    else:
+                        print(f"   ❌ No prediction returned")
+                        return False
+                else:
+                    print(f"   ❌ AI ML predict endpoint failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   AI ML predict endpoint test error: {e}")
+            return False
+
+    # ========== MONEY MANAGEMENT SYSTEM TESTS ==========
+    
+    async def test_money_management_status_endpoint(self) -> bool:
+        """
+        Test Money Management Status Endpoint
+        Test GET /api/money-management/status:
+        - Should return account state with balance, initial_balance, risk_level fields
+        """
+        try:
+            print("   💰 Testing Money Management status endpoint")
+            
+            async with self.session.get(f"{BACKEND_URL}/money-management/status") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Money Management status endpoint accessible")
+                    
+                    # Check required fields
+                    required_fields = ['success', 'account_state', 'risk_level']
+                    missing_fields = [field for field in required_fields if field not in data]
+                    
+                    if missing_fields:
+                        print(f"   ❌ Missing required fields: {missing_fields}")
+                        return False
+                    
+                    success = data.get('success')
+                    account_state = data.get('account_state', {})
+                    risk_level = data.get('risk_level')
+                    
+                    print(f"   📊 Success: {success}")
+                    print(f"   📊 Risk Level: {risk_level}")
+                    
+                    if not success:
+                        print(f"   ❌ Status request failed")
+                        return False
+                    
+                    # Check account state fields
+                    account_fields = ['balance', 'initial_balance', 'peak_balance', 'win_rate', 'total_trades']
+                    missing_account_fields = [field for field in account_fields if field not in account_state]
+                    
+                    if missing_account_fields:
+                        print(f"   ❌ Missing account state fields: {missing_account_fields}")
+                        return False
+                    
+                    balance = account_state.get('balance')
+                    initial_balance = account_state.get('initial_balance')
+                    win_rate = account_state.get('win_rate')
+                    total_trades = account_state.get('total_trades')
+                    
+                    print(f"   📊 Balance: ${balance}")
+                    print(f"   📊 Initial Balance: ${initial_balance}")
+                    print(f"   📊 Win Rate: {win_rate:.1%}")
+                    print(f"   📊 Total Trades: {total_trades}")
+                    
+                    return True
+                else:
+                    print(f"   ❌ Money Management status endpoint failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Money Management status endpoint test error: {e}")
+            return False
+    
+    async def test_money_management_calculate_stake_endpoint(self) -> bool:
+        """
+        Test Money Management Calculate Stake Endpoint
+        Test POST /api/money-management/calculate-stake?confidence=80&balance=500:
+        - Should return can_trade, stake, stake_percentage, kelly_stake_pct, risk_level
+        """
+        try:
+            print("   💵 Testing Money Management calculate stake endpoint")
+            
+            test_confidence = 80
+            test_balance = 500
+            async with self.session.post(f"{BACKEND_URL}/money-management/calculate-stake?confidence={test_confidence}&balance={test_balance}") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Calculate stake endpoint accessible")
+                    
+                    # Check required fields
+                    required_fields = ['success', 'can_trade', 'stake', 'stake_percentage', 'kelly_stake_pct', 'risk_level']
+                    missing_fields = [field for field in required_fields if field not in data]
+                    
+                    if missing_fields:
+                        print(f"   ❌ Missing required fields: {missing_fields}")
+                        return False
+                    
+                    success = data.get('success')
+                    can_trade = data.get('can_trade')
+                    stake = data.get('stake')
+                    stake_percentage = data.get('stake_percentage')
+                    kelly_stake_pct = data.get('kelly_stake_pct')
+                    risk_level = data.get('risk_level')
+                    
+                    print(f"   📊 Success: {success}")
+                    print(f"   📊 Can Trade: {can_trade}")
+                    print(f"   📊 Stake: ${stake}")
+                    print(f"   📊 Stake Percentage: {stake_percentage}%")
+                    print(f"   📊 Kelly Stake %: {kelly_stake_pct}%")
+                    print(f"   📊 Risk Level: {risk_level}")
+                    
+                    if not success:
+                        print(f"   ❌ Calculate stake failed")
+                        return False
+                    
+                    # Validate stake is within reasonable range (0-5% of balance)
+                    if stake_percentage < 0 or stake_percentage > 5:
+                        print(f"   ❌ Stake percentage out of range: {stake_percentage}%")
+                        return False
+                    
+                    # Validate stake amount
+                    if stake < 0 or stake > test_balance * 0.05:
+                        print(f"   ❌ Stake amount out of range: ${stake}")
+                        return False
+                    
+                    return True
+                else:
+                    print(f"   ❌ Calculate stake endpoint failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Calculate stake endpoint test error: {e}")
+            return False
+    
+    async def test_money_management_risk_check_endpoint(self) -> bool:
+        """
+        Test Money Management Risk Check Endpoint
+        Test POST /api/money-management/risk-check?symbol=EURUSD:
+        - Should return can_trade boolean and checks object with 7 schemes
+        """
+        try:
+            print("   ⚠️ Testing Money Management risk check endpoint")
+            
+            test_symbol = "EURUSD"
+            async with self.session.post(f"{BACKEND_URL}/money-management/risk-check?symbol={test_symbol}") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Risk check endpoint accessible")
+                    
+                    # Check required fields
+                    required_fields = ['success', 'can_trade', 'checks']
+                    missing_fields = [field for field in required_fields if field not in data]
+                    
+                    if missing_fields:
+                        print(f"   ❌ Missing required fields: {missing_fields}")
+                        return False
+                    
+                    success = data.get('success')
+                    can_trade = data.get('can_trade')
+                    checks = data.get('checks', {})
+                    
+                    print(f"   📊 Success: {success}")
+                    print(f"   📊 Can Trade: {can_trade}")
+                    print(f"   📊 Checks Performed: {len(checks)}")
+                    
+                    if not success:
+                        print(f"   ❌ Risk check failed")
+                        return False
+                    
+                    # Check for expected risk schemes (should have at least 5 of the 7)
+                    expected_schemes = ['fixed_percentage', 'time_filter', 'correlation', 'trade_limit', 'review']
+                    found_schemes = [scheme for scheme in expected_schemes if scheme in checks]
+                    
+                    print(f"   📊 Risk Schemes Found: {found_schemes}")
+                    
+                    if len(found_schemes) < 5:
+                        print(f"   ❌ Insufficient risk schemes: {len(found_schemes)}/7")
+                        return False
+                    
+                    # Check each scheme has proper structure
+                    for scheme_name, scheme_data in checks.items():
+                        if 'passed' not in scheme_data:
+                            print(f"   ❌ Scheme {scheme_name} missing 'passed' field")
+                            return False
+                        
+                        passed = scheme_data.get('passed')
+                        print(f"   📊 {scheme_name}: {'✅ PASSED' if passed else '❌ FAILED'}")
+                    
+                    return True
+                else:
+                    print(f"   ❌ Risk check endpoint failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Risk check endpoint test error: {e}")
+            return False
+    
+    async def test_money_management_kelly_calculate_endpoint(self) -> bool:
+        """
+        Test Money Management Kelly Calculate Endpoint
+        Test GET /api/money-management/kelly-calculate?win_probability=0.55&payout_rate=0.85:
+        - Should return full_kelly_pct and fractional_kelly_pct
+        """
+        try:
+            print("   📈 Testing Money Management Kelly calculate endpoint")
+            
+            win_prob = 0.55
+            payout_rate = 0.85
+            async with self.session.get(f"{BACKEND_URL}/money-management/kelly-calculate?win_probability={win_prob}&payout_rate={payout_rate}") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Kelly calculate endpoint accessible")
+                    
+                    # Check required fields
+                    required_fields = ['success']
+                    missing_fields = [field for field in required_fields if field not in data]
+                    
+                    if missing_fields:
+                        print(f"   ❌ Missing required fields: {missing_fields}")
+                        return False
+                    
+                    success = data.get('success')
+                    
+                    print(f"   📊 Success: {success}")
+                    
+                    if not success:
+                        print(f"   ❌ Kelly calculation failed: {data.get('error', 'Unknown error')}")
+                        return False
+                    
+                    # Check for Kelly calculation results
+                    if 'full_kelly_pct' in data or 'fractional_kelly_pct' in data:
+                        full_kelly = data.get('full_kelly_pct', 'N/A')
+                        fractional_kelly = data.get('fractional_kelly_pct', 'N/A')
+                        
+                        print(f"   📊 Full Kelly %: {full_kelly}")
+                        print(f"   📊 Fractional Kelly %: {fractional_kelly}")
+                        
+                        # Validate Kelly percentages are reasonable
+                        if isinstance(full_kelly, (int, float)) and (full_kelly < 0 or full_kelly > 100):
+                            print(f"   ❌ Full Kelly out of range: {full_kelly}%")
+                            return False
+                        
+                        if isinstance(fractional_kelly, (int, float)) and (fractional_kelly < 0 or fractional_kelly > 25):
+                            print(f"   ❌ Fractional Kelly out of range: {fractional_kelly}%")
+                            return False
+                        
+                        return True
+                    else:
+                        # Check if there's input/output structure
+                        if 'input' in data:
+                            input_data = data.get('input', {})
+                            print(f"   📊 Input Win Probability: {input_data.get('win_probability')}")
+                            print(f"   📊 Input Payout Rate: {input_data.get('payout_rate')}")
+                            return True
+                        else:
+                            print(f"   ❌ No Kelly calculation results found")
+                            return False
+                else:
+                    print(f"   ❌ Kelly calculate endpoint failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Kelly calculate endpoint test error: {e}")
+            return False
+
+    async def test_force_generate_with_ai_ml_integration(self) -> bool:
+        """
+        Test Force Generate Signal Integration with AI/ML
+        Test POST /api/signals/force-generate:
+        - Check that signal includes AI/ML analysis when available
+        """
+        try:
+            print("   🔗 Testing Force Generate with AI/ML integration")
+            
+            async with self.session.post(f"{BACKEND_URL}/signals/force-generate") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Force generate endpoint accessible")
+                    
+                    success = data.get('success')
+                    message = data.get('message', '')
+                    signal = data.get('signal')
+                    
+                    print(f"   📊 Success: {success}")
+                    print(f"   📊 Message: {message}")
+                    
+                    if success and signal:
+                        # Check if signal has AI/ML analysis
+                        technical_analysis = signal.get('technical_analysis', {})
+                        justification = signal.get('justification', '')
+                        
+                        print(f"   📊 Signal Symbol: {signal.get('symbol')}")
+                        print(f"   📊 Signal Direction: {signal.get('direction')}")
+                        print(f"   📊 Signal Confidence: {signal.get('probability')}%")
+                        
+                        # Look for AI/ML indicators in the signal
+                        has_ai_analysis = (
+                            'ai' in justification.lower() or
+                            'ml' in justification.lower() or
+                            'lstm' in justification.lower() or
+                            'neural' in justification.lower() or
+                            'ensemble' in justification.lower() or
+                            len(technical_analysis) > 5  # Rich technical analysis suggests AI involvement
+                        )
+                        
+                        if has_ai_analysis:
+                            print(f"   ✅ Signal includes AI/ML analysis")
+                        else:
+                            print(f"   ℹ️ Signal uses traditional analysis (AI/ML may not be available)")
+                        
+                        return True
+                    elif success:
+                        print(f"   ℹ️ Force generate succeeded but no signal generated (market conditions)")
+                        return True
+                    else:
+                        print(f"   ❌ Force generate failed: {message}")
+                        return False
+                else:
+                    print(f"   ❌ Force generate endpoint failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Force generate AI/ML integration test error: {e}")
+            return False
+
     # ========== SSID AUTO-REFRESH SERVICE TESTS ==========
     
     async def test_ssid_status_endpoint(self) -> bool:
