@@ -469,6 +469,9 @@ class MoneyManagementSystem:
     
     def get_account_state(self) -> AccountState:
         total = self.total_wins + self.total_losses
+        profit_factor = self.total_profit / max(abs(self.total_loss), 0.01) if self.total_loss != 0 else 0.0
+        if profit_factor == float('inf') or profit_factor != profit_factor:  # Check for inf or nan
+            profit_factor = 0.0
         return AccountState(
             balance=self.balance, initial_balance=self.initial_balance,
             peak_balance=self.peak_balance,
@@ -476,7 +479,7 @@ class MoneyManagementSystem:
             max_drawdown=((self.peak_balance - self.balance) / self.peak_balance * 100) if self.peak_balance > 0 else 0,
             total_trades=total, winning_trades=self.total_wins, losing_trades=self.total_losses,
             win_rate=self.total_wins / max(total, 1),
-            profit_factor=self.total_profit / max(abs(self.total_loss), 1) if self.total_loss != 0 else float('inf'),
+            profit_factor=profit_factor,
             daily_trades=self.daily_trades, daily_profit_loss=self.balance - self.daily_start_balance
         )
     
