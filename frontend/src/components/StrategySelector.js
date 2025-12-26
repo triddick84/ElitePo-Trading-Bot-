@@ -61,7 +61,8 @@ const StrategySelector = ({ onStrategySelect, onAutoGenerateToggle }) => {
       { value: 'supertrend_30s', name: '30s Supertrend Strategy', accuracy: '80%+' }
     ],
     '1m': [
-      { value: 'candlestick_bible', name: '📕 Candlestick Bible', accuracy: '72%+', note: 'Engulfing, Hammer, Morning Star, Inside Bar patterns', recommended: true },
+      { value: 'pocket_option_1m_scalping', name: '⚡ 1-Minute Scalping Pro', accuracy: '70%+', note: 'DEFAULT | EMA+BB+RSI+Volume | 10K+ trades tested', recommended: true, isDefault: true },
+      { value: 'candlestick_bible', name: '📕 Candlestick Bible', accuracy: '72%+', note: 'Engulfing, Hammer, Morning Star, Inside Bar patterns' },
       { value: 'rsi_bb_volume', name: 'RSI + BB + Volume', accuracy: '70%+' },
       { value: 'stoch_macd_pattern', name: 'Stochastic + MACD + Pattern', accuracy: '75-80%' },
       { value: 'enhanced_rsi_bb_volume', name: 'Enhanced RSI + BB + Volume V2', accuracy: '85-89%', recommended: true },
