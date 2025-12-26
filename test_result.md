@@ -1113,6 +1113,42 @@ backend:
         agent: "testing"
         comment: "POST /api/signals/force-generate successfully integrates AI/ML analysis. Generated signal for EURUSD_OTC with SELL direction at 95.0% confidence. Signal includes comprehensive AI/ML analysis in technical_analysis field and justification. Integration between force signal generator and AI/ML trading system is working correctly."
 
+  - task: "1-Minute Scalping Strategy Config Endpoint"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "GET /api/strategy/1m-scalping/config endpoint working correctly. Returns all required fields: success, name, timeframe, documented_winrate (70%+), indicators, and entry_rules. All indicator parameters verified: EMA periods [5,10,21], Bollinger Bands (20, 2.0), RSI period 7, Volume period 10. Entry rules contain 6 buy rules and 6 sell rules as expected."
+
+  - task: "1-Minute Scalping Signal Generation"
+    implemented: true
+    working: true
+    file: "/app/backend/strategies/pocket_option_1m_scalping.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "POST /api/strategy/1m-scalping/signal endpoint working correctly for all test symbols (EURUSD_OTC, GBPUSD, BTCUSD). Signal generation produces valid signals with direction (BUY/SELL/HOLD), confidence (0-100%), strength (STRONG/MODERATE/WEAK), and 0-8 confirmations based on confluence. Indicators object includes RSI, BB position, and volume ratio. S/R levels array properly included."
+
+  - task: "Support/Resistance Levels Endpoint"
+    implemented: true
+    working: true
+    file: "/app/backend/strategies/pocket_option_1m_scalping.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "GET /api/strategy/support-resistance endpoint working correctly for all test symbols (EURUSD_OTC, GBPUSD, BTCUSD). Returns current_price, supports array, resistances array, and analysis object with nearest_support, nearest_resistance, and price_position. Support levels correctly below current price, resistance levels correctly above current price. Dynamic level detection operational."
+
 agent_communication:
   - agent: "testing"
     message: "✅ SOCKET.IO HANDSHAKE TESTING COMPLETE - All 7 tests passed (100% success rate). The Socket.IO handshake fixes are working correctly: Engine.IO OPEN, Socket.IO CONNECT (40 packet), and Authentication sequence verified in backend logs. Extended latency range (-30 to +30s) implemented successfully. Bridge Script v2.0 features confirmed (15,109 chars, SSID extraction, heartbeat, multi-domain support). Connection failures are expected in cloud environment due to network restrictions. Ready for production use."
