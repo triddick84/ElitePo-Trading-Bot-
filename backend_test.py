@@ -15300,8 +15300,8 @@ async def run_socket_io_handshake_tests():
         await tester.cleanup()
 
 async def main():
-    """Main test runner - run Socket.IO handshake tests"""
-    return await run_socket_io_handshake_tests()
+    """Main test runner - run 1-Minute Scalping Strategy tests"""
+    return await run_1m_scalping_strategy_tests()
 
 if __name__ == "__main__":
     asyncio.run(main())
