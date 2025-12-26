@@ -607,18 +607,40 @@ def analyze_1m_candles(candles: List[Dict]) -> Optional[Dict]:
     if signal is None:
         return None
     
+    # Helper to safely convert float values
+    def safe_float(val, default=0.0):
+        if val is None:
+            return default
+        try:
+            f = float(val)
+            if np.isnan(f) or np.isinf(f):
+                return default
+            return f
+        except:
+            return default
+    
+    # Clean indicators dict
+    indicators = {}
+    for k, v in signal.indicators.items():
+        if isinstance(v, (int, float, np.integer, np.floating)):
+            indicators[k] = safe_float(v)
+        elif isinstance(v, (bool, np.bool_)):
+            indicators[k] = bool(v)
+        else:
+            indicators[k] = v
+    
     return {
         'direction': signal.direction,
-        'confidence': signal.confidence,
+        'confidence': safe_float(signal.confidence),
         'strength': signal.strength.value,
         'confirmations': signal.confirmations,
         'confirmations_count': len(signal.confirmations),
-        'entry_price': signal.entry_price,
-        'stop_loss': signal.stop_loss,
-        'take_profit': signal.take_profit,
+        'entry_price': safe_float(signal.entry_price),
+        'stop_loss': safe_float(signal.stop_loss),
+        'take_profit': safe_float(signal.take_profit),
         'sr_levels': signal.sr_levels,
         'reasoning': signal.reasoning,
-        'indicators': signal.indicators
+        'indicators': indicators
     }
 
 
