@@ -4366,8 +4366,352 @@ async def get_candlestick_bible_config():
 
 
 # =============================================================================
-# AUTO TRADING SERVICE ENDPOINTS
+# AI ML TRADING SYSTEM ENDPOINTS
 # =============================================================================
+
+@api_router.post("/ai-ml/predict")
+async def get_ai_ml_prediction(symbol: str = Query("EURUSD_OTC")):
+    """
+    Get AI/ML ensemble prediction for 15-second trading.
+    
+    Combines LSTM, Random Forest, and Emergent LLM predictions.
+    
+    Args:
+        symbol: Trading symbol (e.g., EURUSD_OTC, BTCUSD)
+        
+    Returns:
+        Ensemble prediction with confidence, direction, and risk assessment
+    """
+    try:
+        import yfinance as yf
+        
+        # Parse symbol
+        base_symbol = symbol.replace('_OTC', '').replace('_otc', '').replace('_regular', '')
+        
+        # Convert to yfinance format
+        yf_symbol = base_symbol
+        if base_symbol in ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCHF', 'USDCAD', 'NZDUSD']:
+            yf_symbol = f'{base_symbol}=X'
+        elif base_symbol == 'BTCUSD':
+            yf_symbol = 'BTC-USD'
+        elif base_symbol == 'ETHUSD':
+            yf_symbol = 'ETH-USD'
+        
+        # Fetch candle data
+        ticker = yf.Ticker(yf_symbol)
+        hist = ticker.history(period="5d", interval="1m")
+        
+        if hist.empty or len(hist) < 60:
+            return {
+                "success": False,
+                "message": f"Insufficient data for {symbol}",
+                "prediction": None
+            }
+        
+        # Convert to candle format
+        candles = []
+        for idx, row in hist.iterrows():
+            candles.append({
+                'open': float(row['Open']),
+                'high': float(row['High']),
+                'low': float(row['Low']),
+                'close': float(row['Close']),
+                'volume': float(row['Volume'])
+            })
+        
+        # Get AI prediction
+        prediction = await get_ai_prediction(candles, symbol)
+        
+        # Send to Telegram if high confidence
+        if prediction and prediction.get('final_confidence', 0) >= 75:
+            try:
+                if telegram_notifier:
+                    msg = f"🤖 AI/ML PREDICTION\n\n"
+                    msg += f"💹 Asset: {symbol}\n"
+                    msg += f"📈 Direction: {'🟢 BUY/CALL' if prediction['final_direction'] == 'BUY' else '🔴 SELL/PUT' if prediction['final_direction'] == 'SELL' else '⏸️ HOLD'}\n"
+                    msg += f"🎯 Confidence: {prediction['final_confidence']:.1f}%\n"
+                    msg += f"📊 Consensus: {prediction['consensus_score']:.0%}\n"
+                    msg += f"⚠️ Risk Level: {prediction['risk_level']}\n"
+                    msg += f"💰 Recommended Stake: {prediction['recommended_stake_percent']:.2f}%"
+                    
+                    await telegram_notifier.send_notification(msg)
+            except Exception as e:
+                logger.warning(f"Telegram notification failed: {e}")
+        
+        return {
+            "success": True,
+            "symbol": symbol,
+            "prediction": prediction,
+            "models_used": len(prediction.get('individual_predictions', [])),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"AI ML prediction error: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "prediction": None
+        }
+
+
+@api_router.get("/ai-ml/status")
+async def get_ai_ml_status():
+    """
+    Get AI ML Trading System status.
+    
+    Returns availability of each model (LSTM, RandomForest, LLM).
+    """
+    try:
+        from ai_ml_trading_system import TENSORFLOW_AVAILABLE, SKLEARN_AVAILABLE, EMERGENT_LLM_AVAILABLE
+        
+        return {
+            "success": True,
+            "system_name": "AI ML Trading System",
+            "models": {
+                "lstm": {
+                    "available": TENSORFLOW_AVAILABLE,
+                    "trained": ai_ml_trading_system.lstm_predictor.is_trained if TENSORFLOW_AVAILABLE else False,
+                    "description": "LSTM Neural Network for time series prediction"
+                },
+                "random_forest": {
+                    "available": SKLEARN_AVAILABLE,
+                    "trained": ai_ml_trading_system.rf_predictor.is_trained if SKLEARN_AVAILABLE else False,
+                    "description": "Random Forest classifier for fast inference"
+                },
+                "emergent_llm": {
+                    "available": ai_ml_trading_system.llm_predictor.is_available,
+                    "model": "GPT-4o",
+                    "description": "Emergent LLM for market analysis and pattern recognition"
+                }
+            },
+            "model_weights": ai_ml_trading_system.model_weights,
+            "prediction_history_size": len(ai_ml_trading_system.prediction_history)
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@api_router.post("/ai-ml/train")
+async def train_ai_models(background_tasks: BackgroundTasks, 
+                           epochs: int = Query(default=50, ge=10, le=200)):
+    """
+    Train AI models on historical data (background task).
+    
+    Args:
+        epochs: Number of training epochs for LSTM
+    """
+    try:
+        import yfinance as yf
+        
+        # Fetch training data
+        symbols = ['EURUSD=X', 'GBPUSD=X', 'BTC-USD']
+        all_candles = []
+        
+        for yf_symbol in symbols:
+            ticker = yf.Ticker(yf_symbol)
+            hist = ticker.history(period="1mo", interval="1m")
+            
+            for idx, row in hist.iterrows():
+                all_candles.append({
+                    'open': float(row['Open']),
+                    'high': float(row['High']),
+                    'low': float(row['Low']),
+                    'close': float(row['Close']),
+                    'volume': float(row['Volume'])
+                })
+        
+        if len(all_candles) < 1000:
+            return {
+                "success": False,
+                "message": "Insufficient training data"
+            }
+        
+        # Train in background
+        async def train_task():
+            try:
+                ai_ml_trading_system.lstm_predictor.train(all_candles, epochs=epochs)
+                logger.info("✅ AI models training completed")
+            except Exception as e:
+                logger.error(f"Training error: {e}")
+        
+        background_tasks.add_task(asyncio.create_task, train_task())
+        
+        return {
+            "success": True,
+            "message": f"Training started with {len(all_candles)} candles, {epochs} epochs",
+            "data_points": len(all_candles)
+        }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+# =============================================================================
+# MONEY MANAGEMENT SYSTEM ENDPOINTS
+# =============================================================================
+
+@api_router.get("/money-management/status")
+async def get_money_management_status():
+    """
+    Get money management system status and account state.
+    """
+    try:
+        return {
+            "success": True,
+            **money_management.to_dict()
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@api_router.post("/money-management/calculate-stake")
+async def calculate_optimal_stake(
+    confidence: float = Query(..., ge=0, le=100, description="Signal confidence (0-100)"),
+    balance: float = Query(default=None, description="Optional balance override"),
+    atr: float = Query(default=0.0, description="Current ATR"),
+    avg_atr: float = Query(default=0.0, description="Average ATR")
+):
+    """
+    Calculate optimal stake size using Kelly Formula and risk management.
+    
+    Args:
+        confidence: Signal confidence percentage
+        balance: Optional account balance override
+        atr: Current ATR for volatility adjustment
+        avg_atr: Average ATR for comparison
+        
+    Returns:
+        Recommended stake with risk assessment
+    """
+    try:
+        result = get_optimal_stake(confidence, balance, atr, avg_atr)
+        return {
+            "success": True,
+            **result
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@api_router.post("/money-management/risk-check")
+async def check_trading_risk(
+    symbol: str = Query(..., description="Trading symbol"),
+    open_positions: List[str] = Query(default=[], description="List of currently open positions"),
+    atr: float = Query(default=0.0, description="Current ATR"),
+    avg_atr: float = Query(default=0.0, description="Average ATR")
+):
+    """
+    Run all 7 risk control scheme checks.
+    
+    Schemes:
+    1. Fixed Capital Percentage
+    2. Time-Based Filter (liquidity hours)
+    3. Volatility Filter
+    4. Correlation Analysis
+    5. Diversification
+    6. Trade Limit Per Session
+    7. Periodic Review
+    
+    Returns:
+        Risk check results with can_trade boolean
+    """
+    try:
+        result = run_risk_checks(symbol, open_positions, atr, avg_atr)
+        return {
+            "success": True,
+            **result
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@api_router.put("/money-management/settings")
+async def update_money_management_settings(
+    balance: float = Query(default=None, description="Update account balance"),
+    risk_level: str = Query(default=None, description="Risk level: conservative, moderate, aggressive")
+):
+    """
+    Update money management settings.
+    """
+    try:
+        if balance is not None:
+            money_management.update_balance(balance)
+        
+        if risk_level:
+            from money_management_system import RiskLevel
+            try:
+                new_level = RiskLevel(risk_level.lower())
+                money_management.risk_level = new_level
+                risk_pcts = {RiskLevel.CONSERVATIVE: 0.5, RiskLevel.MODERATE: 1.0, RiskLevel.AGGRESSIVE: 2.0}
+                money_management.base_risk_pct = risk_pcts[new_level]
+            except ValueError:
+                return {"success": False, "error": f"Invalid risk level: {risk_level}"}
+        
+        return {
+            "success": True,
+            "message": "Settings updated",
+            **money_management.to_dict()
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@api_router.get("/money-management/kelly-calculate")
+async def kelly_formula_calculate(
+    win_probability: float = Query(..., ge=0.01, le=0.99, description="Win probability (0-1)"),
+    payout_rate: float = Query(default=0.85, description="Payout rate (e.g., 0.85 for 85%)"),
+    fraction: float = Query(default=0.25, description="Kelly fraction (0.25 = quarter Kelly)")
+):
+    """
+    Calculate Kelly Formula stake size.
+    
+    Formula: f = (bp - q) / b
+    Where b=payout, p=win_prob, q=1-p
+    """
+    try:
+        from money_management_system import KellyFormula
+        
+        full_kelly = KellyFormula.calculate(win_probability, payout_rate, 1.0)
+        fractional_kelly = KellyFormula.calculate(win_probability, payout_rate, fraction)
+        
+        return {
+            "success": True,
+            "input": {
+                "win_probability": win_probability,
+                "payout_rate": payout_rate,
+                "fraction": fraction
+            },
+            "result": {
+                "full_kelly_pct": round(full_kelly, 2),
+                "fractional_kelly_pct": round(fractional_kelly, 2),
+                "recommendation": "Use fractional Kelly for safety"
+            },
+            "formula": f"f = ({payout_rate} × {win_probability} - {1-win_probability}) / {payout_rate}"
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
 
 @api_router.get("/auto-trade/status")
 async def get_auto_trade_status():
