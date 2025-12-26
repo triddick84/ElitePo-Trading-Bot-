@@ -18,6 +18,16 @@ from .pocket_option_1m_scalping import (
     SignalStrength
 )
 
+from .pocket_option_5s_pro import (
+    PocketOption5SecondStrategy,
+    pocket_option_5s_strategy,
+    analyze_5s_candles,
+    get_5s_strategy_config,
+    AIPatternRecognition,
+    TradeDirection,
+    SignalQuality
+)
+
 __all__ = [
     # Candlestick Bible
     'CandlestickBibleStrategy',
@@ -31,5 +41,13 @@ __all__ = [
     'analyze_1m_candles',
     'get_sr_levels',
     'SupportResistanceAnalyzer',
-    'SignalStrength'
+    'SignalStrength',
+    # 5-Second Pro
+    'PocketOption5SecondStrategy',
+    'pocket_option_5s_strategy',
+    'analyze_5s_candles',
+    'get_5s_strategy_config',
+    'AIPatternRecognition',
+    'TradeDirection',
+    'SignalQuality'
 ]
