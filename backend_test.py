@@ -15207,6 +15207,48 @@ async def main_proven_5s_strategy():
     finally:
         await tester.cleanup()
 
+async def run_1m_scalping_strategy_tests():
+    """Run 1-Minute Scalping Strategy and Support/Resistance tests"""
+    tester = BackendTester()
+    
+    try:
+        await tester.setup()
+        
+        print("🚀 Testing Pocket Option 1-Minute Scalping Strategy and Support/Resistance Indicator")
+        print("=" * 80)
+        
+        # Specific tests mentioned in the review request
+        tests = [
+            ("1-Minute Scalping Strategy Config", tester.test_1m_scalping_config_endpoint),
+            ("1-Minute Scalping Signal Generation", tester.test_1m_scalping_signal_generation),
+            ("Support/Resistance Levels", tester.test_support_resistance_levels),
+        ]
+        
+        passed = 0
+        total = len(tests)
+        
+        for test_name, test_func in tests:
+            success = await tester.run_test(test_name, test_func)
+            if success:
+                passed += 1
+        
+        print("\n" + "=" * 80)
+        print(f"🏁 1-Minute Scalping Strategy Testing Complete: {passed}/{total} tests passed")
+        
+        if tester.failed_tests:
+            print(f"\n❌ Failed Tests ({len(tester.failed_tests)}):")
+            for failed_test in tester.failed_tests:
+                print(f"   - {failed_test}")
+        else:
+            print("\n🎉 All 1-Minute Scalping Strategy tests passed!")
+        
+        print(f"\n📊 Success Rate: {(passed/total)*100:.1f}%")
+        
+        return passed, total, tester.failed_tests
+        
+    finally:
+        await tester.cleanup()
+
 async def run_socket_io_handshake_tests():
     """Run specific tests for Socket.IO handshake fixes as requested in review"""
     tester = BackendTester()
