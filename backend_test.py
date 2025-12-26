@@ -14437,6 +14437,43 @@ class BackendTester:
         for test_name, test_func in breakout_predictor_tests:
             await self.run_test(test_name, test_func)
         
+        # PRIORITY 1G: AI ML Trading System Tests (NEW)
+        ai_ml_tests = [
+            ("AI ML Status Endpoint", self.test_ai_ml_status_endpoint),
+            ("AI ML Predict Endpoint", self.test_ai_ml_predict_endpoint),
+        ]
+        
+        # PRIORITY 1H: Money Management System Tests (NEW)
+        money_management_tests = [
+            ("Money Management Status Endpoint", self.test_money_management_status_endpoint),
+            ("Money Management Calculate Stake Endpoint", self.test_money_management_calculate_stake_endpoint),
+            ("Money Management Risk Check Endpoint", self.test_money_management_risk_check_endpoint),
+            ("Money Management Kelly Calculate Endpoint", self.test_money_management_kelly_calculate_endpoint),
+        ]
+        
+        # PRIORITY 1I: Integration Tests (NEW)
+        integration_tests = [
+            ("Force Generate with AI/ML Integration", self.test_force_generate_with_ai_ml_integration),
+        ]
+        
+        # Run AI ML Trading System tests
+        print("\n🤖 RUNNING AI ML TRADING SYSTEM TESTS (PRIORITY 1G)")
+        print("=" * 50)
+        for test_name, test_func in ai_ml_tests:
+            await self.run_test(test_name, test_func)
+        
+        # Run Money Management System tests
+        print("\n💰 RUNNING MONEY MANAGEMENT SYSTEM TESTS (PRIORITY 1H)")
+        print("=" * 55)
+        for test_name, test_func in money_management_tests:
+            await self.run_test(test_name, test_func)
+        
+        # Run Integration tests
+        print("\n🔗 RUNNING INTEGRATION TESTS (PRIORITY 1I)")
+        print("=" * 40)
+        for test_name, test_func in integration_tests:
+            await self.run_test(test_name, test_func)
+        
         # Run core tests (selected subset for efficiency)
         print("\n🔧 RUNNING CORE FUNCTIONALITY TESTS (PRIORITY 2)")
         print("=" * 50)
