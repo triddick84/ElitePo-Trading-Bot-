@@ -14481,7 +14481,7 @@ class BackendTester:
             await self.run_test(test_name, test_func)
         
         # Combine all tests for summary
-        all_tests = critical_tests + ssid_telegram_tests + bridge_tests + latency_tests + bridge_v2_tests + proven_5s_tests + breakout_predictor_tests + core_tests
+        all_tests = critical_tests + ssid_telegram_tests + bridge_tests + latency_tests + bridge_v2_tests + proven_5s_tests + breakout_predictor_tests + ai_ml_tests + money_management_tests + integration_tests + core_tests
             
         await self.cleanup()
         
