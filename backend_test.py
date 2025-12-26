@@ -14569,6 +14569,374 @@ class BackendTester:
             
         return len(self.failed_tests) == 0
 
+    # ========== 1-MINUTE SCALPING STRATEGY TESTS ==========
+    
+    async def test_1m_scalping_config_endpoint(self) -> bool:
+        """
+        Test 1-Minute Scalping Strategy Config Endpoint
+        Test GET /api/strategy/1m-scalping/config:
+        - Should return documented_winrate "70%+"
+        - Should include EMA (5,10,21), BB (20, 2.0), RSI (7), Volume (10) indicators
+        - Should include entry_rules for buy and sell
+        """
+        try:
+            print("   📊 Testing 1-Minute Scalping config endpoint")
+            
+            async with self.session.get(f"{BACKEND_URL}/strategy/1m-scalping/config") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ 1M Scalping config endpoint accessible")
+                    
+                    # Check required fields
+                    required_fields = ['success', 'name', 'timeframe', 'documented_winrate', 'indicators', 'entry_rules']
+                    missing_fields = [field for field in required_fields if field not in data]
+                    
+                    if missing_fields:
+                        print(f"   ❌ Missing required fields: {missing_fields}")
+                        return False
+                    
+                    success = data.get('success')
+                    name = data.get('name')
+                    timeframe = data.get('timeframe')
+                    documented_winrate = data.get('documented_winrate')
+                    indicators = data.get('indicators', {})
+                    entry_rules = data.get('entry_rules', {})
+                    
+                    print(f"   📊 Success: {success}")
+                    print(f"   📊 Name: {name}")
+                    print(f"   📊 Timeframe: {timeframe}")
+                    print(f"   📊 Documented Win Rate: {documented_winrate}")
+                    
+                    # Verify documented win rate
+                    if documented_winrate != "70%+":
+                        print(f"   ❌ Expected documented_winrate '70%+', got '{documented_winrate}'")
+                        return False
+                    
+                    # Check required indicators
+                    required_indicators = ['ema', 'bollinger_bands', 'rsi', 'volume']
+                    missing_indicators = [ind for ind in required_indicators if ind not in indicators]
+                    
+                    if missing_indicators:
+                        print(f"   ❌ Missing indicators: {missing_indicators}")
+                        return False
+                    
+                    # Verify EMA periods (5, 10, 21)
+                    ema_periods = indicators.get('ema', {}).get('periods', [])
+                    expected_ema_periods = [5, 10, 21]
+                    if ema_periods != expected_ema_periods:
+                        print(f"   ❌ Expected EMA periods {expected_ema_periods}, got {ema_periods}")
+                        return False
+                    
+                    # Verify Bollinger Bands (20, 2.0)
+                    bb_period = indicators.get('bollinger_bands', {}).get('period')
+                    bb_std = indicators.get('bollinger_bands', {}).get('std_dev')
+                    if bb_period != 20 or bb_std != 2.0:
+                        print(f"   ❌ Expected BB (20, 2.0), got ({bb_period}, {bb_std})")
+                        return False
+                    
+                    # Verify RSI period (7)
+                    rsi_period = indicators.get('rsi', {}).get('period')
+                    if rsi_period != 7:
+                        print(f"   ❌ Expected RSI period 7, got {rsi_period}")
+                        return False
+                    
+                    # Verify Volume period (10)
+                    volume_period = indicators.get('volume', {}).get('period')
+                    if volume_period != 10:
+                        print(f"   ❌ Expected Volume period 10, got {volume_period}")
+                        return False
+                    
+                    # Check entry rules
+                    if 'buy' not in entry_rules or 'sell' not in entry_rules:
+                        print(f"   ❌ Missing buy/sell entry rules")
+                        return False
+                    
+                    buy_rules = entry_rules.get('buy', [])
+                    sell_rules = entry_rules.get('sell', [])
+                    
+                    print(f"   📊 Buy Rules: {len(buy_rules)} rules")
+                    print(f"   📊 Sell Rules: {len(sell_rules)} rules")
+                    
+                    # Verify minimum number of rules
+                    if len(buy_rules) < 4 or len(sell_rules) < 4:
+                        print(f"   ❌ Insufficient entry rules (expected 4+ each)")
+                        return False
+                    
+                    print(f"   ✅ All indicators and entry rules verified")
+                    return True
+                else:
+                    print(f"   ❌ 1M Scalping config endpoint failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   1M Scalping config endpoint test error: {e}")
+            return False
+    
+    async def test_1m_scalping_signal_generation(self) -> bool:
+        """
+        Test 1-Minute Scalping Signal Generation
+        Test POST /api/strategy/1m-scalping/signal?symbol=EURUSD_OTC:
+        - Should return direction (BUY/SELL/HOLD)
+        - Should return confidence, strength, confirmations
+        - Should include indicators object with RSI, EMA, BB values
+        - Should include sr_levels array
+        """
+        try:
+            print("   🎯 Testing 1-Minute Scalping signal generation")
+            
+            test_symbols = ["EURUSD_OTC", "GBPUSD", "BTCUSD"]
+            
+            for symbol in test_symbols:
+                print(f"   📊 Testing signal generation for {symbol}")
+                
+                async with self.session.post(f"{BACKEND_URL}/strategy/1m-scalping/signal?symbol={symbol}") as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        print(f"   ✅ Signal generation endpoint accessible for {symbol}")
+                        
+                        # Check required fields
+                        required_fields = ['success', 'message']
+                        missing_fields = [field for field in required_fields if field not in data]
+                        
+                        if missing_fields:
+                            print(f"   ❌ Missing required fields: {missing_fields}")
+                            return False
+                        
+                        success = data.get('success')
+                        message = data.get('message')
+                        signal = data.get('signal')
+                        telegram_sent = data.get('telegram_sent')
+                        
+                        print(f"   📊 Success: {success}")
+                        print(f"   📊 Message: {message}")
+                        print(f"   📊 Telegram Sent: {telegram_sent}")
+                        
+                        if not success:
+                            print(f"   ⚠️ Signal generation failed: {message}")
+                            continue  # Try next symbol
+                        
+                        if signal is None:
+                            print(f"   ℹ️ No signal generated for {symbol} (expected when no confluence)")
+                            continue  # This is acceptable
+                        
+                        # If signal exists, verify structure
+                        if signal:
+                            # Check signal fields
+                            signal_fields = ['direction', 'confidence', 'strength', 'confirmations', 'indicators']
+                            missing_signal_fields = [field for field in signal_fields if field not in signal]
+                            
+                            if missing_signal_fields:
+                                print(f"   ❌ Missing signal fields: {missing_signal_fields}")
+                                return False
+                            
+                            direction = signal.get('direction')
+                            confidence = signal.get('confidence')
+                            strength = signal.get('strength')
+                            confirmations = signal.get('confirmations', [])
+                            indicators = signal.get('indicators', {})
+                            
+                            print(f"   📊 Direction: {direction}")
+                            print(f"   📊 Confidence: {confidence}%")
+                            print(f"   📊 Strength: {strength}")
+                            print(f"   📊 Confirmations: {len(confirmations)}")
+                            
+                            # Verify direction
+                            if direction not in ['BUY', 'SELL', 'HOLD']:
+                                print(f"   ❌ Invalid direction: {direction}")
+                                return False
+                            
+                            # Verify confidence range
+                            if not (0 <= confidence <= 100):
+                                print(f"   ❌ Invalid confidence: {confidence}")
+                                return False
+                            
+                            # Verify strength
+                            if strength not in ['STRONG', 'MODERATE', 'WEAK', 'NO_SIGNAL']:
+                                print(f"   ❌ Invalid strength: {strength}")
+                                return False
+                            
+                            # Verify confirmations count (0-8 based on confluence)
+                            confirmations_count = len(confirmations)
+                            if not (0 <= confirmations_count <= 8):
+                                print(f"   ❌ Invalid confirmations count: {confirmations_count}")
+                                return False
+                            
+                            # Check indicators object
+                            required_indicator_fields = ['rsi', 'bb_position', 'volume_ratio']
+                            missing_indicator_fields = [field for field in required_indicator_fields if field not in indicators]
+                            
+                            if missing_indicator_fields:
+                                print(f"   ❌ Missing indicator fields: {missing_indicator_fields}")
+                                return False
+                            
+                            rsi = indicators.get('rsi')
+                            bb_position = indicators.get('bb_position')
+                            volume_ratio = indicators.get('volume_ratio')
+                            
+                            print(f"   📊 RSI: {rsi}")
+                            print(f"   📊 BB Position: {bb_position}%")
+                            print(f"   📊 Volume Ratio: {volume_ratio}x")
+                            
+                            # Verify RSI range
+                            if not (0 <= rsi <= 100):
+                                print(f"   ❌ Invalid RSI: {rsi}")
+                                return False
+                            
+                            # Check for sr_levels (support/resistance)
+                            sr_levels = signal.get('sr_levels', [])
+                            print(f"   📊 S/R Levels: {len(sr_levels)} levels")
+                            
+                            print(f"   ✅ Signal structure verified for {symbol}")
+                    else:
+                        print(f"   ❌ Signal generation failed for {symbol}: {response.status}")
+                        error_text = await response.text()
+                        print(f"   Error details: {error_text}")
+                        return False
+            
+            print(f"   ✅ Signal generation tested for all symbols")
+            return True
+                    
+        except Exception as e:
+            print(f"   1M Scalping signal generation test error: {e}")
+            return False
+    
+    async def test_support_resistance_levels(self) -> bool:
+        """
+        Test Support/Resistance Levels Endpoint
+        Test GET /api/strategy/support-resistance?symbol=EURUSD_OTC:
+        - Should return current_price
+        - Should return supports and resistances arrays
+        - Should include analysis with nearest_support, nearest_resistance
+        """
+        try:
+            print("   📈 Testing Support/Resistance levels endpoint")
+            
+            test_symbols = ["EURUSD_OTC", "GBPUSD", "BTCUSD"]
+            
+            for symbol in test_symbols:
+                print(f"   📊 Testing S/R levels for {symbol}")
+                
+                async with self.session.get(f"{BACKEND_URL}/strategy/support-resistance?symbol={symbol}") as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        print(f"   ✅ S/R levels endpoint accessible for {symbol}")
+                        
+                        # Check required fields
+                        required_fields = ['success', 'symbol', 'current_price', 'supports', 'resistances', 'analysis']
+                        missing_fields = [field for field in required_fields if field not in data]
+                        
+                        if missing_fields:
+                            print(f"   ❌ Missing required fields: {missing_fields}")
+                            return False
+                        
+                        success = data.get('success')
+                        returned_symbol = data.get('symbol')
+                        current_price = data.get('current_price')
+                        supports = data.get('supports', [])
+                        resistances = data.get('resistances', [])
+                        analysis = data.get('analysis', {})
+                        
+                        print(f"   📊 Success: {success}")
+                        print(f"   📊 Symbol: {returned_symbol}")
+                        print(f"   📊 Current Price: {current_price}")
+                        print(f"   📊 Supports: {len(supports)} levels")
+                        print(f"   📊 Resistances: {len(resistances)} levels")
+                        
+                        if not success:
+                            print(f"   ⚠️ S/R levels request failed")
+                            continue
+                        
+                        # Verify symbol matches
+                        if returned_symbol != symbol:
+                            print(f"   ❌ Symbol mismatch: expected {symbol}, got {returned_symbol}")
+                            return False
+                        
+                        # Verify current price is valid
+                        if not isinstance(current_price, (int, float)) or current_price <= 0:
+                            print(f"   ❌ Invalid current price: {current_price}")
+                            return False
+                        
+                        # Check supports array structure
+                        for i, support in enumerate(supports[:3]):  # Check first 3
+                            if not isinstance(support, dict):
+                                print(f"   ❌ Support {i} is not a dict")
+                                return False
+                            
+                            required_support_fields = ['price', 'type', 'strength']
+                            missing_support_fields = [field for field in required_support_fields if field not in support]
+                            
+                            if missing_support_fields:
+                                print(f"   ❌ Support {i} missing fields: {missing_support_fields}")
+                                return False
+                            
+                            if support.get('type') != 'support':
+                                print(f"   ❌ Support {i} has wrong type: {support.get('type')}")
+                                return False
+                            
+                            support_price = support.get('price')
+                            if not isinstance(support_price, (int, float)) or support_price >= current_price:
+                                print(f"   ❌ Invalid support price: {support_price} (should be < {current_price})")
+                                return False
+                        
+                        # Check resistances array structure
+                        for i, resistance in enumerate(resistances[:3]):  # Check first 3
+                            if not isinstance(resistance, dict):
+                                print(f"   ❌ Resistance {i} is not a dict")
+                                return False
+                            
+                            required_resistance_fields = ['price', 'type', 'strength']
+                            missing_resistance_fields = [field for field in required_resistance_fields if field not in resistance]
+                            
+                            if missing_resistance_fields:
+                                print(f"   ❌ Resistance {i} missing fields: {missing_resistance_fields}")
+                                return False
+                            
+                            if resistance.get('type') != 'resistance':
+                                print(f"   ❌ Resistance {i} has wrong type: {resistance.get('type')}")
+                                return False
+                            
+                            resistance_price = resistance.get('price')
+                            if not isinstance(resistance_price, (int, float)) or resistance_price <= current_price:
+                                print(f"   ❌ Invalid resistance price: {resistance_price} (should be > {current_price})")
+                                return False
+                        
+                        # Check analysis object
+                        required_analysis_fields = ['nearest_support', 'nearest_resistance', 'price_position']
+                        missing_analysis_fields = [field for field in required_analysis_fields if field not in analysis]
+                        
+                        if missing_analysis_fields:
+                            print(f"   ❌ Missing analysis fields: {missing_analysis_fields}")
+                            return False
+                        
+                        nearest_support = analysis.get('nearest_support')
+                        nearest_resistance = analysis.get('nearest_resistance')
+                        price_position = analysis.get('price_position')
+                        
+                        print(f"   📊 Nearest Support: {nearest_support}")
+                        print(f"   📊 Nearest Resistance: {nearest_resistance}")
+                        print(f"   📊 Price Position: {price_position}")
+                        
+                        # Verify price position
+                        if price_position not in ['near_support', 'near_resistance', 'mid_range']:
+                            print(f"   ❌ Invalid price position: {price_position}")
+                            return False
+                        
+                        print(f"   ✅ S/R levels structure verified for {symbol}")
+                    else:
+                        print(f"   ❌ S/R levels failed for {symbol}: {response.status}")
+                        error_text = await response.text()
+                        print(f"   Error details: {error_text}")
+                        return False
+            
+            print(f"   ✅ S/R levels tested for all symbols")
+            return True
+                    
+        except Exception as e:
+            print(f"   Support/Resistance levels test error: {e}")
+            return False
+
     async def run_ultra_short_timeframe_tests(self):
         """Run focused ultra-short timeframe tests"""
         print("🚀 Starting Ultra-Short Timeframe Testing for GPT Signal Bot")
