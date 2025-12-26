@@ -42,10 +42,11 @@ const StrategySelector = ({ onStrategySelect, onAutoGenerateToggle }) => {
   // Strategy configurations by timeframe
   const strategiesByTimeframe = {
     '5s': [
+      { value: 'pocket_option_5s_pro', name: '⚡ 5-Second Pro', accuracy: '62-70%', note: 'DEFAULT | EMA20+RSI + S/R Reversal + AI Patterns | Documented win rates', recommended: true, isDefault: true },
       { value: 'candlestick_bible', name: '📕 Candlestick Bible', accuracy: '72%+', note: 'Pattern recognition at key S/R levels | 2:1 R:R', recommended: true },
       { value: 'fast_supertrend_catch', name: '⚡ Fast Supertrend Catch', accuracy: '85%+', note: 'Supertrend ATR100 + 15 EMA Contrarian | S/R Filter', recommended: true },
-      { value: 'enhanced_breakout', name: '🚀 Enhanced Breakout Predictor', accuracy: '80%+', note: '⏳ 10s latency | S/R Levels', recommended: true },
-      { value: 'proven_5s', name: '🎯 Proven RSI+Stoch+BB+EMA', accuracy: '80%+', note: '⏳ 10s latency | 4+ confirmations', recommended: true },
+      { value: 'enhanced_breakout', name: '🚀 Enhanced Breakout Predictor', accuracy: '80%+', note: '⏳ 10s latency | S/R Levels' },
+      { value: 'proven_5s', name: '🎯 Proven RSI+Stoch+BB+EMA', accuracy: '80%+', note: '⏳ 10s latency | 4+ confirmations' },
       { value: 'ultra_v2_5s', name: 'Ultra Precision 5s V2', accuracy: '90%+', note: '⏳ 10s latency applied' },
       { value: 'reversal_5s', name: '5s Reversal Strategy', accuracy: '85%+', note: '⏳ 10s latency applied' },
       { value: 'keltner_fractal', name: 'Keltner Channel + Fractal', accuracy: '85%+', note: '⏳ 10s latency applied' },
@@ -53,10 +54,12 @@ const StrategySelector = ({ onStrategySelect, onAutoGenerateToggle }) => {
       { value: 'stochastic_divergence', name: 'Stochastic Divergence', accuracy: '83%+', note: '⏳ 10s latency applied' }
     ],
     '15s': [
+      { value: 'pocket_option_5s_pro', name: '⚡ 5-Second Pro', accuracy: '62-70%', note: 'EMA20+RSI + S/R + AI Patterns' },
       { value: 'candlestick_bible', name: '📕 Candlestick Bible', accuracy: '72%+', note: 'Pattern recognition at key S/R levels' },
       { value: 'fractal_15s', name: '15s Fractal Strategy', accuracy: '85%+' }
     ],
     '30s': [
+      { value: 'pocket_option_5s_pro', name: '⚡ 5-Second Pro', accuracy: '62-70%', note: 'EMA20+RSI + S/R + AI Patterns' },
       { value: 'candlestick_bible', name: '📕 Candlestick Bible', accuracy: '72%+', note: 'Pattern recognition at key S/R levels' },
       { value: 'supertrend_30s', name: '30s Supertrend Strategy', accuracy: '80%+' }
     ],
