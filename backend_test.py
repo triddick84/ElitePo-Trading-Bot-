@@ -1196,6 +1196,239 @@ class BackendTester:
             print(f"   AI ML predict endpoint test error: {e}")
             return False
 
+    # ========== POCKET OPTION 5-SECOND PRO STRATEGY TESTS ==========
+    
+    async def test_5s_pro_strategy_config(self) -> bool:
+        """
+        Test 5-Second Pro Strategy Config Endpoint
+        Test GET /api/strategy/5s-pro/config:
+        - Should return documented_win_rates including "support_resistance": "62-68%"
+        - Should return strategies including ema_rsi, support_resistance, candlestick_patterns
+        - Should return confluence_required with premium, strong, moderate, weak levels
+        """
+        try:
+            print("   ⚡ Testing 5-Second Pro Strategy config endpoint")
+            
+            async with self.session.get(f"{BACKEND_URL}/strategy/5s-pro/config") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ 5s-pro config endpoint accessible")
+                    
+                    # Check required fields
+                    required_fields = ['success', 'name', 'documented_win_rates', 'strategies', 'confluence_required']
+                    missing_fields = [field for field in required_fields if field not in data]
+                    
+                    if missing_fields:
+                        print(f"   ❌ Missing required fields: {missing_fields}")
+                        return False
+                    
+                    success = data.get('success')
+                    name = data.get('name')
+                    documented_win_rates = data.get('documented_win_rates', {})
+                    strategies = data.get('strategies', {})
+                    confluence_required = data.get('confluence_required', {})
+                    
+                    print(f"   📊 Strategy Name: {name}")
+                    print(f"   📊 Success: {success}")
+                    
+                    # Verify documented win rates
+                    if 'support_resistance' not in documented_win_rates:
+                        print(f"   ❌ Missing support_resistance in documented_win_rates")
+                        return False
+                    
+                    sr_win_rate = documented_win_rates.get('support_resistance')
+                    print(f"   📊 Support/Resistance Win Rate: {sr_win_rate}")
+                    
+                    if sr_win_rate != '62-68%':
+                        print(f"   ❌ Expected '62-68%' but got '{sr_win_rate}'")
+                        return False
+                    
+                    # Verify strategies
+                    expected_strategies = ['ema_rsi', 'support_resistance', 'candlestick_patterns']
+                    for strategy in expected_strategies:
+                        if strategy not in strategies:
+                            print(f"   ❌ Missing strategy: {strategy}")
+                            return False
+                        print(f"   ✅ Found strategy: {strategy}")
+                    
+                    # Verify confluence levels
+                    expected_levels = ['premium', 'strong', 'moderate', 'weak']
+                    for level in expected_levels:
+                        if level not in confluence_required:
+                            print(f"   ❌ Missing confluence level: {level}")
+                            return False
+                        print(f"   ✅ Found confluence level: {level}")
+                    
+                    return True
+                else:
+                    print(f"   ❌ 5s-pro config endpoint failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   5s-pro config endpoint test error: {e}")
+            return False
+    
+    async def test_5s_pro_signal_generation(self) -> bool:
+        """
+        Test 5-Second Pro Signal Generation
+        Test POST /api/strategy/5s-pro/signal?symbol=EURUSD_OTC:
+        - Should return direction (UP/DOWN/HOLD)
+        - Should return quality (PREMIUM/STRONG/MODERATE/WEAK/NO_TRADE)
+        - Should return indicators with ema20, rsi, at_key_level
+        - Should return patterns_detected array
+        - Should return sr_levels array
+        """
+        try:
+            print("   🎯 Testing 5-Second Pro signal generation")
+            
+            test_symbols = ["EURUSD_OTC", "GBPUSD_OTC", "BTCUSD"]
+            
+            for symbol in test_symbols:
+                print(f"   Testing symbol: {symbol}")
+                
+                async with self.session.post(f"{BACKEND_URL}/strategy/5s-pro/signal?symbol={symbol}") as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        print(f"   ✅ Signal generation successful for {symbol}")
+                        
+                        # Check required fields
+                        required_fields = ['success', 'direction', 'quality', 'indicators', 'patterns_detected', 'sr_levels', 'market_condition']
+                        missing_fields = [field for field in required_fields if field not in data]
+                        
+                        if missing_fields:
+                            print(f"   ❌ Missing required fields for {symbol}: {missing_fields}")
+                            return False
+                        
+                        success = data.get('success')
+                        direction = data.get('direction')
+                        quality = data.get('quality')
+                        indicators = data.get('indicators', {})
+                        patterns_detected = data.get('patterns_detected', [])
+                        sr_levels = data.get('sr_levels', [])
+                        market_condition = data.get('market_condition')
+                        
+                        print(f"   📊 {symbol} - Direction: {direction}, Quality: {quality}")
+                        print(f"   📊 {symbol} - Market Condition: {market_condition}")
+                        print(f"   📊 {symbol} - Patterns: {len(patterns_detected)}, S/R Levels: {len(sr_levels)}")
+                        
+                        # Verify direction values
+                        if direction not in ['UP', 'DOWN', 'HOLD']:
+                            print(f"   ❌ Invalid direction for {symbol}: {direction}")
+                            return False
+                        
+                        # Verify quality values
+                        if quality not in ['PREMIUM', 'STRONG', 'MODERATE', 'WEAK', 'NO_TRADE']:
+                            print(f"   ❌ Invalid quality for {symbol}: {quality}")
+                            return False
+                        
+                        # Verify indicators structure
+                        expected_indicators = ['ema20', 'rsi', 'at_key_level']
+                        for indicator in expected_indicators:
+                            if indicator not in indicators:
+                                print(f"   ❌ Missing indicator for {symbol}: {indicator}")
+                                return False
+                        
+                        print(f"   ✅ All required fields present for {symbol}")
+                        
+                    else:
+                        print(f"   ❌ Signal generation failed for {symbol}: {response.status}")
+                        error_text = await response.text()
+                        print(f"   Error details: {error_text}")
+                        return False
+            
+            return True
+                    
+        except Exception as e:
+            print(f"   5s-pro signal generation test error: {e}")
+            return False
+    
+    async def test_5s_pro_pattern_win_rates(self) -> bool:
+        """
+        Test 5-Second Pro Pattern Win Rates
+        Test GET /api/strategy/5s-pro/patterns:
+        - Should return patterns dict with win rates
+        - Should include best_patterns with reversal_at_sr array
+        - Verify morning_star and evening_star have 72% win rate
+        """
+        try:
+            print("   📈 Testing 5-Second Pro pattern win rates")
+            
+            async with self.session.get(f"{BACKEND_URL}/strategy/5s-pro/patterns") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Pattern win rates endpoint accessible")
+                    
+                    # Check required fields
+                    required_fields = ['success', 'patterns', 'best_patterns']
+                    missing_fields = [field for field in required_fields if field not in data]
+                    
+                    if missing_fields:
+                        print(f"   ❌ Missing required fields: {missing_fields}")
+                        return False
+                    
+                    success = data.get('success')
+                    patterns = data.get('patterns', {})
+                    best_patterns = data.get('best_patterns', {})
+                    
+                    print(f"   📊 Success: {success}")
+                    print(f"   📊 Total Patterns: {len(patterns)}")
+                    
+                    # Verify specific patterns
+                    if 'morning_star' not in patterns:
+                        print(f"   ❌ Missing morning_star pattern")
+                        return False
+                    
+                    if 'evening_star' not in patterns:
+                        print(f"   ❌ Missing evening_star pattern")
+                        return False
+                    
+                    morning_star_rate = patterns.get('morning_star')
+                    evening_star_rate = patterns.get('evening_star')
+                    
+                    print(f"   📊 Morning Star Win Rate: {morning_star_rate}")
+                    print(f"   📊 Evening Star Win Rate: {evening_star_rate}")
+                    
+                    # Verify 72% win rate (0.72 in decimal)
+                    if morning_star_rate != 0.72:
+                        print(f"   ❌ Expected 0.72 for morning_star but got {morning_star_rate}")
+                        return False
+                    
+                    if evening_star_rate != 0.72:
+                        print(f"   ❌ Expected 0.72 for evening_star but got {evening_star_rate}")
+                        return False
+                    
+                    # Verify best_patterns structure
+                    if 'reversal_at_sr' not in best_patterns:
+                        print(f"   ❌ Missing reversal_at_sr in best_patterns")
+                        return False
+                    
+                    reversal_patterns = best_patterns.get('reversal_at_sr', [])
+                    print(f"   📊 Best Reversal Patterns: {len(reversal_patterns)}")
+                    
+                    # Check if morning_star and evening_star are in best patterns
+                    pattern_names = [p.get('pattern') for p in reversal_patterns]
+                    if 'morning_star' not in pattern_names:
+                        print(f"   ❌ morning_star not in best patterns")
+                        return False
+                    
+                    if 'evening_star' not in pattern_names:
+                        print(f"   ❌ evening_star not in best patterns")
+                        return False
+                    
+                    print(f"   ✅ All pattern requirements verified")
+                    return True
+                else:
+                    print(f"   ❌ Pattern win rates endpoint failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   5s-pro pattern win rates test error: {e}")
+            return False
+
     # ========== MONEY MANAGEMENT SYSTEM TESTS ==========
     
     async def test_money_management_status_endpoint(self) -> bool:
