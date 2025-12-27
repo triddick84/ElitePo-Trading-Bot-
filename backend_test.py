@@ -15787,8 +15787,54 @@ async def run_socket_io_handshake_tests():
         await tester.cleanup()
 
 async def main():
-    """Main test runner - run 1-Minute Scalping Strategy tests"""
-    return await run_1m_scalping_strategy_tests()
+    """Main test runner - run new features tests"""
+    return await run_new_features_tests()
+
+async def run_new_features_tests():
+    """Run tests for newly implemented features"""
+    print("🚀 Testing Newly Implemented Features")
+    print("=" * 80)
+    
+    tester = BackendTester()
+    await tester.setup()
+    
+    # Define new features tests
+    tests = [
+        ("Health Check", tester.test_health_check),
+        ("Adaptive Strategy Stats", tester.test_adaptive_strategy_stats_endpoint),
+        ("AI/ML Trading System Status", tester.test_ai_ml_status_endpoint),
+        ("AI/ML Prediction", tester.test_ai_ml_predict_endpoint),
+        ("Money Management Status", tester.test_money_management_status_endpoint),
+        ("Money Management Calculate Stake", tester.test_money_management_calculate_stake_endpoint),
+        ("Pocket Option V2 Monitor Status", tester.test_pocket_option_v2_monitor_status_endpoint),
+    ]
+    
+    # Run all tests
+    for test_name, test_func in tests:
+        await tester.run_test(test_name, test_func)
+    
+    await tester.cleanup()
+    
+    # Print summary
+    print("\n" + "=" * 80)
+    print("🏁 New Features Testing Complete: {}/{} tests passed".format(
+        len(tests) - len(tester.failed_tests), len(tests)
+    ))
+    print("=" * 80)
+    
+    total_tests = len(tests)
+    passed_tests = total_tests - len(tester.failed_tests)
+    
+    if tester.failed_tests:
+        print(f"\n❌ Failed Tests:")
+        for test in tester.failed_tests:
+            print(f"   - {test}")
+        print(f"\n📊 Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+        return False
+    else:
+        print(f"\n🎉 All new features tests passed!")
+        print(f"\n📊 Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+        return True
 
 async def run_5s_pro_strategy_tests():
     """Run 5-Second Pro Strategy tests specifically"""
