@@ -246,6 +246,50 @@ const StrategySelector = ({ onStrategySelect, onAutoGenerateToggle }) => {
         '⏱️ Best during European/US session overlap',
         '💡 RSI < 30 + Lower BB + Support = HIGH PROBABILITY BUY'
       ]
+    },
+    'pocket_option_5s_pro': {
+      name: 'Pocket Option 5-Second Pro Strategy (DEFAULT)',
+      timeframe: '5 seconds',
+      chartType: 'Japanese Candlesticks',
+      assets: 'EUR/USD, GBP/USD, BTC/USD - High volatility during London/NY hours',
+      expiry: '5 seconds',
+      accuracy: '62-70% (S/R strategy 62-68% documented)',
+      indicators: [
+        { name: 'EMA 20', settings: 'Period: 20', purpose: 'Trend direction - UP/DOWN based on price position' },
+        { name: 'RSI', settings: 'Period: 14', purpose: 'Momentum - UP: RSI 50-70, DOWN: RSI 30-50' },
+        { name: 'Support/Resistance', settings: 'Dynamic pivot detection', purpose: 'Mean reversion entries (62-68% win rate)' },
+        { name: 'Candlestick Patterns', settings: 'AI pattern recognition', purpose: 'Reversal detection (engulfing, pin bar, doji)' },
+        { name: 'Volume/ATR', settings: 'Volatility analysis', purpose: 'Confirmation of breakout momentum' }
+      ],
+      callSignal: [
+        '📈 Price breaks ABOVE EMA(20)',
+        '📊 RSI between 50-70 (momentum rising)',
+        '🔄 Price just crossed above EMA(20)',
+        '🟢 At SUPPORT level (mean reversion)',
+        '🕯️ Bullish pattern (engulfing, hammer, pin bar)',
+        '📊 Volume spike confirmation',
+        '💹 RSI oversold (<30) turning up'
+      ],
+      putSignal: [
+        '📉 Price breaks BELOW EMA(20)',
+        '📊 RSI between 30-50 (momentum falling)',
+        '🔄 Price just crossed below EMA(20)',
+        '🔴 At RESISTANCE level (mean reversion)',
+        '🕯️ Bearish pattern (engulfing, shooting star)',
+        '📊 Volume spike confirmation',
+        '💹 RSI overbought (>70) turning down'
+      ],
+      tips: [
+        '⚡ USE ONE-CLICK TRADING for precise entry',
+        '⏱️ Execute at START of new candle',
+        '🔥 BEST TIME: London/NY overlap (13:00-21:00 UTC)',
+        '📍 S/R strategy has HIGHEST documented win rate (62-68%)',
+        '🎯 PREMIUM signal: 5+ confirmations = 80%+ confidence',
+        '🎯 STRONG signal: 4 confirmations = 72% confidence',
+        '🎯 MODERATE signal: 3 confirmations = 65% confidence',
+        '⚠️ Wait for CONFLUENCE - discipline is key!',
+        '🚫 No strategy guarantees wins - manage risk'
+      ]
     }
   };
 
