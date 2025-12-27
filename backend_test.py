@@ -1293,21 +1293,41 @@ class BackendTester:
                         data = await response.json()
                         print(f"   ✅ Signal generation successful for {symbol}")
                         
-                        # Check required fields
-                        required_fields = ['success', 'direction', 'quality', 'indicators', 'patterns_detected', 'sr_levels', 'market_condition']
+                        # Check required top-level fields
+                        required_fields = ['success', 'message', 'signal', 'telegram_sent']
                         missing_fields = [field for field in required_fields if field not in data]
                         
                         if missing_fields:
-                            print(f"   ❌ Missing required fields for {symbol}: {missing_fields}")
+                            print(f"   ❌ Missing required top-level fields for {symbol}: {missing_fields}")
                             return False
                         
                         success = data.get('success')
-                        direction = data.get('direction')
-                        quality = data.get('quality')
-                        indicators = data.get('indicators', {})
-                        patterns_detected = data.get('patterns_detected', [])
-                        sr_levels = data.get('sr_levels', [])
-                        market_condition = data.get('market_condition')
+                        message = data.get('message')
+                        signal = data.get('signal', {})
+                        telegram_sent = data.get('telegram_sent')
+                        
+                        print(f"   📊 {symbol} - Success: {success}")
+                        print(f"   📊 {symbol} - Message: {message}")
+                        print(f"   📊 {symbol} - Telegram Sent: {telegram_sent}")
+                        
+                        if not success:
+                            print(f"   ⚠️ Signal generation failed for {symbol}: {message}")
+                            continue
+                        
+                        # Check signal structure
+                        signal_required_fields = ['direction', 'quality', 'indicators', 'patterns_detected', 'sr_levels', 'market_condition']
+                        missing_signal_fields = [field for field in signal_required_fields if field not in signal]
+                        
+                        if missing_signal_fields:
+                            print(f"   ❌ Missing signal fields for {symbol}: {missing_signal_fields}")
+                            return False
+                        
+                        direction = signal.get('direction')
+                        quality = signal.get('quality')
+                        indicators = signal.get('indicators', {})
+                        patterns_detected = signal.get('patterns_detected', [])
+                        sr_levels = signal.get('sr_levels', [])
+                        market_condition = signal.get('market_condition')
                         
                         print(f"   📊 {symbol} - Direction: {direction}, Quality: {quality}")
                         print(f"   📊 {symbol} - Market Condition: {market_condition}")
