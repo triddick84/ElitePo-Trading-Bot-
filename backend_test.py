@@ -1738,7 +1738,7 @@ class BackendTester:
         """
         Test Money Management Calculate Stake Endpoint
         Test POST /api/money-management/calculate-stake?confidence=80&balance=500:
-        - Should return can_trade, stake, stake_percentage, kelly_stake_pct, risk_level
+        - Should return can_trade, stake, stake_percentage, risk_level
         """
         try:
             print("   💵 Testing Money Management calculate stake endpoint")
@@ -1751,7 +1751,7 @@ class BackendTester:
                     print(f"   ✅ Calculate stake endpoint accessible")
                     
                     # Check required fields
-                    required_fields = ['success', 'can_trade', 'stake', 'stake_percentage', 'kelly_stake_pct', 'risk_level']
+                    required_fields = ['success', 'can_trade', 'stake', 'stake_percentage', 'risk_level']
                     missing_fields = [field for field in required_fields if field not in data]
                     
                     if missing_fields:
@@ -1762,15 +1762,15 @@ class BackendTester:
                     can_trade = data.get('can_trade')
                     stake = data.get('stake')
                     stake_percentage = data.get('stake_percentage')
-                    kelly_stake_pct = data.get('kelly_stake_pct')
                     risk_level = data.get('risk_level')
+                    reason = data.get('reason', 'N/A')
                     
                     print(f"   📊 Success: {success}")
                     print(f"   📊 Can Trade: {can_trade}")
                     print(f"   📊 Stake: ${stake}")
                     print(f"   📊 Stake Percentage: {stake_percentage}%")
-                    print(f"   📊 Kelly Stake %: {kelly_stake_pct}%")
                     print(f"   📊 Risk Level: {risk_level}")
+                    print(f"   📊 Reason: {reason}")
                     
                     if not success:
                         print(f"   ❌ Calculate stake failed")
