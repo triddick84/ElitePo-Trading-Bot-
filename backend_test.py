@@ -15549,5 +15549,48 @@ async def main():
     """Main test runner - run 1-Minute Scalping Strategy tests"""
     return await run_1m_scalping_strategy_tests()
 
+async def run_5s_pro_strategy_tests():
+    """Run 5-Second Pro Strategy tests specifically"""
+    print("🚀 Testing Pocket Option 5-Second Pro Strategy")
+    print("=" * 80)
+    
+    tester = BackendTester()
+    await tester.setup()
+    
+    # Define 5-Second Pro Strategy tests
+    tests = [
+        ("Health Check", tester.test_health_check),
+        ("5s-Pro Strategy Config", tester.test_5s_pro_strategy_config),
+        ("5s-Pro Signal Generation", tester.test_5s_pro_signal_generation),
+        ("5s-Pro Pattern Win Rates", tester.test_5s_pro_pattern_win_rates),
+    ]
+    
+    # Run all tests
+    for test_name, test_func in tests:
+        await tester.run_test(test_name, test_func)
+    
+    await tester.cleanup()
+    
+    # Print summary
+    print("\n" + "=" * 80)
+    print("🏁 5-Second Pro Strategy Testing Complete: {}/{} tests passed".format(
+        len(tests) - len(tester.failed_tests), len(tests)
+    ))
+    print("=" * 80)
+    
+    total_tests = len(tests)
+    passed_tests = total_tests - len(tester.failed_tests)
+    
+    if tester.failed_tests:
+        print(f"\n❌ Failed Tests:")
+        for test in tester.failed_tests:
+            print(f"   - {test}")
+        print(f"\n📊 Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+        return False
+    else:
+        print(f"\n🎉 All 5-Second Pro Strategy tests passed!")
+        print(f"\n📊 Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+        return True
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(run_5s_pro_strategy_tests())
