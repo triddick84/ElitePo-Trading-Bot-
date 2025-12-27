@@ -949,7 +949,7 @@ All new bridge endpoints are working:
 - **Loading States**: Proper loading indicators and states
 
 ### Test Environment Details
-- **Frontend URL**: https://signalhub-16.preview.emergentagent.com
+- **Frontend URL**: https://binary-signal-pro-14.preview.emergentagent.com
 - **Backend Integration**: All API endpoints responding correctly
 - **Browser**: Chromium-based automation testing
 - **Viewport**: 1920x1080 desktop resolution

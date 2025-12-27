@@ -12,7 +12,7 @@ import sys
 from datetime import datetime, timezone, timedelta
 
 # Test configuration
-BACKEND_URL = "https://signalhub-16.preview.emergentagent.com/api"
+BACKEND_URL = "https://binary-signal-pro-14.preview.emergentagent.com/api"
 
 class AutoSignalTester:
     def __init__(self):
