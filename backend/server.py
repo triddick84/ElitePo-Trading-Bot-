@@ -2297,6 +2297,95 @@ async def reset_adaptive_strategy_config():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@api_router.get("/adaptive-strategy/stats")
+async def get_adaptive_strategy_stats():
+    """
+    Get performance statistics for adaptive strategy by market condition
+    """
+    try:
+        # Query signals grouped by market condition
+        pipeline = [
+            {
+                "$match": {
+                    "adaptive_market_type": {"$exists": True}
+                }
+            },
+            {
+                "$group": {
+                    "_id": "$adaptive_market_type",
+                    "total": {"$sum": 1},
+                    "wins": {
+                        "$sum": {
+                            "$cond": [{"$eq": ["$result", "win"]}, 1, 0]
+                        }
+                    },
+                    "avg_confidence": {"$avg": "$probability"}
+                }
+            }
+        ]
+        
+        results = await db.trading_signals.aggregate(pipeline).to_list(length=None)
+        
+        # Process results
+        stats = {
+            "trending": {"total_signals": 0, "win_rate": 0, "avg_confidence": 0},
+            "ranging": {"total_signals": 0, "win_rate": 0, "avg_confidence": 0},
+            "neutral": {"total_signals": 0, "win_rate": 0, "avg_confidence": 0},
+            "overall": {"total_signals": 0, "win_rate": 0, "avg_confidence": 0, "best_strategy": None}
+        }
+        
+        total_signals = 0
+        total_wins = 0
+        total_confidence = 0
+        best_win_rate = 0
+        
+        for result in results:
+            market_type = result["_id"]
+            total = result["total"]
+            wins = result["wins"]
+            avg_conf = result["avg_confidence"]
+            
+            win_rate = (wins / total * 100) if total > 0 else 0
+            
+            if market_type in stats:
+                stats[market_type] = {
+                    "total_signals": total,
+                    "win_rate": win_rate,
+                    "avg_confidence": avg_conf
+                }
+                
+                if win_rate > best_win_rate:
+                    best_win_rate = win_rate
+                    stats["overall"]["best_strategy"] = market_type.capitalize()
+            
+            total_signals += total
+            total_wins += wins
+            total_confidence += avg_conf * total
+        
+        # Calculate overall stats
+        if total_signals > 0:
+            stats["overall"]["total_signals"] = total_signals
+            stats["overall"]["win_rate"] = (total_wins / total_signals * 100)
+            stats["overall"]["avg_confidence"] = total_confidence / total_signals
+        
+        return {
+            "success": True,
+            "stats": stats
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting adaptive strategy stats: {e}")
+        return {
+            "success": True,
+            "stats": {
+                "trending": {"total_signals": 0, "win_rate": 0, "avg_confidence": 0},
+                "ranging": {"total_signals": 0, "win_rate": 0, "avg_confidence": 0},
+                "neutral": {"total_signals": 0, "win_rate": 0, "avg_confidence": 0},
+                "overall": {"total_signals": 0, "win_rate": 0, "avg_confidence": 0, "best_strategy": None}
+            }
+        }
+
+
 # =====================================================
 # REAL-TIME MARKET DATA ENDPOINTS
 # =====================================================
