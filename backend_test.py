@@ -14677,6 +14677,12 @@ class BackendTester:
         for test_name, test_func in breakout_predictor_tests:
             await self.run_test(test_name, test_func)
         
+        # Run 5-Second Pro Strategy tests
+        print("\n⚡ RUNNING POCKET OPTION 5-SECOND PRO STRATEGY TESTS (PRIORITY 1G)")
+        print("=" * 65)
+        for test_name, test_func in five_second_pro_tests:
+            await self.run_test(test_name, test_func)
+        
         # PRIORITY 1G: AI ML Trading System Tests (NEW)
         ai_ml_tests = [
             ("AI ML Status Endpoint", self.test_ai_ml_status_endpoint),
