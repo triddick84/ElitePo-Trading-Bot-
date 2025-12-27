@@ -5732,6 +5732,229 @@ async def generate_and_notify_signal(
         }
 
 
+# ============================================================================
+# POCKET OPTION V2 MONITOR ENDPOINTS (BinaryOptionsToolsV2)
+# ============================================================================
+
+@api_router.get("/po-v2/status")
+async def get_po_v2_status():
+    """Get Pocket Option V2 Monitor connection status"""
+    try:
+        from pocket_option_v2_monitor import get_monitor
+        
+        monitor = await get_monitor()
+        
+        if not monitor:
+            return {
+                "success": False,
+                "is_connected": False,
+                "error": "Monitor not initialized - check POCKET_OPTION_SSID in environment"
+            }
+        
+        balance = await monitor.get_balance()
+        is_demo = monitor.is_demo_account()
+        
+        return {
+            "success": True,
+            "is_connected": monitor.is_connected,
+            "balance": balance,
+            "is_demo": is_demo,
+            "subscribed_assets": list(monitor.subscriptions.keys()),
+            "candle_count": len(monitor.latest_candles)
+        }
+    except Exception as e:
+        logger.error(f"Error getting PO V2 status: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "is_connected": False
+        }
+
+
+@api_router.post("/po-v2/subscribe")
+async def subscribe_to_asset(request: Request):
+    """
+    Subscribe to real-time candles for an asset
+    
+    Body:
+    - asset: Asset symbol (e.g., 'EURUSD_otc')
+    - timeframe: Timeframe in seconds (default: 60)
+    """
+    try:
+        data = await request.json()
+        asset = data.get('asset', 'EURUSD_otc')
+        timeframe = data.get('timeframe', 60)
+        
+        from pocket_option_v2_monitor import get_monitor
+        
+        monitor = await get_monitor()
+        if not monitor:
+            return {
+                "success": False,
+                "error": "Monitor not initialized"
+            }
+        
+        success = await monitor.subscribe_candles(asset, timeframe)
+        
+        return {
+            "success": success,
+            "asset": asset,
+            "timeframe": timeframe,
+            "message": f"Subscribed to {asset}" if success else "Subscription failed"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error subscribing to asset: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@api_router.post("/po-v2/unsubscribe")
+async def unsubscribe_from_asset(request: Request):
+    """
+    Unsubscribe from an asset
+    
+    Body:
+    - asset: Asset symbol
+    """
+    try:
+        data = await request.json()
+        asset = data.get('asset')
+        
+        if not asset:
+            return {
+                "success": False,
+                "error": "Asset required"
+            }
+        
+        from pocket_option_v2_monitor import get_monitor
+        
+        monitor = await get_monitor()
+        if monitor:
+            await monitor.unsubscribe(asset)
+        
+        return {
+            "success": True,
+            "asset": asset,
+            "message": f"Unsubscribed from {asset}"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error unsubscribing from asset: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@api_router.get("/po-v2/candle/{asset}")
+async def get_latest_candle(asset: str):
+    """Get the latest candle for an asset"""
+    try:
+        from pocket_option_v2_monitor import get_monitor
+        
+        monitor = await get_monitor()
+        if not monitor:
+            return {
+                "success": False,
+                "error": "Monitor not initialized"
+            }
+        
+        candle = monitor.get_latest_candle(asset)
+        
+        if candle:
+            return {
+                "success": True,
+                "asset": asset,
+                "candle": candle
+            }
+        else:
+            return {
+                "success": False,
+                "error": f"No candle data for {asset} - not subscribed or no data yet"
+            }
+        
+    except Exception as e:
+        logger.error(f"Error getting latest candle: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@api_router.get("/po-v2/history/{asset}")
+async def get_historical_candles_v2(
+    asset: str,
+    period: int = 60,
+    count: int = 100
+):
+    """
+    Get historical candles from Pocket Option V2
+    
+    Args:
+        asset: Asset symbol
+        period: Candle period in seconds
+        count: Number of candles to fetch
+    """
+    try:
+        from pocket_option_v2_monitor import get_monitor
+        
+        monitor = await get_monitor()
+        if not monitor:
+            return {
+                "success": False,
+                "error": "Monitor not initialized"
+            }
+        
+        candles = await monitor.get_historical_candles(asset, period, count)
+        
+        return {
+            "success": True,
+            "asset": asset,
+            "period": period,
+            "count": len(candles),
+            "candles": candles
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting historical candles: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@api_router.get("/po-v2/payout/{asset}")
+async def get_asset_payout_v2(asset: str):
+    """Get payout percentage for an asset"""
+    try:
+        from pocket_option_v2_monitor import get_monitor
+        
+        monitor = await get_monitor()
+        if not monitor:
+            return {
+                "success": False,
+                "error": "Monitor not initialized"
+            }
+        
+        payout = await monitor.get_payout(asset)
+        
+        return {
+            "success": True,
+            "asset": asset,
+            "payout": payout
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting payout: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
