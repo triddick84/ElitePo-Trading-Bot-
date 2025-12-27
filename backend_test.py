@@ -14472,6 +14472,13 @@ class BackendTester:
             ("Configuration - Minimum Probability Threshold", self.test_configuration_minimum_probability_threshold),
         ]
         
+        # PRIORITY 1G: Pocket Option 5-Second Pro Strategy Tests (NEW)
+        five_second_pro_tests = [
+            ("5s-Pro Strategy Config", self.test_5s_pro_strategy_config),
+            ("5s-Pro Signal Generation", self.test_5s_pro_signal_generation),
+            ("5s-Pro Pattern Win Rates", self.test_5s_pro_pattern_win_rates),
+        ]
+        
         # PRIORITY 1B: Enhanced Breakout Predictor with Alerts Tests (NEW)
         breakout_predictor_tests = [
             ("Breakout Predictor Module", self.test_breakout_predictor_module),
