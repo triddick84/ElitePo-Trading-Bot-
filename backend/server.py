@@ -151,6 +151,32 @@ app = FastAPI(
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
+
+# Helper function to process signal through automated trading
+async def process_signal_for_automated_trading(signal_dict: Dict[str, Any]):
+    """
+    Process a generated signal through the automated trading service
+    
+    Args:
+        signal_dict: Signal dictionary with symbol, direction, probability, etc.
+    """
+    try:
+        from automated_trading_service import get_automated_trading_service
+        
+        service = await get_automated_trading_service(db)
+        
+        if service.is_enabled:
+            result = await service.process_signal(signal_dict)
+            
+            if result:
+                logger.info(f"🤖 Automated trade executed: {result['order_id']}")
+            else:
+                logger.debug("Signal not executed by automated trading")
+        
+    except Exception as e:
+        logger.error(f"Error in automated trading: {e}")
+
+
 # Request/Response Models
 class BotStartRequest(BaseModel):
     trading_mode: TradingMode = TradingMode.DEMO
