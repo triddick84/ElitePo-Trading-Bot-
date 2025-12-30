@@ -16896,6 +16896,53 @@ async def main():
     """Main test runner - run Automated Trading Execution Mode tests"""
     return await run_automated_trading_execution_mode_tests()
 
+async def run_automated_trading_execution_mode_tests():
+    """Run Automated Trading Execution Mode tests specifically"""
+    print("🚀 Testing Automated Trading Execution Mode Implementation")
+    print("=" * 80)
+    
+    tester = BackendTester()
+    await tester.setup()
+    
+    # Define execution mode tests
+    tests = [
+        ("Health Check", tester.test_health_check),
+        ("Execution Mode Current", tester.test_execution_mode_current),
+        ("Execution Mode Set DEMO", tester.test_execution_mode_set_demo),
+        ("Headless Status", tester.test_headless_status),
+        ("Headless Start (Expected Failure)", tester.test_headless_start_expected_failure),
+        ("Auto-Trade Status Verification", tester.test_auto_trade_status_verification),
+        ("Trade Executor Pending", tester.test_trade_executor_pending),
+        ("Trade Executor Statistics", tester.test_trade_executor_statistics),
+    ]
+    
+    # Run all tests
+    for test_name, test_func in tests:
+        await tester.run_test(test_name, test_func)
+    
+    await tester.cleanup()
+    
+    # Print summary
+    print("\n" + "=" * 80)
+    print("🏁 Automated Trading Execution Mode Testing Complete: {}/{} tests passed".format(
+        len(tests) - len(tester.failed_tests), len(tests)
+    ))
+    print("=" * 80)
+    
+    total_tests = len(tests)
+    passed_tests = total_tests - len(tester.failed_tests)
+    
+    if tester.failed_tests:
+        print(f"\n❌ Failed Tests:")
+        for test in tester.failed_tests:
+            print(f"   - {test}")
+        print(f"\n📊 Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+        return False
+    else:
+        print(f"\n🎉 All Automated Trading Execution Mode tests passed!")
+        print(f"\n📊 Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+        return True
+
 async def run_new_features_tests():
     """Run tests for newly implemented features"""
     print("🚀 Testing Newly Implemented Features")
