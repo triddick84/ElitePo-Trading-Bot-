@@ -6,12 +6,14 @@ Modern async implementation using pocketoptionapi-async library
 import asyncio
 import logging
 import os
+import sys
 from typing import Dict, Any, Optional, List, Callable
 from datetime import datetime, timezone
 from collections import deque
 
-from pocketoptionapi_async import (
-    AsyncPocketOptionClient,
+# Import library components - use absolute imports to avoid conflicts with local models.py
+from pocketoptionapi_async.client import AsyncPocketOptionClient
+from pocketoptionapi_async.models import (
     OrderDirection,
     OrderStatus,
     ConnectionStatus,
@@ -19,7 +21,9 @@ from pocketoptionapi_async import (
     Balance,
     Candle,
     Order,
-    OrderResult,
+    OrderResult
+)
+from pocketoptionapi_async.exceptions import (
     PocketOptionError,
     AuthenticationError,
     ConnectionError as POConnectionError,
