@@ -87,10 +87,15 @@ class PocketOptionTradeExecutor:
             
             logger.info(f"📤 Trade created: {order_id} - {direction.upper()} {asset} ${amount}")
             
-            # AUTO-EXECUTE immediately in DEMO mode
+            # AUTO-EXECUTE based on current execution mode
             from auto_execution_mode import get_auto_execution
             
-            auto_exec = await get_auto_execution(self.db, mode="DEMO")
+            # Get existing auto_execution instance (preserves current mode)
+            auto_exec = await get_auto_execution(self.db)
+            current_mode = auto_exec.get_mode()
+            
+            logger.info(f"🔄 Executing trade in {current_mode} mode")
+            
             execution_result = await auto_exec.execute_trade_auto(
                 order_id=order_id,
                 asset=asset,
@@ -106,6 +111,7 @@ class PocketOptionTradeExecutor:
                     trade = self.pending_trades[order_id]
                     trade['status'] = 'active'
                     trade['bridge_order_id'] = execution_result.get('order_id')
+                    trade['execution_mode'] = current_mode
                     self.active_trades[order_id] = trade
                     del self.pending_trades[order_id]
                 
@@ -113,14 +119,16 @@ class PocketOptionTradeExecutor:
                     "success": True,
                     "order_id": order_id,
                     "status": "executed",
-                    "execution_mode": "DEMO",
-                    "message": "Trade executed automatically in DEMO mode"
+                    "execution_mode": current_mode,
+                    "bridge_order_id": execution_result.get('order_id'),
+                    "message": f"Trade executed in {current_mode} mode"
                 }
             else:
                 return {
                     "success": True,
                     "order_id": order_id,
                     "status": "pending",
+                    "execution_mode": current_mode,
                     "message": "Trade queued for execution"
                 }
             
