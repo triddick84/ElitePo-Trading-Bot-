@@ -5860,6 +5860,133 @@ async def generate_and_notify_signal(
 
 
 # ============================================================================
+# TRADE EXECUTOR ENDPOINTS (Bridge Script Integration)
+# ============================================================================
+
+@api_router.get("/trade-executor/pending")
+async def get_pending_trades_for_bridge():
+    """
+    Get pending trades waiting for bridge execution
+    
+    This endpoint is called by the frontend bridge script to get trades to execute
+    """
+    try:
+        from trade_executor import get_trade_executor
+        
+        executor = await get_trade_executor(db)
+        pending_trades = await executor.get_pending_trades()
+        
+        return {
+            "success": True,
+            "pending_trades": pending_trades,
+            "count": len(pending_trades)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting pending trades: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@api_router.post("/trade-executor/confirm-execution")
+async def confirm_trade_execution(request: Request):
+    """
+    Confirm trade execution from bridge
+    
+    Called by bridge script when it successfully executes a trade
+    
+    Body:
+    - order_id: Our internal order ID
+    - bridge_order_id: Pocket Option's order ID
+    - execution_price: Price at execution
+    - execution_time: ISO timestamp
+    """
+    try:
+        data = await request.json()
+        
+        from trade_executor import get_trade_executor
+        
+        executor = await get_trade_executor(db)
+        result = await executor.confirm_execution(
+            order_id=data.get('order_id'),
+            bridge_order_id=data.get('bridge_order_id'),
+            execution_price=data.get('execution_price'),
+            execution_time=data.get('execution_time')
+        )
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error confirming execution: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@api_router.post("/trade-executor/report-result")
+async def report_trade_result_from_bridge(request: Request):
+    """
+    Report trade result from bridge
+    
+    Called by bridge script when trade expires
+    
+    Body:
+    - order_id: Our internal order ID
+    - result: 'win', 'loss', or 'draw'
+    - profit: Profit amount (can be negative)
+    - close_price: Closing price
+    - close_time: ISO timestamp
+    """
+    try:
+        data = await request.json()
+        
+        from trade_executor import get_trade_executor
+        
+        executor = await get_trade_executor(db)
+        result = await executor.report_trade_result(
+            order_id=data.get('order_id'),
+            result=data.get('result'),
+            profit=data.get('profit'),
+            close_price=data.get('close_price'),
+            close_time=data.get('close_time')
+        )
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error reporting trade result: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@api_router.get("/trade-executor/statistics")
+async def get_trade_executor_statistics():
+    """Get trade executor statistics"""
+    try:
+        from trade_executor import get_trade_executor
+        
+        executor = await get_trade_executor(db)
+        stats = executor.get_statistics()
+        
+        return {
+            "success": True,
+            **stats
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting executor statistics: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+# ============================================================================
 # 5-SECOND SUPERTREND REVERSAL STRATEGY ENDPOINTS
 # ============================================================================
 
