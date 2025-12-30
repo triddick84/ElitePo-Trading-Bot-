@@ -7,7 +7,14 @@ This module implements:
 3. Model training (XGBoost, LSTM, etc.)
 4. Backtesting and evaluation
 5. Model deployment integration
+
+CPU-ONLY MODE: Configured for deployment without GPU/CUDA
 """
+
+# CRITICAL: Force CPU mode BEFORE imports
+import os
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 import pandas as pd
 import numpy as np
