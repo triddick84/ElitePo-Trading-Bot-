@@ -15422,7 +15422,48 @@ class BackendTester:
             print(f"   Bridge status test error: {e}")
             return False
 
-    async def run_all_tests(self):
+    async def run_automated_trading_integration_tests(self):
+        """Run comprehensive automated trading integration tests"""
+        print("\n" + "="*80)
+        print("🤖 AUTOMATED TRADING INTEGRATION TESTING")
+        print("="*80)
+        
+        # List of automated trading tests to run
+        automated_trading_tests = [
+            ("Automated Trading Status & Configuration", self.test_automated_trading_status),
+            ("Enable/Disable Automated Trading", self.test_automated_trading_enable_disable),
+            ("Configuration Update", self.test_automated_trading_config_update),
+            ("Signal Generation with Automated Trading", self.test_automated_trading_signal_generation),
+            ("Active Orders", self.test_automated_trading_active_orders),
+            ("Trade History", self.test_automated_trading_trade_history),
+            ("Risk Management Rules", self.test_automated_trading_risk_management),
+            ("Money Management Integration", self.test_automated_trading_money_management_integration),
+            ("Error Handling", self.test_automated_trading_error_handling),
+            ("AI ML Status", self.test_ai_ml_status_endpoint),
+            ("AI ML Prediction", self.test_ai_ml_prediction_endpoint),
+        ]
+        
+        passed_tests = 0
+        total_tests = len(automated_trading_tests)
+        
+        for test_name, test_func in automated_trading_tests:
+            success = await self.run_test(test_name, test_func)
+            if success:
+                passed_tests += 1
+        
+        print(f"\n" + "="*80)
+        print(f"🤖 AUTOMATED TRADING INTEGRATION TEST RESULTS")
+        print(f"="*80)
+        print(f"✅ Passed: {passed_tests}/{total_tests}")
+        print(f"❌ Failed: {total_tests - passed_tests}/{total_tests}")
+        print(f"📊 Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+        
+        if self.failed_tests:
+            print(f"\n❌ Failed Tests:")
+            for failed_test in self.failed_tests:
+                print(f"   - {failed_test}")
+        
+        return passed_tests == total_tests
         """Run all backend tests focusing on critical fixes for GPT Signal Bot"""
         print("🚀 Starting Critical Fixes Testing for GPT Signal Bot")
         print("=" * 80)
