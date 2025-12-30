@@ -10,7 +10,7 @@ import json
 import subprocess
 from datetime import datetime, timezone
 
-BACKEND_URL = "https://binary-signal-pro-14.preview.emergentagent.com/api"
+BACKEND_URL = "https://signalbot-34.preview.emergentagent.com/api"
 
 async def test_complete_flow():
     """Test the complete auto signal generation start/stop flow"""

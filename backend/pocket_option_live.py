@@ -525,7 +525,7 @@ def generate_bridge_script(app_url: str) -> str:
     - Trade execution support
     
     Args:
-        app_url: The URL of our trading app (e.g., https://binary-signal-pro-14.preview.emergentagent.com)
+        app_url: The URL of our trading app (e.g., https://signalbot-34.preview.emergentagent.com)
     
     Returns:
         JavaScript code to paste in browser console
@@ -1250,5 +1250,5 @@ def get_bridge_script(app_url: str = None) -> str:
     """Get the browser bridge script"""
     if app_url is None:
         # Default to placeholder - will be replaced with actual URL
-        app_url = "https://binary-signal-pro-14.preview.emergentagent.com"
+        app_url = "https://signalbot-34.preview.emergentagent.com"
     return generate_bridge_script(app_url)

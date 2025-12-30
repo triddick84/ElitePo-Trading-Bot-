@@ -11,7 +11,7 @@ import sys
 from datetime import datetime
 
 # Test configuration
-BACKEND_URL = "https://binary-signal-pro-14.preview.emergentagent.com/api"
+BACKEND_URL = "https://signalbot-34.preview.emergentagent.com/api"
 
 async def test_1m_sell_bias_fix():
     """Test the 1M timeframe SELL bias fix"""

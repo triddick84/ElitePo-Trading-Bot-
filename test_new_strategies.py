@@ -10,7 +10,7 @@ import sys
 from datetime import datetime
 
 # Test configuration
-BACKEND_URL = "https://binary-signal-pro-14.preview.emergentagent.com/api"
+BACKEND_URL = "https://signalbot-34.preview.emergentagent.com/api"
 
 class NewStrategyTester:
     def __init__(self):

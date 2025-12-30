@@ -206,7 +206,7 @@ signal.technical_analysis = {
 ### Enable Candle Sync:
 ```bash
 # Start bot first
-curl -X POST https://binary-signal-pro-14.preview.emergentagent.com/api/bot/start \
+curl -X POST https://signalbot-34.preview.emergentagent.com/api/bot/start \
   -H "Content-Type: application/json" \
   -d '{
     "trading_mode": "demo",
@@ -215,17 +215,17 @@ curl -X POST https://binary-signal-pro-14.preview.emergentagent.com/api/bot/star
   }'
 
 # Enable candle sync
-curl -X POST https://binary-signal-pro-14.preview.emergentagent.com/api/bot/candle-sync/enable
+curl -X POST https://signalbot-34.preview.emergentagent.com/api/bot/candle-sync/enable
 ```
 
 ### Check Status:
 ```bash
-curl https://binary-signal-pro-14.preview.emergentagent.com/api/bot/candle-sync/status
+curl https://signalbot-34.preview.emergentagent.com/api/bot/candle-sync/status
 ```
 
 ### Disable Candle Sync:
 ```bash
-curl -X POST https://binary-signal-pro-14.preview.emergentagent.com/api/bot/candle-sync/disable
+curl -X POST https://signalbot-34.preview.emergentagent.com/api/bot/candle-sync/disable
 ```
 
 ---
