@@ -919,6 +919,247 @@ def generate_bridge_script(app_url: str) -> str:
   }}
   
   // ═══════════════════════════════════════════════════════════════════════════
+  // TRADE EXECUTION
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  async function checkForPendingTrades() {{
+    try {{
+      const response = await fetch(`${{CONFIG.appUrl}}/api/trade-executor/pending`, {{
+        method: 'GET',
+        headers: {{ 'Content-Type': 'application/json' }}
+      }});
+      
+      const data = await response.json();
+      
+      if (data.success && data.pending_trades && data.pending_trades.length > 0) {{
+        log(`📋 Found ${{data.pending_trades.length}} pending trades`, 'info');
+        
+        for (const trade of data.pending_trades) {{
+          await executeTrade(trade);
+        }}
+      }}
+    }} catch (error) {{
+      // Silent fail - don't spam console
+    }}
+  }}
+  
+  async function executeTrade(trade) {{
+    try {{
+      log(`🎯 Executing trade: ${{trade.direction.toUpperCase()}} ${{trade.asset}} $${{trade.amount}}`, 'info');
+      
+      // Find the trading interface
+      // This is Pocket Option specific - may need adjustment based on their UI
+      
+      // 1. Set asset
+      if (typeof window.setAsset === 'function') {{
+        window.setAsset(trade.asset);
+      }}
+      
+      // 2. Set amount
+      if (typeof window.setAmount === 'function') {{
+        window.setAmount(trade.amount);
+      }}
+      
+      // 3. Set duration
+      if (typeof window.setDuration === 'function') {{
+        window.setDuration(trade.duration);
+      }}
+      
+      // 4. Place order
+      const orderResult = await placeOrder(trade.direction, trade.asset, trade.amount, trade.duration);
+      
+      if (orderResult.success) {{
+        log(`✅ Trade executed: ${{orderResult.order_id}}`, 'success');
+        
+        // Confirm execution with backend
+        await fetch(`${{CONFIG.appUrl}}/api/trade-executor/confirm-execution`, {{
+          method: 'POST',
+          headers: {{ 'Content-Type': 'application/json' }},
+          body: JSON.stringify({{
+            order_id: trade.order_id,
+            bridge_order_id: orderResult.order_id,
+            execution_price: orderResult.price,
+            execution_time: new Date().toISOString()
+          }})
+        }});
+        
+        // Monitor order for result
+        monitorOrderResult(trade.order_id, orderResult.order_id, trade.duration);
+      }} else {{
+        log(`❌ Trade execution failed: ${{orderResult.error}}`, 'error');
+      }}
+      
+    }} catch (error) {{
+      log(`❌ Error executing trade: ${{error.message}}`, 'error');
+    }}
+  }}
+  
+  async function placeOrder(direction, asset, amount, duration) {{
+    try {{
+      // METHOD 1: Try using global trading functions (if available)
+      if (typeof window.placeOrder === 'function') {{
+        const result = await window.placeOrder({{
+          asset: asset,
+          direction: direction === 'call' ? 'higher' : 'lower',
+          amount: amount,
+          duration: duration
+        }});
+        
+        return {{
+          success: true,
+          order_id: result.id || result.orderId || result.order_id,
+          price: result.price || result.entryPrice
+        }};
+      }}
+      
+      // METHOD 2: Simulate button clicks (fallback)
+      // Find and click the CALL/PUT button
+      const buttons = document.querySelectorAll('button, div[role="button"]');
+      let orderButton = null;
+      
+      for (const button of buttons) {{
+        const text = button.textContent.toLowerCase();
+        if ((direction === 'call' && (text.includes('call') || text.includes('higher') || text.includes('up'))) ||
+            (direction === 'put' && (text.includes('put') || text.includes('lower') || text.includes('down')))) {{
+          orderButton = button;
+          break;
+        }}
+      }}
+      
+      if (orderButton) {{
+        orderButton.click();
+        
+        // Wait a bit for order to register
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Try to extract order ID from page
+        const orderElements = document.querySelectorAll('[class*="order"], [class*="trade"], [id*="order"], [id*="trade"]');
+        let orderId = 'BRIDGE_' + Date.now();
+        
+        for (const el of orderElements) {{
+          const text = el.textContent;
+          const match = text.match(/#?\\d{{6,}}/);
+          if (match) {{
+            orderId = match[0];
+            break;
+          }}
+        }}
+        
+        return {{
+          success: true,
+          order_id: orderId,
+          price: getCurrentPrice(asset)
+        }};
+      }}
+      
+      return {{
+        success: false,
+        error: 'Could not find trading interface'
+      }};
+      
+    }} catch (error) {{
+      return {{
+        success: false,
+        error: error.message
+      }};
+    }}
+  }}
+  
+  function getCurrentPrice(asset) {{
+    // Try to get current price from page
+    try {{
+      const priceElements = document.querySelectorAll('[class*="price"], [class*="rate"], [id*="price"], [id*="rate"]');
+      for (const el of priceElements) {{
+        const text = el.textContent.trim();
+        const match = text.match(/\\d+\\.\\d{{2,}}/);
+        if (match) {{
+          return parseFloat(match[0]);
+        }}
+      }}
+    }} catch (error) {{
+      // Silent fail
+    }}
+    return 0;
+  }}
+  
+  function monitorOrderResult(ourOrderId, bridgeOrderId, duration) {{
+    // Wait for trade duration + 5 seconds
+    setTimeout(async () => {{
+      try {{
+        // Try to get result from page
+        const result = await getOrderResult(bridgeOrderId);
+        
+        // Report result to backend
+        await fetch(`${{CONFIG.appUrl}}/api/trade-executor/report-result`, {{
+          method: 'POST',
+          headers: {{ 'Content-Type': 'application/json' }},
+          body: JSON.stringify({{
+            order_id: ourOrderId,
+            result: result.status, // 'win', 'loss', or 'draw'
+            profit: result.profit,
+            close_price: result.closePrice,
+            close_time: new Date().toISOString()
+          }})
+        }});
+        
+        log(`📊 Trade result reported: ${{result.status.toUpperCase()}} - $${{result.profit.toFixed(2)}}`, 
+            result.status === 'win' ? 'success' : 'error');
+        
+      }} catch (error) {{
+        log(`⚠️ Could not get order result: ${{error.message}}`, 'warning');
+      }}
+    }}, (duration + 5) * 1000);
+  }}
+  
+  async function getOrderResult(orderId) {{
+    // Try to find order result in page
+    try {{
+      // Look for order in history/results section
+      const orderElements = document.querySelectorAll('[class*="history"], [class*="result"], [class*="trade"]');
+      
+      for (const el of orderElements) {{
+        if (el.textContent.includes(orderId)) {{
+          const text = el.textContent.toLowerCase();
+          
+          // Check if win/loss
+          const isWin = text.includes('win') || text.includes('won') || text.includes('profit') || text.includes('+');
+          const isLoss = text.includes('loss') || text.includes('lost') || text.includes('-');
+          
+          // Try to extract profit amount
+          const profitMatch = text.match(/[+-]?\\$?\\d+\\.\\d{{2}}/);
+          const profit = profitMatch ? parseFloat(profitMatch[0].replace('$', '')) : 0;
+          
+          return {{
+            status: isWin ? 'win' : isLoss ? 'loss' : 'draw',
+            profit: profit,
+            closePrice: getCurrentPrice('') // Current price as approximation
+          }};
+        }}
+      }}
+      
+      // Default to unknown if can't find
+      return {{
+        status: 'unknown',
+        profit: 0,
+        closePrice: 0
+      }};
+      
+    }} catch (error) {{
+      return {{
+        status: 'error',
+        profit: 0,
+        closePrice: 0
+      }};
+    }}
+  }}
+  
+  // Start polling for pending trades every 2 seconds
+  function startTradePolling() {{
+    setInterval(checkForPendingTrades, 2000);
+    log('🔄 Trade polling started', 'info');
+  }}
+  
+  // ═══════════════════════════════════════════════════════════════════════════
   // INITIALIZATION
   // ═══════════════════════════════════════════════════════════════════════════
   
