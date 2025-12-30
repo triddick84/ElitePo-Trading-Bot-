@@ -28,6 +28,11 @@ from .pocket_option_5s_pro import (
     SignalQuality
 )
 
+from .strategy_5s_supertrend_reversal import (
+    SupertrendReversal5s,
+    generate_5s_supertrend_signal
+)
+
 __all__ = [
     # Candlestick Bible
     'CandlestickBibleStrategy',
