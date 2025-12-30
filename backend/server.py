@@ -5822,6 +5822,157 @@ async def generate_and_notify_signal(
 
 
 # ============================================================================
+# AUTOMATED TRADING ENDPOINTS
+# ============================================================================
+
+@api_router.get("/automated-trading/status")
+async def get_automated_trading_status():
+    """Get automated trading status and statistics"""
+    try:
+        from automated_trading_service import get_automated_trading_service
+        
+        service = await get_automated_trading_service(db)
+        stats = service.get_statistics()
+        
+        return {
+            "success": True,
+            **stats
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting automated trading status: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@api_router.post("/automated-trading/enable")
+async def enable_automated_trading():
+    """Enable automated trading"""
+    try:
+        from automated_trading_service import get_automated_trading_service
+        
+        service = await get_automated_trading_service(db)
+        await service.enable()
+        
+        return {
+            "success": True,
+            "message": "Automated trading enabled",
+            "is_enabled": service.is_enabled
+        }
+        
+    except Exception as e:
+        logger.error(f"Error enabling automated trading: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@api_router.post("/automated-trading/disable")
+async def disable_automated_trading():
+    """Disable automated trading"""
+    try:
+        from automated_trading_service import get_automated_trading_service
+        
+        service = await get_automated_trading_service(db)
+        await service.disable()
+        
+        return {
+            "success": True,
+            "message": "Automated trading disabled",
+            "is_enabled": service.is_enabled
+        }
+        
+    except Exception as e:
+        logger.error(f"Error disabling automated trading: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@api_router.post("/automated-trading/config")
+async def update_automated_trading_config(request: Request):
+    """
+    Update automated trading configuration
+    
+    Body:
+    - default_stake: Default stake amount
+    - max_concurrent_trades: Maximum concurrent trades
+    - min_confidence: Minimum confidence threshold
+    - use_money_management: Enable Kelly Formula
+    - use_risk_rules: Enable risk management rules
+    """
+    try:
+        data = await request.json()
+        
+        from automated_trading_service import get_automated_trading_service
+        
+        service = await get_automated_trading_service(db)
+        await service.update_config(data)
+        
+        return {
+            "success": True,
+            "message": "Configuration updated",
+            "config": service.get_statistics()['config']
+        }
+        
+    except Exception as e:
+        logger.error(f"Error updating config: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@api_router.get("/automated-trading/active-orders")
+async def get_active_orders():
+    """Get list of active orders"""
+    try:
+        from automated_trading_service import get_automated_trading_service
+        
+        service = await get_automated_trading_service(db)
+        
+        return {
+            "success": True,
+            "active_orders": list(service.active_orders.values()),
+            "count": len(service.active_orders)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting active orders: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@api_router.get("/automated-trading/trade-history")
+async def get_trade_history(limit: int = 50):
+    """Get recent trade history"""
+    try:
+        trades = await db.automated_trades.find(
+            {"user_id": "default_user"},
+            {"_id": 0}
+        ).sort("timestamp", -1).limit(limit).to_list(length=limit)
+        
+        return {
+            "success": True,
+            "trades": trades,
+            "count": len(trades)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting trade history: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+# ============================================================================
 # POCKET OPTION API CLIENT ENDPOINTS (pocketoptionapi-async)
 # ============================================================================
 
