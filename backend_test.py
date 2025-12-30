@@ -2058,7 +2058,7 @@ class BackendTester:
                     
         except Exception as e:
             print(f"   AI ML prediction endpoint test error: {e}")
-            return Falseeld in required_fields if field not in data]
+            return False
                     
                     if missing_fields:
                         print(f"   ❌ Missing required fields: {missing_fields}")
