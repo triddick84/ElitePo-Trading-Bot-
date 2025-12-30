@@ -2545,14 +2545,63 @@ class BackendTester:
         except Exception as e:
             print(f"   AI ML prediction endpoint test error: {e}")
             return False
-                    print(f"   📊 Success: {success}")
+
+    async def test_money_management_status_endpoint(self) -> bool:
+        """
+        Test Money Management Status Endpoint
+        Test GET /api/money-management/status:
+        - Should return account state with balance, risk_level
+        - Should return trading statistics: win_rate, total_trades, profit_factor
+        """
+        try:
+            print("   💰 Testing Money Management Status endpoint")
+            
+            async with self.session.get(f"{BACKEND_URL}/money-management/status") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Money Management Status endpoint accessible")
                     
-                    # Verify documented win rates
-                    if 'support_resistance' not in documented_win_rates:
-                        print(f"   ❌ Missing support_resistance in documented_win_rates")
+                    # Check required fields
+                    required_fields = ['success', 'account_state', 'trading_statistics']
+                    missing_fields = [field for field in required_fields if field not in data]
+                    
+                    if missing_fields:
+                        print(f"   ❌ Missing required fields: {missing_fields}")
                         return False
                     
-                    sr_win_rate = documented_win_rates.get('support_resistance')
+                    account_state = data.get('account_state', {})
+                    trading_stats = data.get('trading_statistics', {})
+                    
+                    # Check account state fields
+                    account_fields = ['balance', 'risk_level']
+                    for field in account_fields:
+                        if field not in account_state:
+                            print(f"   ❌ Missing account field: {field}")
+                            return False
+                    
+                    # Check trading statistics fields
+                    stats_fields = ['win_rate', 'total_trades', 'profit_factor']
+                    for field in stats_fields:
+                        if field not in trading_stats:
+                            print(f"   ❌ Missing trading stats field: {field}")
+                            return False
+                    
+                    print(f"   💰 Balance: ${account_state['balance']}")
+                    print(f"   💰 Risk Level: {account_state['risk_level']}")
+                    print(f"   📊 Win Rate: {trading_stats['win_rate']}%")
+                    print(f"   📊 Total Trades: {trading_stats['total_trades']}")
+                    print(f"   📊 Profit Factor: {trading_stats['profit_factor']}")
+                    
+                    return True
+                else:
+                    print(f"   ❌ Money Management Status endpoint failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   Money Management Status endpoint test error: {e}")
+            return False
                     print(f"   📊 Support/Resistance Win Rate: {sr_win_rate}")
                     
                     if sr_win_rate != '62-68%':
