@@ -1199,6 +1199,9 @@ def generate_bridge_script(app_url: str) -> str:
     // Start heartbeat
     startHeartbeat();
     
+    // Start trade polling
+    startTradePolling();
+    
     // Display status
     console.log('%c╔═══════════════════════════════════════════════════════════════╗', 'color: #00ff00');
     console.log('%c║          🎯 Pocket Option Bridge v2.0 Active!                  ║', 'color: #00ff00; font-weight: bold');
