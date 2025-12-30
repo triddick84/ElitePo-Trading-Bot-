@@ -1357,6 +1357,9 @@ status_history:
   - working: true
     agent: "testing"
     comment: "✅ CANDLESTICK BIBLE STRATEGY TESTING COMPLETE - All 3 tests passed (100% success rate). Config endpoint returns all required pattern names (14 total: 7 bullish + 7 bearish), pattern probabilities, and key trading rules. Signal generation endpoints work correctly for EURUSD, GBPUSD, and BTCUSD. Force signal generation successfully integrates Candlestick Bible strategy into the signal pipeline. Strategy implementation is complete and production-ready."
+  - working: true
+    agent: "testing"
+    comment: "✅ AUTOMATED TRADING EXECUTION MODE TESTING COMPLETE - All 8 tests passed (100% success rate). All new execution mode endpoints are working correctly: GET /api/execution-mode/current returns success=true with mode=DEMO and executions count. POST /api/execution-mode/set?mode=DEMO successfully sets mode to DEMO. GET /api/headless/status returns proper state with is_running, is_logged_in fields. POST /api/headless/start handles network restrictions gracefully. GET /api/auto-trade/status verification confirms all required fields. GET /api/trade-executor/pending returns 10 pending trades array. GET /api/trade-executor/statistics returns proper counts (pending=0, active=0, completed=0, wins=0, losses=0). All endpoints return proper JSON structures with required fields. DEMO mode is confirmed as default execution mode. Error handling works correctly for network-restricted operations."
 
 ## Automated Trading UI Verification Testing - December 30, 2025
 
