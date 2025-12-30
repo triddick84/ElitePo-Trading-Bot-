@@ -233,13 +233,32 @@ class AutomatedTradingService:
         confidence: float,
         strategy: str
     ) -> Optional[Dict]:
-        """Execute trade via Bridge Script"""
+        """Execute trade via Bridge Script (REAL EXECUTION)"""
         try:
-            logger.info(f"🚀 Executing {direction.upper()} trade: {asset} ${amount} for {duration}s (confidence: {confidence}%)")
+            logger.info(f"🚀 Executing REAL trade: {direction.upper()} {asset} ${amount} for {duration}s (confidence: {confidence}%)")
+            
+            # Import trade executor
+            from trade_executor import get_trade_executor
+            
+            executor = await get_trade_executor(self.db)
+            
+            # Execute trade via Bridge Script
+            result = await executor.execute_trade(
+                asset=asset,
+                direction=direction,
+                amount=amount,
+                duration=duration,
+                strategy=strategy,
+                confidence=confidence
+            )
+            
+            if not result.get('success'):
+                logger.error(f"Trade execution failed: {result.get('error')}")
+                return None
+            
+            order_id = result['order_id']
             
             # Create order record
-            order_id = f"AUTO_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S_%f')}"
-            
             order = {
                 "order_id": order_id,
                 "asset": asset,
@@ -249,7 +268,8 @@ class AutomatedTradingService:
                 "confidence": confidence,
                 "strategy": strategy,
                 "timestamp": datetime.now(timezone.utc),
-                "status": "pending",
+                "status": result.get('status', 'pending'),
+                "execution_type": "bridge_script",
                 "result": None,
                 "profit": 0.0
             }
@@ -263,16 +283,12 @@ class AutomatedTradingService:
                 "user_id": "default_user"
             })
             
-            # TODO: Integrate with Bridge Script to actually place the order
-            # For now, we'll simulate the order being placed
-            # In production, this would call the Bridge Script execution API
-            
-            logger.info(f"✅ Order {order_id} created and tracked")
+            logger.info(f"✅ Order created: {order_id} - Status: {result.get('status')}")
             
             self.total_trades += 1
             
-            # Schedule order expiration check
-            asyncio.create_task(self._check_order_expiration(order_id, duration))
+            # Schedule order result check
+            asyncio.create_task(self._check_order_result_from_bridge(order_id, duration))
             
             return order
             
