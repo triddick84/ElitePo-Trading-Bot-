@@ -8,13 +8,20 @@ Comprehensive 15-second trading prediction system combining:
 4. Real-time prediction pipeline
 
 Based on research for 95%+ accuracy using ensemble methods.
+
+CPU-ONLY MODE: Configured for deployment without GPU/CUDA
 """
+
+# CRITICAL: Force CPU mode BEFORE any ML imports
+import os
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'false'
 
 import numpy as np
 import pandas as pd
 import asyncio
 import logging
-import os
 import json
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Tuple, Any
