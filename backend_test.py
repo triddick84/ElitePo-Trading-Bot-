@@ -17131,6 +17131,52 @@ async def run_new_features_tests():
         print(f"\n📊 Success Rate: {(passed_tests/total_tests)*100:.1f}%")
         return True
 
+async def run_5s_supertrend_reversal_tests():
+    """Run 5-Second Supertrend Reversal Strategy tests specifically"""
+    print("🚀 Testing 5-Second Supertrend Reversal Strategy Implementation")
+    print("=" * 80)
+    
+    tester = BackendTester()
+    await tester.setup()
+    
+    # Define 5-Second Supertrend Reversal Strategy tests
+    tests = [
+        ("Health Check", tester.test_health_check),
+        ("5s Supertrend Info Endpoint", tester.test_5s_supertrend_info_endpoint),
+        ("5s Supertrend Signal Generation (No Data)", tester.test_5s_supertrend_signal_generation_no_data),
+        ("5s Supertrend Signal Generation (With Data)", tester.test_5s_supertrend_signal_generation_with_data),
+        ("5s Supertrend Backtest Endpoint", tester.test_5s_supertrend_backtest_endpoint),
+        ("5s Supertrend AI Training Endpoint", tester.test_5s_supertrend_ai_training_endpoint),
+        ("5s Supertrend Force Signal Integration", tester.test_5s_supertrend_force_signal_integration),
+    ]
+    
+    # Run all tests
+    for test_name, test_func in tests:
+        await tester.run_test(test_name, test_func)
+    
+    await tester.cleanup()
+    
+    # Print summary
+    print("\n" + "=" * 80)
+    print("🏁 5-Second Supertrend Reversal Strategy Testing Complete: {}/{} tests passed".format(
+        len(tests) - len(tester.failed_tests), len(tests)
+    ))
+    print("=" * 80)
+    
+    total_tests = len(tests)
+    passed_tests = total_tests - len(tester.failed_tests)
+    
+    if tester.failed_tests:
+        print(f"\n❌ Failed Tests:")
+        for test in tester.failed_tests:
+            print(f"   - {test}")
+        print(f"\n📊 Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+        return False
+    else:
+        print(f"\n🎉 All 5-Second Supertrend Reversal Strategy tests passed!")
+        print(f"\n📊 Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+        return True
+
 async def run_5s_pro_strategy_tests():
     """Run 5-Second Pro Strategy tests specifically"""
     print("🚀 Testing Pocket Option 5-Second Pro Strategy")
