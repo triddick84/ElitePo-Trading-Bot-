@@ -17082,8 +17082,8 @@ async def run_socket_io_handshake_tests():
         await tester.cleanup()
 
 async def main():
-    """Main test runner - run new features tests"""
-    return await run_new_features_tests()
+    """Main test runner - run 5s Supertrend Reversal Strategy tests"""
+    return await run_5s_supertrend_reversal_tests()
 
 async def run_new_features_tests():
     """Run tests for newly implemented features"""
