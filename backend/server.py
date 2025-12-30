@@ -1127,6 +1127,18 @@ async def force_generate_signals(wait_for_candle: bool = Query(False)):
                     "timestamp": signal.timestamp.isoformat()
                 })
                 
+                # ✨ NEW: Process signal through automated trading service
+                try:
+                    await process_signal_for_automated_trading({
+                        "symbol": stored_signals[-1]["symbol"],
+                        "direction": "call" if "BUY" in str(signal.direction).upper() or "CALL" in str(signal.direction).upper() else "put",
+                        "probability": stored_signals[-1]["probability"],
+                        "timeframe": int(signal.expiration_minutes * 60),  # Convert to seconds
+                        "strategy": stored_signals[-1]["strategy_used"]
+                    })
+                except Exception as e:
+                    logger.error(f"Error processing signal through automated trading: {e}")
+                
                 # Send to platforms if enabled
                 try:
                     await platform_integration.send_signal_to_all_platforms(signal)
