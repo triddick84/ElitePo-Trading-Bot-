@@ -74,7 +74,9 @@ class PocketOptionAPIService:
             # Initialize client
             self.client = AsyncPocketOptionClient(
                 ssid=self.ssid,
-                demo=self.is_demo
+                is_demo=self.is_demo,
+                auto_reconnect=True,
+                persistent_connection=True
             )
             
             # Connect
