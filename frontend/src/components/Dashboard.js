@@ -11,6 +11,10 @@ import ChartConfiguration from './ChartConfiguration';
 import LatencyAdjustment from './LatencyAdjustment';
 import AccountModeToggle from './AccountModeToggle';
 import ImprovedSignalPopup from './ImprovedSignalPopup';
+import AutomatedTradingPanel from './AutomatedTradingPanel';
+import AIMLTradingPanel from './AIMLTradingPanel';
+import MoneyManagementPanel from './MoneyManagementPanel';
+import AdaptiveStrategyResults from './AdaptiveStrategyResults';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
