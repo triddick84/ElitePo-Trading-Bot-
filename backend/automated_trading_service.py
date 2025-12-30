@@ -296,38 +296,54 @@ class AutomatedTradingService:
             logger.error(f"Error executing trade: {e}")
             return None
     
-    async def _check_order_expiration(self, order_id: str, duration: int):
-        """Check order result after duration expires"""
+    async def _check_order_result_from_bridge(self, order_id: str, duration: int):
+        """
+        Check order result from Bridge Script (REAL RESULTS)
+        
+        Args:
+            order_id: Order ID
+            duration: Trade duration in seconds
+        """
         try:
-            # Wait for the trade duration + buffer
-            await asyncio.sleep(duration + 5)
+            # Wait for the trade duration + buffer for result reporting
+            await asyncio.sleep(duration + 10)
             
             if order_id not in self.active_orders:
                 return
             
             order = self.active_orders[order_id]
             
-            # TODO: Query Bridge Script or API for actual result
-            # For now, simulate result based on confidence
-            import random
-            confidence = order['confidence']
+            # Check if bridge has reported the result
+            result_doc = await self.db.trade_execution_queue.find_one(
+                {"order_id": order_id},
+                {"_id": 0}
+            )
             
-            # Higher confidence = higher win probability
-            win_probability = min(confidence / 100, 0.9)
-            is_win = random.random() < win_probability
-            
-            if is_win:
-                order['result'] = 'win'
-                order['profit'] = order['amount'] * 0.8  # 80% payout
-                self.wins += 1
-                logger.info(f"✅ WIN: Order {order_id} - Profit: ${order['profit']:.2f}")
+            if result_doc and result_doc.get('status') == 'completed':
+                # Bridge has reported the result
+                result = result_doc.get('result', 'unknown')
+                profit = result_doc.get('profit', 0.0)
+                
+                if result == 'win':
+                    self.wins += 1
+                    logger.info(f"✅ WIN: Order {order_id} - Profit: ${profit:.2f}")
+                elif result == 'loss':
+                    self.losses += 1
+                    logger.info(f"❌ LOSS: Order {order_id} - Loss: ${abs(profit):.2f}")
+                else:
+                    self.draws += 1
+                    logger.info(f"↔️ DRAW: Order {order_id}")
+                
+                order['result'] = result
+                order['profit'] = profit
+                order['status'] = 'completed'
+                
             else:
-                order['result'] = 'loss'
-                order['profit'] = -order['amount']
-                self.losses += 1
-                logger.info(f"❌ LOSS: Order {order_id} - Loss: ${order['amount']:.2f}")
-            
-            order['status'] = 'completed'
+                # No result yet - might still be pending or bridge disconnected
+                logger.warning(f"⚠️ No result from bridge for {order_id} - Marking as unknown")
+                order['result'] = 'unknown'
+                order['profit'] = 0.0
+                order['status'] = 'expired_no_result'
             
             # Move to completed
             self.completed_orders.append(order)
@@ -345,7 +361,7 @@ class AutomatedTradingService:
             )
             
         except Exception as e:
-            logger.error(f"Error checking order expiration: {e}")
+            logger.error(f"Error checking order result from bridge: {e}")
     
     async def _get_current_balance(self) -> float:
         """Get current account balance"""
