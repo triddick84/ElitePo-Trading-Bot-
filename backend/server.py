@@ -5822,6 +5822,244 @@ async def generate_and_notify_signal(
 
 
 # ============================================================================
+# POCKET OPTION API CLIENT ENDPOINTS (pocketoptionapi-async)
+# ============================================================================
+
+@api_router.get("/po-api/status")
+async def get_po_api_status():
+    """Get Pocket Option API Client connection status"""
+    try:
+        from pocket_option_api_client import get_api_service
+        
+        service = await get_api_service()
+        
+        if not service:
+            return {
+                "success": False,
+                "is_connected": False,
+                "error": "Service not initialized - check POCKET_OPTION_SSID"
+            }
+        
+        status = service.get_status()
+        
+        return {
+            "success": True,
+            **status
+        }
+    except Exception as e:
+        logger.error(f"Error getting PO API status: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "is_connected": False
+        }
+
+
+@api_router.post("/po-api/place-order")
+async def place_order_api(request: Request):
+    """
+    Place a trading order
+    
+    Body:
+    - asset: Asset symbol (e.g., 'EURUSD_otc')
+    - amount: Trade amount in dollars
+    - direction: 'call' or 'put'
+    - duration: Trade duration in seconds
+    """
+    try:
+        data = await request.json()
+        asset = data.get('asset', 'EURUSD_otc')
+        amount = float(data.get('amount', 1.0))
+        direction = data.get('direction', 'call')
+        duration = int(data.get('duration', 60))
+        
+        from pocket_option_api_client import get_api_service
+        
+        service = await get_api_service()
+        if not service or not service.is_connected:
+            return {
+                "success": False,
+                "error": "Not connected to Pocket Option"
+            }
+        
+        order = await service.place_order(asset, amount, direction, duration)
+        
+        if order:
+            return {
+                "success": True,
+                "order": order,
+                "message": f"Order placed: {direction.upper()} {asset}"
+            }
+        else:
+            return {
+                "success": False,
+                "error": "Failed to place order"
+            }
+        
+    except Exception as e:
+        logger.error(f"Error placing order: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@api_router.get("/po-api/order-result/{order_id}")
+async def get_order_result_api(order_id: str):
+    """Check order result"""
+    try:
+        from pocket_option_api_client import get_api_service
+        
+        service = await get_api_service()
+        if not service:
+            return {
+                "success": False,
+                "error": "Service not available"
+            }
+        
+        result = await service.check_order_result(order_id)
+        
+        if result:
+            return {
+                "success": True,
+                "result": result
+            }
+        else:
+            return {
+                "success": False,
+                "error": "Order result not available yet"
+            }
+        
+    except Exception as e:
+        logger.error(f"Error getting order result: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@api_router.get("/po-api/balance")
+async def get_balance_api():
+    """Get current account balance"""
+    try:
+        from pocket_option_api_client import get_api_service
+        
+        service = await get_api_service()
+        if not service:
+            return {
+                "success": False,
+                "error": "Service not available"
+            }
+        
+        balance = await service.get_balance()
+        
+        return {
+            "success": True,
+            "balance": balance,
+            "is_demo": service.is_demo
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting balance: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@api_router.get("/po-api/candles/{asset}")
+async def get_candles_api(
+    asset: str,
+    period: int = 60,
+    count: int = 100
+):
+    """Get historical candles"""
+    try:
+        from pocket_option_api_client import get_api_service
+        
+        service = await get_api_service()
+        if not service:
+            return {
+                "success": False,
+                "error": "Service not available"
+            }
+        
+        candles = await service.get_candles(asset, period, count)
+        
+        return {
+            "success": True,
+            "asset": asset,
+            "period": period,
+            "count": len(candles),
+            "candles": candles
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting candles: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@api_router.get("/po-api/payout/{asset}")
+async def get_payout_api(asset: str):
+    """Get payout percentage for an asset"""
+    try:
+        from pocket_option_api_client import get_api_service
+        
+        service = await get_api_service()
+        if not service:
+            return {
+                "success": False,
+                "error": "Service not available"
+            }
+        
+        payout = await service.get_payout(asset)
+        
+        return {
+            "success": True,
+            "asset": asset,
+            "payout": payout
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting payout: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@api_router.get("/po-api/statistics")
+async def get_statistics_api():
+    """Get trading statistics"""
+    try:
+        from pocket_option_api_client import get_api_service
+        
+        service = await get_api_service()
+        if not service:
+            return {
+                "success": False,
+                "error": "Service not available"
+            }
+        
+        stats = service.get_statistics()
+        
+        return {
+            "success": True,
+            "statistics": stats
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting statistics: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+# ============================================================================
 # POCKET OPTION V2 MONITOR ENDPOINTS (BinaryOptionsToolsV2)
 # ============================================================================
 
