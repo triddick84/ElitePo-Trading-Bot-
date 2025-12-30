@@ -18,10 +18,10 @@ from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
 
-# Pocket Option URLs
-PO_DEMO_URL = "https://pocketoption.com/en/cabinet/demo-quick-high-low/"
-PO_LIVE_URL = "https://pocketoption.com/en/cabinet/quick-high-low/"
-PO_LOGIN_URL = "https://pocketoption.com/en/login/"
+# Pocket Option URLs - using alternative domains that work better
+PO_DEMO_URL = "https://pocket2.click/en/cabinet/demo-quick-high-low/"
+PO_LIVE_URL = "https://pocket2.click/en/cabinet/quick-high-low/"
+PO_LOGIN_URL = "https://pocket2.click/en/login/"
 
 
 @dataclass
