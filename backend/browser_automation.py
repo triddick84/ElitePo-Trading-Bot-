@@ -87,9 +87,13 @@ class PocketOptionBrowserAutomation:
                 
                 self.playwright = await async_playwright().start()
                 
+                # Find chromium executable
+                chromium_path = "/pw-browsers/chromium-1200/chrome-linux/chrome"
+                
                 # Launch browser with stealth settings
                 self.browser = await self.playwright.chromium.launch(
                     headless=True,
+                    executable_path=chromium_path,
                     args=[
                         '--no-sandbox',
                         '--disable-setuid-sandbox',
