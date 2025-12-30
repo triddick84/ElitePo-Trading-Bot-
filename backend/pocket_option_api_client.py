@@ -86,8 +86,15 @@ class PocketOptionAPIService:
             # Connect
             await self.client.connect()
             
-            # Verify connection
-            if self.client.connection_status == ConnectionStatus.CONNECTED:
+            # Verify connection - check if connected
+            try:
+                status = self.client.connection_status
+                is_connected = (status == ConnectionStatus.CONNECTED)
+            except AttributeError:
+                # Fallback: check if client has is_connected property
+                is_connected = getattr(self.client, 'is_connected', False)
+            
+            if is_connected:
                 self.is_connected = True
                 
                 # Get initial balance
