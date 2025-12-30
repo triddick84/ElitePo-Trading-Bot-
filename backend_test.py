@@ -1964,6 +1964,109 @@ class BackendTester:
                     models = data.get('models', {})
                     expected_models = ['lstm', 'random_forest', 'emergent_llm']
                     
+                    for model_name in expected_models:
+                        if model_name not in models:
+                            print(f"   ❌ Missing model: {model_name}")
+                            return False
+                        
+                        model_info = models[model_name]
+                        print(f"   🤖 {model_name.upper()}: Available={model_info.get('available')}, Trained={model_info.get('trained')}")
+                    
+                    available_count = sum(1 for model in models.values() if model.get('available'))
+                    print(f"   📊 Available Models: {available_count}/{len(expected_models)}")
+                    
+                    return available_count >= 2  # At least 2 models should be available
+                else:
+                    print(f"   ❌ AI ML status endpoint failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   AI ML status endpoint test error: {e}")
+            return False
+
+    async def test_ai_ml_prediction_endpoint(self) -> bool:
+        """
+        Test AI ML Prediction Endpoint
+        Test POST /api/ai-ml/predict?symbol=EURUSD_OTC:
+        - Should return ensemble prediction with final_direction, final_confidence, individual_predictions
+        - Models_used should be >= 1
+        """
+        try:
+            print("   🎯 Testing AI ML prediction endpoint")
+            
+            test_symbol = "EURUSD_OTC"
+            
+            async with self.session.post(f"{BACKEND_URL}/ai-ml/predict?symbol={test_symbol}") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ AI ML prediction endpoint accessible")
+                    
+                    # Check required fields
+                    required_fields = ['success', 'symbol', 'prediction']
+                    missing_fields = [field for field in required_fields if field not in data]
+                    
+                    if missing_fields:
+                        print(f"   ❌ Missing required fields: {missing_fields}")
+                        return False
+                    
+                    if not data.get('success'):
+                        print(f"   ❌ Prediction failed: {data.get('error')}")
+                        return False
+                    
+                    prediction = data.get('prediction', {})
+                    
+                    # Check prediction structure
+                    prediction_fields = ['final_direction', 'final_confidence', 'individual_predictions']
+                    for field in prediction_fields:
+                        if field not in prediction:
+                            print(f"   ❌ Missing prediction field: {field}")
+                            return False
+                    
+                    final_direction = prediction.get('final_direction')
+                    final_confidence = prediction.get('final_confidence')
+                    individual_predictions = prediction.get('individual_predictions', [])
+                    models_used = data.get('models_used', 0)
+                    
+                    print(f"   🎯 Symbol: {data.get('symbol')}")
+                    print(f"   🎯 Final Direction: {final_direction}")
+                    print(f"   🎯 Final Confidence: {final_confidence}%")
+                    print(f"   🎯 Models Used: {models_used}")
+                    print(f"   🎯 Individual Predictions: {len(individual_predictions)}")
+                    
+                    # Validate prediction values
+                    if final_direction not in ['BUY', 'SELL', 'HOLD']:
+                        print(f"   ❌ Invalid final direction: {final_direction}")
+                        return False
+                    
+                    if not (0 <= final_confidence <= 100):
+                        print(f"   ❌ Invalid confidence range: {final_confidence}")
+                        return False
+                    
+                    if models_used < 1:
+                        print(f"   ❌ No models used in prediction")
+                        return False
+                    
+                    print(f"   ✅ AI ML prediction working correctly")
+                    return True
+                else:
+                    print(f"   ❌ AI ML prediction endpoint failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   AI ML prediction endpoint test error: {e}")
+            return Falseeld in required_fields if field not in data]
+                    
+                    if missing_fields:
+                        print(f"   ❌ Missing required fields: {missing_fields}")
+                        return False
+                    
+                    models = data.get('models', {})
+                    expected_models = ['lstm', 'random_forest', 'emergent_llm']
+                    
                     print(f"   📊 System Name: {data.get('system_name')}")
                     
                     for model_name in expected_models:
