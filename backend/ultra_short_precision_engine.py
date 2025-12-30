@@ -5,7 +5,7 @@ from typing import Dict, List, Optional, Tuple, Any
 import asyncio
 import pytz
 import logging
-from models import TradingSignal, SignalDirection, TradingStrategy
+from trading_models import TradingSignal, SignalDirection, TradingStrategy
 from pocket_option_timing_sync import pocket_option_sync
 
 logger = logging.getLogger(__name__)

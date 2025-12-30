@@ -5,7 +5,7 @@ import os
 from datetime import datetime, timezone
 from typing import List, Dict, Optional
 import logging
-from models import MarketData, AssetType
+from trading_models import MarketData, AssetType
 
 logger = logging.getLogger(__name__)
 

@@ -7,7 +7,7 @@ import pandas as pd
 from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Optional
 import logging
-from models import MarketData, AssetType
+from trading_models import MarketData, AssetType
 import requests
 from concurrent.futures import ThreadPoolExecutor
 import threading

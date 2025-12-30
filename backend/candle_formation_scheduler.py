@@ -8,7 +8,7 @@ from typing import Dict, List, Optional, Set
 import logging
 from pocket_option_timing_sync import pocket_option_sync
 from timezone_utils import get_chicago_time
-from models import TradingSignal
+from trading_models import TradingSignal
 
 logger = logging.getLogger(__name__)
 

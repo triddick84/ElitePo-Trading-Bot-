@@ -7,7 +7,7 @@ import logging
 from dotenv import load_dotenv
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage
-from models import TradingSignal, MarketData, TechnicalIndicators, SentimentAnalysis, SignalDirection, TradingStrategy, AssetType
+from trading_models import TradingSignal, MarketData, TechnicalIndicators, SentimentAnalysis, SignalDirection, TradingStrategy, AssetType
 
 load_dotenv()
 logger = logging.getLogger(__name__)

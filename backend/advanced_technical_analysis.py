@@ -4,7 +4,7 @@ import yfinance as yf
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Tuple
 import logging
-from models import TechnicalIndicators, MarketData
+from trading_models import TechnicalIndicators, MarketData
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 

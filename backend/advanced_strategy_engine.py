@@ -5,7 +5,7 @@ from typing import Dict, List, Optional, Tuple, Any
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import logging
-from models import TradingSignal, SignalDirection, TradingStrategy
+from trading_models import TradingSignal, SignalDirection, TradingStrategy
 from pocket_option_timing_sync import pocket_option_sync
 import yfinance as yf
 from scipy.signal import find_peaks

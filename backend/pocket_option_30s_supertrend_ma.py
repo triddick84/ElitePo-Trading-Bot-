@@ -18,7 +18,7 @@ import pandas as pd
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 import logging
-from models import TradingSignal, SignalDirection, TradingStrategy
+from trading_models import TradingSignal, SignalDirection, TradingStrategy
 import talib
 
 logger = logging.getLogger(__name__)

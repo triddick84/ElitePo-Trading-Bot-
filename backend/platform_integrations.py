@@ -5,7 +5,7 @@ import logging
 from typing import Dict, Optional, Any
 from datetime import datetime, timezone
 import os
-from models import TradingSignal, SignalDirection
+from trading_models import TradingSignal, SignalDirection
 from timezone_utils import get_chicago_time, format_chicago_time, utc_to_chicago
 
 logger = logging.getLogger(__name__)

@@ -3,7 +3,7 @@ import pandas as pd
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timezone
 import logging
-from models import TechnicalIndicators, MarketData
+from trading_models import TechnicalIndicators, MarketData
 
 logger = logging.getLogger(__name__)
 

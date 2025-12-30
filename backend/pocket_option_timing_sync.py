@@ -9,7 +9,7 @@ from datetime import datetime, timezone, timedelta
 import pytz
 from typing import Dict, List, Optional, Tuple
 import logging
-from models import TradingSignal, SignalDirection
+from trading_models import TradingSignal, SignalDirection
 
 logger = logging.getLogger(__name__)
 

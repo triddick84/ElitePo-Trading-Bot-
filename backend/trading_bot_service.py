@@ -5,7 +5,7 @@ from datetime import datetime, timezone, timedelta
 import json
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
-from models import (
+from trading_models import (
     TradingSignal, MarketData, TechnicalIndicators, SentimentAnalysis,
     TradingConfiguration, PerformanceMetrics, BacktestResult, 
     TradingStrategy, TradingMode, AssetType, SignalDirection
@@ -235,7 +235,7 @@ class TradingBotService:
                         logger.info(f"🚀 Auto generating signal for {asset} (base: {base_symbol}, market: {market_type})")
                         
                         # Create market data object for force generator
-                        from models import MarketData, AssetType
+                        from trading_models import MarketData, AssetType
                         from datetime import datetime, timezone
                         
                         target_asset = MarketData(

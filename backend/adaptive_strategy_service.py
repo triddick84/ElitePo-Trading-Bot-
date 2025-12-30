@@ -8,7 +8,7 @@ from typing import Dict, List, Optional
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 from datetime import datetime, timezone
-from models import AdaptiveStrategyConfig
+from trading_models import AdaptiveStrategyConfig
 
 logger = logging.getLogger(__name__)
 
