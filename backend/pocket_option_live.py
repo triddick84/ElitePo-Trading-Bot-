@@ -1213,6 +1213,8 @@ def generate_bridge_script(app_url: str) -> str:
     console.log('%c╚═══════════════════════════════════════════════════════════════╝', 'color: #00ff00');
     
     log('💡 Navigate to a trading chart to start receiving data', 'info');
+    log('🎉 Pocket Option Bridge fully initialized!', 'success');
+    log('✨ Now monitoring trades and executing automated orders', 'success');
   }}
   
   // Start the bridge
