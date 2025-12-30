@@ -65,7 +65,7 @@ const AdaptiveStrategyResults = () => {
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold text-blue-400">📈 Trending Market Strategy</h3>
               <Badge className="bg-blue-500/20 text-blue-400 border-blue-500">
-                ADX > {config.adx_trending_threshold}
+                ADX &gt; {config.adx_trending_threshold}
               </Badge>
             </div>
             
@@ -122,7 +122,7 @@ const AdaptiveStrategyResults = () => {
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold text-orange-400">📉 Ranging/Volatile Market Strategy</h3>
               <Badge className="bg-orange-500/20 text-orange-400 border-orange-500">
-                ADX < {config.adx_ranging_threshold}
+                ADX &lt; {config.adx_ranging_threshold}
               </Badge>
             </div>
             
