@@ -1,11 +1,12 @@
 """
 Auto-Execution Mode for Automated Trading
-Provides immediate trade execution when Bridge Script is not available
+Provides multiple execution modes for trade execution
 
-This module enables three execution modes:
+This module enables four execution modes:
 1. BRIDGE - Requires browser Bridge Script (manual setup)
 2. DEMO - Simulates trades with realistic outcomes (for testing)
-3. API - Direct API calls (if credentials available)
+3. API - Direct API calls (if credentials available) 
+4. HEADLESS - Uses Playwright headless browser for real execution (LIVE)
 """
 
 import asyncio
@@ -28,11 +29,12 @@ class AutoExecutionMode:
         
         Args:
             db: Database connection
-            mode: Execution mode - "BRIDGE", "DEMO", or "API"
+            mode: Execution mode - "BRIDGE", "DEMO", "API", or "HEADLESS"
         """
         self.db = db
         self.mode = mode
         self.execution_count = 0
+        self.browser_automation = None
         
         logger.info(f"🎯 Auto-Execution Mode: {mode}")
     
@@ -71,9 +73,154 @@ class AutoExecutionMode:
             return await self._execute_api_trade(
                 order_id, asset, direction, amount, duration, confidence
             )
+        elif self.mode == "HEADLESS":
+            return await self._execute_headless_trade(
+                order_id, asset, direction, amount, duration, confidence
+            )
         else:
             logger.error(f"Unknown execution mode: {self.mode}")
             return {"success": False, "error": "Invalid execution mode"}
+    
+    async def _execute_headless_trade(
+        self,
+        order_id: str,
+        asset: str,
+        direction: str,
+        amount: float,
+        duration: int,
+        confidence: float
+    ) -> Dict:
+        """
+        Execute trade via headless browser automation (REAL TRADING)
+        
+        This is the recommended mode for live automated trading.
+        """
+        try:
+            logger.info(f"🌐 HEADLESS MODE: Executing {direction.upper()} {asset} ${amount}")
+            
+            # Get or initialize browser automation
+            from browser_automation import get_browser_automation
+            
+            if self.browser_automation is None:
+                self.browser_automation = await get_browser_automation(self.db)
+            
+            # Check if browser is started and logged in
+            status = self.browser_automation.get_status()
+            if not status['state']['is_running']:
+                # Start browser with live account
+                start_result = await self.browser_automation.start(account_type="live")
+                if not start_result['success']:
+                    logger.error(f"Failed to start browser: {start_result.get('error')}")
+                    # Fallback to DEMO mode
+                    logger.warning("⚠️ Falling back to DEMO mode")
+                    return await self._execute_demo_trade(
+                        order_id, asset, direction, amount, duration, confidence
+                    )
+            
+            # Execute the actual trade
+            trade_result = await self.browser_automation.execute_trade(
+                asset=asset,
+                direction=direction,
+                amount=amount,
+                duration=duration
+            )
+            
+            if trade_result['success']:
+                # Update database with execution
+                await self.db.trade_execution_queue.update_one(
+                    {"order_id": order_id},
+                    {"$set": {
+                        "status": "active",
+                        "bridge_order_id": trade_result.get('order_id'),
+                        "execution_price": trade_result.get('execution_price', 0),
+                        "execution_time": trade_result.get('execution_time'),
+                        "executed_at": datetime.now(timezone.utc),
+                        "execution_mode": "HEADLESS"
+                    }}
+                )
+                
+                # Store execution confirmation
+                await self.db.trade_executions.insert_one({
+                    "order_id": order_id,
+                    "bridge_order_id": trade_result.get('order_id'),
+                    "executed": True,
+                    "execution_price": trade_result.get('execution_price', 0),
+                    "execution_time": trade_result.get('execution_time'),
+                    "execution_mode": "HEADLESS",
+                    "balance_after": trade_result.get('balance', 0),
+                    "confirmed_at": datetime.now(timezone.utc)
+                })
+                
+                logger.info(f"✅ HEADLESS: Trade executed - Order: {trade_result.get('order_id')}")
+                
+                # Schedule result monitoring
+                asyncio.create_task(
+                    self._monitor_trade_result(order_id, trade_result.get('order_id'), duration, amount)
+                )
+                
+                self.execution_count += 1
+                
+                return {
+                    "success": True,
+                    "order_id": trade_result.get('order_id'),
+                    "mode": "HEADLESS",
+                    "balance": trade_result.get('balance', 0),
+                    "message": "Trade executed via headless browser"
+                }
+            else:
+                logger.error(f"Headless trade failed: {trade_result.get('error')}")
+                return trade_result
+                
+        except Exception as e:
+            logger.error(f"Error in headless execution: {e}")
+            # Fallback to demo
+            logger.warning("⚠️ Falling back to DEMO mode due to error")
+            return await self._execute_demo_trade(
+                order_id, asset, direction, amount, duration, confidence
+            )
+    
+    async def _monitor_trade_result(
+        self,
+        order_id: str,
+        browser_order_id: str,
+        duration: int,
+        amount: float
+    ):
+        """
+        Monitor trade result for headless mode
+        
+        Since we can't always capture the exact result from Pocket Option,
+        we'll check balance change to determine win/loss
+        """
+        try:
+            # Wait for trade duration + buffer
+            await asyncio.sleep(duration + 5)
+            
+            if self.browser_automation:
+                # Get current balance
+                status = self.browser_automation.get_status()
+                new_balance = status['state'].get('balance', 0)
+                
+                # Try to determine result
+                # This is a simplified approach - in production, 
+                # you'd want to parse the actual trade history
+                
+                # For now, mark as completed with unknown result
+                await self.db.trade_execution_queue.update_one(
+                    {"order_id": order_id},
+                    {"$set": {
+                        "status": "completed",
+                        "result": "unknown",  # Would need to check actual result
+                        "close_time": datetime.now(timezone.utc).isoformat(),
+                        "completed_at": datetime.now(timezone.utc),
+                        "final_balance": new_balance
+                    }}
+                )
+                
+                logger.info(f"📊 HEADLESS: Trade completed - {order_id}")
+                
+        except Exception as e:
+            logger.error(f"Error monitoring trade result: {e}")
     
     async def _execute_demo_trade(
         self,
@@ -246,6 +393,43 @@ class AutoExecutionMode:
             order_id, asset, direction, amount, duration, confidence
         )
     
+    async def initialize_headless(self, account_type: str = "live") -> Dict:
+        """
+        Initialize headless browser for trading
+        
+        Args:
+            account_type: "demo" or "live"
+        
+        Returns:
+            Initialization result
+        """
+        try:
+            from browser_automation import get_browser_automation
+            
+            self.browser_automation = await get_browser_automation(self.db)
+            result = await self.browser_automation.start(account_type=account_type)
+            
+            if result['success']:
+                self.mode = "HEADLESS"
+                logger.info(f"✅ Headless browser initialized for {account_type} trading")
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize headless: {e}")
+            return {"success": False, "error": str(e)}
+    
+    async def stop_headless(self) -> Dict:
+        """Stop headless browser"""
+        try:
+            from browser_automation import stop_browser_automation
+            await stop_browser_automation()
+            self.browser_automation = None
+            logger.info("🛑 Headless browser stopped")
+            return {"success": True, "message": "Headless browser stopped"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
     def get_mode(self) -> str:
         """Get current execution mode"""
         return self.mode
@@ -255,9 +439,9 @@ class AutoExecutionMode:
         Set execution mode
         
         Args:
-            mode: "DEMO", "BRIDGE", or "API"
+            mode: "DEMO", "BRIDGE", "API", or "HEADLESS"
         """
-        if mode in ["DEMO", "BRIDGE", "API"]:
+        if mode in ["DEMO", "BRIDGE", "API", "HEADLESS"]:
             self.mode = mode
             logger.info(f"🔄 Execution mode changed to: {mode}")
         else:
@@ -265,9 +449,14 @@ class AutoExecutionMode:
     
     def get_statistics(self) -> Dict:
         """Get execution statistics"""
+        headless_status = None
+        if self.browser_automation:
+            headless_status = self.browser_automation.get_status()
+        
         return {
             "mode": self.mode,
-            "executions": self.execution_count
+            "executions": self.execution_count,
+            "headless_status": headless_status
         }
 
 
@@ -283,3 +472,13 @@ async def get_auto_execution(db, mode: str = "DEMO") -> AutoExecutionMode:
         _auto_execution = AutoExecutionMode(db, mode)
     
     return _auto_execution
+
+
+async def set_execution_mode(mode: str) -> Dict:
+    """Set global execution mode"""
+    global _auto_execution
+    
+    if _auto_execution:
+        _auto_execution.set_mode(mode)
+        return {"success": True, "mode": mode}
+    return {"success": False, "error": "Auto-execution not initialized"}
