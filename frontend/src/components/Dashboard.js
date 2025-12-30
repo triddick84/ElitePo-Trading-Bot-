@@ -904,6 +904,40 @@ const Dashboard = ({ botStatus, liveSignals, setLiveSignals, notificationSetting
           </div>
         </Card>
       )}
+
+      {/* Automated Trading Section */}
+      <div className="mt-8">
+        <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
+          <span>🤖</span> Automated Trading & Advanced Features
+        </h2>
+        
+        {/* Automated Trading Panel */}
+        <AutomatedTradingPanel />
+      </div>
+
+      {/* AI/ML Trading System */}
+      <div className="mt-8">
+        <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
+          <span>🧠</span> AI/ML Trading System
+        </h2>
+        <AIMLTradingPanel />
+      </div>
+
+      {/* Money Management */}
+      <div className="mt-8">
+        <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
+          <span>💰</span> Money Management
+        </h2>
+        <MoneyManagementPanel />
+      </div>
+
+      {/* Adaptive Strategy Details */}
+      <div className="mt-8">
+        <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
+          <span>🎯</span> Adaptive Strategy Analysis
+        </h2>
+        <AdaptiveStrategyResults />
+      </div>
     </div>
   );
 };
