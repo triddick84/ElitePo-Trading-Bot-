@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 import pandas as pd
 
 # Import our trading bot components
-from models import (
+from trading_models import (
     TradingSignal, MarketData, TechnicalIndicators, TradingConfiguration,
     PerformanceMetrics, BacktestResult, TradingStrategy, TradingMode, AssetType, SignalDirection,
     FlexibleStrategyRequest, AdaptiveStrategyConfig, AdaptiveStrategyUpdateRequest
@@ -1006,7 +1006,7 @@ async def force_generate_signals(wait_for_candle: bool = Query(False)):
             logger.info(f"🚀 FORCE GENERATING SIGNAL for {asset} (base: {base_symbol}, market: {market_type})")
             
             # Create market data object for this asset
-            from models import MarketData, AssetType
+            from trading_models import MarketData, AssetType
             target_asset = MarketData(
                 symbol=base_symbol,
                 price=1.0500,  # Default price - will be fetched by strategy
@@ -1199,7 +1199,7 @@ async def force_generate_signal_for_asset(asset_symbol: str, wait_for_candle: bo
             data_dict = market_data_service.get_real_time_data(asset_symbol, asset_type.value)
             if data_dict:
                 # Convert dictionary to MarketData object
-                from models import MarketData
+                from trading_models import MarketData
                 target_data = MarketData(
                     symbol=asset_symbol,
                     price=data_dict.get('price', 0.0),
@@ -1233,7 +1233,7 @@ async def force_generate_signal_for_asset(asset_symbol: str, wait_for_candle: bo
             hist = ticker.history(period="1d", interval="1m")
             
             if not hist.empty:
-                from models import MarketData
+                from trading_models import MarketData
                 current_price = float(hist['Close'].iloc[-1])
                 
                 target_data = MarketData(
@@ -1247,7 +1247,7 @@ async def force_generate_signal_for_asset(asset_symbol: str, wait_for_candle: bo
         if not target_data:
             # Create emergency market data for force generation - NEVER fail
             logger.warning(f"No market data available for {asset_symbol} - creating emergency market data for force generation")
-            from models import MarketData
+            from trading_models import MarketData
             target_data = MarketData(
                 symbol=asset_symbol,
                 price=1.0000 if asset_type == AssetType.FOREX else 100.0,  # Default price based on asset type
@@ -5425,7 +5425,7 @@ async def execute_ai_signal_auto_trade(
         else:
             # Use force signal generator
             from real_market_data_service import RealMarketDataService
-            from models import MarketData, AssetType
+            from trading_models import MarketData, AssetType
             
             market_service = RealMarketDataService()
             asset_type = AssetType.FOREX if 'usd' in asset.lower() or 'eur' in asset.lower() else AssetType.CRYPTO
@@ -5746,7 +5746,7 @@ async def generate_and_notify_signal(
         logger.info(f"🚀 Generating signal for {asset} ({timeframe}) with Telegram: {send_telegram}")
         
         # Create market data object
-        from models import MarketData, AssetType
+        from trading_models import MarketData, AssetType
         market_data = MarketData(
             symbol=symbol,
             price=1.0500,  # Default price - will be fetched by strategy
