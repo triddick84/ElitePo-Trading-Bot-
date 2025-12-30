@@ -6786,6 +6786,211 @@ async def get_asset_payout_v2(asset: str):
         }
 
 
+# ============================================================================
+# HEADLESS BROWSER AUTOMATION ENDPOINTS
+# ============================================================================
+
+@api_router.post("/headless/start")
+async def start_headless_automation(account_type: str = "live"):
+    """
+    Start headless browser automation for real trading
+    
+    Args:
+        account_type: "demo" or "live" (default: "live")
+    
+    This launches a headless Chromium browser that:
+    1. Logs into Pocket Option with stored credentials
+    2. Navigates to the trading page
+    3. Is ready to execute trades automatically
+    """
+    try:
+        from browser_automation import get_browser_automation
+        
+        automation = await get_browser_automation(db)
+        result = await automation.start(account_type=account_type)
+        
+        if result['success']:
+            # Set execution mode to HEADLESS
+            from auto_execution_mode import get_auto_execution
+            auto_exec = await get_auto_execution(db)
+            auto_exec.set_mode("HEADLESS")
+            auto_exec.browser_automation = automation
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error starting headless automation: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@api_router.post("/headless/stop")
+async def stop_headless_automation():
+    """Stop headless browser automation"""
+    try:
+        from browser_automation import stop_browser_automation
+        
+        await stop_browser_automation()
+        
+        # Reset execution mode to DEMO
+        from auto_execution_mode import get_auto_execution
+        auto_exec = await get_auto_execution(db)
+        auto_exec.set_mode("DEMO")
+        auto_exec.browser_automation = None
+        
+        return {
+            "success": True,
+            "message": "Headless browser stopped"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error stopping headless automation: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@api_router.get("/headless/status")
+async def get_headless_status():
+    """Get headless browser automation status"""
+    try:
+        from browser_automation import get_browser_automation
+        
+        automation = await get_browser_automation(db)
+        status = automation.get_status()
+        
+        # Also get execution mode
+        from auto_execution_mode import get_auto_execution
+        auto_exec = await get_auto_execution(db)
+        
+        return {
+            "success": True,
+            "execution_mode": auto_exec.get_mode(),
+            **status
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting headless status: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@api_router.post("/headless/execute-trade")
+async def execute_headless_trade(
+    asset: str = "EURUSD_otc",
+    direction: str = "call",
+    amount: float = 1.0,
+    duration: int = 60
+):
+    """
+    Execute a single trade via headless browser
+    
+    Args:
+        asset: Asset symbol (e.g., 'EURUSD_otc')
+        direction: 'call' or 'put'
+        amount: Trade amount in dollars
+        duration: Trade duration in seconds
+    
+    Returns:
+        Trade execution result
+    """
+    try:
+        from browser_automation import get_browser_automation
+        
+        automation = await get_browser_automation(db)
+        
+        # Check if browser is running
+        status = automation.get_status()
+        if not status['state']['is_running']:
+            return {
+                "success": False,
+                "error": "Headless browser not running. Call /api/headless/start first."
+            }
+        
+        result = await automation.execute_trade(
+            asset=asset,
+            direction=direction,
+            amount=amount,
+            duration=duration
+        )
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error executing headless trade: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@api_router.post("/execution-mode/set")
+async def set_execution_mode(mode: str = "DEMO"):
+    """
+    Set the trade execution mode
+    
+    Args:
+        mode: "DEMO", "BRIDGE", "API", or "HEADLESS"
+        
+    - DEMO: Simulates trades (for testing)
+        - BRIDGE: Requires manual browser Bridge Script setup
+        - API: Direct API (not implemented)
+        - HEADLESS: Uses Playwright browser automation (REAL TRADING)
+    """
+    try:
+        valid_modes = ["DEMO", "BRIDGE", "API", "HEADLESS"]
+        if mode.upper() not in valid_modes:
+            return {
+                "success": False,
+                "error": f"Invalid mode. Must be one of: {valid_modes}"
+            }
+        
+        from auto_execution_mode import get_auto_execution
+        
+        auto_exec = await get_auto_execution(db)
+        auto_exec.set_mode(mode.upper())
+        
+        return {
+            "success": True,
+            "mode": mode.upper(),
+            "message": f"Execution mode set to {mode.upper()}"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error setting execution mode: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@api_router.get("/execution-mode/current")
+async def get_current_execution_mode():
+    """Get current execution mode and statistics"""
+    try:
+        from auto_execution_mode import get_auto_execution
+        
+        auto_exec = await get_auto_execution(db)
+        stats = auto_exec.get_statistics()
+        
+        return {
+            "success": True,
+            **stats
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting execution mode: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
