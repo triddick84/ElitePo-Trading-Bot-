@@ -5860,6 +5860,194 @@ async def generate_and_notify_signal(
 
 
 # ============================================================================
+# 5-SECOND SUPERTREND REVERSAL STRATEGY ENDPOINTS
+# ============================================================================
+
+@api_router.get("/5s-supertrend/info")
+async def get_5s_supertrend_info():
+    """Get 5-second Supertrend reversal strategy information"""
+    try:
+        from strategies.strategy_5s_supertrend_reversal import SupertrendReversal5s
+        
+        strategy = SupertrendReversal5s()
+        info = strategy.get_strategy_info()
+        
+        return {
+            "success": True,
+            **info
+        }
+    except Exception as e:
+        logger.error(f"Error getting 5s Supertrend info: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@api_router.post("/5s-supertrend/generate-signal")
+async def generate_5s_supertrend_signal_endpoint(request: Request):
+    """
+    Generate signal using 5-second Supertrend reversal strategy
+    
+    Body:
+    - candle_data: List of OHLC candles (at least 50 candles)
+    - asset: Asset name (optional)
+    """
+    try:
+        data = await request.json()
+        candle_data = data.get('candle_data', [])
+        asset = data.get('asset', 'EURUSD_OTC')
+        
+        if len(candle_data) < 50:
+            return {
+                "success": False,
+                "error": "Need at least 50 candles for 5s Supertrend strategy"
+            }
+        
+        from strategies.strategy_5s_supertrend_reversal import generate_5s_supertrend_signal
+        
+        signal = generate_5s_supertrend_signal(candle_data)
+        
+        if signal:
+            signal['asset'] = asset
+            signal['timestamp'] = datetime.now(timezone.utc).isoformat()
+            
+            return {
+                "success": True,
+                "signal": signal,
+                "message": "5s Supertrend signal generated"
+            }
+        else:
+            return {
+                "success": False,
+                "message": "No signal at this time (no Supertrend flip detected)"
+            }
+        
+    except Exception as e:
+        logger.error(f"Error generating 5s Supertrend signal: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@api_router.post("/5s-supertrend/train-ai-model")
+async def train_5s_supertrend_ai_model(request: Request):
+    """
+    Train AI model for 5-second Supertrend strategy
+    
+    Body:
+    - candle_data: Historical 5s candle data (thousands of candles)
+    - model_name: Name to save model as (optional)
+    """
+    try:
+        data = await request.json()
+        candle_data = data.get('candle_data', [])
+        model_name = data.get('model_name', 'supertrend_5s_model')
+        
+        if len(candle_data) < 1000:
+            return {
+                "success": False,
+                "error": "Need at least 1000 candles for training (preferably 10,000+)"
+            }
+        
+        from ai_trainer_5s_supertrend import Supertrend5sAITrainer
+        import pandas as pd
+        
+        # Convert to DataFrame
+        df = pd.DataFrame(candle_data)
+        
+        # Initialize trainer
+        trainer = Supertrend5sAITrainer()
+        
+        # Prepare features
+        df = trainer.prepare_features(df)
+        df = trainer.generate_labels(df)
+        
+        # Prepare training data
+        X, y, feature_cols = trainer.prepare_training_data(df)
+        
+        # Split data
+        split_idx = int(len(X) * 0.8)
+        X_train, X_val = X[:split_idx], X[split_idx:]
+        y_train, y_val = y[:split_idx], y[split_idx:]
+        
+        # Train model
+        training_results = trainer.train_xgboost_model(X_train, y_train, X_val, y_val)
+        
+        # Save model
+        model_path = f"/app/backend/models/{model_name}.pkl"
+        trainer.save_model(model_path)
+        
+        # Run backtest
+        backtest_results = trainer.backtest_strategy(df)
+        
+        return {
+            "success": True,
+            "message": "Model trained successfully",
+            "training_results": training_results,
+            "backtest_results": {
+                "total_trades": backtest_results['total_trades'],
+                "win_rate": backtest_results['win_rate'],
+                "roi": backtest_results['roi'],
+                "final_balance": backtest_results['final_balance']
+            },
+            "model_path": model_path
+        }
+        
+    except Exception as e:
+        logger.error(f"Error training 5s Supertrend AI model: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@api_router.post("/5s-supertrend/backtest")
+async def backtest_5s_supertrend_strategy(request: Request):
+    """
+    Backtest 5-second Supertrend reversal strategy
+    
+    Body:
+    - candle_data: Historical candle data
+    - initial_balance: Starting balance (default: 1000)
+    - stake_per_trade: Amount per trade (default: 10)
+    - payout_rate: Payout rate on wins (default: 0.8)
+    """
+    try:
+        data = await request.json()
+        candle_data = data.get('candle_data', [])
+        initial_balance = data.get('initial_balance', 1000.0)
+        stake_per_trade = data.get('stake_per_trade', 10.0)
+        payout_rate = data.get('payout_rate', 0.8)
+        
+        from ai_trainer_5s_supertrend import Supertrend5sAITrainer
+        import pandas as pd
+        
+        df = pd.DataFrame(candle_data)
+        
+        trainer = Supertrend5sAITrainer()
+        results = trainer.backtest_strategy(
+            df=df,
+            initial_balance=initial_balance,
+            stake_per_trade=stake_per_trade,
+            payout_rate=payout_rate
+        )
+        
+        return {
+            "success": True,
+            "results": results
+        }
+        
+    except Exception as e:
+        logger.error(f"Error backtesting 5s Supertrend: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+# ============================================================================
 # AUTOMATED TRADING ENDPOINTS
 # ============================================================================
 
