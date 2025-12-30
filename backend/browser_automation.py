@@ -162,9 +162,14 @@ class PocketOptionBrowserAutomation:
         try:
             logger.info("🔐 Logging into Pocket Option...")
             
-            # Navigate to login page
-            await self.page.goto(PO_LOGIN_URL, wait_until='networkidle')
-            await asyncio.sleep(2)  # Wait for page to fully load
+            # Navigate to login page with longer timeout
+            try:
+                await self.page.goto(PO_LOGIN_URL, wait_until='domcontentloaded', timeout=60000)
+            except Exception as nav_error:
+                logger.warning(f"Navigation issue: {nav_error}, trying with load state...")
+                await self.page.goto(PO_LOGIN_URL, timeout=60000)
+            
+            await asyncio.sleep(3)  # Wait for page to fully load
             
             # Accept cookies if present
             try:
@@ -175,9 +180,47 @@ class PocketOptionBrowserAutomation:
             except:
                 pass
             
-            # Fill login form
-            email_input = self.page.locator('input[type="email"], input[name="email"], #email')
-            password_input = self.page.locator('input[type="password"], input[name="password"], #password')
+            # Fill login form - try multiple selector patterns
+            email_selectors = [
+                'input[type="email"]',
+                'input[name="email"]',
+                '#email',
+                'input[placeholder*="email" i]',
+                'input[autocomplete="email"]'
+            ]
+            
+            password_selectors = [
+                'input[type="password"]',
+                'input[name="password"]',
+                '#password',
+                'input[placeholder*="password" i]'
+            ]
+            
+            email_input = None
+            for selector in email_selectors:
+                try:
+                    el = self.page.locator(selector).first
+                    if await el.count() > 0:
+                        email_input = el
+                        break
+                except:
+                    continue
+            
+            password_input = None
+            for selector in password_selectors:
+                try:
+                    el = self.page.locator(selector).first
+                    if await el.count() > 0:
+                        password_input = el
+                        break
+                except:
+                    continue
+            
+            if not email_input or not password_input:
+                # Take screenshot for debugging
+                screenshot = await self.page.screenshot()
+                logger.error("Could not find login form elements")
+                return {"success": False, "error": "Login form not found"}
             
             # Wait for inputs to be visible
             await email_input.wait_for(state='visible', timeout=10000)
