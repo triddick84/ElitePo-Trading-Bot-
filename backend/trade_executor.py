@@ -44,7 +44,7 @@ class PocketOptionTradeExecutor:
         confidence: float = 0.0
     ) -> Dict:
         """
-        Execute a trade via Bridge Script
+        Execute a trade (now with AUTO-EXECUTION mode)
         
         Args:
             asset: Asset symbol (e.g., 'EURUSD_otc')
@@ -72,10 +72,10 @@ class PocketOptionTradeExecutor:
                 "confidence": confidence,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "status": "pending",
-                "execution_type": "bridge"
+                "execution_type": "auto"
             }
             
-            # Store in pending trades (to be picked up by bridge)
+            # Store in pending trades
             self.pending_trades[order_id] = trade_request
             
             # Save to database
@@ -85,28 +85,43 @@ class PocketOptionTradeExecutor:
                 "created_at": datetime.now(timezone.utc)
             })
             
-            logger.info(f"📤 Trade queued for execution: {order_id} - {direction.upper()} {asset} ${amount}")
+            logger.info(f"📤 Trade created: {order_id} - {direction.upper()} {asset} ${amount}")
             
-            # Wait a short time to see if bridge picks it up
-            await asyncio.sleep(1)
+            # AUTO-EXECUTE immediately in DEMO mode
+            from auto_execution_mode import get_auto_execution
             
-            # Check if bridge executed it
-            execution_result = await self._check_execution_status(order_id)
+            auto_exec = await get_auto_execution(self.db, mode="DEMO")
+            execution_result = await auto_exec.execute_trade_auto(
+                order_id=order_id,
+                asset=asset,
+                direction=direction,
+                amount=amount,
+                duration=duration,
+                confidence=confidence
+            )
             
-            if execution_result.get('executed'):
+            if execution_result.get('success'):
+                # Move from pending to active
+                if order_id in self.pending_trades:
+                    trade = self.pending_trades[order_id]
+                    trade['status'] = 'active'
+                    trade['bridge_order_id'] = execution_result.get('order_id')
+                    self.active_trades[order_id] = trade
+                    del self.pending_trades[order_id]
+                
                 return {
                     "success": True,
                     "order_id": order_id,
                     "status": "executed",
-                    "bridge_order_id": execution_result.get('bridge_order_id'),
-                    "message": "Trade executed successfully via Bridge Script"
+                    "execution_mode": "DEMO",
+                    "message": "Trade executed automatically in DEMO mode"
                 }
             else:
                 return {
                     "success": True,
                     "order_id": order_id,
                     "status": "pending",
-                    "message": "Trade queued, waiting for bridge execution"
+                    "message": "Trade queued for execution"
                 }
             
         except Exception as e:
