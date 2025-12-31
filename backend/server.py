@@ -3918,6 +3918,367 @@ async def get_bridge_script():
             "app_url": app_url
         }
     except Exception as e:
+        logger.error(f"Error generating bridge script: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.get("/bridge/simple-script")
+async def get_simple_bridge_script():
+    """
+    Get a SIMPLIFIED bridge script - only for trade execution
+    Use this if the full bridge has connection issues
+    """
+    try:
+        import os
+        app_url = os.environ.get('REACT_APP_BACKEND_URL', '')
+        
+        if not app_url:
+            try:
+                with open('/app/frontend/.env', 'r') as f:
+                    for line in f:
+                        if line.startswith('REACT_APP_BACKEND_URL='):
+                            app_url = line.split('=')[1].strip()
+                            break
+            except:
+                pass
+        
+        # Simplified script focused only on trade execution
+        script = f'''
+// ╔═══════════════════════════════════════════════════════════════════════════╗
+// ║       POCKET OPTION SIMPLE TRADE BOT v3.0 - Trade Execution Only          ║
+// ║              Works on DEMO and REAL accounts                               ║
+// ╚═══════════════════════════════════════════════════════════════════════════╝
+
+(function() {{
+  'use strict';
+  
+  const SERVER = '{app_url}';
+  let pollCount = 0;
+  let tradesExecuted = 0;
+  let lastTradeId = null;
+  
+  console.log('%c🚀 Simple Trade Bot Starting...', 'color: #00ff00; font-size: 18px; font-weight: bold;');
+  console.log('%c📡 Server: ' + SERVER, 'color: #00bfff; font-size: 14px;');
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TRADE BUTTON FINDER - Works for both Demo and Real
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  function findTradeButton(direction) {{
+    const isCall = direction.toLowerCase() === 'call';
+    
+    // Method 1: Look for buttons with specific classes
+    const classPatterns = isCall 
+      ? ['btn-call', 'call', 'higher', 'green', 'up', 'buy']
+      : ['btn-put', 'put', 'lower', 'red', 'down', 'sell'];
+    
+    // Search all clickable elements
+    const clickables = document.querySelectorAll('button, div[role="button"], a[role="button"], span[role="button"], [class*="btn"], [class*="button"]');
+    
+    for (const el of clickables) {{
+      const classes = (el.className || '').toLowerCase();
+      const text = (el.textContent || '').toLowerCase();
+      const dataDir = (el.getAttribute('data-dir') || '').toLowerCase();
+      
+      // Check class names
+      for (const pattern of classPatterns) {{
+        if (classes.includes(pattern)) {{
+          console.log(`%c✓ Found ${{direction}} button by class: ${{pattern}}`, 'color: #00ff00');
+          return el;
+        }}
+      }}
+      
+      // Check text content
+      const textPatterns = isCall
+        ? ['higher', 'call', 'up', 'вверх', 'выше', 'купить']
+        : ['lower', 'put', 'down', 'вниз', 'ниже', 'продать'];
+      
+      for (const pattern of textPatterns) {{
+        if (text.includes(pattern)) {{
+          console.log(`%c✓ Found ${{direction}} button by text: ${{pattern}}`, 'color: #00ff00');
+          return el;
+        }}
+      }}
+      
+      // Check data attributes
+      if (dataDir === direction.toLowerCase() || dataDir === (isCall ? 'higher' : 'lower')) {{
+        console.log(`%c✓ Found ${{direction}} button by data-dir`, 'color: #00ff00');
+        return el;
+      }}
+    }}
+    
+    // Method 2: Try to find by color (green for call, red for put)
+    const allElements = document.querySelectorAll('*');
+    for (const el of allElements) {{
+      if (el.offsetWidth > 50 && el.offsetHeight > 30) {{ // Reasonable button size
+        const style = window.getComputedStyle(el);
+        const bgColor = style.backgroundColor;
+        
+        if (isCall && (bgColor.includes('0, 128') || bgColor.includes('0, 255') || bgColor.includes('34, 139'))) {{
+          if (el.offsetParent !== null) {{ // Is visible
+            console.log(`%c✓ Found CALL button by green color`, 'color: #00ff00');
+            return el;
+          }}
+        }}
+        if (!isCall && (bgColor.includes('255, 0') || bgColor.includes('220, 53') || bgColor.includes('239, 68'))) {{
+          if (el.offsetParent !== null) {{
+            console.log(`%c✓ Found PUT button by red color`, 'color: #ff6600');
+            return el;
+          }}
+        }}
+      }}
+    }}
+    
+    // Method 3: Position-based (usually call is on left/top, put is on right/bottom)
+    const tradingPanels = document.querySelectorAll('[class*="trading"], [class*="deal"], [class*="order"], [class*="trade"]');
+    for (const panel of tradingPanels) {{
+      const buttons = panel.querySelectorAll('button');
+      if (buttons.length >= 2) {{
+        console.log(`%c✓ Found buttons in trading panel, using position`, 'color: #ffff00');
+        return isCall ? buttons[0] : buttons[buttons.length - 1];
+      }}
+    }}
+    
+    return null;
+  }}
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SET TRADE AMOUNT
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  function setAmount(amount) {{
+    const inputs = document.querySelectorAll('input[type="number"], input[type="text"], input[class*="amount"], input[class*="input"]');
+    
+    for (const input of inputs) {{
+      const placeholder = (input.placeholder || '').toLowerCase();
+      const classes = (input.className || '').toLowerCase();
+      const name = (input.name || '').toLowerCase();
+      
+      if (classes.includes('amount') || name.includes('amount') || placeholder.includes('amount') || placeholder.includes('сумма')) {{
+        input.value = amount;
+        input.dispatchEvent(new Event('input', {{ bubbles: true }}));
+        input.dispatchEvent(new Event('change', {{ bubbles: true }}));
+        console.log(`%c💰 Amount set to: $${{amount}}`, 'color: #00bfff');
+        return true;
+      }}
+    }}
+    
+    // Try clicking on amount display and typing
+    const amountDisplays = document.querySelectorAll('[class*="amount"], [class*="value"]');
+    for (const display of amountDisplays) {{
+      if (display.textContent && display.textContent.match(/\\$?\\d+/)) {{
+        display.click();
+        return true;
+      }}
+    }}
+    
+    return false;
+  }}
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // EXECUTE TRADE
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  async function executeTrade(trade) {{
+    const {{ order_id, direction, amount, asset }} = trade;
+    
+    console.log(`%c🎯 EXECUTING: ${{direction.toUpperCase()}} $${{amount}} on ${{asset}}`, 'color: #ff00ff; font-size: 14px; font-weight: bold;');
+    
+    // Set amount first
+    setAmount(amount);
+    await sleep(300);
+    
+    // Find and click trade button
+    const button = findTradeButton(direction);
+    
+    if (button) {{
+      // Highlight the button briefly
+      const originalBg = button.style.backgroundColor;
+      button.style.backgroundColor = direction === 'call' ? '#00ff00' : '#ff0000';
+      button.style.transform = 'scale(1.1)';
+      
+      await sleep(200);
+      
+      // Click!
+      button.click();
+      
+      // Restore style
+      setTimeout(() => {{
+        button.style.backgroundColor = originalBg;
+        button.style.transform = '';
+      }}, 500);
+      
+      tradesExecuted++;
+      lastTradeId = order_id;
+      
+      console.log(`%c✅ TRADE EXECUTED! Order: ${{order_id}} | Total trades: ${{tradesExecuted}}`, 'color: #00ff00; font-size: 14px; font-weight: bold;');
+      
+      // Report success to server
+      await reportExecution(order_id, true);
+      return true;
+    }} else {{
+      console.log(`%c❌ Could not find ${{direction.toUpperCase()}} button!`, 'color: #ff0000; font-size: 14px;');
+      console.log('%c💡 Make sure you are on the trading page with the chart visible', 'color: #ffff00');
+      
+      // Report failure
+      await reportExecution(order_id, false);
+      return false;
+    }}
+  }}
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SERVER COMMUNICATION
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  async function checkForTrades() {{
+    try {{
+      const response = await fetch(`${{SERVER}}/api/trade-executor/pending`);
+      const data = await response.json();
+      
+      if (data.success && data.pending_trades && data.pending_trades.length > 0) {{
+        console.log(`%c📋 Found ${{data.pending_trades.length}} pending trade(s)!`, 'color: #00ff00; font-size: 14px;');
+        
+        for (const trade of data.pending_trades) {{
+          // Skip if we already executed this trade
+          if (trade.order_id === lastTradeId) continue;
+          
+          await executeTrade(trade);
+          await sleep(1000); // Wait between trades
+        }}
+      }}
+    }} catch (err) {{
+      // Only log errors occasionally
+      if (pollCount % 30 === 0) {{
+        console.log(`%c⚠️ Server check failed: ${{err.message}}`, 'color: #ffff00');
+      }}
+    }}
+  }}
+  
+  async function reportExecution(orderId, success) {{
+    try {{
+      await fetch(`${{SERVER}}/api/trade-executor/confirm-execution`, {{
+        method: 'POST',
+        headers: {{ 'Content-Type': 'application/json' }},
+        body: JSON.stringify({{
+          order_id: orderId,
+          bridge_order_id: 'SIMPLE_' + Date.now(),
+          success: success,
+          execution_time: new Date().toISOString()
+        }})
+      }});
+    }} catch (err) {{
+      console.log('%c⚠️ Could not report execution', 'color: #ffff00');
+    }}
+  }}
+  
+  async function sendHeartbeat() {{
+    try {{
+      const isDemo = window.location.href.includes('demo');
+      
+      await fetch(`${{SERVER}}/api/bridge/heartbeat`, {{
+        method: 'POST',
+        headers: {{ 'Content-Type': 'application/json' }},
+        body: JSON.stringify({{
+          timestamp: Date.now(),
+          messageCount: pollCount,
+          activeConnections: 1,
+          ssid: 'present',
+          isDemo: isDemo,
+          balance: getBalance(),
+          tradesExecuted: tradesExecuted
+        }})
+      }});
+    }} catch (err) {{}}
+  }}
+  
+  function getBalance() {{
+    const balanceEls = document.querySelectorAll('[class*="balance"], [class*="amount"]');
+    for (const el of balanceEls) {{
+      const text = el.textContent || '';
+      const match = text.match(/[\\d,]+\\.?\\d*/);
+      if (match) {{
+        return parseFloat(match[0].replace(',', ''));
+      }}
+    }}
+    return 0;
+  }}
+  
+  function sleep(ms) {{
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }}
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // MAIN LOOP
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  async function mainLoop() {{
+    pollCount++;
+    
+    // Check for trades
+    await checkForTrades();
+    
+    // Send heartbeat every 5 polls
+    if (pollCount % 5 === 0) {{
+      await sendHeartbeat();
+    }}
+    
+    // Status update every 30 polls (1 minute)
+    if (pollCount % 30 === 0) {{
+      console.log(`%c📊 Status: Poll #${{pollCount}} | Trades: ${{tradesExecuted}} | Server: ${{SERVER}}`, 'color: #00bfff');
+    }}
+  }}
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // START
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  console.log('%c═══════════════════════════════════════════════════════════', 'color: #00ff00');
+  console.log('%c           🤖 SIMPLE TRADE BOT ACTIVE!                     ', 'color: #00ff00; font-weight: bold;');
+  console.log('%c═══════════════════════════════════════════════════════════', 'color: #00ff00');
+  console.log('%c📡 Polling server for trades every 2 seconds...', 'color: #00bfff');
+  console.log('%c💡 Queue trades at: ' + SERVER + '/api/trade-executor/queue', 'color: #ffff00');
+  console.log('%c═══════════════════════════════════════════════════════════', 'color: #00ff00');
+  
+  // Initial heartbeat
+  sendHeartbeat();
+  
+  // Start main loop
+  setInterval(mainLoop, 2000);
+  
+  // Expose for manual testing
+  window.BOT = {{
+    executeTrade: executeTrade,
+    findButton: findTradeButton,
+    setAmount: setAmount,
+    status: () => console.log(`Polls: ${{pollCount}}, Trades: ${{tradesExecuted}}`)
+  }};
+  
+  console.log('%c💡 Manual test: window.BOT.findButton("call") or window.BOT.findButton("put")', 'color: #888888');
+  
+}})();
+'''
+        
+        return {
+            "success": True,
+            "script": script,
+            "instructions": [
+                "1. Open Pocket Option (DEMO or REAL account)",
+                "2. Navigate to trading page with chart",
+                "3. Open Console (F12 → Console)",
+                "4. Paste this script and press Enter",
+                "5. You should see '🤖 SIMPLE TRADE BOT ACTIVE!'",
+                "6. Queue trades with: curl -X POST '" + app_url + "/api/trade-executor/queue?direction=call&amount=1'",
+                "",
+                "Manual testing commands:",
+                "  window.BOT.findButton('call')  - Test finding CALL button",
+                "  window.BOT.findButton('put')   - Test finding PUT button",
+                "  window.BOT.status()            - Check bot status"
+            ],
+            "app_url": app_url
+        }
+    except Exception as e:
+        logger.error(f"Error generating simple bridge script: {e}")
+        return {"success": False, "error": str(e)}
         logger.error(f"Bridge script error: {e}")
         return {"success": False, "error": str(e)}
 
