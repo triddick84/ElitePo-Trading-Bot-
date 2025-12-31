@@ -7433,22 +7433,42 @@ async def connect_pocket_option_v2(ssid: str = None, demo: bool = False):
     Connect to Pocket Option using BinaryOptionsToolsV2
     
     Args:
-        ssid: Session ID from Pocket Option (get from browser cookies)
-             If not provided, uses stored SSID
+        ssid: The AUTH message from WebSocket (NOT the session cookie!)
+              Format: 42["auth",{"session":"YOUR_SESSION_HERE","isDemo":0}]
         demo: True for demo account, False for real (default: False for live)
     
-    To get SSID:
-    1. Log into Pocket Option in browser
+    HOW TO GET SSID:
+    1. Login to Pocket Option in your browser
     2. Open Developer Tools (F12)
-    3. Go to Application > Cookies
-    4. Find 'ssid' cookie value
+    3. Go to Network tab
+    4. Click "WS" filter (WebSocket)
+    5. Refresh the page
+    6. Find the WebSocket connection
+    7. Look for message with "auth" and "session" (NOT sessionToken)
+    8. Right-click and "Copy message"
+    9. Paste the entire message as the ssid parameter
+    
+    Example SSID format:
+    42["auth",{"session":"abcd1234...","isDemo":0}]
     """
     try:
         from pocket_option_api_v2 import get_api_client
         
-        # Use provided SSID or default stored one
+        # Use provided SSID or prompt user
         if not ssid:
-            ssid = "ALAtqhJkRG4FAQwt4"  # Stored SSID
+            return {
+                "success": False,
+                "error": "SSID required. See endpoint description for how to get it.",
+                "instructions": [
+                    "1. Login to Pocket Option in browser",
+                    "2. Open Developer Tools (F12)",
+                    "3. Go to Network tab → WS filter",
+                    "4. Refresh page",
+                    "5. Find WebSocket, look for 'auth' message with 'session'",
+                    "6. Right-click → Copy message",
+                    "7. Pass entire message as 'ssid' parameter"
+                ]
+            }
         
         client = await get_api_client(ssid=ssid, demo=demo)
         result = await client.connect()
