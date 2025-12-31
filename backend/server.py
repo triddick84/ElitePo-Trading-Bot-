@@ -5863,6 +5863,72 @@ async def generate_and_notify_signal(
 # TRADE EXECUTOR ENDPOINTS (Bridge Script Integration)
 # ============================================================================
 
+@api_router.post("/trade-executor/queue")
+async def queue_trade_for_bridge(
+    asset: str = "EURUSD_otc",
+    direction: str = "call",
+    amount: float = 1.0,
+    duration: int = 60
+):
+    """
+    Queue a trade for bridge script execution
+    
+    This adds a trade to the pending queue that the bridge script will pick up
+    and execute in the browser.
+    
+    Args:
+        asset: Asset symbol (e.g., 'EURUSD_otc')
+        direction: 'call' or 'put'
+        amount: Trade amount in dollars
+        duration: Trade duration in seconds
+    """
+    try:
+        from trade_executor import get_trade_executor
+        from auto_execution_mode import get_auto_execution
+        
+        # Ensure we're in BRIDGE mode
+        auto_exec = await get_auto_execution(db)
+        current_mode = auto_exec.get_mode()
+        
+        if current_mode != "BRIDGE":
+            auto_exec.set_mode("BRIDGE")
+            logger.info("🔄 Switched to BRIDGE mode for trade queueing")
+        
+        executor = await get_trade_executor(db)
+        result = await executor.execute_trade(
+            asset=asset,
+            direction=direction,
+            amount=amount,
+            duration=duration,
+            strategy="manual_bridge",
+            confidence=95.0
+        )
+        
+        # Get pending trades to confirm
+        pending = await executor.get_pending_trades()
+        
+        return {
+            "success": True,
+            "message": f"Trade queued for bridge execution",
+            "order_id": result.get('order_id'),
+            "status": result.get('status'),
+            "pending_count": len(pending),
+            "trade_details": {
+                "asset": asset,
+                "direction": direction,
+                "amount": amount,
+                "duration": duration
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error queueing trade: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
 @api_router.get("/trade-executor/pending")
 async def get_pending_trades_for_bridge():
     """
