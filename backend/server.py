@@ -7423,6 +7423,206 @@ async def get_current_execution_mode():
         }
 
 
+# ============================================================================
+# BINARYOPTIONSTOOLS V2 API ENDPOINTS - Direct WebSocket Trading
+# ============================================================================
+
+@api_router.post("/po-api-v2/connect")
+async def connect_pocket_option_v2(ssid: str = None, demo: bool = False):
+    """
+    Connect to Pocket Option using BinaryOptionsToolsV2
+    
+    Args:
+        ssid: Session ID from Pocket Option (get from browser cookies)
+             If not provided, uses stored SSID
+        demo: True for demo account, False for real (default: False for live)
+    
+    To get SSID:
+    1. Log into Pocket Option in browser
+    2. Open Developer Tools (F12)
+    3. Go to Application > Cookies
+    4. Find 'ssid' cookie value
+    """
+    try:
+        from pocket_option_api_v2 import get_api_client
+        
+        # Use provided SSID or default stored one
+        if not ssid:
+            ssid = "ALAtqhJkRG4FAQwt4"  # Stored SSID
+        
+        client = await get_api_client(ssid=ssid, demo=demo)
+        result = await client.connect()
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"V2 API connect error: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@api_router.post("/po-api-v2/disconnect")
+async def disconnect_pocket_option_v2():
+    """Disconnect from Pocket Option V2 API"""
+    try:
+        from pocket_option_api_v2 import reset_api_client
+        await reset_api_client()
+        return {"success": True, "message": "Disconnected"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@api_router.get("/po-api-v2/status")
+async def get_pocket_option_v2_status():
+    """Get V2 API connection status"""
+    try:
+        from pocket_option_api_v2 import get_api_client
+        
+        try:
+            client = await get_api_client()
+            return client.get_status()
+        except ValueError:
+            return {
+                "success": True,
+                "is_connected": False,
+                "message": "Client not initialized - call /connect first"
+            }
+        
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@api_router.get("/po-api-v2/balance")
+async def get_pocket_option_v2_balance():
+    """Get current account balance via V2 API"""
+    try:
+        from pocket_option_api_v2 import get_api_client
+        
+        client = await get_api_client()
+        result = await client.get_balance()
+        return result
+        
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@api_router.post("/po-api-v2/trade")
+async def execute_pocket_option_v2_trade(
+    asset: str = "EURUSD_otc",
+    direction: str = "call",
+    amount: float = 1.0,
+    duration: int = 60
+):
+    """
+    Execute a trade via V2 API (Direct WebSocket)
+    
+    Args:
+        asset: Asset symbol (e.g., 'EURUSD_otc', 'GBPUSD_otc')
+        direction: 'call' (up) or 'put' (down)
+        amount: Trade amount in dollars
+        duration: Trade duration in seconds (min 5)
+    
+    This executes trades directly without browser automation!
+    """
+    try:
+        from pocket_option_api_v2 import get_api_client
+        
+        client = await get_api_client()
+        result = await client.execute_trade(
+            asset=asset,
+            direction=direction,
+            amount=amount,
+            duration=duration
+        )
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"V2 trade error: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.get("/po-api-v2/check-result/{order_id}")
+async def check_pocket_option_v2_trade_result(order_id: str, timeout: float = 120):
+    """
+    Check the result of a trade
+    
+    Args:
+        order_id: Order ID from trade execution
+        timeout: Max time to wait for result (seconds)
+    """
+    try:
+        from pocket_option_api_v2 import get_api_client
+        
+        client = await get_api_client()
+        result = await client.check_trade_result(order_id, timeout=timeout)
+        return result
+        
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@api_router.post("/po-api-v2/auto-trade")
+async def execute_auto_trade_v2(
+    asset: str = "EURUSD_otc",
+    direction: str = "call",
+    amount: float = 1.0,
+    duration: int = 60,
+    wait_for_result: bool = False
+):
+    """
+    Execute automated trade via V2 API and optionally wait for result
+    
+    This is the MAIN ENDPOINT for automated trading!
+    Uses direct WebSocket connection, no browser needed.
+    
+    Args:
+        asset: Asset symbol
+        direction: 'call' or 'put'
+        amount: Trade amount in dollars
+        duration: Trade duration in seconds
+        wait_for_result: If True, wait for trade result before returning
+    """
+    try:
+        from pocket_option_api_v2 import get_api_client
+        
+        # Connect if not already connected
+        client = await get_api_client(ssid="ALAtqhJkRG4FAQwt4", demo=False)
+        
+        if not client.state.is_connected:
+            conn = await client.connect()
+            if not conn['success']:
+                return conn
+        
+        # Execute trade
+        trade_result = await client.execute_trade(
+            asset=asset,
+            direction=direction,
+            amount=amount,
+            duration=duration
+        )
+        
+        if not trade_result['success']:
+            return trade_result
+        
+        # Optionally wait for result
+        if wait_for_result and trade_result.get('order_id'):
+            # Wait for trade duration + buffer
+            result = await client.check_trade_result(
+                trade_result['order_id'],
+                timeout=duration + 30
+            )
+            trade_result['trade_result'] = result
+        
+        return trade_result
+        
+    except Exception as e:
+        logger.error(f"Auto trade V2 error: {e}")
+        return {"success": False, "error": str(e)}
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
