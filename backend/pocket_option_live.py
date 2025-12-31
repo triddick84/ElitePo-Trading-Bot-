@@ -922,8 +922,13 @@ def generate_bridge_script(app_url: str) -> str:
   // TRADE EXECUTION
   // ═══════════════════════════════════════════════════════════════════════════
   
+  let lastPollTime = 0;
+  let pollCount = 0;
+  
   async function checkForPendingTrades() {{
     try {{
+      pollCount++;
+      
       const response = await fetch(`${{CONFIG.appUrl}}/api/trade-executor/pending`, {{
         method: 'GET',
         headers: {{ 'Content-Type': 'application/json' }}
@@ -931,15 +936,23 @@ def generate_bridge_script(app_url: str) -> str:
       
       const data = await response.json();
       
+      // Log every 15 polls (30 seconds) to show it's working
+      if (pollCount % 15 === 0) {{
+        log(`🔍 Poll #${{pollCount}}: Checking for trades... (${{data.pending_trades?.length || 0}} pending)`, 'debug');
+      }}
+      
       if (data.success && data.pending_trades && data.pending_trades.length > 0) {{
-        log(`📋 Found ${{data.pending_trades.length}} pending trades`, 'info');
+        log(`📋 Found ${{data.pending_trades.length}} pending trade(s)!`, 'success');
         
         for (const trade of data.pending_trades) {{
+          log(`🎯 Processing trade: ${{trade.order_id}}`, 'info');
           await executeTrade(trade);
         }}
       }}
     }} catch (error) {{
-      // Silent fail - don't spam console
+      if (pollCount % 30 === 0) {{
+        log(`⚠️ Trade poll error: ${{error.message}}`, 'warning');
+      }}
     }}
   }}
   
