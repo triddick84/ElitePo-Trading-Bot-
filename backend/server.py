@@ -3842,11 +3842,16 @@ async def bridge_heartbeat(request: Request):
         bridge.last_message_time = datetime.now(timezone.utc)
         bridge.is_connected = True
         
-        # Update connection status with bridge data
+        # Update ALL connection status fields properly
+        bridge.connection_status['connected'] = True
+        bridge.connection_status['last_heartbeat'] = datetime.now(timezone.utc).isoformat()
         bridge.connection_status['active_connections'] = data.get('activeConnections', 0)
         bridge.connection_status['ssid_present'] = data.get('ssid') == 'present'
         bridge.connection_status['is_demo'] = data.get('isDemo')
         bridge.connection_status['balance'] = data.get('balance', 0)
+        bridge.connection_status['error'] = None
+        
+        logger.info(f"💓 Bridge heartbeat received - Balance: ${data.get('balance', 0)}")
         
         return {
             "success": True,
