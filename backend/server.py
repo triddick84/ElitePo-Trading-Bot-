@@ -7427,12 +7427,19 @@ async def get_current_execution_mode():
 # BINARYOPTIONSTOOLS V2 API ENDPOINTS - Direct WebSocket Trading
 # ============================================================================
 
+from pydantic import BaseModel
+from typing import Optional
+
+class SSIDConnectRequest(BaseModel):
+    ssid: str
+    demo: bool = False
+
 @api_router.post("/po-api-v2/connect")
-async def connect_pocket_option_v2(ssid: str = None, demo: bool = False):
+async def connect_pocket_option_v2(request: SSIDConnectRequest):
     """
     Connect to Pocket Option using BinaryOptionsToolsV2
     
-    Args:
+    Request Body:
         ssid: The AUTH message from WebSocket (NOT the session cookie!)
               Format: 42["auth",{"session":"YOUR_SESSION_HERE","isDemo":0}]
         demo: True for demo account, False for real (default: False for live)
@@ -7454,7 +7461,9 @@ async def connect_pocket_option_v2(ssid: str = None, demo: bool = False):
     try:
         from pocket_option_api_v2 import get_api_client
         
-        # Use provided SSID or prompt user
+        ssid = request.ssid
+        demo = request.demo
+        
         if not ssid:
             return {
                 "success": False,
@@ -7470,8 +7479,20 @@ async def connect_pocket_option_v2(ssid: str = None, demo: bool = False):
                 ]
             }
         
+        logger.info(f"🔌 Connecting to Pocket Option V2 API (demo={demo})")
+        logger.info(f"SSID: {ssid[:50]}...")
+        
         client = await get_api_client(ssid=ssid, demo=demo)
         result = await client.connect()
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"V2 API connect error: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
         
         return result
         
