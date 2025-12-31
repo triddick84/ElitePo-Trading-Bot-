@@ -474,27 +474,77 @@ class PocketOptionBrowserAutomation:
         """Click the appropriate trade button"""
         try:
             if direction.lower() == 'call':
-                # CALL/UP/HIGHER button
+                # CALL/UP/HIGHER button - comprehensive selectors
                 button_selectors = [
+                    # Class-based selectors
                     'button.btn-call',
+                    'button.call-btn',
                     'button.js-call',
-                    'button:has-text("Higher")',
-                    'button:has-text("CALL")',
-                    'button:has-text("UP")',
+                    'button[class*="call"]',
+                    'button[class*="higher"]',
+                    'button[class*="green"]',
+                    'button[class*="up"]',
+                    '.btn-call',
                     '.call-btn',
+                    '[class*="call-btn"]',
+                    '[class*="btn-call"]',
+                    '.deal-button--call',
+                    
+                    # Data attribute selectors
+                    'button[data-dir="call"]',
+                    'button[data-direction="call"]',
                     'button[data-action="call"]',
+                    '[data-dir="higher"]',
+                    
+                    # Text-based selectors
+                    'button:has-text("Higher")',
+                    'button:has-text("HIGHER")',
+                    'button:has-text("Call")',
+                    'button:has-text("CALL")',
+                    'button:has-text("Up")',
+                    'button:has-text("UP")',
+                    'button:has-text("Выше")',
+                    
+                    # Position-based
+                    '.trading-panel button:first-child',
+                    '.deal-buttons button:first-child',
                     '.btn-success.call'
                 ]
             else:
-                # PUT/DOWN/LOWER button
+                # PUT/DOWN/LOWER button - comprehensive selectors
                 button_selectors = [
+                    # Class-based selectors
                     'button.btn-put',
+                    'button.put-btn',
                     'button.js-put',
-                    'button:has-text("Lower")',
-                    'button:has-text("PUT")',
-                    'button:has-text("DOWN")',
+                    'button[class*="put"]',
+                    'button[class*="lower"]',
+                    'button[class*="red"]',
+                    'button[class*="down"]',
+                    '.btn-put',
                     '.put-btn',
+                    '[class*="put-btn"]',
+                    '[class*="btn-put"]',
+                    '.deal-button--put',
+                    
+                    # Data attribute selectors
+                    'button[data-dir="put"]',
+                    'button[data-direction="put"]',
                     'button[data-action="put"]',
+                    '[data-dir="lower"]',
+                    
+                    # Text-based selectors
+                    'button:has-text("Lower")',
+                    'button:has-text("LOWER")',
+                    'button:has-text("Put")',
+                    'button:has-text("PUT")',
+                    'button:has-text("Down")',
+                    'button:has-text("DOWN")',
+                    'button:has-text("Ниже")',
+                    
+                    # Position-based
+                    '.trading-panel button:last-child',
+                    '.deal-buttons button:last-child',
                     '.btn-danger.put'
                 ]
             
@@ -502,16 +552,44 @@ class PocketOptionBrowserAutomation:
                 try:
                     btn = self.page.locator(selector).first
                     if await btn.count() > 0:
-                        # Check if button is enabled
-                        is_disabled = await btn.get_attribute('disabled')
-                        if is_disabled:
-                            continue
-                        
-                        await btn.click()
-                        logger.debug(f"Clicked {direction.upper()} button")
-                        return {"success": True}
+                        # Check if button is enabled and visible
+                        if await btn.is_visible():
+                            is_disabled = await btn.get_attribute('disabled')
+                            if not is_disabled:
+                                await btn.click()
+                                logger.info(f"✅ Clicked {direction.upper()} button using: {selector}")
+                                return {"success": True}
                 except:
                     continue
+            
+            # Fallback: Try to find buttons by checking all buttons
+            try:
+                buttons = await self.page.locator('button').all()
+                for btn in buttons:
+                    try:
+                        classes = await btn.get_attribute('class') or ''
+                        text = await btn.text_content() or ''
+                        
+                        if direction.lower() == 'call':
+                            if any(x in classes.lower() for x in ['call', 'higher', 'green', 'up']):
+                                await btn.click()
+                                logger.info(f"✅ Clicked CALL button (fallback)")
+                                return {"success": True}
+                            if any(x in text.lower() for x in ['call', 'higher', 'up']):
+                                await btn.click()
+                                return {"success": True}
+                        else:
+                            if any(x in classes.lower() for x in ['put', 'lower', 'red', 'down']):
+                                await btn.click()
+                                logger.info(f"✅ Clicked PUT button (fallback)")
+                                return {"success": True}
+                            if any(x in text.lower() for x in ['put', 'lower', 'down']):
+                                await btn.click()
+                                return {"success": True}
+                    except:
+                        continue
+            except:
+                pass
             
             return {"success": False, "error": f"Could not find {direction} button"}
             
