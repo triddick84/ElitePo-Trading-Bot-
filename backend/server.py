@@ -7586,6 +7586,7 @@ async def check_pocket_option_v2_trade_result(order_id: str, timeout: float = 12
 
 @api_router.post("/po-api-v2/auto-trade")
 async def execute_auto_trade_v2(
+    ssid: str = None,
     asset: str = "EURUSD_otc",
     direction: str = "call",
     amount: float = 1.0,
@@ -7599,6 +7600,7 @@ async def execute_auto_trade_v2(
     Uses direct WebSocket connection, no browser needed.
     
     Args:
+        ssid: WebSocket AUTH message (required on first call)
         asset: Asset symbol
         direction: 'call' or 'put'
         amount: Trade amount in dollars
@@ -7608,8 +7610,16 @@ async def execute_auto_trade_v2(
     try:
         from pocket_option_api_v2 import get_api_client
         
-        # Connect if not already connected
-        client = await get_api_client(ssid="ALAtqhJkRG4FAQwt4", demo=False)
+        # Get or create client
+        try:
+            client = await get_api_client()
+        except ValueError:
+            if not ssid:
+                return {
+                    "success": False,
+                    "error": "SSID required for first connection. See /api/po-api-v2/connect for instructions."
+                }
+            client = await get_api_client(ssid=ssid, demo=False)
         
         if not client.state.is_connected:
             conn = await client.connect()
