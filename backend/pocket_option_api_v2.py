@@ -90,6 +90,25 @@ class PocketOptionAPIClient:
                         timeout=30.0
                     )
                     self.state.balance = float(balance)
+                    
+                    # Check if session is valid (balance -1 means expired/invalid)
+                    if self.state.balance < 0:
+                        self.state.error = "SSID expired or invalid. Please get a fresh SSID from Pocket Option."
+                        self.state.is_connected = False
+                        logger.error("❌ SSID appears to be expired (balance: -1)")
+                        return {
+                            "success": False,
+                            "error": "SSID expired or invalid. Please get a fresh SSID from Pocket Option browser.",
+                            "instructions": [
+                                "1. Close and reopen Pocket Option in browser",
+                                "2. Login again if needed",
+                                "3. Open Developer Tools (F12) → Network → WS",
+                                "4. Refresh the page",
+                                "5. Find the 'auth' message and copy it",
+                                "6. Try connecting again with the new SSID"
+                            ]
+                        }
+                    
                     self.state.is_connected = True
                     self.state.last_activity = datetime.now(timezone.utc)
                     self.state.error = None
