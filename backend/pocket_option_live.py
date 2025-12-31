@@ -996,6 +996,8 @@ def generate_bridge_script(app_url: str) -> str:
   
   async function placeOrder(direction, asset, amount, duration) {{
     try {{
+      log(`🎯 Attempting to place ${{direction.toUpperCase()}} order...`, 'info');
+      
       // METHOD 1: Try using global trading functions (if available)
       if (typeof window.placeOrder === 'function') {{
         const result = await window.placeOrder({{
@@ -1012,38 +1014,97 @@ def generate_bridge_script(app_url: str) -> str:
         }};
       }}
       
-      // METHOD 2: Simulate button clicks (fallback)
-      // Find and click the CALL/PUT button
-      const buttons = document.querySelectorAll('button, div[role="button"]');
+      // METHOD 2: Find trading buttons by multiple selectors
+      const callSelectors = [
+        'button.btn-call',
+        'button.call-btn',
+        'button[class*="call"]',
+        'button[class*="higher"]',
+        'button[class*="green"]',
+        '.btn-call',
+        '.call-btn',
+        '[class*="call-btn"]',
+        'button[data-dir="call"]',
+        '.deal-button--call'
+      ];
+      
+      const putSelectors = [
+        'button.btn-put',
+        'button.put-btn',
+        'button[class*="put"]',
+        'button[class*="lower"]',
+        'button[class*="red"]',
+        '.btn-put',
+        '.put-btn',
+        '[class*="put-btn"]',
+        'button[data-dir="put"]',
+        '.deal-button--put'
+      ];
+      
+      const selectors = direction === 'call' ? callSelectors : putSelectors;
       let orderButton = null;
       
-      for (const button of buttons) {{
-        const text = button.textContent.toLowerCase();
-        if ((direction === 'call' && (text.includes('call') || text.includes('higher') || text.includes('up'))) ||
-            (direction === 'put' && (text.includes('put') || text.includes('lower') || text.includes('down')))) {{
-          orderButton = button;
-          break;
+      // Try CSS selectors first
+      for (const selector of selectors) {{
+        try {{
+          const btn = document.querySelector(selector);
+          if (btn && !btn.disabled) {{
+            orderButton = btn;
+            log(`Found button using: ${{selector}}`, 'debug');
+            break;
+          }}
+        }} catch (e) {{}}
+      }}
+      
+      // Fallback: Find by text content
+      if (!orderButton) {{
+        const allButtons = document.querySelectorAll('button, div[role="button"], [class*="btn"]');
+        const keywords = direction === 'call' 
+          ? ['call', 'higher', 'up', 'выше', 'green']
+          : ['put', 'lower', 'down', 'ниже', 'red'];
+        
+        for (const button of allButtons) {{
+          const text = (button.textContent || '').toLowerCase();
+          const classes = (button.className || '').toLowerCase();
+          
+          if (keywords.some(kw => text.includes(kw) || classes.includes(kw))) {{
+            orderButton = button;
+            log(`Found button by keyword match`, 'debug');
+            break;
+          }}
+        }}
+      }}
+      
+      // Fallback: Try position-based selection (call is usually first/left, put is last/right)
+      if (!orderButton) {{
+        const dealButtons = document.querySelectorAll('.deal-buttons button, .trading-buttons button, [class*="trade"] button');
+        if (dealButtons.length >= 2) {{
+          orderButton = direction === 'call' ? dealButtons[0] : dealButtons[1];
+          log(`Using position-based button selection`, 'debug');
         }}
       }}
       
       if (orderButton) {{
+        log(`Clicking ${{direction.toUpperCase()}} button...`, 'info');
         orderButton.click();
         
-        // Wait a bit for order to register
+        // Wait for order to register
         await new Promise(resolve => setTimeout(resolve, 500));
         
-        // Try to extract order ID from page
-        const orderElements = document.querySelectorAll('[class*="order"], [class*="trade"], [id*="order"], [id*="trade"]');
+        // Try to extract order ID
+        const orderElements = document.querySelectorAll('[class*="order"], [class*="trade"], [class*="deal"], [id*="order"]');
         let orderId = 'BRIDGE_' + Date.now();
         
         for (const el of orderElements) {{
-          const text = el.textContent;
-          const match = text.match(/#?\\d{{6,}}/);
+          const text = el.textContent || '';
+          const match = text.match(/#?(\\d{{6,}})/);
           if (match) {{
-            orderId = match[0];
+            orderId = match[1];
             break;
           }}
         }}
+        
+        log(`✅ Order placed: ${{orderId}}`, 'success');
         
         return {{
           success: true,
@@ -1052,12 +1113,14 @@ def generate_bridge_script(app_url: str) -> str:
         }};
       }}
       
+      log(`❌ Could not find ${{direction}} button - trading interface not found`, 'error');
       return {{
         success: false,
-        error: 'Could not find trading interface'
+        error: 'Could not find trading interface - make sure you are on the trading page'
       }};
       
     }} catch (error) {{
+      log(`❌ Order error: ${{error.message}}`, 'error');
       return {{
         success: false,
         error: error.message
