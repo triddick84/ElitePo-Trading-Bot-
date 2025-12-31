@@ -96,6 +96,17 @@ class PocketOptionTradeExecutor:
             
             logger.info(f"🔄 Executing trade in {current_mode} mode")
             
+            # For BRIDGE mode, keep trade in pending queue for bridge script to pick up
+            if current_mode == "BRIDGE":
+                logger.info(f"🌉 BRIDGE MODE: Trade {order_id} queued for browser bridge")
+                return {
+                    "success": True,
+                    "order_id": order_id,
+                    "status": "pending_bridge",
+                    "execution_mode": "BRIDGE",
+                    "message": "Trade queued for Bridge Script - waiting for browser to execute"
+                }
+            
             execution_result = await auto_exec.execute_trade_auto(
                 order_id=order_id,
                 asset=asset,
@@ -106,19 +117,20 @@ class PocketOptionTradeExecutor:
             )
             
             if execution_result.get('success'):
-                # Move from pending to active
-                if order_id in self.pending_trades:
-                    trade = self.pending_trades[order_id]
-                    trade['status'] = 'active'
-                    trade['bridge_order_id'] = execution_result.get('order_id')
-                    trade['execution_mode'] = current_mode
-                    self.active_trades[order_id] = trade
-                    del self.pending_trades[order_id]
+                # Only move from pending if actually executed (not just queued)
+                if execution_result.get('status') != 'pending':
+                    if order_id in self.pending_trades:
+                        trade = self.pending_trades[order_id]
+                        trade['status'] = 'active'
+                        trade['bridge_order_id'] = execution_result.get('order_id')
+                        trade['execution_mode'] = current_mode
+                        self.active_trades[order_id] = trade
+                        del self.pending_trades[order_id]
                 
                 return {
                     "success": True,
                     "order_id": order_id,
-                    "status": "executed",
+                    "status": execution_result.get('status', 'executed'),
                     "execution_mode": current_mode,
                     "bridge_order_id": execution_result.get('order_id'),
                     "message": f"Trade executed in {current_mode} mode"
