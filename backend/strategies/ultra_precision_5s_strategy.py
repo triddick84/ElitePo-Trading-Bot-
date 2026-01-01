@@ -946,13 +946,22 @@ class UltraPrecision5SecondStrategy:
         # Convert to CandleData objects
         candles = []
         for c in candle_data:
+            timestamp = c.get("timestamp")
+            if isinstance(timestamp, str):
+                try:
+                    timestamp = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                except:
+                    timestamp = datetime.now(timezone.utc)
+            elif timestamp is None:
+                timestamp = datetime.now(timezone.utc)
+                
             candles.append(CandleData(
-                timestamp=c.get("timestamp", datetime.now(timezone.utc)),
-                open=c["open"],
-                high=c["high"],
-                low=c["low"],
-                close=c["close"],
-                volume=c.get("volume", 0)
+                timestamp=timestamp,
+                open=float(c["open"]),
+                high=float(c["high"]),
+                low=float(c["low"]),
+                close=float(c["close"]),
+                volume=float(c.get("volume", 0))
             ))
         
         signals = []
