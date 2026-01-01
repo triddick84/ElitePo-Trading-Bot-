@@ -550,9 +550,10 @@ class UltraPrecision5SecondStrategy:
     - Candlestick pattern recognition
     - Adaptive learning
     - Real-time signal generation
+    - Support/Resistance filtering (NEW)
     """
     
-    def __init__(self, db=None):
+    def __init__(self, db=None, enable_sr_filter: bool = True, sr_filter_threshold: float = -0.5):
         self.db = db
         self.params = AdaptiveParameters()
         self.trade_history: List[Dict] = []
@@ -565,18 +566,26 @@ class UltraPrecision5SecondStrategy:
             "profit_factor": 0.0
         }
         
-        logger.info("🎯 Ultra-Precision 5-Second Strategy initialized")
+        # Support/Resistance filter configuration
+        self.enable_sr_filter = enable_sr_filter
+        self.sr_filter_threshold = sr_filter_threshold  # Signals with adjustment below this are filtered
+        self.sr_detector = get_sr_detector()
+        
+        logger.info("🎯 Ultra-Precision 5-Second Strategy initialized with S/R filtering")
     
-    def analyze(self, candles: List[CandleData]) -> TradingSignal:
+    def analyze(self, candles: List[CandleData], apply_sr_filter: bool = None) -> TradingSignal:
         """
         Analyze 200 candles and generate trading signal
         
         Args:
             candles: List of 200 CandleData objects
+            apply_sr_filter: Override to enable/disable S/R filtering for this call
         
         Returns:
             TradingSignal with confidence and reasoning
         """
+        use_sr_filter = apply_sr_filter if apply_sr_filter is not None else self.enable_sr_filter
+        
         if len(candles) < 50:
             raise ValueError(f"Need at least 50 candles, got {len(candles)}")
         
