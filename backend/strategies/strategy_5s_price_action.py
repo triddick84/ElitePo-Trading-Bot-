@@ -6,6 +6,7 @@ Based on research:
 - Candlestick patterns
 - Support/Resistance bounces
 - Quick momentum shifts
+- S/R filtering integrated (NEW)
 
 Entry Rules:
 CALL: Bullish engulfing + price above pivot + volume spike
@@ -17,6 +18,15 @@ import numpy as np
 from typing import Dict
 import talib
 import logging
+
+# Import S/R detector
+try:
+    from strategies.support_resistance import get_sr_detector
+except ImportError:
+    try:
+        from support_resistance import get_sr_detector
+    except ImportError:
+        get_sr_detector = None
 
 logger = logging.getLogger(__name__)
 
