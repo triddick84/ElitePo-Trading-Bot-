@@ -29,21 +29,25 @@ logger = logging.getLogger(__name__)
 class SupertrendReversal5s:
     """
     5-Second Supertrend Reversal Strategy Implementation
+    With Support/Resistance filtering for improved accuracy
     """
     
-    def __init__(self, atr_period: int = 2, multiplier: float = 1.11):
+    def __init__(self, atr_period: int = 2, multiplier: float = 1.11, enable_sr_filter: bool = True):
         """
         Initialize strategy with Supertrend parameters
         
         Args:
             atr_period: ATR calculation period (default: 2)
             multiplier: ATR multiplier for bands (default: 1.11)
+            enable_sr_filter: Enable S/R filtering (default: True)
         """
         self.atr_period = atr_period
         self.multiplier = multiplier
         self.name = "5s_supertrend_reversal"
+        self.enable_sr_filter = enable_sr_filter
+        self.sr_detector = get_sr_detector()
         
-        logger.info(f"✅ Initialized 5s Supertrend Reversal (ATR={atr_period}, Mult={multiplier})")
+        logger.info(f"✅ Initialized 5s Supertrend Reversal (ATR={atr_period}, Mult={multiplier}, SR_Filter={enable_sr_filter})")
     
     def calculate_atr(self, df: pd.DataFrame, period: int) -> pd.Series:
         """
