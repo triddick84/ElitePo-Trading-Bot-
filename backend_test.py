@@ -17418,4 +17418,4 @@ async def run_5s_pro_strategy_tests():
         return True
 
 if __name__ == "__main__":
-    asyncio.run(run_5s_supertrend_reversal_tests())
+    asyncio.run(main())
