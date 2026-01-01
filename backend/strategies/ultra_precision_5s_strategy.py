@@ -94,6 +94,9 @@ class TradingSignal:
     trend: TrendDirection
     volatility: str  # "low", "medium", "high"
     reasoning: List[str]
+    sr_analysis: Optional[Dict] = None  # Support/Resistance analysis
+    sr_filtered: bool = False  # Whether signal was filtered by S/R
+    sr_adjustment: float = 0.0  # S/R confidence adjustment (-1 to +1)
     
     def to_dict(self) -> Dict:
         return {
@@ -106,7 +109,10 @@ class TradingSignal:
             "patterns": list(self.patterns),
             "trend": self.trend.value,
             "volatility": self.volatility,
-            "reasoning": list(self.reasoning)
+            "reasoning": list(self.reasoning),
+            "sr_analysis": self.sr_analysis,
+            "sr_filtered": self.sr_filtered,
+            "sr_adjustment": round(float(self.sr_adjustment), 2)
         }
 
 
