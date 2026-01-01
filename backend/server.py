@@ -7972,7 +7972,7 @@ async def generate_live_signal_ultra_precision(asset: str = "EURUSD_otc"):
     """
     try:
         from strategies.ultra_precision_5s_strategy import UltraPrecision5SecondStrategy, CandleData
-        from datetime import datetime, timezone
+        from datetime import datetime, timezone, timedelta
         import random
         
         # In production, this would fetch real candle data
@@ -7999,30 +7999,37 @@ async def generate_live_signal_ultra_precision(asset: str = "EURUSD_otc"):
                 volume=random.randint(100, 1000)
             ))
             
-            current_time = current_time.replace(second=(current_time.second + 5) % 60)
+            current_time = current_time + timedelta(seconds=5)
         
         strategy = UltraPrecision5SecondStrategy()
         signal = strategy.analyze(candles)
         
+        # Convert signal to JSON-safe dict
+        signal_dict = signal.to_dict()
+        
         # Add recommendation
         recommendation = "NO TRADE"
-        if signal.confidence >= 75:
+        confidence = float(signal.confidence)
+        if confidence >= 75:
             if signal.signal_type.value in ["STRONG_BUY", "BUY"]:
-                recommendation = f"CALL - Confidence: {signal.confidence:.1f}%"
+                recommendation = f"CALL - Confidence: {confidence:.1f}%"
             elif signal.signal_type.value in ["STRONG_SELL", "SELL"]:
-                recommendation = f"PUT - Confidence: {signal.confidence:.1f}%"
+                recommendation = f"PUT - Confidence: {confidence:.1f}%"
+        
+        should_trade = bool(confidence >= 75 and signal.signal_type.value != "NEUTRAL")
         
         return {
             "success": True,
             "asset": asset,
-            "signal": signal.to_dict(),
+            "signal": signal_dict,
             "recommendation": recommendation,
-            "should_trade": signal.confidence >= 75 and signal.signal_type.value != "NEUTRAL"
+            "should_trade": should_trade
         }
         
     except Exception as e:
         logger.error(f"Live signal error: {e}")
-        return {"success": False, "error": str(e)}
+        import traceback
+        return {"success": False, "error": str(e), "traceback": traceback.format_exc()}
 
 
 # Include the router in the main app
