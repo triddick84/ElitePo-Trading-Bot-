@@ -95,14 +95,14 @@ class TradingSignal:
         return {
             "signal_type": self.signal_type.value,
             "direction": self.direction,
-            "confidence": round(self.confidence, 2),
-            "entry_price": self.entry_price,
-            "timestamp": self.timestamp.isoformat(),
-            "indicators": {k: round(v, 4) if isinstance(v, float) else v for k, v in self.indicators.items()},
-            "patterns": self.patterns,
+            "confidence": round(float(self.confidence), 2),
+            "entry_price": float(self.entry_price),
+            "timestamp": self.timestamp.isoformat() if hasattr(self.timestamp, 'isoformat') else str(self.timestamp),
+            "indicators": {k: round(float(v), 4) if isinstance(v, (float, np.floating)) else (bool(v) if isinstance(v, (bool, np.bool_)) else v) for k, v in self.indicators.items()},
+            "patterns": list(self.patterns),
             "trend": self.trend.value,
             "volatility": self.volatility,
-            "reasoning": self.reasoning
+            "reasoning": list(self.reasoning)
         }
 
 
