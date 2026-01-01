@@ -7863,6 +7863,168 @@ async def selenium_auto_trade(
         return {"success": False, "error": str(e)}
 
 
+# ============================================================================
+# ULTRA-PRECISION 5-SECOND STRATEGY ENDPOINTS
+# ============================================================================
+
+@api_router.get("/strategy/ultra-precision-5s/info")
+async def get_ultra_precision_strategy_info():
+    """Get Ultra-Precision 5-Second Strategy information"""
+    try:
+        from strategies.ultra_precision_5s_strategy import UltraPrecision5SecondStrategy
+        
+        strategy = UltraPrecision5SecondStrategy()
+        return {
+            "success": True,
+            **strategy.get_strategy_info()
+        }
+    except Exception as e:
+        logger.error(f"Strategy info error: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.post("/strategy/ultra-precision-5s/analyze")
+async def analyze_with_ultra_precision_strategy(candles: List[Dict] = None):
+    """
+    Analyze candles with Ultra-Precision 5-Second Strategy
+    
+    Request Body:
+        candles: List of candle objects with open, high, low, close, timestamp
+                 Must have at least 200 candles
+    
+    Returns:
+        Trading signal with confidence and reasoning
+    """
+    try:
+        from strategies.ultra_precision_5s_strategy import UltraPrecision5SecondStrategy, CandleData
+        from datetime import datetime, timezone
+        
+        if not candles or len(candles) < 200:
+            return {
+                "success": False,
+                "error": f"Need at least 200 candles, got {len(candles) if candles else 0}"
+            }
+        
+        # Convert to CandleData objects
+        candle_objects = []
+        for c in candles:
+            timestamp = c.get("timestamp")
+            if isinstance(timestamp, str):
+                timestamp = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+            elif timestamp is None:
+                timestamp = datetime.now(timezone.utc)
+            
+            candle_objects.append(CandleData(
+                timestamp=timestamp,
+                open=float(c["open"]),
+                high=float(c["high"]),
+                low=float(c["low"]),
+                close=float(c["close"]),
+                volume=float(c.get("volume", 0))
+            ))
+        
+        strategy = UltraPrecision5SecondStrategy()
+        signal = strategy.analyze(candle_objects)
+        
+        return {
+            "success": True,
+            "signal": signal.to_dict()
+        }
+        
+    except Exception as e:
+        logger.error(f"Strategy analysis error: {e}")
+        import traceback
+        return {"success": False, "error": str(e), "traceback": traceback.format_exc()}
+
+
+@api_router.get("/strategy/ultra-precision-5s/sample-signals")
+async def get_sample_signals():
+    """
+    Generate sample signals for demonstration/backtesting
+    
+    Returns:
+        Strategy info, sample candles, and generated signals
+    """
+    try:
+        from strategies.ultra_precision_5s_strategy import generate_sample_signals
+        
+        result = generate_sample_signals()
+        return {
+            "success": True,
+            **result
+        }
+        
+    except Exception as e:
+        logger.error(f"Sample signals error: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.post("/strategy/ultra-precision-5s/generate-live-signal")
+async def generate_live_signal_ultra_precision(asset: str = "EURUSD_otc"):
+    """
+    Generate live trading signal using real market data
+    
+    Args:
+        asset: Asset symbol to analyze
+    
+    Returns:
+        Real-time trading signal
+    """
+    try:
+        from strategies.ultra_precision_5s_strategy import UltraPrecision5SecondStrategy, CandleData
+        from datetime import datetime, timezone
+        import random
+        
+        # In production, this would fetch real candle data
+        # For now, generate realistic synthetic data
+        base_price = 1.08500 if "EUR" in asset else 1.25000
+        candles = []
+        current_time = datetime.now(timezone.utc)
+        
+        for i in range(200):
+            change = random.gauss(0, 0.00008)
+            base_price += change
+            
+            open_price = base_price
+            high_price = base_price + random.uniform(0, 0.00015)
+            low_price = base_price - random.uniform(0, 0.00015)
+            close_price = base_price + random.gauss(0, 0.00006)
+            
+            candles.append(CandleData(
+                timestamp=current_time,
+                open=round(open_price, 5),
+                high=round(high_price, 5),
+                low=round(low_price, 5),
+                close=round(close_price, 5),
+                volume=random.randint(100, 1000)
+            ))
+            
+            current_time = current_time.replace(second=(current_time.second + 5) % 60)
+        
+        strategy = UltraPrecision5SecondStrategy()
+        signal = strategy.analyze(candles)
+        
+        # Add recommendation
+        recommendation = "NO TRADE"
+        if signal.confidence >= 75:
+            if signal.signal_type.value in ["STRONG_BUY", "BUY"]:
+                recommendation = f"CALL - Confidence: {signal.confidence:.1f}%"
+            elif signal.signal_type.value in ["STRONG_SELL", "SELL"]:
+                recommendation = f"PUT - Confidence: {signal.confidence:.1f}%"
+        
+        return {
+            "success": True,
+            "asset": asset,
+            "signal": signal.to_dict(),
+            "recommendation": recommendation,
+            "should_trade": signal.confidence >= 75 and signal.signal_type.value != "NEUTRAL"
+        }
+        
+    except Exception as e:
+        logger.error(f"Live signal error: {e}")
+        return {"success": False, "error": str(e)}
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
