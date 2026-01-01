@@ -347,6 +347,47 @@ class SeleniumTradingBot:
             password_input.send_keys(self.password)
             time.sleep(0.5)
             
+            # Handle reCAPTCHA if present
+            try:
+                recaptcha_selectors = [
+                    (By.CSS_SELECTOR, ".recaptcha-checkbox"),
+                    (By.CSS_SELECTOR, "iframe[title*='reCAPTCHA']"),
+                    (By.CSS_SELECTOR, "#recaptcha-anchor"),
+                    (By.XPATH, "//span[contains(@class, 'recaptcha-checkbox')]"),
+                    (By.CSS_SELECTOR, ".g-recaptcha"),
+                ]
+                
+                for by, selector in recaptcha_selectors:
+                    try:
+                        # Check for reCAPTCHA iframe
+                        if "iframe" in selector:
+                            iframes = self.driver.find_elements(by, selector)
+                            for iframe in iframes:
+                                if iframe.is_displayed():
+                                    logger.info("Found reCAPTCHA iframe, attempting to solve...")
+                                    self.driver.switch_to.frame(iframe)
+                                    checkbox = self.wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, ".recaptcha-checkbox-border")))
+                                    checkbox.click()
+                                    time.sleep(2)
+                                    self.driver.switch_to.default_content()
+                                    logger.info("✅ Clicked reCAPTCHA checkbox")
+                                    break
+                        else:
+                            elements = self.driver.find_elements(by, selector)
+                            for el in elements:
+                                if el.is_displayed():
+                                    el.click()
+                                    logger.info("✅ Clicked reCAPTCHA element")
+                                    time.sleep(2)
+                                    break
+                    except Exception as e:
+                        logger.debug(f"reCAPTCHA attempt failed: {e}")
+                        continue
+            except Exception as e:
+                logger.warning(f"reCAPTCHA handling failed: {e}")
+            
+            time.sleep(1)
+            
             # Click login button
             login_selectors = [
                 (By.CSS_SELECTOR, "button[type='submit']"),
