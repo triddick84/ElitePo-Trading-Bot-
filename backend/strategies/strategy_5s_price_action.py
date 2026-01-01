@@ -32,10 +32,18 @@ logger = logging.getLogger(__name__)
 
 
 class Strategy5sPriceAction:
-    def __init__(self):
+    def __init__(self, enable_sr_filter: bool = True):
         self.name = "5s Price Action"
         self.timeframe = "5s"
         self.accuracy_target = 85.0
+        self.enable_sr_filter = enable_sr_filter
+        
+        # Initialize S/R detector
+        if get_sr_detector:
+            self.sr_detector = get_sr_detector()
+        else:
+            self.sr_detector = None
+            logger.warning("S/R detector not available")
     
     def detect_engulfing(self, df: pd.DataFrame) -> str:
         """Detect engulfing patterns"""
