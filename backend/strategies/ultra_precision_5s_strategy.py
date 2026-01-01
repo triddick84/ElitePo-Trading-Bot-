@@ -629,6 +629,68 @@ class UltraPrecision5SecondStrategy:
         # Build reasoning
         reasoning = self._build_reasoning(indicators, recent_patterns, trend, volatility)
         
+        # ==========================================
+        # SUPPORT/RESISTANCE ANALYSIS & FILTERING
+        # ==========================================
+        sr_analysis = None
+        sr_adjustment = 0.0
+        sr_filtered = False
+        
+        if use_sr_filter and direction != "neutral":
+            try:
+                # Perform S/R analysis
+                sr_result = self.sr_detector.analyze(
+                    highs=highs,
+                    lows=lows,
+                    closes=closes,
+                    signal_direction=direction
+                )
+                
+                sr_analysis = sr_result.to_dict()
+                sr_adjustment = sr_result.signal_adjustment
+                
+                # Add S/R reasoning
+                if sr_result.price_position == "at_resistance":
+                    if direction == "call":
+                        reasoning.append(f"⚠️ S/R WARNING: CALL signal at RESISTANCE level ({sr_result.nearest_resistance.price:.5f})")
+                        reasoning.append(f"   → High risk of price reversal DOWN")
+                    else:
+                        reasoning.append(f"✅ S/R BOOST: PUT signal at RESISTANCE - favorable setup")
+                        
+                elif sr_result.price_position == "at_support":
+                    if direction == "put":
+                        reasoning.append(f"⚠️ S/R WARNING: PUT signal at SUPPORT level ({sr_result.nearest_support.price:.5f})")
+                        reasoning.append(f"   → High risk of price reversal UP")
+                    else:
+                        reasoning.append(f"✅ S/R BOOST: CALL signal at SUPPORT - favorable setup")
+                
+                elif sr_result.price_position == "between_levels":
+                    reasoning.append(f"📊 S/R: Price between levels (Support: {sr_result.distance_to_support_pct:.2f}%, Resistance: {sr_result.distance_to_resistance_pct:.2f}%)")
+                
+                # Add breakout potential
+                if sr_result.breakout_potential != "consolidation":
+                    reasoning.append(f"🔥 Breakout Potential: {sr_result.breakout_potential}")
+                
+                # Apply S/R adjustment to confidence
+                # Negative adjustment reduces confidence, positive boosts it
+                adjusted_confidence = confidence + (sr_adjustment * 15)  # Scale adjustment to confidence points
+                adjusted_confidence = max(0, min(100, adjusted_confidence))
+                
+                # Check if signal should be filtered (strongly negative adjustment)
+                if sr_adjustment < self.sr_filter_threshold:
+                    sr_filtered = True
+                    reasoning.append(f"🚫 S/R FILTER TRIGGERED: Signal has high reversal risk (adjustment: {sr_adjustment:.2f})")
+                    # Downgrade to NEUTRAL signal type
+                    signal_type = SignalType.NEUTRAL
+                    adjusted_confidence = min(adjusted_confidence, 40)  # Cap filtered signal confidence
+                
+                confidence = adjusted_confidence
+                logger.info(f"📊 S/R Analysis: position={sr_result.price_position}, adjustment={sr_adjustment:.2f}, filtered={sr_filtered}")
+                
+            except Exception as e:
+                logger.warning(f"S/R analysis failed: {e}")
+                reasoning.append(f"⚠️ S/R analysis unavailable")
+        
         # Create signal
         signal = TradingSignal(
             signal_type=signal_type,
@@ -658,7 +720,10 @@ class UltraPrecision5SecondStrategy:
             patterns=[p["pattern"] for p in recent_patterns],
             trend=trend,
             volatility=volatility,
-            reasoning=reasoning
+            reasoning=reasoning,
+            sr_analysis=sr_analysis,
+            sr_filtered=sr_filtered,
+            sr_adjustment=sr_adjustment
         )
         
         self.last_signals.append(signal)
