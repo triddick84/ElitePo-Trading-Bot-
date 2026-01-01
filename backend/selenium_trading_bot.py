@@ -205,6 +205,11 @@ class SeleniumTradingBot:
         options.add_argument("--window-size=1920,1080")
         options.add_argument("--disable-blink-features=AutomationControlled")
         options.add_argument("--disable-extensions")
+        options.add_argument("--disable-infobars")
+        options.add_argument("--remote-debugging-port=9222")
+        
+        # Set binary location to chromium
+        options.binary_location = "/usr/bin/chromium"
         
         # Anti-detection
         options.add_experimental_option("excludeSwitches", ["enable-automation"])
@@ -213,8 +218,8 @@ class SeleniumTradingBot:
         # User agent
         options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
         
-        # Create driver
-        service = Service("/usr/bin/chromedriver")
+        # Create driver with explicit chromedriver path
+        service = Service(executable_path="/usr/bin/chromedriver")
         self.driver = webdriver.Chrome(service=service, options=options)
         
         # Set timeouts
