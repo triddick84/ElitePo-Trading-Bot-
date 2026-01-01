@@ -2336,3 +2336,40 @@ Users should run the `pocket_option_local_bot.py` script on their LOCAL MACHINE 
 - [ ] Test DEMO mode trade execution
 - [ ] Verify API responses are correct
 
+
+
+## Support/Resistance Integration Testing - January 1, 2026
+
+### Testing Protocol
+- **Test Date**: 2026-01-01
+- **Test Focus**: S/R Indicator Integration into 5-Second Trading Strategies
+- **Test Type**: Backend Unit Testing + Integration Testing
+- **Test Status**: IN PROGRESS
+
+### Implementation Summary
+
+#### Files Modified:
+1. `/app/backend/strategies/ultra_precision_5s_strategy.py` - Added S/R filtering
+2. `/app/backend/strategies/strategy_5s_supertrend_reversal.py` - Added S/R filtering
+3. `/app/backend/strategies/strategy_5s_momentum_breakout.py` - Added S/R filtering
+4. `/app/backend/strategies/strategy_5s_price_action.py` - Added S/R filtering
+
+#### S/R Module (Already Existed):
+- `/app/backend/strategies/support_resistance.py` - Comprehensive S/R detection
+
+#### Key Features Implemented:
+1. **S/R Level Detection**: Swing points, clusters, pivot points, EMA-based levels
+2. **Signal Filtering**: Blocks signals at unfavorable S/R levels
+3. **Confidence Adjustment**: Boosts/reduces confidence based on S/R position
+4. **Configurable**: `enable_sr_filter` parameter and `sr_filter_threshold`
+
+### Tests Required:
+- [ ] Backend strategy endpoints with S/R filtering
+- [ ] Signal generation with S/R analysis
+- [ ] Verify S/R data in signal response
+- [ ] Test filter threshold behavior
+
+### Incorporate User Feedback:
+- Test that S/R filtering reduces false signals near key levels
+- Verify CALL signals at resistance are filtered or reduced
+- Verify PUT signals at support are filtered or reduced
