@@ -178,6 +178,7 @@ class SupertrendReversal5s:
     ) -> List[Dict]:
         """
         Generate trading signals based on Supertrend reversals
+        With S/R filtering to avoid false signals
         
         Args:
             df: DataFrame with OHLC data (must have at least 50 candles)
@@ -217,7 +218,15 @@ class SupertrendReversal5s:
                     direction='put',
                     reason='Supertrend flip to uptrend - Reversal entry (betting on pullback)'
                 )
-                signals.append(signal)
+                
+                # Apply S/R filter
+                if self.enable_sr_filter:
+                    signal = self._apply_sr_filter(df, signal)
+                
+                if signal and signal.get('confidence', 0) >= min_confidence and not signal.get('sr_filtered', False):
+                    signals.append(signal)
+                elif signal and signal.get('sr_filtered', False):
+                    logger.info(f"🚫 Signal filtered by S/R: PUT signal blocked due to {signal.get('sr_filter_reason', 'S/R proximity')}")
                 
             elif df['flip_to_down'].iloc[last_idx]:
                 # Flip to downtrend → REVERSAL STRATEGY → Generate BUY/CALL
@@ -227,13 +236,93 @@ class SupertrendReversal5s:
                     direction='call',
                     reason='Supertrend flip to downtrend - Reversal entry (betting on bounce)'
                 )
-                signals.append(signal)
+                
+                # Apply S/R filter
+                if self.enable_sr_filter:
+                    signal = self._apply_sr_filter(df, signal)
+                
+                if signal and signal.get('confidence', 0) >= min_confidence and not signal.get('sr_filtered', False):
+                    signals.append(signal)
+                elif signal and signal.get('sr_filtered', False):
+                    logger.info(f"🚫 Signal filtered by S/R: CALL signal blocked due to {signal.get('sr_filter_reason', 'S/R proximity')}")
             
             return signals
             
         except Exception as e:
             logger.error(f"Error generating 5s Supertrend signals: {e}")
             return []
+    
+    def _apply_sr_filter(self, df: pd.DataFrame, signal: Dict) -> Dict:
+        """
+        Apply Support/Resistance filter to signal
+        
+        Args:
+            df: DataFrame with OHLC data
+            signal: Signal dictionary to filter
+        
+        Returns:
+            Updated signal with S/R analysis
+        """
+        try:
+            highs = df['high'].values
+            lows = df['low'].values
+            closes = df['close'].values
+            
+            # Perform S/R analysis
+            sr_analysis = self.sr_detector.analyze(
+                highs=highs,
+                lows=lows,
+                closes=closes,
+                signal_direction=signal['direction']
+            )
+            
+            # Add S/R data to signal
+            signal['sr_analysis'] = sr_analysis.to_dict()
+            signal['sr_adjustment'] = sr_analysis.signal_adjustment
+            signal['price_position'] = sr_analysis.price_position
+            
+            # Filter logic
+            signal['sr_filtered'] = False
+            signal['sr_filter_reason'] = None
+            
+            direction = signal['direction']
+            
+            # CALL at resistance = HIGH RISK → Filter if adjustment is strongly negative
+            if direction == 'call' and sr_analysis.price_position == 'at_resistance':
+                if sr_analysis.signal_adjustment < -0.4:
+                    signal['sr_filtered'] = True
+                    signal['sr_filter_reason'] = 'CALL signal at strong RESISTANCE - high reversal risk'
+                else:
+                    # Reduce confidence but don't filter
+                    signal['confidence'] = signal['confidence'] + (sr_analysis.signal_adjustment * 15)
+            
+            # PUT at support = HIGH RISK → Filter if adjustment is strongly negative
+            elif direction == 'put' and sr_analysis.price_position == 'at_support':
+                if sr_analysis.signal_adjustment < -0.4:
+                    signal['sr_filtered'] = True
+                    signal['sr_filter_reason'] = 'PUT signal at strong SUPPORT - high reversal risk'
+                else:
+                    signal['confidence'] = signal['confidence'] + (sr_analysis.signal_adjustment * 15)
+            
+            # Favorable setups - boost confidence
+            elif direction == 'call' and sr_analysis.price_position == 'at_support':
+                signal['confidence'] = min(95, signal['confidence'] + (sr_analysis.signal_adjustment * 10))
+                signal['sr_boost'] = True
+            
+            elif direction == 'put' and sr_analysis.price_position == 'at_resistance':
+                signal['confidence'] = min(95, signal['confidence'] + (sr_analysis.signal_adjustment * 10))
+                signal['sr_boost'] = True
+            
+            # Clamp confidence
+            signal['confidence'] = max(0, min(100, signal['confidence']))
+            
+            logger.info(f"📊 S/R Filter: {direction.upper()} | position={sr_analysis.price_position} | adj={sr_analysis.signal_adjustment:.2f} | filtered={signal['sr_filtered']}")
+            
+            return signal
+            
+        except Exception as e:
+            logger.warning(f"S/R filter failed: {e}")
+            return signal
     
     def _create_signal(
         self,
