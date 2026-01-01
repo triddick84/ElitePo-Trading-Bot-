@@ -153,6 +153,41 @@ class Strategy5sPriceAction:
             confidence = max(call_signals, put_signals)
             reasons.append("⚠️ Insufficient signal strength")
         
+        # Apply S/R filter
+        sr_data = {}
+        sr_filtered = False
+        
+        if self.enable_sr_filter and self.sr_detector and direction != 'NEUTRAL':
+            try:
+                highs = df['high'].values
+                lows = df['low'].values
+                closes = df['close'].values
+                
+                sr_analysis = self.sr_detector.analyze(
+                    highs=highs,
+                    lows=lows,
+                    closes=closes,
+                    signal_direction=direction.lower()
+                )
+                
+                sr_data = sr_analysis.to_dict()
+                
+                # Apply S/R adjustment
+                if sr_analysis.signal_adjustment < -0.4:
+                    sr_filtered = True
+                    reasons.append(f"🚫 S/R FILTER: {direction} blocked at {sr_analysis.price_position}")
+                    direction = 'NEUTRAL'
+                    confidence = min(confidence, 40)
+                elif sr_analysis.signal_adjustment > 0.2:
+                    confidence = min(100, confidence + sr_analysis.signal_adjustment * 10)
+                    reasons.append(f"✅ S/R BOOST: Favorable {sr_analysis.price_position}")
+                elif sr_analysis.signal_adjustment < 0:
+                    confidence = max(0, confidence + sr_analysis.signal_adjustment * 10)
+                    reasons.append(f"⚠️ S/R: Caution at {sr_analysis.price_position}")
+                    
+            except Exception as e:
+                logger.warning(f"S/R analysis failed: {e}")
+        
         return {
             'direction': direction,
             'confidence': confidence,
@@ -162,6 +197,8 @@ class Strategy5sPriceAction:
             'pattern': pattern,
             'call_score': call_signals,
             'put_score': put_signals,
+            'sr_filtered': sr_filtered,
+            'sr_analysis': sr_data,
             'indicators': {
                 'pivot': float(latest['pivot']),
                 'volume_ratio': float(latest['volume_ratio']),
