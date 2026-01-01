@@ -7674,6 +7674,195 @@ async def execute_auto_trade_v2(
         return {"success": False, "error": str(e)}
 
 
+# ============================================================================
+# SELENIUM TRADING BOT ENDPOINTS - Real Browser Automation
+# ============================================================================
+
+@api_router.post("/selenium-bot/start")
+async def start_selenium_bot(
+    email: str = None,
+    password: str = None,
+    demo: bool = True,
+    headless: bool = True
+):
+    """
+    Start Selenium trading bot with real browser automation
+    
+    Args:
+        email: Pocket Option login email (uses default if not provided)
+        password: Pocket Option password (uses default if not provided)
+        demo: True for demo account, False for real
+        headless: Run browser in headless mode (no visible window)
+    
+    This bot uses a real Chromium browser to:
+    1. Login to Pocket Option
+    2. Navigate to trading page
+    3. Execute trades by clicking buttons
+    """
+    try:
+        from selenium_trading_bot import get_selenium_bot
+        
+        # Use defaults if not provided
+        if not email:
+            email = "thomas.riddick84@gmail.com"
+        if not password:
+            password = "Tonyistheman#1"
+        
+        bot = get_selenium_bot(
+            email=email,
+            password=password,
+            demo=demo,
+            headless=headless
+        )
+        
+        result = bot.start()
+        return result
+        
+    except Exception as e:
+        logger.error(f"Selenium bot start error: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.post("/selenium-bot/stop")
+async def stop_selenium_bot():
+    """Stop the Selenium trading bot"""
+    try:
+        from selenium_trading_bot import stop_selenium_bot
+        stop_selenium_bot()
+        return {"success": True, "message": "Bot stopped"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@api_router.get("/selenium-bot/status")
+async def get_selenium_bot_status():
+    """Get Selenium bot status"""
+    try:
+        from selenium_trading_bot import get_selenium_bot
+        
+        try:
+            bot = get_selenium_bot()
+            return bot.get_status()
+        except:
+            return {
+                "success": True,
+                "state": {
+                    "is_running": False,
+                    "message": "Bot not initialized"
+                }
+            }
+        
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@api_router.get("/selenium-bot/balance")
+async def get_selenium_bot_balance():
+    """Get current balance from Selenium bot"""
+    try:
+        from selenium_trading_bot import get_selenium_bot
+        bot = get_selenium_bot()
+        return bot.get_balance()
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@api_router.post("/selenium-bot/trade")
+async def execute_selenium_trade(
+    direction: str = "call",
+    amount: float = 1.0,
+    asset: str = "EURUSD_otc",
+    duration: int = 60
+):
+    """
+    Execute a trade via Selenium bot
+    
+    Args:
+        direction: 'call' or 'put'
+        amount: Trade amount in dollars
+        asset: Asset symbol
+        duration: Trade duration in seconds
+    
+    The bot must be started first with /selenium-bot/start
+    """
+    try:
+        from selenium_trading_bot import get_selenium_bot
+        
+        bot = get_selenium_bot()
+        
+        if not bot.state.is_running:
+            return {
+                "success": False,
+                "error": "Bot not running. Start it first with /api/selenium-bot/start"
+            }
+        
+        result = bot.execute_trade(
+            direction=direction,
+            amount=amount,
+            asset=asset,
+            duration=duration
+        )
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Selenium trade error: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.post("/selenium-bot/auto-trade")
+async def selenium_auto_trade(
+    direction: str = "call",
+    amount: float = 1.0,
+    asset: str = "EURUSD_otc",
+    duration: int = 60,
+    demo: bool = True
+):
+    """
+    Execute automated trade via Selenium - starts bot if needed
+    
+    This is the MAIN ENDPOINT for Selenium-based automated trading!
+    Automatically starts the bot if not running.
+    
+    Args:
+        direction: 'call' or 'put'
+        amount: Trade amount
+        asset: Asset symbol
+        duration: Trade duration in seconds
+        demo: True for demo, False for real account
+    """
+    try:
+        from selenium_trading_bot import get_selenium_bot
+        
+        bot = get_selenium_bot(demo=demo, headless=True)
+        
+        # Start bot if not running
+        if not bot.state.is_running:
+            logger.info("🚀 Auto-starting Selenium bot...")
+            start_result = bot.start()
+            
+            if not start_result.get('success'):
+                return start_result
+            
+            # Wait for bot to be fully ready
+            import asyncio
+            await asyncio.sleep(3)
+        
+        # Execute trade
+        result = bot.execute_trade(
+            direction=direction,
+            amount=amount,
+            asset=asset,
+            duration=duration
+        )
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Selenium auto-trade error: {e}")
+        return {"success": False, "error": str(e)}
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
