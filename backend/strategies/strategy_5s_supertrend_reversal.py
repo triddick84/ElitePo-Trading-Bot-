@@ -8,6 +8,7 @@ Strategy Logic:
 - Flip to uptrend → Generate SELL/PUT (bet on reversal down)
 - Flip to downtrend → Generate BUY/CALL (bet on reversal up)
 - 5-second expiration (next candle prediction)
+- Support/Resistance filtering to avoid false signals (NEW)
 """
 
 import pandas as pd
@@ -15,6 +16,12 @@ import numpy as np
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Tuple
 import logging
+
+# Import S/R detector
+try:
+    from strategies.support_resistance import get_sr_detector
+except ImportError:
+    from support_resistance import get_sr_detector
 
 logger = logging.getLogger(__name__)
 
