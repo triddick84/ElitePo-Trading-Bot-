@@ -12,6 +12,7 @@ Key Features:
 - Momentum and volatility analysis
 - Adaptive parameter optimization
 - Real-time signal generation
+- Support/Resistance level filtering (NEW)
 """
 
 import numpy as np
@@ -22,6 +23,9 @@ from datetime import datetime, timezone
 from enum import Enum
 import logging
 import json
+
+# Import Support/Resistance detector
+from .support_resistance import get_sr_detector, SRAnalysis
 
 logger = logging.getLogger(__name__)
 
