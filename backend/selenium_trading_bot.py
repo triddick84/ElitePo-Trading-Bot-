@@ -250,14 +250,18 @@ class SeleniumTradingBot:
                     login_url = f"{base_url}/en/login/"
                     logger.info(f"Trying: {login_url}")
                     self.driver.get(login_url)
-                    time.sleep(3)
+                    time.sleep(5)  # Wait longer for page load
                     
                     # Check if page loaded
-                    if "login" in self.driver.current_url.lower() or "pocketoption" in self.driver.current_url.lower():
+                    if "login" in self.driver.current_url.lower() or "pocketoption" in self.driver.current_url.lower() or "po.trade" in self.driver.current_url.lower():
+                        logger.info(f"Page loaded: {self.driver.current_url}")
                         break
                 except Exception as e:
                     logger.warning(f"Failed to load {base_url}: {e}")
                     continue
+            
+            # Wait for any Cloudflare/DDOS protection
+            time.sleep(5)
             
             # Accept cookies if present
             try:
@@ -268,31 +272,73 @@ class SeleniumTradingBot:
             except:
                 pass
             
-            # Find email input
+            # Take screenshot for debugging
+            try:
+                self.driver.save_screenshot("/tmp/po_login_page.png")
+                logger.info("📸 Screenshot saved to /tmp/po_login_page.png")
+            except:
+                pass
+            
+            # Find email input - try many selectors
             email_selectors = [
                 (By.CSS_SELECTOR, "input[type='email']"),
                 (By.CSS_SELECTOR, "input[name='email']"),
                 (By.CSS_SELECTOR, "input[autocomplete='email']"),
                 (By.XPATH, "//input[@placeholder[contains(., 'mail')]]"),
+                (By.XPATH, "//input[@placeholder[contains(., 'Mail')]]"),
+                (By.XPATH, "//input[@placeholder[contains(., 'E-mail')]]"),
+                (By.CSS_SELECTOR, "input.input-control-cabinet__input"),
+                (By.CSS_SELECTOR, "form input[type='text']"),
+                (By.CSS_SELECTOR, ".auth-form input:first-of-type"),
             ]
             
             email_input = None
             for by, selector in email_selectors:
                 try:
-                    email_input = self.wait.until(EC.presence_of_element_located((by, selector)))
-                    if email_input.is_displayed():
+                    elements = self.driver.find_elements(by, selector)
+                    for el in elements:
+                        if el.is_displayed():
+                            email_input = el
+                            logger.info(f"Found email input with: {selector}")
+                            break
+                    if email_input:
                         break
-                except:
+                except Exception as e:
                     continue
             
             if not email_input:
                 logger.error("Could not find email input")
+                # Log page source for debugging
+                logger.debug(f"Page title: {self.driver.title}")
+                logger.debug(f"Current URL: {self.driver.current_url}")
                 return False
             
             # Find password input
-            password_input = self.driver.find_element(By.CSS_SELECTOR, "input[type='password']")
+            password_selectors = [
+                (By.CSS_SELECTOR, "input[type='password']"),
+                (By.CSS_SELECTOR, "input[name='password']"),
+                (By.XPATH, "//input[@placeholder[contains(., 'assword')]]"),
+            ]
+            
+            password_input = None
+            for by, selector in password_selectors:
+                try:
+                    elements = self.driver.find_elements(by, selector)
+                    for el in elements:
+                        if el.is_displayed():
+                            password_input = el
+                            break
+                    if password_input:
+                        break
+                except:
+                    continue
+            
+            if not password_input:
+                logger.error("Could not find password input")
+                return False
             
             # Fill form
+            logger.info("Filling login form...")
             email_input.clear()
             email_input.send_keys(self.email)
             time.sleep(0.5)
@@ -305,33 +351,72 @@ class SeleniumTradingBot:
             login_selectors = [
                 (By.CSS_SELECTOR, "button[type='submit']"),
                 (By.XPATH, "//button[contains(text(), 'Log in') or contains(text(), 'Login') or contains(text(), 'Sign in')]"),
+                (By.XPATH, "//button[contains(text(), 'Войти')]"),  # Russian
                 (By.CSS_SELECTOR, ".btn-login"),
+                (By.CSS_SELECTOR, "form button"),
             ]
             
+            clicked = False
             for by, selector in login_selectors:
                 try:
-                    btn = self.driver.find_element(by, selector)
-                    if btn.is_displayed():
-                        btn.click()
+                    btns = self.driver.find_elements(by, selector)
+                    for btn in btns:
+                        if btn.is_displayed():
+                            btn.click()
+                            clicked = True
+                            logger.info(f"Clicked login button with: {selector}")
+                            break
+                    if clicked:
                         break
                 except:
                     continue
             
+            if not clicked:
+                # Try pressing Enter
+                password_input.submit()
+                logger.info("Submitted form via Enter key")
+            
             # Wait for login to complete
-            time.sleep(8)
+            logger.info("Waiting for login to complete...")
+            time.sleep(10)
+            
+            # Take screenshot after login attempt
+            try:
+                self.driver.save_screenshot("/tmp/po_after_login.png")
+                logger.info("📸 Screenshot saved to /tmp/po_after_login.png")
+            except:
+                pass
             
             # Check if login was successful
             current_url = self.driver.current_url.lower()
-            if "cabinet" in current_url or "trade" in current_url or "login" not in current_url:
+            logger.info(f"Current URL after login: {current_url}")
+            
+            if "cabinet" in current_url or "trade" in current_url or "quick-high-low" in current_url:
                 self.state.is_logged_in = True
                 logger.info("✅ Login successful!")
                 return True
+            elif "login" not in current_url:
+                # Might have redirected somewhere else
+                self.state.is_logged_in = True
+                logger.info("✅ Login appears successful (redirected)")
+                return True
             else:
+                # Check for error messages
+                try:
+                    error_els = self.driver.find_elements(By.CSS_SELECTOR, ".error, .alert-danger, .auth-error")
+                    for el in error_els:
+                        if el.is_displayed():
+                            logger.error(f"Login error: {el.text}")
+                except:
+                    pass
+                
                 logger.error("Login failed - still on login page")
                 return False
                 
         except Exception as e:
             logger.error(f"Login error: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return False
     
     def _navigate_to_trading(self) -> bool:
