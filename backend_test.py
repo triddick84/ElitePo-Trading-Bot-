@@ -17204,6 +17204,50 @@ async def main():
     """Main test runner - run Support/Resistance (S/R) Integration tests"""
     return await run_sr_integration_tests()
 
+async def run_sr_integration_tests():
+    """Run Support/Resistance (S/R) Integration tests specifically"""
+    print("🚀 Testing Support/Resistance (S/R) Indicator Integration in 5-Second Trading Strategies")
+    print("=" * 80)
+    
+    tester = BackendTester()
+    await tester.setup()
+    
+    # Define S/R integration tests
+    tests = [
+        ("S/R Health Check", tester.test_sr_health_check),
+        ("S/R Module Direct Test", tester.test_sr_module_direct_test),
+        ("Ultra-Precision Strategy with S/R", tester.test_ultra_precision_strategy_with_sr),
+        ("Signal Generation API with S/R", tester.test_signal_generation_api_with_sr),
+        ("Strategy Info Endpoints", tester.test_strategy_info_endpoints),
+    ]
+    
+    # Run all tests
+    for test_name, test_func in tests:
+        await tester.run_test(test_name, test_func)
+    
+    await tester.cleanup()
+    
+    # Print summary
+    print("\n" + "=" * 80)
+    print("🏁 Support/Resistance (S/R) Integration Testing Complete: {}/{} tests passed".format(
+        len(tests) - len(tester.failed_tests), len(tests)
+    ))
+    print("=" * 80)
+    
+    total_tests = len(tests)
+    passed_tests = total_tests - len(tester.failed_tests)
+    
+    if tester.failed_tests:
+        print(f"\n❌ Failed Tests:")
+        for test in tester.failed_tests:
+            print(f"   - {test}")
+        print(f"\n📊 Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+        return False
+    else:
+        print(f"\n🎉 All Support/Resistance (S/R) Integration tests passed!")
+        print(f"\n📊 Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+        return True
+
 async def run_automated_trading_execution_mode_tests():
     """Run Automated Trading Execution Mode tests specifically"""
     print("🚀 Testing Automated Trading Execution Mode Implementation")
