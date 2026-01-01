@@ -6,6 +6,7 @@ Based on research:
 - MACD + EMA crossover for momentum
 - Price action breakout confirmation
 - Quick execution for ultra-short timeframes
+- Support/Resistance filtering (NEW)
 
 Entry Rules:
 CALL: MACD crosses above signal, price above EMA(8), strong volume
@@ -17,6 +18,15 @@ import numpy as np
 from typing import Dict, Optional
 import talib
 import logging
+
+# Import S/R detector
+try:
+    from strategies.support_resistance import get_sr_detector
+except ImportError:
+    try:
+        from support_resistance import get_sr_detector
+    except ImportError:
+        get_sr_detector = None
 
 logger = logging.getLogger(__name__)
 
