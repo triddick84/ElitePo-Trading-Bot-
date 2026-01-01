@@ -72,7 +72,7 @@ PO_EMAIL = "your-email@example.com"
 PO_PASSWORD = "your-password"
 
 # Cloud server URL
-CLOUD_SERVER_URL = "https://signalbot-34.preview.emergentagent.com"
+CLOUD_SERVER_URL = "https://gpt-signal-bot.preview.emergentagent.com"
 
 # Account type: "demo" or "live"
 ACCOUNT_TYPE = "live"  # Start with "demo" for testing

@@ -16,7 +16,7 @@ from typing import Dict, Any, List
 sys.path.append('/app/backend')
 
 # Test configuration
-BACKEND_URL = "https://signalbot-34.preview.emergentagent.com/api"
+BACKEND_URL = "https://gpt-signal-bot.preview.emergentagent.com/api"
 
 class CandlestickBibleTester:
     def __init__(self):

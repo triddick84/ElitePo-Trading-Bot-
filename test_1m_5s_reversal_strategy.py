@@ -11,7 +11,7 @@ import sys
 from datetime import datetime, timezone
 
 # Test configuration
-BACKEND_URL = "https://signalbot-34.preview.emergentagent.com/api"
+BACKEND_URL = "https://gpt-signal-bot.preview.emergentagent.com/api"
 
 class ReversalStrategyTester:
     def __init__(self):

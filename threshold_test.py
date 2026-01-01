@@ -8,7 +8,7 @@ import asyncio
 import aiohttp
 import json
 
-BACKEND_URL = "https://signalbot-34.preview.emergentagent.com/api"
+BACKEND_URL = "https://gpt-signal-bot.preview.emergentagent.com/api"
 
 class ThresholdTester:
     def __init__(self):

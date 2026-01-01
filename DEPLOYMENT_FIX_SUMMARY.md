@@ -107,7 +107,7 @@ tail -50 /var/log/supervisor/backend.err.log | grep -E "CUDA|tensorflow|GPU|ERRO
 
 ### 3. API Health Check ✅
 ```bash
-curl https://signalbot-34.preview.emergentagent.com/api/health
+curl https://gpt-signal-bot.preview.emergentagent.com/api/health
 # Result: {"status":"healthy","service":"GPT Signal Bot API","bot_running":false,"app_initialized":true}
 ```
 
