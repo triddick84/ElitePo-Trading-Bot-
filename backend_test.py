@@ -3221,13 +3221,6 @@ class BackendTester:
         except Exception as e:
             print(f"   Money Management Status endpoint test error: {e}")
             return False
-                        passed = scheme_data.get('passed')
-                        print(f"   📊 {scheme_name}: {'✅ PASSED' if passed else '❌ FAILED'}")
-                    
-                    return True
-                else:
-                    print(f"   ❌ Risk check endpoint failed: {response.status}")
-                    error_text = await response.text()
                     print(f"   Error details: {error_text}")
                     return False
                     
