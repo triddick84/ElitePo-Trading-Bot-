@@ -1045,6 +1045,7 @@ class UltraPrecision5SecondStrategy:
 def generate_sample_signals() -> Dict:
     """Generate sample signals for backtesting demonstration"""
     import random
+    from datetime import timedelta
     
     # Generate 200 sample candles (simulating 5-second data)
     base_price = 1.08500
@@ -1062,7 +1063,7 @@ def generate_sample_signals() -> Dict:
         close_price = base_price + random.gauss(0, 0.00008)
         
         candles.append({
-            "timestamp": current_time,
+            "timestamp": current_time.isoformat(),
             "open": round(open_price, 5),
             "high": round(high_price, 5),
             "low": round(low_price, 5),
@@ -1070,7 +1071,7 @@ def generate_sample_signals() -> Dict:
             "volume": random.randint(100, 1000)
         })
         
-        current_time = current_time.replace(microsecond=current_time.microsecond + 5000000)
+        current_time = current_time + timedelta(seconds=5)
     
     # Create strategy and generate signals
     strategy = UltraPrecision5SecondStrategy()
