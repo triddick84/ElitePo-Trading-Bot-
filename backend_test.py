@@ -3221,12 +3221,6 @@ class BackendTester:
         except Exception as e:
             print(f"   Money Management Status endpoint test error: {e}")
             return False
-                    print(f"   Error details: {error_text}")
-                    return False
-                    
-        except Exception as e:
-            print(f"   Risk check endpoint test error: {e}")
-            return False
     
     async def test_money_management_kelly_calculate_endpoint(self) -> bool:
         """
