@@ -35,12 +35,21 @@ class Strategy5sMomentumBreakout:
     """
     5-Second Momentum Breakout Strategy
     Targets ultra-short timeframe with momentum confirmation
+    With S/R filtering for improved accuracy
     """
     
-    def __init__(self):
+    def __init__(self, enable_sr_filter: bool = True):
         self.name = "5s Momentum Breakout"
         self.timeframe = "5s"
         self.accuracy_target = 88.0
+        self.enable_sr_filter = enable_sr_filter
+        
+        # Initialize S/R detector
+        if get_sr_detector:
+            self.sr_detector = get_sr_detector()
+        else:
+            self.sr_detector = None
+            logger.warning("S/R detector not available")
         
         # Parameters
         self.ema_fast = 8
