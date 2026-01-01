@@ -17201,8 +17201,8 @@ async def run_socket_io_handshake_tests():
         await tester.cleanup()
 
 async def main():
-    """Main test runner - run Automated Trading Execution Mode tests"""
-    return await run_automated_trading_execution_mode_tests()
+    """Main test runner - run Support/Resistance (S/R) Integration tests"""
+    return await run_sr_integration_tests()
 
 async def run_automated_trading_execution_mode_tests():
     """Run Automated Trading Execution Mode tests specifically"""
