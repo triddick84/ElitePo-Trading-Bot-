@@ -1057,6 +1057,332 @@ class BackendTester:
             print(f"   Enhanced signal accuracy targeting test error: {e}")
             return False
 
+    # ========== HIGH-PROBABILITY 1-MINUTE TRADING STRATEGIES TESTING ==========
+    
+    async def test_1m_strategy_info_endpoint(self) -> bool:
+        """Test 1: Strategy Info Endpoint - GET /api/strategy/1m-high-probability/info"""
+        try:
+            print("   🔍 Testing 1m High-Probability Strategy Info Endpoint")
+            
+            async with self.session.get(f"{BACKEND_URL}/strategy/1m-high-probability/info") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Strategy info endpoint accessible")
+                    
+                    # Verify all 5 strategies are present
+                    strategies = data.get('strategies', [])
+                    expected_strategies = ['rsi_reversal', 'ema_crossover', 'bb_squeeze', 'macd_divergence', 'stoch_rsi']
+                    
+                    if len(strategies) != 5:
+                        print(f"   ❌ Expected 5 strategies, got {len(strategies)}")
+                        return False
+                    
+                    strategy_ids = [s.get('id') for s in strategies]
+                    missing_strategies = [s for s in expected_strategies if s not in strategy_ids]
+                    
+                    if missing_strategies:
+                        print(f"   ❌ Missing strategies: {missing_strategies}")
+                        return False
+                    
+                    print(f"   ✅ All 5 strategies present: {strategy_ids}")
+                    
+                    # Verify strategy structure
+                    for strategy in strategies:
+                        required_fields = ['id', 'name', 'description', 'probability', 'indicators', 'expiry']
+                        missing_fields = [f for f in required_fields if f not in strategy]
+                        if missing_fields:
+                            print(f"   ❌ Strategy {strategy.get('id')} missing fields: {missing_fields}")
+                            return False
+                    
+                    print(f"   ✅ All strategies have correct structure")
+                    
+                    # Verify features are present
+                    features = data.get('features', [])
+                    if len(features) < 3:
+                        print(f"   ❌ Expected at least 3 features, got {len(features)}")
+                        return False
+                    
+                    print(f"   ✅ Features present: {len(features)} features")
+                    return True
+                else:
+                    print(f"   ❌ Strategy info endpoint failed: {response.status}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ 1m Strategy info test error: {e}")
+            return False
+    
+    async def test_1m_best_signal_generation(self) -> bool:
+        """Test 2: Best Signal Generation - POST /api/strategy/1m-high-probability/generate?strategy=best"""
+        try:
+            print("   🔍 Testing 1m Best Signal Generation")
+            
+            test_assets = ['EURUSD', 'GBPUSD', 'BTCUSD']
+            
+            for asset in test_assets:
+                print(f"   📊 Testing {asset}...")
+                
+                async with self.session.post(
+                    f"{BACKEND_URL}/strategy/1m-high-probability/generate",
+                    params={"asset": asset, "strategy": "best"}
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        
+                        if not data.get('success'):
+                            print(f"   ❌ {asset}: Request failed - {data.get('error')}")
+                            continue
+                        
+                        print(f"   ✅ {asset}: Signal generation successful")
+                        
+                        # Check response structure
+                        required_fields = ['success', 'asset', 'strategy_used', 'timestamp']
+                        missing_fields = [f for f in required_fields if f not in data]
+                        if missing_fields:
+                            print(f"   ❌ {asset}: Missing response fields: {missing_fields}")
+                            return False
+                        
+                        signal = data.get('signal')
+                        if signal:
+                            # Verify signal structure
+                            signal_fields = ['strategy_name', 'direction', 'confidence', 'reasoning', 'sr_analysis']
+                            missing_signal_fields = [f for f in signal_fields if f not in signal]
+                            if missing_signal_fields:
+                                print(f"   ❌ {asset}: Missing signal fields: {missing_signal_fields}")
+                                return False
+                            
+                            print(f"   📊 {asset} Signal:")
+                            print(f"      Strategy: {signal.get('strategy_name')}")
+                            print(f"      Direction: {signal.get('direction')}")
+                            print(f"      Confidence: {signal.get('confidence')}%")
+                            print(f"      Reasoning: {len(signal.get('reasoning', []))} points")
+                            print(f"      S/R Analysis: {'Present' if signal.get('sr_analysis') else 'None'}")
+                            
+                            # Verify confidence is in valid range
+                            confidence = signal.get('confidence', 0)
+                            if not (0 <= confidence <= 100):
+                                print(f"   ❌ {asset}: Invalid confidence: {confidence}")
+                                return False
+                            
+                            # Verify direction is valid
+                            direction = signal.get('direction')
+                            if direction not in ['CALL', 'PUT']:
+                                print(f"   ❌ {asset}: Invalid direction: {direction}")
+                                return False
+                            
+                        else:
+                            print(f"   ℹ️ {asset}: No signal generated (market conditions not met)")
+                    else:
+                        print(f"   ❌ {asset}: HTTP error {response.status}")
+                        return False
+            
+            print("   ✅ Best signal generation test completed successfully")
+            return True
+            
+        except Exception as e:
+            print(f"   ❌ 1m Best signal generation test error: {e}")
+            return False
+    
+    async def test_1m_individual_strategy_signals(self) -> bool:
+        """Test 3: Individual Strategy Test - Test specific strategies"""
+        try:
+            print("   🔍 Testing 1m Individual Strategy Signals")
+            
+            test_strategies = ['stoch_rsi', 'rsi_reversal']
+            test_asset = 'EURUSD'
+            
+            for strategy in test_strategies:
+                print(f"   📊 Testing {strategy} strategy...")
+                
+                async with self.session.post(
+                    f"{BACKEND_URL}/strategy/1m-high-probability/generate",
+                    params={"asset": test_asset, "strategy": strategy}
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        
+                        if not data.get('success'):
+                            print(f"   ❌ {strategy}: Request failed - {data.get('error')}")
+                            return False
+                        
+                        print(f"   ✅ {strategy}: Strategy accessible")
+                        
+                        # Verify strategy_used matches request
+                        if data.get('strategy_used') != strategy:
+                            print(f"   ❌ {strategy}: Strategy mismatch - got {data.get('strategy_used')}")
+                            return False
+                        
+                        signal = data.get('signal')
+                        if signal:
+                            print(f"   📊 {strategy} Signal Generated:")
+                            print(f"      Strategy: {signal.get('strategy_name')}")
+                            print(f"      Direction: {signal.get('direction')}")
+                            print(f"      Confidence: {signal.get('confidence')}%")
+                            print(f"      Risk Level: {signal.get('risk_level')}")
+                            
+                            # Verify indicators are present
+                            indicators = signal.get('indicators', {})
+                            if not indicators:
+                                print(f"   ❌ {strategy}: No indicators in signal")
+                                return False
+                            
+                            print(f"   ✅ {strategy}: Indicators present - {list(indicators.keys())}")
+                        else:
+                            print(f"   ℹ️ {strategy}: No signal (conditions not met)")
+                    else:
+                        print(f"   ❌ {strategy}: HTTP error {response.status}")
+                        return False
+            
+            print("   ✅ Individual strategy test completed successfully")
+            return True
+            
+        except Exception as e:
+            print(f"   ❌ 1m Individual strategy test error: {e}")
+            return False
+    
+    async def test_1m_analyze_all_strategies(self) -> bool:
+        """Test 4: Analyze All Strategies - POST /api/strategy/1m-high-probability/analyze-all"""
+        try:
+            print("   🔍 Testing 1m Analyze All Strategies")
+            
+            test_asset = 'EURUSD'
+            
+            async with self.session.post(
+                f"{BACKEND_URL}/strategy/1m-high-probability/analyze-all",
+                params={"asset": test_asset}
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    
+                    if not data.get('success'):
+                        print(f"   ❌ Analyze all failed: {data.get('error')}")
+                        return False
+                    
+                    print(f"   ✅ Analyze all strategies successful")
+                    
+                    # Verify response structure
+                    required_fields = ['success', 'asset', 'total_strategies', 'signals_generated', 'signals']
+                    missing_fields = [f for f in required_fields if f not in data]
+                    if missing_fields:
+                        print(f"   ❌ Missing response fields: {missing_fields}")
+                        return False
+                    
+                    total_strategies = data.get('total_strategies')
+                    signals_generated = data.get('signals_generated')
+                    signals = data.get('signals', [])
+                    
+                    print(f"   📊 Analysis Results:")
+                    print(f"      Total Strategies: {total_strategies}")
+                    print(f"      Signals Generated: {signals_generated}")
+                    print(f"      Signals Array Length: {len(signals)}")
+                    
+                    # Verify total strategies is 5
+                    if total_strategies != 5:
+                        print(f"   ❌ Expected 5 total strategies, got {total_strategies}")
+                        return False
+                    
+                    # Verify signals structure
+                    for i, signal in enumerate(signals):
+                        if not isinstance(signal, dict):
+                            print(f"   ❌ Signal {i} is not a dictionary")
+                            return False
+                        
+                        if 'strategy_name' not in signal:
+                            print(f"   ❌ Signal {i} missing strategy_name")
+                            return False
+                    
+                    # Check consensus
+                    consensus = data.get('consensus')
+                    if consensus:
+                        print(f"   ✅ Consensus signal present")
+                    else:
+                        print(f"   ℹ️ No consensus (strategies disagree)")
+                    
+                    # Check best signal
+                    best_signal = data.get('best_signal')
+                    if best_signal:
+                        print(f"   ✅ Best signal present: {best_signal.get('strategy_name')}")
+                    
+                    print("   ✅ Analyze all strategies test completed successfully")
+                    return True
+                else:
+                    print(f"   ❌ Analyze all HTTP error: {response.status}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   ❌ 1m Analyze all strategies test error: {e}")
+            return False
+    
+    async def test_1m_consensus_signal(self) -> bool:
+        """Test 5: Consensus Signal - POST /api/strategy/1m-high-probability/generate?strategy=consensus"""
+        try:
+            print("   🔍 Testing 1m Consensus Signal")
+            
+            test_asset = 'EURUSD'
+            
+            async with self.session.post(
+                f"{BACKEND_URL}/strategy/1m-high-probability/generate",
+                params={"asset": test_asset, "strategy": "consensus"}
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    
+                    if not data.get('success'):
+                        print(f"   ❌ Consensus request failed: {data.get('error')}")
+                        return False
+                    
+                    print(f"   ✅ Consensus endpoint accessible")
+                    
+                    # Check response type
+                    response_type = data.get('type')
+                    if response_type != 'consensus':
+                        print(f"   ❌ Expected type 'consensus', got '{response_type}'")
+                        return False
+                    
+                    consensus = data.get('consensus')
+                    if consensus:
+                        print(f"   ✅ Consensus signal found:")
+                        print(f"      Direction: {consensus.get('direction')}")
+                        print(f"      Confidence: {consensus.get('confidence')}%")
+                        print(f"      Agreement: {consensus.get('agreement_count')} strategies")
+                        
+                        # Verify consensus structure
+                        consensus_fields = ['direction', 'confidence', 'agreement_count', 'strategies']
+                        missing_fields = [f for f in consensus_fields if f not in consensus]
+                        if missing_fields:
+                            print(f"   ❌ Consensus missing fields: {missing_fields}")
+                            return False
+                        
+                        # Verify agreement count is at least 2
+                        agreement = consensus.get('agreement_count', 0)
+                        if agreement < 2:
+                            print(f"   ❌ Invalid agreement count: {agreement}")
+                            return False
+                        
+                    else:
+                        message = data.get('message', '')
+                        if 'disagree' in message.lower():
+                            print(f"   ✅ No consensus - strategies disagree (expected behavior)")
+                            
+                            # Check if all_signals is provided when no consensus
+                            all_signals = data.get('all_signals', [])
+                            if all_signals:
+                                print(f"   ✅ All signals provided: {len(all_signals)} signals")
+                            else:
+                                print(f"   ℹ️ No signals generated by any strategy")
+                        else:
+                            print(f"   ❌ Unexpected message: {message}")
+                            return False
+                    
+                    print("   ✅ Consensus signal test completed successfully")
+                    return True
+                else:
+                    print(f"   ❌ Consensus HTTP error: {response.status}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   ❌ 1m Consensus signal test error: {e}")
+            return False
+
     # ========== SUPPORT/RESISTANCE (S/R) INDICATOR INTEGRATION TESTING ==========
     
     async def test_sr_health_check(self) -> bool:
