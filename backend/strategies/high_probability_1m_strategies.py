@@ -61,14 +61,25 @@ class TradingSignal1m:
     sr_analysis: Optional[Dict] = None
     
     def to_dict(self) -> Dict:
+        def convert_value(v):
+            """Convert numpy types to Python native types"""
+            if isinstance(v, (np.bool_, np.bool)):
+                return bool(v)
+            elif isinstance(v, (np.integer, np.int64, np.int32)):
+                return int(v)
+            elif isinstance(v, (np.floating, np.float64, np.float32)):
+                return float(v)
+            elif isinstance(v, np.ndarray):
+                return v.tolist()
+            return v
+        
         return {
             "strategy_name": self.strategy_name,
             "direction": self.direction,
-            "confidence": round(self.confidence, 2),
+            "confidence": round(float(self.confidence), 2),
             "strength": self.strength.value,
             "entry_price": float(self.entry_price),
-            "indicators": {k: float(v) if isinstance(v, (int, float, np.floating)) else v 
-                         for k, v in self.indicators.items()},
+            "indicators": {k: convert_value(v) for k, v in self.indicators.items()},
             "reasoning": self.reasoning,
             "risk_level": self.risk_level,
             "recommended_expiry": self.recommended_expiry,
