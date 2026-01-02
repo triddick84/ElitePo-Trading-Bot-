@@ -8285,6 +8285,133 @@ async def analyze_all_1m_strategies(asset: str = "EURUSD"):
         return {"success": False, "error": str(e)}
 
 
+# =============================================================================
+# SSID HEALTH MONITOR ENDPOINTS
+# =============================================================================
+
+@api_router.get("/ssid/health/status")
+async def get_ssid_health_status():
+    """Get SSID health monitor status and recent alerts"""
+    try:
+        from ssid_health_monitor import get_health_monitor
+        monitor = get_health_monitor()
+        return {
+            "success": True,
+            "status": monitor.get_status()
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@api_router.get("/ssid/health/alerts")
+async def get_ssid_alerts(limit: int = 50, level: str = None):
+    """Get recent SSID health alerts"""
+    try:
+        from ssid_health_monitor import get_health_monitor, AlertLevel
+        monitor = get_health_monitor()
+        
+        alert_level = None
+        if level:
+            try:
+                alert_level = AlertLevel(level)
+            except ValueError:
+                pass
+        
+        alerts = monitor.get_alerts(limit=limit, level=alert_level)
+        return {
+            "success": True,
+            "alerts": alerts,
+            "count": len(alerts)
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@api_router.post("/ssid/health/start")
+async def start_health_monitor():
+    """Start the SSID health monitor"""
+    try:
+        from ssid_health_monitor import start_health_monitor
+        monitor = await start_health_monitor()
+        return {
+            "success": True,
+            "message": "Health monitor started",
+            "status": monitor.get_status()
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@api_router.post("/ssid/health/stop")
+async def stop_health_monitor():
+    """Stop the SSID health monitor"""
+    try:
+        from ssid_health_monitor import get_health_monitor
+        monitor = get_health_monitor()
+        await monitor.stop()
+        return {
+            "success": True,
+            "message": "Health monitor stopped"
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@api_router.get("/local-bot/download")
+async def download_local_bot():
+    """Get the local bot script for download"""
+    try:
+        import os
+        bot_path = "/app/backend/local_bot/pocket_option_local_bot.py"
+        if os.path.exists(bot_path):
+            with open(bot_path, 'r') as f:
+                content = f.read()
+            return {
+                "success": True,
+                "filename": "pocket_option_local_bot.py",
+                "content": content,
+                "instructions": """
+                    1. Save this file to your computer
+                    2. Install dependencies: pip install websockets aiohttp requests
+                    3. Run: python pocket_option_local_bot.py
+                    4. Follow the prompts to connect
+                """
+            }
+        return {"success": False, "error": "Bot file not found"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@api_router.get("/ssid/instructions")
+async def get_ssid_instructions():
+    """Get detailed SSID extraction instructions"""
+    return {
+        "success": True,
+        "instructions": {
+            "title": "How to Get Your Pocket Option SSID",
+            "steps": [
+                {"step": 1, "action": "Open https://pocketoption.com in Chrome/Firefox"},
+                {"step": 2, "action": "Login to your account (demo or real)"},
+                {"step": 3, "action": "Press F12 to open Developer Tools"},
+                {"step": 4, "action": "Click on 'Network' tab"},
+                {"step": 5, "action": "Click 'WS' filter (WebSocket)"},
+                {"step": 6, "action": "Refresh the page (F5)"},
+                {"step": 7, "action": "Find WebSocket connection to wss://..."},
+                {"step": 8, "action": "Click on it, then 'Messages' tab"},
+                {"step": 9, "action": "Find message starting with: 42[\"auth\",{...}]"},
+                {"step": 10, "action": "Copy the ENTIRE message"}
+            ],
+            "notes": [
+                "SSID expires every 1-24 hours",
+                "Never share your SSID",
+                "Get fresh SSID if connection fails",
+                "Make sure you're logged in before extracting"
+            ],
+            "example_format": '42["auth",{"session":"ABC123...","isDemo":1,"uid":12345}]'
+        }
+    }
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
