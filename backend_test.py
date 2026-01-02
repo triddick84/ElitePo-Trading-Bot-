@@ -17801,6 +17801,52 @@ async def main():
     """Main test runner - run SSID Health Monitor and Local Bot tests"""
     return await run_ssid_health_monitor_and_local_bot_tests()
 
+async def run_ssid_health_monitor_and_local_bot_tests():
+    """Run SSID Health Monitor and Local Bot tests specifically"""
+    print("🚀 Testing SSID Health Monitor and Local Bot Features")
+    print("=" * 80)
+    
+    tester = BackendTester()
+    await tester.setup()
+    
+    # Define SSID Health Monitor and Local Bot tests
+    tests = [
+        ("SSID Health Monitor Status", tester.test_ssid_health_status),
+        ("SSID Health Alerts", tester.test_ssid_health_alerts),
+        ("SSID Instructions", tester.test_ssid_instructions),
+        ("Start Health Monitor", tester.test_ssid_health_start),
+        ("Local Bot Download", tester.test_local_bot_download),
+        ("Pocket Option Status", tester.test_pocket_option_status),
+        ("1-Minute Strategy Integration Check", tester.test_1m_strategy_integration_check),
+    ]
+    
+    # Run all tests
+    for test_name, test_func in tests:
+        await tester.run_test(test_name, test_func)
+    
+    await tester.cleanup()
+    
+    # Print summary
+    print("\n" + "=" * 80)
+    print("🏁 SSID Health Monitor and Local Bot Testing Complete: {}/{} tests passed".format(
+        len(tests) - len(tester.failed_tests), len(tests)
+    ))
+    print("=" * 80)
+    
+    total_tests = len(tests)
+    passed_tests = total_tests - len(tester.failed_tests)
+    
+    if tester.failed_tests:
+        print(f"\n❌ Failed Tests:")
+        for test in tester.failed_tests:
+            print(f"   - {test}")
+        print(f"\n📊 Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+        return False
+    else:
+        print(f"\n🎉 All SSID Health Monitor and Local Bot tests passed!")
+        print(f"\n📊 Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+        return True
+
 async def run_1m_high_probability_strategies_tests():
     """Run 1-Minute High-Probability Trading Strategies tests specifically"""
     print("🚀 Testing High-Probability 1-Minute Trading Strategies Implementation")
