@@ -17798,8 +17798,8 @@ async def run_socket_io_handshake_tests():
         await tester.cleanup()
 
 async def main():
-    """Main test runner - run 1-Minute High-Probability Trading Strategies tests"""
-    return await run_1m_high_probability_strategies_tests()
+    """Main test runner - run SSID Health Monitor and Local Bot tests"""
+    return await run_ssid_health_monitor_and_local_bot_tests()
 
 async def run_1m_high_probability_strategies_tests():
     """Run 1-Minute High-Probability Trading Strategies tests specifically"""
