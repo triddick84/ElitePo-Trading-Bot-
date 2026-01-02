@@ -1057,6 +1057,290 @@ class BackendTester:
             print(f"   Enhanced signal accuracy targeting test error: {e}")
             return False
 
+    # ========== SSID HEALTH MONITOR AND LOCAL BOT TESTING ==========
+    
+    async def test_ssid_health_status(self) -> bool:
+        """Test 1: SSID Health Monitor Status - GET /api/ssid/health/status"""
+        try:
+            print("   🔍 Testing SSID Health Monitor Status")
+            
+            async with self.session.get(f"{BACKEND_URL}/ssid/health/status") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Health status endpoint accessible")
+                    
+                    # Verify response structure
+                    if not data.get('success'):
+                        print(f"   ❌ Request failed: {data.get('error')}")
+                        return False
+                    
+                    status = data.get('status', {})
+                    required_fields = ['is_running', 'connection_status', 'check_interval']
+                    missing_fields = [f for f in required_fields if f not in status]
+                    
+                    if missing_fields:
+                        print(f"   ❌ Missing status fields: {missing_fields}")
+                        return False
+                    
+                    print(f"   📊 Monitor Status:")
+                    print(f"      Is Running: {status.get('is_running')}")
+                    print(f"      Connection Status: {status.get('connection_status')}")
+                    print(f"      Check Interval: {status.get('check_interval')}s")
+                    print(f"      Last Check: {status.get('last_check')}")
+                    print(f"      Recent Alerts: {len(status.get('recent_alerts', []))}")
+                    
+                    return True
+                else:
+                    print(f"   ❌ Health status endpoint failed: {response.status}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ SSID health status test error: {e}")
+            return False
+    
+    async def test_ssid_health_alerts(self) -> bool:
+        """Test 2: SSID Health Alerts - GET /api/ssid/health/alerts"""
+        try:
+            print("   🔍 Testing SSID Health Alerts")
+            
+            async with self.session.get(f"{BACKEND_URL}/ssid/health/alerts") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Health alerts endpoint accessible")
+                    
+                    if not data.get('success'):
+                        print(f"   ❌ Request failed: {data.get('error')}")
+                        return False
+                    
+                    alerts = data.get('alerts', [])
+                    count = data.get('count', 0)
+                    
+                    print(f"   📊 Alerts Status:")
+                    print(f"      Total Alerts: {count}")
+                    print(f"      Alerts Array Length: {len(alerts)}")
+                    
+                    # Test with level filter
+                    async with self.session.get(f"{BACKEND_URL}/ssid/health/alerts?level=critical") as filter_response:
+                        if filter_response.status == 200:
+                            filter_data = await filter_response.json()
+                            critical_alerts = filter_data.get('alerts', [])
+                            print(f"      Critical Alerts: {len(critical_alerts)}")
+                        else:
+                            print(f"   ⚠️ Alert filtering failed: {filter_response.status}")
+                    
+                    return True
+                else:
+                    print(f"   ❌ Health alerts endpoint failed: {response.status}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ SSID health alerts test error: {e}")
+            return False
+    
+    async def test_ssid_instructions(self) -> bool:
+        """Test 3: SSID Instructions - GET /api/ssid/instructions"""
+        try:
+            print("   🔍 Testing SSID Instructions")
+            
+            async with self.session.get(f"{BACKEND_URL}/ssid/instructions") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ SSID instructions endpoint accessible")
+                    
+                    if not data.get('success'):
+                        print(f"   ❌ Request failed: {data.get('error')}")
+                        return False
+                    
+                    instructions = data.get('instructions', {})
+                    required_fields = ['title', 'steps', 'notes', 'example_format']
+                    missing_fields = [f for f in required_fields if f not in instructions]
+                    
+                    if missing_fields:
+                        print(f"   ❌ Missing instruction fields: {missing_fields}")
+                        return False
+                    
+                    steps = instructions.get('steps', [])
+                    notes = instructions.get('notes', [])
+                    
+                    print(f"   📊 Instructions Content:")
+                    print(f"      Title: {instructions.get('title')}")
+                    print(f"      Steps: {len(steps)} steps")
+                    print(f"      Notes: {len(notes)} notes")
+                    print(f"      Example Format: {'Present' if instructions.get('example_format') else 'Missing'}")
+                    
+                    # Verify steps have proper structure
+                    if steps and len(steps) >= 5:
+                        first_step = steps[0]
+                        if 'step' in first_step and 'action' in first_step:
+                            print(f"   ✅ Steps have proper structure")
+                        else:
+                            print(f"   ❌ Steps missing required fields")
+                            return False
+                    
+                    return True
+                else:
+                    print(f"   ❌ SSID instructions endpoint failed: {response.status}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ SSID instructions test error: {e}")
+            return False
+    
+    async def test_ssid_health_start(self) -> bool:
+        """Test 4: Start Health Monitor - POST /api/ssid/health/start"""
+        try:
+            print("   🔍 Testing Start Health Monitor")
+            
+            async with self.session.post(f"{BACKEND_URL}/ssid/health/start") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Start health monitor endpoint accessible")
+                    
+                    # This may fail gracefully if no SSID is configured
+                    if data.get('success'):
+                        print(f"   ✅ Health monitor started successfully")
+                        print(f"   📊 Message: {data.get('message')}")
+                        
+                        status = data.get('status', {})
+                        if status:
+                            print(f"      Monitor Running: {status.get('is_running')}")
+                            print(f"      Check Interval: {status.get('check_interval')}s")
+                    else:
+                        print(f"   ℹ️ Health monitor start failed (expected without SSID): {data.get('error')}")
+                    
+                    return True
+                else:
+                    print(f"   ❌ Start health monitor failed: {response.status}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Start health monitor test error: {e}")
+            return False
+    
+    async def test_local_bot_download(self) -> bool:
+        """Test 5: Local Bot Download - GET /api/local-bot/download"""
+        try:
+            print("   🔍 Testing Local Bot Download")
+            
+            async with self.session.get(f"{BACKEND_URL}/local-bot/download") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Local bot download endpoint accessible")
+                    
+                    if not data.get('success'):
+                        print(f"   ❌ Request failed: {data.get('error')}")
+                        return False
+                    
+                    content = data.get('content', '')
+                    filename = data.get('filename', '')
+                    instructions = data.get('instructions', '')
+                    
+                    print(f"   📊 Bot Download Content:")
+                    print(f"      Filename: {filename}")
+                    print(f"      Content Length: {len(content)} characters")
+                    print(f"      Instructions: {'Present' if instructions else 'Missing'}")
+                    
+                    # Verify content contains PocketOptionLocalBot class
+                    if 'PocketOptionLocalBot' in content:
+                        print(f"   ✅ PocketOptionLocalBot class found in content")
+                    else:
+                        print(f"   ❌ PocketOptionLocalBot class not found")
+                        return False
+                    
+                    # Verify content contains key methods
+                    required_methods = ['connect', 'place_trade', 'fetch_signal_from_cloud']
+                    found_methods = [method for method in required_methods if method in content]
+                    
+                    print(f"   📊 Found Methods: {found_methods}")
+                    
+                    if len(found_methods) >= 2:
+                        print(f"   ✅ Essential methods present")
+                    else:
+                        print(f"   ❌ Missing essential methods")
+                        return False
+                    
+                    # Verify instructions are included
+                    if 'pip install' in instructions and 'python' in instructions:
+                        print(f"   ✅ Installation instructions included")
+                    else:
+                        print(f"   ❌ Installation instructions incomplete")
+                        return False
+                    
+                    return True
+                else:
+                    print(f"   ❌ Local bot download failed: {response.status}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Local bot download test error: {e}")
+            return False
+    
+    async def test_pocket_option_status(self) -> bool:
+        """Test 6: Pocket Option Status - GET /api/pocket-option/status"""
+        try:
+            print("   🔍 Testing Pocket Option Status")
+            
+            async with self.session.get(f"{BACKEND_URL}/pocket-option/status") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Pocket Option status endpoint accessible")
+                    
+                    # This should show connected: false when no SSID is configured
+                    success = data.get('success')
+                    connected = data.get('connected', False)
+                    message = data.get('message', '')
+                    
+                    print(f"   📊 Pocket Option Status:")
+                    print(f"      Success: {success}")
+                    print(f"      Connected: {connected}")
+                    print(f"      Message: {message}")
+                    
+                    # Expected behavior: not connected without SSID
+                    if not connected and 'not configured' in message.lower():
+                        print(f"   ✅ Expected behavior: not connected without SSID")
+                    elif connected:
+                        print(f"   ✅ Connected to Pocket Option")
+                    else:
+                        print(f"   ℹ️ Connection status: {message}")
+                    
+                    return True
+                else:
+                    print(f"   ❌ Pocket Option status failed: {response.status}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Pocket Option status test error: {e}")
+            return False
+    
+    async def test_1m_strategy_integration_check(self) -> bool:
+        """Test 7: 1-Minute Strategy Integration Check"""
+        try:
+            print("   🔍 Testing 1-Minute Strategy Integration with Health Monitor")
+            
+            # Test the 1-minute strategy endpoint to ensure it works with new health monitor
+            async with self.session.post(
+                f"{BACKEND_URL}/strategy/1m-high-probability/generate",
+                params={"asset": "EURUSD", "strategy": "best"}
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ 1-minute strategy endpoint accessible")
+                    
+                    if data.get('success'):
+                        print(f"   ✅ Strategy generation working")
+                        print(f"   📊 Asset: {data.get('asset')}")
+                        print(f"   📊 Strategy Used: {data.get('strategy_used')}")
+                        
+                        signal = data.get('signal')
+                        if signal:
+                            print(f"   📊 Signal Generated: {signal.get('direction')} at {signal.get('confidence')}%")
+                        else:
+                            print(f"   ℹ️ No signal generated (market conditions)")
+                    else:
+                        print(f"   ℹ️ Strategy request failed: {data.get('error')}")
+                    
+                    return True
+                else:
+                    print(f"   ❌ 1-minute strategy failed: {response.status}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ 1-minute strategy integration test error: {e}")
+            return False
+
     # ========== HIGH-PROBABILITY 1-MINUTE TRADING STRATEGIES TESTING ==========
     
     async def test_1m_strategy_info_endpoint(self) -> bool:
