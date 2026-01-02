@@ -148,6 +148,92 @@ class PocketOptionAPIClient:
             logger.error(f"Disconnect error: {e}")
             return {"success": False, "error": str(e)}
     
+    async def check_connection(self) -> bool:
+        """Check if connection is still alive"""
+        try:
+            if not self.client or not self.state.is_connected:
+                return False
+            
+            # Try to get balance as a connection check
+            balance = await asyncio.wait_for(
+                self.client.balance(),
+                timeout=5.0
+            )
+            
+            if float(balance) < 0:
+                self.state.is_connected = False
+                return False
+            
+            self.state.balance = float(balance)
+            self.state.last_activity = datetime.now(timezone.utc)
+            return True
+            
+        except Exception as e:
+            logger.warning(f"Connection check failed: {e}")
+            self.state.is_connected = False
+            return False
+    
+    async def reconnect(self) -> Dict:
+        """Attempt to reconnect with existing SSID"""
+        try:
+            logger.info("🔄 Attempting reconnection...")
+            
+            # Disconnect first
+            await self.disconnect()
+            
+            # Wait a bit
+            await asyncio.sleep(2)
+            
+            # Reconnect
+            result = await self.connect()
+            
+            if result['success']:
+                logger.info("✅ Reconnection successful")
+            else:
+                logger.warning(f"❌ Reconnection failed: {result.get('error')}")
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Reconnection error: {e}")
+            return {"success": False, "error": str(e)}
+    
+    async def keep_alive_loop(self, interval: int = 60):
+        """
+        Keep-alive loop that periodically checks connection and reconnects if needed
+        
+        Args:
+            interval: Check interval in seconds (default 60)
+        """
+        logger.info(f"🔄 Starting keep-alive loop (interval: {interval}s)")
+        
+        while True:
+            try:
+                is_alive = await self.check_connection()
+                
+                if not is_alive:
+                    logger.warning("⚠️ Connection lost, attempting reconnect...")
+                    result = await self.reconnect()
+                    
+                    if not result['success']:
+                        logger.error("❌ Reconnection failed - SSID may be expired")
+                        # Notify through callback if set
+                        if hasattr(self, '_on_connection_lost') and self._on_connection_lost:
+                            await self._on_connection_lost()
+                
+                await asyncio.sleep(interval)
+                
+            except asyncio.CancelledError:
+                logger.info("Keep-alive loop cancelled")
+                break
+            except Exception as e:
+                logger.error(f"Keep-alive error: {e}")
+                await asyncio.sleep(interval)
+    
+    def on_connection_lost(self, callback):
+        """Set callback for connection lost event"""
+        self._on_connection_lost = callback
+    
     async def get_balance(self) -> Dict:
         """Get current account balance"""
         try:
