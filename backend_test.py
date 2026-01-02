@@ -17514,8 +17514,8 @@ async def run_socket_io_handshake_tests():
         await tester.cleanup()
 
 async def main():
-    """Main test runner - run Support/Resistance (S/R) Integration tests"""
-    return await run_sr_integration_tests()
+    """Main test runner - run 1-Minute High-Probability Trading Strategies tests"""
+    return await run_1m_high_probability_strategies_tests()
 
 async def run_sr_integration_tests():
     """Run Support/Resistance (S/R) Integration tests specifically"""
