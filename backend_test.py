@@ -17517,6 +17517,50 @@ async def main():
     """Main test runner - run 1-Minute High-Probability Trading Strategies tests"""
     return await run_1m_high_probability_strategies_tests()
 
+async def run_1m_high_probability_strategies_tests():
+    """Run 1-Minute High-Probability Trading Strategies tests specifically"""
+    print("🚀 Testing High-Probability 1-Minute Trading Strategies Implementation")
+    print("=" * 80)
+    
+    tester = BackendTester()
+    await tester.setup()
+    
+    # Define 1m high-probability strategy tests
+    tests = [
+        ("1m Strategy Info Endpoint", tester.test_1m_strategy_info_endpoint),
+        ("1m Best Signal Generation", tester.test_1m_best_signal_generation),
+        ("1m Individual Strategy Test", tester.test_1m_individual_strategy_signals),
+        ("1m Analyze All Strategies", tester.test_1m_analyze_all_strategies),
+        ("1m Consensus Signal", tester.test_1m_consensus_signal),
+    ]
+    
+    # Run all tests
+    for test_name, test_func in tests:
+        await tester.run_test(test_name, test_func)
+    
+    await tester.cleanup()
+    
+    # Print summary
+    print("\n" + "=" * 80)
+    print("🏁 1-Minute High-Probability Trading Strategies Testing Complete: {}/{} tests passed".format(
+        len(tests) - len(tester.failed_tests), len(tests)
+    ))
+    print("=" * 80)
+    
+    total_tests = len(tests)
+    passed_tests = total_tests - len(tester.failed_tests)
+    
+    if tester.failed_tests:
+        print(f"\n❌ Failed Tests:")
+        for test in tester.failed_tests:
+            print(f"   - {test}")
+        print(f"\n📊 Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+        return False
+    else:
+        print(f"\n🎉 All 1-Minute High-Probability Trading Strategies tests passed!")
+        print(f"\n📊 Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+        return True
+
 async def run_sr_integration_tests():
     """Run Support/Resistance (S/R) Integration tests specifically"""
     print("🚀 Testing Support/Resistance (S/R) Indicator Integration in 5-Second Trading Strategies")
