@@ -622,7 +622,7 @@ class MLTrainingService:
         self.models['ensemble'] = ensemble
         
         # Save models to database
-        if self.db:
+        if self.db is not None:
             for name, model_info in trained_models.items():
                 await self.db.ml_models.update_one(
                     {"model_type": name, "asset": asset, "timeframe": timeframe},
