@@ -954,36 +954,45 @@ const DashboardRestructured = ({
         </div>
       </div>
 
-      {/* Automated Trading Section */}
+      {/* Quick Links to New Pages */}
       <div className="mt-8">
-        <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
-          <span>🤖</span> Automated Trading & Advanced Features
-        </h2>
-        <AutomatedTradingPanel />
-      </div>
-
-      {/* AI/ML Trading System */}
-      <div className="mt-8">
-        <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
-          <span>🧠</span> AI/ML Trading System
-        </h2>
-        <AIMLTradingPanel />
-      </div>
-
-      {/* Money Management */}
-      <div className="mt-8">
-        <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
-          <span>💰</span> Money Management
-        </h2>
-        <MoneyManagementPanel />
-      </div>
-
-      {/* Adaptive Strategy Details */}
-      <div className="mt-8">
-        <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
-          <span>🎯</span> Adaptive Strategy Analysis
-        </h2>
-        <AdaptiveStrategyResults />
+        <Card className="bg-slate-800/50 border-purple-500/30 backdrop-blur-sm p-6">
+          <h3 className="text-xl font-bold text-white mb-4">Quick Access</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <button 
+              onClick={() => window.dispatchEvent(new CustomEvent('navigate', { detail: 'automated-trading' }))}
+              className="p-4 bg-gradient-to-br from-purple-600/20 to-blue-600/20 border border-purple-500/30 rounded-lg hover:border-purple-400/50 transition-all"
+            >
+              <span className="text-2xl">🤖</span>
+              <p className="text-white font-medium mt-2">Automated Trading</p>
+              <p className="text-slate-400 text-xs">Bot controls & money management</p>
+            </button>
+            <button 
+              onClick={() => window.dispatchEvent(new CustomEvent('navigate', { detail: 'signal-center' }))}
+              className="p-4 bg-gradient-to-br from-yellow-600/20 to-orange-600/20 border border-yellow-500/30 rounded-lg hover:border-yellow-400/50 transition-all"
+            >
+              <span className="text-2xl">⚡</span>
+              <p className="text-white font-medium mt-2">Signal Center</p>
+              <p className="text-slate-400 text-xs">Generate & view all signals</p>
+            </button>
+            <button 
+              onClick={() => window.dispatchEvent(new CustomEvent('navigate', { detail: 'ai-ml-models' }))}
+              className="p-4 bg-gradient-to-br from-green-600/20 to-teal-600/20 border border-green-500/30 rounded-lg hover:border-green-400/50 transition-all"
+            >
+              <span className="text-2xl">🧠</span>
+              <p className="text-white font-medium mt-2">AI/ML Models</p>
+              <p className="text-slate-400 text-xs">Model configuration & retraining</p>
+            </button>
+            <button 
+              onClick={() => window.dispatchEvent(new CustomEvent('navigate', { detail: 'strategy-builder' }))}
+              className="p-4 bg-gradient-to-br from-pink-600/20 to-rose-600/20 border border-pink-500/30 rounded-lg hover:border-pink-400/50 transition-all"
+            >
+              <span className="text-2xl">🔧</span>
+              <p className="text-white font-medium mt-2">Strategy Builder</p>
+              <p className="text-slate-400 text-xs">Create custom strategies</p>
+            </button>
+          </div>
+        </Card>
       </div>
     </div>
   );
