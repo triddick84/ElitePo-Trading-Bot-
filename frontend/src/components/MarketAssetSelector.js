@@ -7,7 +7,7 @@ import { Checkbox } from './ui/checkbox';
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
-const MarketAssetSelector = ({ onSelectionChange, hideExpirations = false, selectedAssets: externalSelectedAssets, maxSelection }) => {
+const MarketAssetSelector = ({ onSelectionChange, hideExpirations = false, selectedAssets: externalSelectedAssets, maxSelection, config, setConfig }) => {
   const [assets, setAssets] = useState({
     forex: [],
     crypto: [],
@@ -15,8 +15,13 @@ const MarketAssetSelector = ({ onSelectionChange, hideExpirations = false, selec
     commodities: [],
     indices: []
   });
-  const [selectedAssets, setSelectedAssets] = useState(externalSelectedAssets || []);
-  const [selectedExpirations, setSelectedExpirations] = useState([]);
+  // Use config.selected_assets if passed, otherwise use externalSelectedAssets or local state
+  const [selectedAssets, setSelectedAssets] = useState(
+    config?.selected_assets || externalSelectedAssets || []
+  );
+  const [selectedExpirations, setSelectedExpirations] = useState(
+    config?.selected_expirations || []
+  );
   const [showOTC, setShowOTC] = useState(true);
   const [showRegular, setShowRegular] = useState(true);
   const [expandedCategories, setExpandedCategories] = useState({
@@ -28,12 +33,17 @@ const MarketAssetSelector = ({ onSelectionChange, hideExpirations = false, selec
   });
   const [isLoading, setIsLoading] = useState(true);
   
-  // Sync external selectedAssets if provided
+  // Sync with external config/selectedAssets if provided
   useEffect(() => {
-    if (externalSelectedAssets !== undefined) {
+    if (config?.selected_assets !== undefined) {
+      setSelectedAssets(config.selected_assets);
+    } else if (externalSelectedAssets !== undefined) {
       setSelectedAssets(externalSelectedAssets);
     }
-  }, [externalSelectedAssets]);
+    if (config?.selected_expirations !== undefined) {
+      setSelectedExpirations(config.selected_expirations);
+    }
+  }, [config?.selected_assets, config?.selected_expirations, externalSelectedAssets]);
 
   const expirations = [
     { value: '5s', label: '5 Seconds', icon: '⚡' },
