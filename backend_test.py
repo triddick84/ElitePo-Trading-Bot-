@@ -1069,12 +1069,17 @@ class BackendTester:
                     data = await response.json()
                     print(f"   ✅ Custom strategies indicators endpoint accessible")
                     
-                    if not data.get('success'):
-                        print(f"   ❌ Request failed: {data.get('error')}")
-                        return False
-                    
-                    indicators = data.get('indicators', [])
-                    count = data.get('count', 0)
+                    # Check if response has success field or direct data
+                    if 'success' in data:
+                        if not data.get('success'):
+                            print(f"   ❌ Request failed: {data.get('error')}")
+                            return False
+                        indicators = data.get('indicators', [])
+                        count = data.get('count', len(indicators))
+                    else:
+                        # Direct response format
+                        indicators = data.get('indicators', {})
+                        count = len(indicators) if isinstance(indicators, dict) else 0
                     
                     print(f"   📊 Indicators Status:")
                     print(f"      Total Indicators: {count}")
@@ -1086,9 +1091,14 @@ class BackendTester:
                         print(f"   ⚠️ Expected 41 indicators, got {count}")
                     
                     # Check if indicators have proper structure
-                    if indicators and len(indicators) > 0:
-                        first_indicator = indicators[0]
-                        required_fields = ['name', 'parameters']
+                    if indicators and count > 0:
+                        if isinstance(indicators, dict):
+                            first_key = list(indicators.keys())[0]
+                            first_indicator = indicators[first_key]
+                        else:
+                            first_indicator = indicators[0]
+                        
+                        required_fields = ['name', 'parameters'] if isinstance(indicators, dict) else ['name', 'parameters']
                         missing_fields = [f for f in required_fields if f not in first_indicator]
                         
                         if not missing_fields:
@@ -1100,6 +1110,8 @@ class BackendTester:
                     return True
                 else:
                     print(f"   ❌ Custom strategies indicators endpoint failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
                     return False
         except Exception as e:
             print(f"   ❌ Custom strategies indicators test error: {e}")
