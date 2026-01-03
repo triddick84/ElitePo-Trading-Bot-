@@ -7,7 +7,7 @@ import asyncio
 import aiohttp
 import json
 
-BACKEND_URL = "https://trademixer.preview.emergentagent.com/api"
+BACKEND_URL = "https://signalbot-36.preview.emergentagent.com/api"
 
 async def debug_specific_asset():
     async with aiohttp.ClientSession() as session:

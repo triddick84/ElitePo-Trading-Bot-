@@ -10,7 +10,7 @@ import sys
 from datetime import datetime, timezone
 
 # Test configuration
-BACKEND_URL = "https://trademixer.preview.emergentagent.com/api"
+BACKEND_URL = "https://signalbot-36.preview.emergentagent.com/api"
 
 class BridgeTester:
     def __init__(self):
