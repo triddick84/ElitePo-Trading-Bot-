@@ -710,7 +710,7 @@ class MLTrainingService:
         self.models[f'gb_{asset}_{timeframe}'] = gb_model
         
         # Save to database
-        if self.db:
+        if self.db is not None:
             for name, model_info in trained_models.items():
                 await self.db.ml_models.update_one(
                     {"model_type": name, "asset": asset, "timeframe": timeframe},
