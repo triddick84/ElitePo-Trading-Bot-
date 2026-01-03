@@ -164,6 +164,8 @@ function App() {
   const navigation = [
     { id: "dashboard", label: "Dashboard", icon: "📊" },
     { id: "pocket-option", label: "Pocket Option", icon: "🎰" },
+    { id: "ssid-manager", label: "SSID Connection", icon: "🔗" },
+    { id: "strategy-builder", label: "Strategy Builder", icon: "🔧" },
     { id: "realtime", label: "Real-Time Market", icon: "📡" },
     { id: "statistics", label: "Signal Performance", icon: "📈" },
     { id: "signals", label: "Signals", icon: "🔔" },
