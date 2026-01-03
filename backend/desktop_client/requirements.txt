@@ -1,0 +1,26 @@
+# Pocket Option Desktop Trading Client Requirements
+
+# Browser automation
+playwright>=1.40.0
+playwright-stealth>=1.0.0
+
+# CAPTCHA solving
+2captcha-python>=1.2.0
+
+# HTTP client
+requests>=2.31.0
+aiohttp>=3.9.0
+
+# WebSocket
+websockets>=12.0
+
+# Async support
+asyncio-mqtt>=0.16.0
+
+# Utils
+python-dotenv>=1.0.0
+rich>=13.0.0
+click>=8.1.0
+
+# Optional: Telegram notifications
+python-telegram-bot>=20.0
