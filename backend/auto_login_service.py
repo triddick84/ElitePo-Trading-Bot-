@@ -107,6 +107,9 @@ class PlaywrightLoginHandler:
         try:
             from playwright.async_api import async_playwright
             
+            # Set browser path
+            os.environ['PLAYWRIGHT_BROWSERS_PATH'] = '/pw-browsers'
+            
             # Try to import stealth (different versions have different APIs)
             stealth_instance = None
             try:
@@ -118,13 +121,15 @@ class PlaywrightLoginHandler:
             logger.info("🔐 Starting Playwright login with 2Captcha...")
             
             async with async_playwright() as p:
-                # Launch browser
+                # Launch browser with explicit executable path
                 browser = await p.chromium.launch(
                     headless=True,
+                    executable_path='/pw-browsers/chromium-1200/chrome-linux/chrome',
                     args=[
                         '--no-sandbox',
                         '--disable-dev-shm-usage',
-                        '--disable-blink-features=AutomationControlled'
+                        '--disable-blink-features=AutomationControlled',
+                        '--disable-gpu'
                     ]
                 )
                 
