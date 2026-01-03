@@ -2,11 +2,12 @@
  * Comprehensive Backtesting Page
  * 
  * Features:
- * - Historical backtesting with real data (Yahoo Finance, CryptoCompare)
+ * - Historical backtesting with real data (Alpha Vantage for Forex/Stocks, CryptoCompare for Crypto)
+ * - Multi-provider fallback system: Finnhub → Alpha Vantage → Synthetic
  * - Multi-strategy, multi-asset, multi-timeframe testing
  * - Up to 90 days of historical data
  * - Performance analytics and comparison
- * - Live data testing mode (coming soon)
+ * - Data source tracking for transparency
  */
 
 import React, { useState, useEffect } from 'react';
