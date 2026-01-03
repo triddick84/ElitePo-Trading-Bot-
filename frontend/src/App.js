@@ -167,20 +167,17 @@ function App() {
 
   const navigation = [
     { id: "dashboard", label: "Dashboard", icon: "📊" },
-    { id: "pocket-option", label: "Pocket Option", icon: "🎰" },
-    { id: "ssid-manager", label: "SSID Connection", icon: "🔗" },
+    { id: "automated-trading", label: "Automated Trading", icon: "🤖" },
+    { id: "signal-center", label: "Signal Center", icon: "⚡" },
+    { id: "ai-ml-models", label: "AI/ML Models", icon: "🧠" },
     { id: "strategy-builder", label: "Strategy Builder", icon: "🔧" },
+    { id: "ssid-manager", label: "SSID Connection", icon: "🔗" },
+    { id: "pocket-option", label: "Pocket Option", icon: "🎰" },
     { id: "realtime", label: "Real-Time Market", icon: "📡" },
     { id: "statistics", label: "Signal Performance", icon: "📈" },
-    { id: "signals", label: "Signals", icon: "🔔" },
     { id: "strategies", label: "Strategy Selector", icon: "🎯" },
-    { id: "adaptive", label: "Adaptive Strategy", icon: "🧠" },
-    { id: "money", label: "Money Management", icon: "💰" },
-    { id: "market", label: "Market Data", icon: "📈" },
-    { id: "performance", label: "Performance", icon: "📉" },
-    { id: "controls", label: "Bot Controls", icon: "⚙️" },
     { id: "backtest", label: "Backtesting", icon: "🧪" },
-    { id: "integrations", label: "Integrations", icon: "🔗" },
+    { id: "integrations", label: "Integrations", icon: "🔌" },
     { id: "api", label: "API Config", icon: "🔑" }
   ];
 
