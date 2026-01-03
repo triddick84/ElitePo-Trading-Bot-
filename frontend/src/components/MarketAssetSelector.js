@@ -235,35 +235,37 @@ const MarketAssetSelector = ({ onSelectionChange, hideExpirations = false, selec
 
   return (
     <div className="space-y-6">
-      {/* Timeframe Selection */}
-      <Card className="p-6 glass-dark border-emerald-500/20">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-xl font-semibold text-white">⏱️ Trading Expirations</h3>
-            <p className="text-slate-400 text-sm mt-1">Select expirations for signal generation</p>
+      {/* Timeframe Selection - only show if not hidden */}
+      {!hideExpirations && (
+        <Card className="p-6 glass-dark border-emerald-500/20">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-xl font-semibold text-white">⏱️ Trading Expirations</h3>
+              <p className="text-slate-400 text-sm mt-1">Select expirations for signal generation</p>
+            </div>
+            <div className="text-emerald-400 font-medium">
+              {selectedExpirations.length} selected
+            </div>
           </div>
-          <div className="text-emerald-400 font-medium">
-            {selectedExpirations.length} selected
-          </div>
-        </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
-          {expirations.map(tf => (
-            <button
-              key={tf.value}
-              onClick={() => handleTimeframeToggle(tf.value)}
-              className={`flex flex-col items-center justify-center p-4 rounded-lg border-2 transition-all ${
-                selectedExpirations.includes(tf.value)
-                  ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400'
-                  : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:border-slate-600'
-              }`}
-            >
-              <span className="text-2xl mb-1">{tf.icon}</span>
-              <span className="text-xs font-medium">{tf.label}</span>
-            </button>
-          ))}
-        </div>
-      </Card>
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+            {expirations.map(tf => (
+              <button
+                key={tf.value}
+                onClick={() => handleTimeframeToggle(tf.value)}
+                className={`flex flex-col items-center justify-center p-4 rounded-lg border-2 transition-all ${
+                  selectedExpirations.includes(tf.value)
+                    ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400'
+                    : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:border-slate-600'
+                }`}
+              >
+                <span className="text-2xl mb-1">{tf.icon}</span>
+                <span className="text-xs font-medium">{tf.label}</span>
+              </button>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* Asset Selection */}
       <Card className="p-6 glass-dark border-slate-700/50">
