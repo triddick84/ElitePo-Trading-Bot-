@@ -603,35 +603,81 @@ class HistoricalDataFetcher:
                     })
                     df = df[['open', 'high', 'low', 'close', 'volume']].copy()
                     
-                    logger.info(f"Fetched {len(df)} candles for {base_symbol}")
+                    logger.info(f"✅ CryptoCompare: Fetched {len(df)} candles for {base_symbol}")
                     return df
                     
         except Exception as e:
             logger.error(f"Error fetching crypto data for {symbol}: {e}")
             return None
     
-    async def fetch_historical_data(self, symbol: str, asset_type: str, days: int = 30, interval: str = "1h") -> Optional[pd.DataFrame]:
-        """Fetch historical data based on asset type"""
+    async def fetch_historical_data(self, symbol: str, asset_type: str, days: int = 30, interval: str = "1h") -> Tuple[Optional[pd.DataFrame], str]:
+        """
+        Fetch historical data with multi-provider fallback system.
+        
+        Fallback order:
+        1. Finnhub (Primary - 60 calls/min)
+        2. Alpha Vantage (Secondary - 5 calls/min)
+        3. CryptoCompare (For crypto only)
+        4. Synthetic Data (Last resort)
+        
+        Returns: (DataFrame, data_source_name)
+        """
         cache_key = f"{symbol}_{asset_type}_{days}_{interval}"
         
         # Check cache
         if cache_key in self.cache:
-            cached_data, cached_time = self.cache[cache_key]
+            cached_data, cached_time, cached_source = self.cache[cache_key]
             if (datetime.now() - cached_time).seconds < self.cache_ttl:
-                return cached_data
+                logger.info(f"📦 Cache hit for {symbol}: {cached_source}")
+                return cached_data, cached_source
         
         df = None
+        data_source = "synthetic"
+        is_crypto = asset_type == AssetType.CRYPTO or symbol.upper() in CRYPTO_SYMBOLS or 'USDT' in symbol.upper()
+        is_stock = asset_type == AssetType.STOCK or symbol.upper() in STOCK_SYMBOLS
         
-        if asset_type == AssetType.CRYPTO or symbol.upper() in CRYPTO_SYMBOLS or 'USDT' in symbol.upper():
+        if is_crypto:
+            # Try CryptoCompare first for crypto
+            logger.info(f"🔄 Fetching crypto data for {symbol}...")
             df = await self.fetch_crypto_data(symbol, days, interval)
+            if df is not None and len(df) > 0:
+                data_source = "cryptocompare"
         else:
-            # Use Yahoo Finance for forex and stocks
-            df = await self.fetch_yahoo_data(symbol, days, interval)
+            # For forex and stocks, use multi-provider fallback
+            
+            # 1. Try Finnhub first (higher rate limit)
+            logger.info(f"🔄 Trying Finnhub for {symbol}...")
+            if is_stock:
+                df = await self.fetch_finnhub_stock_data(symbol, days, interval)
+            else:
+                df = await self.fetch_finnhub_forex_data(symbol, days, interval)
+            
+            if df is not None and len(df) > 0:
+                data_source = "finnhub"
+            else:
+                # 2. Try Alpha Vantage as fallback
+                logger.info(f"🔄 Finnhub failed, trying Alpha Vantage for {symbol}...")
+                if is_stock:
+                    df = await self.fetch_alphavantage_stock_data(symbol, days, interval)
+                else:
+                    df = await self.fetch_alphavantage_forex_data(symbol, days, interval)
+                
+                if df is not None and len(df) > 0:
+                    data_source = "alphavantage"
         
+        # 3. Last resort: Generate synthetic data
+        if df is None or len(df) == 0:
+            logger.warning(f"⚠️ All data providers failed for {symbol}, using synthetic data")
+            df = self._generate_synthetic_data(symbol, days, interval)
+            data_source = "synthetic"
+        
+        # Cache the result
         if df is not None:
-            self.cache[cache_key] = (df, datetime.now())
+            self.cache[cache_key] = (df, datetime.now(), data_source)
+            self.data_source_used[cache_key] = data_source
         
-        return df
+        logger.info(f"📊 Data source for {symbol}: {data_source.upper()} ({len(df) if df is not None else 0} candles)")
+        return df, data_source
 
 
 class StrategyEngine:
