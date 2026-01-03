@@ -165,8 +165,8 @@ class PlaywrightLoginHandler:
                 
                 # Navigate to login page
                 logger.info(f"📍 Navigating to {self.POCKET_OPTION_LOGIN_URL}")
-                await page.goto(self.POCKET_OPTION_LOGIN_URL, wait_until='networkidle', timeout=30000)
-                await asyncio.sleep(random.uniform(2, 3))
+                await page.goto(self.POCKET_OPTION_LOGIN_URL, wait_until='domcontentloaded', timeout=60000)
+                await asyncio.sleep(random.uniform(3, 5))
                 
                 # Fill email
                 logger.info("📝 Filling login form...")
