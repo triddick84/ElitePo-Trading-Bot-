@@ -18000,7 +18000,7 @@ async def run_custom_strategy_builder_and_ssid_health_tests():
     
     # Print summary
     print("\n" + "=" * 80)
-    print("🏁 SSID Health Monitor and Local Bot Testing Complete: {}/{} tests passed".format(
+    print("🏁 Custom Strategy Builder and SSID Health Monitor Testing Complete: {}/{} tests passed".format(
         len(tests) - len(tester.failed_tests), len(tests)
     ))
     print("=" * 80)
@@ -18015,7 +18015,7 @@ async def run_custom_strategy_builder_and_ssid_health_tests():
         print(f"\n📊 Success Rate: {(passed_tests/total_tests)*100:.1f}%")
         return False
     else:
-        print(f"\n🎉 All SSID Health Monitor and Local Bot tests passed!")
+        print(f"\n🎉 All Custom Strategy Builder and SSID Health Monitor tests passed!")
         print(f"\n📊 Success Rate: {(passed_tests/total_tests)*100:.1f}%")
         return True
 
