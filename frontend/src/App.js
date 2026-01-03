@@ -219,7 +219,7 @@ function App() {
       case "controls":
         return <BotControls onStatusUpdate={fetchBotStatus} />;
       case "backtest":
-        return <BacktestPanel />;
+        return <BacktestingPage />;
       case "integrations":
         return <IntegrationPage />;
       case "api":
