@@ -150,87 +150,341 @@ class BacktestResult:
 
 
 class HistoricalDataFetcher:
-    """Fetches historical market data from various sources"""
+    """Fetches historical market data from multiple providers with intelligent fallback"""
     
     def __init__(self):
         self.cache = {}
         self.cache_ttl = 3600  # 1 hour cache
+        self.data_source_used = {}  # Track which source was used for each request
     
-    async def fetch_yahoo_data(self, symbol: str, days: int = 30, interval: str = "1h") -> Optional[pd.DataFrame]:
-        """Fetch historical data from Yahoo Finance"""
+    async def fetch_finnhub_forex_data(self, symbol: str, days: int = 30, interval: str = "1h") -> Optional[pd.DataFrame]:
+        """Fetch historical forex data from Finnhub API (Primary provider)"""
+        if not FINNHUB_API_KEY:
+            logger.warning("Finnhub API key not configured")
+            return None
+            
         try:
-            import yfinance as yf
+            # Map symbol to Finnhub OANDA format
+            symbol_upper = symbol.upper().replace('_', '')
+            finnhub_symbol = FINNHUB_FOREX_SYMBOLS.get(symbol_upper) or FINNHUB_FOREX_SYMBOLS.get(symbol.upper())
             
-            # Map symbol to Yahoo format
-            yahoo_symbol = YAHOO_FOREX_SYMBOLS.get(symbol.upper(), symbol)
-            if not yahoo_symbol.endswith('=X') and symbol.upper() in YAHOO_FOREX_SYMBOLS:
-                yahoo_symbol = YAHOO_FOREX_SYMBOLS[symbol.upper()]
+            if not finnhub_symbol:
+                # Try to construct the symbol
+                if len(symbol_upper) == 6:
+                    base = symbol_upper[:3]
+                    quote = symbol_upper[3:]
+                    finnhub_symbol = f"OANDA:{base}_{quote}"
+                else:
+                    logger.warning(f"Cannot map symbol {symbol} to Finnhub format")
+                    return None
             
-            # Map interval and period
-            interval_map = {
-                "1m": "1m", "5m": "5m", "15m": "15m", "30m": "30m",
-                "1h": "60m", "4h": "60m", "1d": "1d"
+            # Map interval to Finnhub resolution
+            resolution_map = {
+                '1m': '1', '5m': '5', '15m': '15', '30m': '30',
+                '1h': '60', '4h': '60', '1d': 'D'
             }
-            yf_interval = interval_map.get(interval, "60m")
+            resolution = resolution_map.get(interval, '60')
             
-            period_map = {7: '7d', 14: '14d', 30: '1mo', 60: '2mo', 90: '3mo'}
-            period = '1mo'
-            for p in sorted(period_map.keys()):
-                if days <= p:
-                    period = period_map[p]
-                    break
+            # Calculate time range
+            end_time = int(datetime.now().timestamp())
+            start_time = int((datetime.now() - timedelta(days=days)).timestamp())
             
-            # Synchronous fetch function
-            def fetch_sync():
-                try:
-                    # Suppress yfinance logging
-                    import logging as log_mod
-                    yf_logger = log_mod.getLogger('yfinance')
-                    yf_logger.setLevel(log_mod.CRITICAL)
+            url = f"https://finnhub.io/api/v1/forex/candle"
+            params = {
+                'symbol': finnhub_symbol,
+                'resolution': resolution,
+                'from': start_time,
+                'to': end_time,
+                'token': FINNHUB_API_KEY
+            }
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, params=params, timeout=30) as response:
+                    if response.status != 200:
+                        logger.error(f"Finnhub API error: {response.status}")
+                        return None
                     
-                    # Try Ticker method first
-                    ticker = yf.Ticker(yahoo_symbol)
-                    df = ticker.history(period=period, interval=yf_interval, raise_errors=False)
-                    if df is not None and len(df) > 0:
-                        return df
+                    data = await response.json()
                     
-                    # Try download method
-                    df = yf.download(yahoo_symbol, period=period, interval=yf_interval, progress=False)
-                    if df is not None and len(df) > 0:
-                        return df
+                    # Check for valid response
+                    if data.get('s') != 'ok' or not data.get('c'):
+                        logger.warning(f"Finnhub returned no data for {finnhub_symbol}: {data.get('s', 'unknown')}")
+                        return None
                     
-                    return None
-                except Exception as fetch_err:
-                    return None
-            
-            # Run in thread pool
-            df = await asyncio.to_thread(fetch_sync)
-            
-            if df is None or len(df) == 0:
-                logger.warning(f"No data from Yahoo for {yahoo_symbol}, using synthetic data")
-                df = self._generate_synthetic_data(symbol, days, interval)
-            
-            if df is None or len(df) == 0:
-                logger.warning(f"No data returned for {yahoo_symbol}")
-                return None
-            
-            # Standardize column names
-            df = df.rename(columns={
-                'Open': 'open', 'High': 'high', 'Low': 'low', 
-                'Close': 'close', 'Volume': 'volume'
-            })
-            
-            # Select only needed columns
-            available_cols = [c for c in ['open', 'high', 'low', 'close', 'volume'] if c in df.columns]
-            df = df[available_cols].copy()
-            
-            logger.info(f"Fetched {len(df)} candles for {yahoo_symbol}")
-            return df
-            
+                    # Convert to DataFrame
+                    df = pd.DataFrame({
+                        'open': data['o'],
+                        'high': data['h'],
+                        'low': data['l'],
+                        'close': data['c'],
+                        'volume': data.get('v', [0] * len(data['c']))
+                    })
+                    
+                    # Set timestamp index
+                    df.index = pd.to_datetime(data['t'], unit='s')
+                    df = df.sort_index()
+                    
+                    logger.info(f"✅ Finnhub: Fetched {len(df)} candles for {finnhub_symbol}")
+                    return df
+                    
+        except asyncio.TimeoutError:
+            logger.error(f"Finnhub request timeout for {symbol}")
+            return None
         except Exception as e:
-            logger.error(f"Error fetching Yahoo data for {symbol}: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"Finnhub error for {symbol}: {e}")
+            return None
+    
+    async def fetch_finnhub_stock_data(self, symbol: str, days: int = 30, interval: str = "1h") -> Optional[pd.DataFrame]:
+        """Fetch historical stock data from Finnhub API"""
+        if not FINNHUB_API_KEY:
+            return None
+            
+        try:
+            # Map interval to resolution
+            resolution_map = {
+                '1m': '1', '5m': '5', '15m': '15', '30m': '30',
+                '1h': '60', '4h': '60', '1d': 'D'
+            }
+            resolution = resolution_map.get(interval, '60')
+            
+            end_time = int(datetime.now().timestamp())
+            start_time = int((datetime.now() - timedelta(days=days)).timestamp())
+            
+            url = "https://finnhub.io/api/v1/stock/candle"
+            params = {
+                'symbol': symbol.upper(),
+                'resolution': resolution,
+                'from': start_time,
+                'to': end_time,
+                'token': FINNHUB_API_KEY
+            }
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, params=params, timeout=30) as response:
+                    if response.status != 200:
+                        return None
+                    
+                    data = await response.json()
+                    
+                    if data.get('s') != 'ok' or not data.get('c'):
+                        return None
+                    
+                    df = pd.DataFrame({
+                        'open': data['o'],
+                        'high': data['h'],
+                        'low': data['l'],
+                        'close': data['c'],
+                        'volume': data.get('v', [0] * len(data['c']))
+                    })
+                    
+                    df.index = pd.to_datetime(data['t'], unit='s')
+                    df = df.sort_index()
+                    
+                    logger.info(f"✅ Finnhub: Fetched {len(df)} stock candles for {symbol}")
+                    return df
+                    
+        except Exception as e:
+            logger.error(f"Finnhub stock error for {symbol}: {e}")
+            return None
+    
+    async def fetch_alphavantage_forex_data(self, symbol: str, days: int = 30, interval: str = "1h") -> Optional[pd.DataFrame]:
+        """Fetch historical forex data from Alpha Vantage API (Secondary provider)"""
+        if not ALPHAVANTAGE_API_KEY:
+            logger.warning("Alpha Vantage API key not configured")
+            return None
+            
+        try:
+            # Map symbol to Alpha Vantage format
+            symbol_upper = symbol.upper().replace('_', '')
+            av_pair = ALPHAVANTAGE_FOREX_SYMBOLS.get(symbol_upper) or ALPHAVANTAGE_FOREX_SYMBOLS.get(symbol.upper())
+            
+            if not av_pair:
+                # Try to construct the pair
+                if len(symbol_upper) == 6:
+                    av_pair = (symbol_upper[:3], symbol_upper[3:])
+                else:
+                    logger.warning(f"Cannot map symbol {symbol} to Alpha Vantage format")
+                    return None
+            
+            from_symbol, to_symbol = av_pair
+            
+            # Map interval to Alpha Vantage function and interval parameter
+            if interval in ['1m', '5m', '15m', '30m', '1h']:
+                function = 'FX_INTRADAY'
+                av_interval_map = {
+                    '1m': '1min', '5m': '5min', '15m': '15min', '30m': '30min', '1h': '60min'
+                }
+                av_interval = av_interval_map.get(interval, '60min')
+            else:
+                function = 'FX_DAILY'
+                av_interval = None
+            
+            url = 'https://www.alphavantage.co/query'
+            params = {
+                'function': function,
+                'from_symbol': from_symbol,
+                'to_symbol': to_symbol,
+                'apikey': ALPHAVANTAGE_API_KEY,
+                'outputsize': 'full' if days > 30 else 'compact',
+                'datatype': 'json'
+            }
+            
+            if av_interval:
+                params['interval'] = av_interval
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, params=params, timeout=30) as response:
+                    if response.status != 200:
+                        logger.error(f"Alpha Vantage API error: {response.status}")
+                        return None
+                    
+                    data = await response.json()
+                    
+                    # Check for error messages
+                    if 'Error Message' in data:
+                        logger.error(f"Alpha Vantage error: {data['Error Message']}")
+                        return None
+                    
+                    if 'Note' in data:
+                        logger.warning(f"Alpha Vantage rate limit: {data['Note']}")
+                        return None
+                    
+                    # Find the time series key
+                    time_series_key = None
+                    for key in data:
+                        if 'Time Series' in key:
+                            time_series_key = key
+                            break
+                    
+                    if not time_series_key or not data.get(time_series_key):
+                        logger.warning(f"Alpha Vantage returned no data for {symbol}")
+                        return None
+                    
+                    # Convert to DataFrame
+                    time_series = data[time_series_key]
+                    df = pd.DataFrame.from_dict(time_series, orient='index')
+                    
+                    # Standardize column names
+                    column_map = {}
+                    for col in df.columns:
+                        if 'open' in col.lower():
+                            column_map[col] = 'open'
+                        elif 'high' in col.lower():
+                            column_map[col] = 'high'
+                        elif 'low' in col.lower():
+                            column_map[col] = 'low'
+                        elif 'close' in col.lower():
+                            column_map[col] = 'close'
+                    
+                    df = df.rename(columns=column_map)
+                    df.index = pd.to_datetime(df.index)
+                    df = df.sort_index()
+                    
+                    # Convert to float
+                    for col in ['open', 'high', 'low', 'close']:
+                        if col in df.columns:
+                            df[col] = df[col].astype(float)
+                    
+                    # Add volume column if missing
+                    if 'volume' not in df.columns:
+                        df['volume'] = 0.0
+                    
+                    # Filter by days
+                    cutoff_date = datetime.now() - timedelta(days=days)
+                    df = df[df.index >= cutoff_date]
+                    
+                    logger.info(f"✅ Alpha Vantage: Fetched {len(df)} candles for {from_symbol}/{to_symbol}")
+                    return df
+                    
+        except asyncio.TimeoutError:
+            logger.error(f"Alpha Vantage request timeout for {symbol}")
+            return None
+        except Exception as e:
+            logger.error(f"Alpha Vantage error for {symbol}: {e}")
+            return None
+    
+    async def fetch_alphavantage_stock_data(self, symbol: str, days: int = 30, interval: str = "1h") -> Optional[pd.DataFrame]:
+        """Fetch historical stock data from Alpha Vantage API"""
+        if not ALPHAVANTAGE_API_KEY:
+            return None
+            
+        try:
+            # Map interval to Alpha Vantage function
+            if interval in ['1m', '5m', '15m', '30m', '1h']:
+                function = 'TIME_SERIES_INTRADAY'
+                av_interval_map = {
+                    '1m': '1min', '5m': '5min', '15m': '15min', '30m': '30min', '1h': '60min'
+                }
+                av_interval = av_interval_map.get(interval, '60min')
+            else:
+                function = 'TIME_SERIES_DAILY'
+                av_interval = None
+            
+            url = 'https://www.alphavantage.co/query'
+            params = {
+                'function': function,
+                'symbol': symbol.upper(),
+                'apikey': ALPHAVANTAGE_API_KEY,
+                'outputsize': 'full' if days > 30 else 'compact',
+                'datatype': 'json'
+            }
+            
+            if av_interval:
+                params['interval'] = av_interval
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, params=params, timeout=30) as response:
+                    if response.status != 200:
+                        return None
+                    
+                    data = await response.json()
+                    
+                    if 'Error Message' in data or 'Note' in data:
+                        return None
+                    
+                    # Find time series key
+                    time_series_key = None
+                    for key in data:
+                        if 'Time Series' in key:
+                            time_series_key = key
+                            break
+                    
+                    if not time_series_key:
+                        return None
+                    
+                    df = pd.DataFrame.from_dict(data[time_series_key], orient='index')
+                    
+                    # Standardize columns
+                    column_map = {}
+                    for col in df.columns:
+                        col_lower = col.lower()
+                        if 'open' in col_lower:
+                            column_map[col] = 'open'
+                        elif 'high' in col_lower:
+                            column_map[col] = 'high'
+                        elif 'low' in col_lower:
+                            column_map[col] = 'low'
+                        elif 'close' in col_lower:
+                            column_map[col] = 'close'
+                        elif 'volume' in col_lower:
+                            column_map[col] = 'volume'
+                    
+                    df = df.rename(columns=column_map)
+                    df.index = pd.to_datetime(df.index)
+                    df = df.sort_index()
+                    
+                    for col in ['open', 'high', 'low', 'close', 'volume']:
+                        if col in df.columns:
+                            df[col] = df[col].astype(float)
+                    
+                    cutoff_date = datetime.now() - timedelta(days=days)
+                    df = df[df.index >= cutoff_date]
+                    
+                    logger.info(f"✅ Alpha Vantage: Fetched {len(df)} stock candles for {symbol}")
+                    return df
+                    
+        except Exception as e:
+            logger.error(f"Alpha Vantage stock error for {symbol}: {e}")
             return None
     
     def _generate_synthetic_data(self, symbol: str, days: int, interval: str) -> pd.DataFrame:
