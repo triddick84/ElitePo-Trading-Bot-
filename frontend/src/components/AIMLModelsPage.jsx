@@ -547,6 +547,294 @@ const AIMLModelsPage = () => {
           </div>
         </TabsContent>
 
+        {/* ML Training Tab */}
+        <TabsContent value="ml-training" className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Train from Backtest Results */}
+            <Card className="glass-dark border-slate-700/50">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <Database className="w-5 h-5" />
+                  Train from Backtest Results
+                </CardTitle>
+                <CardDescription>Use backtest trade outcomes to train ML classifiers</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Alert className="bg-blue-500/10 border-blue-500/30">
+                  <Info className="w-4 h-4 text-blue-400" />
+                  <AlertDescription className="text-blue-300 text-sm">
+                    ML models learn from your backtest history to identify winning patterns. 
+                    More backtests = better training.
+                  </AlertDescription>
+                </Alert>
+                
+                <div className="space-y-2">
+                  <p className="text-slate-400 text-sm">Models trained:</p>
+                  {ML_MODEL_TYPES.map(model => (
+                    <div key={model.id} className="flex items-center gap-3 p-2 bg-slate-800/30 rounded-lg">
+                      <span className="text-xl">{model.icon}</span>
+                      <div>
+                        <p className="text-white font-medium">{model.name}</p>
+                        <p className="text-xs text-slate-400">{model.description}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                <Button 
+                  onClick={handleTrainFromBacktests}
+                  disabled={isTrainingML}
+                  className="w-full bg-purple-500 hover:bg-purple-600"
+                >
+                  {isTrainingML ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                      Training...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4 mr-2" />
+                      Train from Backtests
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Train on Price Data */}
+            <Card className="glass-dark border-slate-700/50">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <LineChart className="w-5 h-5" />
+                  Train on Price Data
+                </CardTitle>
+                <CardDescription>Train ML models on historical price data for specific assets</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-slate-300 text-sm">Asset</Label>
+                    <Select value={mlTrainingAsset} onValueChange={setMlTrainingAsset}>
+                      <SelectTrigger className="bg-slate-800/50 border-slate-600 mt-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-800 border-slate-600">
+                        <SelectItem value="EURUSD">EURUSD</SelectItem>
+                        <SelectItem value="GBPUSD">GBPUSD</SelectItem>
+                        <SelectItem value="USDJPY">USDJPY</SelectItem>
+                        <SelectItem value="BTCUSDT">BTCUSDT</SelectItem>
+                        <SelectItem value="ETHUSDT">ETHUSDT</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-slate-300 text-sm">Timeframe</Label>
+                    <Select value={mlTrainingTimeframe} onValueChange={setMlTrainingTimeframe}>
+                      <SelectTrigger className="bg-slate-800/50 border-slate-600 mt-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-800 border-slate-600">
+                        <SelectItem value="1m">1 Minute</SelectItem>
+                        <SelectItem value="5m">5 Minutes</SelectItem>
+                        <SelectItem value="15m">15 Minutes</SelectItem>
+                        <SelectItem value="1h">1 Hour</SelectItem>
+                        <SelectItem value="4h">4 Hours</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                
+                <div>
+                  <Label className="text-slate-300 text-sm">Training Period: {mlTrainingDays} days</Label>
+                  <Slider
+                    value={[mlTrainingDays]}
+                    onValueChange={([v]) => setMlTrainingDays(v)}
+                    min={7}
+                    max={90}
+                    className="mt-2"
+                  />
+                </div>
+                
+                <Button 
+                  onClick={handleTrainOnPriceData}
+                  disabled={isTrainingML}
+                  className="w-full bg-green-500 hover:bg-green-600"
+                >
+                  {isTrainingML ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                      Training...
+                    </>
+                  ) : (
+                    <>
+                      <Brain className="w-4 h-4 mr-2" />
+                      Train on Price Data
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Trained ML Models */}
+          <Card className="glass-dark border-slate-700/50">
+            <CardHeader>
+              <CardTitle className="text-white flex items-center gap-2">
+                <Cpu className="w-5 h-5" />
+                Trained ML Models ({mlModels.length})
+              </CardTitle>
+              <CardDescription>Models ready for signal generation</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {mlModels.length === 0 ? (
+                <div className="text-center py-8 text-slate-400">
+                  <Brain className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  <p>No ML models trained yet</p>
+                  <p className="text-sm">Train models from backtests or price data above</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {mlModels.map((model, idx) => (
+                    <div key={idx} className="p-4 bg-slate-800/30 rounded-lg border border-slate-700">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-medium text-white">{model.name || model.model_type}</span>
+                        <Badge className={model.is_active ? 'bg-green-500/20 text-green-400' : 'bg-slate-500/20 text-slate-400'}>
+                          {model.is_active ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </div>
+                      <div className="space-y-1 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">Accuracy</span>
+                          <span className="text-green-400">{(model.metrics?.accuracy * 100 || 0).toFixed(1)}%</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">F1 Score</span>
+                          <span className="text-purple-400">{(model.metrics?.f1_score * 100 || 0).toFixed(1)}%</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">Training Samples</span>
+                          <span className="text-white">{model.metrics?.training_samples || 0}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Schedule Daily Retraining */}
+          <Card className="glass-dark border-purple-500/30">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-white font-medium flex items-center gap-2">
+                    <Clock className="w-5 h-5 text-purple-400" />
+                    Continuous Learning
+                  </h3>
+                  <p className="text-slate-400 text-sm mt-1">
+                    Schedule daily automatic model retraining at midnight UTC
+                  </p>
+                </div>
+                <Button onClick={handleScheduleDailyRetrain} className="bg-purple-500 hover:bg-purple-600">
+                  <RotateCcw className="w-4 h-4 mr-2" />
+                  Enable Daily Retrain
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Optimization Tab */}
+        <TabsContent value="optimization" className="space-y-6">
+          <Card className="glass-dark border-slate-700/50">
+            <CardHeader>
+              <CardTitle className="text-white flex items-center gap-2">
+                <Target className="w-5 h-5" />
+                Strategy Optimization
+              </CardTitle>
+              <CardDescription>ML-based analysis to find optimal strategy parameters</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Alert className="bg-purple-500/10 border-purple-500/30">
+                <Sparkles className="w-4 h-4 text-purple-400" />
+                <AlertDescription className="text-purple-300 text-sm">
+                  Optimization analyzes all your backtest results to identify the best performing 
+                  strategies and provides recommendations for live trading.
+                </AlertDescription>
+              </Alert>
+              
+              <Button onClick={handleRunOptimization} className="bg-purple-500 hover:bg-purple-600">
+                <Award className="w-4 h-4 mr-2" />
+                Run Strategy Optimization
+              </Button>
+              
+              {optimizationResults && (
+                <div className="space-y-4 mt-6">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="p-4 bg-slate-800/30 rounded-lg text-center">
+                      <p className="text-slate-400 text-sm">Results Analyzed</p>
+                      <p className="text-2xl font-bold text-white">{optimizationResults.total_results_analyzed}</p>
+                    </div>
+                    <div className="p-4 bg-slate-800/30 rounded-lg text-center">
+                      <p className="text-slate-400 text-sm">Strategies Compared</p>
+                      <p className="text-2xl font-bold text-white">{optimizationResults.strategies_analyzed}</p>
+                    </div>
+                    <div className="p-4 bg-slate-800/30 rounded-lg text-center">
+                      <p className="text-slate-400 text-sm">Best Strategy</p>
+                      <p className="text-lg font-bold text-purple-400">{optimizationResults.best_strategy?.strategy?.replace(/_/g, ' ')}</p>
+                    </div>
+                    <div className="p-4 bg-slate-800/30 rounded-lg text-center">
+                      <p className="text-slate-400 text-sm">Best Win Rate</p>
+                      <p className="text-2xl font-bold text-green-400">{optimizationResults.best_strategy?.avg_win_rate}%</p>
+                    </div>
+                  </div>
+                  
+                  {/* Recommendations */}
+                  <div>
+                    <h4 className="text-white font-medium mb-3">Strategy Rankings</h4>
+                    <div className="space-y-2">
+                      {optimizationResults.all_recommendations?.map((rec, idx) => (
+                        <div key={idx} className={`p-3 rounded-lg border ${
+                          rec.recommendation === 'HIGH' ? 'border-green-500/30 bg-green-500/10' :
+                          rec.recommendation === 'MEDIUM' ? 'border-yellow-500/30 bg-yellow-500/10' :
+                          'border-red-500/30 bg-red-500/10'
+                        }`}>
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-white font-medium">{rec.strategy?.replace(/_/g, ' ')}</p>
+                              <p className="text-xs text-slate-400">{rec.total_trades} trades analyzed</p>
+                            </div>
+                            <div className="text-right">
+                              <p className={`font-bold ${
+                                rec.avg_win_rate >= 55 ? 'text-green-400' : 
+                                rec.avg_win_rate >= 45 ? 'text-yellow-400' : 'text-red-400'
+                              }`}>{rec.avg_win_rate}% Win Rate</p>
+                              <p className={rec.avg_roi >= 0 ? 'text-green-400' : 'text-red-400'}>
+                                {rec.avg_roi >= 0 ? '+' : ''}{rec.avg_roi}% ROI
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  {/* Tips */}
+                  <div className="p-4 bg-slate-800/30 rounded-lg">
+                    <h4 className="text-white font-medium mb-2">💡 Optimization Tips</h4>
+                    <ul className="space-y-1 text-sm text-slate-400">
+                      {optimizationResults.optimization_tips?.map((tip, idx) => (
+                        <li key={idx}>• {tip}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         {/* Learning System Tab */}
         <TabsContent value="learning">
           <Card className="glass-dark border-slate-700/50">
