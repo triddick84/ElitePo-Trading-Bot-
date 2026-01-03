@@ -1136,15 +1136,19 @@ class BacktestingService:
     async def run_backtest(self, config: BacktestConfig) -> List[BacktestResult]:
         """Run a comprehensive backtest"""
         results = []
+        data_sources_used = {}  # Track data sources for reporting
         
         for asset in config.assets:
             asset_type = self._determine_asset_type(asset)
             
             for timeframe in config.timeframes:
-                # Fetch historical data
-                df = await self.data_fetcher.fetch_historical_data(
+                # Fetch historical data with multi-provider fallback
+                df, data_source = await self.data_fetcher.fetch_historical_data(
                     asset, asset_type, config.days, timeframe
                 )
+                
+                # Track data source
+                data_sources_used[f"{asset}_{timeframe}"] = data_source
                 
                 if df is None or len(df) < 50:
                     logger.warning(f"Insufficient data for {asset} {timeframe}")
