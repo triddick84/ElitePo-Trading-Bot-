@@ -760,7 +760,7 @@ class MLTrainingService:
     
     async def get_model_performance(self) -> List[Dict]:
         """Get performance metrics for all trained models"""
-        if self.db:
+        if self.db is not None:
             models = await self.db.ml_models.find({}, {"_id": 0}).to_list(100)
             return models
         
