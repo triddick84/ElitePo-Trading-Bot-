@@ -1133,19 +1133,36 @@ class BackendTester:
                     data = await response.json()
                     print(f"   ✅ Desktop client status endpoint accessible")
                     
-                    # Verify it returns a status object with fields like connected, balance, account_type
-                    required_fields = ['connected', 'balance', 'account_type']
-                    missing_fields = [f for f in required_fields if f not in data]
-                    
-                    if not missing_fields:
-                        print(f"   ✅ All required status fields present")
-                        print(f"   📊 Connected: {data.get('connected')}")
-                        print(f"   📊 Balance: {data.get('balance')}")
-                        print(f"   📊 Account Type: {data.get('account_type')}")
-                        return True
+                    # Check if response has nested status structure
+                    if 'status' in data:
+                        status_obj = data['status']
+                        # Verify it returns a status object with fields like connected, balance, account_type
+                        required_fields = ['connected', 'balance', 'account_type']
+                        missing_fields = [f for f in required_fields if f not in status_obj]
+                        
+                        if not missing_fields:
+                            print(f"   ✅ All required status fields present")
+                            print(f"   📊 Connected: {status_obj.get('connected')}")
+                            print(f"   📊 Balance: {status_obj.get('balance')}")
+                            print(f"   📊 Account Type: {status_obj.get('account_type')}")
+                            return True
+                        else:
+                            print(f"   ❌ Missing status fields: {missing_fields}")
+                            return False
                     else:
-                        print(f"   ❌ Missing status fields: {missing_fields}")
-                        return False
+                        # Check if fields are at root level
+                        required_fields = ['connected', 'balance', 'account_type']
+                        missing_fields = [f for f in required_fields if f not in data]
+                        
+                        if not missing_fields:
+                            print(f"   ✅ All required status fields present")
+                            print(f"   📊 Connected: {data.get('connected')}")
+                            print(f"   📊 Balance: {data.get('balance')}")
+                            print(f"   📊 Account Type: {data.get('account_type')}")
+                            return True
+                        else:
+                            print(f"   ❌ Missing status fields: {missing_fields}")
+                            return False
                 else:
                     print(f"   ❌ Desktop client status failed: {response.status}")
                     return False
