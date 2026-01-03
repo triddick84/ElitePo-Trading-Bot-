@@ -111,6 +111,15 @@ const MarketAssetSelector = ({ onSelectionChange, hideExpirations = false, selec
       
       await axios.put(`${API}/config`, updateData);
       
+      // Update parent config if setConfig is provided
+      if (setConfig) {
+        setConfig(prev => ({
+          ...prev,
+          selected_assets: assets,
+          ...(hideExpirations ? {} : { selected_expirations: expirations })
+        }));
+      }
+      
       if (onSelectionChange) {
         onSelectionChange({ assets, expirations });
       }
