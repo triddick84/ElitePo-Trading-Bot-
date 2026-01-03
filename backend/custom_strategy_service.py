@@ -655,15 +655,27 @@ class CustomStrategyService:
         if not original:
             return {"success": False, "error": "Original strategy not found"}
         
-        original["name"] = new_name
-        original["id"] = str(uuid.uuid4())
-        original["created_at"] = datetime.now(timezone.utc).isoformat()
-        original["updated_at"] = datetime.now(timezone.utc).isoformat()
-        original["win_rate"] = 0.0
-        original["total_signals"] = 0
+        # Create a clean copy without any MongoDB ObjectIds
+        duplicated = {
+            "id": str(uuid.uuid4()),
+            "name": new_name,
+            "description": original.get("description", ""),
+            "call_conditions": original.get("call_conditions", []),
+            "put_conditions": original.get("put_conditions", []),
+            "timeframes": original.get("timeframes", []),
+            "assets": original.get("assets", []),
+            "markets": original.get("markets", []),
+            "min_confidence": original.get("min_confidence", 75),
+            "user_id": original.get("user_id", "default_user"),
+            "is_active": True,
+            "win_rate": 0.0,
+            "total_signals": 0,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
         
-        await self.collection.insert_one(original)
-        return {"success": True, "strategy": original}
+        await self.collection.insert_one(duplicated.copy())
+        return {"success": True, "strategy": duplicated}
 
 
 # Global service instance
