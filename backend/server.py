@@ -3234,18 +3234,36 @@ async def get_pocket_option_status():
     Check Pocket Option API connection status
     """
     try:
-        client = await get_pocket_option_client(is_demo=True)
-        if not client:
+        # First try our new WebSocket handler
+        from pocket_option_ws import get_connection, test_connection
+        
+        connection = get_connection()
+        if connection and connection.state.connected:
+            return {
+                "success": True,
+                "connected": True,
+                "is_demo": connection.state.is_demo,
+                "balance": connection.state.balance,
+                "account_id": connection.state.user_id,
+                "authenticated": connection.state.authenticated,
+                "connection_url": connection.state.url,
+                "message": "Connected via custom WebSocket handler"
+            }
+        
+        # Fallback to checking env for credentials
+        ssid = os.getenv('POCKET_OPTION_SSID')
+        if not ssid:
             return {
                 "success": False,
                 "connected": False,
-                "message": "Pocket Option credentials not configured"
+                "message": "Pocket Option SSID not configured. Please update SSID."
             }
         
-        health = await client.health_check()
         return {
-            "success": True,
-            **health
+            "success": False,
+            "connected": False,
+            "message": "SSID configured but not connected. Try updating SSID.",
+            "has_ssid": True
         }
     except Exception as e:
         logger.error(f"Error checking Pocket Option status: {e}")
