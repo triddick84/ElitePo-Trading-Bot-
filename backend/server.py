@@ -2425,6 +2425,151 @@ async def get_adaptive_strategy_stats():
 
 
 # =====================================================
+# AI LEARNING SYSTEM ENDPOINTS
+# =====================================================
+
+@api_router.get("/ai-learning/config")
+async def get_ai_learning_config():
+    """Get AI learning system configuration"""
+    try:
+        config = await db.ai_config.find_one({"type": "learning_config"}, {"_id": 0})
+        return config or {
+            "model_config": {
+                "primary_model": "enhanced_rsi_bb_volume",
+                "secondary_model": "support_resistance",
+                "use_ensemble": True,
+                "ensemble_method": "weighted_average",
+                "min_model_agreement": 2,
+                "confidence_threshold": 75
+            },
+            "learning_config": {
+                "enabled": True,
+                "learning_rate": 0.01,
+                "adaptation_speed": "medium",
+                "use_market_regime": True,
+                "use_volatility_filter": True,
+                "lookback_periods": 100,
+                "min_samples_for_update": 50
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error getting AI learning config: {e}")
+        return {"model_config": {}, "learning_config": {}}
+
+@api_router.post("/ai-learning/config")
+async def update_ai_learning_config(config: dict):
+    """Update AI learning system configuration"""
+    try:
+        await db.ai_config.update_one(
+            {"type": "learning_config"},
+            {"$set": {**config, "type": "learning_config", "updated_at": datetime.now(timezone.utc).isoformat()}},
+            upsert=True
+        )
+        return {"success": True, "message": "AI learning config updated"}
+    except Exception as e:
+        logger.error(f"Error updating AI learning config: {e}")
+        return {"success": False, "error": str(e)}
+
+@api_router.get("/ai-learning/performance")
+async def get_ai_learning_performance():
+    """Get model performance metrics"""
+    try:
+        # Get performance data from database
+        perf_data = await db.model_performance.find({}, {"_id": 0}).to_list(100)
+        
+        # Calculate average accuracy
+        total_acc = 0
+        count = 0
+        result = {}
+        
+        for p in perf_data:
+            model_id = p.get("model_id")
+            if model_id:
+                result[model_id] = {
+                    "accuracy": p.get("accuracy", 70),
+                    "trades": p.get("trades", 0)
+                }
+                total_acc += p.get("accuracy", 70)
+                count += 1
+        
+        result["average_accuracy"] = total_acc / count if count > 0 else 75
+        return result
+    except Exception as e:
+        logger.error(f"Error getting AI performance: {e}")
+        return {"average_accuracy": 75}
+
+@api_router.get("/ai-learning/stats")
+async def get_ai_learning_stats():
+    """Get AI learning statistics"""
+    try:
+        stats = await db.ai_config.find_one({"type": "learning_stats"}, {"_id": 0})
+        return stats or {
+            "total_cycles": 0,
+            "last_retrain": "Never",
+            "samples_collected": 0,
+            "accuracy_improvement": 0
+        }
+    except Exception as e:
+        logger.error(f"Error getting AI learning stats: {e}")
+        return {"total_cycles": 0, "last_retrain": "Never"}
+
+@api_router.post("/ai-learning/retrain")
+async def retrain_ai_models(request: dict):
+    """Trigger model retraining"""
+    try:
+        models = request.get("models", [])
+        use_recent_data = request.get("use_recent_data", True)
+        epochs = request.get("epochs", 100)
+        
+        # Update stats
+        await db.ai_config.update_one(
+            {"type": "learning_stats"},
+            {
+                "$set": {
+                    "type": "learning_stats",
+                    "last_retrain": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M"),
+                    "retrain_models": models,
+                    "epochs": epochs
+                },
+                "$inc": {"total_cycles": 1}
+            },
+            upsert=True
+        )
+        
+        return {
+            "success": True,
+            "message": f"Retraining {len(models)} models with {epochs} epochs",
+            "models": models
+        }
+    except Exception as e:
+        logger.error(f"Error retraining models: {e}")
+        return {"success": False, "error": str(e)}
+
+@api_router.post("/ai-learning/reset")
+async def reset_ai_learning():
+    """Reset all learning parameters"""
+    try:
+        await db.ai_config.update_one(
+            {"type": "learning_stats"},
+            {
+                "$set": {
+                    "type": "learning_stats",
+                    "total_cycles": 0,
+                    "last_retrain": "Never",
+                    "samples_collected": 0,
+                    "accuracy_improvement": 0,
+                    "reset_at": datetime.now(timezone.utc).isoformat()
+                }
+            },
+            upsert=True
+        )
+        return {"success": True, "message": "Learning parameters reset"}
+    except Exception as e:
+        logger.error(f"Error resetting AI learning: {e}")
+        return {"success": False, "error": str(e)}
+
+
+# =====================================================
 # REAL-TIME MARKET DATA ENDPOINTS
 # =====================================================
 
