@@ -8513,6 +8513,112 @@ async def enhanced_disconnect():
 
 
 # =====================================================
+# AUTO LOGIN SERVICE ENDPOINTS
+# =====================================================
+
+from auto_login_service import get_auto_login_service, LoginResult, LoginMethod
+
+@api_router.post("/auto-login/attempt")
+async def attempt_auto_login(
+    email: str,
+    password: str,
+    use_stealth_first: bool = True,
+    captcha_api_key: Optional[str] = None
+):
+    """
+    Attempt automated login to Pocket Option
+    
+    Strategy:
+    1. Try stealth browser first (free, may be blocked by CAPTCHA)
+    2. If CAPTCHA detected and API key provided, use 2Captcha solver (~$0.003/solve)
+    3. Return manual instructions if all else fails
+    
+    Args:
+        email: Pocket Option account email
+        password: Account password
+        use_stealth_first: Try stealth browser before CAPTCHA solver
+        captcha_api_key: 2Captcha API key (optional, enables paid CAPTCHA solving)
+    """
+    try:
+        service = get_auto_login_service(captcha_api_key)
+        result = await service.auto_login(email, password, use_stealth_first)
+        
+        return {
+            "success": result.success,
+            "result": result.to_dict(),
+            "stats": service.get_login_stats(),
+            "message": "Login successful! SSID has been obtained." if result.success else result.error
+        }
+    except Exception as e:
+        logger.error(f"Auto login error: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "message": "Auto login failed. Please try manual SSID extraction."
+        }
+
+
+@api_router.get("/auto-login/stats")
+async def get_login_stats():
+    """Get auto login statistics and available methods"""
+    try:
+        service = get_auto_login_service()
+        return {
+            "success": True,
+            "stats": service.get_login_stats()
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@api_router.get("/auto-login/last-ssid")
+async def get_last_obtained_ssid():
+    """Get the last successfully obtained SSID"""
+    try:
+        service = get_auto_login_service()
+        ssid = service.get_last_ssid()
+        
+        if ssid:
+            return {
+                "success": True,
+                "has_ssid": True,
+                "ssid_preview": ssid[:50] + "..." if len(ssid) > 50 else ssid,
+                "message": "SSID available from last successful login"
+            }
+        else:
+            return {
+                "success": True,
+                "has_ssid": False,
+                "message": "No SSID available. Please attempt auto login first."
+            }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@api_router.post("/auto-login/set-captcha-key")
+async def set_captcha_api_key(api_key: str):
+    """
+    Set 2Captcha API key for CAPTCHA solving
+    
+    Get your API key from: https://2captcha.com/
+    Cost: ~$2.99 per 1000 CAPTCHAs (~$0.003 per solve)
+    """
+    try:
+        # Re-initialize service with new key
+        global _auto_login_service
+        from auto_login_service import AutoLoginService
+        _auto_login_service = AutoLoginService(api_key)
+        
+        return {
+            "success": True,
+            "message": "2Captcha API key configured successfully",
+            "captcha_solver_enabled": True
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+# =====================================================
 # CUSTOM STRATEGY BUILDER ENDPOINTS
 # =====================================================
 
