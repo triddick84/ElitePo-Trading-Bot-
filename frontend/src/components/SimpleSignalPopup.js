@@ -110,7 +110,11 @@ const SimpleSignalPopup = ({ signal, onClose }) => {
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">Expiry:</span>
-              <span className="text-white font-medium">{signal.expiration_minutes || 1}m</span>
+              <span className="text-white font-medium">
+                {(signal.expiration_minutes || 1) < 1
+                  ? `${Math.round((signal.expiration_minutes || 1) * 60)}s`
+                  : `${signal.expiration_minutes || 1}m`}
+              </span>
             </div>
             {signal.technical_analysis?.primary_strategy && (
               <div className="flex justify-between">
