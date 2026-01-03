@@ -637,10 +637,11 @@ async def run_comprehensive_backtest(request: dict):
     }
     """
     try:
-        from backtesting_service import get_backtesting_service, BacktestConfig
+        from backtesting_service import BacktestingService, BacktestConfig
         from dataclasses import asdict
         
-        service = await get_backtesting_service(db)
+        # Create service without db for now (results stored separately)
+        service = BacktestingService(db=None)
         
         config = BacktestConfig(
             strategies=request.get("strategies", ["hybrid"]),
@@ -652,10 +653,25 @@ async def run_comprehensive_backtest(request: dict):
             payout_rate=request.get("payout_rate", 0.85)
         )
         
+        logger.info(f"Starting comprehensive backtest: {len(config.strategies)} strategies, {len(config.assets)} assets, {len(config.timeframes)} timeframes")
+        
         results = await service.run_backtest(config)
         
         # Convert results to dicts
         results_data = [asdict(r) for r in results]
+        
+        # Save results to database
+        if results_data:
+            for result_dict in results_data:
+                try:
+                    result_dict['_id'] = result_dict['id']
+                    await db.backtest_results.update_one(
+                        {"_id": result_dict['id']},
+                        {"$set": result_dict},
+                        upsert=True
+                    )
+                except Exception as save_error:
+                    logger.warning(f"Error saving result: {save_error}")
         
         # Calculate summary statistics
         if results_data:
@@ -666,6 +682,8 @@ async def run_comprehensive_backtest(request: dict):
             avg_win_rate = 0
             best_result = None
             total_trades = 0
+        
+        logger.info(f"Backtest complete: {len(results_data)} results, avg win rate: {avg_win_rate:.1f}%")
         
         return {
             "success": True,
