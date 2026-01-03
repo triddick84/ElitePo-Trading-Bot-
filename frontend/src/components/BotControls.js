@@ -47,6 +47,7 @@ const BotControls = ({ onStatusUpdate }) => {
     fetchAutoSignalStatus();
     fetchCandleSyncStatus();
     fetchLatencySettings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty dependency array - run only once on mount
   
   // Separate effect for polling candle sync status
