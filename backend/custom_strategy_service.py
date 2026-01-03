@@ -581,17 +581,29 @@ class CustomStrategyService:
             return {"success": False, "error": str(e)}
     
     def _parse_condition_groups(self, groups_data: List[Dict]) -> List[ConditionGroup]:
-        """Parse condition groups from dict data"""
+        """Parse condition groups from dict data - supports both legacy and TradingView-style formats"""
         groups = []
         for group_data in groups_data:
             conditions = []
             for cond_data in group_data.get("conditions", []):
+                # Extract operator with proper handling
+                operator_val = cond_data.get("operator")
+                operator = None
+                if operator_val:
+                    try:
+                        operator = ComparisonOperator(operator_val)
+                    except ValueError:
+                        operator = None
+                
                 condition = IndicatorCondition(
                     id=cond_data.get("id", str(uuid.uuid4())),
                     indicator=cond_data.get("indicator"),
                     parameters=cond_data.get("parameters", {}),
+                    # TradingView-style condition type
+                    condition_type=cond_data.get("conditionType"),
+                    # Legacy fields
                     output=cond_data.get("output", "value"),
-                    operator=ComparisonOperator(cond_data.get("operator", ">")),
+                    operator=operator,
                     compare_to=cond_data.get("compare_to", "value"),
                     compare_value=cond_data.get("compare_value")
                 )
