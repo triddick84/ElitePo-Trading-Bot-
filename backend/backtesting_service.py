@@ -1232,6 +1232,7 @@ class BacktestingService:
                         roi=roi,
                         start_date=str(df.index[0]),
                         end_date=str(df.index[-1]),
+                        data_source=data_source,  # Track the data provider used
                         trades=[asdict(TradeResult(**t)) if isinstance(t, dict) else t for t in trades[:100]],  # Limit stored trades
                         equity_curve=equity_curve[-100:]  # Limit equity curve points
                     )
@@ -1250,7 +1251,7 @@ class BacktestingService:
     async def get_available_assets(self) -> Dict[str, List[str]]:
         """Get list of available assets for backtesting"""
         return {
-            "forex": list(YAHOO_FOREX_SYMBOLS.keys()),
+            "forex": list(FINNHUB_FOREX_SYMBOLS.keys()),
             "crypto": [f"{s}USDT" for s in CRYPTO_SYMBOLS],
             "stocks": STOCK_SYMBOLS
         }
