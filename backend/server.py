@@ -8510,18 +8510,6 @@ async def enhanced_disconnect():
         return {"success": False, "error": "No client to disconnect"}
     except Exception as e:
         return {"success": False, "error": str(e)}
-                {"step": 9, "action": "Find message starting with: 42[\"auth\",{...}]"},
-                {"step": 10, "action": "Copy the ENTIRE message"}
-            ],
-            "notes": [
-                "SSID expires every 1-24 hours",
-                "Never share your SSID",
-                "Get fresh SSID if connection fails",
-                "Make sure you're logged in before extracting"
-            ],
-            "example_format": '42["auth",{"session":"ABC123...","isDemo":1,"uid":12345}]'
-        }
-    }
 
 
 # Include the router in the main app
