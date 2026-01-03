@@ -94,10 +94,12 @@ const MarketAssetSelector = ({ onSelectionChange, hideExpirations = false, selec
 
   const updateConfiguration = async (assets, expirations) => {
     try {
-      await axios.put(`${API}/config`, {
-        selected_assets: assets,
-        selected_expirations: expirations
-      });
+      // If hideExpirations is true, only update assets - don't touch expirations
+      const updateData = hideExpirations
+        ? { selected_assets: assets }
+        : { selected_assets: assets, selected_expirations: expirations };
+      
+      await axios.put(`${API}/config`, updateData);
       
       if (onSelectionChange) {
         onSelectionChange({ assets, expirations });
