@@ -8512,6 +8512,300 @@ async def enhanced_disconnect():
         return {"success": False, "error": str(e)}
 
 
+# =====================================================
+# CUSTOM STRATEGY BUILDER ENDPOINTS
+# =====================================================
+
+from custom_strategy_service import get_custom_strategy_service, AVAILABLE_INDICATORS
+from custom_strategy_executor import get_strategy_executor
+
+# Initialize custom strategy service
+custom_strategy_service = None
+
+async def get_strategy_service():
+    """Get or initialize the custom strategy service"""
+    global custom_strategy_service
+    if custom_strategy_service is None:
+        custom_strategy_service = get_custom_strategy_service(db)
+    return custom_strategy_service
+
+
+@api_router.get("/custom-strategies/indicators")
+async def get_available_indicators():
+    """
+    Get all available indicators for strategy building
+    Returns indicator definitions with parameters and outputs
+    """
+    try:
+        service = await get_strategy_service()
+        return await service.get_available_indicators()
+    except Exception as e:
+        logger.error(f"Error getting indicators: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/custom-strategies")
+async def create_custom_strategy(strategy_data: Dict[str, Any]):
+    """
+    Create a new custom trading strategy
+    
+    Example body:
+    {
+        "name": "RSI Oversold Bounce",
+        "description": "Buy when RSI is oversold and crosses above 30",
+        "call_conditions": [
+            {
+                "conditions": [
+                    {
+                        "indicator": "RSI",
+                        "parameters": {"period": 14},
+                        "output": "value",
+                        "operator": "crosses_above",
+                        "compare_to": "value",
+                        "compare_value": 30
+                    }
+                ],
+                "logical_operator": "AND"
+            }
+        ],
+        "put_conditions": [
+            {
+                "conditions": [
+                    {
+                        "indicator": "RSI",
+                        "parameters": {"period": 14},
+                        "output": "value",
+                        "operator": "crosses_below",
+                        "compare_to": "value",
+                        "compare_value": 70
+                    }
+                ],
+                "logical_operator": "AND"
+            }
+        ],
+        "timeframes": ["1m", "5m"],
+        "assets": ["EURUSD", "BTCUSD"],
+        "markets": ["regular"],
+        "min_confidence": 75
+    }
+    """
+    try:
+        service = await get_strategy_service()
+        result = await service.create_strategy(strategy_data)
+        return result
+    except Exception as e:
+        logger.error(f"Error creating strategy: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/custom-strategies")
+async def get_all_custom_strategies(user_id: str = "default_user"):
+    """Get all custom strategies for a user"""
+    try:
+        service = await get_strategy_service()
+        strategies = await service.get_all_strategies(user_id)
+        return {
+            "success": True,
+            "count": len(strategies),
+            "strategies": strategies
+        }
+    except Exception as e:
+        logger.error(f"Error getting strategies: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/custom-strategies/{strategy_id}")
+async def get_custom_strategy(strategy_id: str):
+    """Get a specific custom strategy by ID"""
+    try:
+        service = await get_strategy_service()
+        strategy = await service.get_strategy(strategy_id)
+        if strategy:
+            return {"success": True, "strategy": strategy}
+        raise HTTPException(status_code=404, detail="Strategy not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting strategy: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.put("/custom-strategies/{strategy_id}")
+async def update_custom_strategy(strategy_id: str, update_data: Dict[str, Any]):
+    """Update an existing custom strategy"""
+    try:
+        service = await get_strategy_service()
+        result = await service.update_strategy(strategy_id, update_data)
+        return result
+    except Exception as e:
+        logger.error(f"Error updating strategy: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.delete("/custom-strategies/{strategy_id}")
+async def delete_custom_strategy(strategy_id: str):
+    """Delete a custom strategy"""
+    try:
+        service = await get_strategy_service()
+        result = await service.delete_strategy(strategy_id)
+        return result
+    except Exception as e:
+        logger.error(f"Error deleting strategy: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/custom-strategies/{strategy_id}/toggle")
+async def toggle_custom_strategy(strategy_id: str, is_active: bool = True):
+    """Toggle strategy active status"""
+    try:
+        service = await get_strategy_service()
+        result = await service.toggle_strategy(strategy_id, is_active)
+        return result
+    except Exception as e:
+        logger.error(f"Error toggling strategy: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/custom-strategies/{strategy_id}/duplicate")
+async def duplicate_custom_strategy(strategy_id: str, new_name: str = "Copy"):
+    """Duplicate an existing strategy"""
+    try:
+        service = await get_strategy_service()
+        result = await service.duplicate_strategy(strategy_id, new_name)
+        return result
+    except Exception as e:
+        logger.error(f"Error duplicating strategy: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/custom-strategies/{strategy_id}/test")
+async def test_custom_strategy(
+    strategy_id: str,
+    asset: str = "EURUSD",
+    timeframe: str = "1m"
+):
+    """
+    Test a custom strategy against current market data
+    Returns whether a signal would be generated
+    """
+    try:
+        service = await get_strategy_service()
+        strategy = await service.get_strategy(strategy_id)
+        
+        if not strategy:
+            raise HTTPException(status_code=404, detail="Strategy not found")
+        
+        # Get market data for testing
+        market_service = RealMarketDataService()
+        market_data = await market_service.get_market_data(asset, AssetType.FOREX)
+        
+        if not market_data:
+            return {
+                "success": False,
+                "error": "Could not get market data for testing"
+            }
+        
+        # Create OHLCV data structure (simplified for testing)
+        ohlcv_data = {
+            "open": [market_data.price * 0.999] * 50 + [market_data.price],
+            "high": [market_data.price * 1.001] * 50 + [market_data.price * 1.0005],
+            "low": [market_data.price * 0.998] * 50 + [market_data.price * 0.9995],
+            "close": [market_data.price * (1 + i * 0.0001) for i in range(-50, 1)],
+            "volume": [1000000] * 51
+        }
+        
+        # Execute strategy
+        executor = get_strategy_executor()
+        signal = executor.evaluate_strategy(strategy, ohlcv_data, asset, timeframe)
+        
+        if signal:
+            return {
+                "success": True,
+                "signal_generated": True,
+                "signal": signal.to_dict(),
+                "message": f"Strategy would generate a {signal.direction.value} signal"
+            }
+        else:
+            return {
+                "success": True,
+                "signal_generated": False,
+                "message": "No signal would be generated with current market conditions"
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error testing strategy: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =====================================================
+# SSID HEALTH MONITOR ENDPOINTS
+# =====================================================
+
+from ssid_health_monitor import get_health_monitor, start_health_monitor
+
+@api_router.get("/ssid/health/status")
+async def get_ssid_health_status():
+    """Get SSID health monitor status"""
+    try:
+        monitor = get_health_monitor(db)
+        status = monitor.get_status()
+        return {
+            "success": True,
+            "status": status
+        }
+    except Exception as e:
+        logger.error(f"Error getting health status: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.post("/ssid/health/start")
+async def start_ssid_health_monitor():
+    """Start the SSID health monitor"""
+    try:
+        monitor = await start_health_monitor(db)
+        return {
+            "success": True,
+            "message": "Health monitor started",
+            "status": monitor.get_status()
+        }
+    except Exception as e:
+        logger.error(f"Error starting health monitor: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.post("/ssid/health/stop")
+async def stop_ssid_health_monitor():
+    """Stop the SSID health monitor"""
+    try:
+        monitor = get_health_monitor(db)
+        await monitor.stop()
+        return {
+            "success": True,
+            "message": "Health monitor stopped"
+        }
+    except Exception as e:
+        logger.error(f"Error stopping health monitor: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.get("/ssid/health/alerts")
+async def get_ssid_alerts(limit: int = 50):
+    """Get recent SSID alerts"""
+    try:
+        monitor = get_health_monitor(db)
+        alerts = monitor.get_alerts(limit=limit)
+        return {
+            "success": True,
+            "count": len(alerts),
+            "alerts": alerts
+        }
+    except Exception as e:
+        logger.error(f"Error getting alerts: {e}")
+        return {"success": False, "error": str(e)}
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
