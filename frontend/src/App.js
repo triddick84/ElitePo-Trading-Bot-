@@ -193,6 +193,12 @@ function App() {
             setNotificationSettings={setGlobalNotificationSettings}
           />
         );
+      case "automated-trading":
+        return <AutomatedTradingPage />;
+      case "signal-center":
+        return <SignalCenterPage />;
+      case "ai-ml-models":
+        return <AIMLModelsPage />;
       case "pocket-option":
         return <PocketOptionSettings />;
       case "ssid-manager":
@@ -203,12 +209,8 @@ function App() {
         return <RealtimeMarketDashboard />;
       case "statistics":
         return <SignalStatistics />;
-      case "signals":
-        return <SignalsPanel />;
       case "strategies":
         return <StrategySelectorEnhanced />;
-      case "adaptive":
-        return <AdaptiveStrategyConfig />;
       case "market":
         return <MarketData />;
       case "performance":
@@ -217,8 +219,6 @@ function App() {
         return <BotControls onStatusUpdate={fetchBotStatus} />;
       case "backtest":
         return <BacktestPanel />;
-      case "money":
-        return <MoneyManagement />;
       case "integrations":
         return <IntegrationPage />;
       case "api":
