@@ -32,22 +32,40 @@ logger = logging.getLogger(__name__)
 FINNHUB_API_KEY = os.environ.get('FINNHUB_API_KEY', '')
 ALPHAVANTAGE_API_KEY = os.environ.get('ALPHAVANTAGE_API_KEY', '')
 
-# Yahoo Finance symbol mappings for forex
-YAHOO_FOREX_SYMBOLS = {
-    'EURUSD': 'EURUSD=X',
-    'GBPUSD': 'GBPUSD=X',
-    'USDJPY': 'USDJPY=X',
-    'USDCHF': 'USDCHF=X',
-    'AUDUSD': 'AUDUSD=X',
-    'USDCAD': 'USDCAD=X',
-    'NZDUSD': 'NZDUSD=X',
-    'EURGBP': 'EURGBP=X',
-    'EURJPY': 'EURJPY=X',
-    'GBPJPY': 'GBPJPY=X',
-    'EUR_USD': 'EURUSD=X',
-    'GBP_USD': 'GBPUSD=X',
-    'USD_JPY': 'USDJPY=X',
-    'AUD_USD': 'AUDUSD=X',
+# Finnhub forex symbol mappings (OANDA format)
+FINNHUB_FOREX_SYMBOLS = {
+    'EURUSD': 'OANDA:EUR_USD',
+    'GBPUSD': 'OANDA:GBP_USD',
+    'USDJPY': 'OANDA:USD_JPY',
+    'USDCHF': 'OANDA:USD_CHF',
+    'AUDUSD': 'OANDA:AUD_USD',
+    'USDCAD': 'OANDA:USD_CAD',
+    'NZDUSD': 'OANDA:NZD_USD',
+    'EURGBP': 'OANDA:EUR_GBP',
+    'EURJPY': 'OANDA:EUR_JPY',
+    'GBPJPY': 'OANDA:GBP_JPY',
+    'EUR_USD': 'OANDA:EUR_USD',
+    'GBP_USD': 'OANDA:GBP_USD',
+    'USD_JPY': 'OANDA:USD_JPY',
+    'AUD_USD': 'OANDA:AUD_USD',
+}
+
+# Alpha Vantage forex symbol mappings (FROM_SYMBOL, TO_SYMBOL)
+ALPHAVANTAGE_FOREX_SYMBOLS = {
+    'EURUSD': ('EUR', 'USD'),
+    'GBPUSD': ('GBP', 'USD'),
+    'USDJPY': ('USD', 'JPY'),
+    'USDCHF': ('USD', 'CHF'),
+    'AUDUSD': ('AUD', 'USD'),
+    'USDCAD': ('USD', 'CAD'),
+    'NZDUSD': ('NZD', 'USD'),
+    'EURGBP': ('EUR', 'GBP'),
+    'EURJPY': ('EUR', 'JPY'),
+    'GBPJPY': ('GBP', 'JPY'),
+    'EUR_USD': ('EUR', 'USD'),
+    'GBP_USD': ('GBP', 'USD'),
+    'USD_JPY': ('USD', 'JPY'),
+    'AUD_USD': ('AUD', 'USD'),
 }
 
 # CryptoCompare symbols
