@@ -864,21 +864,102 @@ const StrategyBuilder = () => {
 
               {/* Assets */}
               <div>
-                <Label className="mb-2 block">Assets</Label>
-                <div className="flex flex-wrap gap-2">
-                  {assets.slice(0, 12).map(asset => (
-                    <Button
-                      key={asset.value}
-                      variant={strategyForm.assets.includes(asset.value) ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => toggleAsset(asset.value)}
-                      className={strategyForm.assets.includes(asset.value) 
-                        ? 'bg-blue-500/20 text-blue-400 border-blue-500/50'
-                        : 'border-slate-600'}
-                    >
-                      {asset.label}
-                    </Button>
-                  ))}
+                <Label className="mb-2 block">Assets ({strategyForm.assets.length} selected)</Label>
+                
+                {/* Market Type Filter */}
+                <div className="flex gap-2 mb-3">
+                  <Badge 
+                    variant="outline" 
+                    className="cursor-pointer hover:bg-blue-500/20"
+                    onClick={() => {
+                      const regularAssets = assets.filter(a => a.market === 'regular').map(a => a.value);
+                      setStrategyForm(prev => ({ ...prev, assets: regularAssets }));
+                    }}
+                  >
+                    🔵 Select All Regular
+                  </Badge>
+                  <Badge 
+                    variant="outline" 
+                    className="cursor-pointer hover:bg-green-500/20"
+                    onClick={() => {
+                      const otcAssets = assets.filter(a => a.market === 'otc').map(a => a.value);
+                      setStrategyForm(prev => ({ ...prev, assets: otcAssets }));
+                    }}
+                  >
+                    🟢 Select All OTC
+                  </Badge>
+                  <Badge 
+                    variant="outline" 
+                    className="cursor-pointer hover:bg-slate-500/20"
+                    onClick={() => setStrategyForm(prev => ({ ...prev, assets: [] }))}
+                  >
+                    Clear All
+                  </Badge>
+                </div>
+
+                {/* Category Sections */}
+                <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+                  {/* Regular Markets */}
+                  <div className="p-3 bg-blue-500/5 rounded-lg border border-blue-500/20">
+                    <div className="text-sm font-medium text-blue-400 mb-2">🔵 Regular Markets</div>
+                    <div className="space-y-2">
+                      {['Forex Major', 'Forex Minor', 'Forex Exotic', 'Crypto', 'Crypto Alt', 'Crypto DeFi', 'Crypto Meme', 'Stocks Tech', 'Stocks Finance', 'Stocks Consumer', 'Stocks Industrial', 'Stocks Healthcare', 'Commodities', 'Indices'].map(cat => {
+                        const catAssets = assets.filter(a => a.category === cat && a.market === 'regular');
+                        if (catAssets.length === 0) return null;
+                        return (
+                          <div key={cat}>
+                            <div className="text-xs text-slate-500 mb-1">{cat}</div>
+                            <div className="flex flex-wrap gap-1">
+                              {catAssets.map(asset => (
+                                <Button
+                                  key={asset.value}
+                                  variant={strategyForm.assets.includes(asset.value) ? 'default' : 'outline'}
+                                  size="sm"
+                                  onClick={() => toggleAsset(asset.value)}
+                                  className={`text-xs h-7 ${strategyForm.assets.includes(asset.value) 
+                                    ? 'bg-blue-500/20 text-blue-400 border-blue-500/50'
+                                    : 'border-slate-600'}`}
+                                >
+                                  {asset.label}
+                                </Button>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* OTC Markets */}
+                  <div className="p-3 bg-green-500/5 rounded-lg border border-green-500/20">
+                    <div className="text-sm font-medium text-green-400 mb-2">🟢 OTC Markets (24/7 Trading)</div>
+                    <div className="space-y-2">
+                      {['OTC Forex', 'OTC Crypto', 'OTC Commodities', 'OTC Indices'].map(cat => {
+                        const catAssets = assets.filter(a => a.category === cat);
+                        if (catAssets.length === 0) return null;
+                        return (
+                          <div key={cat}>
+                            <div className="text-xs text-slate-500 mb-1">{cat.replace('OTC ', '')}</div>
+                            <div className="flex flex-wrap gap-1">
+                              {catAssets.map(asset => (
+                                <Button
+                                  key={asset.value}
+                                  variant={strategyForm.assets.includes(asset.value) ? 'default' : 'outline'}
+                                  size="sm"
+                                  onClick={() => toggleAsset(asset.value)}
+                                  className={`text-xs h-7 ${strategyForm.assets.includes(asset.value) 
+                                    ? 'bg-green-500/20 text-green-400 border-green-500/50'
+                                    : 'border-slate-600'}`}
+                                >
+                                  {asset.label}
+                                </Button>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
               </div>
 
