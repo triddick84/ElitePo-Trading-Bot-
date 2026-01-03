@@ -190,7 +190,7 @@ class HistoricalDataFetcher:
             end_time = int(datetime.now().timestamp())
             start_time = int((datetime.now() - timedelta(days=days)).timestamp())
             
-            url = f"https://finnhub.io/api/v1/forex/candle"
+            url = "https://finnhub.io/api/v1/forex/candle"
             params = {
                 'symbol': finnhub_symbol,
                 'resolution': resolution,
