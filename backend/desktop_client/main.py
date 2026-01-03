@@ -177,6 +177,12 @@ class PocketOptionClient:
         Login to Pocket Option using browser automation and get SSID
         """
         try:
+            # Check if Playwright browsers are installed
+            if not check_playwright_browsers():
+                console.print("[red]❌ Cannot proceed without browser. Please install Chromium first.[/red]")
+                console.print("[yellow]Run: python -m playwright install chromium[/yellow]")
+                return None
+            
             from playwright.async_api import async_playwright
             
             console.print("[yellow]🔐 Starting browser login...[/yellow]")
