@@ -1057,6 +1057,180 @@ class BackendTester:
             print(f"   Enhanced signal accuracy targeting test error: {e}")
             return False
 
+    # ========== CUSTOM STRATEGY BUILDER TESTING ==========
+    
+    async def test_custom_strategies_indicators(self) -> bool:
+        """Test 1: Custom Strategy Builder Indicators - GET /api/custom-strategies/indicators"""
+        try:
+            print("   🔍 Testing Custom Strategy Builder Indicators")
+            
+            async with self.session.get(f"{BACKEND_URL}/custom-strategies/indicators") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Custom strategies indicators endpoint accessible")
+                    
+                    if not data.get('success'):
+                        print(f"   ❌ Request failed: {data.get('error')}")
+                        return False
+                    
+                    indicators = data.get('indicators', [])
+                    count = data.get('count', 0)
+                    
+                    print(f"   📊 Indicators Status:")
+                    print(f"      Total Indicators: {count}")
+                    print(f"      Expected: 41 indicators")
+                    
+                    if count == 41:
+                        print(f"   ✅ Correct number of indicators returned")
+                    else:
+                        print(f"   ⚠️ Expected 41 indicators, got {count}")
+                    
+                    # Check if indicators have proper structure
+                    if indicators and len(indicators) > 0:
+                        first_indicator = indicators[0]
+                        required_fields = ['name', 'parameters']
+                        missing_fields = [f for f in required_fields if f not in first_indicator]
+                        
+                        if not missing_fields:
+                            print(f"   ✅ Indicators have proper structure")
+                        else:
+                            print(f"   ❌ Missing indicator fields: {missing_fields}")
+                            return False
+                    
+                    return True
+                else:
+                    print(f"   ❌ Custom strategies indicators endpoint failed: {response.status}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Custom strategies indicators test error: {e}")
+            return False
+    
+    async def test_custom_strategies_crud(self) -> bool:
+        """Test 2-8: Custom Strategy Builder CRUD Operations"""
+        try:
+            print("   🔍 Testing Custom Strategy Builder CRUD Operations")
+            
+            # Test strategy creation
+            strategy_data = {
+                "name": "MACD Crossover Strategy",
+                "description": "Buy when MACD crosses above signal, sell when crosses below",
+                "call_conditions": [{
+                    "id": "group1",
+                    "conditions": [{
+                        "id": "cond1",
+                        "indicator": "MACD",
+                        "parameters": {"fast_period": 12, "slow_period": 26, "signal_period": 9},
+                        "output": "macd_line",
+                        "operator": "crosses_above",
+                        "compare_to": "indicator",
+                        "compare_value": {"indicator": "MACD", "parameters": {"fast_period": 12, "slow_period": 26, "signal_period": 9}, "output": "signal_line"}
+                    }],
+                    "logical_operator": "AND"
+                }],
+                "put_conditions": [{
+                    "id": "group2",
+                    "conditions": [{
+                        "id": "cond2",
+                        "indicator": "MACD",
+                        "parameters": {"fast_period": 12, "slow_period": 26, "signal_period": 9},
+                        "output": "macd_line",
+                        "operator": "crosses_below",
+                        "compare_to": "indicator",
+                        "compare_value": {"indicator": "MACD", "parameters": {"fast_period": 12, "slow_period": 26, "signal_period": 9}, "output": "signal_line"}
+                    }],
+                    "logical_operator": "AND"
+                }],
+                "timeframes": ["1m"],
+                "assets": ["EURUSD"],
+                "markets": ["regular"],
+                "min_confidence": 75
+            }
+            
+            # Create strategy
+            async with self.session.post(f"{BACKEND_URL}/custom-strategies", json=strategy_data) as response:
+                if response.status == 200:
+                    create_data = await response.json()
+                    print(f"   ✅ Strategy creation successful")
+                    
+                    if not create_data.get('success'):
+                        print(f"   ❌ Strategy creation failed: {create_data.get('error')}")
+                        return False
+                    
+                    strategy = create_data.get('strategy', {})
+                    strategy_id = strategy.get('id')
+                    
+                    if not strategy_id:
+                        print(f"   ❌ No strategy ID returned")
+                        return False
+                    
+                    print(f"   📊 Created Strategy ID: {strategy_id}")
+                    
+                    # Test list strategies
+                    async with self.session.get(f"{BACKEND_URL}/custom-strategies") as list_response:
+                        if list_response.status == 200:
+                            list_data = await list_response.json()
+                            strategies = list_data.get('strategies', [])
+                            print(f"   ✅ Strategy list retrieved: {len(strategies)} strategies")
+                        else:
+                            print(f"   ❌ Strategy list failed: {list_response.status}")
+                            return False
+                    
+                    # Test get specific strategy
+                    async with self.session.get(f"{BACKEND_URL}/custom-strategies/{strategy_id}") as get_response:
+                        if get_response.status == 200:
+                            get_data = await get_response.json()
+                            retrieved_strategy = get_data.get('strategy', {})
+                            print(f"   ✅ Strategy retrieved: {retrieved_strategy.get('name')}")
+                        else:
+                            print(f"   ❌ Strategy get failed: {get_response.status}")
+                            return False
+                    
+                    # Test update strategy
+                    update_data = {"name": "MACD Crossover v2"}
+                    async with self.session.put(f"{BACKEND_URL}/custom-strategies/{strategy_id}", json=update_data) as update_response:
+                        if update_response.status == 200:
+                            update_result = await update_response.json()
+                            print(f"   ✅ Strategy updated successfully")
+                        else:
+                            print(f"   ❌ Strategy update failed: {update_response.status}")
+                            return False
+                    
+                    # Test strategy testing
+                    async with self.session.post(f"{BACKEND_URL}/custom-strategies/{strategy_id}/test?asset=EURUSD&timeframe=1m") as test_response:
+                        if test_response.status == 200:
+                            test_result = await test_response.json()
+                            print(f"   ✅ Strategy test completed")
+                        else:
+                            print(f"   ❌ Strategy test failed: {test_response.status}")
+                            return False
+                    
+                    # Test strategy duplication
+                    async with self.session.post(f"{BACKEND_URL}/custom-strategies/{strategy_id}/duplicate?new_name=MACD Copy") as dup_response:
+                        if dup_response.status == 200:
+                            dup_result = await dup_response.json()
+                            duplicate_id = dup_result.get('strategy', {}).get('id')
+                            print(f"   ✅ Strategy duplicated: {duplicate_id}")
+                            
+                            # Test delete the duplicate
+                            if duplicate_id:
+                                async with self.session.delete(f"{BACKEND_URL}/custom-strategies/{duplicate_id}") as del_response:
+                                    if del_response.status == 200:
+                                        print(f"   ✅ Duplicate strategy deleted")
+                                    else:
+                                        print(f"   ❌ Strategy deletion failed: {del_response.status}")
+                                        return False
+                        else:
+                            print(f"   ❌ Strategy duplication failed: {dup_response.status}")
+                            return False
+                    
+                    return True
+                else:
+                    print(f"   ❌ Strategy creation failed: {response.status}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Custom strategies CRUD test error: {e}")
+            return False
+
     # ========== SSID HEALTH MONITOR AND LOCAL BOT TESTING ==========
     
     async def test_ssid_health_status(self) -> bool:
