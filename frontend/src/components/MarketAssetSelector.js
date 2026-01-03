@@ -57,8 +57,11 @@ const MarketAssetSelector = ({ onSelectionChange, hideExpirations = false, selec
 
   useEffect(() => {
     fetchAssets();
-    fetchConfiguration();
-  }, []);
+    // Only fetch configuration from server if config prop isn't provided
+    if (!config) {
+      fetchConfiguration();
+    }
+  }, [config]);
 
   const fetchAssets = async () => {
     try {
@@ -76,8 +79,11 @@ const MarketAssetSelector = ({ onSelectionChange, hideExpirations = false, selec
   const fetchConfiguration = async () => {
     try {
       const response = await axios.get(`${API}/config`);
-      setSelectedAssets(response.data.selected_assets || []);
-      setSelectedExpirations(response.data.selected_expirations || []);
+      // Only update local state if config prop isn't controlling it
+      if (!config) {
+        setSelectedAssets(response.data.selected_assets || []);
+        setSelectedExpirations(response.data.selected_expirations || []);
+      }
     } catch (error) {
       console.error('Error fetching config:', error);
     }
