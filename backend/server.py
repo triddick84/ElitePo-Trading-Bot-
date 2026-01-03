@@ -8544,12 +8544,12 @@ async def attempt_auto_login(
     Args:
         email: Pocket Option account email
         password: Account password
-        use_stealth_first: Try stealth browser before CAPTCHA solver
-        captcha_api_key: 2Captcha API key (optional, enables paid CAPTCHA solving)
+        use_stealth_first: Try stealth browser before CAPTCHA solver (currently ignored, always uses combined approach)
+        captcha_api_key: 2Captcha API key (optional, uses env var if not provided)
     """
     try:
         service = get_auto_login_service(captcha_api_key)
-        result = await service.auto_login(email, password, use_stealth_first)
+        result = await service.auto_login(email, password)
         
         return {
             "success": result.success,
