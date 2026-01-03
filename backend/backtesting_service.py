@@ -3,7 +3,8 @@ Comprehensive Backtesting Service
 =================================
 
 Features:
-- Historical data fetching from Yahoo Finance (forex/stocks) and CryptoCompare (crypto)
+- Historical data fetching from multiple providers (Finnhub, Alpha Vantage, CryptoCompare)
+- Intelligent fallback system: Finnhub -> Alpha Vantage -> Synthetic Data
 - Strategy backtesting across multiple timeframes and assets
 - Live data testing mode
 - Performance analytics and comparison
@@ -22,9 +23,14 @@ from dataclasses import dataclass, field, asdict
 from enum import Enum
 import aiohttp
 import json
+import os
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)
+
+# API Keys from environment
+FINNHUB_API_KEY = os.environ.get('FINNHUB_API_KEY', '')
+ALPHAVANTAGE_API_KEY = os.environ.get('ALPHAVANTAGE_API_KEY', '')
 
 # Yahoo Finance symbol mappings for forex
 YAHOO_FOREX_SYMBOLS = {
