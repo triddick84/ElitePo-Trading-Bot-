@@ -2750,6 +2750,286 @@ async def reset_ai_learning():
 
 
 # =====================================================
+# ML MODEL TRAINING ENDPOINTS
+# =====================================================
+
+@api_router.post("/ml-training/train-from-backtests")
+async def train_ml_from_backtests(request: dict = {}):
+    """
+    Train ML models using recent backtest results.
+    This implements the continuous learning loop.
+    """
+    try:
+        from ml_training_service import get_ml_training_service
+        from dataclasses import asdict
+        
+        service = await get_ml_training_service(db)
+        
+        # Get recent backtest results
+        limit = request.get("limit", 100)
+        results = await db.backtest_results.find({}, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+        
+        if len(results) < 10:
+            return {
+                "success": False,
+                "error": "Insufficient backtest results. Run more backtests first.",
+                "results_count": len(results)
+            }
+        
+        # Train models
+        asset = request.get("asset", "all")
+        timeframe = request.get("timeframe", "1h")
+        
+        trained_models = await service.train_from_backtest_results(results, asset, timeframe)
+        
+        # Convert to serializable format
+        models_data = {k: asdict(v) for k, v in trained_models.items()}
+        
+        return {
+            "success": True,
+            "message": f"Trained {len(trained_models)} ML models from {len(results)} backtest results",
+            "models": models_data
+        }
+        
+    except Exception as e:
+        logger.error(f"Error training ML models: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "error": str(e)}
+
+
+@api_router.post("/ml-training/train-on-price-data")
+async def train_ml_on_price_data(request: dict):
+    """
+    Train ML models on historical price data for a specific asset/timeframe.
+    """
+    try:
+        from ml_training_service import get_ml_training_service
+        from backtesting_service import BacktestingService
+        from dataclasses import asdict
+        
+        asset = request.get("asset", "EURUSD")
+        timeframe = request.get("timeframe", "1h")
+        days = min(request.get("days", 30), 90)
+        
+        # Fetch price data
+        backtest_service = BacktestingService()
+        price_df = await backtest_service.data_fetcher.fetch_historical_data(
+            asset, 
+            backtest_service._determine_asset_type(asset),
+            days,
+            timeframe
+        )
+        
+        if price_df is None or len(price_df) < 100:
+            return {
+                "success": False,
+                "error": f"Insufficient price data for {asset}. Got {len(price_df) if price_df is not None else 0} candles."
+            }
+        
+        # Train models
+        ml_service = await get_ml_training_service(db)
+        trained_models = await ml_service.train_on_price_data(price_df, asset, timeframe)
+        
+        models_data = {k: asdict(v) for k, v in trained_models.items()}
+        
+        return {
+            "success": True,
+            "message": f"Trained {len(trained_models)} ML models on {len(price_df)} candles",
+            "asset": asset,
+            "timeframe": timeframe,
+            "candles_used": len(price_df),
+            "models": models_data
+        }
+        
+    except Exception as e:
+        logger.error(f"Error training on price data: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "error": str(e)}
+
+
+@api_router.post("/ml-training/predict")
+async def ml_predict_signal(request: dict):
+    """
+    Use trained ML models to predict signal direction.
+    """
+    try:
+        from ml_training_service import get_ml_training_service
+        from backtesting_service import BacktestingService
+        
+        asset = request.get("asset", "EURUSD")
+        timeframe = request.get("timeframe", "1h")
+        
+        # Fetch recent price data
+        backtest_service = BacktestingService()
+        price_df = await backtest_service.data_fetcher.fetch_historical_data(
+            asset,
+            backtest_service._determine_asset_type(asset),
+            7,  # Last 7 days
+            timeframe
+        )
+        
+        if price_df is None or len(price_df) < 50:
+            return {
+                "success": False,
+                "error": "Insufficient price data for prediction"
+            }
+        
+        # Get prediction
+        ml_service = await get_ml_training_service(db)
+        prediction = await ml_service.predict_signal(price_df, asset, timeframe)
+        
+        if "error" in prediction:
+            return {"success": False, **prediction}
+        
+        return {
+            "success": True,
+            "prediction": prediction
+        }
+        
+    except Exception as e:
+        logger.error(f"Error making ML prediction: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.get("/ml-training/models")
+async def get_ml_models():
+    """Get all trained ML models and their performance metrics."""
+    try:
+        from ml_training_service import get_ml_training_service
+        
+        ml_service = await get_ml_training_service(db)
+        models = await ml_service.get_model_performance()
+        
+        return {
+            "success": True,
+            "models": models,
+            "count": len(models)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting ML models: {e}")
+        return {"success": False, "error": str(e), "models": []}
+
+
+@api_router.post("/ml-training/run-optimization")
+async def run_strategy_optimization(request: dict):
+    """
+    Run ML-based strategy optimization.
+    Analyzes backtest results to find optimal strategy parameters.
+    """
+    try:
+        # Get all backtest results
+        results = await db.backtest_results.find({}, {"_id": 0}).to_list(500)
+        
+        if len(results) < 5:
+            return {
+                "success": False,
+                "error": "Need at least 5 backtest results for optimization"
+            }
+        
+        # Analyze results by strategy
+        strategy_stats = {}
+        for result in results:
+            strategy = result.get('strategy', 'unknown')
+            if strategy not in strategy_stats:
+                strategy_stats[strategy] = {
+                    'total_trades': 0,
+                    'winning_trades': 0,
+                    'total_profit': 0,
+                    'win_rates': [],
+                    'rois': []
+                }
+            
+            stats = strategy_stats[strategy]
+            stats['total_trades'] += result.get('total_trades', 0)
+            stats['winning_trades'] += result.get('winning_trades', 0)
+            stats['total_profit'] += result.get('total_profit', 0)
+            stats['win_rates'].append(result.get('win_rate', 0))
+            stats['rois'].append(result.get('roi', 0))
+        
+        # Calculate optimization recommendations
+        recommendations = []
+        for strategy, stats in strategy_stats.items():
+            if stats['total_trades'] > 0:
+                avg_win_rate = sum(stats['win_rates']) / len(stats['win_rates'])
+                avg_roi = sum(stats['rois']) / len(stats['rois'])
+                
+                recommendations.append({
+                    'strategy': strategy,
+                    'total_trades': stats['total_trades'],
+                    'avg_win_rate': round(avg_win_rate, 2),
+                    'avg_roi': round(avg_roi, 2),
+                    'total_profit': round(stats['total_profit'], 2),
+                    'recommendation': 'HIGH' if avg_win_rate > 55 else 'MEDIUM' if avg_win_rate > 45 else 'LOW'
+                })
+        
+        # Sort by win rate
+        recommendations.sort(key=lambda x: x['avg_win_rate'], reverse=True)
+        
+        # Get best performing strategy
+        best_strategy = recommendations[0] if recommendations else None
+        
+        return {
+            "success": True,
+            "total_results_analyzed": len(results),
+            "strategies_analyzed": len(strategy_stats),
+            "best_strategy": best_strategy,
+            "all_recommendations": recommendations,
+            "optimization_tips": [
+                f"Best performing strategy: {best_strategy['strategy']} ({best_strategy['avg_win_rate']}% win rate)" if best_strategy else "Run more backtests",
+                "Strategies with >55% win rate are recommended for live trading",
+                "Consider combining high-performing strategies in ensemble mode"
+            ]
+        }
+        
+    except Exception as e:
+        logger.error(f"Error running optimization: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.post("/ml-training/schedule-daily-retrain")
+async def schedule_daily_retrain():
+    """Enable daily automatic model retraining."""
+    try:
+        from ml_training_service import get_ml_training_service
+        
+        ml_service = await get_ml_training_service(db)
+        
+        # Start background task for daily retraining
+        asyncio.create_task(ml_service.schedule_daily_retrain())
+        
+        return {
+            "success": True,
+            "message": "Daily ML retraining scheduled. Models will retrain at midnight UTC."
+        }
+        
+    except Exception as e:
+        logger.error(f"Error scheduling retraining: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.post("/ml-training/retrain-now")
+async def retrain_models_now():
+    """Manually trigger immediate model retraining."""
+    try:
+        from ml_training_service import get_ml_training_service
+        
+        ml_service = await get_ml_training_service(db)
+        await ml_service.run_daily_retrain()
+        
+        return {
+            "success": True,
+            "message": "ML models retrained successfully"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error retraining models: {e}")
+        return {"success": False, "error": str(e)}
+
+
+# =====================================================
 # REAL-TIME MARKET DATA ENDPOINTS
 # =====================================================
 
