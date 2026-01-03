@@ -7,7 +7,7 @@ import { Checkbox } from './ui/checkbox';
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
-const MarketAssetSelector = ({ onSelectionChange }) => {
+const MarketAssetSelector = ({ onSelectionChange, hideExpirations = false, selectedAssets: externalSelectedAssets, maxSelection }) => {
   const [assets, setAssets] = useState({
     forex: [],
     crypto: [],
@@ -15,7 +15,7 @@ const MarketAssetSelector = ({ onSelectionChange }) => {
     commodities: [],
     indices: []
   });
-  const [selectedAssets, setSelectedAssets] = useState([]);
+  const [selectedAssets, setSelectedAssets] = useState(externalSelectedAssets || []);
   const [selectedExpirations, setSelectedExpirations] = useState([]);
   const [showOTC, setShowOTC] = useState(true);
   const [showRegular, setShowRegular] = useState(true);
@@ -27,6 +27,13 @@ const MarketAssetSelector = ({ onSelectionChange }) => {
     indices: false
   });
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Sync external selectedAssets if provided
+  useEffect(() => {
+    if (externalSelectedAssets !== undefined) {
+      setSelectedAssets(externalSelectedAssets);
+    }
+  }, [externalSelectedAssets]);
 
   const expirations = [
     { value: '5s', label: '5 Seconds', icon: '⚡' },
