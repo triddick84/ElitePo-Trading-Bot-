@@ -255,8 +255,12 @@ const SignalNotificationManager = ({ signals = [], onSignalExecute, onSignalDism
     onSignalExecute?.(signal);
     handleSignalClose(signal.id);
     
+    const expirationText = signal.expiration_minutes < 1
+      ? `${Math.round(signal.expiration_minutes * 60)}s`
+      : `${signal.expiration_minutes}m`;
+    
     toast.success(`Trade executed: ${signal.direction} ${signal.symbol}`, {
-      description: `Entry: $${signal.entry_price} • Expiration: ${signal.expiration_minutes}m`,
+      description: `Entry: $${signal.entry_price} • Expiration: ${expirationText}`,
       duration: 3000
     });
   };
