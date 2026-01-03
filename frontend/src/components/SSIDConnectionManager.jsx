@@ -438,15 +438,33 @@ const SSIDConnectionManager = () => {
         </CardContent>
       </Card>
 
-      {/* Auto Login Card - NEW FEATURE */}
+      {/* Desktop Client Card - HYBRID SOLUTION */}
+      <Card className="border-green-500/30 bg-green-500/5">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <span className="text-xl">🖥️</span>
+            Desktop Trading Client
+            <Badge className="bg-green-500/20 text-green-600">RECOMMENDED</Badge>
+          </CardTitle>
+          <CardDescription>
+            Run the trading bot on your PC for reliable connection (bypasses IP blocking)
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <DesktopClientSection />
+        </CardContent>
+      </Card>
+
+      {/* Auto Login Card - CLOUD BASED */}
       <Card className="border-purple-500/30">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <span className="text-xl">🤖</span>
-            Auto Login (Experimental)
+            Auto Login (Cloud)
+            <Badge variant="outline" className="text-yellow-600">IP Blocked</Badge>
           </CardTitle>
           <CardDescription>
-            Automatically obtain SSID using stealth browser or CAPTCHA solver
+            Cloud-based auto login (currently blocked by Pocket Option)
           </CardDescription>
         </CardHeader>
         <CardContent>
