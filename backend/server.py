@@ -6831,6 +6831,53 @@ async def disable_automated_trading():
         }
 
 
+@api_router.post("/automated-trading/toggle")
+async def toggle_automated_trading(request: dict):
+    """Toggle automated trading on/off"""
+    try:
+        enabled = request.get("enabled", False)
+        
+        # Update config
+        await db.bot_config.update_one(
+            {"_id": "trading_config"},
+            {"$set": {"auto_trade_enabled": enabled}},
+            upsert=True
+        )
+        
+        return {
+            "success": True,
+            "message": f"Auto-trading {'enabled' if enabled else 'disabled'}",
+            "auto_trade_enabled": enabled
+        }
+    except Exception as e:
+        logger.error(f"Error toggling automated trading: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.get("/automated-trading/config")
+async def get_automated_trading_config_v2():
+    """Get automated trading configuration"""
+    try:
+        config = await db.bot_config.find_one({"_id": "trading_config"}, {"_id": 0})
+        return config or {
+            "auto_trade_enabled": False,
+            "min_confidence": 75,
+            "max_trades_per_hour": 10,
+            "max_trades_per_day": 50,
+            "cooldown_seconds": 30,
+            "account_type": "demo",
+            "money_management": {
+                "mode": "fixed",
+                "base_amount": 1,
+                "martingale_multiplier": 2,
+                "martingale_max_steps": 5
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error getting automated trading config: {e}")
+        return {}
+
+
 @api_router.post("/automated-trading/config")
 async def update_automated_trading_config(request: Request):
     """
