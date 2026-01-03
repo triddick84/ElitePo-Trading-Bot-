@@ -8412,6 +8412,118 @@ async def get_ssid_instructions():
     }
 
 
+# =============================================================================
+# ENHANCED POCKET OPTION CLIENT ENDPOINTS
+# =============================================================================
+
+@api_router.post("/pocket-option/enhanced/connect")
+async def enhanced_connect(ssid: str, is_demo: bool = True):
+    """
+    Connect using the enhanced Pocket Option client with keep-alive
+    
+    Features:
+    - Automatic ping every 60 seconds
+    - Automatic reconnection on disconnect
+    - Event-based architecture
+    - Better error handling
+    """
+    try:
+        from enhanced_pocket_option_client import create_enhanced_client
+        
+        client = await create_enhanced_client(ssid=ssid, is_demo=is_demo)
+        status = client.get_status()
+        
+        return {
+            "success": status["connected"],
+            "status": status,
+            "message": "Connected with enhanced client (keep-alive enabled)" if status["connected"] else "Connection failed"
+        }
+    except Exception as e:
+        logger.error(f"Enhanced connect error: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.get("/pocket-option/enhanced/status")
+async def enhanced_status():
+    """Get enhanced client status"""
+    try:
+        from enhanced_pocket_option_client import get_enhanced_client
+        
+        client = get_enhanced_client()
+        if client:
+            return {
+                "success": True,
+                "status": client.get_status(),
+                "statistics": client.get_statistics()
+            }
+        return {"success": False, "error": "No enhanced client initialized"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@api_router.post("/pocket-option/enhanced/trade")
+async def enhanced_trade(
+    asset: str = "EURUSD_otc",
+    amount: float = 1,
+    direction: str = "call",
+    duration: int = 60
+):
+    """
+    Place trade using enhanced client
+    
+    Args:
+        asset: Asset symbol (e.g., EURUSD_otc, GBPUSD)
+        amount: Trade amount in dollars
+        direction: "call" or "put"
+        duration: Expiration in seconds
+    """
+    try:
+        from enhanced_pocket_option_client import get_enhanced_client
+        
+        client = get_enhanced_client()
+        if not client:
+            return {"success": False, "error": "No client connected"}
+        
+        result = await client.buy(
+            asset=asset,
+            amount=amount,
+            direction=direction,
+            duration=duration
+        )
+        
+        return result
+    except Exception as e:
+        logger.error(f"Enhanced trade error: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.post("/pocket-option/enhanced/disconnect")
+async def enhanced_disconnect():
+    """Disconnect enhanced client"""
+    try:
+        from enhanced_pocket_option_client import get_enhanced_client
+        
+        client = get_enhanced_client()
+        if client:
+            await client.disconnect()
+            return {"success": True, "message": "Disconnected"}
+        return {"success": False, "error": "No client to disconnect"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+                {"step": 9, "action": "Find message starting with: 42[\"auth\",{...}]"},
+                {"step": 10, "action": "Copy the ENTIRE message"}
+            ],
+            "notes": [
+                "SSID expires every 1-24 hours",
+                "Never share your SSID",
+                "Get fresh SSID if connection fails",
+                "Make sure you're logged in before extracting"
+            ],
+            "example_format": '42["auth",{"session":"ABC123...","isDemo":1,"uid":12345}]'
+        }
+    }
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
