@@ -584,6 +584,27 @@ const BacktestingPage = () => {
                     </Badge>
                   </div>
                   
+                  {/* Data Source Indicator */}
+                  <div className="mb-3 flex items-center gap-2">
+                    <Badge 
+                      variant="outline" 
+                      className={`text-xs ${
+                        result.data_source === 'alphavantage' ? 'border-green-500/50 text-green-400 bg-green-500/10' :
+                        result.data_source === 'finnhub' ? 'border-blue-500/50 text-blue-400 bg-blue-500/10' :
+                        result.data_source === 'cryptocompare' ? 'border-orange-500/50 text-orange-400 bg-orange-500/10' :
+                        'border-yellow-500/50 text-yellow-400 bg-yellow-500/10'
+                      }`}
+                    >
+                      {result.data_source === 'alphavantage' ? '📊 Alpha Vantage' :
+                       result.data_source === 'finnhub' ? '📈 Finnhub' :
+                       result.data_source === 'cryptocompare' ? '₿ CryptoCompare' :
+                       '⚡ Synthetic Data'}
+                    </Badge>
+                    {result.data_source === 'synthetic' && (
+                      <span className="text-yellow-400 text-xs">(simulated)</span>
+                    )}
+                  </div>
+                  
                   <div className="grid grid-cols-3 gap-2 text-center mb-3">
                     <div>
                       <p className="text-slate-400 text-xs">Trades</p>
