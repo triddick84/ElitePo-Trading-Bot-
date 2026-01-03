@@ -40,21 +40,28 @@ const BotControls = ({ onStatusUpdate }) => {
   const [latencyOffset, setLatencyOffset] = useState(0);
   const [isLatencySaving, setIsLatencySaving] = useState(false);
 
+  // Fetch initial data only once on mount
   useEffect(() => {
     fetchCurrentConfig();
     fetchBotStatus();
     fetchAutoSignalStatus();
     fetchCandleSyncStatus();
     fetchLatencySettings();
-    
-    // Poll candle sync status every 2 seconds for live countdown
-    const interval = setInterval(() => {
-      if (botStatus.is_running) {
+  }, []); // Empty dependency array - run only once on mount
+  
+  // Separate effect for polling candle sync status
+  useEffect(() => {
+    let interval;
+    if (botStatus.is_running) {
+      // Poll candle sync status every 2 seconds for live countdown
+      interval = setInterval(() => {
         fetchCandleSyncStatus();
-      }
-    }, 2000);
+      }, 2000);
+    }
     
-    return () => clearInterval(interval);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [botStatus.is_running]);
 
   const fetchCurrentConfig = async () => {
