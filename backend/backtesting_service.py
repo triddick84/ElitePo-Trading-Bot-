@@ -136,9 +136,12 @@ class HistoricalDataFetcher:
         """Fetch historical data from Yahoo Finance"""
         try:
             import yfinance as yf
+            import concurrent.futures
             
             # Map symbol to Yahoo format
             yahoo_symbol = YAHOO_FOREX_SYMBOLS.get(symbol.upper(), symbol)
+            if not yahoo_symbol.endswith('=X') and symbol.upper() in YAHOO_FOREX_SYMBOLS:
+                yahoo_symbol = YAHOO_FOREX_SYMBOLS[symbol.upper()]
             
             # Calculate date range
             end_date = datetime.now()
@@ -151,11 +154,16 @@ class HistoricalDataFetcher:
             }
             yf_interval = interval_map.get(interval, "60m")
             
-            # Fetch data
-            ticker = yf.Ticker(yahoo_symbol)
-            df = ticker.history(start=start_date, end=end_date, interval=yf_interval)
+            # Run yfinance in thread pool to avoid blocking
+            def fetch_sync():
+                ticker = yf.Ticker(yahoo_symbol)
+                return ticker.history(start=start_date, end=end_date, interval=yf_interval)
             
-            if df.empty:
+            loop = asyncio.get_event_loop()
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                df = await loop.run_in_executor(executor, fetch_sync)
+            
+            if df is None or df.empty:
                 logger.warning(f"No data returned for {yahoo_symbol}")
                 return None
             
@@ -173,6 +181,8 @@ class HistoricalDataFetcher:
             
         except Exception as e:
             logger.error(f"Error fetching Yahoo data for {symbol}: {e}")
+            import traceback
+            traceback.print_exc()
             return None
     
     async def fetch_crypto_data(self, symbol: str, days: int = 30, interval: str = "1h") -> Optional[pd.DataFrame]:
