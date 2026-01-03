@@ -97,7 +97,11 @@ const SignalsPanel = () => {
         </div>
         <div>
           <p className="text-slate-400 text-sm">Expiration</p>
-          <p className="text-white font-medium">{signal.expiration_minutes}m</p>
+          <p className="text-white font-medium">
+            {signal.expiration_minutes < 1
+              ? `${Math.round(signal.expiration_minutes * 60)}s`
+              : `${signal.expiration_minutes}m`}
+          </p>
         </div>
         <div>
           <p className="text-slate-400 text-sm">Confidence</p>
