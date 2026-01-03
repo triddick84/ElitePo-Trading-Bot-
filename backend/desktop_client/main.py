@@ -18,11 +18,58 @@ import os
 import sys
 import time
 import ssl
+import subprocess
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass, field
 import threading
 
+def install_package(package_name, pip_name=None):
+    """Install a package using pip"""
+    pip_name = pip_name or package_name
+    print(f"Installing {pip_name}...")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", pip_name, "-q"])
+
+def check_playwright_browsers():
+    """Check if Playwright browsers are installed, install if not"""
+    try:
+        from playwright.sync_api import sync_playwright
+        # Try to launch browser to check if it's installed
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            browser.close()
+        return True
+    except Exception as e:
+        error_msg = str(e).lower()
+        if "executable doesn't exist" in error_msg or "browser" in error_msg or "chromium" in error_msg:
+            print("\n" + "="*60)
+            print("🔧 PLAYWRIGHT BROWSER NOT INSTALLED")
+            print("="*60)
+            print("\nPlaywright needs to download browser binaries.")
+            print("This is a one-time setup that takes ~100MB.\n")
+            
+            response = input("Install Chromium browser now? (y/n): ").strip().lower()
+            if response == 'y':
+                print("\n📥 Downloading Chromium browser...")
+                try:
+                    subprocess.check_call([sys.executable, "-m", "playwright", "install", "chromium"])
+                    print("✅ Chromium installed successfully!\n")
+                    return True
+                except Exception as install_error:
+                    print(f"\n❌ Failed to install browser: {install_error}")
+                    print("\nPlease run manually:")
+                    print("  python -m playwright install chromium")
+                    return False
+            else:
+                print("\n⚠️ Browser installation skipped.")
+                print("Run this command to install manually:")
+                print("  python -m playwright install chromium\n")
+                return False
+        else:
+            # Some other error
+            print(f"Playwright check error: {e}")
+            return True  # Continue anyway
+
 try:
     import requests
     from rich.console import Console
@@ -31,8 +78,8 @@ try:
     from rich.panel import Panel
     from rich import print as rprint
 except ImportError:
-    print("Installing required packages...")
-    os.system("pip install requests rich")
+    install_package("requests")
+    install_package("rich")
     import requests
     from rich.console import Console
     from rich.table import Table
@@ -43,16 +90,20 @@ except ImportError:
 try:
     import websockets
 except ImportError:
-    print("Installing websockets...")
-    os.system("pip install websockets")
+    install_package("websockets")
     import websockets
 
 try:
     from twocaptcha import TwoCaptcha
 except ImportError:
-    print("Installing 2captcha-python...")
-    os.system("pip install 2captcha-python")
+    install_package("twocaptcha", "2captcha-python")
     from twocaptcha import TwoCaptcha
+
+try:
+    import playwright
+except ImportError:
+    install_package("playwright")
+    import playwright
 
 # Import config
 try:
