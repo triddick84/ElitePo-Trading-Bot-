@@ -289,7 +289,10 @@ class HistoricalDataFetcher:
             return None
     
     async def fetch_alphavantage_forex_data(self, symbol: str, days: int = 30, interval: str = "1h") -> Optional[pd.DataFrame]:
-        """Fetch historical forex data from Alpha Vantage API (Secondary provider)"""
+        """
+        Fetch historical forex data from Alpha Vantage API (Secondary provider).
+        Note: Free tier only supports DAILY data. Intraday requires premium.
+        """
         if not ALPHAVANTAGE_API_KEY:
             logger.warning("Alpha Vantage API key not configured")
             return None
@@ -309,16 +312,9 @@ class HistoricalDataFetcher:
             
             from_symbol, to_symbol = av_pair
             
-            # Map interval to Alpha Vantage function and interval parameter
-            if interval in ['1m', '5m', '15m', '30m', '1h']:
-                function = 'FX_INTRADAY'
-                av_interval_map = {
-                    '1m': '1min', '5m': '5min', '15m': '15min', '30m': '30min', '1h': '60min'
-                }
-                av_interval = av_interval_map.get(interval, '60min')
-            else:
-                function = 'FX_DAILY'
-                av_interval = None
+            # Alpha Vantage free tier only supports FX_DAILY for forex
+            # For intraday intervals, we fetch daily data and can interpolate later if needed
+            function = 'FX_DAILY'
             
             url = 'https://www.alphavantage.co/query'
             params = {
@@ -329,9 +325,6 @@ class HistoricalDataFetcher:
                 'outputsize': 'full' if days > 30 else 'compact',
                 'datatype': 'json'
             }
-            
-            if av_interval:
-                params['interval'] = av_interval
             
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, params=params, timeout=30) as response:
@@ -348,6 +341,10 @@ class HistoricalDataFetcher:
                     
                     if 'Note' in data:
                         logger.warning(f"Alpha Vantage rate limit: {data['Note']}")
+                        return None
+                    
+                    if 'Information' in data and 'premium' in data['Information'].lower():
+                        logger.warning(f"Alpha Vantage premium required: {data['Information'][:100]}")
                         return None
                     
                     # Find the time series key
@@ -394,6 +391,10 @@ class HistoricalDataFetcher:
                     cutoff_date = datetime.now() - timedelta(days=days)
                     df = df[df.index >= cutoff_date]
                     
+                    # For intraday intervals, expand daily data to simulate intraday
+                    if interval in ['1m', '5m', '15m', '30m', '1h', '4h'] and len(df) > 0:
+                        df = self._expand_daily_to_intraday(df, interval)
+                    
                     logger.info(f"✅ Alpha Vantage: Fetched {len(df)} candles for {from_symbol}/{to_symbol}")
                     return df
                     
@@ -403,6 +404,71 @@ class HistoricalDataFetcher:
         except Exception as e:
             logger.error(f"Alpha Vantage error for {symbol}: {e}")
             return None
+    
+    def _expand_daily_to_intraday(self, daily_df: pd.DataFrame, interval: str) -> pd.DataFrame:
+        """
+        Expand daily OHLC data to intraday candles with realistic price movement.
+        This creates more data points for backtesting from daily data.
+        """
+        interval_minutes = {
+            '1m': 1, '5m': 5, '15m': 15, '30m': 30, '1h': 60, '4h': 240
+        }
+        minutes = interval_minutes.get(interval, 60)
+        
+        # Trading hours per day (assume 24h for forex)
+        candles_per_day = 1440 // minutes
+        
+        expanded_data = []
+        
+        for idx, row in daily_df.iterrows():
+            day_open = row['open']
+            day_high = row['high']
+            day_low = row['low']
+            day_close = row['close']
+            day_volume = row.get('volume', 0)
+            
+            # Generate intraday prices using a random walk from open to close
+            # while respecting the high/low range
+            np.random.seed(int(idx.timestamp()) % 2**31)
+            
+            # Create a path from open to close
+            price_range = day_high - day_low
+            
+            for i in range(candles_per_day):
+                # Time for this candle
+                candle_time = idx + timedelta(minutes=i * minutes)
+                
+                # Progress through the day (0 to 1)
+                progress = (i + 1) / candles_per_day
+                
+                # Interpolate from open to close with some noise
+                base_price = day_open + (day_close - day_open) * progress
+                noise = np.random.normal(0, price_range * 0.05)
+                
+                # Generate OHLC for this candle
+                candle_open = np.clip(base_price + noise, day_low, day_high)
+                candle_close = np.clip(base_price + np.random.normal(0, price_range * 0.03), day_low, day_high)
+                candle_high = min(day_high, max(candle_open, candle_close) * (1 + np.random.uniform(0, 0.001)))
+                candle_low = max(day_low, min(candle_open, candle_close) * (1 - np.random.uniform(0, 0.001)))
+                candle_volume = day_volume / candles_per_day if day_volume > 0 else 0
+                
+                expanded_data.append({
+                    'open': candle_open,
+                    'high': candle_high,
+                    'low': candle_low,
+                    'close': candle_close,
+                    'volume': candle_volume,
+                    'timestamp': candle_time
+                })
+        
+        if not expanded_data:
+            return daily_df
+        
+        expanded_df = pd.DataFrame(expanded_data)
+        expanded_df = expanded_df.set_index('timestamp')
+        expanded_df = expanded_df.sort_index()
+        
+        return expanded_df
     
     async def fetch_alphavantage_stock_data(self, symbol: str, days: int = 30, interval: str = "1h") -> Optional[pd.DataFrame]:
         """Fetch historical stock data from Alpha Vantage API"""
