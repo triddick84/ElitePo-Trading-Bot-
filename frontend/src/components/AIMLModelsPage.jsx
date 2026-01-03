@@ -3,7 +3,8 @@
  * 
  * Centralized page for AI/ML model management:
  * - Model Selection & Configuration
- * - Strategy Model Parameters
+ * - ML Training from Backtests
+ * - Strategy Optimization
  * - Retrain Models Section
  * - Model Performance Metrics
  * - Learning System Settings
@@ -26,7 +27,8 @@ import { toast } from 'sonner';
 import { 
   Brain, Settings, Zap, RefreshCw, BarChart3, TrendingUp, 
   Activity, Database, Cpu, CheckCircle, AlertTriangle, Play,
-  Pause, RotateCcw, Layers, Target, Clock, Info
+  Pause, RotateCcw, Layers, Target, Clock, Info, Sparkles,
+  GitBranch, LineChart, Award
 } from 'lucide-react';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -44,6 +46,13 @@ const AVAILABLE_MODELS = [
   { id: 'ichimoku', name: 'Ichimoku Cloud', category: 'Trend', accuracy: 69 },
   { id: 'support_resistance', name: 'Support/Resistance', category: 'Pattern', accuracy: 76 },
   { id: 'candlestick_patterns', name: 'Candlestick Patterns', category: 'Pattern', accuracy: 68 }
+];
+
+// ML Model Types
+const ML_MODEL_TYPES = [
+  { id: 'random_forest', name: 'Random Forest', description: 'Pattern classification with decision trees', icon: '🌲' },
+  { id: 'gradient_boosting', name: 'Gradient Boosting', description: 'Sequential learning for accuracy', icon: '📈' },
+  { id: 'ensemble', name: 'Ensemble', description: 'Combined predictions from multiple models', icon: '🎯' }
 ];
 
 const AIMLModelsPage = () => {
