@@ -8657,6 +8657,41 @@ async def send_signal_to_desktop(signal: Dict[str, Any]):
         return {"success": False, "error": str(e)}
 
 
+@api_router.get("/desktop-client/download")
+async def download_desktop_client():
+    """
+    Download the desktop client files as a zip
+    """
+    import zipfile
+    import io
+    from fastapi.responses import StreamingResponse
+    
+    try:
+        # Create zip in memory
+        zip_buffer = io.BytesIO()
+        
+        desktop_path = "/app/backend/desktop_client"
+        
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            for filename in ['main.py', 'config.py', 'requirements.txt', 'README.md']:
+                filepath = os.path.join(desktop_path, filename)
+                if os.path.exists(filepath):
+                    zip_file.write(filepath, f"pocket_option_desktop_bot/{filename}")
+        
+        zip_buffer.seek(0)
+        
+        return StreamingResponse(
+            zip_buffer,
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": "attachment; filename=pocket_option_desktop_bot.zip"
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error creating download: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @api_router.get("/desktop-client/trades")
 async def get_desktop_trades(limit: int = 50):
     """
