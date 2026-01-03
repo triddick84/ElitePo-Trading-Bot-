@@ -2769,6 +2769,67 @@ Users should run the `pocket_option_local_bot.py` script on their LOCAL MACHINE 
 
 
 
+## Custom Strategy Builder & SSID Connection Manager - January 3, 2026
+
+### Implementation Status: COMPLETE
+
+### New Files Created:
+1. `/app/backend/custom_strategy_service.py` - Backend service for custom strategy CRUD operations
+2. `/app/backend/custom_strategy_executor.py` - Strategy evaluation engine with 41 indicators
+3. `/app/frontend/src/components/StrategyBuilder.jsx` - Full-featured UI for building custom strategies
+
+### Updated Files:
+1. `/app/backend/server.py` - Added 11 new API endpoints for custom strategies and SSID health
+2. `/app/frontend/src/App.js` - Added navigation for Strategy Builder and SSID Connection Manager
+
+### New API Endpoints:
+- `GET /api/custom-strategies/indicators` - Get all 41 available indicators
+- `POST /api/custom-strategies` - Create a new strategy
+- `GET /api/custom-strategies` - List all strategies
+- `GET /api/custom-strategies/{id}` - Get specific strategy
+- `PUT /api/custom-strategies/{id}` - Update strategy
+- `DELETE /api/custom-strategies/{id}` - Delete strategy
+- `POST /api/custom-strategies/{id}/toggle` - Toggle active status
+- `POST /api/custom-strategies/{id}/duplicate` - Duplicate strategy
+- `POST /api/custom-strategies/{id}/test` - Test strategy against market data
+- `GET /api/ssid/health/status` - Get SSID health status
+- `POST /api/ssid/health/start` - Start health monitor
+- `POST /api/ssid/health/stop` - Stop health monitor
+- `GET /api/ssid/health/alerts` - Get SSID alerts
+
+### Features Implemented:
+1. **41 Technical Indicators** across 7 categories:
+   - Trend: SMA, EMA, WMA, VWMA, DEMA, TEMA, SuperTrend, Parabolic SAR, Ichimoku
+   - Momentum: RSI, MACD, Stochastic, Stochastic RSI, CCI, Williams %R, Momentum, ROC, AO, AC, ADX
+   - Volatility: Bollinger Bands, ATR, Keltner Channel, Donchian Channel, Standard Deviation
+   - Volume: Volume, OBV, Volume SMA, MFI, VWAP, CMF
+   - Oscillator: Aroon, Ultimate Oscillator, TRIX, DPO
+   - Pattern: Support/Resistance, Pivot Points, Fibonacci Retracement, Candlestick Patterns
+   - Custom: Price, Heikin Ashi
+
+2. **Full Condition Builder Logic**:
+   - AND/OR logical operators between conditions
+   - Comparison operators: >, <, =, >=, <=, crosses_above, crosses_below
+   - Multi-condition groups per signal direction
+   - Parameter customization for each indicator
+
+3. **SSID Connection Manager Integration**:
+   - Connection status display
+   - SSID update form with instructions
+   - Health monitor with alerts
+   - Account type (Demo/Real) selection
+
+### Tests Required:
+- [x] Backend strategy creation API
+- [x] Backend indicators listing API
+- [x] Frontend Strategy Builder loads
+- [x] Frontend SSID Connection Manager loads
+- [ ] Strategy test endpoint
+- [ ] Strategy duplicate/delete operations
+- [ ] Full UI flow testing
+
+---
+
 ## Support/Resistance Integration Testing - January 1, 2026
 
 ### Testing Protocol
