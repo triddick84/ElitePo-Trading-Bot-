@@ -253,6 +253,81 @@ const AIMLModelsPage = () => {
     }
   };
 
+  // Train ML models from backtest results
+  const handleTrainFromBacktests = async () => {
+    setIsTrainingML(true);
+    try {
+      toast.info('Training ML models from backtest results...');
+      const response = await axios.post(`${API}/ml-training/train-from-backtests`, {
+        limit: 100
+      });
+      
+      if (response.data.success) {
+        toast.success(`✅ ${response.data.message}`);
+        fetchMLModels();
+      } else {
+        toast.error(response.data.error || 'Training failed');
+      }
+    } catch (error) {
+      toast.error('Failed to train ML models');
+    } finally {
+      setIsTrainingML(false);
+    }
+  };
+
+  // Train ML on price data
+  const handleTrainOnPriceData = async () => {
+    setIsTrainingML(true);
+    try {
+      toast.info(`Training ML models on ${mlTrainingAsset} ${mlTrainingTimeframe}...`);
+      const response = await axios.post(`${API}/ml-training/train-on-price-data`, {
+        asset: mlTrainingAsset,
+        timeframe: mlTrainingTimeframe,
+        days: mlTrainingDays
+      });
+      
+      if (response.data.success) {
+        toast.success(`✅ Trained on ${response.data.candles_used} candles`);
+        fetchMLModels();
+      } else {
+        toast.error(response.data.error || 'Training failed');
+      }
+    } catch (error) {
+      toast.error('Failed to train on price data');
+    } finally {
+      setIsTrainingML(false);
+    }
+  };
+
+  // Run strategy optimization
+  const handleRunOptimization = async () => {
+    try {
+      toast.info('Running strategy optimization...');
+      const response = await axios.post(`${API}/ml-training/run-optimization`);
+      
+      if (response.data.success) {
+        setOptimizationResults(response.data);
+        toast.success('✅ Optimization complete!');
+      } else {
+        toast.error(response.data.error || 'Optimization failed');
+      }
+    } catch (error) {
+      toast.error('Failed to run optimization');
+    }
+  };
+
+  // Schedule daily retraining
+  const handleScheduleDailyRetrain = async () => {
+    try {
+      const response = await axios.post(`${API}/ml-training/schedule-daily-retrain`);
+      if (response.data.success) {
+        toast.success('✅ Daily retraining scheduled');
+      }
+    } catch (error) {
+      toast.error('Failed to schedule retraining');
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
