@@ -116,7 +116,11 @@ const SignalNotification = ({ signal, onClose, onExecute }) => {
           
           <div className="flex items-center justify-between">
             <span className="text-slate-400">Expiration</span>
-            <span className="text-white">{signal.expiration_minutes}m</span>
+            <span className="text-white">
+              {signal.expiration_minutes < 1
+                ? `${Math.round(signal.expiration_minutes * 60)}s`
+                : `${signal.expiration_minutes}m`}
+            </span>
           </div>
           
           <div className="flex items-center justify-between">
