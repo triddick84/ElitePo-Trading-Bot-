@@ -645,6 +645,7 @@ const DashboardRestructured = ({
               <MarketAssetSelector 
                 config={config}
                 setConfig={setConfig}
+                hideExpirations={true}
               />
             </div>
           </div>
