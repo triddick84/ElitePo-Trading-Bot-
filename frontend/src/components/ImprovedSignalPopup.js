@@ -254,7 +254,9 @@ const ImprovedSignalPopup = ({ signals, onClose, onDismiss }) => {
                             <Calendar className="w-3 h-3" />
                             <span>{signal.timeframe || '1m'}</span>
                             <span>•</span>
-                            <span>Expires: {signal.expiration_minutes}m</span>
+                            <span>Expires: {signal.expiration_minutes < 1 
+                              ? `${Math.round(signal.expiration_minutes * 60)}s` 
+                              : `${signal.expiration_minutes}m`}</span>
                           </div>
                         </div>
                       </div>
