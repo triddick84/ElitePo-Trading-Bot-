@@ -438,6 +438,28 @@ const SSIDConnectionManager = () => {
         </CardContent>
       </Card>
 
+      {/* Auto Login Card - NEW FEATURE */}
+      <Card className="border-purple-500/30">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <span className="text-xl">🤖</span>
+            Auto Login (Experimental)
+          </CardTitle>
+          <CardDescription>
+            Automatically obtain SSID using stealth browser or CAPTCHA solver
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <AutoLoginSection 
+            onSuccess={(ssid) => {
+              setSsidInput(ssid);
+              fetchStatus();
+              fetchHealthStatus();
+            }}
+          />
+        </CardContent>
+      </Card>
+
       {/* Quick Actions */}
       <Card>
         <CardHeader>
@@ -465,6 +487,198 @@ const SSIDConnectionManager = () => {
           </div>
         </CardContent>
       </Card>
+    </div>
+  );
+};
+
+// Auto Login Sub-Component
+const AutoLoginSection = ({ onSuccess }) => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [captchaApiKey, setCaptchaApiKey] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [loginResult, setLoginResult] = useState(null);
+  const [loginStats, setLoginStats] = useState(null);
+
+  // Fetch login stats on mount
+  useEffect(() => {
+    fetchStats();
+  }, []);
+
+  const fetchStats = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/auto-login/stats`);
+      const data = await response.json();
+      if (data.success) {
+        setLoginStats(data.stats);
+      }
+    } catch (error) {
+      console.error('Failed to fetch login stats:', error);
+    }
+  };
+
+  const handleAutoLogin = async () => {
+    if (!email || !password) {
+      setLoginResult({ success: false, error: 'Please enter email and password' });
+      return;
+    }
+
+    setIsLoggingIn(true);
+    setLoginResult(null);
+
+    try {
+      const params = new URLSearchParams({
+        email,
+        password,
+        use_stealth_first: 'true'
+      });
+      
+      if (captchaApiKey) {
+        params.append('captcha_api_key', captchaApiKey);
+      }
+
+      const response = await fetch(`${API_URL}/api/auto-login/attempt?${params}`, {
+        method: 'POST'
+      });
+      const data = await response.json();
+
+      setLoginResult(data);
+      
+      if (data.success && data.result?.ssid) {
+        onSuccess(data.result.ssid);
+      }
+
+      // Refresh stats
+      fetchStats();
+    } catch (error) {
+      setLoginResult({ success: false, error: error.message });
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Method Info */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+        <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+          <div className="font-medium text-purple-700 dark:text-purple-300">🥷 Stealth Browser (Free)</div>
+          <div className="text-gray-600 dark:text-gray-400 text-xs mt-1">
+            Uses undetected Chrome to bypass detection. May be blocked by CAPTCHA.
+          </div>
+        </div>
+        <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+          <div className="font-medium text-blue-700 dark:text-blue-300">🧩 CAPTCHA Solver (~$0.003/login)</div>
+          <div className="text-gray-600 dark:text-gray-400 text-xs mt-1">
+            Falls back to 2Captcha if stealth fails. Requires API key.
+          </div>
+        </div>
+      </div>
+
+      {/* Login Stats */}
+      {loginStats && (
+        <div className="flex flex-wrap gap-2 text-xs">
+          <Badge variant="outline">
+            Attempts: {loginStats.total_attempts}
+          </Badge>
+          <Badge variant="outline" className="text-green-600">
+            Success: {loginStats.successful}
+          </Badge>
+          {loginStats.total_captcha_cost > 0 && (
+            <Badge variant="outline" className="text-blue-600">
+              Cost: ${loginStats.total_captcha_cost.toFixed(4)}
+            </Badge>
+          )}
+        </div>
+      )}
+
+      {/* Credentials Input */}
+      <div className="space-y-3">
+        <Input
+          type="email"
+          placeholder="Pocket Option Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+        <Input
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+        
+        {/* Advanced Options */}
+        <button
+          type="button"
+          onClick={() => setShowAdvanced(!showAdvanced)}
+          className="text-sm text-purple-600 hover:underline"
+        >
+          {showAdvanced ? '▼ Hide' : '▶ Show'} Advanced Options
+        </button>
+        
+        {showAdvanced && (
+          <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg space-y-2">
+            <div className="text-sm text-gray-500">
+              2Captcha API Key (Optional - for CAPTCHA fallback)
+            </div>
+            <Input
+              type="password"
+              placeholder="2Captcha API Key"
+              value={captchaApiKey}
+              onChange={(e) => setCaptchaApiKey(e.target.value)}
+            />
+            <div className="text-xs text-gray-400">
+              Get key from: <a href="https://2captcha.com" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">2captcha.com</a>
+              {' '}(~$2.99 per 1000 solves)
+            </div>
+          </div>
+        )}
+
+        <Button
+          onClick={handleAutoLogin}
+          disabled={isLoggingIn || !email || !password}
+          className="w-full bg-purple-600 hover:bg-purple-700"
+        >
+          {isLoggingIn ? (
+            <>
+              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+              Attempting Auto Login...
+            </>
+          ) : (
+            <>
+              <span className="mr-2">🤖</span>
+              Auto Login
+            </>
+          )}
+        </Button>
+      </div>
+
+      {/* Login Result */}
+      {loginResult && (
+        <Alert variant={loginResult.success ? 'default' : 'destructive'}>
+          {loginResult.success ? (
+            <CheckCircle className="h-4 w-4" />
+          ) : (
+            <AlertTriangle className="h-4 w-4" />
+          )}
+          <AlertTitle>
+            {loginResult.success ? '✅ Login Successful!' : '❌ Login Failed'}
+          </AlertTitle>
+          <AlertDescription>
+            <div>{loginResult.message || loginResult.error}</div>
+            {loginResult.result && (
+              <div className="mt-2 text-xs space-y-1">
+                <div>Method: {loginResult.result.method_used}</div>
+                <div>Status: {loginResult.result.status}</div>
+                {loginResult.result.captcha_cost > 0 && (
+                  <div>CAPTCHA Cost: ${loginResult.result.captcha_cost.toFixed(4)}</div>
+                )}
+              </div>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
     </div>
   );
 };
