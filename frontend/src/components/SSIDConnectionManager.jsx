@@ -509,6 +509,113 @@ const SSIDConnectionManager = () => {
   );
 };
 
+// Desktop Client Sub-Component
+const DesktopClientSection = () => {
+  const [desktopStatus, setDesktopStatus] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    fetchDesktopStatus();
+    const interval = setInterval(fetchDesktopStatus, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const fetchDesktopStatus = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/desktop-client/status`);
+      const data = await response.json();
+      if (data.success) {
+        setDesktopStatus(data.status);
+      }
+    } catch (error) {
+      console.error('Failed to fetch desktop status:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const downloadClient = () => {
+    window.open(`${API_URL}/api/desktop-client/download`, '_blank');
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Status */}
+      <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+        <div className="flex items-center gap-2">
+          <div className={`w-3 h-3 rounded-full ${
+            desktopStatus?.is_online ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
+          }`} />
+          <span className="font-medium">
+            {desktopStatus?.is_online ? 'Desktop Client Online' : 'Desktop Client Offline'}
+          </span>
+        </div>
+        {desktopStatus?.is_online && (
+          <div className="text-sm text-gray-500">
+            Balance: ${desktopStatus?.balance?.toFixed(2) || '0.00'} ({desktopStatus?.account_type})
+          </div>
+        )}
+      </div>
+
+      {/* Benefits */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+        <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+          <div className="font-medium text-green-700 dark:text-green-300">✅ No IP Blocking</div>
+          <div className="text-gray-600 dark:text-gray-400 text-xs mt-1">
+            Your home IP isn't blocked by Pocket Option
+          </div>
+        </div>
+        <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+          <div className="font-medium text-green-700 dark:text-green-300">✅ Auto CAPTCHA</div>
+          <div className="text-gray-600 dark:text-gray-400 text-xs mt-1">
+            2Captcha integration solves CAPTCHAs automatically
+          </div>
+        </div>
+        <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+          <div className="font-medium text-green-700 dark:text-green-300">✅ Direct Trading</div>
+          <div className="text-gray-600 dark:text-gray-400 text-xs mt-1">
+            Executes trades directly with lower latency
+          </div>
+        </div>
+        <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+          <div className="font-medium text-green-700 dark:text-green-300">✅ Web UI Signals</div>
+          <div className="text-gray-600 dark:text-gray-400 text-xs mt-1">
+            Uses strategies from this web interface
+          </div>
+        </div>
+      </div>
+
+      {/* Setup Instructions */}
+      <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+        <h4 className="font-medium text-blue-700 dark:text-blue-300 mb-2">Quick Setup (5 minutes)</h4>
+        <ol className="text-sm text-gray-600 dark:text-gray-400 space-y-1 list-decimal list-inside">
+          <li>Download the desktop client below</li>
+          <li>Extract to a folder on your PC</li>
+          <li>Edit <code className="bg-gray-200 dark:bg-gray-700 px-1 rounded">config.py</code> with your server URL</li>
+          <li>Run: <code className="bg-gray-200 dark:bg-gray-700 px-1 rounded">pip install -r requirements.txt</code></li>
+          <li>Run: <code className="bg-gray-200 dark:bg-gray-700 px-1 rounded">python main.py</code></li>
+        </ol>
+      </div>
+
+      {/* Download Button */}
+      <Button
+        onClick={downloadClient}
+        className="w-full bg-green-600 hover:bg-green-700 text-white"
+      >
+        <span className="mr-2">📥</span>
+        Download Desktop Client
+      </Button>
+
+      {/* Recent Trades */}
+      {desktopStatus?.recent_trades > 0 && (
+        <div className="text-sm text-gray-500 text-center">
+          {desktopStatus.recent_trades} trades executed via desktop client
+        </div>
+      )}
+    </div>
+  );
+};
+
 // Auto Login Sub-Component
 const AutoLoginSection = ({ onSuccess }) => {
   const [email, setEmail] = useState('');
