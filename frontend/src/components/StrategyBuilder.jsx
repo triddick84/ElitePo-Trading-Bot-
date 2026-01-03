@@ -12,46 +12,320 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { toast } from 'sonner';
 import { 
-  Plus, 
-  Trash2, 
-  Copy, 
-  Save, 
-  Play,
-  Settings,
-  TrendingUp,
-  Activity,
-  BarChart3,
-  Layers,
-  ChevronDown,
-  ChevronUp,
-  AlertTriangle,
-  CheckCircle,
-  Zap
+  Plus, Trash2, Copy, Save, Play, Settings, TrendingUp, Activity,
+  BarChart3, Layers, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, Zap, ArrowUp, ArrowDown
 } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL || '';
 
-// Indicator category icons
-const categoryIcons = {
-  trend: <TrendingUp className="w-4 h-4" />,
-  momentum: <Activity className="w-4 h-4" />,
-  volatility: <BarChart3 className="w-4 h-4" />,
-  volume: <Layers className="w-4 h-4" />,
-  oscillator: <Zap className="w-4 h-4" />,
-  pattern: <Settings className="w-4 h-4" />,
-  custom: <Settings className="w-4 h-4" />
-};
+// =====================================================
+// INDICATOR TEMPLATES - TradingView Style
+// =====================================================
+// Each indicator has pre-built condition types that make sense for that indicator
 
-// Comparison operators
-const operators = [
-  { value: '>', label: 'Greater than (>)' },
-  { value: '<', label: 'Less than (<)' },
-  { value: '>=', label: 'Greater or equal (>=)' },
-  { value: '<=', label: 'Less or equal (<=)' },
-  { value: '=', label: 'Equal to (=)' },
-  { value: 'crosses_above', label: 'Crosses Above ↗' },
-  { value: 'crosses_below', label: 'Crosses Below ↘' }
-];
+const INDICATOR_TEMPLATES = {
+  // Moving Averages
+  EMA: {
+    name: 'EMA (Exponential Moving Average)',
+    category: 'trend',
+    icon: '📈',
+    description: 'Exponential Moving Average - gives more weight to recent prices',
+    parameters: {
+      period: { label: 'Period', type: 'number', default: 9, min: 1, max: 200 }
+    },
+    conditions: [
+      { id: 'price_crosses_above', label: 'Price crosses above EMA', signal: 'CALL', description: 'Bullish signal when price moves above the EMA' },
+      { id: 'price_crosses_below', label: 'Price crosses below EMA', signal: 'PUT', description: 'Bearish signal when price moves below the EMA' },
+      { id: 'price_above', label: 'Price is above EMA', signal: 'CALL', description: 'Bullish when price stays above EMA' },
+      { id: 'price_below', label: 'Price is below EMA', signal: 'PUT', description: 'Bearish when price stays below EMA' },
+    ]
+  },
+  
+  EMA_CROSSOVER: {
+    name: 'EMA Crossover',
+    category: 'trend',
+    icon: '✖️',
+    description: 'Two EMAs crossing - classic trend signal',
+    parameters: {
+      fast_period: { label: 'Fast EMA', type: 'number', default: 7, min: 1, max: 100 },
+      slow_period: { label: 'Slow EMA', type: 'number', default: 21, min: 1, max: 200 }
+    },
+    conditions: [
+      { id: 'golden_cross', label: 'Fast EMA crosses above Slow EMA (Golden Cross)', signal: 'CALL', description: 'Strong bullish signal - short-term momentum turning up' },
+      { id: 'death_cross', label: 'Fast EMA crosses below Slow EMA (Death Cross)', signal: 'PUT', description: 'Strong bearish signal - short-term momentum turning down' },
+      { id: 'fast_above_slow', label: 'Fast EMA is above Slow EMA', signal: 'CALL', description: 'Uptrend confirmed' },
+      { id: 'fast_below_slow', label: 'Fast EMA is below Slow EMA', signal: 'PUT', description: 'Downtrend confirmed' },
+    ]
+  },
+
+  SMA: {
+    name: 'SMA (Simple Moving Average)',
+    category: 'trend',
+    icon: '📊',
+    description: 'Simple Moving Average - equal weight to all prices',
+    parameters: {
+      period: { label: 'Period', type: 'number', default: 20, min: 1, max: 200 }
+    },
+    conditions: [
+      { id: 'price_crosses_above', label: 'Price crosses above SMA', signal: 'CALL', description: 'Bullish crossover' },
+      { id: 'price_crosses_below', label: 'Price crosses below SMA', signal: 'PUT', description: 'Bearish crossover' },
+      { id: 'price_above', label: 'Price is above SMA', signal: 'CALL', description: 'Uptrend filter' },
+      { id: 'price_below', label: 'Price is below SMA', signal: 'PUT', description: 'Downtrend filter' },
+    ]
+  },
+
+  // Oscillators
+  RSI: {
+    name: 'RSI (Relative Strength Index)',
+    category: 'momentum',
+    icon: '📉',
+    description: 'Measures overbought/oversold conditions (0-100)',
+    parameters: {
+      period: { label: 'Period', type: 'number', default: 14, min: 2, max: 50 },
+      overbought: { label: 'Overbought Level', type: 'number', default: 70, min: 50, max: 95 },
+      oversold: { label: 'Oversold Level', type: 'number', default: 30, min: 5, max: 50 }
+    },
+    conditions: [
+      { id: 'crosses_above_oversold', label: 'RSI crosses above oversold level', signal: 'CALL', description: 'Exit oversold - potential reversal up' },
+      { id: 'crosses_below_overbought', label: 'RSI crosses below overbought level', signal: 'PUT', description: 'Exit overbought - potential reversal down' },
+      { id: 'enters_oversold', label: 'RSI enters oversold zone', signal: 'CALL', description: 'Extreme oversold - look for bounce' },
+      { id: 'enters_overbought', label: 'RSI enters overbought zone', signal: 'PUT', description: 'Extreme overbought - look for drop' },
+      { id: 'above_50', label: 'RSI is above 50 (bullish momentum)', signal: 'CALL', description: 'Bullish momentum filter' },
+      { id: 'below_50', label: 'RSI is below 50 (bearish momentum)', signal: 'PUT', description: 'Bearish momentum filter' },
+    ]
+  },
+
+  STOCHASTIC: {
+    name: 'Stochastic Oscillator',
+    category: 'momentum',
+    icon: '🔄',
+    description: 'Compares closing price to price range (0-100)',
+    parameters: {
+      k_period: { label: '%K Period', type: 'number', default: 14, min: 1, max: 50 },
+      d_period: { label: '%D Period', type: 'number', default: 3, min: 1, max: 20 },
+      overbought: { label: 'Overbought', type: 'number', default: 80, min: 50, max: 95 },
+      oversold: { label: 'Oversold', type: 'number', default: 20, min: 5, max: 50 }
+    },
+    conditions: [
+      { id: 'k_crosses_above_d_oversold', label: '%K crosses above %D in oversold zone', signal: 'CALL', description: 'Strong buy signal' },
+      { id: 'k_crosses_below_d_overbought', label: '%K crosses below %D in overbought zone', signal: 'PUT', description: 'Strong sell signal' },
+      { id: 'exits_oversold', label: 'Stochastic exits oversold zone', signal: 'CALL', description: 'Bullish momentum starting' },
+      { id: 'exits_overbought', label: 'Stochastic exits overbought zone', signal: 'PUT', description: 'Bearish momentum starting' },
+    ]
+  },
+
+  MACD: {
+    name: 'MACD',
+    category: 'momentum',
+    icon: '📶',
+    description: 'Moving Average Convergence Divergence - trend & momentum',
+    parameters: {
+      fast_period: { label: 'Fast Period', type: 'number', default: 12, min: 1, max: 50 },
+      slow_period: { label: 'Slow Period', type: 'number', default: 26, min: 1, max: 100 },
+      signal_period: { label: 'Signal Period', type: 'number', default: 9, min: 1, max: 30 }
+    },
+    conditions: [
+      { id: 'macd_crosses_above_signal', label: 'MACD line crosses above Signal line', signal: 'CALL', description: 'Bullish crossover - momentum turning up' },
+      { id: 'macd_crosses_below_signal', label: 'MACD line crosses below Signal line', signal: 'PUT', description: 'Bearish crossover - momentum turning down' },
+      { id: 'histogram_turns_positive', label: 'Histogram turns positive', signal: 'CALL', description: 'Bullish momentum increasing' },
+      { id: 'histogram_turns_negative', label: 'Histogram turns negative', signal: 'PUT', description: 'Bearish momentum increasing' },
+      { id: 'macd_crosses_above_zero', label: 'MACD crosses above zero line', signal: 'CALL', description: 'Trend turning bullish' },
+      { id: 'macd_crosses_below_zero', label: 'MACD crosses below zero line', signal: 'PUT', description: 'Trend turning bearish' },
+    ]
+  },
+
+  // Volatility
+  BOLLINGER_BANDS: {
+    name: 'Bollinger Bands',
+    category: 'volatility',
+    icon: '🎯',
+    description: 'Volatility bands around a moving average',
+    parameters: {
+      period: { label: 'Period', type: 'number', default: 20, min: 5, max: 50 },
+      std_dev: { label: 'Std Deviations', type: 'number', default: 2, min: 1, max: 4, step: 0.5 }
+    },
+    conditions: [
+      { id: 'price_breaks_above_upper', label: 'Price breaks above Upper Band', signal: 'CALL', description: 'Breakout - strong bullish momentum' },
+      { id: 'price_breaks_below_lower', label: 'Price breaks below Lower Band', signal: 'PUT', description: 'Breakdown - strong bearish momentum' },
+      { id: 'price_touches_lower_reversal', label: 'Price touches Lower Band (reversal)', signal: 'CALL', description: 'Mean reversion buy - oversold bounce' },
+      { id: 'price_touches_upper_reversal', label: 'Price touches Upper Band (reversal)', signal: 'PUT', description: 'Mean reversion sell - overbought drop' },
+      { id: 'price_crosses_above_middle', label: 'Price crosses above Middle Band', signal: 'CALL', description: 'Bullish - above average' },
+      { id: 'price_crosses_below_middle', label: 'Price crosses below Middle Band', signal: 'PUT', description: 'Bearish - below average' },
+      { id: 'bands_squeeze', label: 'Bands squeezing (low volatility)', signal: 'NEUTRAL', description: 'Breakout imminent - prepare for move' },
+    ]
+  },
+
+  ATR: {
+    name: 'ATR (Average True Range)',
+    category: 'volatility',
+    icon: '📏',
+    description: 'Measures market volatility',
+    parameters: {
+      period: { label: 'Period', type: 'number', default: 14, min: 1, max: 50 }
+    },
+    conditions: [
+      { id: 'high_volatility', label: 'High volatility (ATR above average)', signal: 'NEUTRAL', description: 'Market is volatile - wider stops needed' },
+      { id: 'low_volatility', label: 'Low volatility (ATR below average)', signal: 'NEUTRAL', description: 'Market is quiet - tighter stops possible' },
+    ]
+  },
+
+  // Trend
+  SUPERTREND: {
+    name: 'SuperTrend',
+    category: 'trend',
+    icon: '🚀',
+    description: 'Trend-following indicator based on ATR',
+    parameters: {
+      period: { label: 'ATR Period', type: 'number', default: 10, min: 1, max: 50 },
+      multiplier: { label: 'Multiplier', type: 'number', default: 3, min: 1, max: 10, step: 0.5 }
+    },
+    conditions: [
+      { id: 'turns_bullish', label: 'SuperTrend turns bullish (green)', signal: 'CALL', description: 'Trend changed to up' },
+      { id: 'turns_bearish', label: 'SuperTrend turns bearish (red)', signal: 'PUT', description: 'Trend changed to down' },
+      { id: 'price_above_supertrend', label: 'Price is above SuperTrend', signal: 'CALL', description: 'Uptrend active' },
+      { id: 'price_below_supertrend', label: 'Price is below SuperTrend', signal: 'PUT', description: 'Downtrend active' },
+    ]
+  },
+
+  ADX: {
+    name: 'ADX (Average Directional Index)',
+    category: 'trend',
+    icon: '💪',
+    description: 'Measures trend strength (not direction)',
+    parameters: {
+      period: { label: 'Period', type: 'number', default: 14, min: 5, max: 50 },
+      threshold: { label: 'Trend Threshold', type: 'number', default: 25, min: 15, max: 50 }
+    },
+    conditions: [
+      { id: 'strong_trend', label: 'ADX above threshold (strong trend)', signal: 'NEUTRAL', description: 'Trend is strong - follow momentum' },
+      { id: 'weak_trend', label: 'ADX below threshold (weak trend)', signal: 'NEUTRAL', description: 'No clear trend - range trading' },
+      { id: 'plus_di_above_minus', label: '+DI above -DI (bullish trend)', signal: 'CALL', description: 'Buyers in control' },
+      { id: 'minus_di_above_plus', label: '-DI above +DI (bearish trend)', signal: 'PUT', description: 'Sellers in control' },
+    ]
+  },
+
+  // Volume
+  VOLUME: {
+    name: 'Volume',
+    category: 'volume',
+    icon: '📊',
+    description: 'Trading volume analysis',
+    parameters: {
+      ma_period: { label: 'MA Period', type: 'number', default: 20, min: 5, max: 50 }
+    },
+    conditions: [
+      { id: 'above_average', label: 'Volume above average (high interest)', signal: 'NEUTRAL', description: 'Confirms price movement' },
+      { id: 'volume_spike', label: 'Volume spike (2x average)', signal: 'NEUTRAL', description: 'Significant activity' },
+    ]
+  },
+
+  // Support/Resistance
+  SUPPORT_RESISTANCE: {
+    name: 'Support/Resistance Levels',
+    category: 'pattern',
+    icon: '🎚️',
+    description: 'Key price levels where reversals may occur',
+    parameters: {
+      lookback: { label: 'Lookback Period', type: 'number', default: 50, min: 10, max: 200 }
+    },
+    conditions: [
+      { id: 'bounces_off_support', label: 'Price bounces off Support', signal: 'CALL', description: 'Support holding - bullish' },
+      { id: 'breaks_below_support', label: 'Price breaks below Support', signal: 'PUT', description: 'Support broken - bearish' },
+      { id: 'rejected_at_resistance', label: 'Price rejected at Resistance', signal: 'PUT', description: 'Resistance holding - bearish' },
+      { id: 'breaks_above_resistance', label: 'Price breaks above Resistance', signal: 'CALL', description: 'Resistance broken - bullish' },
+    ]
+  },
+
+  // Price Action
+  CANDLESTICK: {
+    name: 'Candlestick Patterns',
+    category: 'pattern',
+    icon: '🕯️',
+    description: 'Classic candlestick reversal patterns',
+    parameters: {},
+    conditions: [
+      { id: 'bullish_engulfing', label: 'Bullish Engulfing pattern', signal: 'CALL', description: 'Strong reversal signal' },
+      { id: 'bearish_engulfing', label: 'Bearish Engulfing pattern', signal: 'PUT', description: 'Strong reversal signal' },
+      { id: 'hammer', label: 'Hammer (bullish)', signal: 'CALL', description: 'Reversal at bottom' },
+      { id: 'shooting_star', label: 'Shooting Star (bearish)', signal: 'PUT', description: 'Reversal at top' },
+      { id: 'doji', label: 'Doji (indecision)', signal: 'NEUTRAL', description: 'Potential reversal' },
+      { id: 'morning_star', label: 'Morning Star (bullish)', signal: 'CALL', description: 'Three-candle reversal' },
+      { id: 'evening_star', label: 'Evening Star (bearish)', signal: 'PUT', description: 'Three-candle reversal' },
+    ]
+  },
+
+  // Williams %R
+  WILLIAMS_R: {
+    name: 'Williams %R',
+    category: 'momentum',
+    icon: '📈',
+    description: 'Momentum indicator similar to Stochastic',
+    parameters: {
+      period: { label: 'Period', type: 'number', default: 14, min: 5, max: 50 },
+      overbought: { label: 'Overbought', type: 'number', default: -20, min: -10, max: -30 },
+      oversold: { label: 'Oversold', type: 'number', default: -80, min: -70, max: -90 }
+    },
+    conditions: [
+      { id: 'exits_oversold', label: 'Exits oversold zone (above -80)', signal: 'CALL', description: 'Bullish momentum' },
+      { id: 'exits_overbought', label: 'Exits overbought zone (below -20)', signal: 'PUT', description: 'Bearish momentum' },
+    ]
+  },
+
+  CCI: {
+    name: 'CCI (Commodity Channel Index)',
+    category: 'momentum',
+    icon: '🌊',
+    description: 'Measures current price vs average price',
+    parameters: {
+      period: { label: 'Period', type: 'number', default: 20, min: 5, max: 50 },
+      overbought: { label: 'Overbought', type: 'number', default: 100, min: 50, max: 200 },
+      oversold: { label: 'Oversold', type: 'number', default: -100, min: -200, max: -50 }
+    },
+    conditions: [
+      { id: 'crosses_above_oversold', label: 'CCI crosses above oversold', signal: 'CALL', description: 'Bullish reversal' },
+      { id: 'crosses_below_overbought', label: 'CCI crosses below overbought', signal: 'PUT', description: 'Bearish reversal' },
+      { id: 'crosses_above_zero', label: 'CCI crosses above zero', signal: 'CALL', description: 'Bullish momentum' },
+      { id: 'crosses_below_zero', label: 'CCI crosses below zero', signal: 'PUT', description: 'Bearish momentum' },
+    ]
+  },
+
+  // Parabolic SAR
+  PARABOLIC_SAR: {
+    name: 'Parabolic SAR',
+    category: 'trend',
+    icon: '⭐',
+    description: 'Stop and Reverse - trend following',
+    parameters: {
+      acceleration: { label: 'Acceleration', type: 'number', default: 0.02, min: 0.01, max: 0.1, step: 0.01 },
+      maximum: { label: 'Maximum', type: 'number', default: 0.2, min: 0.1, max: 0.5, step: 0.05 }
+    },
+    conditions: [
+      { id: 'sar_flips_below', label: 'SAR flips below price (bullish)', signal: 'CALL', description: 'Trend changed to up' },
+      { id: 'sar_flips_above', label: 'SAR flips above price (bearish)', signal: 'PUT', description: 'Trend changed to down' },
+    ]
+  },
+
+  // Ichimoku
+  ICHIMOKU: {
+    name: 'Ichimoku Cloud',
+    category: 'trend',
+    icon: '☁️',
+    description: 'Complete trading system with multiple signals',
+    parameters: {
+      tenkan: { label: 'Tenkan Period', type: 'number', default: 9, min: 5, max: 30 },
+      kijun: { label: 'Kijun Period', type: 'number', default: 26, min: 10, max: 60 },
+      senkou: { label: 'Senkou Span B', type: 'number', default: 52, min: 20, max: 120 }
+    },
+    conditions: [
+      { id: 'price_above_cloud', label: 'Price above Cloud (bullish)', signal: 'CALL', description: 'Strong uptrend' },
+      { id: 'price_below_cloud', label: 'Price below Cloud (bearish)', signal: 'PUT', description: 'Strong downtrend' },
+      { id: 'tenkan_crosses_kijun_up', label: 'Tenkan crosses above Kijun', signal: 'CALL', description: 'Bullish TK cross' },
+      { id: 'tenkan_crosses_kijun_down', label: 'Tenkan crosses below Kijun', signal: 'PUT', description: 'Bearish TK cross' },
+      { id: 'cloud_turns_bullish', label: 'Cloud turns bullish (green)', signal: 'CALL', description: 'Future trend bullish' },
+      { id: 'cloud_turns_bearish', label: 'Cloud turns bearish (red)', signal: 'PUT', description: 'Future trend bearish' },
+    ]
+  },
+};
 
 // Timeframe options
 const timeframes = [
@@ -67,9 +341,8 @@ const timeframes = [
   { value: '1h', label: '1 Hour' }
 ];
 
-// Asset options - Complete list including OTC markets
+// Asset options (abbreviated - full list from before)
 const assets = [
-  // ===================== REGULAR MARKETS =====================
   // Forex Major
   { value: 'EURUSD', label: 'EUR/USD', category: 'Forex Major', market: 'regular' },
   { value: 'GBPUSD', label: 'GBP/USD', category: 'Forex Major', market: 'regular' },
@@ -81,204 +354,76 @@ const assets = [
   // Forex Minor
   { value: 'EURGBP', label: 'EUR/GBP', category: 'Forex Minor', market: 'regular' },
   { value: 'EURJPY', label: 'EUR/JPY', category: 'Forex Minor', market: 'regular' },
-  { value: 'EURCHF', label: 'EUR/CHF', category: 'Forex Minor', market: 'regular' },
-  { value: 'EURCAD', label: 'EUR/CAD', category: 'Forex Minor', market: 'regular' },
-  { value: 'EURAUD', label: 'EUR/AUD', category: 'Forex Minor', market: 'regular' },
   { value: 'GBPJPY', label: 'GBP/JPY', category: 'Forex Minor', market: 'regular' },
-  { value: 'GBPCHF', label: 'GBP/CHF', category: 'Forex Minor', market: 'regular' },
-  { value: 'GBPCAD', label: 'GBP/CAD', category: 'Forex Minor', market: 'regular' },
-  { value: 'CHFJPY', label: 'CHF/JPY', category: 'Forex Minor', market: 'regular' },
-  { value: 'CADJPY', label: 'CAD/JPY', category: 'Forex Minor', market: 'regular' },
   { value: 'AUDJPY', label: 'AUD/JPY', category: 'Forex Minor', market: 'regular' },
-  { value: 'AUDCHF', label: 'AUD/CHF', category: 'Forex Minor', market: 'regular' },
-  { value: 'NZDJPY', label: 'NZD/JPY', category: 'Forex Minor', market: 'regular' },
-  // Forex Exotic
-  { value: 'USDMXN', label: 'USD/MXN', category: 'Forex Exotic', market: 'regular' },
-  { value: 'USDBRL', label: 'USD/BRL', category: 'Forex Exotic', market: 'regular' },
-  { value: 'USDTRY', label: 'USD/TRY', category: 'Forex Exotic', market: 'regular' },
-  { value: 'USDZAR', label: 'USD/ZAR', category: 'Forex Exotic', market: 'regular' },
-  { value: 'USDPLN', label: 'USD/PLN', category: 'Forex Exotic', market: 'regular' },
-  { value: 'USDSGD', label: 'USD/SGD', category: 'Forex Exotic', market: 'regular' },
-  { value: 'USDHKD', label: 'USD/HKD', category: 'Forex Exotic', market: 'regular' },
-  { value: 'USDTHB', label: 'USD/THB', category: 'Forex Exotic', market: 'regular' },
-  { value: 'USDSEK', label: 'USD/SEK', category: 'Forex Exotic', market: 'regular' },
-  { value: 'USDNOK', label: 'USD/NOK', category: 'Forex Exotic', market: 'regular' },
-  // Crypto Major
+  { value: 'CADJPY', label: 'CAD/JPY', category: 'Forex Minor', market: 'regular' },
+  // Crypto
   { value: 'BTCUSD', label: 'BTC/USD', category: 'Crypto', market: 'regular' },
   { value: 'ETHUSD', label: 'ETH/USD', category: 'Crypto', market: 'regular' },
   { value: 'LTCUSD', label: 'LTC/USD', category: 'Crypto', market: 'regular' },
-  { value: 'ADAUSD', label: 'ADA/USD', category: 'Crypto', market: 'regular' },
-  { value: 'DOTUSD', label: 'DOT/USD', category: 'Crypto', market: 'regular' },
-  { value: 'BNBUSD', label: 'BNB/USD', category: 'Crypto', market: 'regular' },
-  // Crypto Altcoins
-  { value: 'DOGEUSD', label: 'DOGE/USD', category: 'Crypto Alt', market: 'regular' },
-  { value: 'SOLUSD', label: 'SOL/USD', category: 'Crypto Alt', market: 'regular' },
-  { value: 'AVAXUSD', label: 'AVAX/USD', category: 'Crypto Alt', market: 'regular' },
-  { value: 'MATICUSD', label: 'MATIC/USD', category: 'Crypto Alt', market: 'regular' },
-  { value: 'LINKUSD', label: 'LINK/USD', category: 'Crypto Alt', market: 'regular' },
-  { value: 'TONUSD', label: 'TON/USD', category: 'Crypto Alt', market: 'regular' },
-  { value: 'ATOMUSD', label: 'ATOM/USD', category: 'Crypto Alt', market: 'regular' },
-  { value: 'NEARUSD', label: 'NEAR/USD', category: 'Crypto Alt', market: 'regular' },
-  { value: 'APTOUSD', label: 'APT/USD', category: 'Crypto Alt', market: 'regular' },
-  { value: 'OPUSD', label: 'OP/USD', category: 'Crypto Alt', market: 'regular' },
-  { value: 'ARBUSD', label: 'ARB/USD', category: 'Crypto Alt', market: 'regular' },
-  { value: 'UNIUSD', label: 'UNI/USD', category: 'Crypto DeFi', market: 'regular' },
-  { value: 'AAVEUSD', label: 'AAVE/USD', category: 'Crypto DeFi', market: 'regular' },
-  { value: 'SHIBUSDT', label: 'SHIB/USD', category: 'Crypto Meme', market: 'regular' },
-  { value: 'FLOKIUSD', label: 'FLOKI/USD', category: 'Crypto Meme', market: 'regular' },
-  // Stocks - Tech
-  { value: 'AAPL', label: 'AAPL - Apple', category: 'Stocks Tech', market: 'regular' },
-  { value: 'MSFT', label: 'MSFT - Microsoft', category: 'Stocks Tech', market: 'regular' },
-  { value: 'GOOGL', label: 'GOOGL - Alphabet', category: 'Stocks Tech', market: 'regular' },
-  { value: 'AMZN', label: 'AMZN - Amazon', category: 'Stocks Tech', market: 'regular' },
-  { value: 'TSLA', label: 'TSLA - Tesla', category: 'Stocks Tech', market: 'regular' },
-  { value: 'META', label: 'META - Meta', category: 'Stocks Tech', market: 'regular' },
-  { value: 'NFLX', label: 'NFLX - Netflix', category: 'Stocks Tech', market: 'regular' },
-  { value: 'NVDA', label: 'NVDA - NVIDIA', category: 'Stocks Tech', market: 'regular' },
-  { value: 'BABA', label: 'BABA - Alibaba', category: 'Stocks Tech', market: 'regular' },
-  // Stocks - Financial
-  { value: 'JPM', label: 'JPM - JPMorgan', category: 'Stocks Finance', market: 'regular' },
-  { value: 'BAC', label: 'BAC - Bank of America', category: 'Stocks Finance', market: 'regular' },
-  { value: 'WFC', label: 'WFC - Wells Fargo', category: 'Stocks Finance', market: 'regular' },
-  { value: 'GS', label: 'GS - Goldman Sachs', category: 'Stocks Finance', market: 'regular' },
-  { value: 'MS', label: 'MS - Morgan Stanley', category: 'Stocks Finance', market: 'regular' },
-  // Stocks - Consumer
-  { value: 'MCD', label: 'MCD - McDonalds', category: 'Stocks Consumer', market: 'regular' },
-  { value: 'KO', label: 'KO - Coca-Cola', category: 'Stocks Consumer', market: 'regular' },
-  { value: 'WMT', label: 'WMT - Walmart', category: 'Stocks Consumer', market: 'regular' },
-  { value: 'BA', label: 'BA - Boeing', category: 'Stocks Industrial', market: 'regular' },
-  { value: 'CAT', label: 'CAT - Caterpillar', category: 'Stocks Industrial', market: 'regular' },
-  { value: 'JNJ', label: 'JNJ - J&J', category: 'Stocks Healthcare', market: 'regular' },
-  { value: 'PFE', label: 'PFE - Pfizer', category: 'Stocks Healthcare', market: 'regular' },
+  { value: 'SOLUSD', label: 'SOL/USD', category: 'Crypto', market: 'regular' },
+  { value: 'DOGEUSD', label: 'DOGE/USD', category: 'Crypto', market: 'regular' },
   // Commodities
   { value: 'XAUUSD', label: 'XAU/USD - Gold', category: 'Commodities', market: 'regular' },
   { value: 'XAGUSD', label: 'XAG/USD - Silver', category: 'Commodities', market: 'regular' },
-  { value: 'BRENTOIL', label: 'Brent Oil', category: 'Commodities', market: 'regular' },
-  { value: 'WTIUSD', label: 'WTI Crude Oil', category: 'Commodities', market: 'regular' },
-  { value: 'NATGAS', label: 'Natural Gas', category: 'Commodities', market: 'regular' },
-  { value: 'XPTUSD', label: 'XPT/USD - Platinum', category: 'Commodities', market: 'regular' },
-  { value: 'XPDUSD', label: 'XPD/USD - Palladium', category: 'Commodities', market: 'regular' },
   // Indices
-  { value: 'US100', label: 'US100 - NASDAQ', category: 'Indices', market: 'regular' },
-  { value: 'US30', label: 'US30 - Dow Jones', category: 'Indices', market: 'regular' },
-  { value: 'SPX500', label: 'SPX500 - S&P 500', category: 'Indices', market: 'regular' },
-  { value: 'US2000', label: 'US2000 - Russell 2000', category: 'Indices', market: 'regular' },
-  { value: 'GER40', label: 'GER40 - DAX', category: 'Indices', market: 'regular' },
-  { value: 'UK100', label: 'UK100 - FTSE', category: 'Indices', market: 'regular' },
-  { value: 'FRA40', label: 'FRA40 - CAC 40', category: 'Indices', market: 'regular' },
-  { value: 'ESP35', label: 'ESP35 - IBEX 35', category: 'Indices', market: 'regular' },
-  { value: 'ITA40', label: 'ITA40 - FTSE MIB', category: 'Indices', market: 'regular' },
-  { value: 'E35EUR', label: 'E35EUR - EuroStoxx', category: 'Indices', market: 'regular' },
-  { value: 'JPN225', label: 'JPN225 - Nikkei', category: 'Indices', market: 'regular' },
-  { value: 'HK50', label: 'HK50 - Hang Seng', category: 'Indices', market: 'regular' },
-  { value: 'CHINA50', label: 'CHINA50 - China A50', category: 'Indices', market: 'regular' },
-  { value: 'AUS200', label: 'AUS200 - ASX 200', category: 'Indices', market: 'regular' },
-  
-  // ===================== OTC MARKETS (24/7 Trading) =====================
-  // OTC Forex Major
+  { value: 'US100', label: 'NASDAQ 100', category: 'Indices', market: 'regular' },
+  { value: 'US30', label: 'Dow Jones', category: 'Indices', market: 'regular' },
+  { value: 'SPX500', label: 'S&P 500', category: 'Indices', market: 'regular' },
+  // OTC
   { value: 'EURUSD_OTC', label: '🟢 EUR/USD OTC', category: 'OTC Forex', market: 'otc' },
   { value: 'GBPUSD_OTC', label: '🟢 GBP/USD OTC', category: 'OTC Forex', market: 'otc' },
   { value: 'USDJPY_OTC', label: '🟢 USD/JPY OTC', category: 'OTC Forex', market: 'otc' },
-  { value: 'AUDUSD_OTC', label: '🟢 AUD/USD OTC', category: 'OTC Forex', market: 'otc' },
-  { value: 'USDCHF_OTC', label: '🟢 USD/CHF OTC', category: 'OTC Forex', market: 'otc' },
-  { value: 'USDCAD_OTC', label: '🟢 USD/CAD OTC', category: 'OTC Forex', market: 'otc' },
-  { value: 'NZDUSD_OTC', label: '🟢 NZD/USD OTC', category: 'OTC Forex', market: 'otc' },
-  { value: 'EURGBP_OTC', label: '🟢 EUR/GBP OTC', category: 'OTC Forex', market: 'otc' },
-  { value: 'EURJPY_OTC', label: '🟢 EUR/JPY OTC', category: 'OTC Forex', market: 'otc' },
-  { value: 'GBPJPY_OTC', label: '🟢 GBP/JPY OTC', category: 'OTC Forex', market: 'otc' },
-  { value: 'AUDCAD_OTC', label: '🟢 AUD/CAD OTC', category: 'OTC Forex', market: 'otc' },
-  { value: 'GBPCAD_OTC', label: '🟢 GBP/CAD OTC', category: 'OTC Forex', market: 'otc' },
-  { value: 'GBPAUD_OTC', label: '🟢 GBP/AUD OTC', category: 'OTC Forex', market: 'otc' },
-  { value: 'AUDNZD_OTC', label: '🟢 AUD/NZD OTC', category: 'OTC Forex', market: 'otc' },
-  { value: 'NZDCAD_OTC', label: '🟢 NZD/CAD OTC', category: 'OTC Forex', market: 'otc' },
-  // OTC Crypto
   { value: 'BTCUSD_OTC', label: '🟢 BTC/USD OTC', category: 'OTC Crypto', market: 'otc' },
-  { value: 'ETHUSD_OTC', label: '🟢 ETH/USD OTC', category: 'OTC Crypto', market: 'otc' },
-  { value: 'LTCUSD_OTC', label: '🟢 LTC/USD OTC', category: 'OTC Crypto', market: 'otc' },
-  // OTC Commodities
   { value: 'XAUUSD_OTC', label: '🟢 Gold OTC', category: 'OTC Commodities', market: 'otc' },
-  { value: 'XAGUSD_OTC', label: '🟢 Silver OTC', category: 'OTC Commodities', market: 'otc' },
-  // OTC Indices
-  { value: 'US100_OTC', label: '🟢 NASDAQ OTC', category: 'OTC Indices', market: 'otc' },
-  { value: 'US30_OTC', label: '🟢 Dow Jones OTC', category: 'OTC Indices', market: 'otc' },
-  { value: 'SPX500_OTC', label: '🟢 S&P 500 OTC', category: 'OTC Indices', market: 'otc' },
 ];
 
-// Default empty condition
-const createEmptyCondition = () => ({
-  id: `cond_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-  indicator: 'RSI',
-  parameters: { period: 14 },
-  output: 'value',
-  operator: '>',
-  compare_to: 'value',
-  compare_value: 70
-});
-
-// Default empty condition group
-const createEmptyConditionGroup = () => ({
-  id: `group_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-  conditions: [createEmptyCondition()],
-  logical_operator: 'AND'
-});
-
-// Condition Editor Component
-const ConditionEditor = ({ condition, indicators, onChange, onRemove, index }) => {
-  const indicatorConfig = indicators[condition.indicator] || {};
-  const outputs = indicatorConfig.outputs || ['value'];
-  const parameters = indicatorConfig.parameters || {};
-
-  const handleIndicatorChange = (newIndicator) => {
-    const newConfig = indicators[newIndicator] || {};
-    const newParams = {};
-    Object.entries(newConfig.parameters || {}).forEach(([key, config]) => {
-      newParams[key] = config.default;
-    });
-    onChange({
-      ...condition,
-      indicator: newIndicator,
-      parameters: newParams,
-      output: (newConfig.outputs || ['value'])[0]
-    });
-  };
-
-  const handleParameterChange = (paramName, value) => {
-    onChange({
-      ...condition,
-      parameters: { ...condition.parameters, [paramName]: value }
-    });
-  };
+// =====================================================
+// CONDITION CARD COMPONENT
+// =====================================================
+const ConditionCard = ({ condition, onRemove, onUpdate, index }) => {
+  const template = INDICATOR_TEMPLATES[condition.indicator];
+  const selectedCondition = template?.conditions.find(c => c.id === condition.conditionType);
 
   return (
-    <div className="p-4 bg-slate-800/50 rounded-lg border border-slate-600/50 space-y-4">
-      <div className="flex items-center justify-between">
-        <Badge variant="outline" className="text-xs">
-          Condition {index + 1}
-        </Badge>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onRemove}
-          className="text-red-400 hover:text-red-300 hover:bg-red-500/20"
-        >
+    <div className={`p-4 rounded-lg border-2 ${
+      selectedCondition?.signal === 'CALL' ? 'border-green-500/30 bg-green-500/5' :
+      selectedCondition?.signal === 'PUT' ? 'border-red-500/30 bg-red-500/5' :
+      'border-slate-600/30 bg-slate-800/30'
+    }`}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <span className="text-lg">{template?.icon || '📊'}</span>
+          <span className="font-medium text-white">{template?.name || condition.indicator}</span>
+          {selectedCondition && (
+            <Badge className={
+              selectedCondition.signal === 'CALL' ? 'bg-green-500/20 text-green-400' :
+              selectedCondition.signal === 'PUT' ? 'bg-red-500/20 text-red-400' :
+              'bg-slate-500/20 text-slate-400'
+            }>
+              {selectedCondition.signal}
+            </Badge>
+          )}
+        </div>
+        <Button variant="ghost" size="sm" onClick={onRemove} className="text-red-400 hover:bg-red-500/20">
           <Trash2 className="w-4 h-4" />
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Indicator Selection */}
+      {/* Indicator Selection */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <div>
           <Label className="text-xs text-slate-400">Indicator</Label>
-          <Select value={condition.indicator} onValueChange={handleIndicatorChange}>
+          <Select value={condition.indicator} onValueChange={(v) => onUpdate({ ...condition, indicator: v, conditionType: '' })}>
             <SelectTrigger className="bg-slate-700/50 border-slate-600">
-              <SelectValue />
+              <SelectValue placeholder="Select indicator..." />
             </SelectTrigger>
             <SelectContent className="bg-slate-800 border-slate-600 max-h-80">
-              {Object.entries(indicators).map(([key, config]) => (
+              {Object.entries(INDICATOR_TEMPLATES).map(([key, ind]) => (
                 <SelectItem key={key} value={key}>
                   <span className="flex items-center gap-2">
-                    {categoryIcons[config.category] || <Settings className="w-4 h-4" />}
-                    {config.name}
+                    <span>{ind.icon}</span>
+                    {ind.name}
                   </span>
                 </SelectItem>
               ))}
@@ -286,234 +431,89 @@ const ConditionEditor = ({ condition, indicators, onChange, onRemove, index }) =
           </Select>
         </div>
 
-        {/* Output Selection (for multi-output indicators) */}
-        {outputs.length > 1 && (
+        {/* Condition Selection */}
+        {template && (
           <div>
-            <Label className="text-xs text-slate-400">Output</Label>
-            <Select 
-              value={condition.output} 
-              onValueChange={(v) => onChange({ ...condition, output: v })}
-            >
+            <Label className="text-xs text-slate-400">Condition</Label>
+            <Select value={condition.conditionType} onValueChange={(v) => onUpdate({ ...condition, conditionType: v })}>
               <SelectTrigger className="bg-slate-700/50 border-slate-600">
-                <SelectValue />
+                <SelectValue placeholder="Select condition..." />
               </SelectTrigger>
-              <SelectContent className="bg-slate-800 border-slate-600">
-                {outputs.map(output => (
-                  <SelectItem key={output} value={output}>
-                    {output}
+              <SelectContent className="bg-slate-800 border-slate-600 max-h-80">
+                {template.conditions.map((cond) => (
+                  <SelectItem key={cond.id} value={cond.id}>
+                    <span className="flex items-center gap-2">
+                      {cond.signal === 'CALL' && <ArrowUp className="w-3 h-3 text-green-400" />}
+                      {cond.signal === 'PUT' && <ArrowDown className="w-3 h-3 text-red-400" />}
+                      {cond.label}
+                    </span>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
         )}
-
-        {/* Operator Selection */}
-        <div>
-          <Label className="text-xs text-slate-400">Operator</Label>
-          <Select 
-            value={condition.operator} 
-            onValueChange={(v) => onChange({ ...condition, operator: v })}
-          >
-            <SelectTrigger className="bg-slate-700/50 border-slate-600">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="bg-slate-800 border-slate-600">
-              {operators.map(op => (
-                <SelectItem key={op.value} value={op.value}>
-                  {op.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Compare Value */}
-        <div>
-          <Label className="text-xs text-slate-400">Compare To</Label>
-          <Input
-            type="number"
-            value={condition.compare_value}
-            onChange={(e) => onChange({ ...condition, compare_value: parseFloat(e.target.value) || 0 })}
-            className="bg-slate-700/50 border-slate-600"
-            step="0.01"
-          />
-        </div>
       </div>
 
-      {/* Indicator Parameters */}
-      {Object.keys(parameters).length > 0 && (
-        <div className="pt-2 border-t border-slate-600/50">
-          <Label className="text-xs text-slate-400 mb-2 block">Parameters</Label>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {Object.entries(parameters).map(([paramName, paramConfig]) => (
-              <div key={paramName}>
-                <Label className="text-xs text-slate-500">{paramConfig.description || paramName}</Label>
-                {paramConfig.type === 'select' ? (
-                  <Select 
-                    value={String(condition.parameters[paramName] || paramConfig.default)}
-                    onValueChange={(v) => handleParameterChange(paramName, v)}
-                  >
-                    <SelectTrigger className="bg-slate-700/50 border-slate-600 h-8 text-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-slate-600">
-                      {(paramConfig.options || []).map(opt => (
-                        <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <Input
-                    type="number"
-                    value={condition.parameters[paramName] || paramConfig.default}
-                    onChange={(e) => handleParameterChange(paramName, parseFloat(e.target.value) || paramConfig.default)}
-                    min={paramConfig.min}
-                    max={paramConfig.max}
-                    step={paramConfig.type === 'float' ? 0.1 : 1}
-                    className="bg-slate-700/50 border-slate-600 h-8 text-sm"
-                  />
-                )}
-              </div>
-            ))}
-          </div>
+      {/* Parameters */}
+      {template && Object.keys(template.parameters).length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+          {Object.entries(template.parameters).map(([key, param]) => (
+            <div key={key}>
+              <Label className="text-xs text-slate-500">{param.label}</Label>
+              <Input
+                type="number"
+                value={condition.parameters?.[key] ?? param.default}
+                onChange={(e) => onUpdate({
+                  ...condition,
+                  parameters: { ...condition.parameters, [key]: parseFloat(e.target.value) || param.default }
+                })}
+                min={param.min}
+                max={param.max}
+                step={param.step || 1}
+                className="h-8 bg-slate-700/50 border-slate-600 text-sm"
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Description */}
+      {selectedCondition && (
+        <div className="text-xs text-slate-400 italic">
+          💡 {selectedCondition.description}
         </div>
       )}
     </div>
   );
 };
 
-// Condition Group Component
-const ConditionGroupEditor = ({ group, indicators, onChange, onRemove, direction }) => {
-  const addCondition = () => {
-    onChange({
-      ...group,
-      conditions: [...group.conditions, createEmptyCondition()]
-    });
-  };
-
-  const updateCondition = (index, updatedCondition) => {
-    const newConditions = [...group.conditions];
-    newConditions[index] = updatedCondition;
-    onChange({ ...group, conditions: newConditions });
-  };
-
-  const removeCondition = (index) => {
-    if (group.conditions.length > 1) {
-      const newConditions = group.conditions.filter((_, i) => i !== index);
-      onChange({ ...group, conditions: newConditions });
-    }
-  };
-
-  return (
-    <div className={`p-4 rounded-lg border-2 ${
-      direction === 'call' ? 'border-green-500/30 bg-green-500/5' : 'border-red-500/30 bg-red-500/5'
-    }`}>
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <Badge className={direction === 'call' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}>
-            {direction === 'call' ? '📈 CALL' : '📉 PUT'} Condition Group
-          </Badge>
-          <Select 
-            value={group.logical_operator} 
-            onValueChange={(v) => onChange({ ...group, logical_operator: v })}
-          >
-            <SelectTrigger className="w-24 h-8 bg-slate-700/50 border-slate-600">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="bg-slate-800 border-slate-600">
-              <SelectItem value="AND">AND</SelectItem>
-              <SelectItem value="OR">OR</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onRemove}
-          className="text-red-400 hover:text-red-300"
-        >
-          <Trash2 className="w-4 h-4 mr-1" />
-          Remove Group
-        </Button>
-      </div>
-
-      <div className="space-y-3">
-        {group.conditions.map((condition, index) => (
-          <React.Fragment key={condition.id}>
-            {index > 0 && (
-              <div className="flex items-center justify-center">
-                <Badge variant="outline" className="text-xs">
-                  {group.logical_operator}
-                </Badge>
-              </div>
-            )}
-            <ConditionEditor
-              condition={condition}
-              indicators={indicators}
-              index={index}
-              onChange={(updated) => updateCondition(index, updated)}
-              onRemove={() => removeCondition(index)}
-            />
-          </React.Fragment>
-        ))}
-      </div>
-
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={addCondition}
-        className="mt-3 w-full border-dashed"
-      >
-        <Plus className="w-4 h-4 mr-2" />
-        Add Condition
-      </Button>
-    </div>
-  );
-};
-
-// Main Strategy Builder Component
+// =====================================================
+// MAIN STRATEGY BUILDER COMPONENT
+// =====================================================
 const StrategyBuilder = () => {
-  // State
-  const [indicators, setIndicators] = useState({});
   const [strategies, setStrategies] = useState([]);
   const [selectedStrategy, setSelectedStrategy] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [isTesting, setIsTesting] = useState(false);
-  const [testResult, setTestResult] = useState(null);
   const [activeTab, setActiveTab] = useState('builder');
 
   // Strategy form state
   const [strategyForm, setStrategyForm] = useState({
     name: 'New Strategy',
     description: '',
-    call_conditions: [createEmptyConditionGroup()],
-    put_conditions: [createEmptyConditionGroup()],
+    conditions: [], // Simplified condition list
     timeframes: ['1m'],
     assets: ['EURUSD'],
-    markets: ['regular'],
     min_confidence: 75,
     max_signals_per_hour: 10,
     cooldown_seconds: 60,
     is_active: true
   });
 
-  // Fetch indicators and strategies on mount
   useEffect(() => {
-    fetchIndicators();
     fetchStrategies();
   }, []);
-
-  const fetchIndicators = async () => {
-    try {
-      const response = await axios.get(`${API_URL}/api/custom-strategies/indicators`);
-      setIndicators(response.data.indicators || {});
-    } catch (error) {
-      console.error('Error fetching indicators:', error);
-      toast.error('Failed to load indicators');
-    }
-  };
 
   const fetchStrategies = async () => {
     try {
@@ -522,24 +522,96 @@ const StrategyBuilder = () => {
       setStrategies(response.data.strategies || []);
     } catch (error) {
       console.error('Error fetching strategies:', error);
-      toast.error('Failed to load strategies');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const addCondition = () => {
+    setStrategyForm(prev => ({
+      ...prev,
+      conditions: [...prev.conditions, {
+        id: `cond_${Date.now()}`,
+        indicator: 'RSI',
+        conditionType: 'crosses_above_oversold',
+        parameters: {}
+      }]
+    }));
+  };
+
+  const updateCondition = (index, updated) => {
+    setStrategyForm(prev => {
+      const newConditions = [...prev.conditions];
+      newConditions[index] = updated;
+      return { ...prev, conditions: newConditions };
+    });
+  };
+
+  const removeCondition = (index) => {
+    setStrategyForm(prev => ({
+      ...prev,
+      conditions: prev.conditions.filter((_, i) => i !== index)
+    }));
   };
 
   const saveStrategy = async () => {
     try {
       setIsSaving(true);
       
+      // Convert our simplified format to the backend format
+      const callConditions = strategyForm.conditions
+        .filter(c => {
+          const template = INDICATOR_TEMPLATES[c.indicator];
+          const cond = template?.conditions.find(x => x.id === c.conditionType);
+          return cond?.signal === 'CALL';
+        })
+        .map(c => ({
+          id: c.id,
+          conditions: [{
+            id: `${c.id}_inner`,
+            indicator: c.indicator,
+            parameters: c.parameters || {},
+            conditionType: c.conditionType
+          }],
+          logical_operator: 'AND'
+        }));
+
+      const putConditions = strategyForm.conditions
+        .filter(c => {
+          const template = INDICATOR_TEMPLATES[c.indicator];
+          const cond = template?.conditions.find(x => x.id === c.conditionType);
+          return cond?.signal === 'PUT';
+        })
+        .map(c => ({
+          id: c.id,
+          conditions: [{
+            id: `${c.id}_inner`,
+            indicator: c.indicator,
+            parameters: c.parameters || {},
+            conditionType: c.conditionType
+          }],
+          logical_operator: 'AND'
+        }));
+
+      const payload = {
+        name: strategyForm.name,
+        description: strategyForm.description,
+        call_conditions: callConditions,
+        put_conditions: putConditions,
+        timeframes: strategyForm.timeframes,
+        assets: strategyForm.assets,
+        min_confidence: strategyForm.min_confidence,
+        max_signals_per_hour: strategyForm.max_signals_per_hour,
+        cooldown_seconds: strategyForm.cooldown_seconds,
+        is_active: strategyForm.is_active
+      };
+
       if (selectedStrategy) {
-        // Update existing strategy
-        await axios.put(`${API_URL}/api/custom-strategies/${selectedStrategy.id}`, strategyForm);
-        toast.success('Strategy updated successfully!');
+        await axios.put(`${API_URL}/api/custom-strategies/${selectedStrategy.id}`, payload);
+        toast.success('Strategy updated!');
       } else {
-        // Create new strategy
-        await axios.post(`${API_URL}/api/custom-strategies`, strategyForm);
-        toast.success('Strategy created successfully!');
+        await axios.post(`${API_URL}/api/custom-strategies`, payload);
+        toast.success('Strategy created!');
       }
       
       fetchStrategies();
@@ -552,133 +624,19 @@ const StrategyBuilder = () => {
     }
   };
 
-  const testStrategy = async () => {
-    try {
-      setIsTesting(true);
-      setTestResult(null);
-      
-      // Save first if new strategy
-      let strategyId = selectedStrategy?.id;
-      if (!strategyId) {
-        const createResponse = await axios.post(`${API_URL}/api/custom-strategies`, strategyForm);
-        strategyId = createResponse.data.strategy?.id;
-        if (!strategyId) {
-          throw new Error('Failed to create strategy for testing');
-        }
-        fetchStrategies();
-      }
-      
-      const response = await axios.post(
-        `${API_URL}/api/custom-strategies/${strategyId}/test`,
-        null,
-        { params: { asset: strategyForm.assets[0], timeframe: strategyForm.timeframes[0] } }
-      );
-      
-      setTestResult(response.data);
-      
-      if (response.data.signal_generated) {
-        toast.success(`Signal generated: ${response.data.signal?.direction}`);
-      } else {
-        toast.info('No signal generated with current conditions');
-      }
-    } catch (error) {
-      console.error('Error testing strategy:', error);
-      toast.error('Failed to test strategy');
-    } finally {
-      setIsTesting(false);
-    }
-  };
-
-  const deleteStrategy = async (strategyId) => {
-    if (!window.confirm('Are you sure you want to delete this strategy?')) return;
-    
-    try {
-      await axios.delete(`${API_URL}/api/custom-strategies/${strategyId}`);
-      toast.success('Strategy deleted');
-      fetchStrategies();
-      if (selectedStrategy?.id === strategyId) {
-        resetForm();
-      }
-    } catch (error) {
-      console.error('Error deleting strategy:', error);
-      toast.error('Failed to delete strategy');
-    }
-  };
-
-  const duplicateStrategy = async (strategyId) => {
-    try {
-      await axios.post(`${API_URL}/api/custom-strategies/${strategyId}/duplicate`, null, {
-        params: { new_name: `Copy of ${strategies.find(s => s.id === strategyId)?.name || 'Strategy'}` }
-      });
-      toast.success('Strategy duplicated');
-      fetchStrategies();
-    } catch (error) {
-      console.error('Error duplicating strategy:', error);
-      toast.error('Failed to duplicate strategy');
-    }
-  };
-
-  const loadStrategy = (strategy) => {
-    setSelectedStrategy(strategy);
-    setStrategyForm({
-      name: strategy.name,
-      description: strategy.description || '',
-      call_conditions: strategy.call_conditions || [createEmptyConditionGroup()],
-      put_conditions: strategy.put_conditions || [createEmptyConditionGroup()],
-      timeframes: strategy.timeframes || ['1m'],
-      assets: strategy.assets || ['EURUSD'],
-      markets: strategy.markets || ['regular'],
-      min_confidence: strategy.min_confidence || 75,
-      max_signals_per_hour: strategy.max_signals_per_hour || 10,
-      cooldown_seconds: strategy.cooldown_seconds || 60,
-      is_active: strategy.is_active !== false
-    });
-    setActiveTab('builder');
-  };
-
   const resetForm = () => {
     setSelectedStrategy(null);
     setStrategyForm({
       name: 'New Strategy',
       description: '',
-      call_conditions: [createEmptyConditionGroup()],
-      put_conditions: [createEmptyConditionGroup()],
+      conditions: [],
       timeframes: ['1m'],
       assets: ['EURUSD'],
-      markets: ['regular'],
       min_confidence: 75,
       max_signals_per_hour: 10,
       cooldown_seconds: 60,
       is_active: true
     });
-    setTestResult(null);
-  };
-
-  const addConditionGroup = (direction) => {
-    const key = direction === 'call' ? 'call_conditions' : 'put_conditions';
-    setStrategyForm(prev => ({
-      ...prev,
-      [key]: [...prev[key], createEmptyConditionGroup()]
-    }));
-  };
-
-  const updateConditionGroup = (direction, index, updated) => {
-    const key = direction === 'call' ? 'call_conditions' : 'put_conditions';
-    setStrategyForm(prev => {
-      const newGroups = [...prev[key]];
-      newGroups[index] = updated;
-      return { ...prev, [key]: newGroups };
-    });
-  };
-
-  const removeConditionGroup = (direction, index) => {
-    const key = direction === 'call' ? 'call_conditions' : 'put_conditions';
-    if (strategyForm[key].length > 1) {
-      setStrategyForm(prev => ({
-        ...prev,
-        [key]: prev[key].filter((_, i) => i !== index)
-      }));
-    }
   };
 
   const toggleTimeframe = (tf) => {
@@ -703,35 +661,121 @@ const StrategyBuilder = () => {
     });
   };
 
+  const deleteStrategy = async (strategyId) => {
+    if (!window.confirm('Delete this strategy?')) return;
+    try {
+      await axios.delete(`${API_URL}/api/custom-strategies/${strategyId}`);
+      toast.success('Strategy deleted');
+      fetchStrategies();
+    } catch (error) {
+      toast.error('Failed to delete');
+    }
+  };
+
+  // Quick Templates
+  const applyTemplate = (templateName) => {
+    const templates = {
+      'EMA Crossover': {
+        name: 'EMA 7/21 Crossover',
+        description: 'Classic EMA crossover strategy',
+        conditions: [
+          { id: 'c1', indicator: 'EMA_CROSSOVER', conditionType: 'golden_cross', parameters: { fast_period: 7, slow_period: 21 } },
+          { id: 'c2', indicator: 'EMA_CROSSOVER', conditionType: 'death_cross', parameters: { fast_period: 7, slow_period: 21 } }
+        ]
+      },
+      'RSI Reversal': {
+        name: 'RSI Oversold/Overbought',
+        description: 'Buy oversold, sell overbought',
+        conditions: [
+          { id: 'c1', indicator: 'RSI', conditionType: 'crosses_above_oversold', parameters: { period: 14, oversold: 30, overbought: 70 } },
+          { id: 'c2', indicator: 'RSI', conditionType: 'crosses_below_overbought', parameters: { period: 14, oversold: 30, overbought: 70 } }
+        ]
+      },
+      'Bollinger Breakout': {
+        name: 'Bollinger Bands Breakout',
+        description: 'Trade breakouts from BB',
+        conditions: [
+          { id: 'c1', indicator: 'BOLLINGER_BANDS', conditionType: 'price_breaks_above_upper', parameters: { period: 20, std_dev: 2 } },
+          { id: 'c2', indicator: 'BOLLINGER_BANDS', conditionType: 'price_breaks_below_lower', parameters: { period: 20, std_dev: 2 } }
+        ]
+      },
+      'MACD Signal': {
+        name: 'MACD Crossover',
+        description: 'MACD line crosses signal line',
+        conditions: [
+          { id: 'c1', indicator: 'MACD', conditionType: 'macd_crosses_above_signal', parameters: { fast_period: 12, slow_period: 26, signal_period: 9 } },
+          { id: 'c2', indicator: 'MACD', conditionType: 'macd_crosses_below_signal', parameters: { fast_period: 12, slow_period: 26, signal_period: 9 } }
+        ]
+      },
+      'SuperTrend': {
+        name: 'SuperTrend Trend Follow',
+        description: 'Follow SuperTrend signals',
+        conditions: [
+          { id: 'c1', indicator: 'SUPERTREND', conditionType: 'turns_bullish', parameters: { period: 10, multiplier: 3 } },
+          { id: 'c2', indicator: 'SUPERTREND', conditionType: 'turns_bearish', parameters: { period: 10, multiplier: 3 } }
+        ]
+      }
+    };
+
+    if (templates[templateName]) {
+      setStrategyForm(prev => ({
+        ...prev,
+        ...templates[templateName]
+      }));
+      toast.success(`Applied "${templateName}" template`);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold text-white mb-2">Custom Strategy Builder</h2>
-          <p className="text-slate-400">Create custom trading strategies with AND/OR condition logic</p>
+          <h2 className="text-3xl font-bold text-white mb-2">Strategy Builder</h2>
+          <p className="text-slate-400">Create custom trading strategies with TradingView-style conditions</p>
         </div>
-        <div className="flex gap-2">
-          <Button
-            onClick={resetForm}
-            variant="outline"
-            className="border-slate-600"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            New Strategy
-          </Button>
-        </div>
+        <Button onClick={resetForm} variant="outline" className="border-slate-600">
+          <Plus className="w-4 h-4 mr-2" />
+          New Strategy
+        </Button>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="bg-slate-800/50">
           <TabsTrigger value="builder">🛠️ Builder</TabsTrigger>
-          <TabsTrigger value="strategies">📋 My Strategies ({strategies.length})</TabsTrigger>
+          <TabsTrigger value="templates">📋 Quick Templates</TabsTrigger>
+          <TabsTrigger value="strategies">💾 My Strategies ({strategies.length})</TabsTrigger>
         </TabsList>
+
+        {/* Templates Tab */}
+        <TabsContent value="templates">
+          <Card className="glass-dark border-slate-700/50">
+            <CardHeader>
+              <CardTitle className="text-white">Quick Start Templates</CardTitle>
+              <CardDescription>Click a template to instantly apply it</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {['EMA Crossover', 'RSI Reversal', 'Bollinger Breakout', 'MACD Signal', 'SuperTrend'].map(name => (
+                  <Card 
+                    key={name} 
+                    className="cursor-pointer hover:border-purple-500/50 transition-colors border-slate-600"
+                    onClick={() => { applyTemplate(name); setActiveTab('builder'); }}
+                  >
+                    <CardContent className="p-4">
+                      <div className="font-medium text-white">{name}</div>
+                      <div className="text-sm text-slate-400 mt-1">Click to use this strategy</div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         {/* Builder Tab */}
         <TabsContent value="builder" className="space-y-6">
-          {/* Strategy Name & Description */}
+          {/* Strategy Name */}
           <Card className="glass-dark border-slate-700/50">
             <CardHeader>
               <CardTitle className="text-white">Strategy Details</CardTitle>
@@ -743,7 +787,6 @@ const StrategyBuilder = () => {
                   <Input
                     value={strategyForm.name}
                     onChange={(e) => setStrategyForm(prev => ({ ...prev, name: e.target.value }))}
-                    placeholder="My Custom Strategy"
                     className="bg-slate-800/50 border-slate-600"
                   />
                 </div>
@@ -752,87 +795,72 @@ const StrategyBuilder = () => {
                   <Input
                     value={strategyForm.description}
                     onChange={(e) => setStrategyForm(prev => ({ ...prev, description: e.target.value }))}
-                    placeholder="Brief description of your strategy"
                     className="bg-slate-800/50 border-slate-600"
                   />
                 </div>
               </div>
+            </CardContent>
+          </Card>
 
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <Switch
-                    checked={strategyForm.is_active}
-                    onCheckedChange={(checked) => setStrategyForm(prev => ({ ...prev, is_active: checked }))}
-                  />
-                  <Label>Active</Label>
+          {/* Conditions */}
+          <Card className="glass-dark border-slate-700/50">
+            <CardHeader>
+              <CardTitle className="text-white flex items-center gap-2">
+                📊 Trading Conditions
+                <Badge variant="outline">{strategyForm.conditions.length} conditions</Badge>
+              </CardTitle>
+              <CardDescription>
+                Add indicators and select when to trigger CALL (buy) or PUT (sell) signals
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {strategyForm.conditions.length === 0 ? (
+                <div className="text-center py-8 text-slate-400">
+                  <p>No conditions yet. Add an indicator to get started!</p>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              ) : (
+                strategyForm.conditions.map((condition, index) => (
+                  <ConditionCard
+                    key={condition.id}
+                    condition={condition}
+                    index={index}
+                    onUpdate={(updated) => updateCondition(index, updated)}
+                    onRemove={() => removeCondition(index)}
+                  />
+                ))
+              )}
 
-          {/* CALL Conditions */}
-          <Card className="glass-dark border-green-500/30">
-            <CardHeader>
-              <CardTitle className="text-green-400 flex items-center gap-2">
-                📈 CALL Signal Conditions
-                <Badge className="bg-green-500/20 text-green-400">BUY</Badge>
-              </CardTitle>
-              <CardDescription>
-                Define conditions that must be met to generate a CALL (buy) signal
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {strategyForm.call_conditions.map((group, index) => (
-                <ConditionGroupEditor
-                  key={group.id}
-                  group={group}
-                  indicators={indicators}
-                  direction="call"
-                  onChange={(updated) => updateConditionGroup('call', index, updated)}
-                  onRemove={() => removeConditionGroup('call', index)}
-                />
-              ))}
-              <Button
-                variant="outline"
-                onClick={() => addConditionGroup('call')}
-                className="w-full border-dashed border-green-500/50 text-green-400 hover:bg-green-500/10"
-              >
+              <Button onClick={addCondition} variant="outline" className="w-full border-dashed">
                 <Plus className="w-4 h-4 mr-2" />
-                Add Condition Group (AND with other groups)
+                Add Condition
               </Button>
-            </CardContent>
-          </Card>
 
-          {/* PUT Conditions */}
-          <Card className="glass-dark border-red-500/30">
-            <CardHeader>
-              <CardTitle className="text-red-400 flex items-center gap-2">
-                📉 PUT Signal Conditions
-                <Badge className="bg-red-500/20 text-red-400">SELL</Badge>
-              </CardTitle>
-              <CardDescription>
-                Define conditions that must be met to generate a PUT (sell) signal
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {strategyForm.put_conditions.map((group, index) => (
-                <ConditionGroupEditor
-                  key={group.id}
-                  group={group}
-                  indicators={indicators}
-                  direction="put"
-                  onChange={(updated) => updateConditionGroup('put', index, updated)}
-                  onRemove={() => removeConditionGroup('put', index)}
-                />
-              ))}
-              <Button
-                variant="outline"
-                onClick={() => addConditionGroup('put')}
-                className="w-full border-dashed border-red-500/50 text-red-400 hover:bg-red-500/10"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add Condition Group (AND with other groups)
-              </Button>
+              {/* Summary */}
+              {strategyForm.conditions.length > 0 && (
+                <div className="p-4 bg-slate-800/50 rounded-lg">
+                  <div className="text-sm font-medium text-white mb-2">Signal Summary:</div>
+                  <div className="flex gap-4">
+                    <div className="flex items-center gap-2">
+                      <ArrowUp className="w-4 h-4 text-green-400" />
+                      <span className="text-green-400">
+                        {strategyForm.conditions.filter(c => {
+                          const t = INDICATOR_TEMPLATES[c.indicator];
+                          return t?.conditions.find(x => x.id === c.conditionType)?.signal === 'CALL';
+                        }).length} CALL conditions
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <ArrowDown className="w-4 h-4 text-red-400" />
+                      <span className="text-red-400">
+                        {strategyForm.conditions.filter(c => {
+                          const t = INDICATOR_TEMPLATES[c.indicator];
+                          return t?.conditions.find(x => x.id === c.conditionType)?.signal === 'PUT';
+                        }).length} PUT conditions
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -865,105 +893,24 @@ const StrategyBuilder = () => {
               {/* Assets */}
               <div>
                 <Label className="mb-2 block">Assets ({strategyForm.assets.length} selected)</Label>
-                
-                {/* Market Type Filter */}
-                <div className="flex gap-2 mb-3">
-                  <Badge 
-                    variant="outline" 
-                    className="cursor-pointer hover:bg-blue-500/20"
-                    onClick={() => {
-                      const regularAssets = assets.filter(a => a.market === 'regular').map(a => a.value);
-                      setStrategyForm(prev => ({ ...prev, assets: regularAssets }));
-                    }}
-                  >
-                    🔵 Select All Regular
-                  </Badge>
-                  <Badge 
-                    variant="outline" 
-                    className="cursor-pointer hover:bg-green-500/20"
-                    onClick={() => {
-                      const otcAssets = assets.filter(a => a.market === 'otc').map(a => a.value);
-                      setStrategyForm(prev => ({ ...prev, assets: otcAssets }));
-                    }}
-                  >
-                    🟢 Select All OTC
-                  </Badge>
-                  <Badge 
-                    variant="outline" 
-                    className="cursor-pointer hover:bg-slate-500/20"
-                    onClick={() => setStrategyForm(prev => ({ ...prev, assets: [] }))}
-                  >
-                    Clear All
-                  </Badge>
-                </div>
-
-                {/* Category Sections */}
-                <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
-                  {/* Regular Markets */}
-                  <div className="p-3 bg-blue-500/5 rounded-lg border border-blue-500/20">
-                    <div className="text-sm font-medium text-blue-400 mb-2">🔵 Regular Markets</div>
-                    <div className="space-y-2">
-                      {['Forex Major', 'Forex Minor', 'Forex Exotic', 'Crypto', 'Crypto Alt', 'Crypto DeFi', 'Crypto Meme', 'Stocks Tech', 'Stocks Finance', 'Stocks Consumer', 'Stocks Industrial', 'Stocks Healthcare', 'Commodities', 'Indices'].map(cat => {
-                        const catAssets = assets.filter(a => a.category === cat && a.market === 'regular');
-                        if (catAssets.length === 0) return null;
-                        return (
-                          <div key={cat}>
-                            <div className="text-xs text-slate-500 mb-1">{cat}</div>
-                            <div className="flex flex-wrap gap-1">
-                              {catAssets.map(asset => (
-                                <Button
-                                  key={asset.value}
-                                  variant={strategyForm.assets.includes(asset.value) ? 'default' : 'outline'}
-                                  size="sm"
-                                  onClick={() => toggleAsset(asset.value)}
-                                  className={`text-xs h-7 ${strategyForm.assets.includes(asset.value) 
-                                    ? 'bg-blue-500/20 text-blue-400 border-blue-500/50'
-                                    : 'border-slate-600'}`}
-                                >
-                                  {asset.label}
-                                </Button>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* OTC Markets */}
-                  <div className="p-3 bg-green-500/5 rounded-lg border border-green-500/20">
-                    <div className="text-sm font-medium text-green-400 mb-2">🟢 OTC Markets (24/7 Trading)</div>
-                    <div className="space-y-2">
-                      {['OTC Forex', 'OTC Crypto', 'OTC Commodities', 'OTC Indices'].map(cat => {
-                        const catAssets = assets.filter(a => a.category === cat);
-                        if (catAssets.length === 0) return null;
-                        return (
-                          <div key={cat}>
-                            <div className="text-xs text-slate-500 mb-1">{cat.replace('OTC ', '')}</div>
-                            <div className="flex flex-wrap gap-1">
-                              {catAssets.map(asset => (
-                                <Button
-                                  key={asset.value}
-                                  variant={strategyForm.assets.includes(asset.value) ? 'default' : 'outline'}
-                                  size="sm"
-                                  onClick={() => toggleAsset(asset.value)}
-                                  className={`text-xs h-7 ${strategyForm.assets.includes(asset.value) 
-                                    ? 'bg-green-500/20 text-green-400 border-green-500/50'
-                                    : 'border-slate-600'}`}
-                                >
-                                  {asset.label}
-                                </Button>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
+                <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
+                  {assets.map(asset => (
+                    <Button
+                      key={asset.value}
+                      variant={strategyForm.assets.includes(asset.value) ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => toggleAsset(asset.value)}
+                      className={`text-xs ${strategyForm.assets.includes(asset.value) 
+                        ? asset.market === 'otc' ? 'bg-green-500/20 text-green-400 border-green-500/50' : 'bg-blue-500/20 text-blue-400 border-blue-500/50'
+                        : 'border-slate-600'}`}
+                    >
+                      {asset.label}
+                    </Button>
+                  ))}
                 </div>
               </div>
 
-              {/* Risk Parameters */}
+              {/* Risk Settings */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <Label>Min Confidence ({strategyForm.min_confidence}%)</Label>
@@ -972,7 +919,6 @@ const StrategyBuilder = () => {
                     onValueChange={(v) => setStrategyForm(prev => ({ ...prev, min_confidence: v[0] }))}
                     min={50}
                     max={99}
-                    step={1}
                     className="mt-2"
                   />
                 </div>
@@ -982,8 +928,6 @@ const StrategyBuilder = () => {
                     type="number"
                     value={strategyForm.max_signals_per_hour}
                     onChange={(e) => setStrategyForm(prev => ({ ...prev, max_signals_per_hour: parseInt(e.target.value) || 10 }))}
-                    min={1}
-                    max={100}
                     className="bg-slate-800/50 border-slate-600"
                   />
                 </div>
@@ -993,8 +937,6 @@ const StrategyBuilder = () => {
                     type="number"
                     value={strategyForm.cooldown_seconds}
                     onChange={(e) => setStrategyForm(prev => ({ ...prev, cooldown_seconds: parseInt(e.target.value) || 60 }))}
-                    min={0}
-                    max={3600}
                     className="bg-slate-800/50 border-slate-600"
                   />
                 </div>
@@ -1002,44 +944,15 @@ const StrategyBuilder = () => {
             </CardContent>
           </Card>
 
-          {/* Test Result */}
-          {testResult && (
-            <Alert className={testResult.signal_generated ? 'border-green-500/50 bg-green-500/10' : 'border-yellow-500/50 bg-yellow-500/10'}>
-              {testResult.signal_generated ? (
-                <CheckCircle className="h-4 w-4 text-green-400" />
-              ) : (
-                <AlertTriangle className="h-4 w-4 text-yellow-400" />
-              )}
-              <AlertTitle>{testResult.signal_generated ? 'Signal Generated!' : 'No Signal'}</AlertTitle>
-              <AlertDescription>
-                {testResult.message}
-                {testResult.signal && (
-                  <div className="mt-2 text-sm">
-                    <div><strong>Direction:</strong> {testResult.signal.direction}</div>
-                    <div><strong>Confidence:</strong> {testResult.signal.confidence}%</div>
-                  </div>
-                )}
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {/* Action Buttons */}
+          {/* Save Button */}
           <div className="flex gap-3">
             <Button
               onClick={saveStrategy}
-              disabled={isSaving}
+              disabled={isSaving || strategyForm.conditions.length === 0}
               className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30"
             >
               <Save className="w-4 h-4 mr-2" />
-              {isSaving ? 'Saving...' : (selectedStrategy ? 'Update Strategy' : 'Save Strategy')}
-            </Button>
-            <Button
-              onClick={testStrategy}
-              disabled={isTesting}
-              className="bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:bg-blue-500/30"
-            >
-              <Play className="w-4 h-4 mr-2" />
-              {isTesting ? 'Testing...' : 'Test Strategy'}
+              {isSaving ? 'Saving...' : 'Save Strategy'}
             </Button>
           </div>
         </TabsContent>
@@ -1048,16 +961,13 @@ const StrategyBuilder = () => {
         <TabsContent value="strategies">
           <Card className="glass-dark border-slate-700/50">
             <CardHeader>
-              <CardTitle className="text-white">My Custom Strategies</CardTitle>
-              <CardDescription>Manage your saved trading strategies</CardDescription>
+              <CardTitle className="text-white">My Strategies</CardTitle>
             </CardHeader>
             <CardContent>
               {isLoading ? (
-                <div className="text-center py-8 text-slate-400">Loading strategies...</div>
+                <div className="text-center py-8 text-slate-400">Loading...</div>
               ) : strategies.length === 0 ? (
-                <div className="text-center py-8 text-slate-400">
-                  No strategies yet. Create your first one in the Builder tab!
-                </div>
+                <div className="text-center py-8 text-slate-400">No strategies yet</div>
               ) : (
                 <div className="space-y-3">
                   {strategies.map(strategy => (
@@ -1065,46 +975,17 @@ const StrategyBuilder = () => {
                       key={strategy.id}
                       className="p-4 bg-slate-800/50 rounded-lg border border-slate-600/50 flex items-center justify-between"
                     >
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-medium text-white">{strategy.name}</h4>
-                          <Badge variant={strategy.is_active ? 'default' : 'secondary'}>
-                            {strategy.is_active ? 'Active' : 'Inactive'}
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-slate-400 mt-1">{strategy.description || 'No description'}</p>
+                      <div>
+                        <div className="font-medium text-white">{strategy.name}</div>
+                        <div className="text-sm text-slate-400">{strategy.description}</div>
                         <div className="flex gap-2 mt-2">
-                          {strategy.timeframes?.map(tf => (
+                          {strategy.timeframes?.slice(0, 3).map(tf => (
                             <Badge key={tf} variant="outline" className="text-xs">{tf}</Badge>
                           ))}
-                          <Badge variant="outline" className="text-xs text-blue-400">
-                            {strategy.assets?.length || 0} assets
-                          </Badge>
                         </div>
                       </div>
                       <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => loadStrategy(strategy)}
-                          className="border-slate-600"
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => duplicateStrategy(strategy.id)}
-                          className="border-slate-600"
-                        >
-                          <Copy className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => deleteStrategy(strategy.id)}
-                          className="border-red-500/50 text-red-400 hover:bg-red-500/20"
-                        >
+                        <Button variant="outline" size="sm" onClick={() => deleteStrategy(strategy.id)} className="border-red-500/50 text-red-400">
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
