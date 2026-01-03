@@ -424,25 +424,34 @@ AVAILABLE_INDICATORS = {
 
 @dataclass
 class IndicatorCondition:
-    """Single indicator condition"""
+    """Single indicator condition - supports both legacy and TradingView-style formats"""
     id: str
-    indicator: str  # e.g., "RSI"
+    indicator: str  # e.g., "RSI", "EMA_CROSSOVER", "BOLLINGER_BANDS"
     parameters: Dict[str, Any]  # e.g., {"period": 14}
-    output: str  # e.g., "value" for RSI, "k" for Stochastic
-    operator: ComparisonOperator
-    compare_to: str  # Can be: "value", "indicator", "previous"
-    compare_value: Any  # The value or indicator config to compare against
+    # TradingView-style condition type (e.g., "crosses_above_oversold", "golden_cross")
+    condition_type: Optional[str] = None
+    # Legacy fields for backward compatibility
+    output: str = "value"  # e.g., "value" for RSI, "k" for Stochastic
+    operator: Optional[ComparisonOperator] = None
+    compare_to: str = "value"  # Can be: "value", "indicator", "previous"
+    compare_value: Any = None  # The value or indicator config to compare against
     
     def to_dict(self) -> Dict:
-        return {
+        result = {
             "id": self.id,
             "indicator": self.indicator,
             "parameters": self.parameters,
-            "output": self.output,
-            "operator": self.operator.value if isinstance(self.operator, ComparisonOperator) else self.operator,
-            "compare_to": self.compare_to,
-            "compare_value": self.compare_value
         }
+        # Include TradingView-style condition type if present
+        if self.condition_type:
+            result["conditionType"] = self.condition_type
+        # Include legacy fields
+        result["output"] = self.output
+        if self.operator:
+            result["operator"] = self.operator.value if isinstance(self.operator, ComparisonOperator) else self.operator
+        result["compare_to"] = self.compare_to
+        result["compare_value"] = self.compare_value
+        return result
 
 
 @dataclass
