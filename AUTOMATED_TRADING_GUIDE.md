@@ -72,7 +72,7 @@ PO_EMAIL = "your-email@example.com"
 PO_PASSWORD = "your-password"
 
 # Cloud server URL
-CLOUD_SERVER_URL = "https://signalbot-36.preview.emergentagent.com"
+CLOUD_SERVER_URL = "https://bottrader-14.preview.emergentagent.com"
 
 # Account type: "demo" or "live"
 ACCOUNT_TYPE = "live"  # Start with "demo" for testing
