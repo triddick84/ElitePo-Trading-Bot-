@@ -2914,7 +2914,7 @@ async def get_ml_models():
 
 
 @api_router.post("/ml-training/run-optimization")
-async def run_strategy_optimization(request: dict):
+async def run_strategy_optimization(request: dict = None):
     """
     Run ML-based strategy optimization.
     Analyzes backtest results to find optimal strategy parameters.
