@@ -18236,8 +18236,8 @@ async def run_socket_io_handshake_tests():
         await tester.cleanup()
 
 async def main():
-    """Main test runner - run Desktop Trading Client and Custom Strategy Builder tests"""
-    return await run_desktop_trading_client_tests()
+    """Main test runner - run Multi-Provider Backtesting tests"""
+    return await run_multi_provider_backtesting_tests()
 
 async def run_desktop_trading_client_tests():
     """Run Desktop Trading Client and Custom Strategy Builder tests specifically"""
