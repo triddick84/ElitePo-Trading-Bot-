@@ -108,11 +108,10 @@ class PlaywrightLoginHandler:
             from playwright.async_api import async_playwright
             
             # Try to import stealth (different versions have different APIs)
-            stealth_func = None
+            stealth_instance = None
             try:
                 from playwright_stealth import Stealth
-                stealth_config = Stealth()
-                stealth_func = stealth_config.apply
+                stealth_instance = Stealth()
             except ImportError:
                 pass
             
