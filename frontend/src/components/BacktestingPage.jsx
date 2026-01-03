@@ -680,9 +680,23 @@ const BacktestingPage = () => {
                           <p className="text-white font-medium">
                             {result.strategy?.replace(/_/g, ' ')} • {result.asset} • {result.timeframe}
                           </p>
-                          <p className="text-slate-400 text-sm">
-                            {result.total_trades} trades • {new Date(result.created_at).toLocaleDateString()}
-                          </p>
+                          <div className="flex items-center gap-2 text-slate-400 text-sm">
+                            <span>{result.total_trades} trades • {new Date(result.created_at).toLocaleDateString()}</span>
+                            <Badge 
+                              variant="outline" 
+                              className={`text-xs ${
+                                result.data_source === 'alphavantage' ? 'border-green-500/30 text-green-400' :
+                                result.data_source === 'finnhub' ? 'border-blue-500/30 text-blue-400' :
+                                result.data_source === 'cryptocompare' ? 'border-orange-500/30 text-orange-400' :
+                                'border-yellow-500/30 text-yellow-400'
+                              }`}
+                            >
+                              {result.data_source === 'alphavantage' ? 'AV' :
+                               result.data_source === 'finnhub' ? 'FH' :
+                               result.data_source === 'cryptocompare' ? 'CC' :
+                               'SYN'}
+                            </Badge>
+                          </div>
                         </div>
                       </div>
                       <div className="text-right">
