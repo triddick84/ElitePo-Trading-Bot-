@@ -10,7 +10,7 @@ import json
 import subprocess
 from datetime import datetime, timezone
 
-BACKEND_URL = "https://gpt-signal-bot.preview.emergentagent.com/api"
+BACKEND_URL = "https://trademixer.preview.emergentagent.com/api"
 
 async def test_complete_flow():
     """Test the complete auto signal generation start/stop flow"""

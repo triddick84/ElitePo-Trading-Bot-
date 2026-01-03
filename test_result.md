@@ -1789,7 +1789,7 @@ All new bridge endpoints are working:
 - **Loading States**: Proper loading indicators and states
 
 ### Test Environment Details
-- **Frontend URL**: https://gpt-signal-bot.preview.emergentagent.com
+- **Frontend URL**: https://trademixer.preview.emergentagent.com
 - **Backend Integration**: All API endpoints responding correctly
 - **Browser**: Chromium-based automation testing
 - **Viewport**: 1920x1080 desktop resolution
@@ -1988,7 +1988,7 @@ status_history:
 #### 📋 FRONTEND TESTING RESULTS
 
 ##### Navigation Testing ✅ PASSED
-- ✅ Application loads correctly at https://gpt-signal-bot.preview.emergentagent.com
+- ✅ Application loads correctly at https://trademixer.preview.emergentagent.com
 - ✅ Navigation sidebar is functional
 - ✅ Dashboard navigation works (routes to DashboardRestructured)
 - ✅ All navigation items are accessible
@@ -2011,7 +2011,7 @@ status_history:
 
 #### API Endpoints Status Testing:
 ```bash
-curl -s "https://gpt-signal-bot.preview.emergentagent.com/api/automated-trading/status"
+curl -s "https://trademixer.preview.emergentagent.com/api/automated-trading/status"
 ```
 **Response**: ✅ Working
 ```json
