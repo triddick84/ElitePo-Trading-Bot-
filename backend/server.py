@@ -2911,7 +2911,7 @@ async def quick_auth_test(request: QuickAuthTestRequest):
 
 
 @api_router.post("/pocket-option/update-ssid")
-async def update_pocket_option_ssid(ssid: str):
+async def update_pocket_option_ssid(ssid: str, is_demo: bool = True):
     """
     Update the Pocket Option SSID
     
@@ -2921,6 +2921,7 @@ async def update_pocket_option_ssid(ssid: str):
     
     Args:
         ssid: Either the cookie value OR the full WebSocket auth message
+        is_demo: Whether this is a demo account (default True)
     
     Examples:
         # Simple cookie:
@@ -2938,7 +2939,7 @@ async def update_pocket_option_ssid(ssid: str):
         # Parse the SSID format
         actual_ssid = ssid
         uid = int(os.getenv('POCKET_OPTION_UID', '0'))
-        is_demo = True
+        parsed_is_demo = is_demo
         
         if ssid.startswith('42["auth"'):
             # Extract from WebSocket message (greedy match to capture all JSON)
@@ -2947,8 +2948,8 @@ async def update_pocket_option_ssid(ssid: str):
                 auth_data = json.loads(match.group(1))
                 actual_ssid = auth_data.get('session', ssid)
                 uid = auth_data.get('uid', uid)
-                is_demo = auth_data.get('isDemo', 1) == 1
-                logger.info(f"📨 Extracted from WebSocket: uid={uid}, demo={is_demo}")
+                parsed_is_demo = auth_data.get('isDemo', 1) == 1
+                logger.info(f"📨 Extracted from WebSocket: uid={uid}, demo={parsed_is_demo}")
         
         # Update .env file with the actual SSID
         env_path = '/app/backend/.env'
@@ -2976,43 +2977,32 @@ async def update_pocket_option_ssid(ssid: str):
         
         logger.info("✅ SSID updated in .env file")
         
-        # Test the new SSID immediately using AsyncPocketOptionClient
-        from pocketoptionapi_async import AsyncPocketOptionClient
+        # Test the new SSID using our custom WebSocket handler (compatible with websockets 15+)
+        from pocket_option_ws import connect_pocket_option
         
-        client = AsyncPocketOptionClient(
-            ssid=actual_ssid,
-            uid=uid,
-            is_demo=is_demo,
-            enable_logging=True
-        )
+        logger.info("🧪 Testing connection with new WebSocket handler...")
         
-        logger.info("🧪 Testing connection...")
-        connected = await client.connect()
+        # Use the full SSID message for connection if available
+        connection_ssid = ssid if ssid.startswith('42["auth"') else f'42["auth",{{"session":"{actual_ssid}","isDemo":{1 if parsed_is_demo else 0},"uid":{uid}}}]'
         
-        if connected:
-            try:
-                balance = await client.get_balance()
-            except:
-                balance = 0
-            await client.disconnect()
-            
+        result = await connect_pocket_option(connection_ssid, parsed_is_demo)
+        
+        if result.get("success"):
             return {
                 "success": True,
                 "message": "✅ SSID updated and tested successfully!",
                 "ssid_format": "websocket_message" if ssid.startswith('42[') else "simple_cookie",
-                "ssid_preview": f"{actual_ssid[:15]}...",
+                "ssid_preview": f"{actual_ssid[:15]}..." if len(actual_ssid) > 15 else actual_ssid,
                 "uid": uid,
-                "is_demo": is_demo,
-                "connection": {
-                    "connected": True,
-                    "balance": balance
-                }
+                "is_demo": parsed_is_demo,
+                "connection": result.get("state", {})
             }
         else:
             return {
                 "success": False,
                 "message": "SSID updated in .env but connection test failed",
-                "error": "SSID might be expired or invalid",
+                "error": result.get("error", "SSID might be expired or invalid"),
+                "connection_state": result.get("state", {}),
                 "recommendation": "Try getting a fresh SSID:\n1. Cookie: Application→Cookies→ssid\n2. WebSocket: Network→WS→Messages"
             }
             
