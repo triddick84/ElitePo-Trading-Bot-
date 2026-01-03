@@ -1057,64 +1057,298 @@ class BackendTester:
             print(f"   Enhanced signal accuracy targeting test error: {e}")
             return False
 
-    # ========== CUSTOM STRATEGY BUILDER TESTING ==========
+    # ========== DESKTOP TRADING CLIENT AND CUSTOM STRATEGY BUILDER TESTING ==========
     
-    async def test_custom_strategies_indicators(self) -> bool:
-        """Test 1: Custom Strategy Builder Indicators - GET /api/custom-strategies/indicators"""
+    async def test_desktop_client_health_check(self) -> bool:
+        """Test 1: Health Check - GET /api/health"""
         try:
-            print("   🔍 Testing Custom Strategy Builder Indicators")
+            print("   🔍 Testing Health Check")
             
-            async with self.session.get(f"{BACKEND_URL}/custom-strategies/indicators") as response:
+            async with self.session.get(f"{BACKEND_URL}/health") as response:
                 if response.status == 200:
                     data = await response.json()
-                    print(f"   ✅ Custom strategies indicators endpoint accessible")
+                    print(f"   ✅ Health check endpoint accessible")
                     
-                    # Check if response has success field or direct data
-                    if 'success' in data:
-                        if not data.get('success'):
-                            print(f"   ❌ Request failed: {data.get('error')}")
-                            return False
-                        indicators = data.get('indicators', [])
-                        count = data.get('count', len(indicators))
+                    # Verify response contains "status": "healthy"
+                    if data.get('status') == 'healthy':
+                        print(f"   ✅ Status is healthy")
+                        return True
                     else:
-                        # Direct response format
-                        indicators = data.get('indicators', {})
-                        count = len(indicators) if isinstance(indicators, dict) else 0
-                    
-                    print(f"   📊 Indicators Status:")
-                    print(f"      Total Indicators: {count}")
-                    print(f"      Expected: 41 indicators")
-                    
-                    if count == 41:
-                        print(f"   ✅ Correct number of indicators returned")
-                    else:
-                        print(f"   ⚠️ Expected 41 indicators, got {count}")
-                    
-                    # Check if indicators have proper structure
-                    if indicators and count > 0:
-                        if isinstance(indicators, dict):
-                            first_key = list(indicators.keys())[0]
-                            first_indicator = indicators[first_key]
-                        else:
-                            first_indicator = indicators[0]
-                        
-                        required_fields = ['name', 'parameters'] if isinstance(indicators, dict) else ['name', 'parameters']
-                        missing_fields = [f for f in required_fields if f not in first_indicator]
-                        
-                        if not missing_fields:
-                            print(f"   ✅ Indicators have proper structure")
-                        else:
-                            print(f"   ❌ Missing indicator fields: {missing_fields}")
-                            return False
-                    
-                    return True
+                        print(f"   ❌ Status is not healthy: {data.get('status')}")
+                        return False
                 else:
-                    print(f"   ❌ Custom strategies indicators endpoint failed: {response.status}")
+                    print(f"   ❌ Health check failed: {response.status}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Health check test error: {e}")
+            return False
+    
+    async def test_desktop_client_download(self) -> bool:
+        """Test 2: Desktop Client Download - GET /api/desktop-client/download"""
+        try:
+            print("   🔍 Testing Desktop Client Download")
+            
+            async with self.session.get(f"{BACKEND_URL}/desktop-client/download") as response:
+                if response.status == 200:
+                    content_type = response.headers.get('content-type', '')
+                    content_length = response.headers.get('content-length', '0')
+                    
+                    print(f"   ✅ Desktop client download endpoint accessible")
+                    print(f"   📊 Content Type: {content_type}")
+                    print(f"   📊 Content Length: {content_length} bytes")
+                    
+                    # Verify response is a ZIP file (content type application/zip or binary data)
+                    if 'application/zip' in content_type or 'application/octet-stream' in content_type:
+                        print(f"   ✅ Response is a ZIP file")
+                        return True
+                    else:
+                        # Check if it's binary data by reading a small portion
+                        data = await response.read()
+                        if len(data) > 0:
+                            # Check for ZIP file signature (PK)
+                            if data[:2] == b'PK':
+                                print(f"   ✅ Response is a ZIP file (detected by signature)")
+                                return True
+                            else:
+                                print(f"   ❌ Response is not a ZIP file")
+                                return False
+                        else:
+                            print(f"   ❌ Empty response")
+                            return False
+                else:
+                    print(f"   ❌ Desktop client download failed: {response.status}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Desktop client download test error: {e}")
+            return False
+    
+    async def test_desktop_client_status(self) -> bool:
+        """Test 3: Desktop Client Status - GET /api/desktop-client/status"""
+        try:
+            print("   🔍 Testing Desktop Client Status")
+            
+            async with self.session.get(f"{BACKEND_URL}/desktop-client/status") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Desktop client status endpoint accessible")
+                    
+                    # Verify it returns a status object with fields like connected, balance, account_type
+                    required_fields = ['connected', 'balance', 'account_type']
+                    missing_fields = [f for f in required_fields if f not in data]
+                    
+                    if not missing_fields:
+                        print(f"   ✅ All required status fields present")
+                        print(f"   📊 Connected: {data.get('connected')}")
+                        print(f"   📊 Balance: {data.get('balance')}")
+                        print(f"   📊 Account Type: {data.get('account_type')}")
+                        return True
+                    else:
+                        print(f"   ❌ Missing status fields: {missing_fields}")
+                        return False
+                else:
+                    print(f"   ❌ Desktop client status failed: {response.status}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Desktop client status test error: {e}")
+            return False
+    
+    async def test_desktop_client_signals(self) -> bool:
+        """Test 4: Desktop Client Signals - GET /api/desktop-client/signals"""
+        try:
+            print("   🔍 Testing Desktop Client Signals")
+            
+            async with self.session.get(f"{BACKEND_URL}/desktop-client/signals") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Desktop client signals endpoint accessible")
+                    
+                    # Verify it returns a signals array
+                    if 'signals' in data and isinstance(data['signals'], list):
+                        signals_count = len(data['signals'])
+                        print(f"   ✅ Signals array returned with {signals_count} signals")
+                        return True
+                    else:
+                        print(f"   ❌ No signals array in response")
+                        return False
+                else:
+                    print(f"   ❌ Desktop client signals failed: {response.status}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Desktop client signals test error: {e}")
+            return False
+    
+    async def test_custom_strategy_create_tradingview_format(self) -> bool:
+        """Test 5: Custom Strategy Create with TradingView-style Format - POST /api/custom-strategies"""
+        try:
+            print("   🔍 Testing Custom Strategy Create with TradingView-style Format")
+            
+            strategy_data = {
+                "name": "Backend Test Strategy",
+                "description": "Testing new conditionType format",
+                "call_conditions": [{
+                    "id": "group_call",
+                    "conditions": [{
+                        "id": "cond_1",
+                        "indicator": "RSI",
+                        "parameters": {"period": 14, "overbought": 70, "oversold": 30},
+                        "conditionType": "crosses_above_oversold"
+                    }],
+                    "logical_operator": "AND"
+                }],
+                "put_conditions": [{
+                    "id": "group_put",
+                    "conditions": [{
+                        "id": "cond_2",
+                        "indicator": "MACD",
+                        "parameters": {"fast_period": 12, "slow_period": 26, "signal_period": 9},
+                        "conditionType": "macd_crosses_below_signal"
+                    }],
+                    "logical_operator": "AND"
+                }],
+                "timeframes": ["1m", "5m"],
+                "assets": ["EURUSD", "BTCUSD"],
+                "min_confidence": 75,
+                "is_active": True
+            }
+            
+            async with self.session.post(f"{BACKEND_URL}/custom-strategies", json=strategy_data) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Custom strategy creation endpoint accessible")
+                    
+                    # Verify "success": true
+                    if data.get('success') == True:
+                        print(f"   ✅ Strategy creation successful")
+                        
+                        # Verify the saved strategy contains "conditionType" field in conditions
+                        strategy = data.get('strategy', {})
+                        call_conditions = strategy.get('call_conditions', [])
+                        
+                        if call_conditions and len(call_conditions) > 0:
+                            first_condition_group = call_conditions[0]
+                            conditions = first_condition_group.get('conditions', [])
+                            
+                            if conditions and len(conditions) > 0:
+                                first_condition = conditions[0]
+                                if 'conditionType' in first_condition:
+                                    print(f"   ✅ Strategy contains conditionType field: {first_condition['conditionType']}")
+                                    
+                                    # Store strategy ID for cleanup
+                                    self.test_strategy_id = strategy.get('id')
+                                    return True
+                                else:
+                                    print(f"   ❌ Strategy missing conditionType field")
+                                    return False
+                            else:
+                                print(f"   ❌ No conditions in strategy")
+                                return False
+                        else:
+                            print(f"   ❌ No call_conditions in strategy")
+                            return False
+                    else:
+                        print(f"   ❌ Strategy creation failed: {data.get('error', 'Unknown error')}")
+                        return False
+                else:
+                    print(f"   ❌ Custom strategy creation failed: {response.status}")
                     error_text = await response.text()
                     print(f"   Error details: {error_text}")
                     return False
         except Exception as e:
-            print(f"   ❌ Custom strategies indicators test error: {e}")
+            print(f"   ❌ Custom strategy create test error: {e}")
+            return False
+    
+    async def test_custom_strategy_list(self) -> bool:
+        """Test 6: Custom Strategy List - GET /api/custom-strategies"""
+        try:
+            print("   🔍 Testing Custom Strategy List")
+            
+            async with self.session.get(f"{BACKEND_URL}/custom-strategies") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Custom strategy list endpoint accessible")
+                    
+                    # Verify it returns strategies array
+                    if 'strategies' in data and isinstance(data['strategies'], list):
+                        strategies = data['strategies']
+                        strategies_count = len(strategies)
+                        print(f"   ✅ Strategies array returned with {strategies_count} strategies")
+                        
+                        # Verify the newly created strategy appears in the list
+                        if hasattr(self, 'test_strategy_id') and self.test_strategy_id:
+                            strategy_found = any(s.get('id') == self.test_strategy_id for s in strategies)
+                            if strategy_found:
+                                print(f"   ✅ Newly created strategy found in list")
+                            else:
+                                print(f"   ❌ Newly created strategy not found in list")
+                                return False
+                        
+                        return True
+                    else:
+                        print(f"   ❌ No strategies array in response")
+                        return False
+                else:
+                    print(f"   ❌ Custom strategy list failed: {response.status}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Custom strategy list test error: {e}")
+            return False
+    
+    async def test_custom_strategy_indicators(self) -> bool:
+        """Test 7: Custom Strategy Indicators - GET /api/custom-strategies/indicators"""
+        try:
+            print("   🔍 Testing Custom Strategy Indicators")
+            
+            async with self.session.get(f"{BACKEND_URL}/custom-strategies/indicators") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Custom strategy indicators endpoint accessible")
+                    
+                    # Verify it returns indicators object with at least 20 indicators
+                    if 'indicators' in data:
+                        indicators = data['indicators']
+                        if isinstance(indicators, dict):
+                            indicators_count = len(indicators)
+                        elif isinstance(indicators, list):
+                            indicators_count = len(indicators)
+                        else:
+                            indicators_count = 0
+                        
+                        print(f"   📊 Indicators count: {indicators_count}")
+                        
+                        if indicators_count >= 20:
+                            print(f"   ✅ At least 20 indicators returned")
+                            return True
+                        else:
+                            print(f"   ❌ Expected at least 20 indicators, got {indicators_count}")
+                            return False
+                    else:
+                        print(f"   ❌ No indicators in response")
+                        return False
+                else:
+                    print(f"   ❌ Custom strategy indicators failed: {response.status}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Custom strategy indicators test error: {e}")
+            return False
+    
+    async def cleanup_test_strategy(self) -> bool:
+        """Clean up: Delete the test strategy after testing"""
+        try:
+            if hasattr(self, 'test_strategy_id') and self.test_strategy_id:
+                print("   🧹 Cleaning up test strategy")
+                
+                async with self.session.delete(f"{BACKEND_URL}/custom-strategies/{self.test_strategy_id}") as response:
+                    if response.status == 200:
+                        print(f"   ✅ Test strategy deleted successfully")
+                        return True
+                    else:
+                        print(f"   ⚠️ Failed to delete test strategy: {response.status}")
+                        return False
+            else:
+                print("   ℹ️ No test strategy to clean up")
+                return True
+        except Exception as e:
+            print(f"   ⚠️ Error cleaning up test strategy: {e}")
             return False
     
     async def test_custom_strategies_crud(self) -> bool:
