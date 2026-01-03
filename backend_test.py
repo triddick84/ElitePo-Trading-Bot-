@@ -18218,8 +18218,8 @@ async def run_socket_io_handshake_tests():
         await tester.cleanup()
 
 async def main():
-    """Main test runner - run Custom Strategy Builder and SSID Health Monitor tests"""
-    return await run_custom_strategy_builder_and_ssid_health_tests()
+    """Main test runner - run Desktop Trading Client and Custom Strategy Builder tests"""
+    return await run_desktop_trading_client_tests()
 
 async def run_custom_strategy_builder_and_ssid_health_tests():
     """Run Custom Strategy Builder and SSID Health Monitor tests specifically"""
