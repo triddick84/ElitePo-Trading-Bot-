@@ -106,7 +106,15 @@ class PlaywrightLoginHandler:
         
         try:
             from playwright.async_api import async_playwright
-            from playwright_stealth import stealth_async
+            
+            # Try to import stealth (different versions have different APIs)
+            stealth_func = None
+            try:
+                from playwright_stealth import Stealth
+                stealth_config = Stealth()
+                stealth_func = stealth_config.apply
+            except ImportError:
+                pass
             
             logger.info("🔐 Starting Playwright login with 2Captcha...")
             
@@ -130,8 +138,12 @@ class PlaywrightLoginHandler:
                 
                 page = await context.new_page()
                 
-                # Apply stealth
-                await stealth_async(page)
+                # Apply stealth if available
+                if stealth_func:
+                    try:
+                        await stealth_func(page)
+                    except:
+                        pass
                 
                 # Intercept WebSocket to capture auth message
                 captured_auth = []
