@@ -29,6 +29,7 @@ import SSIDConnectionManager from "./components/SSIDConnectionManager";
 import AutomatedTradingPage from "./components/AutomatedTradingPage";
 import AIMLModelsPage from "./components/AIMLModelsPage";
 import SignalCenterPage from "./components/SignalCenterPage";
+import BacktestingPage from "./components/BacktestingPage";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
 const API = BACKEND_URL ? `${BACKEND_URL}/api` : '';
