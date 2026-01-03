@@ -138,11 +138,11 @@ class PlaywrightLoginHandler:
                 page = await context.new_page()
                 
                 # Apply stealth if available
-                if stealth_func:
+                if stealth_instance:
                     try:
-                        await stealth_func(page)
-                    except:
-                        pass
+                        await stealth_instance.apply_stealth_async(page)
+                    except Exception as e:
+                        logger.warning(f"Stealth application failed: {e}")
                 
                 # Intercept WebSocket to capture auth message
                 captured_auth = []
