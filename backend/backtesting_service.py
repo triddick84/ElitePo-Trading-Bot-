@@ -471,21 +471,16 @@ class HistoricalDataFetcher:
         return expanded_df
     
     async def fetch_alphavantage_stock_data(self, symbol: str, days: int = 30, interval: str = "1h") -> Optional[pd.DataFrame]:
-        """Fetch historical stock data from Alpha Vantage API"""
+        """
+        Fetch historical stock data from Alpha Vantage API.
+        Note: Free tier only supports DAILY data. Intraday requires premium.
+        """
         if not ALPHAVANTAGE_API_KEY:
             return None
             
         try:
-            # Map interval to Alpha Vantage function
-            if interval in ['1m', '5m', '15m', '30m', '1h']:
-                function = 'TIME_SERIES_INTRADAY'
-                av_interval_map = {
-                    '1m': '1min', '5m': '5min', '15m': '15min', '30m': '30min', '1h': '60min'
-                }
-                av_interval = av_interval_map.get(interval, '60min')
-            else:
-                function = 'TIME_SERIES_DAILY'
-                av_interval = None
+            # Alpha Vantage free tier only supports TIME_SERIES_DAILY for stocks
+            function = 'TIME_SERIES_DAILY'
             
             url = 'https://www.alphavantage.co/query'
             params = {
@@ -496,9 +491,6 @@ class HistoricalDataFetcher:
                 'datatype': 'json'
             }
             
-            if av_interval:
-                params['interval'] = av_interval
-            
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, params=params, timeout=30) as response:
                     if response.status != 200:
@@ -507,6 +499,10 @@ class HistoricalDataFetcher:
                     data = await response.json()
                     
                     if 'Error Message' in data or 'Note' in data:
+                        return None
+                    
+                    if 'Information' in data and 'premium' in data['Information'].lower():
+                        logger.warning(f"Alpha Vantage premium required for {symbol}")
                         return None
                     
                     # Find time series key
@@ -546,6 +542,10 @@ class HistoricalDataFetcher:
                     
                     cutoff_date = datetime.now() - timedelta(days=days)
                     df = df[df.index >= cutoff_date]
+                    
+                    # For intraday intervals, expand daily data
+                    if interval in ['1m', '5m', '15m', '30m', '1h', '4h'] and len(df) > 0:
+                        df = self._expand_daily_to_intraday(df, interval)
                     
                     logger.info(f"✅ Alpha Vantage: Fetched {len(df)} stock candles for {symbol}")
                     return df
