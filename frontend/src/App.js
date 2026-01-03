@@ -25,6 +25,10 @@ import SignalStatistics from "./components/SignalStatistics";
 import PocketOptionSettings from "./components/PocketOptionSettings";
 import StrategyBuilder from "./components/StrategyBuilder";
 import SSIDConnectionManager from "./components/SSIDConnectionManager";
+// New Pages
+import AutomatedTradingPage from "./components/AutomatedTradingPage";
+import AIMLModelsPage from "./components/AIMLModelsPage";
+import SignalCenterPage from "./components/SignalCenterPage";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
 const API = BACKEND_URL ? `${BACKEND_URL}/api` : '';
