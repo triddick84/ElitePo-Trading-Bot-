@@ -573,9 +573,20 @@ class TradingBot:
 
 def main():
     """Entry point"""
-    console.print("[bold]Pocket Option Desktop Trading Client[/bold]")
-    console.print(f"Python {sys.version}")
+    console.print(Panel.fit(
+        "[bold cyan]Pocket Option Desktop Trading Client[/bold cyan]\n"
+        f"Python {sys.version.split()[0]}",
+        title="🤖 GPT Signal Bot"
+    ))
     console.print()
+    
+    # Check Playwright browsers at startup
+    console.print("[blue]🔍 Checking browser installation...[/blue]")
+    if not check_playwright_browsers():
+        console.print("\n[red]❌ Browser not installed. Cannot proceed.[/red]")
+        console.print("[yellow]Please run: python -m playwright install chromium[/yellow]")
+        sys.exit(1)
+    console.print("[green]✅ Browser ready![/green]\n")
     
     bot = TradingBot()
     
