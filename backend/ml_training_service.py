@@ -792,7 +792,7 @@ class MLTrainingService:
     async def run_daily_retrain(self):
         """Run daily model retraining using recent backtest results"""
         try:
-            if not self.db:
+            if self.db is None:
                 logger.warning("Database not available for retraining")
                 return
             
