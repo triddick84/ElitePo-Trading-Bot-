@@ -135,10 +135,7 @@ class HistoricalDataFetcher:
     async def fetch_yahoo_data(self, symbol: str, days: int = 30, interval: str = "1h") -> Optional[pd.DataFrame]:
         """Fetch historical data from Yahoo Finance"""
         try:
-            import subprocess
-            import pickle
-            import base64
-            import tempfile
+            import yfinance as yf
             import os
             
             # Map symbol to Yahoo format
@@ -160,47 +157,48 @@ class HistoricalDataFetcher:
                     period = period_map[p]
                     break
             
-            # Run yfinance in subprocess to avoid async context issues
-            script = f'''
-import yfinance as yf
-import pickle
-import sys
-
-ticker = yf.Ticker("{yahoo_symbol}")
-df = ticker.history(period="{period}", interval="{yf_interval}")
-if df is not None and not df.empty:
-    # Standardize columns
-    df = df.rename(columns={{"Open": "open", "High": "high", "Low": "low", "Close": "close", "Volume": "volume"}})
-    df = df[["open", "high", "low", "close", "volume"]].copy()
-    # Reset index to avoid datetime serialization issues
-    df = df.reset_index()
-    df["Datetime"] = df["Datetime"].astype(str)
-    sys.stdout.buffer.write(pickle.dumps(df))
-else:
-    sys.stdout.buffer.write(pickle.dumps(None))
-'''
+            # Synchronous fetch function
+            def fetch_sync():
+                try:
+                    # Suppress yfinance logging
+                    import logging
+                    yf_logger = logging.getLogger('yfinance')
+                    yf_logger.setLevel(logging.CRITICAL)
+                    
+                    ticker = yf.Ticker(yahoo_symbol)
+                    df = ticker.history(period=period, interval=yf_interval, raise_errors=False)
+                    return df
+                except Exception as fetch_err:
+                    logger.error(f"yfinance fetch error: {fetch_err}")
+                    return None
             
-            # Execute in subprocess
-            result = await asyncio.to_thread(
-                subprocess.run,
-                ['python3', '-c', script],
-                capture_output=True,
-                timeout=30
-            )
+            # Run in thread pool
+            df = await asyncio.to_thread(fetch_sync)
             
-            if result.returncode != 0:
-                logger.error(f"Subprocess error for {yahoo_symbol}: {result.stderr.decode()}")
-                return None
-            
-            df = pickle.loads(result.stdout)
+            if df is None or len(df) == 0:
+                logger.warning(f"No data returned for {yahoo_symbol}, trying download method")
+                # Try alternative download method
+                def download_sync():
+                    try:
+                        return yf.download(yahoo_symbol, period=period, interval=yf_interval, progress=False)
+                    except:
+                        return None
+                df = await asyncio.to_thread(download_sync)
             
             if df is None or len(df) == 0:
                 logger.warning(f"No data returned for {yahoo_symbol}")
                 return None
             
-            # Restore datetime index
-            df['Datetime'] = pd.to_datetime(df['Datetime'])
-            df = df.set_index('Datetime')
+            # Standardize column names
+            df = df.rename(columns={
+                'Open': 'open', 'High': 'high', 'Low': 'low', 
+                'Close': 'close', 'Volume': 'volume'
+            })
+            
+            # Select only needed columns
+            available_cols = [c for c in ['open', 'high', 'low', 'close', 'volume'] if c in df.columns]
+            df = df[available_cols].copy()
+            df.index = pd.to_datetime(df.index)
             
             logger.info(f"Fetched {len(df)} candles for {yahoo_symbol}")
             return df
