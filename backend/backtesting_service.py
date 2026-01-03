@@ -1100,7 +1100,7 @@ class BacktestingService:
         
         if any(crypto in symbol_upper for crypto in CRYPTO_SYMBOLS) or 'USDT' in symbol_upper:
             return AssetType.CRYPTO
-        elif symbol_upper in [s.replace('_', '') for s in YAHOO_FOREX_SYMBOLS.keys()] or '=' in symbol:
+        elif symbol_upper in [s.replace('_', '') for s in FINNHUB_FOREX_SYMBOLS.keys()] or '=' in symbol:
             return AssetType.FOREX
         elif symbol_upper in STOCK_SYMBOLS:
             return AssetType.STOCK
