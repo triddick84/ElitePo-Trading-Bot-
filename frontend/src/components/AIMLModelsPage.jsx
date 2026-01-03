@@ -409,8 +409,10 @@ const AIMLModelsPage = () => {
       </div>
 
       <Tabs defaultValue="models" className="space-y-4">
-        <TabsList className="bg-slate-800/50">
+        <TabsList className="bg-slate-800/50 flex-wrap">
           <TabsTrigger value="models">🧠 Model Selection</TabsTrigger>
+          <TabsTrigger value="ml-training">🤖 ML Training</TabsTrigger>
+          <TabsTrigger value="optimization">🎯 Optimization</TabsTrigger>
           <TabsTrigger value="learning">📚 Learning System</TabsTrigger>
           <TabsTrigger value="adaptive">🔄 Adaptive Strategy</TabsTrigger>
           <TabsTrigger value="retrain">⚡ Retrain Models</TabsTrigger>
