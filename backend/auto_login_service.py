@@ -269,7 +269,7 @@ class PlaywrightLoginHandler:
                     
                     # Navigate to trading page to get WebSocket
                     if "quick-high-low" not in current_url:
-                        await page.goto(self.POCKET_OPTION_TRADE_URL, wait_until='networkidle', timeout=30000)
+                        await page.goto(self.POCKET_OPTION_TRADE_URL, wait_until='domcontentloaded', timeout=60000)
                         await asyncio.sleep(5)
                     
                     # Check captured auth messages
