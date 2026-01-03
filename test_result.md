@@ -1,3 +1,37 @@
+## TradingView-Style Strategy Builder Fix - January 3, 2026
+
+### Testing Protocol
+- **Test Date**: 2026-01-03
+- **Test Focus**: TradingView-style Strategy Builder frontend rewrite and backend compatibility fix
+- **Test Type**: Frontend UI Testing + Backend API Testing
+- **Test Status**: ⏳ IN PROGRESS
+
+### Changes Made
+
+#### 1. Frontend `StrategyBuilder.jsx` - Complete Rewrite (Previous Agent)
+- Implemented TradingView-style condition templates with `INDICATOR_TEMPLATES`
+- Human-readable conditions like "RSI crosses above oversold level" instead of confusing compare fields
+- Added indicator categories: trend, momentum, volatility, volume, pattern
+- Pre-built condition signals (CALL/PUT/NEUTRAL) with descriptions
+- Quick Templates tab for common strategies (EMA Crossover, RSI Reversal, etc.)
+- Simplified condition card component with visual signal indicators
+
+#### 2. Backend `custom_strategy_service.py` - Compatibility Update (This Agent)
+- Updated `IndicatorCondition` dataclass to support `condition_type` field
+- Modified `_parse_condition_groups` to handle TradingView-style `conditionType`
+- Maintained backward compatibility with legacy format
+- Fixed operator parsing to avoid errors with new format
+
+### Tests to Run
+1. ✅ Strategy Builder page loads correctly
+2. ✅ Add Condition button works
+3. ⏳ Save strategy with new condition format
+4. ⏳ Load existing strategies
+5. ⏳ Apply Quick Templates
+6. ⏳ Full e2e workflow test
+
+---
+
 ## Auto Login & CAPTCHA Bypass Implementation - January 3, 2026
 
 ### Testing Protocol
