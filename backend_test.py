@@ -18221,6 +18221,53 @@ async def main():
     """Main test runner - run Desktop Trading Client and Custom Strategy Builder tests"""
     return await run_desktop_trading_client_tests()
 
+async def run_desktop_trading_client_tests():
+    """Run Desktop Trading Client and Custom Strategy Builder tests specifically"""
+    print("🚀 Testing Desktop Trading Client and Custom Strategy Builder API Endpoints")
+    print("=" * 80)
+    
+    tester = BackendTester()
+    await tester.setup()
+    
+    # Define Desktop Trading Client and Custom Strategy Builder tests
+    tests = [
+        ("Health Check", tester.test_desktop_client_health_check),
+        ("Desktop Client Download", tester.test_desktop_client_download),
+        ("Desktop Client Status", tester.test_desktop_client_status),
+        ("Desktop Client Signals", tester.test_desktop_client_signals),
+        ("Custom Strategy Create (TradingView Format)", tester.test_custom_strategy_create_tradingview_format),
+        ("Custom Strategy List", tester.test_custom_strategy_list),
+        ("Custom Strategy Indicators", tester.test_custom_strategy_indicators),
+        ("Cleanup Test Strategy", tester.cleanup_test_strategy),
+    ]
+    
+    # Run all tests
+    for test_name, test_func in tests:
+        await tester.run_test(test_name, test_func)
+    
+    await tester.cleanup()
+    
+    # Print summary
+    print("\n" + "=" * 80)
+    print("🏁 Desktop Trading Client and Custom Strategy Builder Testing Complete: {}/{} tests passed".format(
+        len(tests) - len(tester.failed_tests), len(tests)
+    ))
+    print("=" * 80)
+    
+    total_tests = len(tests)
+    passed_tests = total_tests - len(tester.failed_tests)
+    
+    if tester.failed_tests:
+        print(f"\n❌ Failed Tests:")
+        for test in tester.failed_tests:
+            print(f"   - {test}")
+        print(f"\n📊 Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+        return False
+    else:
+        print(f"\n🎉 All Desktop Trading Client and Custom Strategy Builder tests passed!")
+        print(f"\n📊 Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+        return True
+
 async def run_custom_strategy_builder_and_ssid_health_tests():
     """Run Custom Strategy Builder and SSID Health Monitor tests specifically"""
     print("🚀 Testing Custom Strategy Builder and SSID Health Monitor Features")
