@@ -136,16 +136,11 @@ class HistoricalDataFetcher:
         """Fetch historical data from Yahoo Finance"""
         try:
             import yfinance as yf
-            import concurrent.futures
             
             # Map symbol to Yahoo format
             yahoo_symbol = YAHOO_FOREX_SYMBOLS.get(symbol.upper(), symbol)
             if not yahoo_symbol.endswith('=X') and symbol.upper() in YAHOO_FOREX_SYMBOLS:
                 yahoo_symbol = YAHOO_FOREX_SYMBOLS[symbol.upper()]
-            
-            # Calculate date range
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=days)
             
             # Map interval
             interval_map = {
@@ -154,14 +149,20 @@ class HistoricalDataFetcher:
             }
             yf_interval = interval_map.get(interval, "60m")
             
-            # Run yfinance in thread pool to avoid blocking
+            # Define synchronous fetch function
             def fetch_sync():
                 ticker = yf.Ticker(yahoo_symbol)
-                return ticker.history(start=start_date, end=end_date, interval=yf_interval)
+                # Use period instead of date range for more reliable results
+                period_map = {7: '7d', 14: '14d', 30: '1mo', 60: '2mo', 90: '3mo'}
+                period = period_map.get(days, '1mo')
+                for p in sorted(period_map.keys()):
+                    if days <= p:
+                        period = period_map[p]
+                        break
+                return ticker.history(period=period, interval=yf_interval)
             
-            loop = asyncio.get_event_loop()
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                df = await loop.run_in_executor(executor, fetch_sync)
+            # Run in thread pool
+            df = await asyncio.to_thread(fetch_sync)
             
             if df is None or df.empty:
                 logger.warning(f"No data returned for {yahoo_symbol}")
