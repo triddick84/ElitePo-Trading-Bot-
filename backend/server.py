@@ -8521,6 +8521,156 @@ async def enhanced_disconnect():
 
 
 # =====================================================
+# DESKTOP CLIENT BRIDGE ENDPOINTS
+# =====================================================
+# These endpoints allow the desktop trading client to communicate
+# with the cloud server for signals and trade reporting
+
+from datetime import datetime, timezone
+import asyncio
+
+# Store for pending signals and desktop client status
+_desktop_client_state = {
+    "connected": False,
+    "balance": 0.0,
+    "account_type": "demo",
+    "last_seen": None,
+    "pending_signals": [],
+    "executed_trades": []
+}
+
+
+@api_router.get("/desktop-client/signals")
+async def get_desktop_client_signals():
+    """
+    Get pending signals for the desktop client to execute
+    """
+    try:
+        # Get signals that haven't been sent to desktop client yet
+        pending = _desktop_client_state.get("pending_signals", [])
+        
+        # Clear pending after sending
+        _desktop_client_state["pending_signals"] = []
+        
+        return {
+            "success": True,
+            "signals": pending,
+            "count": len(pending)
+        }
+    except Exception as e:
+        logger.error(f"Error getting desktop signals: {e}")
+        return {"success": False, "signals": [], "error": str(e)}
+
+
+@api_router.post("/desktop-client/trade-result")
+async def report_desktop_trade_result(result: Dict[str, Any]):
+    """
+    Desktop client reports trade execution result
+    """
+    try:
+        # Store the trade result
+        result["received_at"] = datetime.now(timezone.utc).isoformat()
+        _desktop_client_state["executed_trades"].append(result)
+        
+        # Keep only last 100 trades
+        if len(_desktop_client_state["executed_trades"]) > 100:
+            _desktop_client_state["executed_trades"] = _desktop_client_state["executed_trades"][-100:]
+        
+        logger.info(f"📊 Desktop trade result: {result.get('direction')} {result.get('asset')} - {'✅' if result.get('success') else '❌'}")
+        
+        return {
+            "success": True,
+            "message": "Trade result recorded"
+        }
+    except Exception as e:
+        logger.error(f"Error recording trade result: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.post("/desktop-client/status")
+async def update_desktop_client_status(status: Dict[str, Any]):
+    """
+    Desktop client sends status update
+    """
+    try:
+        _desktop_client_state.update({
+            "connected": status.get("connected", False),
+            "balance": status.get("balance", 0.0),
+            "account_type": status.get("account_type", "demo"),
+            "last_seen": datetime.now(timezone.utc).isoformat()
+        })
+        
+        return {"success": True}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@api_router.get("/desktop-client/status")
+async def get_desktop_client_status():
+    """
+    Get current desktop client status
+    """
+    last_seen = _desktop_client_state.get("last_seen")
+    is_online = False
+    
+    if last_seen:
+        try:
+            last_seen_dt = datetime.fromisoformat(last_seen.replace('Z', '+00:00'))
+            seconds_ago = (datetime.now(timezone.utc) - last_seen_dt).total_seconds()
+            is_online = seconds_ago < 30  # Consider online if seen in last 30 seconds
+        except:
+            pass
+    
+    return {
+        "success": True,
+        "status": {
+            "connected": _desktop_client_state.get("connected", False),
+            "is_online": is_online,
+            "balance": _desktop_client_state.get("balance", 0.0),
+            "account_type": _desktop_client_state.get("account_type", "demo"),
+            "last_seen": last_seen,
+            "recent_trades": len(_desktop_client_state.get("executed_trades", []))
+        }
+    }
+
+
+@api_router.post("/desktop-client/send-signal")
+async def send_signal_to_desktop(signal: Dict[str, Any]):
+    """
+    Queue a signal to be sent to desktop client
+    """
+    try:
+        signal["id"] = str(uuid.uuid4())
+        signal["queued_at"] = datetime.now(timezone.utc).isoformat()
+        
+        _desktop_client_state["pending_signals"].append(signal)
+        
+        logger.info(f"📤 Signal queued for desktop: {signal.get('direction')} {signal.get('asset')}")
+        
+        return {
+            "success": True,
+            "signal_id": signal["id"],
+            "message": "Signal queued for desktop client"
+        }
+    except Exception as e:
+        logger.error(f"Error queuing signal: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.get("/desktop-client/trades")
+async def get_desktop_trades(limit: int = 50):
+    """
+    Get recent trades executed by desktop client
+    """
+    trades = _desktop_client_state.get("executed_trades", [])
+    return {
+        "success": True,
+        "trades": trades[-limit:],
+        "count": len(trades)
+    }
+
+
+# =====================================================
 # AUTO LOGIN SERVICE ENDPOINTS
 # =====================================================
 
