@@ -135,47 +135,72 @@ class HistoricalDataFetcher:
     async def fetch_yahoo_data(self, symbol: str, days: int = 30, interval: str = "1h") -> Optional[pd.DataFrame]:
         """Fetch historical data from Yahoo Finance"""
         try:
-            import yfinance as yf
+            import subprocess
+            import pickle
+            import base64
+            import tempfile
+            import os
             
             # Map symbol to Yahoo format
             yahoo_symbol = YAHOO_FOREX_SYMBOLS.get(symbol.upper(), symbol)
             if not yahoo_symbol.endswith('=X') and symbol.upper() in YAHOO_FOREX_SYMBOLS:
                 yahoo_symbol = YAHOO_FOREX_SYMBOLS[symbol.upper()]
             
-            # Map interval
+            # Map interval and period
             interval_map = {
                 "1m": "1m", "5m": "5m", "15m": "15m", "30m": "30m",
                 "1h": "60m", "4h": "60m", "1d": "1d"
             }
             yf_interval = interval_map.get(interval, "60m")
             
-            # Define synchronous fetch function
-            def fetch_sync():
-                ticker = yf.Ticker(yahoo_symbol)
-                # Use period instead of date range for more reliable results
-                period_map = {7: '7d', 14: '14d', 30: '1mo', 60: '2mo', 90: '3mo'}
-                period = period_map.get(days, '1mo')
-                for p in sorted(period_map.keys()):
-                    if days <= p:
-                        period = period_map[p]
-                        break
-                return ticker.history(period=period, interval=yf_interval)
+            period_map = {7: '7d', 14: '14d', 30: '1mo', 60: '2mo', 90: '3mo'}
+            period = '1mo'
+            for p in sorted(period_map.keys()):
+                if days <= p:
+                    period = period_map[p]
+                    break
             
-            # Run in thread pool
-            df = await asyncio.to_thread(fetch_sync)
+            # Run yfinance in subprocess to avoid async context issues
+            script = f'''
+import yfinance as yf
+import pickle
+import sys
+
+ticker = yf.Ticker("{yahoo_symbol}")
+df = ticker.history(period="{period}", interval="{yf_interval}")
+if df is not None and not df.empty:
+    # Standardize columns
+    df = df.rename(columns={{"Open": "open", "High": "high", "Low": "low", "Close": "close", "Volume": "volume"}})
+    df = df[["open", "high", "low", "close", "volume"]].copy()
+    # Reset index to avoid datetime serialization issues
+    df = df.reset_index()
+    df["Datetime"] = df["Datetime"].astype(str)
+    sys.stdout.buffer.write(pickle.dumps(df))
+else:
+    sys.stdout.buffer.write(pickle.dumps(None))
+'''
             
-            if df is None or df.empty:
+            # Execute in subprocess
+            result = await asyncio.to_thread(
+                subprocess.run,
+                ['python3', '-c', script],
+                capture_output=True,
+                timeout=30
+            )
+            
+            if result.returncode != 0:
+                logger.error(f"Subprocess error for {yahoo_symbol}: {result.stderr.decode()}")
+                return None
+            
+            df = pickle.loads(result.stdout)
+            
+            if df is None or len(df) == 0:
                 logger.warning(f"No data returned for {yahoo_symbol}")
                 return None
             
-            # Standardize column names
-            df = df.rename(columns={
-                'Open': 'open', 'High': 'high', 'Low': 'low', 
-                'Close': 'close', 'Volume': 'volume'
-            })
-            
-            df = df[['open', 'high', 'low', 'close', 'volume']].copy()
-            df.index = pd.to_datetime(df.index)
+            # Restore datetime index
+            df['Datetime'] = pd.to_datetime(df['Datetime'])
+            df = df.set_index('Datetime')
             
             logger.info(f"Fetched {len(df)} candles for {yahoo_symbol}")
             return df
