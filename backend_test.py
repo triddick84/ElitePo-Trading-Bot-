@@ -17972,26 +17972,24 @@ async def run_socket_io_handshake_tests():
         await tester.cleanup()
 
 async def main():
-    """Main test runner - run SSID Health Monitor and Local Bot tests"""
-    return await run_ssid_health_monitor_and_local_bot_tests()
+    """Main test runner - run Custom Strategy Builder and SSID Health Monitor tests"""
+    return await run_custom_strategy_builder_and_ssid_health_tests()
 
-async def run_ssid_health_monitor_and_local_bot_tests():
-    """Run SSID Health Monitor and Local Bot tests specifically"""
-    print("🚀 Testing SSID Health Monitor and Local Bot Features")
+async def run_custom_strategy_builder_and_ssid_health_tests():
+    """Run Custom Strategy Builder and SSID Health Monitor tests specifically"""
+    print("🚀 Testing Custom Strategy Builder and SSID Health Monitor Features")
     print("=" * 80)
     
     tester = BackendTester()
     await tester.setup()
     
-    # Define SSID Health Monitor and Local Bot tests
+    # Define Custom Strategy Builder and SSID Health Monitor tests
     tests = [
+        ("Health Check", tester.test_health_check),
+        ("Custom Strategies Indicators", tester.test_custom_strategies_indicators),
+        ("Custom Strategies CRUD", tester.test_custom_strategies_crud),
         ("SSID Health Monitor Status", tester.test_ssid_health_status),
         ("SSID Health Alerts", tester.test_ssid_health_alerts),
-        ("SSID Instructions", tester.test_ssid_instructions),
-        ("Start Health Monitor", tester.test_ssid_health_start),
-        ("Local Bot Download", tester.test_local_bot_download),
-        ("Pocket Option Status", tester.test_pocket_option_status),
-        ("1-Minute Strategy Integration Check", tester.test_1m_strategy_integration_check),
     ]
     
     # Run all tests
