@@ -23,6 +23,7 @@ class BackendTester:
         self.session = None
         self.test_results = []
         self.failed_tests = []
+        self.test_strategy_id = None  # For storing test strategy ID for cleanup
         
     async def setup(self):
         """Setup test session"""
