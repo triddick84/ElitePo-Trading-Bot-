@@ -194,6 +194,10 @@ function App() {
         );
       case "pocket-option":
         return <PocketOptionSettings />;
+      case "ssid-manager":
+        return <SSIDConnectionManager />;
+      case "strategy-builder":
+        return <StrategyBuilder />;
       case "realtime":
         return <RealtimeMarketDashboard />;
       case "statistics":
