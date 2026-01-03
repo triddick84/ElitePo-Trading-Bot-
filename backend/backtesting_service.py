@@ -144,6 +144,7 @@ class BacktestResult:
     roi: float = 0.0
     start_date: str = ""
     end_date: str = ""
+    data_source: str = "unknown"  # Track which data provider was used (finnhub, alphavantage, cryptocompare, synthetic)
     trades: List[Dict] = field(default_factory=list)
     equity_curve: List[float] = field(default_factory=list)
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
