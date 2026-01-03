@@ -95,6 +95,14 @@ const AIMLModelsPage = () => {
   const [retrainProgress, setRetrainProgress] = useState(0);
   const [retrainLog, setRetrainLog] = useState([]);
   
+  // ML Training State
+  const [mlModels, setMlModels] = useState([]);
+  const [isTrainingML, setIsTrainingML] = useState(false);
+  const [mlTrainingAsset, setMlTrainingAsset] = useState('EURUSD');
+  const [mlTrainingTimeframe, setMlTrainingTimeframe] = useState('1h');
+  const [mlTrainingDays, setMlTrainingDays] = useState(30);
+  const [optimizationResults, setOptimizationResults] = useState(null);
+  
   // Loading States
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -109,9 +117,19 @@ const AIMLModelsPage = () => {
       fetchModelConfig(),
       fetchModelPerformance(),
       fetchLearningStats(),
-      fetchAdaptiveConfig()
+      fetchAdaptiveConfig(),
+      fetchMLModels()
     ]);
     setIsLoading(false);
+  };
+  
+  const fetchMLModels = async () => {
+    try {
+      const response = await axios.get(`${API}/ml-training/models`);
+      setMlModels(response.data.models || []);
+    } catch (error) {
+      console.error('Error fetching ML models:', error);
+    }
   };
   
   const fetchModelConfig = async () => {
