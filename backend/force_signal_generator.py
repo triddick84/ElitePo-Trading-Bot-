@@ -2784,7 +2784,7 @@ class ForceSignalGenerator:
             # Calculate latency offset based on timeframe
             # Each timeframe gets latency matching its duration
             latency_map = {
-                '5s': 5,        # 5 seconds
+                '5s': 10,       # 10 seconds (5s timeframe + 5s extra)
                 '15s': 15,      # 15 seconds
                 '30s': 30,      # 30 seconds
                 '1m': 60,       # 1 minute
@@ -2855,7 +2855,7 @@ class ForceSignalGenerator:
             
             # Calculate latency based on timeframe - each timeframe matches its duration
             latency_map = {
-                '5s': 5,        # 5 seconds
+                '5s': 10,       # 10 seconds (5s timeframe + 5s extra)
                 '15s': 15,      # 15 seconds
                 '30s': 30,      # 30 seconds
                 '1m': 60,       # 1 minute
