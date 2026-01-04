@@ -9780,11 +9780,14 @@ async def get_data_collector() -> HistoricalDataCollector:
     return _data_collector
 
 
+class DataCollectionStartRequest(BaseModel):
+    """Request to start data collection"""
+    assets: Optional[List[str]] = None
+    timeframes: Optional[List[str]] = None
+
+
 @api_router.post("/data-collector/start")
-async def start_data_collection(
-    assets: List[str] = None,
-    timeframes: List[str] = None
-):
+async def start_data_collection(request: DataCollectionStartRequest = None):
     """
     Start collecting historical market data.
     
@@ -9794,6 +9797,10 @@ async def start_data_collection(
     """
     try:
         collector = await get_data_collector()
+        
+        assets = request.assets if request else None
+        timeframes = request.timeframes if request else None
+        
         collector.start_collection(assets=assets, timeframes=timeframes)
         
         return {
