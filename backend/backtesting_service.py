@@ -1150,11 +1150,13 @@ class StrategyEngine:
         Enhanced RSI Divergence + MACD Exhaustion Strategy
         Based on research showing 73%+ win rate with divergence confluence
         
-        Entry Rules:
-        1. RSI Divergence (bullish: price lower low, RSI higher low)
-        2. MACD Histogram Exhaustion (shrinking bars)
-        3. Stochastic in extreme zone
-        4. Volume confirmation
+        STRICT Entry Rules (need 5+ confirmations):
+        1. RSI Divergence (bullish: price lower low, RSI higher low) - 2 points
+        2. MACD Histogram Exhaustion (shrinking bars) - 1 point
+        3. RSI Extreme Level (<25 or >75) - 1 point  
+        4. Stochastic Crossover in extreme zone - 2 points
+        5. Volume spike confirmation - 1 point
+        6. Price near Bollinger Band - 1 point
         """
         signals = []
         
@@ -1166,14 +1168,15 @@ class StrategyEngine:
         low = df['low']
         volume = df['volume'] if 'volume' in df.columns else pd.Series([1] * len(df))
         
-        # Calculate indicators
-        rsi = self._calculate_rsi(close, 7)  # Faster RSI for short timeframes
-        macd, macd_signal, macd_hist = self._calculate_macd(close, 8, 17, 9)
-        stoch_k, stoch_d = self._calculate_stochastic(high, low, close, 5, 3)
+        # Calculate indicators with optimized settings
+        rsi = self._calculate_rsi(close, 7)  # RSI 7 for balanced sensitivity
+        macd, macd_signal, macd_hist = self._calculate_macd(close, 12, 26, 9)  # Standard MACD
+        stoch_k, stoch_d = self._calculate_stochastic(high, low, close, 14, 3)  # Standard stochastic
         volume_ma = self._calculate_sma(volume, 20)
+        bb_upper, bb_middle, bb_lower = self._calculate_bollinger_bands(close, 20, 2.0)
         
-        # Lookback for divergence detection
-        lookback = 10
+        # Lookback for divergence detection (adaptive based on data)
+        lookback = min(15, len(df) // 4)
         
         for i in range(max(lookback + 5, 30), len(df)):
             if pd.isna(rsi.iloc[i]) or pd.isna(macd_hist.iloc[i]) or pd.isna(stoch_k.iloc[i]):
@@ -1187,73 +1190,95 @@ class StrategyEngine:
             
             # Get recent data for divergence
             recent_close = close.iloc[i-lookback:i]
-            recent_rsi = rsi.iloc[i-lookback:i]
+            recent_rsi = rsi.iloc[i-lookback:i].dropna()
             recent_hist = macd_hist.iloc[i-lookback:i].dropna()
             
             # Track confirmations
             bullish_confirmations = 0
             bearish_confirmations = 0
             
-            # === 1. RSI DIVERGENCE ===
-            # Bullish: Price lower low, RSI higher low
-            if current_close <= recent_close.min():
-                if len(recent_rsi.dropna()) > 0 and current_rsi > recent_rsi.min():
-                    bullish_confirmations += 2  # High weight
+            # === 1. RSI DIVERGENCE (Strict) ===
+            # Only count divergence if it's clear and significant
+            if len(recent_rsi) >= 5:
+                price_min = recent_close.min()
+                price_max = recent_close.max()
+                rsi_min = recent_rsi.min()
+                rsi_max = recent_rsi.max()
+                
+                # Bullish: Price at/near new low, RSI higher than its low
+                if current_close <= price_min * 1.001:  # Within 0.1% of low
+                    if current_rsi > rsi_min + 5:  # RSI at least 5 points higher
+                        bullish_confirmations += 2  # Strong signal
+                
+                # Bearish: Price at/near new high, RSI lower than its high
+                if current_close >= price_max * 0.999:  # Within 0.1% of high
+                    if current_rsi < rsi_max - 5:  # RSI at least 5 points lower
+                        bearish_confirmations += 2  # Strong signal
             
-            # Bearish: Price higher high, RSI lower high
-            if current_close >= recent_close.max():
-                if len(recent_rsi.dropna()) > 0 and current_rsi < recent_rsi.max():
-                    bearish_confirmations += 2  # High weight
-            
-            # === 2. RSI EXTREME LEVELS ===
+            # === 2. RSI EXTREME LEVELS (Stricter thresholds) ===
             if current_rsi < 25:
                 bullish_confirmations += 1
             elif current_rsi > 75:
                 bearish_confirmations += 1
             
             # === 3. MACD HISTOGRAM EXHAUSTION ===
-            if len(recent_hist) >= 3:
-                hist_values = recent_hist.values
-                # Bullish exhaustion: negative but rising histogram
-                if current_hist < 0 and len(hist_values) >= 3:
-                    if hist_values[-1] > hist_values[-2] > hist_values[-3]:
+            if len(recent_hist) >= 4:
+                hist_values = recent_hist.values[-4:]
+                # Bullish exhaustion: negative but clearly rising
+                if current_hist < 0:
+                    if all(hist_values[j] > hist_values[j-1] for j in range(1, len(hist_values))):
                         bullish_confirmations += 1
-                # Bearish exhaustion: positive but falling histogram
-                elif current_hist > 0 and len(hist_values) >= 3:
-                    if hist_values[-1] < hist_values[-2] < hist_values[-3]:
+                # Bearish exhaustion: positive but clearly falling
+                elif current_hist > 0:
+                    if all(hist_values[j] < hist_values[j-1] for j in range(1, len(hist_values))):
                         bearish_confirmations += 1
             
-            # === 4. STOCHASTIC CONFIRMATION ===
+            # === 4. STOCHASTIC CROSSOVER IN EXTREME ===
             prev_stoch_k = stoch_k.iloc[i-1] if i > 0 else current_stoch
             prev_stoch_d = stoch_d.iloc[i-1] if i > 0 else stoch_d.iloc[i]
             current_stoch_d = stoch_d.iloc[i]
             
-            # Bullish crossover in oversold
+            # Bullish crossover in oversold (<20)
             if current_stoch < 20:
-                bullish_confirmations += 1
                 if current_stoch > current_stoch_d and prev_stoch_k <= prev_stoch_d:
-                    bullish_confirmations += 1  # Crossover bonus
+                    bullish_confirmations += 2  # Strong signal with crossover
+                else:
+                    bullish_confirmations += 1  # Just oversold
             
-            # Bearish crossover in overbought
+            # Bearish crossover in overbought (>80)
             if current_stoch > 80:
-                bearish_confirmations += 1
                 if current_stoch < current_stoch_d and prev_stoch_k >= prev_stoch_d:
-                    bearish_confirmations += 1  # Crossover bonus
+                    bearish_confirmations += 2  # Strong signal with crossover
+                else:
+                    bearish_confirmations += 1  # Just overbought
             
             # === 5. VOLUME CONFIRMATION ===
             if not pd.isna(volume_ma.iloc[i]) and volume_ma.iloc[i] > 0:
-                if current_volume > volume_ma.iloc[i] * 1.3:
+                if current_volume > volume_ma.iloc[i] * 1.5:  # 50% above average
                     # Add to whichever direction has more confirmations
                     if bullish_confirmations > bearish_confirmations:
                         bullish_confirmations += 1
                     elif bearish_confirmations > bullish_confirmations:
                         bearish_confirmations += 1
             
-            # === GENERATE SIGNAL (require 4+ confirmations) ===
-            min_confirmations = 4
+            # === 6. BOLLINGER BAND TOUCH ===
+            if not pd.isna(bb_lower.iloc[i]) and not pd.isna(bb_upper.iloc[i]):
+                bb_range = bb_upper.iloc[i] - bb_lower.iloc[i]
+                if bb_range > 0:
+                    lower_dist = (current_close - bb_lower.iloc[i]) / bb_range
+                    upper_dist = (bb_upper.iloc[i] - current_close) / bb_range
+                    
+                    if lower_dist < 0.05:  # Within 5% of lower band
+                        bullish_confirmations += 1
+                    elif upper_dist < 0.05:  # Within 5% of upper band
+                        bearish_confirmations += 1
             
-            if bullish_confirmations >= min_confirmations and bullish_confirmations > bearish_confirmations:
-                confidence = min(70 + (bullish_confirmations - min_confirmations) * 5, 92)
+            # === GENERATE SIGNAL (STRICT: require 5+ confirmations) ===
+            min_confirmations = 5
+            
+            # Only generate signal if clearly one-sided
+            if bullish_confirmations >= min_confirmations and bullish_confirmations > bearish_confirmations + 1:
+                confidence = min(72 + (bullish_confirmations - min_confirmations) * 4, 90)
                 signals.append({
                     'index': i,
                     'timestamp': str(df.index[i]),
@@ -1263,8 +1288,8 @@ class StrategyEngine:
                     'confirmations': bullish_confirmations
                 })
             
-            elif bearish_confirmations >= min_confirmations and bearish_confirmations > bullish_confirmations:
-                confidence = min(70 + (bearish_confirmations - min_confirmations) * 5, 92)
+            elif bearish_confirmations >= min_confirmations and bearish_confirmations > bullish_confirmations + 1:
+                confidence = min(72 + (bearish_confirmations - min_confirmations) * 4, 90)
                 signals.append({
                     'index': i,
                     'timestamp': str(df.index[i]),
