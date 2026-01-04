@@ -1674,6 +1674,8 @@ class BacktestingService:
             {"id": "support_resistance", "name": "Support/Resistance", "description": "Breakout of support/resistance levels"},
             {"id": "hybrid", "name": "Hybrid Strategy", "description": "Combination of RSI, EMA, and Bollinger"},
             {"id": "enhanced_rsi_bb_volume", "name": "Enhanced RSI+BB+Volume", "description": "RSI + Bollinger with volume confirmation"},
+            {"id": "enhanced_divergence", "name": "RSI/MACD Divergence", "description": "RSI divergence + MACD exhaustion patterns (research-based)"},
+            {"id": "professional_scalping", "name": "Professional Scalping", "description": "Multi-filter institutional strategy (8 confirmations)"},
         ]
 
 
