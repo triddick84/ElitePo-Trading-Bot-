@@ -58,9 +58,9 @@ const CompactSignalPopup = ({ signals, onClose, onDismiss }) => {
           const displayDuration = (now - signalCreatedTime) / 1000;
           
           // Close popup when:
-          // 1. Entry time passed by 10 seconds (timeLeft <= -10), OR
+          // 1. Entry time passed by 3 seconds (timeLeft <= -3), OR
           // 2. Popup has been displayed for more than 5 minutes (300 seconds) regardless of countdown
-          const isExpiredByTime = timeLeft <= -10;
+          const isExpiredByTime = timeLeft <= -3;  // Close 3 seconds after entry time
           const isExpiredByDuration = displayDuration > 300; // Max 5 minutes display
           
           newTimers[signal.id] = {
