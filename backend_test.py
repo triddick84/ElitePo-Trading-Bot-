@@ -19184,8 +19184,8 @@ async def run_socket_io_handshake_tests():
         await tester.cleanup()
 
 async def main():
-    """Main test runner - run Historical Data Collection and ML Training tests"""
-    return await run_historical_data_and_ml_training_tests()
+    """Main test runner - run Custom Strategies API tests"""
+    return await run_custom_strategies_tests()
 
 async def run_historical_data_and_ml_training_tests():
     """Run Historical Data Collection and ML Training API tests specifically"""
