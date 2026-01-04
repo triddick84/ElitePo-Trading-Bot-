@@ -1360,7 +1360,8 @@ class StrategyEngine:
         dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di + 0.0001)
         adx = dx.rolling(window=14).mean()
         
-        min_score = 7
+        # Lower threshold for more signals while maintaining quality
+        min_score = 5  # Reduced from 7 to 5 for 1h timeframe
         
         for i in range(50, len(df)):
             current_close = close.iloc[i]
