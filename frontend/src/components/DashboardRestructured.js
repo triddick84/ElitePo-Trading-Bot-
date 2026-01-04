@@ -427,9 +427,9 @@ const DashboardRestructured = ({
         normalizedConfig.trading_mode = 'live';
       }
       
+      // Build full config - use current config's selected_expirations as default, NOT hardcoded ['1m']
       const fullConfig = {
         trading_mode: 'demo',
-        selected_expirations: ['1m'],
         active_strategies: ['hybrid'],
         target_assets: ['forex'],
         risk_tolerance: 'medium',
@@ -440,8 +440,8 @@ const DashboardRestructured = ({
         sound_alerts_enabled: true,
         popup_notifications: true,
         invert_signals: false,
-        ...normalizedConfig,  // Current config (with trading_mode converted)
-        ...normalizedUpdates  // New updates
+        ...normalizedConfig,  // Current config (preserves selected_expirations)
+        ...normalizedUpdates  // New updates (overrides if specified)
       };
       
       await axios.put(`${API}/config`, fullConfig);
