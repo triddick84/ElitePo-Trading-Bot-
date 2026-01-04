@@ -2775,6 +2775,13 @@ class ForceSignalGenerator:
             emergency_confidence = min(confidence + 15.0, 95.0)  # Significant boost for forced signals
             emergency_conf_level = "HIGH" if emergency_confidence >= 88.0 else "MEDIUM"
             
+            # Calculate latency offset based on timeframe
+            # For 1m signals: Add 60 seconds latency so signals generate 1 minute later
+            if timeframe == '1m':
+                latency_offset = 60  # 1 minute delay for 1m signals
+            else:
+                latency_offset = 25 if market_type == "otc" else 35  # Standard latency for other timeframes
+            
             return TradingSignal(
                 id=f"EMERGENCY_{market_type.upper()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{symbol}",
                 symbol=f"{symbol}{symbol_suffix}",
@@ -2802,7 +2809,7 @@ class ForceSignalGenerator:
                             f"This is a forced emergency signal when normal analysis fails.",
                 risk_assessment="HIGH RISK - Emergency fallback signal with limited analysis data. Use minimum stake.",
                 suggested_stake=5.0,
-                precision_entry_time=datetime.now(timezone.utc) + timedelta(seconds=25 if market_type == "otc" else 35),  # +5s latency offset
+                precision_entry_time=datetime.now(timezone.utc) + timedelta(seconds=latency_offset),
                 timestamp=datetime.now(timezone.utc)
             )
             
