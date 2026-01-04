@@ -447,7 +447,39 @@ const StrategySelector = ({ onStrategySelect, onAutoGenerateToggle }) => {
               <SelectTrigger className="w-full bg-gray-800/50 border-gray-700 text-white">
                 <SelectValue placeholder="Choose strategy..." />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-80">
+                {/* My Built Strategies Section */}
+                {getCustomStrategiesForTimeframe().length > 0 && (
+                  <>
+                    <div className="px-2 py-1.5 text-xs font-semibold text-yellow-400 bg-yellow-500/10 flex items-center gap-2">
+                      <Star className="w-3 h-3" />
+                      MY BUILT STRATEGIES
+                    </div>
+                    {getCustomStrategiesForTimeframe().map(strategy => (
+                      <SelectItem 
+                        key={`custom_${strategy.id}`} 
+                        value={`custom_${strategy.id}`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <User className="w-3 h-3 text-yellow-400" />
+                          <span>{strategy.name}</span>
+                          <Badge variant="outline" className="text-xs text-yellow-400 border-yellow-400/50">
+                            Custom
+                          </Badge>
+                          {strategy.is_active && (
+                            <Badge className="text-xs bg-green-500/20 text-green-400">Active</Badge>
+                          )}
+                        </div>
+                      </SelectItem>
+                    ))}
+                    <div className="border-t border-gray-700 my-1"></div>
+                  </>
+                )}
+                
+                {/* Default Strategies Section */}
+                <div className="px-2 py-1.5 text-xs font-semibold text-blue-400 bg-blue-500/10">
+                  DEFAULT STRATEGIES
+                </div>
                 {availableStrategies.map(strategy => (
                   <SelectItem key={strategy.value} value={strategy.value}>
                     <div className="flex items-center gap-2">
@@ -460,6 +492,15 @@ const StrategySelector = ({ onStrategySelect, onAutoGenerateToggle }) => {
                 ))}
               </SelectContent>
             </Select>
+            
+            {/* Info about custom strategies */}
+            {getCustomStrategiesForTimeframe().length === 0 && customStrategies.length > 0 && (
+              <p className="text-xs text-gray-400 mt-2">
+                💡 You have {customStrategies.length} custom {customStrategies.length === 1 ? 'strategy' : 'strategies'}, 
+                but none are configured for {selectedTimeframe} timeframe. 
+                Build one in Strategy Builder with this timeframe selected.
+              </p>
+            )}
             
             {selectedStrategy && (
               <Button
