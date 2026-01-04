@@ -2,67 +2,31 @@
 Desktop Trading Client Configuration
 ====================================
 
-Edit these settings before running the bot.
+Default configuration values.
+Actual settings are saved to bot_settings.json by the GUI.
 """
 
-# ===========================================
-# POCKET OPTION CREDENTIALS
-# ===========================================
-POCKET_OPTION_EMAIL = "thomas.riddick84@gmail.com"
-POCKET_OPTION_PASSWORD = "Tonyistheman#1"
+# === DEFAULT VALUES ===
+# These are used if no settings file exists
 
-# Account type: "demo" or "real"
-ACCOUNT_TYPE = "demo"
+# Account Settings
+DEFAULT_ACCOUNT_TYPE = "demo"  # "demo" or "live"
+DEFAULT_TRADE_AMOUNT = 1
+DEFAULT_MIN_PAYOUT = 80
 
-# ===========================================
-# 2CAPTCHA API KEY
-# ===========================================
-# Get your key from https://2captcha.com
-TWOCAPTCHA_API_KEY = "c987655ee4a7359530d3558bd6fbe5a9"
+# Strategy Settings  
+DEFAULT_FAST_MA = 3
+DEFAULT_SLOW_MA = 8
+DEFAULT_RSI_PERIOD = 14
+DEFAULT_MIN_CONFIDENCE = 65
+DEFAULT_MIN_STRATEGY_VOTES = 2
 
-# ===========================================
-# CLOUD SERVER CONNECTION
-# ===========================================
-# Your GPT Signal Bot cloud server URL
-# Replace with your actual deployed URL
-CLOUD_SERVER_URL = "https://gpt-signal-bot-1.preview.emergentagent.com"
+# Risk Management
+DEFAULT_MARTINGALE_LIST = [1, 3, 7, 15, 32, 67]
+DEFAULT_MAX_TRADES_PER_HOUR = 30
+DEFAULT_TAKE_PROFIT = 100
+DEFAULT_STOP_LOSS = 50
 
-# How often to poll for new signals (seconds)
-SIGNAL_POLL_INTERVAL = 2
-
-# ===========================================
-# TRADING SETTINGS
-# ===========================================
-# Default trade amount (can be overridden by signals)
-DEFAULT_TRADE_AMOUNT = 1.0
-
-# Maximum trades per hour
-MAX_TRADES_PER_HOUR = 30
-
-# Minimum confidence to execute trade
-MIN_CONFIDENCE = 70
-
-# Enable auto-trading (set False to only monitor)
-AUTO_TRADE_ENABLED = True
-
-# ===========================================
-# TELEGRAM NOTIFICATIONS (Optional)
-# ===========================================
-TELEGRAM_ENABLED = False
-TELEGRAM_BOT_TOKEN = "your-telegram-bot-token"
-TELEGRAM_CHAT_ID = "your-chat-id"
-
-# ===========================================
-# BROWSER SETTINGS
-# ===========================================
-# Run browser in headless mode (no visible window)
-HEADLESS = True
-
-# Show browser for debugging (overrides HEADLESS)
-DEBUG_MODE = False
-
-# ===========================================
-# LOGGING
-# ===========================================
-LOG_LEVEL = "INFO"  # DEBUG, INFO, WARNING, ERROR
+# Logging
+LOG_LEVEL = "INFO"
 LOG_FILE = "trading_bot.log"
