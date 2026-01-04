@@ -344,10 +344,42 @@ const StrategySelector = ({ onStrategySelect, onAutoGenerateToggle }) => {
 
   const handleStrategyChange = (strategyKey) => {
     setSelectedStrategy(strategyKey);
-    const config = strategyConfigs[strategyKey];
-    if (config) {
-      setCurrentStrategyConfig(config);
-      setShowSetupModal(true);
+    
+    // Check if this is a custom strategy
+    if (strategyKey.startsWith('custom_')) {
+      const strategyId = strategyKey.replace('custom_', '');
+      const customStrategy = customStrategies.find(s => s.id === strategyId);
+      
+      if (customStrategy) {
+        // Build a config object from the custom strategy
+        const customConfig = {
+          name: customStrategy.name,
+          timeframe: selectedTimeframe,
+          chartType: 'Japanese Candlesticks',
+          assets: customStrategy.assets?.join(', ') || 'Any',
+          expiry: selectedTimeframe,
+          accuracy: 'Custom Strategy',
+          indicators: customStrategy.indicators?.map(ind => ({
+            name: ind.name,
+            settings: `${ind.setting}: ${ind.value}`,
+            purpose: ind.condition || 'Signal condition'
+          })) || [],
+          callSignal: customStrategy.buy_conditions || ['Custom BUY conditions'],
+          putSignal: customStrategy.sell_conditions || ['Custom SELL conditions'],
+          tips: ['This is your custom-built strategy', 'Test thoroughly on demo account first'],
+          isCustom: true,
+          customStrategyId: strategyId
+        };
+        setCurrentStrategyConfig(customConfig);
+        toast.success(`Selected custom strategy: ${customStrategy.name}`);
+      }
+    } else {
+      // Default strategy
+      const config = strategyConfigs[strategyKey];
+      if (config) {
+        setCurrentStrategyConfig(config);
+        setShowSetupModal(true);
+      }
     }
   };
 
