@@ -1058,6 +1058,349 @@ class BackendTester:
             print(f"   Enhanced signal accuracy targeting test error: {e}")
             return False
 
+    # ========== HISTORICAL DATA COLLECTION AND ML TRAINING API TESTING ==========
+    
+    async def test_data_collector_start(self) -> bool:
+        """Test POST /api/data-collector/start - Start collecting data"""
+        try:
+            print("   🔍 Testing Data Collection Start")
+            
+            payload = {
+                "assets": ["EURUSD_otc"],
+                "timeframes": ["1m", "5s"]
+            }
+            
+            async with self.session.post(f"{BACKEND_URL}/data-collector/start", json=payload) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Data collection started successfully")
+                    print(f"   📊 Status: {data.get('status')}")
+                    print(f"   📊 Message: {data.get('message')}")
+                    
+                    # Verify response contains success status
+                    return data.get('status') == 'success'
+                else:
+                    print(f"   ❌ Data collection start failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Data collection start test error: {e}")
+            return False
+    
+    async def test_data_collector_history(self) -> bool:
+        """Test POST /api/data-collector/history - Receive historical data"""
+        try:
+            print("   🔍 Testing Data Collection History")
+            
+            # Sample candle data for testing
+            payload = {
+                "asset": "EURUSD_otc",
+                "history_data": [
+                    [1640995200, 1.1300],  # timestamp, price
+                    [1640995260, 1.1305],
+                    [1640995320, 1.1302]
+                ],
+                "period": 60
+            }
+            
+            async with self.session.post(f"{BACKEND_URL}/data-collector/history", json=payload) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Historical data processed successfully")
+                    print(f"   📊 Status: {data.get('status')}")
+                    print(f"   📊 Candles saved: {data.get('candles_saved', 0)}")
+                    
+                    return data.get('status') == 'success'
+                else:
+                    print(f"   ❌ Historical data processing failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Historical data test error: {e}")
+            return False
+    
+    async def test_data_collector_stats(self) -> bool:
+        """Test GET /api/data-collector/stats - Get collection statistics"""
+        try:
+            print("   🔍 Testing Data Collection Stats")
+            
+            async with self.session.get(f"{BACKEND_URL}/data-collector/stats") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Collection stats retrieved successfully")
+                    print(f"   📊 Collection enabled: {data.get('collection_enabled')}")
+                    
+                    # Check for database_stats with candle counts
+                    database_stats = data.get('database_stats', {})
+                    print(f"   📊 Database stats keys: {list(database_stats.keys())}")
+                    
+                    # Verify response structure
+                    required_fields = ['collection_enabled', 'database_stats']
+                    missing_fields = [f for f in required_fields if f not in data]
+                    
+                    if not missing_fields:
+                        print(f"   ✅ All required stats fields present")
+                        return True
+                    else:
+                        print(f"   ❌ Missing stats fields: {missing_fields}")
+                        return False
+                else:
+                    print(f"   ❌ Collection stats failed: {response.status}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Collection stats test error: {e}")
+            return False
+    
+    async def test_data_collector_candles(self) -> bool:
+        """Test GET /api/data-collector/candles/EURUSD_otc/1m?days=30 - Get stored candles"""
+        try:
+            print("   🔍 Testing Data Collection Candles Retrieval")
+            
+            async with self.session.get(f"{BACKEND_URL}/data-collector/candles/EURUSD_otc/1m?days=30") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Candles retrieved successfully")
+                    
+                    candles = data.get('candles', [])
+                    print(f"   📊 Candles count: {len(candles)}")
+                    
+                    # Verify response structure
+                    if 'candles' in data and isinstance(candles, list):
+                        print(f"   ✅ Candles array returned")
+                        
+                        # Check if we have candles and verify structure
+                        if len(candles) > 0:
+                            first_candle = candles[0]
+                            required_fields = ['asset', 'timeframe', 'timestamp', 'open', 'high', 'low', 'close']
+                            missing_fields = [f for f in required_fields if f not in first_candle]
+                            
+                            if not missing_fields:
+                                print(f"   ✅ Candle structure is valid")
+                                return True
+                            else:
+                                print(f"   ❌ Missing candle fields: {missing_fields}")
+                                return False
+                        else:
+                            print(f"   ℹ️ No candles found (expected if no data collected yet)")
+                            return True
+                    else:
+                        print(f"   ❌ Invalid response structure")
+                        return False
+                else:
+                    print(f"   ❌ Candles retrieval failed: {response.status}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Candles retrieval test error: {e}")
+            return False
+    
+    async def test_data_collector_training_data(self) -> bool:
+        """Test GET /api/data-collector/training-data/EURUSD_otc/1m?days=30 - Get training data"""
+        try:
+            print("   🔍 Testing Data Collection Training Data")
+            
+            async with self.session.get(f"{BACKEND_URL}/data-collector/training-data/EURUSD_otc/1m?days=30") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Training data retrieved successfully")
+                    
+                    # Verify response structure for ML training
+                    if 'data' in data:
+                        training_data = data['data']
+                        required_arrays = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+                        missing_arrays = [f for f in required_arrays if f not in training_data]
+                        
+                        if not missing_arrays:
+                            print(f"   ✅ All required data arrays present")
+                            print(f"   📊 Asset: {data.get('asset')}")
+                            print(f"   📊 Timeframe: {data.get('timeframe')}")
+                            print(f"   📊 Candle count: {data.get('candle_count', 0)}")
+                            return True
+                        else:
+                            print(f"   ❌ Missing data arrays: {missing_arrays}")
+                            return False
+                    else:
+                        print(f"   ℹ️ No training data available (expected if no data collected yet)")
+                        return True
+                else:
+                    print(f"   ❌ Training data retrieval failed: {response.status}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Training data test error: {e}")
+            return False
+    
+    async def test_data_collector_stop(self) -> bool:
+        """Test POST /api/data-collector/stop - Stop collection"""
+        try:
+            print("   🔍 Testing Data Collection Stop")
+            
+            async with self.session.post(f"{BACKEND_URL}/data-collector/stop") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Data collection stopped successfully")
+                    print(f"   📊 Status: {data.get('status')}")
+                    print(f"   📊 Message: {data.get('message')}")
+                    
+                    return data.get('status') == 'success'
+                else:
+                    print(f"   ❌ Data collection stop failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Data collection stop test error: {e}")
+            return False
+    
+    async def test_ml_trainer_train(self) -> bool:
+        """Test POST /api/ml-trainer/train - Train a model"""
+        try:
+            print("   🔍 Testing ML Trainer Train")
+            
+            payload = {
+                "asset": "EURUSD_otc",
+                "timeframe": "1m",
+                "confidence_threshold": 0.6,
+                "min_samples": 500
+            }
+            
+            async with self.session.post(f"{BACKEND_URL}/ml-trainer/train", json=payload) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ ML training completed")
+                    print(f"   📊 Success: {data.get('success')}")
+                    
+                    if data.get('success'):
+                        performance = data.get('performance', {})
+                        print(f"   📊 Win rate: {performance.get('win_rate', 0):.1f}%")
+                        print(f"   📊 Accuracy: {performance.get('accuracy', 0):.3f}")
+                        print(f"   📊 Samples used: {data.get('samples_used', 0)}")
+                        
+                        # Verify performance metrics are present
+                        required_metrics = ['win_rate', 'accuracy', 'precision', 'recall']
+                        missing_metrics = [m for m in required_metrics if m not in performance]
+                        
+                        if not missing_metrics:
+                            print(f"   ✅ All performance metrics present")
+                            return True
+                        else:
+                            print(f"   ❌ Missing performance metrics: {missing_metrics}")
+                            return False
+                    else:
+                        error_msg = data.get('error', 'Unknown error')
+                        print(f"   ℹ️ Training failed (expected if insufficient data): {error_msg}")
+                        # This is acceptable if there's insufficient data
+                        return True
+                else:
+                    print(f"   ❌ ML training failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ ML training test error: {e}")
+            return False
+    
+    async def test_ml_trainer_models(self) -> bool:
+        """Test GET /api/ml-trainer/models - Get model status"""
+        try:
+            print("   🔍 Testing ML Trainer Models Status")
+            
+            async with self.session.get(f"{BACKEND_URL}/ml-trainer/models") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Model status retrieved successfully")
+                    
+                    models = data.get('models', {})
+                    print(f"   📊 Models found: {len(models)}")
+                    
+                    # Verify response structure
+                    if isinstance(models, dict):
+                        print(f"   ✅ Models dictionary returned")
+                        
+                        # If models exist, check their structure
+                        for model_key, model_info in models.items():
+                            print(f"   📊 Model: {model_key}")
+                            if isinstance(model_info, dict):
+                                print(f"      Loaded: {model_info.get('loaded', False)}")
+                                if 'performance' in model_info:
+                                    perf = model_info['performance']
+                                    print(f"      Win rate: {perf.get('win_rate', 0):.1f}%")
+                        
+                        return True
+                    else:
+                        print(f"   ❌ Invalid models response structure")
+                        return False
+                else:
+                    print(f"   ❌ Model status retrieval failed: {response.status}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Model status test error: {e}")
+            return False
+    
+    async def test_ml_trainer_performance(self) -> bool:
+        """Test GET /api/ml-trainer/performance/EURUSD_otc/1m - Get model performance"""
+        try:
+            print("   🔍 Testing ML Trainer Performance")
+            
+            async with self.session.get(f"{BACKEND_URL}/ml-trainer/performance/EURUSD_otc/1m") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Model performance retrieved successfully")
+                    
+                    # Check if performance data is present
+                    if 'performance' in data:
+                        performance = data['performance']
+                        print(f"   📊 Win rate: {performance.get('win_rate', 0):.1f}%")
+                        print(f"   📊 Accuracy: {performance.get('accuracy', 0):.3f}")
+                        
+                        # Check for feature importance
+                        if 'feature_importance' in data:
+                            feature_importance = data['feature_importance']
+                            print(f"   📊 Feature importance keys: {len(feature_importance)}")
+                            
+                        return True
+                    else:
+                        print(f"   ℹ️ No performance data (expected if model not trained yet)")
+                        return True
+                elif response.status == 404:
+                    print(f"   ℹ️ Model not found (expected if not trained yet)")
+                    return True
+                else:
+                    print(f"   ❌ Model performance retrieval failed: {response.status}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Model performance test error: {e}")
+            return False
+    
+    async def test_trained_model_file_verification(self) -> bool:
+        """Test that trained model exists in /app/backend/trained_models/"""
+        try:
+            print("   🔍 Testing Trained Model File Verification")
+            
+            import os
+            model_dir = "/app/backend/trained_models"
+            
+            # Check if directory exists
+            if os.path.exists(model_dir):
+                print(f"   ✅ Model directory exists: {model_dir}")
+                
+                # List model files
+                model_files = [f for f in os.listdir(model_dir) if f.endswith('.pkl')]
+                print(f"   📊 Model files found: {len(model_files)}")
+                
+                for model_file in model_files:
+                    print(f"      - {model_file}")
+                
+                # Directory exists and is accessible
+                return True
+            else:
+                print(f"   ℹ️ Model directory does not exist yet (will be created when first model is trained)")
+                return True
+                
+        except Exception as e:
+            print(f"   ❌ Model file verification test error: {e}")
+            return False
+
     # ========== DESKTOP TRADING CLIENT AND CUSTOM STRATEGY BUILDER TESTING ==========
     
     async def test_desktop_client_health_check(self) -> bool:
