@@ -9,7 +9,7 @@ import aiohttp
 import json
 from datetime import datetime
 
-BACKEND_URL = "https://gpt-signal-bot-1.preview.emergentagent.com/api"
+BACKEND_URL = "https://optionsignal-12.preview.emergentagent.com/api"
 
 async def test_complete_configuration_workflow():
     """Test the complete configuration persistence workflow"""
