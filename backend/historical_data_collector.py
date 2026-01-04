@@ -228,14 +228,14 @@ class HistoricalDataCollector:
         await self._save_candle(asset, timeframe, candle)
     
     async def process_history(self, asset: str, history_data: List[Tuple], 
-                              candles_data: List = None, period: int = 60):
+                              candles_data: List = None, period: int = 60) -> int:
         """
         Process historical data batch from WebSocket 'history' message.
         
         This captures the initial historical data sent when connecting to an asset.
+        Returns the number of candles saved.
         """
-        if not self.enabled:
-            return
+        # Note: Process history data even if collection is stopped (for manual imports)
         
         # Determine timeframe from period
         timeframe = '1m'  # default
@@ -243,9 +243,6 @@ class HistoricalDataCollector:
             if seconds == period:
                 timeframe = tf
                 break
-        
-        if timeframe not in self.collecting_timeframes:
-            return
         
         saved_count = 0
         
