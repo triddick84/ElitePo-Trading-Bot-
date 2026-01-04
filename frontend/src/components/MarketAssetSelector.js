@@ -15,12 +15,18 @@ const MarketAssetSelector = ({ onSelectionChange, hideExpirations = false, selec
     commodities: [],
     indices: []
   });
+  
+  // Ensure we always have an array for selectedAssets
+  const getInitialAssets = () => {
+    if (Array.isArray(config?.selected_assets)) return config.selected_assets;
+    if (Array.isArray(externalSelectedAssets)) return externalSelectedAssets;
+    return [];
+  };
+  
   // Use config.selected_assets if passed, otherwise use externalSelectedAssets or local state
-  const [selectedAssets, setSelectedAssets] = useState(
-    config?.selected_assets || externalSelectedAssets || []
-  );
+  const [selectedAssets, setSelectedAssets] = useState(getInitialAssets);
   const [selectedExpirations, setSelectedExpirations] = useState(
-    config?.selected_expirations || []
+    Array.isArray(config?.selected_expirations) ? config.selected_expirations : []
   );
   const [showOTC, setShowOTC] = useState(true);
   const [showRegular, setShowRegular] = useState(true);
@@ -35,12 +41,12 @@ const MarketAssetSelector = ({ onSelectionChange, hideExpirations = false, selec
   
   // Sync with external config/selectedAssets if provided
   useEffect(() => {
-    if (config?.selected_assets !== undefined) {
+    if (config?.selected_assets !== undefined && Array.isArray(config.selected_assets)) {
       setSelectedAssets(config.selected_assets);
-    } else if (externalSelectedAssets !== undefined) {
+    } else if (externalSelectedAssets !== undefined && Array.isArray(externalSelectedAssets)) {
       setSelectedAssets(externalSelectedAssets);
     }
-    if (config?.selected_expirations !== undefined) {
+    if (config?.selected_expirations !== undefined && Array.isArray(config.selected_expirations)) {
       setSelectedExpirations(config.selected_expirations);
     }
   }, [config?.selected_assets, config?.selected_expirations, externalSelectedAssets]);
