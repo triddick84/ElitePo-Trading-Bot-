@@ -773,10 +773,46 @@ async def compare_strategies(strategies: str = "", asset: str = "EURUSD", timefr
 # Configuration
 @api_router.get("/config")
 async def get_config():
-    """Get current bot configuration"""
+    """Get current bot configuration with proper defaults"""
     try:
-        config = trading_bot.config.dict()
-        return config
+        # Get config from database
+        config_doc = await db.trading_configurations.find_one({"user_id": "default_user"})
+        
+        # Define default startup values
+        default_config = {
+            "trading_mode": "demo",              # Demo account by default
+            "selected_expirations": ["5s"],      # 5 seconds by default
+            "selected_assets": [],               # Nothing selected - user must select
+            "selected_timeframe": "5s",          # 5 seconds by default
+            "selected_strategy": "",
+            "min_probability_threshold": 85.0,
+            "invert_signals": False,
+            "sound_alerts_enabled": True,
+            "popup_notifications": True,
+            "auto_trading_enabled": False,
+            "candle_sync_enabled": True          # Pocket Option sync enabled by default
+        }
+        
+        # Merge with database config if exists
+        if config_doc:
+            # Remove MongoDB _id field
+            config_doc.pop('_id', None)
+            
+            # Merge defaults with database values
+            for key, default_value in default_config.items():
+                if key not in config_doc or config_doc[key] is None:
+                    config_doc[key] = default_value
+            
+            return config_doc
+        else:
+            # No config in database - return defaults and save them
+            default_config["user_id"] = "default_user"
+            default_config["updated_at"] = datetime.now(timezone.utc)
+            
+            await db.trading_configurations.insert_one(default_config)
+            default_config.pop('_id', None)
+            
+            return default_config
         
     except Exception as e:
         logging.error(f"Error getting config: {e}")
