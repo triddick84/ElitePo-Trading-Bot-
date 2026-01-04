@@ -1058,6 +1058,253 @@ class BackendTester:
             print(f"   Enhanced signal accuracy targeting test error: {e}")
             return False
 
+    # ========== CUSTOM STRATEGIES API TESTING ==========
+    
+    async def test_custom_strategies_get_all(self) -> bool:
+        """Test GET /api/custom-strategies - Get all custom strategies"""
+        try:
+            print("   🔍 Testing Get All Custom Strategies")
+            
+            async with self.session.get(f"{BACKEND_URL}/custom-strategies") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Custom strategies retrieved successfully")
+                    print(f"   📊 Success: {data.get('success')}")
+                    print(f"   📊 Count: {data.get('count', 0)}")
+                    
+                    strategies = data.get('strategies', [])
+                    print(f"   📊 Strategies found: {len(strategies)}")
+                    
+                    # Verify response structure
+                    required_fields = ['success', 'count', 'strategies']
+                    missing_fields = [f for f in required_fields if f not in data]
+                    
+                    if not missing_fields:
+                        print(f"   ✅ All required fields present")
+                        
+                        # Check each strategy has required fields including timeframes
+                        for strategy in strategies:
+                            if 'timeframes' not in strategy:
+                                print(f"   ❌ Strategy missing timeframes field: {strategy.get('name', 'Unknown')}")
+                                return False
+                            
+                            timeframes = strategy.get('timeframes', [])
+                            if not isinstance(timeframes, list):
+                                print(f"   ❌ Strategy timeframes is not an array: {strategy.get('name', 'Unknown')}")
+                                return False
+                            
+                            print(f"   📊 Strategy '{strategy.get('name', 'Unknown')}' timeframes: {timeframes}")
+                        
+                        return True
+                    else:
+                        print(f"   ❌ Missing required fields: {missing_fields}")
+                        return False
+                else:
+                    print(f"   ❌ Get all custom strategies failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Get all custom strategies test error: {e}")
+            return False
+    
+    async def test_custom_strategies_create_with_timeframes(self) -> bool:
+        """Test POST /api/custom-strategies - Create custom strategy with specific timeframes"""
+        try:
+            print("   🔍 Testing Create Custom Strategy with Timeframes")
+            
+            # Create test strategy with 5s timeframe only
+            strategy_data = {
+                "name": "Test 5s Only Strategy",
+                "description": "A test strategy for 5s timeframe only",
+                "timeframes": ["5s"],
+                "assets": ["EURUSD"],
+                "markets": ["regular"],
+                "call_conditions": [
+                    {
+                        "conditions": [
+                            {
+                                "indicator": "RSI",
+                                "parameters": {"period": 14},
+                                "output": "value",
+                                "operator": "crosses_above",
+                                "compare_to": "value",
+                                "compare_value": 30
+                            }
+                        ],
+                        "logical_operator": "AND"
+                    }
+                ],
+                "put_conditions": [
+                    {
+                        "conditions": [
+                            {
+                                "indicator": "RSI",
+                                "parameters": {"period": 14},
+                                "output": "value",
+                                "operator": "crosses_below",
+                                "compare_to": "value",
+                                "compare_value": 70
+                            }
+                        ],
+                        "logical_operator": "AND"
+                    }
+                ],
+                "min_confidence": 75.0,
+                "is_active": True
+            }
+            
+            async with self.session.post(f"{BACKEND_URL}/custom-strategies", json=strategy_data) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Custom strategy created successfully")
+                    print(f"   📊 Success: {data.get('success')}")
+                    print(f"   📊 Message: {data.get('message')}")
+                    
+                    strategy = data.get('strategy', {})
+                    strategy_id = strategy.get('id')
+                    strategy_name = strategy.get('name')
+                    timeframes = strategy.get('timeframes', [])
+                    
+                    print(f"   📊 Strategy ID: {strategy_id}")
+                    print(f"   📊 Strategy Name: {strategy_name}")
+                    print(f"   📊 Timeframes: {timeframes}")
+                    
+                    # Store strategy ID for cleanup
+                    self.test_strategy_id = strategy_id
+                    
+                    # Verify timeframes are correctly set
+                    if timeframes == ["5s"]:
+                        print(f"   ✅ Timeframes correctly set to 5s only")
+                        return True
+                    else:
+                        print(f"   ❌ Timeframes not correctly set. Expected: ['5s'], Got: {timeframes}")
+                        return False
+                else:
+                    print(f"   ❌ Create custom strategy failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Create custom strategy test error: {e}")
+            return False
+    
+    async def test_custom_strategies_timeframe_filtering(self) -> bool:
+        """Test that custom strategies can be filtered by timeframe"""
+        try:
+            print("   🔍 Testing Custom Strategy Timeframe Filtering")
+            
+            # First, get all strategies to verify our test strategy exists
+            async with self.session.get(f"{BACKEND_URL}/custom-strategies") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    strategies = data.get('strategies', [])
+                    
+                    # Find our test strategy
+                    test_strategy = None
+                    for strategy in strategies:
+                        if strategy.get('name') == "Test 5s Only Strategy":
+                            test_strategy = strategy
+                            break
+                    
+                    if test_strategy:
+                        timeframes = test_strategy.get('timeframes', [])
+                        print(f"   📊 Found test strategy with timeframes: {timeframes}")
+                        
+                        # Verify it only has 5s timeframe
+                        if timeframes == ["5s"]:
+                            print(f"   ✅ Test strategy correctly has only 5s timeframe")
+                            
+                            # Verify it should NOT appear when filtering for 1m timeframe
+                            # (This is conceptual - the API doesn't have filtering endpoint, 
+                            # but we verify the timeframes field is correctly set)
+                            if "1m" not in timeframes:
+                                print(f"   ✅ Strategy correctly excludes 1m timeframe")
+                                return True
+                            else:
+                                print(f"   ❌ Strategy incorrectly includes 1m timeframe")
+                                return False
+                        else:
+                            print(f"   ❌ Test strategy has incorrect timeframes: {timeframes}")
+                            return False
+                    else:
+                        print(f"   ❌ Test strategy not found in strategies list")
+                        return False
+                else:
+                    print(f"   ❌ Failed to get strategies for filtering test: {response.status}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Timeframe filtering test error: {e}")
+            return False
+    
+    async def test_custom_strategies_get_indicators(self) -> bool:
+        """Test GET /api/custom-strategies/indicators - Get available indicators"""
+        try:
+            print("   🔍 Testing Get Available Indicators")
+            
+            async with self.session.get(f"{BACKEND_URL}/custom-strategies/indicators") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Available indicators retrieved successfully")
+                    
+                    # Verify response structure
+                    required_fields = ['indicators', 'categories', 'operators', 'logical_operators']
+                    missing_fields = [f for f in required_fields if f not in data]
+                    
+                    if not missing_fields:
+                        indicators = data.get('indicators', {})
+                        categories = data.get('categories', [])
+                        operators = data.get('operators', [])
+                        
+                        print(f"   📊 Indicators count: {len(indicators)}")
+                        print(f"   📊 Categories: {categories}")
+                        print(f"   📊 Operators: {operators}")
+                        
+                        # Check for key indicators
+                        key_indicators = ['RSI', 'MACD', 'BOLLINGER_BANDS', 'SMA', 'EMA']
+                        missing_indicators = [ind for ind in key_indicators if ind not in indicators]
+                        
+                        if not missing_indicators:
+                            print(f"   ✅ All key indicators present")
+                            return True
+                        else:
+                            print(f"   ❌ Missing key indicators: {missing_indicators}")
+                            return False
+                    else:
+                        print(f"   ❌ Missing required fields: {missing_fields}")
+                        return False
+                else:
+                    print(f"   ❌ Get indicators failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Get indicators test error: {e}")
+            return False
+    
+    async def test_custom_strategies_cleanup(self) -> bool:
+        """Clean up test strategy created during testing"""
+        try:
+            if not self.test_strategy_id:
+                print("   ℹ️ No test strategy to clean up")
+                return True
+            
+            print(f"   🧹 Cleaning up test strategy: {self.test_strategy_id}")
+            
+            async with self.session.delete(f"{BACKEND_URL}/custom-strategies/{self.test_strategy_id}") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Test strategy cleaned up successfully")
+                    print(f"   📊 Success: {data.get('success')}")
+                    return True
+                else:
+                    print(f"   ⚠️ Failed to clean up test strategy: {response.status}")
+                    # Don't fail the test for cleanup issues
+                    return True
+        except Exception as e:
+            print(f"   ⚠️ Cleanup error (non-critical): {e}")
+            return True
+
     # ========== HISTORICAL DATA COLLECTION AND ML TRAINING API TESTING ==========
     
     async def test_data_collector_start(self) -> bool:
