@@ -10061,6 +10061,152 @@ async def cleanup_old_data(days_to_keep: int = Query(default=30, ge=1, le=365)):
         return {"success": False, "error": str(e)}
 
 
+# ===============================
+# REAL DATA ML TRAINING API
+# ===============================
+# Endpoints for training high-accuracy models using collected real data
+
+from real_data_trainer import get_real_data_trainer, RealDataTrainer
+
+_ml_trainer: Optional[RealDataTrainer] = None
+
+def get_ml_trainer() -> RealDataTrainer:
+    """Get or create ML trainer"""
+    global _ml_trainer
+    if _ml_trainer is None:
+        _ml_trainer = get_real_data_trainer(db)
+    return _ml_trainer
+
+
+class TrainModelRequest(BaseModel):
+    """Request to train a model"""
+    asset: str
+    timeframe: str
+    confidence_threshold: Optional[float] = 0.75
+    min_samples: Optional[int] = 500
+
+
+@api_router.post("/ml-trainer/train")
+async def train_ml_model(request: TrainModelRequest, background_tasks: BackgroundTasks):
+    """
+    Train a high-accuracy ML model using collected real data.
+    
+    Args:
+        asset: Asset symbol (e.g., 'EURUSD_otc')
+        timeframe: Timeframe ('5s', '1m', '5m')
+        confidence_threshold: Minimum confidence for signals (0.5-0.95)
+        min_samples: Minimum samples required for training
+    """
+    try:
+        trainer = get_ml_trainer()
+        
+        result = await trainer.train_model(
+            asset=request.asset,
+            timeframe=request.timeframe,
+            confidence_threshold=request.confidence_threshold,
+            min_samples=request.min_samples
+        )
+        
+        return result
+    except Exception as e:
+        logger.error(f"Error training model: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "error": str(e)}
+
+
+class GenerateSignalRequest(BaseModel):
+    """Request to generate a signal"""
+    asset: str
+    timeframe: str
+    candles: List[Dict[str, Any]]
+
+
+@api_router.post("/ml-trainer/signal")
+async def generate_ml_signal(request: GenerateSignalRequest):
+    """
+    Generate a trading signal using trained model.
+    
+    Requires model to be trained first via /ml-trainer/train
+    """
+    try:
+        trainer = get_ml_trainer()
+        
+        signal = await trainer.generate_signal(
+            asset=request.asset,
+            timeframe=request.timeframe,
+            current_data=request.candles
+        )
+        
+        if signal:
+            return {
+                "success": True,
+                "has_signal": True,
+                "signal": signal
+            }
+        else:
+            return {
+                "success": True,
+                "has_signal": False,
+                "message": "No signal - confidence below threshold or model not trained"
+            }
+    except Exception as e:
+        logger.error(f"Error generating signal: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.get("/ml-trainer/models")
+async def get_ml_models_status():
+    """Get status of all trained models"""
+    try:
+        trainer = get_ml_trainer()
+        status = trainer.get_model_status()
+        history = trainer.get_training_history()
+        
+        return {
+            "success": True,
+            "models": status,
+            "training_history": history[-10:]  # Last 10 trainings
+        }
+    except Exception as e:
+        logger.error(f"Error getting model status: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.get("/ml-trainer/performance/{asset}/{timeframe}")
+async def get_model_performance(asset: str, timeframe: str):
+    """Get detailed performance metrics for a trained model"""
+    try:
+        trainer = get_ml_trainer()
+        model_key = f"{asset}_{timeframe}"
+        
+        # Try to load model if not in memory
+        if model_key not in trainer.models:
+            from real_data_trainer import HighAccuracyEnsemble
+            model = HighAccuracyEnsemble()
+            if model.load(asset, timeframe):
+                trainer.models[model_key] = model
+            else:
+                return {
+                    "success": False,
+                    "error": f"No trained model found for {asset} {timeframe}"
+                }
+        
+        model = trainer.models[model_key]
+        
+        return {
+            "success": True,
+            "asset": asset,
+            "timeframe": timeframe,
+            "performance": model.performance.to_dict(),
+            "feature_importance": model.get_feature_importance(),
+            "confidence_threshold": model.confidence_threshold
+        }
+    except Exception as e:
+        logger.error(f"Error getting performance: {e}")
+        return {"success": False, "error": str(e)}
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
