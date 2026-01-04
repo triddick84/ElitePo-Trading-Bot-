@@ -2330,15 +2330,21 @@ class ForceSignalGenerator:
                     time_until_entry = time_to_previous
             
             # APPLY LATENCY OFFSET based on expiration timeframe
-            # For 1m signals: Add 60 seconds latency so signals generate 1 minute later
-            # For other timeframes: Keep 5 second latency
+            # Each timeframe gets latency matching its duration
             primary_expiration = user_expirations[0] if user_expirations else '1m'
             
-            if primary_expiration == '1m':
-                LATENCY_OFFSET = 60.0  # 1 minute delay for 1m signals
-                logger.info(f"⏳ Using 60-second latency offset for 1m signals")
-            else:
-                LATENCY_OFFSET = 5.0  # 5 seconds for other timeframes
+            # Latency map - each timeframe's latency matches its duration
+            latency_map = {
+                '5s': 5.0,      # 5 seconds
+                '15s': 15.0,    # 15 seconds
+                '30s': 30.0,    # 30 seconds
+                '1m': 60.0,     # 1 minute
+                '2m': 120.0,    # 2 minutes
+                '3m': 180.0,    # 3 minutes
+                '5m': 300.0     # 5 minutes
+            }
+            LATENCY_OFFSET = latency_map.get(primary_expiration, 60.0)  # Default to 60s
+            logger.info(f"⏳ Using {LATENCY_OFFSET}-second latency offset for {primary_expiration} signals")
             
             # Add latency offset to entry time (signals generate later)
             adjusted_entry_time = real_entry_time + timedelta(seconds=LATENCY_OFFSET)
