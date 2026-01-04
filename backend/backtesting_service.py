@@ -761,7 +761,8 @@ class StrategyEngine:
             'support_resistance': self._support_resistance_strategy,
             'hybrid': self._hybrid_strategy,
             'enhanced_rsi_bb_volume': self._enhanced_rsi_bb_volume_strategy,
-            'enhanced_divergence': self._enhanced_divergence_strategy,  # NEW: RSI/MACD Divergence
+            'enhanced_divergence': self._enhanced_divergence_strategy,
+            'professional_scalping': self._professional_scalping_strategy,  # NEW: Professional multi-filter
         }
     
     def _calculate_rsi(self, prices: pd.Series, period: int = 14) -> pd.Series:
