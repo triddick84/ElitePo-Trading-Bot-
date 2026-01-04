@@ -53,11 +53,22 @@ const CompactSignalPopup = ({ signals, onClose, onDismiss }) => {
             playEntrySound(signal.id);
           }
 
+          // Calculate time since signal was created for max display time
+          const signalCreatedTime = signal?.timestamp ? new Date(signal.timestamp).getTime() : now;
+          const displayDuration = (now - signalCreatedTime) / 1000;
+          
+          // Close popup when:
+          // 1. Entry time passed by 10 seconds (timeLeft <= -10), OR
+          // 2. Popup has been displayed for more than 5 minutes (300 seconds) regardless of countdown
+          const isExpiredByTime = timeLeft <= -10;
+          const isExpiredByDuration = displayDuration > 300; // Max 5 minutes display
+          
           newTimers[signal.id] = {
             timeLeft: timeLeft,
-            isExpired: timeLeft <= -10,  // Close at -10 seconds
+            isExpired: isExpiredByTime || isExpiredByDuration,
             isOptimal: isOptimal,
-            progress: Math.max(0, Math.min(100, ((20 - timeLeft) / 20) * 100))
+            progress: Math.max(0, Math.min(100, ((20 - timeLeft) / 20) * 100)),
+            displayDuration: displayDuration
           };
         } catch (error) {
           console.error('Timer error:', error);
