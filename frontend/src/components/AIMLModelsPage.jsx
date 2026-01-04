@@ -8,6 +8,7 @@
  * - Retrain Models Section
  * - Model Performance Metrics
  * - Learning System Settings
+ * - Real Data Collection & Training (NEW)
  */
 
 import React, { useState, useEffect } from 'react';
@@ -30,6 +31,7 @@ import {
   Pause, RotateCcw, Layers, Target, Clock, Info, Sparkles,
   GitBranch, LineChart, Award
 } from 'lucide-react';
+import DataCollectionDashboard from './DataCollectionDashboard';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
