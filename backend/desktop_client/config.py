@@ -25,7 +25,7 @@ TWOCAPTCHA_API_KEY = "c987655ee4a7359530d3558bd6fbe5a9"
 # ===========================================
 # Your GPT Signal Bot cloud server URL
 # Replace with your actual deployed URL
-CLOUD_SERVER_URL = "https://bottrader-14.preview.emergentagent.com"
+CLOUD_SERVER_URL = "https://gpt-signal-bot-1.preview.emergentagent.com"
 
 # How often to poll for new signals (seconds)
 SIGNAL_POLL_INTERVAL = 2
