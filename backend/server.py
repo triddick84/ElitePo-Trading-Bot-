@@ -828,6 +828,7 @@ async def update_config(config: BotStartRequest):
         # Build merged config - existing values as base, new values override
         merged_selected_expirations = config.selected_expirations
         merged_selected_assets = config.selected_assets
+        merged_candle_sync = config.candle_sync_enabled if hasattr(config, 'candle_sync_enabled') else True
         
         # If the request has default values that look like they weren't intentionally set,
         # prefer the existing database values
@@ -841,9 +842,9 @@ async def update_config(config: BotStartRequest):
                 logger.info(f"🔄 Preserving existing expirations: {existing_config.get('selected_expirations')}")
                 merged_selected_expirations = existing_config.get('selected_expirations')
             
-            # Similarly for assets
-            if not config.selected_assets and existing_config.get('selected_assets'):
-                merged_selected_assets = existing_config.get('selected_assets')
+            # NOTE: We now allow empty arrays to clear assets (user explicitly selected nothing)
+            # Only preserve existing assets if the request truly has no assets AND it's not a deliberate clear
+            # Empty array [] is now treated as "user wants no assets selected"
         
         # Update main trading configuration
         new_config = TradingConfiguration(
