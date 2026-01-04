@@ -165,6 +165,17 @@ const DashboardRestructured = ({
       const response = await axios.get(`${API}/bot/candle-sync/status`);
       setCandleSyncStatus(response.data);
       setCandleSyncEnabled(response.data.enabled);
+      
+      // Auto-enable candle sync if not already enabled (keep active by default)
+      if (!response.data.enabled) {
+        try {
+          await axios.post(`${API}/bot/candle-sync/enable`);
+          setCandleSyncEnabled(true);
+          console.log('🔄 Auto-enabled Pocket Option candle sync');
+        } catch (enableError) {
+          console.error('Failed to auto-enable candle sync:', enableError);
+        }
+      }
     } catch (error) {
       console.error('Error fetching candle sync status:', error);
     }
