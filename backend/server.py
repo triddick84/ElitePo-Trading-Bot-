@@ -640,8 +640,8 @@ async def run_comprehensive_backtest(request: dict):
         from backtesting_service import BacktestingService, BacktestConfig
         from dataclasses import asdict
         
-        # Create service without db for now (results stored separately)
-        service = BacktestingService(db=None)
+        # Create service WITH database connection for real data access
+        service = BacktestingService(db=db)
         
         config = BacktestConfig(
             strategies=request.get("strategies", ["hybrid"]),
