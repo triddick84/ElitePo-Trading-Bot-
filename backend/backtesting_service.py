@@ -1302,6 +1302,187 @@ class StrategyEngine:
         
         return signals
     
+    def _professional_scalping_strategy(self, df: pd.DataFrame) -> List[Dict]:
+        """
+        Professional Multi-Filter Scalping Strategy
+        Based on institutional trading research
+        
+        Scoring System (10 points max):
+        1. Trend alignment (EMA 9/21 ribbon): 2 points
+        2. RSI momentum direction: 1-2 points
+        3. Stochastic crossover in extreme: 2 points
+        4. Volume confirmation: 1 point
+        5. ADX trending market: 1 point
+        6. Bollinger Band position: 1 point
+        7. Candlestick pattern: 1 point
+        8. MACD confirmation: 1 point
+        
+        Requires 7/10 points for signal
+        """
+        signals = []
+        
+        if len(df) < 50:
+            return signals
+        
+        close = df['close']
+        high = df['high']
+        low = df['low']
+        open_price = df['open']
+        volume = df['volume'] if 'volume' in df.columns else pd.Series([1] * len(df))
+        
+        # Calculate indicators
+        ema_fast = close.ewm(span=9, adjust=False).mean()
+        ema_slow = close.ewm(span=21, adjust=False).mean()
+        ema_trend = close.ewm(span=50, adjust=False).mean()
+        
+        rsi = self._calculate_rsi(close, 14)
+        stoch_k, stoch_d = self._calculate_stochastic(high, low, close, 5, 3)
+        
+        macd, macd_signal, macd_hist = self._calculate_macd(close, 12, 26, 9)
+        
+        bb_upper, bb_middle, bb_lower = self._calculate_bollinger_bands(close, 20, 2.0)
+        
+        volume_ma = self._calculate_sma(volume, 20)
+        
+        # ADX calculation
+        tr = pd.concat([
+            high - low,
+            (high - close.shift()).abs(),
+            (low - close.shift()).abs()
+        ], axis=1).max(axis=1)
+        atr = tr.rolling(window=14).mean()
+        
+        plus_dm = high.diff().where((high.diff() > low.diff().abs()) & (high.diff() > 0), 0)
+        minus_dm = low.diff().abs().where((low.diff().abs() > high.diff()) & (low.diff() < 0), 0)
+        
+        plus_di = 100 * (plus_dm.rolling(window=14).mean() / atr)
+        minus_di = 100 * (minus_dm.rolling(window=14).mean() / atr)
+        dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di + 0.0001)
+        adx = dx.rolling(window=14).mean()
+        
+        min_score = 7
+        
+        for i in range(50, len(df)):
+            current_close = close.iloc[i]
+            current_open = open_price.iloc[i]
+            current_high = high.iloc[i]
+            current_low = low.iloc[i]
+            
+            # Skip if essential indicators are NaN
+            if pd.isna(ema_fast.iloc[i]) or pd.isna(rsi.iloc[i]) or pd.isna(stoch_k.iloc[i]):
+                continue
+            
+            bullish_score = 0
+            bearish_score = 0
+            
+            # === 1. TREND ALIGNMENT (EMA Ribbon) - 2 points ===
+            if ema_fast.iloc[i] > ema_slow.iloc[i] and current_close > ema_trend.iloc[i]:
+                bullish_score += 2
+            elif ema_fast.iloc[i] < ema_slow.iloc[i] and current_close < ema_trend.iloc[i]:
+                bearish_score += 2
+            
+            # === 2. RSI MOMENTUM - 1-2 points ===
+            current_rsi = rsi.iloc[i]
+            if current_rsi > 50 and current_rsi < 70:
+                bullish_score += 1
+            elif current_rsi < 50 and current_rsi > 30:
+                bearish_score += 1
+            
+            if current_rsi < 30:
+                bullish_score += 1  # Oversold = bullish potential
+            elif current_rsi > 70:
+                bearish_score += 1  # Overbought = bearish potential
+            
+            # === 3. STOCHASTIC CROSSOVER - 2 points ===
+            current_stoch_k = stoch_k.iloc[i]
+            current_stoch_d = stoch_d.iloc[i]
+            prev_stoch_k = stoch_k.iloc[i-1] if i > 0 else current_stoch_k
+            prev_stoch_d = stoch_d.iloc[i-1] if i > 0 else current_stoch_d
+            
+            if current_stoch_k < 30:
+                if current_stoch_k > current_stoch_d and prev_stoch_k <= prev_stoch_d:
+                    bullish_score += 2
+                else:
+                    bullish_score += 1
+            
+            if current_stoch_k > 70:
+                if current_stoch_k < current_stoch_d and prev_stoch_k >= prev_stoch_d:
+                    bearish_score += 2
+                else:
+                    bearish_score += 1
+            
+            # === 4. VOLUME CONFIRMATION - 1 point ===
+            if not pd.isna(volume_ma.iloc[i]) and volume_ma.iloc[i] > 0:
+                vol_ratio = volume.iloc[i] / volume_ma.iloc[i]
+                if vol_ratio >= 1.2:
+                    if bullish_score > bearish_score:
+                        bullish_score += 1
+                    elif bearish_score > bullish_score:
+                        bearish_score += 1
+            
+            # === 5. ADX TRENDING - 1 point ===
+            if not pd.isna(adx.iloc[i]) and adx.iloc[i] > 20:
+                if bullish_score > bearish_score:
+                    bullish_score += 1
+                elif bearish_score > bullish_score:
+                    bearish_score += 1
+            
+            # === 6. BOLLINGER BAND POSITION - 1 point ===
+            if not pd.isna(bb_lower.iloc[i]) and not pd.isna(bb_upper.iloc[i]):
+                bb_range = bb_upper.iloc[i] - bb_lower.iloc[i]
+                if bb_range > 0:
+                    bb_pos = (current_close - bb_lower.iloc[i]) / bb_range
+                    if bb_pos < 0.1:
+                        bullish_score += 1
+                    elif bb_pos > 0.9:
+                        bearish_score += 1
+            
+            # === 7. CANDLESTICK PATTERN - 1 point ===
+            body = abs(current_close - current_open)
+            total_range = current_high - current_low
+            if total_range > 0:
+                upper_wick = current_high - max(current_open, current_close)
+                lower_wick = min(current_open, current_close) - current_low
+                
+                # Hammer (bullish)
+                if lower_wick > body * 2 and lower_wick > upper_wick * 1.5:
+                    bullish_score += 1
+                # Shooting star (bearish)
+                elif upper_wick > body * 2 and upper_wick > lower_wick * 1.5:
+                    bearish_score += 1
+            
+            # === 8. MACD CONFIRMATION - 1 point ===
+            if not pd.isna(macd_hist.iloc[i]) and not pd.isna(macd_hist.iloc[i-1]):
+                if macd_hist.iloc[i] > macd_hist.iloc[i-1] and macd_hist.iloc[i] > 0:
+                    bullish_score += 1
+                elif macd_hist.iloc[i] < macd_hist.iloc[i-1] and macd_hist.iloc[i] < 0:
+                    bearish_score += 1
+            
+            # === GENERATE SIGNAL ===
+            if bullish_score >= min_score and bullish_score > bearish_score + 1:
+                confidence = min(70 + (bullish_score - min_score) * 5, 90)
+                signals.append({
+                    'index': i,
+                    'timestamp': str(df.index[i]),
+                    'direction': 'call',
+                    'confidence': confidence,
+                    'entry_price': current_close,
+                    'score': bullish_score
+                })
+            
+            elif bearish_score >= min_score and bearish_score > bullish_score + 1:
+                confidence = min(70 + (bearish_score - min_score) * 5, 90)
+                signals.append({
+                    'index': i,
+                    'timestamp': str(df.index[i]),
+                    'direction': 'put',
+                    'confidence': confidence,
+                    'entry_price': current_close,
+                    'score': bearish_score
+                })
+        
+        return signals
+    
     def execute_strategy(self, df: pd.DataFrame, strategy_name: str) -> List[Dict]:
         """Execute a strategy and return signals"""
         if strategy_name not in self.strategies:
