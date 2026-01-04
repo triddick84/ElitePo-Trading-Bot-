@@ -97,18 +97,20 @@ const MarketAssetSelector = ({ onSelectionChange, hideExpirations = false, selec
 
   const handleAssetToggle = (symbol, marketType) => {
     const assetKey = marketType === 'otc' ? `${symbol}_OTC` : symbol;
-    const newSelected = selectedAssets.includes(assetKey)
-      ? selectedAssets.filter(a => a !== assetKey)
-      : [...selectedAssets, assetKey];
+    const currentAssets = Array.isArray(selectedAssets) ? selectedAssets : [];
+    const newSelected = currentAssets.includes(assetKey)
+      ? currentAssets.filter(a => a !== assetKey)
+      : [...currentAssets, assetKey];
     
     setSelectedAssets(newSelected);
     updateConfiguration(newSelected, selectedExpirations);
   };
 
   const handleTimeframeToggle = (timeframe) => {
-    const newExpirations = selectedExpirations.includes(timeframe)
-      ? selectedExpirations.filter(t => t !== timeframe)
-      : [...selectedExpirations, timeframe];
+    const currentExpirations = Array.isArray(selectedExpirations) ? selectedExpirations : [];
+    const newExpirations = currentExpirations.includes(timeframe)
+      ? currentExpirations.filter(t => t !== timeframe)
+      : [...currentExpirations, timeframe];
     
     setSelectedExpirations(newExpirations);
     updateConfiguration(selectedAssets, newExpirations);
