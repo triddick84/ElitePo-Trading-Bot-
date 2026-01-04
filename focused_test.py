@@ -9,7 +9,7 @@ import json
 from datetime import datetime
 
 # Test configuration
-BACKEND_URL = "https://optionsignal-12.preview.emergentagent.com/api"
+BACKEND_URL = "https://pocket-gpt-signals.preview.emergentagent.com/api"
 
 async def test_force_signal_generation_with_timing_verification():
     """Test force signal generation endpoint with focus on timing and OTC signals"""

@@ -58,7 +58,7 @@ Test the Custom Strategies API endpoints to verify they are working correctly fo
 6. **Indicator Library**: Comprehensive set of 41 indicators available for strategy building
 
 #### 📊 Technical Verification:
-- **Backend URL**: https://optionsignal-12.preview.emergentagent.com/api
+- **Backend URL**: https://pocket-gpt-signals.preview.emergentagent.com/api
 - **Database**: MongoDB with proper custom_strategies collection
 - **API Response**: All endpoints return proper JSON with success/error handling
 - **Timeframe Values**: Support for ultra-short timeframes (5s, 15s, 30s) and standard timeframes
@@ -155,7 +155,7 @@ Test the Data Collection and ML Training features on the GPT Signal Bot frontend
 6. **Real-Time Updates**: Data refreshes and status updates work properly
 
 #### 📊 Technical Verification:
-- **Frontend URL**: https://optionsignal-12.preview.emergentagent.com
+- **Frontend URL**: https://pocket-gpt-signals.preview.emergentagent.com
 - **Real Data**: EURUSD_otc showing 2.6K candles from Pocket Option
 - **ML Models**: EURUSD_otc_1m model trained and loaded
 - **Training Samples**: 1980 samples used for ML training
@@ -230,7 +230,7 @@ Test the Data Collection and ML Training features on the GPT Signal Bot frontend
 6. **Data Integration**: ~2000 candles available for training (sufficient for ML)
 
 #### 📊 Technical Details:
-- **Backend URL**: https://optionsignal-12.preview.emergentagent.com/api
+- **Backend URL**: https://pocket-gpt-signals.preview.emergentagent.com/api
 - **Database**: MongoDB with proper indexing for historical_candles collection
 - **ML Framework**: scikit-learn ensemble (Random Forest + Gradient Boosting)
 - **Model Storage**: /app/backend/trained_models/ directory
@@ -399,7 +399,7 @@ Test with: POST /api/signals/force-generate (after setting 5s expiration)
   6. ✅ Strategy cleanup - Database operations working correctly
   
   **Key Validation:**
-  - Custom strategies API fully functional at https://optionsignal-12.preview.emergentagent.com/api
+  - Custom strategies API fully functional at https://pocket-gpt-signals.preview.emergentagent.com/api
   - Timeframe filtering ready: strategies contain timeframes as arrays (["5s"], ["1m"], ["1m", "5m"], etc.)
   - Test strategy "Test 5s Only Strategy" successfully created with ["5s"] timeframe only
   - 15 existing strategies found with various timeframe configurations

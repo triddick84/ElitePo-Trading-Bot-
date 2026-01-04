@@ -13,7 +13,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List
 
 # Test configuration
-BACKEND_URL = "https://optionsignal-12.preview.emergentagent.com/api"
+BACKEND_URL = "https://pocket-gpt-signals.preview.emergentagent.com/api"
 
 class AutomatedTradingTester:
     def __init__(self):
