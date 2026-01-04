@@ -61,12 +61,13 @@ const BacktestingPage = () => {
   // Available options (fetched from backend)
   const [availableAssets, setAvailableAssets] = useState({ forex: [], crypto: [], stocks: [] });
   const [availableStrategies, setAvailableStrategies] = useState([]);
+  const [customStrategies, setCustomStrategies] = useState([]);
   
   // Configuration state
   const [config, setConfig] = useState({
     strategies: ['hybrid'],
     assets: ['EURUSD'],
-    timeframes: ['1h'],
+    timeframes: ['5s'],  // Default to 5 seconds
     days: 30,
     initial_balance: 1000,
     trade_amount: 10,
