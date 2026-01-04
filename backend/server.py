@@ -2873,8 +2873,8 @@ async def train_ml_on_price_data(request: dict):
         timeframe = request.get("timeframe", "1h")
         days = min(request.get("days", 30), 90)
         
-        # Fetch price data
-        backtest_service = BacktestingService()
+        # Fetch price data - pass db for real MongoDB data access
+        backtest_service = BacktestingService(db=db)
         price_df = await backtest_service.data_fetcher.fetch_historical_data(
             asset, 
             backtest_service._determine_asset_type(asset),
