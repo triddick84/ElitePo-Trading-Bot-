@@ -18937,6 +18937,56 @@ async def main():
     """Main test runner - run Multi-Provider Backtesting tests"""
     return await run_multi_provider_backtesting_tests()
 
+async def run_historical_data_and_ml_training_tests():
+    """Run Historical Data Collection and ML Training API tests specifically"""
+    print("🚀 Testing Historical Data Collection and ML Training APIs")
+    print("=" * 80)
+    
+    tester = BackendTester()
+    await tester.setup()
+    
+    # Define Historical Data Collection and ML Training tests
+    tests = [
+        ("Health Check", tester.test_health_check),
+        ("Data Collector Start", tester.test_data_collector_start),
+        ("Data Collector History", tester.test_data_collector_history),
+        ("Data Collector Stats", tester.test_data_collector_stats),
+        ("Data Collector Candles", tester.test_data_collector_candles),
+        ("Data Collector Training Data", tester.test_data_collector_training_data),
+        ("Data Collector Stop", tester.test_data_collector_stop),
+        ("ML Trainer Train", tester.test_ml_trainer_train),
+        ("ML Trainer Models", tester.test_ml_trainer_models),
+        ("ML Trainer Performance", tester.test_ml_trainer_performance),
+        ("Trained Model File Verification", tester.test_trained_model_file_verification),
+    ]
+    
+    # Run all tests
+    for test_name, test_func in tests:
+        await tester.run_test(test_name, test_func)
+    
+    await tester.cleanup()
+    
+    # Print summary
+    print("\n" + "=" * 80)
+    print("🏁 Historical Data Collection and ML Training Testing Complete: {}/{} tests passed".format(
+        len(tests) - len(tester.failed_tests), len(tests)
+    ))
+    print("=" * 80)
+    
+    total_tests = len(tests)
+    passed_tests = total_tests - len(tester.failed_tests)
+    
+    if tester.failed_tests:
+        print(f"\n❌ Failed Tests:")
+        for test in tester.failed_tests:
+            print(f"   - {test}")
+        print(f"\n📊 Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+        return False
+    else:
+        print(f"\n🎉 All Historical Data Collection and ML Training tests passed!")
+        print(f"\n📊 Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+        return True
+
 async def run_desktop_trading_client_tests():
     """Run Desktop Trading Client and Custom Strategy Builder tests specifically"""
     print("🚀 Testing Desktop Trading Client and Custom Strategy Builder API Endpoints")
