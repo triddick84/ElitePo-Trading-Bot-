@@ -19187,6 +19187,51 @@ async def main():
     """Main test runner - run Custom Strategies API tests"""
     return await run_custom_strategies_tests()
 
+async def run_custom_strategies_tests():
+    """Run Custom Strategies API tests specifically"""
+    print("🚀 Testing Custom Strategies API Endpoints")
+    print("=" * 80)
+    
+    tester = BackendTester()
+    await tester.setup()
+    
+    # Define Custom Strategies API tests
+    tests = [
+        ("Health Check", tester.test_health_check),
+        ("Get Available Indicators", tester.test_custom_strategies_get_indicators),
+        ("Get All Custom Strategies", tester.test_custom_strategies_get_all),
+        ("Create Custom Strategy with Timeframes", tester.test_custom_strategies_create_with_timeframes),
+        ("Verify Timeframe Filtering", tester.test_custom_strategies_timeframe_filtering),
+        ("Cleanup Test Strategy", tester.test_custom_strategies_cleanup),
+    ]
+    
+    # Run all tests
+    for test_name, test_func in tests:
+        await tester.run_test(test_name, test_func)
+    
+    await tester.cleanup()
+    
+    # Print summary
+    print("\n" + "=" * 80)
+    print("🏁 Custom Strategies API Testing Complete: {}/{} tests passed".format(
+        len(tests) - len(tester.failed_tests), len(tests)
+    ))
+    print("=" * 80)
+    
+    total_tests = len(tests)
+    passed_tests = total_tests - len(tester.failed_tests)
+    
+    if tester.failed_tests:
+        print(f"\n❌ Failed Tests:")
+        for test in tester.failed_tests:
+            print(f"   - {test}")
+        print(f"\n📊 Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+        return False
+    else:
+        print(f"\n🎉 All Custom Strategies API tests passed!")
+        print(f"\n📊 Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+        return True
+
 async def run_historical_data_and_ml_training_tests():
     """Run Historical Data Collection and ML Training API tests specifically"""
     print("🚀 Testing Historical Data Collection and ML Training APIs")
