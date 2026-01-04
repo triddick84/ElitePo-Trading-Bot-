@@ -153,10 +153,107 @@ class BacktestResult:
 class HistoricalDataFetcher:
     """Fetches historical market data from multiple providers with intelligent fallback"""
     
-    def __init__(self):
+    def __init__(self, db=None):
+        self.db = db  # MongoDB database connection for accessing collected real data
         self.cache = {}
         self.cache_ttl = 3600  # 1 hour cache
         self.data_source_used = {}  # Track which source was used for each request
+    
+    async def fetch_mongodb_data(self, symbol: str, days: int = 30, interval: str = "1h") -> Optional[pd.DataFrame]:
+        """
+        Fetch historical data from MongoDB historical_candles collection.
+        This is the PRIMARY data source - uses REAL data collected from Pocket Option.
+        
+        Args:
+            symbol: Asset symbol (e.g., 'EURUSD', 'BTCUSD')
+            days: Number of days of data to fetch
+            interval: Timeframe interval ('5s', '1m', '5m', '15m', '1h', etc.)
+        
+        Returns:
+            DataFrame with OHLCV data, or None if insufficient data
+        """
+        if self.db is None:
+            logger.debug("MongoDB not available for historical data fetch")
+            return None
+        
+        try:
+            # Calculate time range
+            end_time = datetime.now(timezone.utc)
+            start_time = end_time - timedelta(days=days)
+            start_timestamp = int(start_time.timestamp())
+            end_timestamp = int(end_time.timestamp())
+            
+            # Map interval to timeframe format used in historical_candles
+            timeframe_map = {
+                '1m': '1m', '5m': '5m', '15m': '15m', '30m': '30m',
+                '1h': '1h', '4h': '4h', '1d': '1d',
+                '5s': '5s', '15s': '15s', '30s': '30s'
+            }
+            timeframe = timeframe_map.get(interval, '1m')
+            
+            # Normalize symbol - try multiple formats
+            symbol_variants = [
+                symbol,
+                symbol.upper(),
+                symbol.upper().replace('_', ''),
+                f"{symbol}_otc",
+                f"{symbol.upper()}_otc",
+                f"{symbol}_regular",
+                f"{symbol.upper()}_regular"
+            ]
+            
+            # Query historical_candles collection
+            candles = []
+            for sym in symbol_variants:
+                query = {
+                    "asset": sym,
+                    "timeframe": timeframe,
+                    "timestamp": {"$gte": start_timestamp, "$lte": end_timestamp}
+                }
+                
+                cursor = self.db.historical_candles.find(
+                    query, {"_id": 0}
+                ).sort("timestamp", 1)
+                
+                candles = await cursor.to_list(length=50000)
+                if candles and len(candles) >= 100:  # Minimum 100 candles for backtesting
+                    logger.info(f"✅ MongoDB: Found {len(candles)} candles for {sym} ({timeframe})")
+                    break
+            
+            if not candles or len(candles) < 100:
+                logger.debug(f"Insufficient MongoDB data for {symbol} ({timeframe}): {len(candles)} candles")
+                return None
+            
+            # Convert to DataFrame
+            df = pd.DataFrame(candles)
+            
+            # Ensure all required columns exist
+            required_cols = ['open', 'high', 'low', 'close', 'volume', 'timestamp']
+            for col in required_cols:
+                if col not in df.columns:
+                    if col == 'volume':
+                        df['volume'] = 0.0
+                    else:
+                        return None
+            
+            # Set timestamp index
+            df['datetime'] = pd.to_datetime(df['timestamp'], unit='s')
+            df = df.set_index('datetime')
+            df = df.sort_index()
+            
+            # Ensure numeric types
+            for col in ['open', 'high', 'low', 'close', 'volume']:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+            
+            # Drop any rows with NaN
+            df = df.dropna(subset=['open', 'high', 'low', 'close'])
+            
+            logger.info(f"✅ MongoDB REAL DATA: Loaded {len(df)} candles for {symbol} ({timeframe})")
+            return df
+            
+        except Exception as e:
+            logger.error(f"Error fetching MongoDB data for {symbol}: {e}")
+            return None
     
     async def fetch_finnhub_forex_data(self, symbol: str, days: int = 30, interval: str = "1h") -> Optional[pd.DataFrame]:
         """Fetch historical forex data from Finnhub API (Primary provider)"""
