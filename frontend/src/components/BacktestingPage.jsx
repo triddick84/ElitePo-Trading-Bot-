@@ -341,7 +341,59 @@ const BacktestingPage = () => {
                 </CardTitle>
                 <CardDescription>Select strategies to backtest ({config.strategies.length} selected)</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-2 max-h-80 overflow-y-auto">
+              <CardContent className="space-y-2 max-h-96 overflow-y-auto">
+                {/* My Built Strategies Section */}
+                {getCustomStrategiesForTimeframes().length > 0 && (
+                  <>
+                    <div className="flex items-center gap-2 py-2 px-3 bg-yellow-500/10 rounded-lg sticky top-0 z-10">
+                      <Star className="w-4 h-4 text-yellow-400" />
+                      <span className="text-sm font-semibold text-yellow-400">
+                        MY BUILT STRATEGIES ({getCustomStrategiesForTimeframes().length})
+                      </span>
+                    </div>
+                    {getCustomStrategiesForTimeframes().map(strategy => (
+                      <label
+                        key={`custom_${strategy.id}`}
+                        className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all ${
+                          config.strategies.includes(`custom_${strategy.id}`)
+                            ? 'bg-yellow-500/20 border border-yellow-500/30'
+                            : 'bg-slate-800/30 border border-transparent hover:bg-slate-800/50'
+                        }`}
+                      >
+                        <Checkbox
+                          checked={config.strategies.includes(`custom_${strategy.id}`)}
+                          onCheckedChange={() => toggleStrategy(`custom_${strategy.id}`)}
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <User className="w-3 h-3 text-yellow-400" />
+                            <p className="text-white font-medium">{strategy.name}</p>
+                            <Badge className="text-xs bg-yellow-500/20 text-yellow-400">Custom</Badge>
+                          </div>
+                          <p className="text-xs text-slate-400">
+                            {strategy.description || `Timeframes: ${strategy.timeframes?.join(', ') || 'Any'}`}
+                          </p>
+                        </div>
+                      </label>
+                    ))}
+                    <div className="border-t border-slate-700 my-2"></div>
+                  </>
+                )}
+                
+                {/* Info when no custom strategies for selected timeframes */}
+                {customStrategies.length > 0 && getCustomStrategiesForTimeframes().length === 0 && (
+                  <div className="p-3 rounded-lg bg-slate-800/30 border border-slate-700/50 text-sm text-slate-400">
+                    💡 {customStrategies.length} custom strategies available, but none match selected timeframes.
+                  </div>
+                )}
+                
+                {/* Default Strategies Section */}
+                <div className="flex items-center gap-2 py-2 px-3 bg-blue-500/10 rounded-lg sticky top-0 z-10">
+                  <Zap className="w-4 h-4 text-blue-400" />
+                  <span className="text-sm font-semibold text-blue-400">
+                    DEFAULT STRATEGIES ({availableStrategies.length})
+                  </span>
+                </div>
                 {availableStrategies.map(strategy => (
                   <label
                     key={strategy.id}
