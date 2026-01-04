@@ -1108,10 +1108,10 @@ class BackendTester:
                 if response.status == 200:
                     data = await response.json()
                     print(f"   ✅ Historical data processed successfully")
-                    print(f"   📊 Status: {data.get('status')}")
+                    print(f"   📊 Success: {data.get('success')}")
                     print(f"   📊 Candles saved: {data.get('candles_saved', 0)}")
                     
-                    return data.get('status') == 'success'
+                    return data.get('success') == True
                 else:
                     print(f"   ❌ Historical data processing failed: {response.status}")
                     error_text = await response.text()
