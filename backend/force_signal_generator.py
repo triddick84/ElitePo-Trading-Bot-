@@ -2782,11 +2782,17 @@ class ForceSignalGenerator:
             emergency_conf_level = "HIGH" if emergency_confidence >= 88.0 else "MEDIUM"
             
             # Calculate latency offset based on timeframe
-            # For 1m signals: Add 60 seconds latency so signals generate 1 minute later
-            if timeframe == '1m':
-                latency_offset = 60  # 1 minute delay for 1m signals
-            else:
-                latency_offset = 25 if market_type == "otc" else 35  # Standard latency for other timeframes
+            # Each timeframe gets latency matching its duration
+            latency_map = {
+                '5s': 5,        # 5 seconds
+                '15s': 15,      # 15 seconds
+                '30s': 30,      # 30 seconds
+                '1m': 60,       # 1 minute
+                '2m': 120,      # 2 minutes
+                '3m': 180,      # 3 minutes
+                '5m': 300       # 5 minutes
+            }
+            latency_offset = latency_map.get(timeframe, 60)  # Default to 60s
             
             return TradingSignal(
                 id=f"EMERGENCY_{market_type.upper()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{symbol}",
