@@ -79,7 +79,7 @@ Test the Data Collection and ML Training features on the GPT Signal Bot frontend
 
 ### Previous Backend API Testing Results ✅
 
-### Backend API Endpoints Tested
+### Backend API Endpoints Tested (Previous Results)
 
 #### 1. Data Collection API Tests ✅
 - **POST /api/data-collector/start** ✅ - Start collecting data
