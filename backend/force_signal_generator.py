@@ -2335,7 +2335,7 @@ class ForceSignalGenerator:
             
             # Latency map - each timeframe's latency matches its duration
             latency_map = {
-                '5s': 5.0,      # 5 seconds
+                '5s': 10.0,     # 10 seconds (5s timeframe + 5s extra)
                 '15s': 15.0,    # 15 seconds
                 '30s': 30.0,    # 30 seconds
                 '1m': 60.0,     # 1 minute
