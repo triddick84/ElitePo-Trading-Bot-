@@ -2,6 +2,7 @@
  * Enhanced Strategy Selector
  * Includes:
  * - Strategy selection by timeframe
+ * - Custom/Built strategies from Strategy Builder
  * - Chart configuration (moved from Dashboard)
  * - Signal timing controls (moved from Dashboard)
  * - Flexible trading system (moved from Dashboard)
@@ -9,12 +10,14 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Switch } from './ui/switch';
 import { Label } from './ui/label';
 import { Input } from './ui/input';
+import { Badge } from './ui/badge';
 import { 
   Settings, 
   TrendingUp, 
@@ -23,7 +26,9 @@ import {
   Sliders,
   Info,
   CheckCircle,
-  Save
+  Save,
+  Star,
+  User
 } from 'lucide-react';
 import { toast } from 'sonner';
 import SignalSetupGuideModal from './SignalSetupGuideModal';
@@ -37,6 +42,10 @@ const StrategySelectorEnhanced = ({ onStrategySelect, onConfigChange }) => {
   const [showSetupModal, setShowSetupModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Custom/Built strategies from Strategy Builder
+  const [customStrategies, setCustomStrategies] = useState([]);
+  const [isLoadingCustom, setIsLoadingCustom] = useState(false);
   
   // Chart Configuration
   const [chartConfig, setChartConfig] = useState({
@@ -61,6 +70,35 @@ const StrategySelectorEnhanced = ({ onStrategySelect, onConfigChange }) => {
   });
   const [flexibleLoading, setFlexibleLoading] = useState(false);
   const [flexibleResult, setFlexibleResult] = useState(null);
+
+  // Fetch custom strategies on mount
+  useEffect(() => {
+    fetchCustomStrategies();
+  }, []);
+  
+  // Fetch custom strategies from backend
+  const fetchCustomStrategies = async () => {
+    try {
+      setIsLoadingCustom(true);
+      const response = await axios.get(`${API}/custom-strategies`);
+      if (response.data.success) {
+        setCustomStrategies(response.data.strategies || []);
+        console.log(`📚 Loaded ${response.data.strategies?.length || 0} custom strategies`);
+      }
+    } catch (error) {
+      console.error('Error fetching custom strategies:', error);
+    } finally {
+      setIsLoadingCustom(false);
+    }
+  };
+  
+  // Get custom strategies filtered by selected timeframe
+  const getCustomStrategiesForTimeframe = () => {
+    return customStrategies.filter(strategy => {
+      const strategyTimeframes = strategy.timeframes || [];
+      return strategyTimeframes.includes(selectedTimeframe);
+    });
+  };
 
   // Available timeframes
   const timeframes = [
