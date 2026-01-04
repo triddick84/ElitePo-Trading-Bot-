@@ -4,13 +4,17 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Switch } from './ui/switch';
 import { Label } from './ui/label';
-import { Settings, TrendingUp, X, Check, Play, Square, Zap, Clock } from 'lucide-react';
+import { Badge } from './ui/badge';
+import { Settings, TrendingUp, X, Check, Play, Square, Zap, Clock, User, Star } from 'lucide-react';
 import { toast } from 'sonner';
+
+const API_URL = process.env.REACT_APP_BACKEND_URL || '';
 
 const StrategySelector = ({ onStrategySelect, onAutoGenerateToggle }) => {
   const [selectedTimeframe, setSelectedTimeframe] = useState('1m');
@@ -19,11 +23,44 @@ const StrategySelector = ({ onStrategySelect, onAutoGenerateToggle }) => {
   const [showSetupModal, setShowSetupModal] = useState(false);
   const [currentStrategyConfig, setCurrentStrategyConfig] = useState(null);
   
+  // Custom/Built strategies from Strategy Builder
+  const [customStrategies, setCustomStrategies] = useState([]);
+  const [isLoadingCustom, setIsLoadingCustom] = useState(false);
+  
   // Bot control states
   const [autoGenerateEnabled, setAutoGenerateEnabled] = useState(false);
   const [autoGenerateInterval, setAutoGenerateInterval] = useState('1m');
   const [botActive, setBotActive] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+
+  // Fetch custom strategies on mount
+  useEffect(() => {
+    fetchCustomStrategies();
+  }, []);
+  
+  // Fetch custom strategies from backend
+  const fetchCustomStrategies = async () => {
+    try {
+      setIsLoadingCustom(true);
+      const response = await axios.get(`${API_URL}/api/custom-strategies`);
+      if (response.data.success) {
+        setCustomStrategies(response.data.strategies || []);
+      }
+    } catch (error) {
+      console.error('Error fetching custom strategies:', error);
+    } finally {
+      setIsLoadingCustom(false);
+    }
+  };
+  
+  // Get custom strategies filtered by selected timeframe
+  const getCustomStrategiesForTimeframe = () => {
+    return customStrategies.filter(strategy => {
+      // Check if strategy's timeframes includes the selected timeframe
+      const strategyTimeframes = strategy.timeframes || [];
+      return strategyTimeframes.includes(selectedTimeframe);
+    });
+  };
 
   // Available timeframes
   const timeframes = [
