@@ -9757,6 +9757,303 @@ async def get_ssid_alerts(limit: int = 50):
         return {"success": False, "error": str(e)}
 
 
+# ===============================
+# HISTORICAL DATA COLLECTION API
+# ===============================
+# These endpoints support collecting real market data from Pocket Option
+# for training high-accuracy AI/ML models
+
+from historical_data_collector import (
+    get_historical_data_collector, 
+    initialize_data_collector,
+    HistoricalDataCollector
+)
+
+# Global data collector instance
+_data_collector: Optional[HistoricalDataCollector] = None
+
+async def get_data_collector() -> HistoricalDataCollector:
+    """Get or initialize the data collector"""
+    global _data_collector
+    if _data_collector is None:
+        _data_collector = await initialize_data_collector(db)
+    return _data_collector
+
+
+@api_router.post("/data-collector/start")
+async def start_data_collection(
+    assets: List[str] = None,
+    timeframes: List[str] = None
+):
+    """
+    Start collecting historical market data.
+    
+    Args:
+        assets: List of assets to collect (e.g., ['EURUSD_otc', 'GBPUSD_otc'])
+        timeframes: List of timeframes (e.g., ['5s', '1m', '5m'])
+    """
+    try:
+        collector = await get_data_collector()
+        collector.start_collection(assets=assets, timeframes=timeframes)
+        
+        return {
+            "success": True,
+            "message": "Data collection started",
+            "collecting_assets": collector.collecting_assets or "ALL",
+            "collecting_timeframes": collector.collecting_timeframes
+        }
+    except Exception as e:
+        logger.error(f"Error starting data collection: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.post("/data-collector/stop")
+async def stop_data_collection():
+    """Stop collecting historical market data"""
+    try:
+        collector = await get_data_collector()
+        collector.stop_collection()
+        
+        return {
+            "success": True,
+            "message": "Data collection stopped"
+        }
+    except Exception as e:
+        logger.error(f"Error stopping data collection: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.post("/data-collector/tick")
+async def receive_tick_data(data: Dict[str, Any]):
+    """
+    Receive tick data from desktop client.
+    
+    Expected payload:
+    {
+        "asset": "EURUSD_otc",
+        "timestamp": 1704067200,
+        "price": 1.0523
+    }
+    """
+    try:
+        collector = await get_data_collector()
+        
+        await collector.process_tick(
+            asset=data.get('asset', 'UNKNOWN'),
+            timestamp=data.get('timestamp', 0),
+            price=data.get('price', 0.0),
+            volume=data.get('volume', 0.0)
+        )
+        
+        return {"success": True}
+    except Exception as e:
+        logger.debug(f"Error processing tick: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.post("/data-collector/history")
+async def receive_history_data(data: Dict[str, Any]):
+    """
+    Receive historical data batch from desktop client.
+    
+    Expected payload:
+    {
+        "asset": "EURUSD_otc",
+        "period": 60,
+        "history": [[timestamp, price], ...],
+        "candles": [[ts, open, close, high, low], ...]
+    }
+    """
+    try:
+        collector = await get_data_collector()
+        
+        saved_count = await collector.process_history(
+            asset=data.get('asset', 'UNKNOWN'),
+            history_data=data.get('history', []),
+            candles_data=data.get('candles', []),
+            period=data.get('period', 60)
+        )
+        
+        return {
+            "success": True,
+            "candles_saved": saved_count
+        }
+    except Exception as e:
+        logger.error(f"Error processing history: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.post("/data-collector/candle")
+async def receive_candle_data(data: Dict[str, Any]):
+    """
+    Receive a complete candle from desktop client.
+    
+    Expected payload:
+    {
+        "asset": "EURUSD_otc",
+        "timeframe": "1m",
+        "candle": {
+            "timestamp": 1704067200,
+            "open": 1.0520,
+            "high": 1.0525,
+            "low": 1.0518,
+            "close": 1.0523
+        }
+    }
+    """
+    try:
+        collector = await get_data_collector()
+        
+        await collector.process_candle(
+            asset=data.get('asset', 'UNKNOWN'),
+            candle=data.get('candle', {}),
+            timeframe=data.get('timeframe', '1m')
+        )
+        
+        return {"success": True}
+    except Exception as e:
+        logger.debug(f"Error processing candle: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.get("/data-collector/stats")
+async def get_collection_stats():
+    """Get statistics about collected data"""
+    try:
+        collector = await get_data_collector()
+        stats = await collector.get_collection_stats()
+        
+        return {
+            "success": True,
+            "stats": stats
+        }
+    except Exception as e:
+        logger.error(f"Error getting stats: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.get("/data-collector/candles/{asset}/{timeframe}")
+async def get_collected_candles(
+    asset: str,
+    timeframe: str,
+    days: int = Query(default=7, ge=1, le=90),
+    limit: int = Query(default=1000, ge=1, le=50000)
+):
+    """
+    Retrieve collected candles for an asset/timeframe.
+    
+    Args:
+        asset: Asset symbol (e.g., 'EURUSD_otc')
+        timeframe: Timeframe ('5s', '1m', '5m', etc.)
+        days: Number of days to retrieve (default 7, max 90)
+        limit: Maximum candles to return (default 1000)
+    """
+    try:
+        collector = await get_data_collector()
+        
+        from datetime import datetime, timezone, timedelta
+        start_time = datetime.now(timezone.utc) - timedelta(days=days)
+        
+        candles = await collector.get_candles(
+            asset=asset,
+            timeframe=timeframe,
+            start_time=start_time,
+            limit=limit
+        )
+        
+        return {
+            "success": True,
+            "asset": asset,
+            "timeframe": timeframe,
+            "count": len(candles),
+            "candles": candles
+        }
+    except Exception as e:
+        logger.error(f"Error getting candles: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.get("/data-collector/training-data/{asset}/{timeframe}")
+async def get_training_data(
+    asset: str,
+    timeframe: str,
+    days: int = Query(default=7, ge=1, le=90)
+):
+    """
+    Get data formatted for ML training.
+    
+    Returns arrays suitable for pandas DataFrame construction.
+    """
+    try:
+        collector = await get_data_collector()
+        
+        data = await collector.get_training_data(
+            asset=asset,
+            timeframe=timeframe,
+            days=days
+        )
+        
+        if not data:
+            return {
+                "success": False,
+                "error": f"Insufficient data for {asset} {timeframe}"
+            }
+        
+        return {
+            "success": True,
+            **data
+        }
+    except Exception as e:
+        logger.error(f"Error getting training data: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.get("/data-collector/quality/{asset}/{timeframe}")
+async def get_data_quality_report(
+    asset: str,
+    timeframe: str,
+    days: int = Query(default=1, ge=1, le=7)
+):
+    """
+    Get data quality report for an asset/timeframe.
+    
+    Checks for gaps, anomalies, and completeness.
+    """
+    try:
+        collector = await get_data_collector()
+        
+        report = await collector.get_data_quality_report(
+            asset=asset,
+            timeframe=timeframe,
+            days=days
+        )
+        
+        return {
+            "success": True,
+            "report": report
+        }
+    except Exception as e:
+        logger.error(f"Error getting quality report: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.delete("/data-collector/cleanup")
+async def cleanup_old_data(days_to_keep: int = Query(default=30, ge=1, le=365)):
+    """Remove data older than specified days"""
+    try:
+        collector = await get_data_collector()
+        deleted_count = await collector.cleanup_old_data(days_to_keep=days_to_keep)
+        
+        return {
+            "success": True,
+            "message": f"Removed {deleted_count} old candles",
+            "deleted_count": deleted_count
+        }
+    except Exception as e:
+        logger.error(f"Error cleaning up data: {e}")
+        return {"success": False, "error": str(e)}
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
