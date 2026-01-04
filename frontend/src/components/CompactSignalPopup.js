@@ -77,12 +77,12 @@ const CompactSignalPopup = ({ signals, onClose, onDismiss }) => {
 
       setSignalTimers(newTimers);
 
-      // Auto-close if all signals expired (entry time passed by 10s OR displayed for 5+ minutes)
+      // Auto-close if all signals expired (entry time passed by 3s OR displayed for 5+ minutes)
       const allExpired = signals.every(s => newTimers[s.id]?.isExpired);
       if (allExpired) {
         const reason = signals.some(s => newTimers[s.id]?.displayDuration > 300) 
           ? 'max display duration reached (5 min)' 
-          : 'entry time passed by 10s';
+          : 'entry time passed by 3s';
         console.log(`🔔 All signals expired (${reason}), auto-closing popup`);
         onClose();
       }
