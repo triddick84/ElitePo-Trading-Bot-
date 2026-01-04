@@ -2862,7 +2862,7 @@ class ForceSignalGenerator:
                 justification=f"🎯 FORCED {market_type.upper()} SIGNAL - User requested immediate signal generation",
                 risk_assessment="MODERATE RISK - Forced generation with statistical analysis.",
                 suggested_stake=5.0,  # Increased from 1.0
-                precision_entry_time=datetime.now(timezone.utc) + timedelta(seconds=15),  # +5s latency offset
+                precision_entry_time=datetime.now(timezone.utc) + timedelta(seconds=60 if timeframe == '1m' else 15),  # 60s for 1m, 15s for others
                 timestamp=datetime.now(timezone.utc)
             )
     
