@@ -374,9 +374,9 @@ async def disable_candle_sync():
 async def get_candle_sync_status():
     """Get current candle synchronization status and next candle times"""
     try:
-        # Get config setting
+        # Get config setting - default to True (enabled) if not set
         config_doc = await db.trading_configurations.find_one({"user_id": "default_user"})
-        candle_sync_enabled = config_doc.get("candle_sync_enabled", False) if config_doc else False
+        candle_sync_enabled = config_doc.get("candle_sync_enabled", True) if config_doc else True
         
         # If bot is running, get detailed status from scheduler
         if trading_bot.is_running and candle_sync_enabled:
