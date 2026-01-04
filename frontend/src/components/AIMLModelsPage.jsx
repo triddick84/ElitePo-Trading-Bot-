@@ -410,8 +410,9 @@ const AIMLModelsPage = () => {
         </Card>
       </div>
 
-      <Tabs defaultValue="models" className="space-y-4">
+      <Tabs defaultValue="real-data" className="space-y-4">
         <TabsList className="bg-slate-800/50 flex-wrap">
+          <TabsTrigger value="real-data">📊 Real Data Training</TabsTrigger>
           <TabsTrigger value="models">🧠 Model Selection</TabsTrigger>
           <TabsTrigger value="ml-training">🤖 ML Training</TabsTrigger>
           <TabsTrigger value="optimization">🎯 Optimization</TabsTrigger>
@@ -420,6 +421,11 @@ const AIMLModelsPage = () => {
           <TabsTrigger value="retrain">⚡ Retrain Models</TabsTrigger>
           <TabsTrigger value="performance">📊 Performance</TabsTrigger>
         </TabsList>
+
+        {/* Real Data Training Tab - NEW */}
+        <TabsContent value="real-data" className="space-y-4">
+          <DataCollectionDashboard />
+        </TabsContent>
 
         {/* Model Selection Tab */}
         <TabsContent value="models" className="space-y-4">
