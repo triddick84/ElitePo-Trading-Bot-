@@ -1757,7 +1757,7 @@ class BacktestingService:
                     results.append(result)
                     
                     # Save to database
-                    if self.db:
+                    if self.db is not None:
                         await self.db.backtest_results.insert_one({
                             **asdict(result),
                             '_id': result.id
