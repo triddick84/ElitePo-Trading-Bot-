@@ -1130,15 +1130,18 @@ class BackendTester:
                 if response.status == 200:
                     data = await response.json()
                     print(f"   ✅ Collection stats retrieved successfully")
-                    print(f"   📊 Collection enabled: {data.get('collection_enabled')}")
+                    print(f"   📊 Success: {data.get('success')}")
                     
-                    # Check for database_stats with candle counts
-                    database_stats = data.get('database_stats', {})
+                    # Check for stats with database_stats with candle counts
+                    stats = data.get('stats', {})
+                    collection_enabled = stats.get('collection_enabled')
+                    database_stats = stats.get('database_stats', {})
+                    print(f"   📊 Collection enabled: {collection_enabled}")
                     print(f"   📊 Database stats keys: {list(database_stats.keys())}")
                     
                     # Verify response structure
                     required_fields = ['collection_enabled', 'database_stats']
-                    missing_fields = [f for f in required_fields if f not in data]
+                    missing_fields = [f for f in required_fields if f not in stats]
                     
                     if not missing_fields:
                         print(f"   ✅ All required stats fields present")
