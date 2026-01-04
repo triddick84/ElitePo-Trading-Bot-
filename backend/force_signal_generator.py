@@ -2853,6 +2853,18 @@ class ForceSignalGenerator:
             import random
             ultimate_direction = SignalDirection.BUY if random.random() > 0.5 else SignalDirection.SELL
             
+            # Calculate latency based on timeframe - each timeframe matches its duration
+            latency_map = {
+                '5s': 5,        # 5 seconds
+                '15s': 15,      # 15 seconds
+                '30s': 30,      # 30 seconds
+                '1m': 60,       # 1 minute
+                '2m': 120,      # 2 minutes
+                '3m': 180,      # 3 minutes
+                '5m': 300       # 5 minutes
+            }
+            fallback_latency = latency_map.get(timeframe, 60)
+            
             return TradingSignal(
                 id=f"ULTIMATE_{market_type.upper()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
                 symbol=f"{symbol}{symbol_suffix}",
@@ -2874,7 +2886,7 @@ class ForceSignalGenerator:
                 justification=f"🎯 FORCED {market_type.upper()} SIGNAL - User requested immediate signal generation",
                 risk_assessment="MODERATE RISK - Forced generation with statistical analysis.",
                 suggested_stake=5.0,  # Increased from 1.0
-                precision_entry_time=datetime.now(timezone.utc) + timedelta(seconds=60 if timeframe == '1m' else 15),  # 60s for 1m, 15s for others
+                precision_entry_time=datetime.now(timezone.utc) + timedelta(seconds=fallback_latency),
                 timestamp=datetime.now(timezone.utc)
             )
     
