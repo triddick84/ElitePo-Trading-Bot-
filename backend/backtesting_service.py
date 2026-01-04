@@ -1609,7 +1609,7 @@ class BacktestingService:
     
     def __init__(self, db=None):
         self.db = db
-        self.data_fetcher = HistoricalDataFetcher()
+        self.data_fetcher = HistoricalDataFetcher(db=db)  # Pass db for MongoDB access
         self.strategy_engine = StrategyEngine()
     
     def _determine_asset_type(self, symbol: str) -> str:
