@@ -1,26 +1,21 @@
 # Pocket Option Desktop Trading Client Requirements
+# Based on VitalySvyatyuk's approach
 
-# Browser automation
-playwright>=1.40.0
-playwright-stealth>=1.0.0
+# Browser automation (undetected)
+undetected-chromedriver>=3.5.0
+selenium>=4.15.0
 
-# CAPTCHA solving
-2captcha-python>=1.2.0
+# Data analysis
+numpy>=1.24.0
+pandas>=2.0.0
+ta-lib>=0.4.0
 
 # HTTP client
 requests>=2.31.0
-aiohttp>=3.9.0
-
-# WebSocket
-websockets>=12.0
-
-# Async support
-asyncio-mqtt>=0.16.0
 
 # Utils
-python-dotenv>=1.0.0
 rich>=13.0.0
-click>=8.1.0
+python-dotenv>=1.0.0
 
-# Optional: Telegram notifications
-python-telegram-bot>=20.0
+# Optional: For technical analysis if ta-lib fails
+TA-Lib-Precompiled>=0.4.25; sys_platform == 'win32'

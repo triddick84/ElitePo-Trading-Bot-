@@ -1,158 +1,145 @@
 # Pocket Option Desktop Trading Client
 
-## Hybrid Trading System
+Automated trading client for Pocket Option using Chrome browser automation.
 
-This desktop client works with your cloud-based GPT Signal Bot to execute trades.
+## Features
 
-### How It Works
+- **Browser-Based Trading**: Uses undetected_chromedriver to bypass bot detection
+- **Multiple Strategies**: Simple MA crossover, RSI, and advanced divergence strategies
+- **Martingale Support**: Optional bet progression for loss recovery
+- **Risk Management**: Take profit, stop loss, and hourly trade limits
+- **GUI Interface**: Easy-to-use Tkinter interface for configuration
+- **Demo & Live Support**: Works with both demo and live accounts
 
-1. **Cloud Server** (your web UI) generates trading signals using your custom strategies
-2. **Desktop Client** (this script) handles:
-   - Logging into Pocket Option (bypasses IP blocking)
-   - Solving CAPTCHAs automatically with 2Captcha
-   - Executing trades based on signals from the cloud
-   - Reporting results back to the cloud
+## Architecture
 
----
+This client follows the approach from [VitalySvyatyuk's pocket_option_trading_bot](https://github.com/VitalySvyatyuk/pocket_option_trading_bot):
 
-## 🚀 Quick Setup (5 minutes)
+1. **Browser Automation**: Uses undetected_chromedriver to control Chrome
+2. **WebSocket Data**: Reads market data from browser's WebSocket performance logs
+3. **UI Trading**: Executes trades by clicking the CALL/PUT buttons in the web interface
+4. **Persistent Session**: Uses Chrome profile to maintain login session
 
-### Step 1: Install Python
-Download Python 3.10+ from https://python.org
-- ✅ Make sure to check "Add Python to PATH" during installation
+## Prerequisites
 
-### Step 2: Extract Files
-Extract the downloaded ZIP to a folder on your PC, e.g.:
-```
-C:\Users\YourName\Desktop\pocket_option_bot\
-```
+1. **Google Chrome** installed on your system
+2. **Python 3.8+** with pip
+3. **Pocket Option account** (demo or live)
 
-### Step 3: Install Dependencies
-Open Command Prompt (Windows) or Terminal (Mac/Linux) in that folder:
+## Installation
 
 ```bash
-# Install Python packages
+# Navigate to desktop client directory
+cd /app/backend/desktop_client
+
+# Install dependencies
 pip install -r requirements.txt
 
-# IMPORTANT: Install Playwright browser (required!)
-python -m playwright install chromium
+# For TA-Lib on Linux, you may need:
+sudo apt-get install ta-lib
+
+# For TA-Lib on Mac:
+brew install ta-lib
 ```
 
-⚠️ **The `playwright install chromium` step is REQUIRED!** This downloads the browser (~100MB) that the bot uses to login.
+## Usage
 
-### Step 4: Configure Settings
-Edit `config.py` with your details:
-- Your Pocket Option email/password
-- Your 2Captcha API key (get one at https://2captcha.com)
-- Cloud server URL (already set to your server)
+### Option 1: GUI (Recommended)
 
-### Step 5: Run the Bot
 ```bash
-python main.py
+python gui.py
 ```
 
----
+This opens a graphical interface where you can:
+- Select Demo or Live account
+- Configure trading strategies
+- Set risk management parameters
+- Monitor trading activity
 
-## ⚠️ Common Issues
+### Option 2: Command Line
 
-### "Executable doesn't exist" or "Browser not installed"
-**Solution:** Run this command:
 ```bash
-python -m playwright install chromium
+# Demo account
+python trading_bot.py --demo
+
+# Live account (use with caution!)
+python trading_bot.py --live
+
+# With Martingale
+python trading_bot.py --demo --martingale --amount 1
+
+# Headless mode (no browser window)
+python trading_bot.py --demo --headless
 ```
 
-### "playwright is just installed"
-**Solution:** Same as above - you need to download the browser:
+## Configuration
+
+### Strategies
+
+1. **MA Crossover**: Fast/Slow moving average crossover
+2. **RSI**: Overbought/Oversold reversals
+3. **Enhanced Divergence**: RSI divergence + MACD momentum exhaustion
+4. **Professional Scalping**: Multi-filter institutional approach
+
+### Risk Management
+
+- **Trade Amount**: Base bet size ($1-$1000)
+- **Min Payout**: Minimum required payout % (default: 80%)
+- **Martingale**: Progressive bet sizing after losses
+- **Take Profit**: Stop trading after reaching profit target
+- **Stop Loss**: Stop trading after reaching loss limit
+- **Vice Versa**: Invert all signals (CALL→PUT, PUT→CALL)
+
+## How It Works
+
+1. **Login**: Open Chrome with your Pocket Option session
+2. **Data Capture**: Monitor WebSocket messages for price data
+3. **Strategy Analysis**: Run configured strategies on candle data
+4. **Signal Generation**: Wait for strategy consensus
+5. **Trade Execution**: Click CALL or PUT button when signal appears
+6. **Martingale**: Adjust bet size based on win/loss
+
+## Important Notes
+
+⚠️ **Risk Warning**: Binary options trading involves significant risk. Only trade with money you can afford to lose.
+
+⚠️ **Chrome Session**: You must be logged into Pocket Option in Chrome before starting the bot.
+
+⚠️ **Demo First**: Always test on a demo account before using real money.
+
+⚠️ **Monitoring**: Keep an eye on the bot, especially when using live account.
+
+## Troubleshooting
+
+### Chrome driver issues
 ```bash
-python -m playwright install chromium
+# Update undetected-chromedriver
+pip install --upgrade undetected-chromedriver
 ```
 
-### CAPTCHA keeps appearing
-- Make sure your 2Captcha account has balance
-- Check API key is correct in `config.py`
-
-### Connection drops
-- The bot auto-reconnects every 30 seconds
-- Check your internet connection
-
-### Trades not executing
-- Verify cloud server is generating signals
-- Check the web UI signal history
-
----
-
-## 📋 Features
-
-- ✅ Auto-login with CAPTCHA solving
-- ✅ Maintains persistent connection
-- ✅ Polls cloud server for signals
-- ✅ Executes trades automatically
-- ✅ Reports results to cloud dashboard
-- ✅ Reconnects on disconnection
-- ✅ Telegram notifications (optional)
-
----
-
-## 🎮 Commands
-
-While running, you can type:
-- `status` - Show connection status
-- `balance` - Show current balance
-- `trades` - Show recent trades
-- `stop` - Stop the bot
-- `restart` - Restart connection
-
----
-
-## 📁 Files
-
-```
-pocket_option_desktop_bot/
-├── main.py          # Main bot script
-├── config.py        # Your settings (edit this!)
-├── requirements.txt # Python dependencies
-└── README.md        # This file
-```
-
----
-
-## 🔧 Full Installation Commands (Copy/Paste)
-
-**Windows (Command Prompt):**
-```cmd
-cd C:\path\to\pocket_option_desktop_bot
-pip install -r requirements.txt
-python -m playwright install chromium
-python main.py
-```
-
-**Mac/Linux (Terminal):**
+### TA-Lib installation fails
 ```bash
-cd ~/path/to/pocket_option_desktop_bot
-pip install -r requirements.txt
-python -m playwright install chromium
-python main.py
+# Use pre-compiled version (Windows)
+pip install TA-Lib-Precompiled
+
+# Or use pandas-ta as alternative
+pip install pandas-ta
 ```
 
----
+### Bot not detecting prices
+- Make sure you're on the trading page
+- Check that WebSocket connection is active
+- Try refreshing the page
 
-## 💰 2Captcha Setup
+## Files
 
-1. Go to https://2captcha.com
-2. Create an account
-3. Add funds ($3-5 is enough for many logins)
-4. Go to API Settings
-5. Copy your API key
-6. Paste it in `config.py` as `TWOCAPTCHA_API_KEY`
+- `gui.py` - Tkinter graphical interface
+- `trading_bot.py` - Main trading logic
+- `driver.py` - Chrome driver setup
+- `strategies.py` - Strategy implementations
+- `requirements.txt` - Python dependencies
+- `bot_settings.json` - Saved configuration (auto-created)
 
-Each CAPTCHA solve costs ~$0.003
+## License
 
----
-
-## Need Help?
-
-If you encounter issues:
-1. Check the `trading_bot.log` file for error details
-2. Make sure Python 3.10+ is installed
-3. Verify all dependencies are installed
-4. Confirm `python -m playwright install chromium` was run
+For personal use only. Not for commercial distribution.
