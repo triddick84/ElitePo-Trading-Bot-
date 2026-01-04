@@ -780,12 +780,12 @@ class StrategyEngine:
         """Calculate SMA"""
         return prices.rolling(window=period).mean()
     
-    def _calculate_macd(self, prices: pd.Series) -> Tuple[pd.Series, pd.Series, pd.Series]:
-        """Calculate MACD"""
-        ema12 = self._calculate_ema(prices, 12)
-        ema26 = self._calculate_ema(prices, 26)
-        macd_line = ema12 - ema26
-        signal_line = self._calculate_ema(macd_line, 9)
+    def _calculate_macd(self, prices: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) -> Tuple[pd.Series, pd.Series, pd.Series]:
+        """Calculate MACD with customizable periods"""
+        ema_fast = self._calculate_ema(prices, fast)
+        ema_slow = self._calculate_ema(prices, slow)
+        macd_line = ema_fast - ema_slow
+        signal_line = self._calculate_ema(macd_line, signal)
         histogram = macd_line - signal_line
         return macd_line, signal_line, histogram
     
@@ -797,11 +797,11 @@ class StrategyEngine:
         lower = sma - (std * std_dev)
         return upper, sma, lower
     
-    def _calculate_stochastic(self, df: pd.DataFrame, k_period: int = 14, d_period: int = 3) -> Tuple[pd.Series, pd.Series]:
-        """Calculate Stochastic oscillator"""
-        low_min = df['low'].rolling(window=k_period).min()
-        high_max = df['high'].rolling(window=k_period).max()
-        k = 100 * (df['close'] - low_min) / (high_max - low_min)
+    def _calculate_stochastic(self, high: pd.Series, low: pd.Series, close: pd.Series, k_period: int = 14, d_period: int = 3) -> Tuple[pd.Series, pd.Series]:
+        """Calculate Stochastic oscillator with customizable periods"""
+        low_min = low.rolling(window=k_period).min()
+        high_max = high.rolling(window=k_period).max()
+        k = 100 * (close - low_min) / (high_max - low_min)
         d = k.rolling(window=d_period).mean()
         return k, d
     
