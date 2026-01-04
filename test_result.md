@@ -386,32 +386,33 @@ Test with: POST /api/signals/force-generate (after setting 5s expiration)
 
 ### Agent Communication
 - **Agent**: testing
-- **Message**: ✅ FRONTEND DATA COLLECTION & ML TRAINING FEATURES FULLY TESTED AND WORKING
+- **Message**: ✅ CUSTOM STRATEGIES API ENDPOINTS FULLY TESTED AND WORKING
   
-  Comprehensive UI testing completed for the Data Collection and ML Training features:
+  Comprehensive API testing completed for the Custom Strategies endpoints for Strategy Selector feature:
   
-  **All 12 test scenarios PASSED:**
-  1. ✅ Navigation to AI/ML Models page working
-  2. ✅ Real Data Training tab is default and functional
-  3. ✅ Data Collection UI elements all present and working
-  4. ✅ Asset selection buttons (7 found) functional
-  5. ✅ Timeframe selection buttons (4 found) functional  
-  6. ✅ Start/Stop Collection workflow working
-  7. ✅ Collected Data table showing real EURUSD data (2.6K candles)
-  8. ✅ Train High-Accuracy Model section fully functional
-  9. ✅ Asset/Timeframe dropdowns with correct defaults
-  10. ✅ Confidence Threshold slider (75% default) working
-  11. ✅ Train Model button with gradient styling functional
-  12. ✅ Tab navigation between all ML model tabs working
+  **All 6 test scenarios PASSED (100% Success Rate):**
+  1. ✅ GET /api/custom-strategies/indicators - 41 indicators available with full metadata
+  2. ✅ GET /api/custom-strategies - All strategies retrieved with timeframes arrays
+  3. ✅ POST /api/custom-strategies - Strategy creation with specific timeframes working
+  4. ✅ Timeframe filtering verification - Strategies properly support timeframe arrays
+  5. ✅ Strategy data validation - Timeframes field correctly maintained as arrays
+  6. ✅ Strategy cleanup - Database operations working correctly
   
   **Key Validation:**
-  - Real market data from Pocket Option displaying correctly
-  - EURUSD_otc_1m model trained and loaded (1980 samples)
-  - All UI interactions respond properly
-  - No console errors detected
-  - Professional UI with proper styling
+  - Custom strategies API fully functional at https://optionsignal-12.preview.emergentagent.com/api
+  - Timeframe filtering ready: strategies contain timeframes as arrays (["5s"], ["1m"], ["1m", "5m"], etc.)
+  - Test strategy "Test 5s Only Strategy" successfully created with ["5s"] timeframe only
+  - 15 existing strategies found with various timeframe configurations
+  - Complete indicator library (41 indicators) available for strategy building
+  - All API endpoints return proper JSON responses with success/error handling
   
-  **Recommendation**: The Data Collection and ML Training features are production-ready. Main agent can proceed with any additional features or mark this as complete.
+  **Strategy Selector Integration Ready:**
+  - GET /api/custom-strategies returns all strategies with timeframes for filtering
+  - Timeframe arrays support ultra-short (5s, 15s, 30s) and standard timeframes
+  - Filtering logic verified: strategies can be filtered by timeframe values
+  - Database properly stores and retrieves timeframe specifications
+  
+  **Recommendation**: The Custom Strategies API is production-ready for Strategy Selector feature. Main agent can proceed with frontend integration or mark this as complete.
 
 
 ---
