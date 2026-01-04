@@ -420,14 +420,22 @@ const DashboardRestructured = ({
         );
       }
       
-      // Ensure all required fields are present with defaults
-      // Convert config's trading_mode from frontend format ('real') to backend format ('live')
-      const normalizedConfig = { ...config };
-      if (normalizedConfig.trading_mode === 'real') {
-        normalizedConfig.trading_mode = 'live';
+      // IMPORTANT: Fetch current server config first to avoid overwriting with stale defaults
+      let serverConfig = {};
+      try {
+        const response = await axios.get(`${API}/config`);
+        serverConfig = response.data || {};
+      } catch (e) {
+        console.warn('Could not fetch server config, using local state');
+        serverConfig = config;
       }
       
-      // Build full config - use current config's selected_expirations as default, NOT hardcoded ['1m']
+      // Convert config's trading_mode from frontend format ('real') to backend format ('live')
+      if (serverConfig.trading_mode === 'real') {
+        serverConfig.trading_mode = 'live';
+      }
+      
+      // Build full config using SERVER's current config as base (not local state defaults)
       const fullConfig = {
         trading_mode: 'demo',
         active_strategies: ['hybrid'],
@@ -440,12 +448,20 @@ const DashboardRestructured = ({
         sound_alerts_enabled: true,
         popup_notifications: true,
         invert_signals: false,
-        ...normalizedConfig,  // Current config (preserves selected_expirations)
+        ...serverConfig,      // Server's current config (preserves selected_expirations)
         ...normalizedUpdates  // New updates (overrides if specified)
       };
       
       await axios.put(`${API}/config`, fullConfig);
-      setConfig({ ...config, ...updates }); // Use original updates for frontend state
+      
+      // Update local state - merge server config with updates
+      setConfig(prev => ({ 
+        ...prev, 
+        ...serverConfig,
+        ...updates,
+        // Convert 'live' back to 'real' for frontend display
+        trading_mode: updates.trading_mode || (serverConfig.trading_mode === 'live' ? 'real' : serverConfig.trading_mode) || prev.trading_mode
+      }));
       return true;
     } catch (error) {
       console.error('Error updating configuration:', error);
