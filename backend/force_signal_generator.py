@@ -2329,10 +2329,19 @@ class ForceSignalGenerator:
                     real_entry_time = previous_candle
                     time_until_entry = time_to_previous
             
-            # APPLY 5-SECOND LATENCY OFFSET
-            # Subtract 5 seconds from entry time to give user more preparation time
-            LATENCY_OFFSET = 5.0  # seconds
-            adjusted_entry_time = real_entry_time - timedelta(seconds=LATENCY_OFFSET)
+            # APPLY LATENCY OFFSET based on expiration timeframe
+            # For 1m signals: Add 60 seconds latency so signals generate 1 minute later
+            # For other timeframes: Keep 5 second latency
+            primary_expiration = user_expirations[0] if user_expirations else '1m'
+            
+            if primary_expiration == '1m':
+                LATENCY_OFFSET = 60.0  # 1 minute delay for 1m signals
+                logger.info(f"⏳ Using 60-second latency offset for 1m signals")
+            else:
+                LATENCY_OFFSET = 5.0  # 5 seconds for other timeframes
+            
+            # Add latency offset to entry time (signals generate later)
+            adjusted_entry_time = real_entry_time + timedelta(seconds=LATENCY_OFFSET)
             adjusted_countdown = time_until_entry + LATENCY_OFFSET  # More time on countdown
             
             # For force generate: Display popup NOW, countdown shows time until entry (with offset)
@@ -2340,14 +2349,14 @@ class ForceSignalGenerator:
             countdown_seconds = adjusted_countdown
             
             # Log timing details for verification
-            logger.info(f"⏰ FORCE GENERATE TIMING (with 5s latency offset):")
+            logger.info(f"⏰ FORCE GENERATE TIMING (with {LATENCY_OFFSET}s latency offset):")
             logger.info(f"   Current time: {chicago_time.strftime('%H:%M:%S')}")
             logger.info(f"   Original entry time: {real_entry_time.strftime('%H:%M:%S')}")
-            logger.info(f"   Adjusted entry time: {adjusted_entry_time.strftime('%H:%M:%S')} (5s earlier)")
-            logger.info(f"   Countdown: {countdown_seconds:.1f} seconds (target: 15s with offset)")
+            logger.info(f"   Adjusted entry time: {adjusted_entry_time.strftime('%H:%M:%S')} ({LATENCY_OFFSET}s later)")
+            logger.info(f"   Countdown: {countdown_seconds:.1f} seconds")
             logger.info(f"   Popup shows: NOW (immediately)")
             
-            # Use adjusted entry time for actual trade (5 seconds earlier)
+            # Use adjusted entry time for actual trade
             optimal_entry_time = adjusted_entry_time
             
             # Convert expiration time to minutes
