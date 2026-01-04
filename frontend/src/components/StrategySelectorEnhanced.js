@@ -397,7 +397,39 @@ const StrategySelectorEnhanced = ({ onStrategySelect, onConfigChange }) => {
               <SelectTrigger className="w-full bg-slate-700/50 border-purple-500/30 text-white">
                 <SelectValue placeholder="Choose strategy..." />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-80 overflow-y-auto">
+                {/* My Built Strategies Section */}
+                {getCustomStrategiesForTimeframe().length > 0 && (
+                  <>
+                    <div className="px-2 py-1.5 text-xs font-semibold text-yellow-400 bg-yellow-500/10 flex items-center gap-2 sticky top-0">
+                      <Star className="w-3 h-3" />
+                      MY BUILT STRATEGIES ({getCustomStrategiesForTimeframe().length})
+                    </div>
+                    {getCustomStrategiesForTimeframe().map(strategy => (
+                      <SelectItem 
+                        key={`custom_${strategy.id}`} 
+                        value={`custom_${strategy.id}`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <User className="w-3 h-3 text-yellow-400" />
+                          <span>{strategy.name}</span>
+                          <Badge variant="outline" className="text-xs text-yellow-400 border-yellow-400/50 px-1">
+                            Custom
+                          </Badge>
+                          {strategy.is_active && (
+                            <Badge className="text-xs bg-green-500/20 text-green-400 px-1">Active</Badge>
+                          )}
+                        </div>
+                      </SelectItem>
+                    ))}
+                    <div className="border-t border-gray-700 my-1"></div>
+                  </>
+                )}
+                
+                {/* Default Strategies Section */}
+                <div className="px-2 py-1.5 text-xs font-semibold text-blue-400 bg-blue-500/10 sticky top-0">
+                  DEFAULT STRATEGIES ({availableStrategies.length})
+                </div>
                 {availableStrategies.map(strategy => (
                   <SelectItem key={strategy.value} value={strategy.value}>
                     <div className="flex items-center gap-2">
@@ -410,12 +442,28 @@ const StrategySelectorEnhanced = ({ onStrategySelect, onConfigChange }) => {
               </SelectContent>
             </Select>
             
+            {/* Info about custom strategies for this timeframe */}
+            {getCustomStrategiesForTimeframe().length === 0 && customStrategies.length > 0 && (
+              <p className="text-xs text-gray-400 mt-2">
+                💡 You have {customStrategies.length} custom {customStrategies.length === 1 ? 'strategy' : 'strategies'}, 
+                but none are configured for {selectedTimeframe}. Build one in Strategy Builder with this timeframe.
+              </p>
+            )}
+            
             {selectedStrategy && (
               <div className="mt-3 bg-green-900/20 border border-green-600/50 rounded-lg p-3">
                 <div className="flex items-center gap-2 text-green-300 text-sm">
                   <CheckCircle className="w-4 h-4" />
                   <span className="font-semibold">Strategy Active:</span>
-                  <span>{availableStrategies.find(s => s.value === selectedStrategy)?.name}</span>
+                  <span>
+                    {selectedStrategy.startsWith('custom_') 
+                      ? customStrategies.find(s => `custom_${s.id}` === selectedStrategy)?.name || 'Custom Strategy'
+                      : availableStrategies.find(s => s.value === selectedStrategy)?.name || selectedStrategy
+                    }
+                  </span>
+                  {selectedStrategy.startsWith('custom_') && (
+                    <Badge className="text-xs bg-yellow-500/20 text-yellow-400">Custom</Badge>
+                  )}
                 </div>
               </div>
             )}
