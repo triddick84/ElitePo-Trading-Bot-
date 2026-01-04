@@ -90,6 +90,7 @@ const BacktestingPage = () => {
   useEffect(() => {
     fetchAvailableOptions();
     fetchBacktestHistory();
+    fetchCustomStrategies();
   }, []);
   
   const fetchAvailableOptions = async () => {
@@ -110,6 +111,30 @@ const BacktestingPage = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+  
+  // Fetch custom strategies from Strategy Builder
+  const fetchCustomStrategies = async () => {
+    try {
+      const response = await axios.get(`${API}/custom-strategies`);
+      if (response.data.success) {
+        setCustomStrategies(response.data.strategies || []);
+        console.log(`📚 Loaded ${response.data.strategies?.length || 0} custom strategies for backtesting`);
+      }
+    } catch (error) {
+      console.error('Error fetching custom strategies:', error);
+    }
+  };
+  
+  // Get custom strategies filtered by selected timeframes
+  const getCustomStrategiesForTimeframes = () => {
+    if (config.timeframes.length === 0) return customStrategies;
+    
+    return customStrategies.filter(strategy => {
+      const strategyTimeframes = strategy.timeframes || [];
+      // Show strategy if it supports ANY of the selected timeframes
+      return config.timeframes.some(tf => strategyTimeframes.includes(tf));
+    });
   };
   
   const fetchBacktestHistory = async () => {
