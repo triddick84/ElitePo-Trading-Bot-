@@ -83,9 +83,9 @@ const DashboardRestructured = ({
   const [scanCount, setScanCount] = useState(0);
   
   // Candle Sync State
-  const [candleSyncEnabled, setCandleSyncEnabled] = useState(false);
+  const [candleSyncEnabled, setCandleSyncEnabled] = useState(true);  // Default to enabled
   const [candleSyncStatus, setCandleSyncStatus] = useState({ 
-    enabled: false, 
+    enabled: true,  // Default to enabled
     next_candle_times: {},
     bot_running: false
   });
