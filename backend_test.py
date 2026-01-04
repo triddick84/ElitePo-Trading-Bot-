@@ -1305,6 +1305,170 @@ class BackendTester:
             print(f"   ⚠️ Cleanup error (non-critical): {e}")
             return True
 
+    # ========== PRIORITY TESTS FROM REVIEW REQUEST ==========
+    
+    async def test_default_config_endpoint(self) -> bool:
+        """Test GET /api/config endpoint for default startup settings"""
+        try:
+            print("   🔍 Testing Default Configuration Endpoint")
+            
+            async with self.session.get(f"{BACKEND_URL}/config") as response:
+                if response.status == 200:
+                    config = await response.json()
+                    print(f"   ✅ Config endpoint responded successfully")
+                    
+                    # Check default values as specified in the review request
+                    trading_mode = config.get('trading_mode')
+                    selected_timeframe = config.get('selected_timeframe')
+                    selected_expirations = config.get('selected_expirations', [])
+                    selected_assets = config.get('selected_assets', [])
+                    candle_sync_enabled = config.get('candle_sync_enabled')
+                    
+                    print(f"   📊 Trading mode: {trading_mode}")
+                    print(f"   📊 Selected timeframe: {selected_timeframe}")
+                    print(f"   📊 Selected expirations: {selected_expirations}")
+                    print(f"   📊 Selected assets: {selected_assets}")
+                    print(f"   📊 Candle sync enabled: {candle_sync_enabled}")
+                    
+                    # Verify default values
+                    defaults_correct = (
+                        trading_mode == "demo" and
+                        selected_timeframe == "5s" and
+                        selected_expirations == ["5s"] and
+                        selected_assets == [] and
+                        candle_sync_enabled is True
+                    )
+                    
+                    if defaults_correct:
+                        print(f"   ✅ All default configuration values are correct")
+                        return True
+                    else:
+                        print(f"   ❌ Default configuration values are incorrect")
+                        print(f"   Expected: demo mode, 5s timeframe, ['5s'] expirations, [] assets, candle_sync=True")
+                        return False
+                else:
+                    print(f"   ❌ Config endpoint failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Default config endpoint test error: {e}")
+            return False
+
+    async def test_backtest_with_real_mongodb_data(self) -> bool:
+        """Test POST /api/backtest/comprehensive with real MongoDB data"""
+        try:
+            print("   🔍 Testing Backtesting with Real MongoDB Data")
+            
+            # Test request body as specified in the review request
+            backtest_request = {
+                "strategies": ["hybrid"],
+                "assets": ["EURUSD_otc"],
+                "timeframes": ["1m"],
+                "days": 30
+            }
+            
+            async with self.session.post(f"{BACKEND_URL}/backtest/comprehensive", json=backtest_request) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Backtest endpoint responded successfully")
+                    
+                    success = data.get('success')
+                    results = data.get('results', [])
+                    
+                    print(f"   📊 Success: {success}")
+                    print(f"   📊 Results count: {len(results)}")
+                    
+                    if success and results:
+                        # Check the first result for data source
+                        first_result = results[0]
+                        data_source = first_result.get('data_source')
+                        win_rate = first_result.get('win_rate')
+                        total_trades = first_result.get('total_trades')
+                        
+                        print(f"   📊 Data source: {data_source}")
+                        print(f"   📊 Win rate: {win_rate}%")
+                        print(f"   📊 Total trades: {total_trades}")
+                        
+                        # Verify it uses real MongoDB data
+                        if data_source == "mongodb_real":
+                            print(f"   ✅ Backtest correctly uses real MongoDB data")
+                            
+                            # Verify trades are executed and win rate is calculated
+                            if total_trades > 0 and win_rate is not None:
+                                print(f"   ✅ Trades executed and win rate calculated")
+                                return True
+                            else:
+                                print(f"   ❌ No trades executed or win rate not calculated")
+                                return False
+                        else:
+                            print(f"   ❌ Backtest not using real MongoDB data. Data source: {data_source}")
+                            return False
+                    else:
+                        print(f"   ❌ Backtest failed or no results returned")
+                        return False
+                else:
+                    print(f"   ❌ Backtest endpoint failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Backtest with real MongoDB data test error: {e}")
+            return False
+
+    async def test_backtest_fallback_to_external_data(self) -> bool:
+        """Test that backtesting falls back to external data when MongoDB has no data"""
+        try:
+            print("   🔍 Testing Backtest Fallback to External Data")
+            
+            # Test with an asset that likely has no MongoDB data
+            backtest_request = {
+                "strategies": ["hybrid"],
+                "assets": ["GBPUSD"],  # Asset without MongoDB data
+                "timeframes": ["1m"],
+                "days": 30
+            }
+            
+            async with self.session.post(f"{BACKEND_URL}/backtest/comprehensive", json=backtest_request) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Backtest endpoint responded successfully")
+                    
+                    success = data.get('success')
+                    results = data.get('results', [])
+                    
+                    print(f"   📊 Success: {success}")
+                    print(f"   📊 Results count: {len(results)}")
+                    
+                    if success and results:
+                        # Check the first result for data source
+                        first_result = results[0]
+                        data_source = first_result.get('data_source')
+                        
+                        print(f"   📊 Data source: {data_source}")
+                        
+                        # Verify it does NOT use synthetic data (should be external provider)
+                        if data_source != "synthetic" and data_source in ["finnhub", "alphavantage", "external"]:
+                            print(f"   ✅ Backtest correctly falls back to external data provider: {data_source}")
+                            return True
+                        elif data_source == "mongodb_real":
+                            print(f"   ℹ️ MongoDB data was available for GBPUSD (unexpected but valid)")
+                            return True
+                        else:
+                            print(f"   ❌ Backtest using synthetic data instead of external provider. Data source: {data_source}")
+                            return False
+                    else:
+                        print(f"   ❌ Backtest failed or no results returned")
+                        return False
+                else:
+                    print(f"   ❌ Backtest endpoint failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Backtest fallback to external data test error: {e}")
+            return False
+
     # ========== HISTORICAL DATA COLLECTION AND ML TRAINING API TESTING ==========
     
     async def test_data_collector_start(self) -> bool:
