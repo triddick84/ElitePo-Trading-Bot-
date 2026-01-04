@@ -150,7 +150,7 @@ class HistoricalDataCollector:
         if timeframes:
             self.collecting_timeframes = timeframes
         
-        logger.info(f"🟢 Data collection STARTED")
+        logger.info("🟢 Data collection STARTED")
         logger.info(f"   Assets: {self.collecting_assets or 'ALL'}")
         logger.info(f"   Timeframes: {self.collecting_timeframes}")
     
