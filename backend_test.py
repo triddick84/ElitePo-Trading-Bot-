@@ -19347,7 +19347,53 @@ async def run_socket_io_handshake_tests():
     finally:
         await tester.cleanup()
 
+async def run_priority_tests():
+    """Run Priority Tests from Review Request"""
+    print("🚀 Testing GPT Signal Bot - Priority Tests from Review Request")
+    print("=" * 80)
+    
+    tester = BackendTester()
+    await tester.setup()
+    
+    # Define Priority tests from review request
+    tests = [
+        ("Default Configuration Endpoint", tester.test_default_config_endpoint),
+        ("Backtest with Real MongoDB Data", tester.test_backtest_with_real_mongodb_data),
+        ("Backtest Fallback to External Data", tester.test_backtest_fallback_to_external_data),
+    ]
+    
+    # Run all tests
+    for test_name, test_func in tests:
+        await tester.run_test(test_name, test_func)
+    
+    await tester.cleanup()
+    
+    # Print summary
+    print("\n" + "=" * 80)
+    print("🏁 Priority Testing Complete: {}/{} tests passed".format(
+        len(tests) - len(tester.failed_tests), len(tests)
+    ))
+    print("=" * 80)
+    
+    total_tests = len(tests)
+    passed_tests = total_tests - len(tester.failed_tests)
+    
+    if tester.failed_tests:
+        print(f"\n❌ Failed Tests:")
+        for test in tester.failed_tests:
+            print(f"   - {test}")
+        print(f"\n📊 Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+        return False
+    else:
+        print(f"\n🎉 All Priority tests passed!")
+        print(f"\n📊 Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+        return True
+
 async def main():
+    """Main test runner - run Priority tests from review request"""
+    return await run_priority_tests()
+
+async def main_custom_strategies():
     """Main test runner - run Custom Strategies API tests"""
     return await run_custom_strategies_tests()
 
