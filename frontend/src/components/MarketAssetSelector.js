@@ -186,6 +186,9 @@ const MarketAssetSelector = ({ onSelectionChange, hideExpirations = false, selec
     });
 
     if (filteredAssets.length === 0) return null;
+    
+    // Ensure selectedAssets is always an array for safe checking
+    const safeSelectedAssets = Array.isArray(selectedAssets) ? selectedAssets : [];
 
     return (
       <div key={category} className="border border-slate-700/50 rounded-lg overflow-hidden bg-slate-800/30">
@@ -232,7 +235,7 @@ const MarketAssetSelector = ({ onSelectionChange, hideExpirations = false, selec
                     {asset.market_types.includes('otc') && showOTC && (
                       <label className="flex items-center space-x-2 cursor-pointer">
                         <Checkbox
-                          checked={selectedAssets.includes(`${asset.symbol}_OTC`)}
+                          checked={safeSelectedAssets.includes(`${asset.symbol}_OTC`)}
                           onCheckedChange={() => handleAssetToggle(asset.symbol, 'otc')}
                         />
                         <span className="text-sm text-purple-400 font-medium">OTC</span>
@@ -241,7 +244,7 @@ const MarketAssetSelector = ({ onSelectionChange, hideExpirations = false, selec
                     {asset.market_types.includes('regular') && showRegular && (
                       <label className="flex items-center space-x-2 cursor-pointer">
                         <Checkbox
-                          checked={selectedAssets.includes(asset.symbol)}
+                          checked={safeSelectedAssets.includes(asset.symbol)}
                           onCheckedChange={() => handleAssetToggle(asset.symbol, 'regular')}
                         />
                         <span className="text-sm text-blue-400 font-medium">Regular</span>
