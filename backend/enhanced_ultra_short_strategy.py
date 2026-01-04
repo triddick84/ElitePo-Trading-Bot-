@@ -491,7 +491,7 @@ class EnhancedUltraShortStrategy:
         # === 6. BOLLINGER BAND TOUCH ===
         bb_upper = indicators['bb_upper'][-1]
         bb_lower = indicators['bb_lower'][-1]
-        bb_middle = indicators['bb_middle'][-1]
+        # bb_middle available but not used in current logic
         
         if not np.isnan(bb_lower) and not np.isnan(bb_upper):
             bb_range = bb_upper - bb_lower
