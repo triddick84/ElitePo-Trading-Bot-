@@ -784,15 +784,38 @@ async def get_config():
 
 @api_router.put("/config")
 async def update_config(config: BotStartRequest):
-    """Update bot configuration"""
+    """Update bot configuration - merges with existing config to preserve unspecified fields"""
     try:
+        # First, fetch existing config from database to preserve fields not being updated
+        existing_config = await db.trading_configurations.find_one({"user_id": "default_user"})
+        
+        # Build merged config - existing values as base, new values override
+        merged_selected_expirations = config.selected_expirations
+        merged_selected_assets = config.selected_assets
+        
+        # If the request has default values that look like they weren't intentionally set,
+        # prefer the existing database values
+        if existing_config:
+            # Only use existing expiration if new one appears to be default and existing is different
+            if (config.selected_expirations == ['1m', '2m'] or config.selected_expirations == ['1m']) and \
+               existing_config.get('selected_expirations') and \
+               existing_config.get('selected_expirations') != config.selected_expirations:
+                # Check if the update is ONLY for trading_mode (account switch)
+                # In this case, preserve the existing expirations
+                logger.info(f"🔄 Preserving existing expirations: {existing_config.get('selected_expirations')}")
+                merged_selected_expirations = existing_config.get('selected_expirations')
+            
+            # Similarly for assets
+            if not config.selected_assets and existing_config.get('selected_assets'):
+                merged_selected_assets = existing_config.get('selected_assets')
+        
         # Update main trading configuration
         new_config = TradingConfiguration(
             trading_mode=config.trading_mode,
             active_strategies=config.active_strategies,
             target_assets=config.target_assets,
-            selected_assets=config.selected_assets,
-            selected_expirations=config.selected_expirations,
+            selected_assets=merged_selected_assets,
+            selected_expirations=merged_selected_expirations,
             risk_tolerance=config.risk_tolerance,
             max_stake_per_trade=config.max_stake_per_trade,
             max_daily_trades=config.max_daily_trades,
@@ -812,8 +835,8 @@ async def update_config(config: BotStartRequest):
             "selected_strategy": config.selected_strategy,
             "chart_config": config.chart_config or {},
             "flexible_config": config.flexible_config or {},
-            "selected_assets": config.selected_assets,
-            "selected_expirations": config.selected_expirations,
+            "selected_assets": merged_selected_assets,
+            "selected_expirations": merged_selected_expirations,
             "min_probability_threshold": config.min_probability_threshold,
             "trading_mode": config.trading_mode.value if hasattr(config.trading_mode, 'value') else config.trading_mode,
             "invert_signals": config.invert_signals,
@@ -829,14 +852,15 @@ async def update_config(config: BotStartRequest):
             upsert=True
         )
         
-        logger.info(f"✅ Configuration saved: timeframe={config.selected_timeframe}, strategy={config.selected_strategy}")
+        logger.info(f"✅ Configuration saved: timeframe={config.selected_timeframe}, expirations={merged_selected_expirations}")
         
         return {
             "status": "success", 
             "message": "Configuration updated and saved",
             "saved_config": {
                 "timeframe": config.selected_timeframe,
-                "strategy": config.selected_strategy
+                "strategy": config.selected_strategy,
+                "selected_expirations": merged_selected_expirations
             }
         }
         
