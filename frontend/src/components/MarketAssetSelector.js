@@ -311,7 +311,7 @@ const MarketAssetSelector = ({ onSelectionChange, hideExpirations = false, selec
           <div>
             <h3 className="text-xl font-semibold text-white">📊 Market Assets</h3>
             <p className="text-slate-400 text-sm mt-1">
-              Select assets for signal generation • {selectedAssets.length} assets selected
+              Select assets for signal generation • {Array.isArray(selectedAssets) ? selectedAssets.length : 0} assets selected
             </p>
           </div>
           <div className="flex items-center space-x-3">
