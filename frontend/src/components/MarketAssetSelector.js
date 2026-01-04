@@ -151,7 +151,8 @@ const MarketAssetSelector = ({ onSelectionChange, hideExpirations = false, selec
 
   const selectAll = (category) => {
     const categoryAssets = assets[category] || [];
-    const newAssets = [...selectedAssets];
+    const currentAssets = Array.isArray(selectedAssets) ? selectedAssets : [];
+    const newAssets = [...currentAssets];
     
     categoryAssets.forEach(asset => {
       if (showOTC && asset.market_types.includes('otc')) {
