@@ -778,8 +778,9 @@ class HistoricalDataFetcher:
         """
         Fetch historical data with multi-provider fallback system.
         
-        Fallback order:
-        1. Finnhub (Primary - 60 calls/min)
+        Fallback order (UPDATED):
+        0. MongoDB (Priority - REAL collected data from Pocket Option)
+        1. Finnhub (Primary external - 60 calls/min)
         2. Alpha Vantage (Secondary - 5 calls/min)
         3. CryptoCompare (For crypto only)
         4. Synthetic Data (Last resort)
@@ -800,36 +801,49 @@ class HistoricalDataFetcher:
         is_crypto = asset_type == AssetType.CRYPTO or symbol.upper() in CRYPTO_SYMBOLS or 'USDT' in symbol.upper()
         is_stock = asset_type == AssetType.STOCK or symbol.upper() in STOCK_SYMBOLS
         
-        if is_crypto:
-            # Try CryptoCompare first for crypto
-            logger.info(f"🔄 Fetching crypto data for {symbol}...")
-            df = await self.fetch_crypto_data(symbol, days, interval)
-            if df is not None and len(df) > 0:
-                data_source = "cryptocompare"
+        # ============================================================
+        # PRIORITY 0: Try MongoDB first (REAL collected data)
+        # This is the most accurate data source - collected from Pocket Option
+        # ============================================================
+        logger.info(f"🔄 Checking MongoDB for REAL collected data: {symbol} ({interval})...")
+        df = await self.fetch_mongodb_data(symbol, days, interval)
+        if df is not None and len(df) >= 100:
+            data_source = "mongodb_real"
+            logger.info(f"🎯 Using REAL MongoDB data for {symbol}: {len(df)} candles")
         else:
-            # For forex and stocks, use multi-provider fallback
+            # Fall back to external providers
+            logger.info(f"📡 No sufficient MongoDB data, trying external providers...")
             
-            # 1. Try Finnhub first (higher rate limit)
-            logger.info(f"🔄 Trying Finnhub for {symbol}...")
-            if is_stock:
-                df = await self.fetch_finnhub_stock_data(symbol, days, interval)
+            if is_crypto:
+                # Try CryptoCompare first for crypto
+                logger.info(f"🔄 Fetching crypto data for {symbol}...")
+                df = await self.fetch_crypto_data(symbol, days, interval)
+                if df is not None and len(df) > 0:
+                    data_source = "cryptocompare"
             else:
-                df = await self.fetch_finnhub_forex_data(symbol, days, interval)
-            
-            if df is not None and len(df) > 0:
-                data_source = "finnhub"
-            else:
-                # 2. Try Alpha Vantage as fallback
-                logger.info(f"🔄 Finnhub failed, trying Alpha Vantage for {symbol}...")
+                # For forex and stocks, use multi-provider fallback
+                
+                # 1. Try Finnhub first (higher rate limit)
+                logger.info(f"🔄 Trying Finnhub for {symbol}...")
                 if is_stock:
-                    df = await self.fetch_alphavantage_stock_data(symbol, days, interval)
+                    df = await self.fetch_finnhub_stock_data(symbol, days, interval)
                 else:
-                    df = await self.fetch_alphavantage_forex_data(symbol, days, interval)
+                    df = await self.fetch_finnhub_forex_data(symbol, days, interval)
                 
                 if df is not None and len(df) > 0:
-                    data_source = "alphavantage"
+                    data_source = "finnhub"
+                else:
+                    # 2. Try Alpha Vantage as fallback
+                    logger.info(f"🔄 Finnhub failed, trying Alpha Vantage for {symbol}...")
+                    if is_stock:
+                        df = await self.fetch_alphavantage_stock_data(symbol, days, interval)
+                    else:
+                        df = await self.fetch_alphavantage_forex_data(symbol, days, interval)
+                    
+                    if df is not None and len(df) > 0:
+                        data_source = "alphavantage"
         
-        # 3. Last resort: Generate synthetic data
+        # Last resort: Generate synthetic data
         if df is None or len(df) == 0:
             logger.warning(f"⚠️ All data providers failed for {symbol}, using synthetic data")
             df = self._generate_synthetic_data(symbol, days, interval)
