@@ -932,7 +932,7 @@ class StrategyEngine:
     def _stochastic_rsi_strategy(self, df: pd.DataFrame) -> List[Dict]:
         """Stochastic RSI Strategy"""
         signals = []
-        k, d = self._calculate_stochastic(df)
+        k, d = self._calculate_stochastic(df['high'], df['low'], df['close'])
         
         for i in range(1, len(df)):
             if pd.isna(k.iloc[i]) or pd.isna(d.iloc[i]):
