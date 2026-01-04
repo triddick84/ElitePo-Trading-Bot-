@@ -27,15 +27,19 @@ import { toast } from 'sonner';
 import { 
   Play, History, TrendingUp, TrendingDown, BarChart3, Target, 
   RefreshCw, Download, Trash2, Clock, DollarSign, Award,
-  Activity, AlertTriangle, CheckCircle, XCircle, Zap, Filter
+  Activity, AlertTriangle, CheckCircle, XCircle, Zap, Filter,
+  Star, User
 } from 'lucide-react';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
-// Timeframes available
+// Timeframes available - including short timeframes
 const TIMEFRAMES = [
-  { id: '1m', name: '1 Minute', icon: '⚡' },
+  { id: '5s', name: '5 Seconds', icon: '⚡' },
+  { id: '15s', name: '15 Seconds', icon: '🔥' },
+  { id: '30s', name: '30 Seconds', icon: '⏱️' },
+  { id: '1m', name: '1 Minute', icon: '⏱️' },
   { id: '5m', name: '5 Minutes', icon: '🔥' },
   { id: '15m', name: '15 Minutes', icon: '⏱️' },
   { id: '30m', name: '30 Minutes', icon: '🕐' },
