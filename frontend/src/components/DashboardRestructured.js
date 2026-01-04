@@ -45,15 +45,15 @@ const DashboardRestructured = ({
   notificationSettings, 
   setNotificationSettings 
 }) => {
-  // Configuration State
+  // Configuration State - DEFAULT STARTUP VALUES
   const [config, setConfig] = useState({
-    selected_assets: [],
-    selected_expirations: ['1m', '2m'],
+    selected_assets: [],                    // Nothing selected - user must select
+    selected_expirations: ['5s'],           // 5 seconds selected by default
     min_probability_threshold: 85,
     selected_strategy: '',
-    selected_timeframe: '1m',
-    trading_mode: 'demo', // 'demo' or 'real'
-    invert_signals: false, // Independent of account type
+    selected_timeframe: '5s',               // 5 seconds selected by default
+    trading_mode: 'demo',                   // Demo account selected
+    invert_signals: false,                  // Independent of account type
     popup_notifications: true,
     sound_alerts: true
   });
@@ -82,7 +82,7 @@ const DashboardRestructured = ({
   const [scanIntervalId, setScanIntervalId] = useState(null);
   const [scanCount, setScanCount] = useState(0);
   
-  // Candle Sync State
+  // Candle Sync State - ENABLED BY DEFAULT
   const [candleSyncEnabled, setCandleSyncEnabled] = useState(true);  // Default to enabled
   const [candleSyncStatus, setCandleSyncStatus] = useState({ 
     enabled: true,  // Default to enabled
