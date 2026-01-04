@@ -2922,8 +2922,8 @@ async def ml_predict_signal(request: dict):
         asset = request.get("asset", "EURUSD")
         timeframe = request.get("timeframe", "1h")
         
-        # Fetch recent price data
-        backtest_service = BacktestingService()
+        # Fetch recent price data - pass db for real MongoDB data access
+        backtest_service = BacktestingService(db=db)
         price_df = await backtest_service.data_fetcher.fetch_historical_data(
             asset,
             backtest_service._determine_asset_type(asset),
