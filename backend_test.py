@@ -1239,10 +1239,10 @@ class BackendTester:
                 if response.status == 200:
                     data = await response.json()
                     print(f"   ✅ Data collection stopped successfully")
-                    print(f"   📊 Status: {data.get('status')}")
+                    print(f"   📊 Success: {data.get('success')}")
                     print(f"   📊 Message: {data.get('message')}")
                     
-                    return data.get('status') == 'success'
+                    return data.get('success') == True
                 else:
                     print(f"   ❌ Data collection stop failed: {response.status}")
                     error_text = await response.text()
