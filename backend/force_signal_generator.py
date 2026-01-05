@@ -730,7 +730,6 @@ class ForceSignalGenerator:
                             logger.info(f"✅ Enhanced Breakout 5s: {symbol} → {result['direction']} ({result['confidence']:.1f}%)")
                             logger.info(f"   Breakout Type: {result.get('breakout_type')}, Strength: {result.get('strength')}")
                             logger.info(f"   S/R Levels - Support: {result.get('support_levels', [])[:2]}, Resistance: {result.get('resistance_levels', [])[:2]}")
-                            await asyncio.sleep(10)
                             result['strategy'] = 'enhanced_breakout_5s'
                             result['timeframe'] = timeframe
                             result['chart_type'] = chart_type
