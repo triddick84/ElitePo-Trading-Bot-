@@ -613,8 +613,6 @@ class ForceSignalGenerator:
                         
                         if result:
                             logger.info(f"✅ Keltner+Fractal 5s: {symbol} → {result['direction']} ({result['confidence']:.1f}%)")
-                            logger.info(f"⏳ Applying 10-second latency for 5s timeframe signal stability...")
-                            await asyncio.sleep(10)  # 10-second delay for 5s signals
                             result['strategy'] = 'keltner_fractal_5s'
                             result['timeframe'] = timeframe
                             result['chart_type'] = chart_type
@@ -642,8 +640,6 @@ class ForceSignalGenerator:
                         
                         if result:
                             logger.info(f"✅ 3-EMA Crossover 5s: {symbol} → {result['direction']} ({result['confidence']:.1f}%)")
-                            logger.info(f"⏳ Applying 10-second latency for 5s timeframe signal stability...")
-                            await asyncio.sleep(10)  # 10-second delay for 5s signals
                             result['strategy'] = '3ema_crossover_5s'
                             result['timeframe'] = timeframe
                             result['chart_type'] = chart_type
@@ -671,8 +667,6 @@ class ForceSignalGenerator:
                         
                         if result:
                             logger.info(f"✅ EMA20+RSI14 5s: {symbol} → {result['direction']} ({result['confidence']:.1f}%)")
-                            logger.info(f"⏳ Applying 10-second latency for 5s timeframe signal stability...")
-                            await asyncio.sleep(10)  # 10-second delay for 5s signals
                             result['strategy'] = 'ema20_rsi14_5s'
                             result['timeframe'] = timeframe
                             result['chart_type'] = chart_type
@@ -701,8 +695,6 @@ class ForceSignalGenerator:
                         
                         if result:
                             logger.info(f"✅ Stochastic Divergence 5s: {symbol} → {result['direction']} ({result['confidence']:.1f}%)")
-                            logger.info(f"⏳ Applying 10-second latency for 5s timeframe signal stability...")
-                            await asyncio.sleep(10)  # 10-second delay for 5s signals
                             result['strategy'] = 'stochastic_divergence_5s'
                             result['timeframe'] = timeframe
                             result['chart_type'] = chart_type
@@ -738,7 +730,6 @@ class ForceSignalGenerator:
                             logger.info(f"✅ Enhanced Breakout 5s: {symbol} → {result['direction']} ({result['confidence']:.1f}%)")
                             logger.info(f"   Breakout Type: {result.get('breakout_type')}, Strength: {result.get('strength')}")
                             logger.info(f"   S/R Levels - Support: {result.get('support_levels', [])[:2]}, Resistance: {result.get('resistance_levels', [])[:2]}")
-                            logger.info(f"⏳ Applying 10-second latency for 5s timeframe signal stability...")
                             await asyncio.sleep(10)
                             result['strategy'] = 'enhanced_breakout_5s'
                             result['timeframe'] = timeframe
@@ -784,8 +775,6 @@ class ForceSignalGenerator:
                     if result_enhanced and result_enhanced.get('confidence', 0) >= 80:
                         logger.info(f"✅ ENHANCED 5S: {symbol} → {result_enhanced['direction']} ({result_enhanced['confidence']:.1f}%) [{result_enhanced.get('confirmation_count', 0)}/8 confirmations]")
                         logger.info(f"   Confirmations: {result_enhanced.get('confirmations', [])[:3]}")
-                        logger.info(f"⏳ Applying 10-second latency for 5s timeframe signal stability...")
-                        await asyncio.sleep(10)  # 10-second delay for 5s signals
                         
                         return {
                             'direction': result_enhanced['direction'],
@@ -822,8 +811,6 @@ class ForceSignalGenerator:
                 if result_proven and result_proven.get('confidence', 0) >= 80:
                     logger.info(f"✅ PROVEN 5S: {symbol} → {result_proven['direction']} ({result_proven['confidence']:.1f}%) [{result_proven.get('confirmation_count', 0)} confirmations]")
                     logger.info(f"   S/R: {result_proven.get('technical_analysis', {}).get('support_resistance', {})}")
-                    logger.info(f"⏳ Applying 10-second latency for 5s timeframe signal stability...")
-                    await asyncio.sleep(10)  # 10-second delay for 5s signals
                     return {
                         'direction': result_proven['direction'],
                         'confidence': result_proven['confidence'],
@@ -852,8 +839,6 @@ class ForceSignalGenerator:
                 
                 if result_ultra_precision:
                     logger.info(f"✅ Ultra-Precision 5S: {symbol} → {result_ultra_precision['direction']} ({result_ultra_precision['confidence']:.1f}%) [{result_ultra_precision['technical_analysis']['confirmations']}/5 confirmations]")
-                    logger.info(f"⏳ Applying 10-second latency for 5s timeframe signal stability...")
-                    await asyncio.sleep(10)  # 10-second delay for 5s signals
                     return {
                         'direction': result_ultra_precision['direction'],
                         'confidence': result_ultra_precision['confidence'],
@@ -897,7 +882,6 @@ class ForceSignalGenerator:
                         if result_breakout and result_breakout.get('confidence', 0) >= 75:
                             logger.info(f"✅ Enhanced Breakout 5s: {symbol} → {result_breakout['direction']} ({result_breakout['confidence']:.1f}%)")
                             logger.info(f"   Breakout: {result_breakout.get('breakout_type')}, Strength: {result_breakout.get('strength')}")
-                            logger.info(f"⏳ Applying 10-second latency for 5s timeframe signal stability...")
                             await asyncio.sleep(10)
                             return {
                                 'direction': result_breakout['direction'],
@@ -931,8 +915,6 @@ class ForceSignalGenerator:
                 
                 if result_ultra_v2:
                     logger.info(f"✅ 5s Ultra V2 strategy: {symbol} → {result_ultra_v2.get('signal', 'N/A')} ({result_ultra_v2.get('confidence', 0):.1f}%)")
-                    logger.info(f"⏳ Applying 10-second latency for 5s timeframe signal stability...")
-                    await asyncio.sleep(10)  # 10-second delay for 5s signals
                     return {
                         'direction': result_ultra_v2['signal'],
                         'confidence': result_ultra_v2['confidence'],
