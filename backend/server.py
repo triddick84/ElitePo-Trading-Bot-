@@ -212,9 +212,13 @@ class BacktestRequest(BaseModel):
 
 # Bot Control Endpoints
 @api_router.post("/bot/start")
-async def start_bot(config: BotStartRequest):
-    """Start the trading bot with specified configuration"""
+async def start_bot(config: Optional[BotStartRequest] = None):
+    """Start the trading bot with specified configuration (or defaults)"""
     try:
+        # Use provided config or create default
+        if config is None:
+            config = BotStartRequest()
+        
         trading_config = TradingConfiguration(
             trading_mode=config.trading_mode,
             active_strategies=config.active_strategies,
