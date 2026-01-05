@@ -576,10 +576,7 @@ class ForceSignalGenerator:
                         if result and result.get('direction') != 'NEUTRAL':
                             logger.info(f"✅ Strategy Registry: {selected_strategy_id} → {result['direction']} ({result['confidence']:.1f}%)")
                             
-                            # Apply 10s latency for 5s timeframe
-                            if timeframe in ['5s', '5sec', '5 sec']:
-                                logger.info(f"⏳ Applying 10-second latency for 5s timeframe signal stability...")
-                                await asyncio.sleep(10)
+                            # No extra latency for 5s timeframe - removed per user request
                             
                             result['timeframe'] = timeframe
                             result['chart_type'] = chart_type
