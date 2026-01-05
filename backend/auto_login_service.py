@@ -422,14 +422,22 @@ class PlaywrightLoginHandler:
                     )
                     
         except Exception as e:
+            error_msg = str(e)
             logger.error(f"❌ Login error: {e}")
             import traceback
             traceback.print_exc()
+            
+            # Provide more helpful error messages
+            if "Timeout" in error_msg and "pocketoption" in error_msg.lower():
+                error_msg = "Pocket Option website timed out. This usually means cloud IPs are blocked. Please use manual SSID extraction or the Desktop Trading Client instead."
+            elif "executable doesn't exist" in error_msg:
+                error_msg = "Browser not installed. Please wait while we install it and try again."
+            
             return LoginResult(
                 success=False,
                 status=LoginStatus.NETWORK_ERROR,
                 method_used=LoginMethod.CAPTCHA_SOLVER,
-                error=str(e),
+                error=error_msg,
                 captcha_cost=captcha_cost
             )
         finally:
