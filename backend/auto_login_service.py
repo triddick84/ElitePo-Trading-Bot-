@@ -247,6 +247,43 @@ class PlaywrightLoginHandler:
                             captcha_cost=captcha_cost
                         )
                 
+                # Check for Cloudflare Turnstile if no reCAPTCHA
+                if not captcha_solved and self.solver:
+                    turnstile_key = await self._find_turnstile_site_key(page)
+                    if turnstile_key:
+                        logger.info(f"🧩 Cloudflare Turnstile detected! Site key: {turnstile_key[:20]}...")
+                        turnstile_token = await self._solve_turnstile(page, turnstile_key, self.POCKET_OPTION_LOGIN_URL)
+                        
+                        if turnstile_token:
+                            captcha_cost = 0.00299
+                            
+                            # Inject Turnstile response
+                            await page.evaluate(f'''() => {{
+                                // Set cf-turnstile-response
+                                const inputs = document.querySelectorAll('input[name="cf-turnstile-response"], [name="cf-turnstile-response"]');
+                                inputs.forEach(input => {{
+                                    input.value = "{turnstile_token}";
+                                }});
+                                
+                                // Also try hidden fields
+                                const hidden = document.querySelector('[name="turnstile-response"]');
+                                if (hidden) hidden.value = "{turnstile_token}";
+                                
+                                // Try callback if available
+                                if (window.turnstile && window.turnstile.getResponse) {{
+                                    try {{
+                                        // Force set the response
+                                        const widget = document.querySelector('.cf-turnstile iframe');
+                                        if (widget && widget.contentWindow) {{
+                                            widget.contentWindow.postMessage({{ token: "{turnstile_token}" }}, '*');
+                                        }}
+                                    }} catch(e) {{}}
+                                }}
+                            }}''')
+                            
+                            captcha_solved = True
+                            await asyncio.sleep(1)
+                
                 # Click login button
                 logger.info("🖱️ Clicking login button...")
                 login_button = await page.query_selector(
