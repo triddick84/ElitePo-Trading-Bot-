@@ -110,6 +110,9 @@ class PlaywrightLoginHandler:
             # Set browser path
             os.environ['PLAYWRIGHT_BROWSERS_PATH'] = '/pw-browsers'
             
+            # Ensure browser is installed
+            await self._ensure_browser_installed()
+            
             # Try to import stealth (different versions have different APIs)
             stealth_instance = None
             try:
