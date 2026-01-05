@@ -97,6 +97,39 @@ class PlaywrightLoginHandler:
         ]
         return random.choice(user_agents)
     
+    async def _ensure_browser_installed(self):
+        """Ensure Chromium browser is installed for Playwright"""
+        import subprocess
+        
+        # Check if browser exists
+        browser_paths = [
+            '/pw-browsers/chromium-1200/chrome-linux/chrome',
+            '/pw-browsers/chromium-1200/chrome-linux-arm64/chrome',
+        ]
+        
+        browser_exists = any(os.path.exists(p) for p in browser_paths)
+        
+        if not browser_exists:
+            logger.info("🔧 Installing Chromium browser...")
+            try:
+                env = os.environ.copy()
+                env['PLAYWRIGHT_BROWSERS_PATH'] = '/pw-browsers'
+                
+                result = subprocess.run(
+                    ['playwright', 'install', 'chromium'],
+                    capture_output=True,
+                    text=True,
+                    env=env,
+                    timeout=300
+                )
+                
+                if result.returncode == 0:
+                    logger.info("✅ Chromium installed successfully")
+                else:
+                    logger.error(f"❌ Chromium install failed: {result.stderr}")
+            except Exception as e:
+                logger.error(f"❌ Failed to install Chromium: {e}")
+    
     async def login(self, email: str, password: str) -> LoginResult:
         """
         Login using Playwright + 2Captcha
