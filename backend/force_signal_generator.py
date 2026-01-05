@@ -881,7 +881,6 @@ class ForceSignalGenerator:
                         if result_breakout and result_breakout.get('confidence', 0) >= 75:
                             logger.info(f"✅ Enhanced Breakout 5s: {symbol} → {result_breakout['direction']} ({result_breakout['confidence']:.1f}%)")
                             logger.info(f"   Breakout: {result_breakout.get('breakout_type')}, Strength: {result_breakout.get('strength')}")
-                            await asyncio.sleep(10)
                             return {
                                 'direction': result_breakout['direction'],
                                 'confidence': result_breakout['confidence'],
