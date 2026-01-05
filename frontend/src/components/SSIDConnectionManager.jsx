@@ -240,7 +240,7 @@ const SSIDConnectionManager = () => {
                 variant={autoTradingEnabled ? 'destructive' : 'default'}
                 size="sm"
                 onClick={toggleAutoTrading}
-                disabled={!connectionStatus.connected}
+                disabled={false}
                 className="mt-1"
               >
                 {autoTradingEnabled ? <Pause className="w-4 h-4 mr-1" /> : <Play className="w-4 h-4 mr-1" />}
