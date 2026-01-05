@@ -121,17 +121,44 @@ class PlaywrightLoginHandler:
             logger.info("🔐 Starting Playwright login with 2Captcha...")
             
             async with async_playwright() as p:
-                # Launch browser with explicit executable path
-                browser = await p.chromium.launch(
-                    headless=True,
-                    executable_path='/pw-browsers/chromium-1200/chrome-linux/chrome',
-                    args=[
+                # Find chromium executable dynamically
+                chromium_path = None
+                possible_paths = [
+                    '/pw-browsers/chromium-1200/chrome-linux/chrome',
+                    '/pw-browsers/chromium-1200/chrome-linux-arm64/chrome',
+                    '/usr/bin/chromium',
+                    '/usr/bin/chromium-browser',
+                    '/usr/bin/google-chrome',
+                ]
+                
+                for path in possible_paths:
+                    if os.path.exists(path):
+                        chromium_path = path
+                        logger.info(f"✅ Found Chromium at: {path}")
+                        break
+                
+                # Launch browser - let Playwright find it if no path found
+                launch_args = {
+                    'headless': True,
+                    'args': [
                         '--no-sandbox',
                         '--disable-dev-shm-usage',
                         '--disable-blink-features=AutomationControlled',
                         '--disable-gpu'
                     ]
-                )
+                }
+                
+                if chromium_path:
+                    launch_args['executable_path'] = chromium_path
+                
+                try:
+                    browser = await p.chromium.launch(**launch_args)
+                except Exception as launch_error:
+                    logger.error(f"❌ Browser launch failed: {launch_error}")
+                    # Try without executable_path as fallback
+                    if 'executable_path' in launch_args:
+                        del launch_args['executable_path']
+                        browser = await p.chromium.launch(**launch_args)
                 
                 # Create context with stealth settings
                 context = await browser.new_context(
