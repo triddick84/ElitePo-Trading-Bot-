@@ -370,6 +370,62 @@ class PlaywrightLoginHandler:
         except Exception as e:
             logger.warning(f"Error finding site key: {e}")
             return None
+    
+    async def _find_turnstile_site_key(self, page) -> Optional[str]:
+        """Find Cloudflare Turnstile site key on page"""
+        try:
+            site_key = await page.evaluate('''() => {
+                // From cf-turnstile element
+                const turnstile = document.querySelector('.cf-turnstile');
+                if (turnstile) return turnstile.getAttribute('data-sitekey');
+                
+                // From turnstile widget
+                const widget = document.querySelector('[data-turnstile-sitekey]');
+                if (widget) return widget.getAttribute('data-turnstile-sitekey');
+                
+                // From iframe src
+                const iframe = document.querySelector('iframe[src*="turnstile"], iframe[src*="challenges.cloudflare.com"]');
+                if (iframe) {
+                    const src = iframe.src;
+                    const match = src.match(/[?&]sitekey=([^&]+)/);
+                    if (match) return match[1];
+                }
+                
+                // From page source
+                const html = document.documentElement.outerHTML;
+                const match1 = html.match(/turnstile.*?sitekey["\\s:]+["']([^"']+)["']/i);
+                if (match1) return match1[1];
+                
+                return null;
+            }''')
+            return site_key
+        except Exception as e:
+            logger.warning(f"Error finding Turnstile site key: {e}")
+            return None
+    
+    async def _solve_turnstile(self, page, site_key: str, url: str) -> Optional[str]:
+        """Solve Cloudflare Turnstile captcha using 2Captcha"""
+        if not self.solver:
+            return None
+        
+        try:
+            logger.info(f"🔄 Solving Cloudflare Turnstile via 2Captcha...")
+            
+            # Use 2Captcha's turnstile method
+            result = self.solver.turnstile(
+                sitekey=site_key,
+                url=url
+            )
+            
+            token = result.get('code')
+            if token:
+                logger.info(f"✅ Turnstile solved!")
+                return token
+            return None
+            
+        except Exception as e:
+            logger.error(f"❌ Turnstile solving failed: {e}")
+            return None
 
 
 class AutoLoginService:
