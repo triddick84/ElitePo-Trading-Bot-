@@ -19742,6 +19742,61 @@ async def run_priority_tests():
         print(f"\n📊 Success Rate: {(passed_tests/total_tests)*100:.1f}%")
         return True
 
+async def run_auth_and_telegram_tests():
+    """Run Authentication and Telegram Bot API tests from review request"""
+    print("🚀 Testing Authentication and Telegram Bot Features")
+    print("=" * 80)
+    print("Testing new Authentication and Telegram Bot features as requested")
+    print("=" * 80)
+    
+    tester = BackendTester()
+    await tester.setup()
+    
+    # Define Authentication and Telegram Bot tests
+    tests = [
+        ("Health Check", tester.test_health_check),
+        
+        # Authentication Tests
+        ("User Registration", tester.test_auth_register_new_user),
+        ("Admin Login", tester.test_auth_login_admin),
+        ("Get User Info with Token", tester.test_auth_me_with_token),
+        ("JWT Token Validation", tester.test_auth_token_validation),
+        
+        # Telegram Bot Tests
+        ("Telegram Bot Status", tester.test_telegram_status),
+        ("Send Telegram Message", tester.test_telegram_send_message),
+        ("Update Telegram Settings", tester.test_telegram_settings_update),
+        ("Telegram Trading Stats", tester.test_telegram_stats),
+        ("Send Trading Signal to Telegram", tester.test_telegram_send_trading_signal),
+    ]
+    
+    # Run all tests
+    for test_name, test_func in tests:
+        await tester.run_test(test_name, test_func)
+    
+    await tester.cleanup()
+    
+    # Print summary
+    print("\n" + "=" * 80)
+    print("🏁 Authentication and Telegram Bot Testing Complete: {}/{} tests passed".format(
+        len(tests) - len(tester.failed_tests), len(tests)
+    ))
+    print("=" * 80)
+    
+    total_tests = len(tests)
+    passed_tests = total_tests - len(tester.failed_tests)
+    
+    if tester.failed_tests:
+        print(f"\n❌ Failed Tests:")
+        for test in tester.failed_tests:
+            print(f"   - {test}")
+        print(f"\n📊 Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+        return False
+    else:
+        print(f"\n🎉 All Authentication and Telegram Bot tests passed!")
+        print(f"\n📊 Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+        return True
+
 async def main():
     """Main test runner - run Priority tests from review request"""
     return await run_priority_tests()
