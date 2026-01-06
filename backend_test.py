@@ -1673,6 +1673,274 @@ class BackendTester:
             print(f"   ⚠️ Cleanup error (non-critical): {e}")
             return True
 
+    # ========== NEW TESTS FOR REVIEW REQUEST ==========
+    
+    async def test_custom_strategies_with_reversal(self) -> bool:
+        """Test Feature 1: Strategy Builder Reversal Button - Create and save strategy with reversal conditions"""
+        try:
+            print("   🔍 Testing Custom Strategy with Reversal Conditions")
+            
+            # Create test strategy with reversal flag
+            strategy_data = {
+                "name": "RSI Reversal Test Strategy",
+                "description": "Test strategy with RSI reversal conditions",
+                "timeframes": ["1m"],
+                "assets": ["EURUSD"],
+                "markets": ["regular"],
+                "call_conditions": [
+                    {
+                        "conditions": [
+                            {
+                                "indicator": "RSI",
+                                "parameters": {"period": 14},
+                                "output": "value",
+                                "operator": "crosses_above",
+                                "compare_to": "value",
+                                "compare_value": 30,
+                                "reversal": True  # Test reversal flag
+                            }
+                        ],
+                        "logical_operator": "AND"
+                    }
+                ],
+                "put_conditions": [
+                    {
+                        "conditions": [
+                            {
+                                "indicator": "RSI",
+                                "parameters": {"period": 14},
+                                "output": "value",
+                                "operator": "crosses_below",
+                                "compare_to": "value",
+                                "compare_value": 70,
+                                "reversal": False  # Test reversal flag
+                            }
+                        ],
+                        "logical_operator": "AND"
+                    }
+                ],
+                "min_confidence": 75.0,
+                "is_active": True
+            }
+            
+            # Step 1: Create strategy with reversal conditions
+            async with self.session.post(f"{BACKEND_URL}/custom-strategies", json=strategy_data) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Strategy with reversal created successfully")
+                    
+                    strategy = data.get('strategy', {})
+                    strategy_id = strategy.get('id')
+                    self.test_strategy_id = strategy_id  # Store for cleanup
+                    
+                    print(f"   📊 Strategy ID: {strategy_id}")
+                    
+                    # Step 2: Verify the saved strategy has the reversal flag
+                    async with self.session.get(f"{BACKEND_URL}/custom-strategies/{strategy_id}") as get_response:
+                        if get_response.status == 200:
+                            get_data = await get_response.json()
+                            saved_strategy = get_data.get('strategy', {})
+                            
+                            # Check call conditions for reversal flag
+                            call_conditions = saved_strategy.get('call_conditions', [])
+                            if call_conditions:
+                                first_condition = call_conditions[0].get('conditions', [])[0]
+                                reversal_flag = first_condition.get('reversal')
+                                
+                                print(f"   📊 Call condition reversal flag: {reversal_flag}")
+                                
+                                if reversal_flag is True:
+                                    print(f"   ✅ Reversal flag correctly saved and retrieved")
+                                    return True
+                                else:
+                                    print(f"   ❌ Reversal flag not correctly saved. Expected: True, Got: {reversal_flag}")
+                                    return False
+                            else:
+                                print(f"   ❌ No call conditions found in saved strategy")
+                                return False
+                        else:
+                            print(f"   ❌ Failed to retrieve saved strategy: {get_response.status}")
+                            return False
+                else:
+                    print(f"   ❌ Failed to create strategy with reversal: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+                    
+        except Exception as e:
+            print(f"   ❌ Custom strategies with reversal test error: {e}")
+            return False
+    
+    async def test_ssid_status_endpoint(self) -> bool:
+        """Test Feature 2: SSID Auto-Refresh - Get SSID status"""
+        try:
+            print("   🔍 Testing SSID Status Endpoint")
+            
+            async with self.session.get(f"{BACKEND_URL}/ssid/status") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ SSID status retrieved successfully")
+                    print(f"   📊 Success: {data.get('success')}")
+                    
+                    ssid_service = data.get('ssid_service', {})
+                    is_running = ssid_service.get('is_running', False)
+                    auto_refresh_available = data.get('auto_refresh_available', False)
+                    
+                    print(f"   📊 SSID service running: {is_running}")
+                    print(f"   📊 Auto-refresh available: {auto_refresh_available}")
+                    
+                    # Verify response structure
+                    required_fields = ['success', 'ssid_service']
+                    missing_fields = [f for f in required_fields if f not in data]
+                    
+                    if not missing_fields:
+                        return True
+                    else:
+                        print(f"   ❌ Missing required fields: {missing_fields}")
+                        return False
+                else:
+                    print(f"   ❌ SSID status failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ SSID status test error: {e}")
+            return False
+    
+    async def test_telegram_bot_status_endpoint(self) -> bool:
+        """Test Feature 2: Telegram Bot Integration - Get Telegram bot status"""
+        try:
+            print("   🔍 Testing Telegram Bot Status Endpoint")
+            
+            async with self.session.get(f"{BACKEND_URL}/telegram-bot/status") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Telegram bot status retrieved successfully")
+                    print(f"   📊 Success: {data.get('success')}")
+                    
+                    status = data.get('status', {})
+                    is_running = status.get('is_running', False)
+                    auto_trading_enabled = status.get('auto_trading_enabled', False)
+                    demo_mode = status.get('demo_mode', True)
+                    bot_token_configured = status.get('bot_token_configured', False)
+                    
+                    print(f"   📊 Bot running: {is_running}")
+                    print(f"   📊 Auto trading enabled: {auto_trading_enabled}")
+                    print(f"   📊 Demo mode: {demo_mode}")
+                    print(f"   📊 Bot token configured: {bot_token_configured}")
+                    
+                    # Verify response structure
+                    required_fields = ['success', 'status']
+                    missing_fields = [f for f in required_fields if f not in data]
+                    
+                    if not missing_fields:
+                        return True
+                    else:
+                        print(f"   ❌ Missing required fields: {missing_fields}")
+                        return False
+                else:
+                    print(f"   ❌ Telegram bot status failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Telegram bot status test error: {e}")
+            return False
+    
+    async def test_telegram_bot_start_with_ssid_integration(self) -> bool:
+        """Test Feature 2: Start Telegram bot (should also start SSID auto-refresh)"""
+        try:
+            print("   🔍 Testing Telegram Bot Start with SSID Integration")
+            
+            # Start Telegram bot
+            async with self.session.post(f"{BACKEND_URL}/telegram-bot/start") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Telegram bot start request successful")
+                    print(f"   📊 Success: {data.get('success')}")
+                    print(f"   📊 Message: {data.get('message')}")
+                    
+                    ssid_auto_refresh = data.get('ssid_auto_refresh', False)
+                    features = data.get('features', {})
+                    
+                    print(f"   📊 SSID auto-refresh started: {ssid_auto_refresh}")
+                    print(f"   📊 Features: {features}")
+                    
+                    # Verify SSID service is now running
+                    async with self.session.get(f"{BACKEND_URL}/ssid/status") as ssid_response:
+                        if ssid_response.status == 200:
+                            ssid_data = await ssid_response.json()
+                            ssid_service = ssid_data.get('ssid_service', {})
+                            ssid_running = ssid_service.get('is_running', False)
+                            
+                            print(f"   📊 SSID service running after bot start: {ssid_running}")
+                            
+                            # Verify bot is running
+                            async with self.session.get(f"{BACKEND_URL}/telegram-bot/status") as bot_response:
+                                if bot_response.status == 200:
+                                    bot_data = await bot_response.json()
+                                    bot_status = bot_data.get('status', {})
+                                    bot_running = bot_status.get('is_running', False)
+                                    
+                                    print(f"   📊 Telegram bot running: {bot_running}")
+                                    
+                                    # Test passes if both services are running or if SSID auto-refresh was started
+                                    if ssid_auto_refresh or ssid_running:
+                                        print(f"   ✅ SSID auto-refresh integration working")
+                                        return True
+                                    else:
+                                        print(f"   ❌ SSID auto-refresh not started with Telegram bot")
+                                        return False
+                                else:
+                                    print(f"   ❌ Failed to check bot status after start")
+                                    return False
+                        else:
+                            print(f"   ❌ Failed to check SSID status after bot start")
+                            return False
+                else:
+                    print(f"   ❌ Telegram bot start failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Telegram bot start with SSID integration test error: {e}")
+            return False
+    
+    async def test_telegram_bot_stop_with_ssid_integration(self) -> bool:
+        """Test Feature 2: Stop Telegram bot (should also stop SSID service)"""
+        try:
+            print("   🔍 Testing Telegram Bot Stop with SSID Integration")
+            
+            # Stop Telegram bot
+            async with self.session.post(f"{BACKEND_URL}/telegram-bot/stop") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Telegram bot stop request successful")
+                    print(f"   📊 Success: {data.get('success')}")
+                    print(f"   📊 Message: {data.get('message')}")
+                    
+                    telegram_stopped = data.get('telegram_stopped', False)
+                    ssid_stopped = data.get('ssid_auto_refresh_stopped', False)
+                    
+                    print(f"   📊 Telegram stopped: {telegram_stopped}")
+                    print(f"   📊 SSID auto-refresh stopped: {ssid_stopped}")
+                    
+                    # Verify both services are stopped
+                    if telegram_stopped and ssid_stopped:
+                        print(f"   ✅ Both services stopped together")
+                        return True
+                    else:
+                        print(f"   ❌ Services not stopped together")
+                        return False
+                else:
+                    print(f"   ❌ Telegram bot stop failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Telegram bot stop with SSID integration test error: {e}")
+            return False
+
     # ========== PRIORITY TESTS FROM REVIEW REQUEST ==========
     
     async def test_default_config_endpoint(self) -> bool:
