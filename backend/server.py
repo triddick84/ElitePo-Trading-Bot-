@@ -10492,7 +10492,7 @@ async def update_telegram_bot_settings(settings: TelegramSettingsRequest):
 
 @api_router.post("/telegram-bot/start")
 async def start_telegram_bot_polling(background_tasks: BackgroundTasks):
-    """Start Telegram bot polling"""
+    """Start Telegram bot polling with SSID auto-refresh integration"""
     telegram_bot = get_telegram_bot(db)
     
     if telegram_bot.is_running:
@@ -10517,7 +10517,63 @@ async def start_telegram_bot_polling(background_tasks: BackgroundTasks):
     # Start polling in background
     background_tasks.add_task(telegram_bot.start_polling)
     
-    return {"success": True, "message": "Telegram bot started"}
+    # Start SSID auto-refresh service
+    ssid_service = get_ssid_service()
+    ssid_auto_refresh_started = False
+    
+    if ssid_service is None:
+        # Initialize SSID service with Telegram notification callbacks
+        async def on_ssid_refreshed(new_ssid: str):
+            """Callback when SSID is successfully refreshed"""
+            try:
+                await telegram_bot.send_message(
+                    f"🔄 <b>SSID Auto-Refreshed!</b>\n\n"
+                    f"✅ New SSID obtained successfully\n"
+                    f"📋 Preview: <code>{new_ssid[:20]}...</code>\n"
+                    f"⏰ Time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}"
+                )
+                logger.info(f"✅ SSID refreshed and Telegram notified")
+            except Exception as e:
+                logger.error(f"Error sending SSID refresh notification: {e}")
+        
+        async def on_refresh_failed(error: str):
+            """Callback when SSID refresh fails"""
+            try:
+                await telegram_bot.send_message(
+                    f"⚠️ <b>SSID Refresh Failed!</b>\n\n"
+                    f"❌ Error: {error}\n"
+                    f"🔧 Manual refresh may be required\n"
+                    f"⏰ Time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}"
+                )
+                logger.warning(f"⚠️ SSID refresh failed, Telegram notified")
+            except Exception as e:
+                logger.error(f"Error sending SSID failure notification: {e}")
+        
+        try:
+            await initialize_ssid_service(
+                on_ssid_refreshed=lambda ssid: asyncio.create_task(on_ssid_refreshed(ssid)),
+                on_refresh_failed=lambda err: asyncio.create_task(on_refresh_failed(err))
+            )
+            ssid_auto_refresh_started = True
+            logger.info("🔄 SSID auto-refresh service started with Telegram integration")
+        except Exception as e:
+            logger.warning(f"⚠️ SSID auto-refresh could not be started: {e}")
+    else:
+        # Service already exists, just start it
+        if not ssid_service.is_running:
+            await ssid_service.start()
+            ssid_auto_refresh_started = True
+    
+    return {
+        "success": True, 
+        "message": "Telegram bot started",
+        "ssid_auto_refresh": ssid_auto_refresh_started,
+        "features": {
+            "telegram_polling": True,
+            "ssid_auto_refresh": ssid_auto_refresh_started,
+            "signal_callback": True
+        }
+    }
 
 @api_router.post("/telegram-bot/stop")
 async def stop_telegram_bot_polling():
