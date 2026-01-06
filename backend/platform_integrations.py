@@ -220,11 +220,12 @@ class PlatformIntegrationService:
     async def send_autobot_signal(self, signal: TradingSignal):
         """Send signal to AutobotSignal.io webhook with enhanced format"""
         try:
-            # Format signal for AutobotSignal.io
-            side = "buy" if signal.direction in ['BUY', 'CALL'] else "sell"
+            # Handle direction as enum or string
+            direction_str = signal.direction.value if hasattr(signal.direction, 'value') else str(signal.direction)
+            side = "buy" if direction_str.upper() in ['BUY', 'CALL'] else "sell"
             
             # Clean symbol for AutobotSignal (remove _OTC, _regular suffixes)
-            clean_symbol = signal.symbol.replace('_OTC', '').replace('_regular', '')
+            clean_symbol = signal.symbol.replace('_OTC', '').replace('_regular', '').replace('_otc', '')
             
             # Convert timestamp to Chicago timezone
             chicago_time = utc_to_chicago(signal.timestamp) if signal.timestamp.tzinfo else signal.timestamp
