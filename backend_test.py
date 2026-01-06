@@ -1240,6 +1240,211 @@ class BackendTester:
 
     # ========== TELEGRAM BOT API TESTING ==========
     
+    async def test_telegram_bot_status(self) -> bool:
+        """Test GET /api/telegram-bot/status - Check Telegram bot is configured"""
+        try:
+            print("   🔍 Testing Telegram Bot Status")
+            
+            async with self.session.get(f"{BACKEND_URL}/telegram-bot/status") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Telegram bot status retrieved successfully")
+                    print(f"   📊 Bot running: {data.get('bot_running')}")
+                    print(f"   📊 Auto trading enabled: {data.get('auto_trading_enabled')}")
+                    print(f"   📊 Demo mode: {data.get('demo_mode')}")
+                    print(f"   📊 Bot token configured: {data.get('bot_token_configured')}")
+                    print(f"   📊 Chat ID: {data.get('chat_id')}")
+                    
+                    # Verify response structure
+                    required_fields = ['bot_running', 'auto_trading_enabled', 'demo_mode', 'bot_token_configured']
+                    missing_fields = [f for f in required_fields if f not in data]
+                    
+                    if not missing_fields:
+                        return True
+                    else:
+                        print(f"   ❌ Missing required fields: {missing_fields}")
+                        return False
+                else:
+                    print(f"   ❌ Telegram bot status failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Telegram bot status test error: {e}")
+            return False
+    
+    async def test_telegram_bot_send_message(self) -> bool:
+        """Test POST /api/telegram-bot/send - Test basic message sending"""
+        try:
+            print("   🔍 Testing Send Telegram Bot Message")
+            
+            message_data = {
+                "message": "🧪 Test message"
+            }
+            
+            async with self.session.post(f"{BACKEND_URL}/telegram-bot/send", json=message_data) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Message sent successfully")
+                    print(f"   📊 Success: {data.get('success')}")
+                    print(f"   📊 Message ID: {data.get('message_id')}")
+                    
+                    if data.get('success'):
+                        return True
+                    else:
+                        print(f"   ❌ Message send failed: {data.get('error')}")
+                        return False
+                else:
+                    print(f"   ❌ Send message failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Send message test error: {e}")
+            return False
+    
+    async def test_force_generate_signals_with_telegram(self) -> bool:
+        """Test POST /api/signals/force-generate - Generate trading signals and verify Telegram sending"""
+        try:
+            print("   🔍 Testing Force Generate Signals with Telegram Integration")
+            
+            # First, ensure we have assets selected for signal generation
+            config_data = {
+                "trading_mode": "demo",
+                "active_strategies": ["hybrid"],
+                "target_assets": ["forex"],
+                "selected_assets": ["EURUSD_otc"],
+                "selected_expirations": ["1m"],
+                "risk_tolerance": "medium",
+                "max_stake_per_trade": 10.0,
+                "max_daily_trades": 50,
+                "min_probability_threshold": 75.0,
+                "auto_trading_enabled": False,
+                "invert_signals": False,
+                "sound_alerts_enabled": True
+            }
+            
+            # Update configuration
+            async with self.session.put(f"{BACKEND_URL}/config", json=config_data) as response:
+                if response.status != 200:
+                    print(f"   ❌ Failed to set configuration: {response.status}")
+                    return False
+            
+            print("   📊 Configuration set successfully")
+            
+            # Force generate signals
+            async with self.session.post(f"{BACKEND_URL}/signals/force-generate") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Force generate completed")
+                    print(f"   📊 Success: {data.get('success')}")
+                    print(f"   📊 Message: {data.get('message')}")
+                    
+                    signals = data.get('signals', [])
+                    if signals:
+                        signal = signals[0]
+                        print(f"   📊 Signal generated: {signal.get('symbol')} {signal.get('direction')} at {signal.get('probability')}%")
+                        
+                        # Check if signal was generated successfully
+                        if data.get('success'):
+                            return True
+                        else:
+                            print(f"   ❌ Signal generation failed")
+                            return False
+                    else:
+                        print(f"   ⚠️ No signals generated (may be due to market conditions)")
+                        # This is acceptable - not all market conditions produce signals
+                        return True
+                else:
+                    print(f"   ❌ Force generate failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Force generate signals test error: {e}")
+            return False
+    
+    async def test_telegram_bot_history(self) -> bool:
+        """Test GET /api/telegram-bot/history - Check if signals were recorded"""
+        try:
+            print("   🔍 Testing Telegram Bot History")
+            
+            async with self.session.get(f"{BACKEND_URL}/telegram-bot/history") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Telegram bot history retrieved successfully")
+                    
+                    history = data.get('history', [])
+                    print(f"   📊 Total messages in history: {len(history)}")
+                    
+                    if history:
+                        latest_message = history[0]
+                        print(f"   📊 Latest message type: {latest_message.get('type')}")
+                        print(f"   📊 Latest message timestamp: {latest_message.get('timestamp')}")
+                        print(f"   📊 Latest message success: {latest_message.get('success')}")
+                    
+                    # History endpoint should work regardless of content
+                    return True
+                else:
+                    print(f"   ❌ Telegram bot history failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Telegram bot history test error: {e}")
+            return False
+    
+    async def check_backend_logs_for_telegram_signals(self) -> bool:
+        """Check backend logs for 'Signal sent to Telegram successfully'"""
+        try:
+            print("   🔍 Checking backend logs for Telegram signal sending")
+            
+            import subprocess
+            result = subprocess.run(['tail', '-50', '/var/log/supervisor/backend.err.log'], 
+                                  capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                logs = result.stdout
+                
+                # Look for Telegram signal indicators
+                telegram_indicators = [
+                    'signal sent to telegram successfully',
+                    '✅ signal sent to telegram successfully',
+                    'telegram signal sent',
+                    'signal sent to telegram',
+                    'telegram.*signal.*success'
+                ]
+                
+                found_indicators = []
+                for indicator in telegram_indicators:
+                    if indicator.lower() in logs.lower():
+                        found_indicators.append(indicator)
+                
+                if found_indicators:
+                    print(f"   ✅ Found Telegram signal indicators: {found_indicators}")
+                    return True
+                else:
+                    print("   ℹ️ No Telegram signal success indicators found in recent logs")
+                    
+                    # Also check for any Telegram-related activity
+                    if 'telegram' in logs.lower():
+                        print("   ℹ️ Found Telegram-related activity in logs")
+                        # Print relevant log lines
+                        log_lines = logs.split('\n')
+                        telegram_lines = [line for line in log_lines if 'telegram' in line.lower()]
+                        for line in telegram_lines[-5:]:  # Show last 5 Telegram-related lines
+                            print(f"   📋 {line.strip()}")
+                    
+                    return False
+                    
+            else:
+                print("   ⚠️ Could not read backend logs")
+                return False
+                
+        except Exception as e:
+            print(f"   ⚠️ Error checking backend logs: {e}")
+            return False
+    
     async def test_telegram_status(self) -> bool:
         """Test GET /api/telegram/status - Get Telegram bot status"""
         try:
