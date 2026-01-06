@@ -448,76 +448,31 @@ Check connection on the dashboard.
 """
     
     async def _cmd_connect(self, chat_id: str, args: List[str]) -> str:
-        """Connect to Pocket Option using SSID"""
-        try:
-            import os
-            ssid = os.environ.get('POCKET_OPTION_SSID', '')
-            
-            if not ssid:
-                return """
-<b>🔌 CONNECT</b>
+        """Connect command - inform about cloud IP limitation"""
+        return """
+<b>🔌 CONNECTION STATUS</b>
 
-⚠️ No SSID configured.
-Please set up SSID on the dashboard first:
-1. Go to SSID Connection page
-2. Enter your SSID
-3. Click "Update SSID"
-4. Then use /connect
-"""
-            
-            await self.send_message("🔄 <b>Connecting to Pocket Option...</b>\n\nPlease wait...", chat_id)
-            
-            from pocket_option_auto_trader import get_auto_trading_service
-            trader = get_auto_trading_service()
-            
-            # Set demo mode based on bot settings
-            if trader.ws_client:
-                trader.ws_client.is_demo = self.demo_mode
-            
-            # Attempt connection
-            connected = await trader.connect(ssid)
-            
-            if connected:
-                balance = trader.ws_client.get_balance() if trader.ws_client else 0
-                mode = "🟢 DEMO" if self.demo_mode else "🔴 REAL"
-                
-                return f"""
-<b>✅ CONNECTED TO POCKET OPTION!</b>
+⚠️ <b>Cloud IP Limitation</b>
 
-{mode} Mode Active
-💰 Balance: <code>${balance:.2f}</code>
-🤖 Auto-Trade: {'✅ Ready' if self.auto_trading_enabled else '❌ Disabled (use /enable)'}
+Pocket Option blocks cloud/datacenter IPs, so direct auto-trading from this server is not possible.
 
-You can now:
-• Use /signal to generate trades
-• Use /balance to check balance
-• Use /enable to start auto-trading
-"""
-            else:
-                return """
-<b>❌ CONNECTION FAILED</b>
+<b>✅ What WORKS:</b>
+• Signal generation (/signal)
+• Signals sent to Telegram
+• All analysis and strategies
 
-Could not connect to Pocket Option.
+<b>📱 How to Trade:</b>
+1. Receive signal in Telegram
+2. Open Pocket Option on your device
+3. Place trade manually based on signal
+4. Signal includes: Asset, Direction, Expiry
 
-Possible issues:
-1. SSID may be expired - refresh on dashboard
-2. Network connectivity issues
-3. Pocket Option servers may be down
+<b>💡 Tips:</b>
+• Keep Pocket Option open on your phone/PC
+• Act quickly when signals arrive
+• Follow the direction (CALL=UP, PUT=DOWN)
 
-Try:
-1. Go to SSID Connection page
-2. Click "Auto-Login" to get fresh SSID
-3. Then use /connect again
-"""
-                
-        except Exception as e:
-            logger.error(f"Connect error: {e}")
-            return f"""
-<b>❌ CONNECTION ERROR</b>
-
-Error: {str(e)[:100]}
-
-Please check the dashboard for more details.
+Use /signal to generate a trading signal now!
 """
     
     async def _cmd_enable_auto_trading(self, chat_id: str, args: List[str]) -> str:
