@@ -245,7 +245,7 @@ function ProtectedApp() {
                 </div>
               </div>
               
-              {/* Status Indicator */}
+              {/* Status Indicator and User Menu */}
               <div className="flex items-center space-x-4">
                 <div className="flex items-center space-x-2 bg-[#1a1a24] px-4 py-2 rounded-lg border border-[#2a2a35]">
                   <div className={`w-3 h-3 rounded-full ${
@@ -262,6 +262,20 @@ function ProtectedApp() {
                   <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-lg shadow-green-500/50"></span>
                   <span>Live Data</span>
                 </div>
+                
+                {/* User Menu */}
+                <div className="flex items-center space-x-2 bg-[#1a1a24] px-4 py-2 rounded-lg border border-[#2a2a35]">
+                  <span className="text-purple-400">👤</span>
+                  <span className="text-slate-300 font-medium">{user?.username}</span>
+                  <span className="text-xs text-slate-500 bg-purple-500/20 px-2 py-0.5 rounded">{user?.role}</span>
+                </div>
+                <button
+                  onClick={logout}
+                  className="flex items-center space-x-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 px-4 py-2 rounded-lg border border-red-500/30 transition-colors"
+                >
+                  <span>🚪</span>
+                  <span className="font-medium">Logout</span>
+                </button>
               </div>
             </div>
           </div>
