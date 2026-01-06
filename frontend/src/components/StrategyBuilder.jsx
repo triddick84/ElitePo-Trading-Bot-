@@ -873,13 +873,15 @@ const StrategyBuilder = () => {
               {strategyForm.conditions.length > 0 && (
                 <div className="p-4 bg-slate-800/50 rounded-lg">
                   <div className="text-sm font-medium text-white mb-2">Signal Summary:</div>
-                  <div className="flex gap-4">
+                  <div className="flex gap-4 flex-wrap">
                     <div className="flex items-center gap-2">
                       <ArrowUp className="w-4 h-4 text-green-400" />
                       <span className="text-green-400">
                         {strategyForm.conditions.filter(c => {
                           const t = INDICATOR_TEMPLATES[c.indicator];
-                          return t?.conditions.find(x => x.id === c.conditionType)?.signal === 'CALL';
+                          const originalSignal = t?.conditions.find(x => x.id === c.conditionType)?.signal;
+                          // Account for reversal
+                          return c.reversal ? originalSignal === 'PUT' : originalSignal === 'CALL';
                         }).length} CALL conditions
                       </span>
                     </div>
@@ -888,10 +890,20 @@ const StrategyBuilder = () => {
                       <span className="text-red-400">
                         {strategyForm.conditions.filter(c => {
                           const t = INDICATOR_TEMPLATES[c.indicator];
-                          return t?.conditions.find(x => x.id === c.conditionType)?.signal === 'PUT';
+                          const originalSignal = t?.conditions.find(x => x.id === c.conditionType)?.signal;
+                          // Account for reversal
+                          return c.reversal ? originalSignal === 'CALL' : originalSignal === 'PUT';
                         }).length} PUT conditions
                       </span>
                     </div>
+                    {/* Show reversed count */}
+                    {strategyForm.conditions.some(c => c.reversal) && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-purple-400">
+                          🔄 {strategyForm.conditions.filter(c => c.reversal).length} reversed
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
