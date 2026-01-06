@@ -330,6 +330,10 @@ Use /help to see all available commands.
         return """
 <b>📚 AVAILABLE COMMANDS</b>
 
+<b>🔌 Connection:</b>
+/connect - Connect to Pocket Option
+/balance - Check balance (shows connection status)
+
 <b>📊 Signals & Trading:</b>
 /signal - Force generate a new signal
 /enable - Enable auto-trading
@@ -337,7 +341,6 @@ Use /help to see all available commands.
 
 <b>💰 Account:</b>
 /status - Bot status and settings
-/balance - Check balance (if connected)
 /demo - Switch to demo mode
 /real - Switch to real mode (caution!)
 /amount [value] - Set trade amount
