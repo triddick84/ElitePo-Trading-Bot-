@@ -10641,6 +10641,144 @@ async def get_telegram_bot_stats():
     }
 
 
+# =====================================================
+# SSID AUTO-REFRESH ENDPOINTS
+# =====================================================
+
+@api_router.get("/ssid/status")
+async def get_ssid_status():
+    """Get current SSID status and auto-refresh information"""
+    ssid_service = get_ssid_service()
+    
+    if ssid_service:
+        status = ssid_service.get_status()
+        return {
+            "success": True,
+            "ssid_service": status,
+            "auto_refresh_available": True
+        }
+    else:
+        # Check for manual SSID in environment
+        current_ssid = os.environ.get('POCKET_OPTION_SSID', '')
+        return {
+            "success": True,
+            "ssid_service": {
+                "is_running": False,
+                "has_credentials": False,
+                "ssid_status": {
+                    "ssid_preview": current_ssid[:20] + "..." if len(current_ssid) > 20 else current_ssid,
+                    "is_valid": bool(current_ssid),
+                    "refresh_count": 0
+                }
+            },
+            "auto_refresh_available": False,
+            "message": "SSID auto-refresh service not initialized. Start Telegram bot to enable."
+        }
+
+
+@api_router.post("/ssid/refresh")
+async def manual_ssid_refresh():
+    """Manually trigger SSID refresh using auto-login"""
+    ssid_service = get_ssid_service()
+    
+    if ssid_service and ssid_service.is_running:
+        success = await ssid_service.refresh_ssid()
+        
+        if success:
+            return {
+                "success": True,
+                "message": "SSID refreshed successfully",
+                "new_ssid_preview": ssid_service.get_current_ssid()[:20] + "..."
+            }
+        else:
+            return {
+                "success": False,
+                "error": "SSID refresh failed",
+                "last_error": ssid_service.status.last_refresh_error
+            }
+    else:
+        # Try to refresh using auto-login directly
+        try:
+            from auto_login_service import get_auto_login_service
+            login_service = get_auto_login_service()
+            
+            email = os.environ.get('POCKET_OPTION_EMAIL', '')
+            password = os.environ.get('POCKET_OPTION_PASSWORD', '')
+            
+            if not email or not password:
+                return {
+                    "success": False,
+                    "error": "No credentials configured for auto-login",
+                    "hint": "Set POCKET_OPTION_EMAIL and POCKET_OPTION_PASSWORD in environment"
+                }
+            
+            result = await login_service.auto_login(email, password)
+            
+            if result.success:
+                # Update environment variable
+                os.environ['POCKET_OPTION_SSID'] = result.ssid
+                
+                # Notify via Telegram if bot is running
+                telegram_bot = get_telegram_bot(db)
+                if telegram_bot.is_running:
+                    await telegram_bot.send_message(
+                        f"🔄 <b>SSID Manually Refreshed!</b>\n\n"
+                        f"✅ New SSID obtained\n"
+                        f"📋 Preview: <code>{result.ssid[:20]}...</code>"
+                    )
+                
+                return {
+                    "success": True,
+                    "message": "SSID refreshed via auto-login",
+                    "new_ssid_preview": result.ssid[:20] + "...",
+                    "method": result.method_used.value if result.method_used else "unknown"
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": result.error or "Auto-login failed",
+                    "status": result.status.value
+                }
+                
+        except Exception as e:
+            logger.error(f"Manual SSID refresh error: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
+
+@api_router.put("/ssid/settings")
+async def update_ssid_settings(
+    refresh_interval_minutes: int = 45,
+    auto_refresh_enabled: bool = True
+):
+    """Update SSID auto-refresh settings"""
+    ssid_service = get_ssid_service()
+    
+    if ssid_service:
+        ssid_service.refresh_interval = refresh_interval_minutes
+        
+        if auto_refresh_enabled and not ssid_service.is_running:
+            await ssid_service.start()
+        elif not auto_refresh_enabled and ssid_service.is_running:
+            await ssid_service.stop()
+        
+        return {
+            "success": True,
+            "message": "SSID settings updated",
+            "settings": {
+                "refresh_interval_minutes": refresh_interval_minutes,
+                "auto_refresh_enabled": ssid_service.is_running
+            }
+        }
+    else:
+        return {
+            "success": False,
+            "error": "SSID service not initialized. Start Telegram bot first."
+        }
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
