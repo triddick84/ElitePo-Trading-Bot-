@@ -288,10 +288,11 @@ class PlatformIntegrationService:
                 return
             
             # Clean symbol name for Pocket Option
-            clean_symbol = signal.symbol.replace('_OTC', '').replace('_regular', '')
+            clean_symbol = signal.symbol.replace('_OTC', '').replace('_regular', '').replace('_otc', '')
             
-            # Convert signal direction
-            direction = "call" if signal.direction in ['BUY', 'CALL'] else "put"
+            # Handle direction as enum or string
+            direction_str = signal.direction.value if hasattr(signal.direction, 'value') else str(signal.direction)
+            direction = "call" if direction_str.upper() in ['BUY', 'CALL'] else "put"
             
             # Execute trade
             trade_result = await self.pocket_option_api.buy_binary_option(
