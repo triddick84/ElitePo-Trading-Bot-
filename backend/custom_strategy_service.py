@@ -430,6 +430,8 @@ class IndicatorCondition:
     parameters: Dict[str, Any]  # e.g., {"period": 14}
     # TradingView-style condition type (e.g., "crosses_above_oversold", "golden_cross")
     condition_type: Optional[str] = None
+    # Reversal flag - if True, inverts the signal direction (CALL→PUT, PUT→CALL)
+    reversal: bool = False
     # Legacy fields for backward compatibility
     output: str = "value"  # e.g., "value" for RSI, "k" for Stochastic
     operator: Optional[ComparisonOperator] = None
@@ -441,6 +443,7 @@ class IndicatorCondition:
             "id": self.id,
             "indicator": self.indicator,
             "parameters": self.parameters,
+            "reversal": self.reversal,  # Include reversal flag
         }
         # Include TradingView-style condition type if present
         if self.condition_type:
