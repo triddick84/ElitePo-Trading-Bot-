@@ -1022,7 +1022,107 @@ class ForceSignalGenerator:
                             result['selected_strategy'] = True
                             return result
                 
-                # DEFAULT or if selected strategy fails
+                elif selected_strategy_id == 'triple_confluence':
+                    # NEW: 15s Triple Confluence Strategy (RSI + Stochastic + Bollinger)
+                    logger.info(f"🎯 Applying SELECTED: Triple Confluence (RSI+Stoch+BB) for {symbol}")
+                    try:
+                        from strategies.strategy_15s_triple_confluence import strategy_15s_triple_confluence
+                        
+                        from real_market_data_service import real_market_data_service
+                        market_data_list = await real_market_data_service.get_historical_data(symbol, interval='1m', periods=100)
+                        
+                        if market_data_list and len(market_data_list) >= 30:
+                            import pandas as pd
+                            df = pd.DataFrame([{
+                                'open': md.open_price,
+                                'high': md.high_price,
+                                'low': md.low_price,
+                                'close': md.close_price,
+                                'volume': md.volume if hasattr(md, 'volume') else 0
+                            } for md in market_data_list])
+                            
+                            result = strategy_15s_triple_confluence.generate_signal(df, symbol)
+                            
+                            if result and result.get('confidence', 0) >= 75:
+                                logger.info(f"✅ Triple Confluence 15s: {symbol} → {result['direction']} ({result['confidence']:.1f}%)")
+                                result['strategy'] = 'triple_confluence_15s'
+                                result['timeframe'] = timeframe
+                                result['chart_type'] = chart_type
+                                result['selected_strategy'] = True
+                                return result
+                    except Exception as e:
+                        logger.warning(f"Triple Confluence failed: {e}")
+                
+                elif selected_strategy_id == 'ema_cascade':
+                    # NEW: 15s EMA Cascade Strategy (3-5-8-13)
+                    logger.info(f"🎯 Applying SELECTED: EMA Cascade (3-5-8-13) for {symbol}")
+                    try:
+                        from strategies.strategy_15s_ema_cascade import strategy_15s_ema_cascade
+                        
+                        from real_market_data_service import real_market_data_service
+                        market_data_list = await real_market_data_service.get_historical_data(symbol, interval='1m', periods=100)
+                        
+                        if market_data_list and len(market_data_list) >= 25:
+                            import pandas as pd
+                            df = pd.DataFrame([{
+                                'open': md.open_price,
+                                'high': md.high_price,
+                                'low': md.low_price,
+                                'close': md.close_price,
+                                'volume': md.volume if hasattr(md, 'volume') else 0
+                            } for md in market_data_list])
+                            
+                            result = strategy_15s_ema_cascade.generate_signal(df, symbol)
+                            
+                            if result and result.get('confidence', 0) >= 72:
+                                logger.info(f"✅ EMA Cascade 15s: {symbol} → {result['direction']} ({result['confidence']:.1f}%)")
+                                result['strategy'] = 'ema_cascade_15s'
+                                result['timeframe'] = timeframe
+                                result['chart_type'] = chart_type
+                                result['selected_strategy'] = True
+                                return result
+                    except Exception as e:
+                        logger.warning(f"EMA Cascade failed: {e}")
+                
+                # DEFAULT or if selected strategy fails - Try NEW high-accuracy strategies first
+                logger.info(f"⚡ Trying HIGH-ACCURACY 15s strategies for {symbol}")
+                
+                # Try Triple Confluence first (highest accuracy target: 85%)
+                try:
+                    from strategies.strategy_15s_triple_confluence import strategy_15s_triple_confluence
+                    from real_market_data_service import real_market_data_service
+                    market_data_list = await real_market_data_service.get_historical_data(symbol, interval='1m', periods=100)
+                    
+                    if market_data_list and len(market_data_list) >= 30:
+                        import pandas as pd
+                        df = pd.DataFrame([{
+                            'open': md.open_price,
+                            'high': md.high_price,
+                            'low': md.low_price,
+                            'close': md.close_price,
+                            'volume': md.volume if hasattr(md, 'volume') else 0
+                        } for md in market_data_list])
+                        
+                        result = strategy_15s_triple_confluence.generate_signal(df, symbol)
+                        
+                        if result and result.get('direction') != 'NEUTRAL' and result.get('confidence', 0) >= 80:
+                            logger.info(f"✅ 15s Triple Confluence: {symbol} → {result['direction']} ({result['confidence']:.1f}%)")
+                            return {
+                                'direction': result['direction'],
+                                'confidence': result['confidence'],
+                                'probability': result['confidence'],
+                                'reasoning': result.get('reasoning', result.get('reason', '')),
+                                'strategy': '15s_triple_confluence',
+                                'timeframe': '15s',
+                                'chart_type': chart_type,
+                                'high_accuracy_strategy': True,
+                                'indicators': result.get('indicators', {}),
+                                'suggested_stake': 2.0
+                            }
+                except Exception as e:
+                    logger.warning(f"15s Triple Confluence fallback failed: {e}")
+                
+                # Fallback to Fractal strategy
                 logger.info(f"⚡ Applying DEFAULT 15-SECOND Fractal strategy for {symbol}")
                 
                 # Use NEW Fractal strategy with 5s chart data
