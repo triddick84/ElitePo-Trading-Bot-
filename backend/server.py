@@ -10577,10 +10577,22 @@ async def start_telegram_bot_polling(background_tasks: BackgroundTasks):
 
 @api_router.post("/telegram-bot/stop")
 async def stop_telegram_bot_polling():
-    """Stop Telegram bot polling"""
+    """Stop Telegram bot polling and SSID auto-refresh"""
     telegram_bot = get_telegram_bot(db)
     await telegram_bot.stop_polling()
-    return {"success": True, "message": "Telegram bot stopped"}
+    
+    # Also stop SSID auto-refresh
+    ssid_service = get_ssid_service()
+    if ssid_service and ssid_service.is_running:
+        await ssid_service.stop()
+        logger.info("🛑 SSID auto-refresh service stopped")
+    
+    return {
+        "success": True, 
+        "message": "Telegram bot and SSID auto-refresh stopped",
+        "telegram_stopped": True,
+        "ssid_auto_refresh_stopped": True
+    }
 
 @api_router.get("/telegram-bot/history")
 async def get_telegram_bot_history(limit: int = 50):
