@@ -1092,8 +1092,9 @@ class ForceSignalGenerator:
                 # Try Triple Confluence first (highest accuracy target: 85%)
                 try:
                     from strategies.strategy_15s_triple_confluence import strategy_15s_triple_confluence
-                    from real_market_data_service import real_market_data_service
-                    market_data_list = await real_market_data_service.get_historical_data(symbol, interval='1m', periods=100)
+                    from real_market_data_service import RealMarketDataService
+                    market_service = RealMarketDataService()
+                    market_data_list = await market_service.get_historical_data(symbol, interval='1m', periods=100)
                     
                     if market_data_list and len(market_data_list) >= 30:
                         import pandas as pd
