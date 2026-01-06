@@ -30,6 +30,8 @@ import AutomatedTradingPage from "./components/AutomatedTradingPage";
 import AIMLModelsPage from "./components/AIMLModelsPage";
 import SignalCenterPage from "./components/SignalCenterPage";
 import BacktestingPage from "./components/BacktestingPage";
+import TelegramBotPage from "./components/TelegramBotPage";
+import { AuthProvider, LoginPage, UserMenu, useAuth } from "./components/AuthComponents";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
 const API = BACKEND_URL ? `${BACKEND_URL}/api` : '';
