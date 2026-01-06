@@ -560,29 +560,50 @@ Make sure you understand the risks.
         self.is_running = True
         logger.info("Starting Telegram bot polling...")
         
+        # Send startup notification
+        await self.send_message("🤖 <b>Elite Pocket Bot Started!</b>\n\nUse /help to see available commands.", self.default_chat_id)
+        
         while self.is_running:
             try:
                 client = await self._get_client()
                 
                 params = {
                     'offset': self._last_update_id + 1,
-                    'timeout': 30
+                    'timeout': 30,
+                    'allowed_updates': ['message']
                 }
                 
-                response = await client.get(f"{self.api_url}/getUpdates", params=params)
-                data = response.json()
+                response = await client.get(
+                    f"{self.api_url}/getUpdates", 
+                    params=params,
+                    timeout=35.0  # Slightly longer than Telegram timeout
+                )
                 
-                if data.get('ok') and data.get('result'):
-                    for update in data['result']:
-                        self._last_update_id = update['update_id']
-                        await self.process_update(update)
-                
-                await asyncio.sleep(0.5)
+                if response.status_code == 200:
+                    data = response.json()
+                    
+                    if data.get('ok') and data.get('result'):
+                        for update in data['result']:
+                            self._last_update_id = update['update_id']
+                            try:
+                                await self.process_update(update)
+                            except Exception as proc_error:
+                                logger.error(f"Error processing update: {proc_error}")
+                    
+                    # Small delay between successful polls
+                    await asyncio.sleep(0.1)
+                else:
+                    logger.warning(f"Telegram API returned status {response.status_code}")
+                    await asyncio.sleep(5)
                 
             except asyncio.CancelledError:
+                logger.info("Polling cancelled")
                 break
+            except httpx.TimeoutException:
+                # Normal timeout, just continue
+                continue
             except Exception as e:
-                logger.error(f"Polling error: {e}")
+                logger.error(f"Polling error: {type(e).__name__}: {e}")
                 await asyncio.sleep(5)
         
         logger.info("Telegram bot polling stopped.")
