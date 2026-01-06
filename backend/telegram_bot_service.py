@@ -160,7 +160,7 @@ class TelegramBotService:
             result = await self.send_message(message, chat_id)
             
             # Log signal to database
-            if self.db:
+            if self.db is not None:
                 await self.db.telegram_signals.insert_one({
                     'signal_id': signal.id,
                     'symbol': signal.symbol,
