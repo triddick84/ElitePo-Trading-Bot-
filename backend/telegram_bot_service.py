@@ -91,6 +91,7 @@ class TelegramBotService:
             '/help': self._cmd_help,
             '/status': self._cmd_status,
             '/balance': self._cmd_balance,
+            '/connect': self._cmd_connect,
             '/enable': self._cmd_enable_auto_trading,
             '/disable': self._cmd_disable_auto_trading,
             '/demo': self._cmd_set_demo,
