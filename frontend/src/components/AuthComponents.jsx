@@ -228,60 +228,6 @@ export const LoginPage = ({ onClose }) => {
     </div>
   );
 };
-                      type="email"
-                      placeholder="Enter email"
-                      value={regEmail}
-                      onChange={(e) => setRegEmail(e.target.value)}
-                      className="pl-10 bg-slate-800 border-slate-600"
-                      required
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="reg-password">Password</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
-                    <Input
-                      id="reg-password"
-                      type="password"
-                      placeholder="Create password (min 6 chars)"
-                      value={regPassword}
-                      onChange={(e) => setRegPassword(e.target.value)}
-                      className="pl-10 bg-slate-800 border-slate-600"
-                      required
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="reg-confirm">Confirm Password</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
-                    <Input
-                      id="reg-confirm"
-                      type="password"
-                      placeholder="Confirm password"
-                      value={regConfirmPassword}
-                      onChange={(e) => setRegConfirmPassword(e.target.value)}
-                      className="pl-10 bg-slate-800 border-slate-600"
-                      required
-                    />
-                  </div>
-                </div>
-                <Button 
-                  type="submit" 
-                  className="w-full bg-green-600 hover:bg-green-700"
-                  disabled={isLoading}
-                >
-                  {isLoading ? 'Creating account...' : 'Create Account'}
-                </Button>
-              </form>
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
-    </div>
-  );
-};
 
 // User Menu Component
 export const UserMenu = () => {
