@@ -1249,15 +1249,15 @@ class BackendTester:
                 if response.status == 200:
                     data = await response.json()
                     print(f"   ✅ Telegram status retrieved successfully")
-                    print(f"   📊 Bot running: {data.get('is_running')}")
-                    print(f"   📊 Auto trading: {data.get('auto_trading_enabled')}")
-                    print(f"   📊 Demo mode: {data.get('demo_mode')}")
-                    print(f"   📊 Trade amount: {data.get('trade_amount')}")
-                    print(f"   📊 Chat ID: {data.get('default_chat_id')}")
-                    print(f"   📊 Token configured: {data.get('bot_token_configured')}")
+                    print(f"   📊 Enabled: {data.get('enabled')}")
+                    print(f"   📊 Configured: {data.get('configured')}")
+                    print(f"   📊 Chat ID: {data.get('chat_id')}")
+                    print(f"   📊 Send signals: {data.get('send_signals')}")
+                    print(f"   📊 Send errors: {data.get('send_errors')}")
+                    print(f"   📊 Send status updates: {data.get('send_status_updates')}")
                     
-                    # Verify response structure
-                    required_fields = ['is_running', 'auto_trading_enabled', 'demo_mode', 'trade_amount']
+                    # Verify response structure (this is the telegram_signal_notifier status)
+                    required_fields = ['enabled', 'configured', 'chat_id']
                     missing_fields = [f for f in required_fields if f not in data]
                     
                     if not missing_fields:
