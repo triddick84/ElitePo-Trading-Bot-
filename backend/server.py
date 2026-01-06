@@ -47,7 +47,6 @@ except ImportError as e:
     lstm_predictor = None
 from pocket_option_auth import auto_login_and_get_ssid
 from advanced_signal_generator import advanced_signal_generator
-from pocket_option_client import get_pocket_option_client
 from enhanced_sr_analyzer import enhanced_sr_analyzer
 from candlestick_analyzer import candlestick_analyzer
 # Import SSID and Telegram services
@@ -1667,7 +1666,7 @@ async def flexible_signal_generation(request: FlexibleStrategyRequest):
     try:
         from flexible_crossover_strategy import get_flexible_strategy
         
-        logger.info(f"🎯 Flexible Strategy Signal Generation Request:")
+        logger.info("🎯 Flexible Strategy Signal Generation Request:")
         logger.info(f"   Asset: {request.asset_symbol}")
         logger.info(f"   Market Type: {request.market_type}")
         logger.info(f"   Chart Timeframe: {request.chart_timeframe}")
@@ -1998,7 +1997,7 @@ async def get_alpha_vantage_exchange_rate(from_currency: str, to_currency: str):
         
         return {
             "success": True,
-            "message": f"Exchange rate fetched successfully",
+            "message": "Exchange rate fetched successfully",
             "data": rate_data
         }
         
@@ -2032,7 +2031,7 @@ async def get_alpha_vantage_price(symbol: str):
         
         return {
             "success": True,
-            "message": f"Price fetched successfully",
+            "message": "Price fetched successfully",
             "symbol": symbol,
             "price": price,
             "timestamp": datetime.now(timezone.utc).isoformat()
@@ -2058,7 +2057,7 @@ async def micro_momentum_5s_otc_signal_generation(asset_symbol: str, trade_durat
     try:
         from micro_momentum_scalp_5s_otc import get_micro_momentum_5s_otc_strategy
         
-        logger.info(f"🚀 Micro-Momentum 5s OTC Signal Generation:")
+        logger.info("🚀 Micro-Momentum 5s OTC Signal Generation:")
         logger.info(f"   Asset: {asset_symbol}")
         logger.info(f"   Trade Duration: {trade_duration_seconds}s")
         
@@ -2306,7 +2305,7 @@ async def update_strategy_selection(request: StrategySelectionRequest):
         if not success:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid timeframe or strategy ID"
+                detail="Invalid timeframe or strategy ID"
             )
         
         return {
@@ -3504,7 +3503,7 @@ async def quick_auth_test(request: QuickAuthTestRequest):
             uid = auth_data.get('uid', 0)
             is_demo = auth_data.get('isDemo', 1) == 1
             
-            logger.info(f"✅ Extracted from WebSocket message:")
+            logger.info("✅ Extracted from WebSocket message:")
             logger.info(f"   SSID: {ssid[:50]}...")
             logger.info(f"   UID: {uid}")
             logger.info(f"   Demo: {is_demo}")
@@ -3514,7 +3513,7 @@ async def quick_auth_test(request: QuickAuthTestRequest):
             uid = int(os.getenv('POCKET_OPTION_UID', '0'))
             is_demo = True  # Default to demo
             
-            logger.info(f"✅ Using simple SSID format:")
+            logger.info("✅ Using simple SSID format:")
             logger.info(f"   SSID: {ssid}")
             logger.info(f"   UID: {uid} (from env)")
             logger.info(f"   Demo: {is_demo} (default)")
@@ -5348,7 +5347,7 @@ async def generate_fast_supertrend_signal(
             
             return {
                 "success": True,
-                "message": f"✅ Fast Supertrend Catch signal generated",
+                "message": "✅ Fast Supertrend Catch signal generated",
                 "signal": signal,
                 "strategy_config": strategy.get_config(),
                 "telegram_sent": telegram_sent
@@ -5457,7 +5456,7 @@ async def generate_candlestick_bible_signal(symbol: str = Query("EURUSD_OTC")):
         telegram_sent = False
         try:
             if telegram_notifier and pattern_result['confidence'] >= 70:
-                signal_msg = f"📕 CANDLESTICK BIBLE SIGNAL\n\n"
+                signal_msg = "📕 CANDLESTICK BIBLE SIGNAL\n\n"
                 signal_msg += f"📊 Pattern: {pattern_result['pattern'].upper()}\n"
                 signal_msg += f"💹 Asset: {symbol}\n"
                 signal_msg += f"📈 Signal: {'🟢 BUY/CALL' if pattern_result['signal'] == 'BUY' else '🔴 SELL/PUT'}\n"
@@ -5614,13 +5613,13 @@ async def generate_1m_scalping_signal(symbol: str = Query("EURUSD_OTC")):
         telegram_sent = False
         try:
             if telegram_notifier and signal_result['confidence'] >= 65:
-                msg = f"📈 1-MINUTE SCALPING SIGNAL\n\n"
+                msg = "📈 1-MINUTE SCALPING SIGNAL\n\n"
                 msg += f"💹 Asset: {symbol}\n"
                 msg += f"📊 Direction: {'🟢 BUY/CALL' if signal_result['direction'] == 'BUY' else '🔴 SELL/PUT'}\n"
                 msg += f"🎯 Confidence: {signal_result['confidence']:.1f}%\n"
                 msg += f"💪 Strength: {signal_result['strength']}\n"
                 msg += f"✅ Confirmations: {signal_result['confirmations_count']}\n\n"
-                msg += f"📍 Indicators:\n"
+                msg += "📍 Indicators:\n"
                 msg += f"   RSI(7): {signal_result['indicators']['rsi']} ({signal_result['indicators']['rsi_signal']})\n"
                 msg += f"   BB Position: {signal_result['indicators']['bb_position']}%\n"
                 msg += f"   Volume: {signal_result['indicators']['volume_ratio']}x avg\n"
@@ -5742,7 +5741,7 @@ async def generate_5s_pro_signal(symbol: str = Query("EURUSD_OTC")):
                 direction = signal_result.get('direction', 'HOLD')
                 confidence = signal_result.get('confidence', 0)
                 
-                msg = f"⚡ 5-SECOND PRO SIGNAL\n\n"
+                msg = "⚡ 5-SECOND PRO SIGNAL\n\n"
                 msg += f"💹 Asset: {symbol}\n"
                 msg += f"📊 Direction: {'🟢 UP/CALL' if direction == 'UP' else '🔴 DOWN/PUT'}\n"
                 msg += f"🎯 Confidence: {confidence:.1f}%\n"
@@ -5751,7 +5750,7 @@ async def generate_5s_pro_signal(symbol: str = Query("EURUSD_OTC")):
                 msg += f"✅ Confirmations: {signal_result.get('confirmations_count', 0)}\n\n"
                 
                 indicators = signal_result.get('indicators', {})
-                msg += f"📍 Indicators:\n"
+                msg += "📍 Indicators:\n"
                 msg += f"   EMA(20): {indicators.get('price_vs_ema', 'N/A')}\n"
                 msg += f"   RSI(14): {indicators.get('rsi', 0):.1f} ({indicators.get('rsi_signal', 'N/A')})\n"
                 
@@ -5970,7 +5969,7 @@ async def get_ai_ml_prediction(symbol: str = Query("EURUSD_OTC")):
         if prediction and prediction.get('final_confidence', 0) >= 75:
             try:
                 if telegram_notifier:
-                    msg = f"🤖 AI/ML PREDICTION\n\n"
+                    msg = "🤖 AI/ML PREDICTION\n\n"
                     msg += f"💹 Asset: {symbol}\n"
                     msg += f"📈 Direction: {'🟢 BUY/CALL' if prediction['final_direction'] == 'BUY' else '🔴 SELL/PUT' if prediction['final_direction'] == 'SELL' else '⏸️ HOLD'}\n"
                     msg += f"🎯 Confidence: {prediction['final_confidence']:.1f}%\n"
@@ -6957,7 +6956,7 @@ async def queue_trade_for_bridge(
         
         return {
             "success": True,
-            "message": f"Trade queued for bridge execution",
+            "message": "Trade queued for bridge execution",
             "order_id": result.get('order_id'),
             "status": result.get('status'),
             "pending_count": len(pending),
@@ -9247,8 +9246,6 @@ async def enhanced_disconnect():
 # These endpoints allow the desktop trading client to communicate
 # with the cloud server for signals and trade reporting
 
-from datetime import datetime, timezone
-import asyncio
 
 # Store for pending signals and desktop client status
 _desktop_client_state = {
@@ -10532,7 +10529,7 @@ async def start_telegram_bot_polling(background_tasks: BackgroundTasks):
                     f"📋 Preview: <code>{new_ssid[:20]}...</code>\n"
                     f"⏰ Time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}"
                 )
-                logger.info(f"✅ SSID refreshed and Telegram notified")
+                logger.info("✅ SSID refreshed and Telegram notified")
             except Exception as e:
                 logger.error(f"Error sending SSID refresh notification: {e}")
         
@@ -10545,7 +10542,7 @@ async def start_telegram_bot_polling(background_tasks: BackgroundTasks):
                     f"🔧 Manual refresh may be required\n"
                     f"⏰ Time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}"
                 )
-                logger.warning(f"⚠️ SSID refresh failed, Telegram notified")
+                logger.warning("⚠️ SSID refresh failed, Telegram notified")
             except Exception as e:
                 logger.error(f"Error sending SSID failure notification: {e}")
         
