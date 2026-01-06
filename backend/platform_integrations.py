@@ -142,53 +142,55 @@ class PlatformIntegrationService:
             logger.error(f"Error sending signal to platforms: {e}")
 
     async def send_telegram_signal(self, signal: TradingSignal):
-        """Send signal to Telegram bot with Chicago timezone"""
+        """Send signal to Telegram - optimized for MANUAL TRADING"""
         try:
             # Handle direction as enum or string
             direction_str = signal.direction.value if hasattr(signal.direction, 'value') else str(signal.direction)
-            direction_emoji = "🟢 📈" if direction_str.upper() in ['BUY', 'CALL'] else "🔴 📉"
+            is_call = direction_str.upper() in ['BUY', 'CALL']
+            direction_emoji = "🟢 📈" if is_call else "🔴 📉"
+            action_text = "⬆️ UP / CALL" if is_call else "⬇️ DOWN / PUT"
             
             # Convert timestamp to Chicago timezone for display
             chicago_timestamp = utc_to_chicago(signal.timestamp) if signal.timestamp.tzinfo else signal.timestamp
             chicago_time_str = chicago_timestamp.strftime('%H:%M:%S CT')
             
-            # Add precision entry time if available
-            entry_time_str = ""
-            if signal.precision_entry_time:
-                entry_chicago = utc_to_chicago(signal.precision_entry_time) if signal.precision_entry_time.tzinfo else signal.precision_entry_time
-                entry_time_str = f"\n🎯 Precision Entry: {entry_chicago.strftime('%H:%M:%S CT')}"
+            # Calculate expiry in seconds
+            expiry_seconds = int(signal.expiration_minutes * 60)
+            expiry_display = f"{expiry_seconds}s" if expiry_seconds < 60 else f"{int(signal.expiration_minutes)}m"
             
             # Get strategy name safely
             strategy_name = signal.strategy_used.value if hasattr(signal.strategy_used, 'value') else str(signal.strategy_used)
-            strategy_name = strategy_name.replace('_', ' ').title()
+            strategy_name = strategy_name.replace('_', ' ').replace('TradingStrategy.', '').title()
             
-            # Get market analysis summary safely
-            market_analysis = getattr(signal, 'market_analysis_summary', '') or signal.justification[:200]
-            risk_assessment = getattr(signal, 'risk_assessment', 'Standard risk parameters applied') or 'N/A'
+            # Clean asset name
+            asset_name = signal.symbol.replace('_otc', '').replace('_regular', '').replace('_OTC', '')
+            market_type = "OTC" if 'otc' in signal.symbol.lower() else "Regular"
+            
+            # Confidence stars
+            confidence_stars = "⭐" * min(int(signal.probability / 20), 5)
             
             message = f"""
-🚨 <b>ELITE POCKET TRADING SIGNAL</b> 🚨
+🚨 <b>TRADING SIGNAL - MANUAL TRADE</b> 🚨
 
-{direction_emoji} <b>{direction_str}</b> {signal.symbol}
+{direction_emoji} <b>{action_text}</b>
 
-💰 <b>Entry Price:</b> ${signal.entry_price}
-⏱️ <b>Timeframe:</b> {signal.timeframe} | <b>Expiration:</b> {signal.expiration_minutes} min
-🌐 <b>Market:</b> {signal.market_type.upper() if hasattr(signal.market_type, 'upper') else signal.market_type}
-⚡ <b>Probability:</b> {signal.probability}%
-🎯 <b>Strategy:</b> {strategy_name}
+━━━━━━━━━━━━━━━━━━━━
+📊 <b>Asset:</b> <code>{asset_name}</code> ({market_type})
+⏱️ <b>Expiry:</b> <code>{expiry_display}</code>
+🎯 <b>Confidence:</b> <code>{signal.probability:.0f}%</code> {confidence_stars}
+💰 <b>Entry:</b> <code>${signal.entry_price}</code>
+━━━━━━━━━━━━━━━━━━━━
 
-📊 <b>Analysis:</b>
-{market_analysis[:200]}...
+<b>📋 QUICK GUIDE:</b>
+1️⃣ Open Pocket Option
+2️⃣ Find <code>{asset_name}</code>
+3️⃣ Set <code>{expiry_display}</code> expiry
+4️⃣ Click <b>{action_text}</b>
 
-🔥 <b>Justification:</b>
-{signal.justification[:300]}...
+📈 Strategy: {strategy_name}
+🕐 Time: {chicago_time_str}
 
-💡 <b>Suggested Stake:</b> ${signal.suggested_stake}
-
-🕐 <b>Generated:</b> {chicago_time_str} (Chicago){entry_time_str}
-🌍 <b>Pocket Option Synchronized</b> ✅
-
-#ElitePocketSignals #TradingAlert
+⚡ <i>Act fast - signals are time-sensitive!</i>
             """.strip()
 
             url = f"https://api.telegram.org/bot{self.telegram_bot_token}/sendMessage"
@@ -203,7 +205,7 @@ class PlatformIntegrationService:
             async with aiohttp.ClientSession() as session:
                 async with session.post(url, json=payload) as response:
                     if response.status == 200:
-                        logger.info(f"✅ Signal sent to Telegram successfully: {signal.id}")
+                        logger.info(f"✅ Manual trading signal sent to Telegram: {signal.id}")
                         return True
                     else:
                         error_text = await response.text()
