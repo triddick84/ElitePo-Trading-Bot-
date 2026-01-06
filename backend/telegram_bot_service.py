@@ -282,7 +282,7 @@ class TelegramBotService:
         )
         
         # Log to database
-        if self.db:
+        if self.db is not None:
             await self.db.telegram_trades.insert_one(asdict(result))
         
         return result
