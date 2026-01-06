@@ -1170,8 +1170,9 @@ class ForceSignalGenerator:
                 # Try Williams + ADX + ATR first (highest accuracy target: 83%)
                 try:
                     from strategies.strategy_30s_williams_adx_atr import strategy_30s_williams_adx_atr
-                    from real_market_data_service import real_market_data_service
-                    market_data_list = await real_market_data_service.get_historical_data(symbol, interval='1m', periods=100)
+                    from real_market_data_service import RealMarketDataService
+                    market_service = RealMarketDataService()
+                    market_data_list = await market_service.get_historical_data(symbol, interval='1m', periods=100)
                     
                     if market_data_list and len(market_data_list) >= 30:
                         import pandas as pd
