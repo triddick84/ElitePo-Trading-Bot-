@@ -1206,8 +1206,9 @@ class ForceSignalGenerator:
                 # Try VWAP Momentum as second option
                 try:
                     from strategies.strategy_30s_vwap_momentum import strategy_30s_vwap_momentum
-                    from real_market_data_service import real_market_data_service
-                    market_data_list = await real_market_data_service.get_historical_data(symbol, interval='1m', periods=100)
+                    from real_market_data_service import RealMarketDataService
+                    market_service = RealMarketDataService()
+                    market_data_list = await market_service.get_historical_data(symbol, interval='1m', periods=100)
                     
                     if market_data_list and len(market_data_list) >= 30:
                         import pandas as pd
