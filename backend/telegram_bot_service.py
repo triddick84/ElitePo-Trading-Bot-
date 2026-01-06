@@ -317,14 +317,22 @@ class TelegramBotService:
     
     async def _cmd_start(self, chat_id: str, args: List[str]) -> str:
         return """
-👋 <b>Welcome to Elite Pocket Trading Bot!</b>
+👋 <b>Welcome to GPT Signal Bot!</b>
 
-🤖 I can help you:
-• Receive trading signals automatically
-• Execute trades on Pocket Option
-• Track your trading history
+🤖 I generate trading signals for Pocket Option.
 
-Use /help to see all available commands.
+<b>📱 MANUAL TRADING MODE</b>
+Signals are sent here for you to trade manually.
+
+<b>Quick Start:</b>
+1. Use /signal to generate a signal
+2. Open Pocket Option on your device
+3. Trade based on the signal info
+
+<b>Commands:</b>
+/signal - Generate trading signal
+/help - See all commands
+/status - Bot status
 
 🟢 Bot Status: <b>ONLINE</b>
 """
