@@ -1058,6 +1058,356 @@ class BackendTester:
             print(f"   Enhanced signal accuracy targeting test error: {e}")
             return False
 
+    # ========== AUTHENTICATION API TESTING ==========
+    
+    async def test_auth_register_new_user(self) -> bool:
+        """Test POST /api/auth/register - Register new user"""
+        try:
+            print("   🔍 Testing User Registration")
+            
+            # Generate unique username for testing
+            import time
+            test_username = f"testuser_{int(time.time())}"
+            test_email = f"{test_username}@test.com"
+            
+            user_data = {
+                "username": test_username,
+                "email": test_email,
+                "password": "testpass123"
+            }
+            
+            async with self.session.post(f"{BACKEND_URL}/auth/register", json=user_data) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ User registration successful")
+                    print(f"   📊 Success: {data.get('success')}")
+                    
+                    user = data.get('user', {})
+                    token = data.get('token')
+                    
+                    print(f"   📊 User ID: {user.get('id')}")
+                    print(f"   📊 Username: {user.get('username')}")
+                    print(f"   📊 Email: {user.get('email')}")
+                    print(f"   📊 Role: {user.get('role')}")
+                    print(f"   📊 Token provided: {bool(token)}")
+                    
+                    # Store token for subsequent tests
+                    self.auth_token = token
+                    self.test_user_id = user.get('id')
+                    
+                    # Verify response structure
+                    required_fields = ['success', 'user', 'token']
+                    missing_fields = [f for f in required_fields if f not in data]
+                    
+                    if not missing_fields and data.get('success'):
+                        return True
+                    else:
+                        print(f"   ❌ Missing required fields or failed: {missing_fields}")
+                        return False
+                else:
+                    print(f"   ❌ User registration failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ User registration test error: {e}")
+            return False
+    
+    async def test_auth_login_admin(self) -> bool:
+        """Test POST /api/auth/login - Login with admin credentials"""
+        try:
+            print("   🔍 Testing Admin Login")
+            
+            login_data = {
+                "username": "admin",
+                "password": "admin123"
+            }
+            
+            async with self.session.post(f"{BACKEND_URL}/auth/login", json=login_data) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Admin login successful")
+                    print(f"   📊 Success: {data.get('success')}")
+                    
+                    user = data.get('user', {})
+                    token = data.get('token')
+                    
+                    print(f"   📊 User ID: {user.get('id')}")
+                    print(f"   📊 Username: {user.get('username')}")
+                    print(f"   📊 Email: {user.get('email')}")
+                    print(f"   📊 Role: {user.get('role')}")
+                    print(f"   📊 Token provided: {bool(token)}")
+                    
+                    # Store admin token
+                    self.admin_token = token
+                    
+                    # Verify admin role
+                    if user.get('role') == 'admin' and data.get('success') and token:
+                        return True
+                    else:
+                        print(f"   ❌ Admin login validation failed")
+                        return False
+                else:
+                    print(f"   ❌ Admin login failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Admin login test error: {e}")
+            return False
+    
+    async def test_auth_me_with_token(self) -> bool:
+        """Test GET /api/auth/me - Get user info with JWT token"""
+        try:
+            print("   🔍 Testing Get User Info with Token")
+            
+            if not hasattr(self, 'admin_token') or not self.admin_token:
+                print("   ⚠️ No admin token available, skipping test")
+                return True
+            
+            headers = {
+                "Authorization": f"Bearer {self.admin_token}"
+            }
+            
+            async with self.session.get(f"{BACKEND_URL}/auth/me", headers=headers) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ User info retrieved successfully")
+                    print(f"   📊 Success: {data.get('success')}")
+                    
+                    user = data.get('user', {})
+                    print(f"   📊 User ID: {user.get('id')}")
+                    print(f"   📊 Username: {user.get('username')}")
+                    print(f"   📊 Email: {user.get('email')}")
+                    print(f"   📊 Role: {user.get('role')}")
+                    
+                    # Verify response structure
+                    required_fields = ['success', 'user']
+                    missing_fields = [f for f in required_fields if f not in data]
+                    
+                    if not missing_fields and data.get('success'):
+                        return True
+                    else:
+                        print(f"   ❌ Missing required fields or failed: {missing_fields}")
+                        return False
+                elif response.status == 401:
+                    print(f"   ❌ Unauthorized - token may be invalid")
+                    return False
+                else:
+                    print(f"   ❌ Get user info failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Get user info test error: {e}")
+            return False
+    
+    async def test_auth_token_validation(self) -> bool:
+        """Test JWT token validation and expiration"""
+        try:
+            print("   🔍 Testing JWT Token Validation")
+            
+            # Test with invalid token
+            headers = {
+                "Authorization": "Bearer invalid_token_here"
+            }
+            
+            async with self.session.get(f"{BACKEND_URL}/auth/me", headers=headers) as response:
+                if response.status == 401:
+                    print(f"   ✅ Invalid token correctly rejected")
+                    invalid_token_rejected = True
+                else:
+                    print(f"   ❌ Invalid token not rejected: {response.status}")
+                    invalid_token_rejected = False
+            
+            # Test without token
+            async with self.session.get(f"{BACKEND_URL}/auth/me") as response:
+                if response.status == 401:
+                    print(f"   ✅ Missing token correctly rejected")
+                    missing_token_rejected = True
+                else:
+                    print(f"   ❌ Missing token not rejected: {response.status}")
+                    missing_token_rejected = False
+            
+            return invalid_token_rejected and missing_token_rejected
+            
+        except Exception as e:
+            print(f"   ❌ Token validation test error: {e}")
+            return False
+
+    # ========== TELEGRAM BOT API TESTING ==========
+    
+    async def test_telegram_status(self) -> bool:
+        """Test GET /api/telegram/status - Get Telegram bot status"""
+        try:
+            print("   🔍 Testing Telegram Bot Status")
+            
+            async with self.session.get(f"{BACKEND_URL}/telegram/status") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Telegram status retrieved successfully")
+                    print(f"   📊 Bot running: {data.get('is_running')}")
+                    print(f"   📊 Auto trading: {data.get('auto_trading_enabled')}")
+                    print(f"   📊 Demo mode: {data.get('demo_mode')}")
+                    print(f"   📊 Trade amount: {data.get('trade_amount')}")
+                    print(f"   📊 Chat ID: {data.get('default_chat_id')}")
+                    print(f"   📊 Token configured: {data.get('bot_token_configured')}")
+                    
+                    # Verify response structure
+                    required_fields = ['is_running', 'auto_trading_enabled', 'demo_mode', 'trade_amount']
+                    missing_fields = [f for f in required_fields if f not in data]
+                    
+                    if not missing_fields:
+                        return True
+                    else:
+                        print(f"   ❌ Missing required fields: {missing_fields}")
+                        return False
+                else:
+                    print(f"   ❌ Telegram status failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Telegram status test error: {e}")
+            return False
+    
+    async def test_telegram_send_message(self) -> bool:
+        """Test POST /api/telegram/send - Send message to Telegram"""
+        try:
+            print("   🔍 Testing Send Telegram Message")
+            
+            message_data = {
+                "message": "Test from API - Backend Testing Suite"
+            }
+            
+            async with self.session.post(f"{BACKEND_URL}/telegram/send", json=message_data) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Message sent successfully")
+                    print(f"   📊 Success: {data.get('success')}")
+                    print(f"   📊 Message ID: {data.get('message_id')}")
+                    
+                    if data.get('success'):
+                        return True
+                    else:
+                        print(f"   ❌ Message send failed: {data.get('error')}")
+                        return False
+                else:
+                    print(f"   ❌ Send message failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Send message test error: {e}")
+            return False
+    
+    async def test_telegram_settings_update(self) -> bool:
+        """Test PUT /api/telegram/settings - Update Telegram settings"""
+        try:
+            print("   🔍 Testing Update Telegram Settings")
+            
+            settings_data = {
+                "auto_trading_enabled": True,
+                "demo_mode": True,
+                "trade_amount": 5.0
+            }
+            
+            async with self.session.put(f"{BACKEND_URL}/telegram/settings", json=settings_data) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Settings updated successfully")
+                    print(f"   📊 Auto trading: {data.get('auto_trading_enabled')}")
+                    print(f"   📊 Demo mode: {data.get('demo_mode')}")
+                    print(f"   📊 Trade amount: {data.get('trade_amount')}")
+                    
+                    # Verify settings were applied
+                    if (data.get('auto_trading_enabled') == True and 
+                        data.get('demo_mode') == True and 
+                        data.get('trade_amount') == 5.0):
+                        return True
+                    else:
+                        print(f"   ❌ Settings not applied correctly")
+                        return False
+                else:
+                    print(f"   ❌ Update settings failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Update settings test error: {e}")
+            return False
+    
+    async def test_telegram_stats(self) -> bool:
+        """Test GET /api/telegram/stats - Get Telegram trading statistics"""
+        try:
+            print("   🔍 Testing Telegram Trading Stats")
+            
+            async with self.session.get(f"{BACKEND_URL}/telegram/stats") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Stats retrieved successfully")
+                    print(f"   📊 Total signals: {data.get('total_signals')}")
+                    print(f"   📊 Total trades: {data.get('total_trades')}")
+                    print(f"   📊 Wins: {data.get('wins')}")
+                    print(f"   📊 Losses: {data.get('losses')}")
+                    print(f"   📊 Win rate: {data.get('win_rate')}%")
+                    print(f"   📊 Total profit: ${data.get('total_profit')}")
+                    
+                    # Verify response structure
+                    required_fields = ['total_signals', 'total_trades', 'wins', 'losses', 'win_rate']
+                    missing_fields = [f for f in required_fields if f not in data]
+                    
+                    if not missing_fields:
+                        return True
+                    else:
+                        print(f"   ❌ Missing required fields: {missing_fields}")
+                        return False
+                else:
+                    print(f"   ❌ Get stats failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Get stats test error: {e}")
+            return False
+    
+    async def test_telegram_send_trading_signal(self) -> bool:
+        """Test POST /api/telegram/send-signal - Send trading signal to Telegram"""
+        try:
+            print("   🔍 Testing Send Trading Signal to Telegram")
+            
+            signal_data = {
+                "symbol": "EURUSD_otc",
+                "direction": "CALL",
+                "confidence": 85.5,
+                "entry_price": 1.0542,
+                "timeframe": "1m",
+                "expiration_seconds": 60,
+                "strategy": "triple_confluence",
+                "reasoning": "RSI oversold + Stochastic crossover + Price at lower Bollinger Band"
+            }
+            
+            async with self.session.post(f"{BACKEND_URL}/telegram/send-signal", json=signal_data) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"   ✅ Trading signal sent successfully")
+                    print(f"   📊 Success: {data.get('success')}")
+                    print(f"   📊 Message ID: {data.get('message_id')}")
+                    
+                    if data.get('success'):
+                        return True
+                    else:
+                        print(f"   ❌ Signal send failed: {data.get('error')}")
+                        return False
+                else:
+                    print(f"   ❌ Send signal failed: {response.status}")
+                    error_text = await response.text()
+                    print(f"   Error details: {error_text}")
+                    return False
+        except Exception as e:
+            print(f"   ❌ Send signal test error: {e}")
+            return False
+
     # ========== CUSTOM STRATEGIES API TESTING ==========
     
     async def test_custom_strategies_get_all(self) -> bool:
