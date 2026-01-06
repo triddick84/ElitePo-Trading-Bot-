@@ -314,7 +314,7 @@ class AuthService:
     async def create_default_admin(self):
         """Create default admin user if none exists"""
         try:
-            if not self.db:
+            if self.db is None:
                 return
             
             admin = await self.db.users.find_one({'role': 'admin'})
