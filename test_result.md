@@ -1,6 +1,88 @@
 # Test Results - GPT Signal Bot
 
-## Backend Testing Results - COMPLETED ✅
+## Authentication and Telegram Bot Testing Results - COMPLETED ✅
+
+### Test 1: User Authentication ✅
+**Status:** PASSED  
+**Endpoints:** POST /api/auth/register, POST /api/auth/login, GET /api/auth/me  
+**Purpose:** Verify user registration, login, and JWT token validation
+
+**Results:**
+- ✅ User Registration: Successfully created new user with JWT token
+- ✅ Admin Login: Successfully logged in with admin credentials (admin/admin123)
+- ✅ JWT Token Validation: Token correctly validates user info and rejects invalid tokens
+- ✅ Token Security: Properly rejects invalid and missing tokens with 401 status
+
+**Conclusion:** Authentication system is fully functional with proper JWT token management.
+
+---
+
+### Test 2: Telegram Bot API ✅
+**Status:** PASSED  
+**Endpoints:** GET /api/telegram/status, POST /api/telegram/send, PUT /api/telegram/settings, GET /api/telegram/stats  
+**Purpose:** Verify Telegram bot configuration and messaging functionality
+
+**Results:**
+- ✅ Bot Status: Telegram bot is enabled and configured (Chat ID: 6434316177)
+- ✅ Send Message: Successfully sent "Test from API" message (Message ID: 16961)
+- ✅ Settings Update: Successfully enabled auto_trading and set demo mode
+- ✅ Trading Stats: Retrieved statistics (1 signal sent, 0 trades executed)
+
+**Conclusion:** Telegram bot integration is fully operational with proper message delivery.
+
+---
+
+### Test 3: Send Trading Signal to Telegram ✅
+**Status:** PASSED  
+**Endpoint:** POST /api/telegram/send-signal  
+**Purpose:** Verify trading signal delivery to Telegram
+
+**Test Payload:**
+```json
+{
+  "symbol": "EURUSD_otc",
+  "direction": "CALL",
+  "confidence": 85.5,
+  "entry_price": 1.0542,
+  "timeframe": "1m",
+  "expiration_seconds": 60,
+  "strategy": "triple_confluence",
+  "reasoning": "RSI oversold + Stochastic crossover + Price at lower Bollinger Band"
+}
+```
+
+**Results:**
+- ✅ Signal Sent: Successfully delivered trading signal to Telegram (Message ID: 16962)
+- ✅ Message Format: Proper formatting with direction, confidence, strategy details
+- ✅ Database Logging: Signal properly logged to telegram_signals collection
+
+**Conclusion:** Trading signal delivery to Telegram is working correctly with proper formatting and logging.
+
+---
+
+## Summary
+
+**All 10 Authentication and Telegram Bot tests PASSED with 100% success rate.**
+
+The new Authentication and Telegram Bot features are working correctly:
+1. ✅ User registration and login with JWT tokens
+2. ✅ Admin authentication (admin/admin123) working
+3. ✅ JWT token validation and security
+4. ✅ Telegram bot status and configuration
+5. ✅ Telegram message sending functionality
+6. ✅ Telegram settings management
+7. ✅ Trading statistics retrieval
+8. ✅ Trading signal delivery to Telegram
+
+**Backend API Status:** FULLY FUNCTIONAL ✅
+
+**Fixed Issues During Testing:**
+- Fixed database boolean comparison issue in telegram_bot_service.py
+- Updated API response structure handling for proper test validation
+
+---
+
+## Previous Backend Testing Results - COMPLETED ✅
 
 ### Test 1: Default Configuration Endpoint ✅
 **Status:** PASSED  
@@ -64,19 +146,6 @@
 - ✅ NOT using synthetic data (as required)
 
 **Conclusion:** System correctly falls back to external data providers (Alpha Vantage) when MongoDB data is not available.
-
----
-
-## Summary
-
-**All 3 critical backend tests PASSED with 100% success rate.**
-
-The GPT Signal Bot backend is working correctly:
-1. ✅ Default configuration endpoint returns proper startup settings
-2. ✅ Backtesting uses real MongoDB data when available
-3. ✅ Backtesting falls back to external providers (not synthetic data) when MongoDB data is unavailable
-
-**Backend API Status:** FULLY FUNCTIONAL ✅
 
 ---
 
