@@ -24,6 +24,9 @@ class BackendTester:
         self.test_results = []
         self.failed_tests = []
         self.test_strategy_id = None  # For storing test strategy ID for cleanup
+        self.auth_token = None  # For storing user auth token
+        self.admin_token = None  # For storing admin auth token
+        self.test_user_id = None  # For storing test user ID
         
     async def setup(self):
         """Setup test session"""
