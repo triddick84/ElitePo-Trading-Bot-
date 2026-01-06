@@ -20289,6 +20289,56 @@ async def main():
     """Main test runner - run Telegram Signal Flow tests"""
     return await run_telegram_signal_flow_tests()
 
+async def run_telegram_signal_flow_tests():
+    """Run tests for the Telegram signal sending flow that was just fixed"""
+    print("🚀 Testing Telegram Signal Sending Flow")
+    print("=" * 80)
+    print("Issue Fixed: Telegram signals weren't being sent because signal.direction was an Enum but was being compared as string")
+    print("Testing: Telegram bot configuration, message sending, signal generation, and log verification")
+    print("=" * 80)
+    
+    tester = BackendTester()
+    await tester.setup()
+    
+    # Define Telegram Signal Flow tests
+    tests = [
+        ("Health Check", tester.test_health_check),
+        
+        # Test Flow as specified in review request
+        ("GET /api/telegram-bot/status - Check Telegram bot is configured", tester.test_telegram_bot_status),
+        ("POST /api/telegram-bot/send - Test basic message sending", tester.test_telegram_bot_send_message),
+        ("POST /api/signals/force-generate - Generate trading signals", tester.test_force_generate_signals_with_telegram),
+        ("GET /api/telegram-bot/history - Check if signals were recorded", tester.test_telegram_bot_history),
+        ("Check backend logs for 'Signal sent to Telegram successfully'", tester.check_backend_logs_for_telegram_signals),
+    ]
+    
+    # Run all tests
+    for test_name, test_func in tests:
+        await tester.run_test(test_name, test_func)
+    
+    await tester.cleanup()
+    
+    # Print summary
+    print("\n" + "=" * 80)
+    print("🏁 Telegram Signal Flow Testing Complete: {}/{} tests passed".format(
+        len(tests) - len(tester.failed_tests), len(tests)
+    ))
+    print("=" * 80)
+    
+    total_tests = len(tests)
+    passed_tests = total_tests - len(tester.failed_tests)
+    
+    if tester.failed_tests:
+        print(f"\n❌ Failed Tests:")
+        for test in tester.failed_tests:
+            print(f"   - {test}")
+        print(f"\n📊 Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+        return False
+    else:
+        print(f"\n🎉 All Telegram Signal Flow tests passed!")
+        print(f"\n📊 Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+        return True
+
 async def run_review_request_tests():
     """Run tests for the specific features mentioned in the review request"""
     print("🚀 Testing Review Request Features")
