@@ -10412,8 +10412,8 @@ class TelegramSettingsRequest(BaseModel):
     demo_mode: Optional[bool] = None
     trade_amount: Optional[float] = None
 
-@api_router.get("/telegram/status")
-async def get_telegram_status():
+@api_router.get("/telegram-bot/status")
+async def get_telegram_bot_status():
     """Get Telegram bot status"""
     telegram_bot = get_telegram_bot(db)
     return {
@@ -10428,15 +10428,15 @@ async def get_telegram_status():
         }
     }
 
-@api_router.post("/telegram/send")
-async def send_telegram_message(request: TelegramMessageRequest):
+@api_router.post("/telegram-bot/send")
+async def send_telegram_bot_message(request: TelegramMessageRequest):
     """Send a message to Telegram"""
     telegram_bot = get_telegram_bot(db)
     result = await telegram_bot.send_message(request.message, request.chat_id)
     return result
 
-@api_router.post("/telegram/send-signal")
-async def send_signal_to_telegram(signal_data: Dict):
+@api_router.post("/telegram-bot/send-signal")
+async def send_signal_to_telegram_bot(signal_data: Dict):
     """Send a trading signal to Telegram"""
     telegram_bot = get_telegram_bot(db)
     
@@ -10456,8 +10456,8 @@ async def send_signal_to_telegram(signal_data: Dict):
     result = await telegram_bot.send_signal(signal)
     return result
 
-@api_router.put("/telegram/settings")
-async def update_telegram_settings(settings: TelegramSettingsRequest):
+@api_router.put("/telegram-bot/settings")
+async def update_telegram_bot_settings(settings: TelegramSettingsRequest):
     """Update Telegram bot settings"""
     telegram_bot = get_telegram_bot(db)
     
@@ -10468,6 +10468,19 @@ async def update_telegram_settings(settings: TelegramSettingsRequest):
     if settings.trade_amount is not None:
         telegram_bot.trade_amount = settings.trade_amount
     
+    # Save settings to database
+    if db is not None:
+        await db.telegram_bot_settings.update_one(
+            {'id': 'default'},
+            {'$set': {
+                'auto_trading_enabled': telegram_bot.auto_trading_enabled,
+                'demo_mode': telegram_bot.demo_mode,
+                'trade_amount': telegram_bot.trade_amount,
+                'updated_at': datetime.now(timezone.utc).isoformat()
+            }},
+            upsert=True
+        )
+    
     return {
         "success": True,
         "settings": {
@@ -10477,8 +10490,8 @@ async def update_telegram_settings(settings: TelegramSettingsRequest):
         }
     }
 
-@api_router.post("/telegram/start")
-async def start_telegram_bot(background_tasks: BackgroundTasks):
+@api_router.post("/telegram-bot/start")
+async def start_telegram_bot_polling(background_tasks: BackgroundTasks):
     """Start Telegram bot polling"""
     telegram_bot = get_telegram_bot(db)
     
@@ -10495,7 +10508,7 @@ async def start_telegram_bot(background_tasks: BackgroundTasks):
             )
             if result and result.get('signals'):
                 signal = result['signals'][0]
-                await send_signal_to_telegram(signal)
+                await send_signal_to_telegram_bot(signal)
         except Exception as e:
             logger.error(f"Signal callback error: {e}")
     
@@ -10506,15 +10519,15 @@ async def start_telegram_bot(background_tasks: BackgroundTasks):
     
     return {"success": True, "message": "Telegram bot started"}
 
-@api_router.post("/telegram/stop")
-async def stop_telegram_bot():
+@api_router.post("/telegram-bot/stop")
+async def stop_telegram_bot_polling():
     """Stop Telegram bot polling"""
     telegram_bot = get_telegram_bot(db)
     await telegram_bot.stop_polling()
     return {"success": True, "message": "Telegram bot stopped"}
 
-@api_router.get("/telegram/history")
-async def get_telegram_history(limit: int = 50):
+@api_router.get("/telegram-bot/history")
+async def get_telegram_bot_history(limit: int = 50):
     """Get Telegram signal and trade history"""
     signals = await db.telegram_signals.find(
         {}, {'_id': 0}
@@ -10530,8 +10543,8 @@ async def get_telegram_history(limit: int = 50):
         "trades": trades
     }
 
-@api_router.get("/telegram/stats")
-async def get_telegram_stats():
+@api_router.get("/telegram-bot/stats")
+async def get_telegram_bot_stats():
     """Get Telegram trading statistics"""
     total_signals = await db.telegram_signals.count_documents({})
     total_trades = await db.telegram_trades.count_documents({})
