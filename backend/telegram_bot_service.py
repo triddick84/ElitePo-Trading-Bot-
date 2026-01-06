@@ -333,29 +333,30 @@ Use /help to see all available commands.
         return """
 <b>📚 AVAILABLE COMMANDS</b>
 
-<b>🔌 Connection:</b>
-/connect - Connect to Pocket Option
-/balance - Check balance (shows connection status)
+<b>📊 Signals:</b>
+/signal - Generate a trading signal
+/connect - Connection info
 
-<b>📊 Signals & Trading:</b>
-/signal - Force generate a new signal
-/enable - Enable auto-trading
-/disable - Disable auto-trading
-
-<b>💰 Account:</b>
-/status - Bot status and settings
-/demo - Switch to demo mode
-/real - Switch to real mode (caution!)
-/amount [value] - Set trade amount
+<b>⚙️ Settings:</b>
+/status - Bot status
+/settings - Current settings
 
 <b>📈 History & Stats:</b>
-/history - Recent trade history
-/stats - Trading statistics
-/settings - Current settings
+/history - Recent signals
+/stats - Signal statistics
 
 <b>ℹ️ Info:</b>
 /start - Welcome message
 /help - This help message
+
+━━━━━━━━━━━━━━━━━━━━
+<b>📱 MANUAL TRADING MODE</b>
+
+Signals are sent here for you to trade manually on Pocket Option. When you receive a signal:
+1. Open Pocket Option
+2. Find the asset
+3. Set the expiry time
+4. Click UP or DOWN as indicated
 """
     
     async def _cmd_status(self, chat_id: str, args: List[str]) -> str:
