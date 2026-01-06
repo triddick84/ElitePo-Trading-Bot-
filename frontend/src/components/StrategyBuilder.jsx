@@ -384,11 +384,17 @@ const assets = [
 const ConditionCard = ({ condition, onRemove, onUpdate, index }) => {
   const template = INDICATOR_TEMPLATES[condition.indicator];
   const selectedCondition = template?.conditions.find(c => c.id === condition.conditionType);
+  
+  // Get the effective signal direction (considering reversal)
+  const isReversed = condition.reversal === true;
+  const effectiveSignal = selectedCondition?.signal ? 
+    (isReversed ? (selectedCondition.signal === 'CALL' ? 'PUT' : selectedCondition.signal === 'PUT' ? 'CALL' : selectedCondition.signal) : selectedCondition.signal) 
+    : null;
 
   return (
     <div className={`p-4 rounded-lg border-2 ${
-      selectedCondition?.signal === 'CALL' ? 'border-green-500/30 bg-green-500/5' :
-      selectedCondition?.signal === 'PUT' ? 'border-red-500/30 bg-red-500/5' :
+      effectiveSignal === 'CALL' ? 'border-green-500/30 bg-green-500/5' :
+      effectiveSignal === 'PUT' ? 'border-red-500/30 bg-red-500/5' :
       'border-slate-600/30 bg-slate-800/30'
     }`}>
       <div className="flex items-center justify-between mb-3">
@@ -397,17 +403,30 @@ const ConditionCard = ({ condition, onRemove, onUpdate, index }) => {
           <span className="font-medium text-white">{template?.name || condition.indicator}</span>
           {selectedCondition && (
             <Badge className={
-              selectedCondition.signal === 'CALL' ? 'bg-green-500/20 text-green-400' :
-              selectedCondition.signal === 'PUT' ? 'bg-red-500/20 text-red-400' :
+              effectiveSignal === 'CALL' ? 'bg-green-500/20 text-green-400' :
+              effectiveSignal === 'PUT' ? 'bg-red-500/20 text-red-400' :
               'bg-slate-500/20 text-slate-400'
             }>
-              {selectedCondition.signal}
+              {isReversed && <span className="mr-1">🔄</span>}
+              {effectiveSignal}
+              {isReversed && <span className="ml-1 text-xs">(reversed)</span>}
             </Badge>
           )}
         </div>
-        <Button variant="ghost" size="sm" onClick={onRemove} className="text-red-400 hover:bg-red-500/20">
-          <Trash2 className="w-4 h-4" />
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* Reversal Toggle */}
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-slate-700/50 border border-slate-600">
+            <span className="text-xs text-slate-400">Reverse</span>
+            <Switch
+              checked={isReversed}
+              onCheckedChange={(checked) => onUpdate({ ...condition, reversal: checked })}
+              className="data-[state=checked]:bg-purple-500"
+            />
+          </div>
+          <Button variant="ghost" size="sm" onClick={onRemove} className="text-red-400 hover:bg-red-500/20">
+            <Trash2 className="w-4 h-4" />
+          </Button>
+        </div>
       </div>
 
       {/* Indicator Selection */}
