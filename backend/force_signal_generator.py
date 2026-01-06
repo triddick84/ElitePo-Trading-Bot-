@@ -1161,8 +1161,81 @@ class ForceSignalGenerator:
                 )
                 
             elif timeframe in ['30s', '30sec', '30 sec']:
-                # Use NEW 30s SuperTrend + MA Crossover strategy
-                logger.info("   🚀 Applying 30s SuperTrend MA Strategy (ATR=2, Mult=1.1)")
+                # NEW: Try High-Accuracy 30s strategies first
+                logger.info(f"⚡ Trying HIGH-ACCURACY 30s strategies for {symbol}")
+                
+                # Try Williams + ADX + ATR first (highest accuracy target: 83%)
+                try:
+                    from strategies.strategy_30s_williams_adx_atr import strategy_30s_williams_adx_atr
+                    from real_market_data_service import real_market_data_service
+                    market_data_list = await real_market_data_service.get_historical_data(symbol, interval='1m', periods=100)
+                    
+                    if market_data_list and len(market_data_list) >= 30:
+                        import pandas as pd
+                        df = pd.DataFrame([{
+                            'open': md.open_price,
+                            'high': md.high_price,
+                            'low': md.low_price,
+                            'close': md.close_price,
+                            'volume': md.volume if hasattr(md, 'volume') else 0
+                        } for md in market_data_list])
+                        
+                        result = strategy_30s_williams_adx_atr.generate_signal(df, symbol)
+                        
+                        if result and result.get('direction') != 'NEUTRAL' and result.get('confidence', 0) >= 75:
+                            logger.info(f"✅ 30s Williams+ADX+ATR: {symbol} → {result['direction']} ({result['confidence']:.1f}%)")
+                            return {
+                                'direction': result['direction'],
+                                'confidence': result['confidence'],
+                                'probability': result['confidence'],
+                                'reasoning': result.get('reasoning', result.get('reason', '')),
+                                'strategy': '30s_williams_adx_atr',
+                                'timeframe': '30s',
+                                'chart_type': chart_type,
+                                'high_accuracy_strategy': True,
+                                'indicators': result.get('indicators', {}),
+                                'suggested_stake': 2.0
+                            }
+                except Exception as e:
+                    logger.warning(f"30s Williams+ADX+ATR failed: {e}")
+                
+                # Try VWAP Momentum as second option
+                try:
+                    from strategies.strategy_30s_vwap_momentum import strategy_30s_vwap_momentum
+                    from real_market_data_service import real_market_data_service
+                    market_data_list = await real_market_data_service.get_historical_data(symbol, interval='1m', periods=100)
+                    
+                    if market_data_list and len(market_data_list) >= 30:
+                        import pandas as pd
+                        df = pd.DataFrame([{
+                            'open': md.open_price,
+                            'high': md.high_price,
+                            'low': md.low_price,
+                            'close': md.close_price,
+                            'volume': md.volume if hasattr(md, 'volume') else 0
+                        } for md in market_data_list])
+                        
+                        result = strategy_30s_vwap_momentum.generate_signal(df, symbol)
+                        
+                        if result and result.get('direction') != 'NEUTRAL' and result.get('confidence', 0) >= 75:
+                            logger.info(f"✅ 30s VWAP Momentum: {symbol} → {result['direction']} ({result['confidence']:.1f}%)")
+                            return {
+                                'direction': result['direction'],
+                                'confidence': result['confidence'],
+                                'probability': result['confidence'],
+                                'reasoning': result.get('reasoning', result.get('reason', '')),
+                                'strategy': '30s_vwap_momentum',
+                                'timeframe': '30s',
+                                'chart_type': chart_type,
+                                'high_accuracy_strategy': True,
+                                'indicators': result.get('indicators', {}),
+                                'suggested_stake': 2.0
+                            }
+                except Exception as e:
+                    logger.warning(f"30s VWAP Momentum failed: {e}")
+                
+                # Fallback to SuperTrend + MA Crossover strategy
+                logger.info("   🚀 Falling back to 30s SuperTrend MA Strategy (ATR=2, Mult=1.1)")
                 # Get market data for analysis
                 from real_market_data_service import RealMarketDataService
                 market_service = RealMarketDataService()
