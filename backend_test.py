@@ -1319,14 +1319,18 @@ class BackendTester:
                 if response.status == 200:
                     data = await response.json()
                     print(f"   ✅ Settings updated successfully")
-                    print(f"   📊 Auto trading: {data.get('auto_trading_enabled')}")
-                    print(f"   📊 Demo mode: {data.get('demo_mode')}")
-                    print(f"   📊 Trade amount: {data.get('trade_amount')}")
+                    print(f"   📊 Success: {data.get('success')}")
+                    
+                    settings = data.get('settings', {})
+                    print(f"   📊 Auto trading: {settings.get('auto_trading_enabled')}")
+                    print(f"   📊 Demo mode: {settings.get('demo_mode')}")
+                    print(f"   📊 Trade amount: {settings.get('trade_amount')}")
                     
                     # Verify settings were applied
-                    if (data.get('auto_trading_enabled') == True and 
-                        data.get('demo_mode') == True and 
-                        data.get('trade_amount') == 5.0):
+                    if (data.get('success') and
+                        settings.get('auto_trading_enabled') == True and 
+                        settings.get('demo_mode') == True and 
+                        settings.get('trade_amount') == 5.0):
                         return True
                     else:
                         print(f"   ❌ Settings not applied correctly")
