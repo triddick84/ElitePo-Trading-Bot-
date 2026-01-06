@@ -68,6 +68,10 @@ from pocket_option_auto_trader import (
 from ai_ml_trading_system import ai_ml_trading_system, get_ai_prediction
 from money_management_system import money_management, get_optimal_stake, run_risk_checks
 
+# Import Auth and Telegram Bot Services
+from auth_service import get_auth_service, UserRole
+from telegram_bot_service import get_telegram_bot, TradingSignal as TelegramTradingSignal
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
