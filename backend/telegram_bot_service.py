@@ -359,15 +359,31 @@ Use /help to see all available commands.
         mode = "🟢 DEMO" if self.demo_mode else "🔴 REAL"
         auto = "✅ ENABLED" if self.auto_trading_enabled else "❌ DISABLED"
         
+        # Check Pocket Option connection
+        connection_status = "❌ Not Connected"
+        balance_info = ""
+        try:
+            from pocket_option_auto_trader import get_auto_trading_service
+            trader = get_auto_trading_service()
+            if trader.is_running and trader.ws_client and trader.ws_client.is_ready():
+                connection_status = "✅ Connected"
+                balance = trader.ws_client.get_balance()
+                balance_info = f"\n💰 Balance: <code>${balance:.2f}</code>"
+        except:
+            pass
+        
         return f"""
 <b>🤖 BOT STATUS</b>
 
 🟢 Bot: <b>ONLINE</b>
-💰 Mode: <b>{mode}</b>
+🔌 Pocket Option: <b>{connection_status}</b>{balance_info}
+💵 Mode: <b>{mode}</b>
 🤖 Auto-Trading: <b>{auto}</b>
-💵 Trade Amount: <b>${self.trade_amount}</b>
+💰 Trade Amount: <b>${self.trade_amount}</b>
 
 ⏰ Last Update: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+💡 Use /connect to connect to Pocket Option
 """
     
     async def _cmd_balance(self, chat_id: str, args: List[str]) -> str:
