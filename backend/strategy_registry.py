@@ -53,11 +53,43 @@ class StrategyRegistry:
             self.strategies['15s_ema_crossover'] = strategy_15s_ema_crossover
             self.strategies['15s_rsi_stochastic'] = strategy_15s_rsi_stochastic
             
+            # NEW: 15s Triple Confluence (High Accuracy - 85%+ target)
+            try:
+                from strategies.strategy_15s_triple_confluence import strategy_15s_triple_confluence
+                self.strategies['15s_triple_confluence'] = strategy_15s_triple_confluence
+                logger.info("✅ Loaded 15s Triple Confluence Strategy (RSI+Stoch+BB)")
+            except Exception as e:
+                logger.warning(f"Could not load 15s Triple Confluence: {e}")
+            
+            # NEW: 15s EMA Cascade (3-5-8-13)
+            try:
+                from strategies.strategy_15s_ema_cascade import strategy_15s_ema_cascade
+                self.strategies['15s_ema_cascade'] = strategy_15s_ema_cascade
+                logger.info("✅ Loaded 15s EMA Cascade Strategy (3-5-8-13)")
+            except Exception as e:
+                logger.warning(f"Could not load 15s EMA Cascade: {e}")
+            
             # 30-second strategies
             from strategies.strategy_30s_bollinger_rsi import strategy_30s_bollinger_rsi
             from strategies.strategy_30s_macd_keltner import strategy_30s_macd_keltner
             self.strategies['30s_bollinger_rsi'] = strategy_30s_bollinger_rsi
             self.strategies['30s_macd_keltner'] = strategy_30s_macd_keltner
+            
+            # NEW: 30s Williams %R + ADX + ATR (High Accuracy - 83%+ target)
+            try:
+                from strategies.strategy_30s_williams_adx_atr import strategy_30s_williams_adx_atr
+                self.strategies['30s_williams_adx_atr'] = strategy_30s_williams_adx_atr
+                logger.info("✅ Loaded 30s Williams+ADX+ATR Strategy")
+            except Exception as e:
+                logger.warning(f"Could not load 30s Williams+ADX+ATR: {e}")
+            
+            # NEW: 30s VWAP Momentum
+            try:
+                from strategies.strategy_30s_vwap_momentum import strategy_30s_vwap_momentum
+                self.strategies['30s_vwap_momentum'] = strategy_30s_vwap_momentum
+                logger.info("✅ Loaded 30s VWAP Momentum Strategy")
+            except Exception as e:
+                logger.warning(f"Could not load 30s VWAP Momentum: {e}")
             
             # 1-minute strategies
             from strategies.strategy_1m_rsi_divergence import strategy_1m_rsi_divergence
