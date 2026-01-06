@@ -501,6 +501,11 @@ const ConditionCard = ({ condition, onRemove, onUpdate, index }) => {
       {selectedCondition && (
         <div className="text-xs text-slate-400 italic">
           💡 {selectedCondition.description}
+          {isReversed && (
+            <span className="ml-2 text-purple-400">
+              🔄 Signal will be reversed ({selectedCondition.signal} → {effectiveSignal})
+            </span>
+          )}
         </div>
       )}
     </div>
