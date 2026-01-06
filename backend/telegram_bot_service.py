@@ -471,9 +471,20 @@ Make sure you understand the risks.
     
     async def _cmd_force_signal(self, chat_id: str, args: List[str]) -> str:
         if self._signal_callback:
+            # Send immediate feedback
+            await self.send_message("🔄 <b>Generating signal...</b>\n\nPlease wait, analyzing market conditions...", chat_id)
+            # Execute callback
             asyncio.create_task(self._signal_callback())
-            return "🔄 Generating signal... Please wait."
-        return "⚠️ Signal generator not connected."
+            return ""  # Empty string since we already sent a message
+        return """
+⚠️ <b>Signal Generator Not Connected</b>
+
+The signal generator is not properly initialized.
+Please:
+1. Make sure the Telegram bot was started from the dashboard
+2. Try stopping and restarting the bot
+3. Check the backend logs for errors
+"""
     
     async def _cmd_trade_history(self, chat_id: str, args: List[str]) -> str:
         if self.db is None:
