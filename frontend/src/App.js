@@ -31,12 +31,15 @@ import AIMLModelsPage from "./components/AIMLModelsPage";
 import SignalCenterPage from "./components/SignalCenterPage";
 import BacktestingPage from "./components/BacktestingPage";
 import TelegramBotPage from "./components/TelegramBotPage";
-import { AuthProvider, LoginPage, UserMenu, useAuth } from "./components/AuthComponents";
+import { AuthProvider, LoginPage, useAuth } from "./components/AuthComponents";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
 const API = BACKEND_URL ? `${BACKEND_URL}/api` : '';
 
-function App() {
+// Protected App Content - only shown when authenticated
+function ProtectedApp() {
+  const { user, logout, isAuthenticated, loading } = useAuth();
+  
   // All hooks must be declared at the top before any conditional returns
   const [botStatus, setBotStatus] = useState(null);
   const [activeView, setActiveView] = useState("dashboard");
@@ -84,7 +87,7 @@ function App() {
 
   // useEffect must be after state declarations but before conditional returns
   useEffect(() => {
-    if (!BACKEND_URL) return; // Skip if no backend URL
+    if (!BACKEND_URL || !isAuthenticated) return; // Skip if no backend URL or not authenticated
     
     fetchBotStatus();
     fetchLiveSignals();
@@ -106,55 +109,34 @@ function App() {
       clearInterval(signalsInterval);
       window.removeEventListener('navigate', handleNavigate);
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]); // eslint-disable-line react-hooks/exhaustive-deps
   
-  // Check if backend URL is configured (now AFTER all hooks)
-  if (!BACKEND_URL) {
+  // Show loading while checking auth
+  if (loading) {
     return (
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh',
-        backgroundColor: '#1a1a1a',
-        color: '#fff',
-        fontFamily: 'Arial, sans-serif',
-        padding: '20px',
-        textAlign: 'center'
-      }}>
-        <h1 style={{ fontSize: '2rem', marginBottom: '1rem', color: '#ff4444' }}>⚠️ Configuration Error</h1>
-        <p style={{ fontSize: '1.2rem', marginBottom: '1rem' }}>Backend URL is not configured</p>
-        <p style={{ fontSize: '1rem', color: '#888' }}>Please ensure REACT_APP_BACKEND_URL is set in the .env file</p>
-        <div style={{ 
-          marginTop: '2rem', 
-          padding: '1rem', 
-          backgroundColor: '#2a2a2a', 
-          borderRadius: '8px',
-          maxWidth: '600px'
-        }}>
-          <p style={{ fontSize: '0.9rem', color: '#aaa', marginBottom: '0.5rem' }}>
-            Current .env location: /app/frontend/.env
-          </p>
-          <p style={{ fontSize: '0.9rem', color: '#aaa' }}>
-            Required variable: REACT_APP_BACKEND_URL=&lt;your-backend-url&gt;
-          </p>
+      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-slate-400">Loading...</p>
         </div>
-        <button 
-          onClick={() => window.location.reload()} 
-          style={{
-            marginTop: '2rem',
-            padding: '12px 24px',
-            fontSize: '1rem',
-            backgroundColor: '#4CAF50',
-            color: 'white',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer'
-          }}
-        >
-          Reload Page
-        </button>
+      </div>
+    );
+  }
+  
+  // Show login page if not authenticated
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-8">
+            <div className="w-20 h-20 bg-gradient-to-br from-purple-600 to-purple-800 rounded-2xl flex items-center justify-center shadow-lg mx-auto mb-4">
+              <span className="text-4xl">🤖</span>
+            </div>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-purple-600 bg-clip-text text-transparent">GPT Signal Bot</h1>
+            <p className="text-slate-500 mt-2">AI-Powered Trading System</p>
+          </div>
+          <LoginPage />
+        </div>
       </div>
     );
   }
