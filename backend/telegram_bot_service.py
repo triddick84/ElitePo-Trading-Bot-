@@ -427,7 +427,7 @@ Make sure you understand the risks.
         return "⚠️ Signal generator not connected."
     
     async def _cmd_trade_history(self, chat_id: str, args: List[str]) -> str:
-        if not self.db:
+        if self.db is None:
             return "⚠️ Database not available."
         
         trades = await self.db.telegram_trades.find(
@@ -445,7 +445,7 @@ Make sure you understand the risks.
         return history
     
     async def _cmd_stats(self, chat_id: str, args: List[str]) -> str:
-        if not self.db:
+        if self.db is None:
             return "⚠️ Database not available."
         
         total = await self.db.telegram_trades.count_documents({})
