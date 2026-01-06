@@ -212,37 +212,57 @@ class TelegramBotService:
         try:
             logger.info(f"Executing auto-trade: {signal.direction} {signal.symbol}")
             
-            # Import pocket option client
+            # Import pocket option auto trading service
             try:
-                from pocket_option_auto_trader import get_auto_trader
-                trader = get_auto_trader()
+                from pocket_option_auto_trader import get_auto_trading_service
+                import os
                 
-                if not trader or not trader.is_connected:
-                    logger.warning("Pocket Option not connected, simulating trade")
-                    return await self._simulate_trade(signal)
+                trader = get_auto_trading_service()
+                
+                # Check if connected, if not try to connect with SSID
+                if not trader.is_running or not (trader.ws_client and trader.ws_client.is_ready()):
+                    ssid = os.environ.get('POCKET_OPTION_SSID', '')
+                    if ssid:
+                        logger.info("🔌 Attempting to connect to Pocket Option...")
+                        connected = await trader.connect(ssid)
+                        if not connected:
+                            logger.warning("❌ Could not connect to Pocket Option, simulating trade")
+                            return await self._simulate_trade(signal)
+                    else:
+                        logger.warning("⚠️ No SSID available, simulating trade")
+                        return await self._simulate_trade(signal)
                 
                 # Execute real trade
-                direction = 'call' if signal.direction in ['CALL', 'BUY'] else 'put'
-                trade_response = await trader.place_trade(
-                    asset=signal.symbol,
-                    amount=self.trade_amount,
-                    direction=direction,
-                    duration=signal.expiration_seconds
-                )
+                direction_str = signal.direction if isinstance(signal.direction, str) else signal.direction
                 
-                return TradeResult(
+                # Use execute_signal method which handles the trade properly
+                trade = await trader.execute_signal(
+                    symbol=signal.symbol.replace('_regular', '_otc'),  # Use OTC for trading
+                    direction=direction_str,
+                    probability=signal.confidence,
+                    amount=self.trade_amount,
+                    expiration=signal.expiration_seconds,
                     signal_id=signal.id,
-                    trade_id=trade_response.get('trade_id', f"trade-{int(datetime.now().timestamp())}"),
-                    symbol=signal.symbol,
-                    direction=signal.direction,
-                    amount=self.trade_amount,
-                    duration=signal.expiration_seconds,
-                    status='placed',
-                    timestamp=datetime.now(timezone.utc).isoformat()
+                    strategy=signal.strategy
                 )
                 
-            except ImportError:
-                logger.warning("Pocket Option trader not available, simulating")
+                if trade:
+                    return TradeResult(
+                        signal_id=signal.id,
+                        trade_id=str(trade.id),
+                        symbol=signal.symbol,
+                        direction=signal.direction,
+                        amount=self.trade_amount,
+                        duration=signal.expiration_seconds,
+                        status='placed',
+                        timestamp=datetime.now(timezone.utc).isoformat()
+                    )
+                else:
+                    logger.warning("Trade execution returned None, simulating")
+                    return await self._simulate_trade(signal)
+                
+            except ImportError as e:
+                logger.warning(f"Pocket Option trader not available: {e}, simulating")
                 return await self._simulate_trade(signal)
                 
         except Exception as e:
