@@ -604,6 +604,8 @@ class CustomStrategyService:
                     parameters=cond_data.get("parameters", {}),
                     # TradingView-style condition type
                     condition_type=cond_data.get("conditionType"),
+                    # Reversal flag - inverts signal direction
+                    reversal=cond_data.get("reversal", False),
                     # Legacy fields
                     output=cond_data.get("output", "value"),
                     operator=operator,
