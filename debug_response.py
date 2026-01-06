@@ -7,7 +7,7 @@ import asyncio
 import aiohttp
 import json
 
-BACKEND_URL = "https://pocket-gpt-signals.preview.emergentagent.com/api"
+BACKEND_URL = "https://sigbot.preview.emergentagent.com/api"
 
 async def debug_response():
     async with aiohttp.ClientSession() as session:

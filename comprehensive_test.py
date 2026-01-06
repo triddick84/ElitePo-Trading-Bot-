@@ -10,7 +10,7 @@ import json
 import subprocess
 from datetime import datetime, timezone
 
-BACKEND_URL = "https://pocket-gpt-signals.preview.emergentagent.com/api"
+BACKEND_URL = "https://sigbot.preview.emergentagent.com/api"
 
 async def test_complete_flow():
     """Test the complete auto signal generation start/stop flow"""

@@ -19,7 +19,7 @@ import pytz
 sys.path.append('/app/backend')
 
 # Test configuration
-BACKEND_URL = "https://pocket-gpt-signals.preview.emergentagent.com/api"
+BACKEND_URL = "https://sigbot.preview.emergentagent.com/api"
 CHICAGO_TZ = pytz.timezone('America/Chicago')
 
 class TimezoneAlphaAutobotTester:

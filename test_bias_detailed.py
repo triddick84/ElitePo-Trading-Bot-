@@ -7,7 +7,7 @@ import asyncio
 import aiohttp
 import json
 
-BACKEND_URL = "https://pocket-gpt-signals.preview.emergentagent.com/api"
+BACKEND_URL = "https://sigbot.preview.emergentagent.com/api"
 
 async def test_bias_detailed():
     """Test to understand the bias issue in detail"""
