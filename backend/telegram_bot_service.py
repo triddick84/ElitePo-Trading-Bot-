@@ -381,49 +381,38 @@ Use /help to see all available commands.
 Please connect via SSID Connection page first.
 """
             
-            # Try to get balance using the auto trader
-            from pocket_option_auto_trader import get_auto_trader
-            trader = get_auto_trader()
+            # Try to get balance using the auto trading service
+            from pocket_option_auto_trader import get_auto_trading_service
+            trader = get_auto_trading_service()
             
-            if trader and trader.is_connected:
-                balance = await trader.get_balance()
-                demo_balance = balance.get('demo', 0)
-                real_balance = balance.get('real', 0)
+            if trader.is_running and trader.ws_client and trader.ws_client.is_ready():
+                balance = trader.ws_client.get_balance()
+                is_demo = trader.ws_client.is_demo
+                mode = "🟢 DEMO" if is_demo else "🔴 REAL"
                 
                 return f"""
 <b>💰 ACCOUNT BALANCE</b>
 
-🟢 Demo: <code>${demo_balance:.2f}</code>
-🔴 Real: <code>${real_balance:.2f}</code>
+{mode} Balance: <code>${balance:.2f}</code>
 
 ✅ Connected to Pocket Option
 📋 SSID: <code>{ssid[:15]}...</code>
+🤖 Auto-Trade: {'✅ Enabled' if trader.is_auto_trade_enabled else '❌ Disabled'}
 """
             else:
-                # SSID exists but not connected - try to get status from database
-                if self.db:
-                    connection_status = await self.db.pocket_option_status.find_one({"id": "connection"}, {"_id": 0})
-                    if connection_status:
-                        return f"""
-<b>💰 BALANCE</b>
-
-📋 SSID configured: <code>{ssid[:15]}...</code>
-🔌 WebSocket: {'🟢 Connected' if connection_status.get('ws_connected') else '🔴 Not Connected'}
-🤖 Auto-Trading: {'✅ Enabled' if connection_status.get('auto_trading') else '❌ Disabled'}
-
-⚠️ Use the dashboard to check full connection status.
-"""
-                
+                # Not connected - try to connect
                 return f"""
 <b>💰 BALANCE</b>
 
 📋 SSID: <code>{ssid[:15]}...</code>
-🔌 Status: ⚠️ Not actively connected
+🔌 Status: ⚠️ Not connected to Pocket Option
 
-💡 Tips:
-1. Go to SSID Connection page
+💡 To connect:
+1. Go to SSID Connection page  
 2. Click "Start" to connect
-3. Then try /balance again
+3. Or use /connect command
+
+After connecting, try /balance again.
 """
                 
         except ImportError:
