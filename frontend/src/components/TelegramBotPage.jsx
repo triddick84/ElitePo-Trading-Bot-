@@ -29,10 +29,13 @@ const TelegramBotPage = () => {
 
   const fetchStatus = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/telegram/status`);
+      const response = await fetch(`${API_URL}/api/telegram-bot/status`);
       const data = await response.json();
-      if (data.success !== false) {
-        setStatus(data.status || data);
+      if (data.success) {
+        setStatus(data.status);
+        if (data.status?.trade_amount) {
+          setTradeAmount(data.status.trade_amount);
+        }
       }
     } catch (error) {
       console.error('Error fetching status:', error);
@@ -43,7 +46,7 @@ const TelegramBotPage = () => {
 
   const fetchStats = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/telegram/stats`);
+      const response = await fetch(`${API_URL}/api/telegram-bot/stats`);
       const data = await response.json();
       if (data.success) {
         setStats(data.stats);
@@ -55,7 +58,7 @@ const TelegramBotPage = () => {
 
   const fetchHistory = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/telegram/history?limit=20`);
+      const response = await fetch(`${API_URL}/api/telegram-bot/history?limit=20`);
       const data = await response.json();
       if (data.success) {
         setHistory({ signals: data.signals || [], trades: data.trades || [] });
@@ -67,12 +70,12 @@ const TelegramBotPage = () => {
 
   const startBot = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/telegram/start`, {
+      const response = await fetch(`${API_URL}/api/telegram-bot/start`, {
         method: 'POST'
       });
       const data = await response.json();
       if (data.success) {
-        toast.success('Telegram bot started!');
+        toast.success(data.message || 'Telegram bot started!');
         fetchStatus();
       } else {
         toast.error(data.message || 'Failed to start bot');
@@ -84,7 +87,7 @@ const TelegramBotPage = () => {
 
   const stopBot = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/telegram/stop`, {
+      const response = await fetch(`${API_URL}/api/telegram-bot/stop`, {
         method: 'POST'
       });
       const data = await response.json();
@@ -99,7 +102,7 @@ const TelegramBotPage = () => {
 
   const updateSettings = async (settings) => {
     try {
-      const response = await fetch(`${API_URL}/api/telegram/settings`, {
+      const response = await fetch(`${API_URL}/api/telegram-bot/settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settings)
@@ -107,7 +110,9 @@ const TelegramBotPage = () => {
       const data = await response.json();
       if (data.success) {
         toast.success('Settings updated');
-        fetchStatus();
+        setStatus(prev => ({ ...prev, ...data.settings }));
+      } else {
+        toast.error('Failed to update settings');
       }
     } catch (error) {
       toast.error('Error updating settings');
@@ -120,7 +125,7 @@ const TelegramBotPage = () => {
       return;
     }
     try {
-      const response = await fetch(`${API_URL}/api/telegram/send`, {
+      const response = await fetch(`${API_URL}/api/telegram-bot/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: testMessage })
