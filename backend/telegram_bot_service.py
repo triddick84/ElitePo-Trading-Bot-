@@ -347,26 +347,75 @@ Use /help to see all available commands.
 """
     
     async def _cmd_balance(self, chat_id: str, args: List[str]) -> str:
-        # Try to get real balance
+        # Try to get balance from Pocket Option
         try:
+            # First check if we have a valid SSID
+            import os
+            ssid = os.environ.get('POCKET_OPTION_SSID', '')
+            
+            if not ssid:
+                return """
+<b>💰 BALANCE</b>
+
+⚠️ No SSID configured.
+Please connect via SSID Connection page first.
+"""
+            
+            # Try to get balance using the auto trader
             from pocket_option_auto_trader import get_auto_trader
             trader = get_auto_trader()
+            
             if trader and trader.is_connected:
                 balance = await trader.get_balance()
+                demo_balance = balance.get('demo', 0)
+                real_balance = balance.get('real', 0)
+                
                 return f"""
 <b>💰 ACCOUNT BALANCE</b>
 
-🟢 Demo: <code>${balance.get('demo', 0):.2f}</code>
-🔴 Real: <code>${balance.get('real', 0):.2f}</code>
+🟢 Demo: <code>${demo_balance:.2f}</code>
+🔴 Real: <code>${real_balance:.2f}</code>
+
+✅ Connected to Pocket Option
+📋 SSID: <code>{ssid[:15]}...</code>
 """
-        except:
+            else:
+                # SSID exists but not connected - try to get status from database
+                if self.db:
+                    connection_status = await self.db.pocket_option_status.find_one({"id": "connection"}, {"_id": 0})
+                    if connection_status:
+                        return f"""
+<b>💰 BALANCE</b>
+
+📋 SSID configured: <code>{ssid[:15]}...</code>
+🔌 WebSocket: {'🟢 Connected' if connection_status.get('ws_connected') else '🔴 Not Connected'}
+🤖 Auto-Trading: {'✅ Enabled' if connection_status.get('auto_trading') else '❌ Disabled'}
+
+⚠️ Use the dashboard to check full connection status.
+"""
+                
+                return f"""
+<b>💰 BALANCE</b>
+
+📋 SSID: <code>{ssid[:15]}...</code>
+🔌 Status: ⚠️ Not actively connected
+
+💡 Tips:
+1. Go to SSID Connection page
+2. Click "Start" to connect
+3. Then try /balance again
+"""
+                
+        except ImportError:
             pass
+        except Exception as e:
+            logger.error(f"Balance check error: {e}")
         
         return """
 <b>💰 BALANCE</b>
 
-⚠️ Not connected to Pocket Option.
-Please connect via SSID first.
+⚠️ Could not retrieve balance.
+Check connection on the dashboard.
 """
     
     async def _cmd_enable_auto_trading(self, chat_id: str, args: List[str]) -> str:
