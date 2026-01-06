@@ -19798,8 +19798,8 @@ async def run_auth_and_telegram_tests():
         return True
 
 async def main():
-    """Main test runner - run Priority tests from review request"""
-    return await run_priority_tests()
+    """Main test runner - run Authentication and Telegram Bot tests from review request"""
+    return await run_auth_and_telegram_tests()
 
 async def main_custom_strategies():
     """Main test runner - run Custom Strategies API tests"""
