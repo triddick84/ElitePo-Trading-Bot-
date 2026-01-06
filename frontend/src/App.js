@@ -333,4 +333,40 @@ function ProtectedApp() {
   );
 }
 
+// Main App with Auth Provider
+function App() {
+  // Check if backend URL is configured
+  if (!BACKEND_URL) {
+    return (
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '100vh',
+        backgroundColor: '#0a0a0f',
+        color: '#fff',
+        fontFamily: 'Arial, sans-serif',
+        padding: '20px',
+        textAlign: 'center'
+      }}>
+        <h1 style={{ fontSize: '2rem', marginBottom: '1rem', color: '#ff4444' }}>⚠️ Configuration Error</h1>
+        <p style={{ fontSize: '1.2rem', marginBottom: '1rem' }}>Backend URL is not configured</p>
+      </div>
+    );
+  }
+
+  return (
+    <AuthProvider>
+      <ProtectedApp />
+      <Toaster 
+        position="top-right" 
+        theme="dark" 
+        richColors 
+        closeButton
+      />
+    </AuthProvider>
+  );
+}
+
 export default App;
