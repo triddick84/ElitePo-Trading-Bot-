@@ -144,8 +144,9 @@ class PlatformIntegrationService:
     async def send_telegram_signal(self, signal: TradingSignal):
         """Send signal to Telegram bot with Chicago timezone"""
         try:
-            # Format signal message for Telegram
-            direction_emoji = "🟢 📈" if signal.direction in ['BUY', 'CALL'] else "🔴 📉"
+            # Handle direction as enum or string
+            direction_str = signal.direction.value if hasattr(signal.direction, 'value') else str(signal.direction)
+            direction_emoji = "🟢 📈" if direction_str.upper() in ['BUY', 'CALL'] else "🔴 📉"
             
             # Convert timestamp to Chicago timezone for display
             chicago_timestamp = utc_to_chicago(signal.timestamp) if signal.timestamp.tzinfo else signal.timestamp
@@ -155,34 +156,39 @@ class PlatformIntegrationService:
             entry_time_str = ""
             if signal.precision_entry_time:
                 entry_chicago = utc_to_chicago(signal.precision_entry_time) if signal.precision_entry_time.tzinfo else signal.precision_entry_time
-                entry_time_str = f"\n🎯 **Precision Entry:** {entry_chicago.strftime('%H:%M:%S CT')}"
+                entry_time_str = f"\n🎯 Precision Entry: {entry_chicago.strftime('%H:%M:%S CT')}"
+            
+            # Get strategy name safely
+            strategy_name = signal.strategy_used.value if hasattr(signal.strategy_used, 'value') else str(signal.strategy_used)
+            strategy_name = strategy_name.replace('_', ' ').title()
+            
+            # Get market analysis summary safely
+            market_analysis = getattr(signal, 'market_analysis_summary', '') or signal.justification[:200]
+            risk_assessment = getattr(signal, 'risk_assessment', 'Standard risk parameters applied') or 'N/A'
             
             message = f"""
-🚨 **ELITE POCKET TRADING SIGNAL** 🚨
+🚨 <b>ELITE POCKET TRADING SIGNAL</b> 🚨
 
-{direction_emoji} **{signal.direction}** {signal.symbol}
+{direction_emoji} <b>{direction_str}</b> {signal.symbol}
 
-💰 **Entry Price:** ${signal.entry_price}
-⏱️ **Timeframe:** {signal.timeframe} | **Expiration:** {signal.expiration_minutes} min
-🌐 **Market:** {signal.market_type.upper()}
-⚡ **Probability:** {signal.probability}%
-🎯 **Strategy:** {signal.strategy_used.value.replace('_', ' ').title()}
+💰 <b>Entry Price:</b> ${signal.entry_price}
+⏱️ <b>Timeframe:</b> {signal.timeframe} | <b>Expiration:</b> {signal.expiration_minutes} min
+🌐 <b>Market:</b> {signal.market_type.upper() if hasattr(signal.market_type, 'upper') else signal.market_type}
+⚡ <b>Probability:</b> {signal.probability}%
+🎯 <b>Strategy:</b> {strategy_name}
 
-📊 **Analysis Summary:**
-{signal.market_analysis_summary[:200]}...
+📊 <b>Analysis:</b>
+{market_analysis[:200]}...
 
-🔥 **Justification:**
+🔥 <b>Justification:</b>
 {signal.justification[:300]}...
 
-⚠️ **Risk Assessment:**
-{signal.risk_assessment[:200]}...
+💡 <b>Suggested Stake:</b> ${signal.suggested_stake}
 
-💡 **Suggested Stake:** ${signal.suggested_stake}
+🕐 <b>Generated:</b> {chicago_time_str} (Chicago){entry_time_str}
+🌍 <b>Pocket Option Synchronized</b> ✅
 
-🕐 **Generated:** {chicago_time_str} (Chicago Central Time){entry_time_str}
-🌍 **Pocket Option Synchronized** ✅
-
-#ElitePocketSignals #TradingAlert #{signal.symbol.replace('/', '')}
+#ElitePocketSignals #TradingAlert
             """.strip()
 
             url = f"https://api.telegram.org/bot{self.telegram_bot_token}/sendMessage"
@@ -190,17 +196,23 @@ class PlatformIntegrationService:
             payload = {
                 'chat_id': self.telegram_chat_id,
                 'text': message,
-                'parse_mode': 'Markdown',
+                'parse_mode': 'HTML',
                 'disable_web_page_preview': True
             }
 
             async with aiohttp.ClientSession() as session:
                 async with session.post(url, json=payload) as response:
                     if response.status == 200:
-                        logger.info(f"Signal sent to Telegram successfully: {signal.id}")
+                        logger.info(f"✅ Signal sent to Telegram successfully: {signal.id}")
+                        return True
                     else:
                         error_text = await response.text()
-                        logger.error(f"Telegram send failed: {response.status} - {error_text}")
+                        logger.error(f"❌ Telegram send failed: {response.status} - {error_text}")
+                        return False
+
+        except Exception as e:
+            logger.error(f"❌ Error sending Telegram signal: {e}")
+            return False
 
         except Exception as e:
             logger.error(f"Error sending Telegram signal: {e}")
