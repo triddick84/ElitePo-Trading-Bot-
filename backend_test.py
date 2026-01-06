@@ -20081,8 +20081,67 @@ async def run_auth_and_telegram_tests():
         return True
 
 async def main():
-    """Main test runner - run Authentication and Telegram Bot tests from review request"""
-    return await run_auth_and_telegram_tests()
+    """Main test runner - run Review Request tests"""
+    return await run_review_request_tests()
+
+async def run_review_request_tests():
+    """Run tests for the specific features mentioned in the review request"""
+    print("🚀 Testing Review Request Features")
+    print("=" * 80)
+    print("Feature 1: Strategy Builder Reversal Button")
+    print("Feature 2: SSID Auto-Refresh and Telegram Bot Integration")
+    print("=" * 80)
+    
+    tester = BackendTester()
+    await tester.setup()
+    
+    # Define Review Request tests
+    tests = [
+        ("Health Check", tester.test_health_check),
+        
+        # Feature 1: Strategy Builder Reversal Button
+        ("GET /api/custom-strategies - List existing strategies", tester.test_custom_strategies_get_all),
+        ("POST /api/custom-strategies - Create strategy with reversal conditions", tester.test_custom_strategies_with_reversal),
+        ("GET /api/custom-strategies/{id} - Verify reversal flag saved", tester.test_custom_strategies_with_reversal),  # This test includes verification
+        
+        # Feature 2: SSID Auto-Refresh and Telegram Bot Integration
+        ("GET /api/ssid/status - Get SSID status (initial)", tester.test_ssid_status_endpoint),
+        ("GET /api/telegram-bot/status - Get Telegram bot status", tester.test_telegram_bot_status_endpoint),
+        ("POST /api/telegram-bot/start - Start Telegram bot (should start SSID)", tester.test_telegram_bot_start_with_ssid_integration),
+        ("GET /api/ssid/status - Verify SSID running after bot start", tester.test_ssid_status_endpoint),
+        ("GET /api/telegram-bot/status - Verify bot running", tester.test_telegram_bot_status_endpoint),
+        ("POST /api/telegram-bot/stop - Stop bot (should stop SSID)", tester.test_telegram_bot_stop_with_ssid_integration),
+        
+        # Cleanup
+        ("Cleanup Test Strategy", tester.test_custom_strategies_cleanup),
+    ]
+    
+    # Run all tests
+    for test_name, test_func in tests:
+        await tester.run_test(test_name, test_func)
+    
+    await tester.cleanup()
+    
+    # Print summary
+    print("\n" + "=" * 80)
+    print("🏁 Review Request Testing Complete: {}/{} tests passed".format(
+        len(tests) - len(tester.failed_tests), len(tests)
+    ))
+    print("=" * 80)
+    
+    total_tests = len(tests)
+    passed_tests = total_tests - len(tester.failed_tests)
+    
+    if tester.failed_tests:
+        print(f"\n❌ Failed Tests:")
+        for test in tester.failed_tests:
+            print(f"   - {test}")
+        print(f"\n📊 Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+        return False
+    else:
+        print(f"\n🎉 All Review Request tests passed!")
+        print(f"\n📊 Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+        return True
 
 async def main_custom_strategies():
     """Main test runner - run Custom Strategies API tests"""
