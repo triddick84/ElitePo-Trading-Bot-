@@ -320,14 +320,6 @@ function ProtectedApp() {
           onSignalDismiss={handleSignalDismiss}
           notificationSettings={globalNotificationSettings}
         />
-
-        {/* Toast Notifications */}
-        <Toaster 
-          position="top-right" 
-          theme="dark" 
-          richColors 
-          closeButton
-        />
       </div>
     </BrowserRouter>
   );
