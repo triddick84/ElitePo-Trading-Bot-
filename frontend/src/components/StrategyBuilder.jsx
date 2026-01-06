@@ -558,7 +558,8 @@ const StrategyBuilder = () => {
         id: `cond_${Date.now()}`,
         indicator: 'RSI',
         conditionType: 'crosses_above_oversold',
-        parameters: {}
+        parameters: {},
+        reversal: false  // Default: no reversal
       }]
     }));
   };
