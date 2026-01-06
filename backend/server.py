@@ -10604,6 +10604,16 @@ async def startup_event():
             # Initialize Telegram notifier
             await initialize_telegram_notifier()
             logger.info("📱 Telegram notifier initialized")
+            
+            # Create default admin user
+            auth_service = get_auth_service(db)
+            await auth_service.create_default_admin()
+            logger.info("👤 Auth service initialized")
+            
+            # Initialize Telegram bot service
+            telegram_bot = get_telegram_bot(db)
+            logger.info("🤖 Telegram bot service initialized")
+            
             app_initialized = True
             logger.info("✅ Application initialization complete")
         except Exception as e:
