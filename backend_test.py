@@ -20286,8 +20286,8 @@ async def run_auth_and_telegram_tests():
         return True
 
 async def main():
-    """Main test runner - run Review Request tests"""
-    return await run_review_request_tests()
+    """Main test runner - run Telegram Signal Flow tests"""
+    return await run_telegram_signal_flow_tests()
 
 async def run_review_request_tests():
     """Run tests for the specific features mentioned in the review request"""
