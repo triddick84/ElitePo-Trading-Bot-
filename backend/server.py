@@ -10495,19 +10495,68 @@ async def start_telegram_bot_polling(background_tasks: BackgroundTasks):
     if telegram_bot.is_running:
         return {"success": True, "message": "Bot already running"}
     
-    # Set up signal callback
+    # Set up signal callback that properly generates and sends signals
     async def signal_callback():
         try:
-            # Generate a signal and send it
-            result = await force_signal_generator.generate_signal(
-                symbol="EURUSD_otc",
-                timeframe="1m"
+            logger.info("📡 Telegram /signal command triggered - generating signal...")
+            
+            # Get user config for assets
+            config_doc = await db.trading_configurations.find_one({"user_id": "default_user"})
+            selected_assets = config_doc.get('selected_assets', ['EURUSD_otc']) if config_doc else ['EURUSD_otc']
+            user_expirations = config_doc.get('selected_expirations', ['1m']) if config_doc else ['1m']
+            
+            # Use first selected asset
+            asset = selected_assets[0] if selected_assets else 'EURUSD_otc'
+            base_symbol = asset.replace('_regular', '').replace('_otc', '')
+            
+            # Create market data object
+            from trading_models import MarketData, AssetType
+            target_asset = MarketData(
+                symbol=base_symbol,
+                price=1.0500,
+                timestamp=datetime.now(timezone.utc),
+                asset_type=AssetType.FOREX,
+                volume=0
             )
-            if result and result.get('signals'):
-                signal = result['signals'][0]
-                await send_signal_to_telegram_bot(signal)
+            
+            # Generate signal using force_generate_signal
+            signals = await force_signal_generator.force_generate_signal(
+                base_symbol, target_asset, user_expirations, 
+                chart_type='japanese_candles', wait_for_candle=False
+            )
+            
+            if signals and len(signals) > 0:
+                signal = signals[0]
+                signal.symbol = asset  # Use full asset name
+                
+                # Send to Telegram via platform integration (this handles the enum properly now)
+                await platform_integration.send_telegram_signal(signal)
+                
+                # Also execute auto-trade if enabled
+                if telegram_bot.auto_trading_enabled:
+                    # Create TelegramTradingSignal for auto-trading
+                    tg_signal = TelegramTradingSignal(
+                        id=str(signal.id),
+                        symbol=signal.symbol,
+                        direction=signal.direction.value if hasattr(signal.direction, 'value') else str(signal.direction),
+                        confidence=float(signal.probability),
+                        entry_price=float(signal.entry_price),
+                        timeframe=str(signal.timeframe),
+                        expiration_seconds=int(signal.expiration_minutes * 60),
+                        strategy=str(signal.strategy_used),
+                        timestamp=signal.timestamp.isoformat(),
+                        reasoning=signal.justification[:200]
+                    )
+                    await telegram_bot.send_signal(tg_signal)
+                
+                logger.info(f"✅ Signal generated and sent via Telegram: {signal.id}")
+            else:
+                await telegram_bot.send_message("⚠️ No signal generated - conditions not met. Try again.")
+                logger.warning("⚠️ No signal generated from /signal command")
+                
         except Exception as e:
             logger.error(f"Signal callback error: {e}")
+            await telegram_bot.send_message(f"❌ Signal generation error: {str(e)[:100]}")
     
     telegram_bot.set_signal_callback(signal_callback)
     
