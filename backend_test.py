@@ -1349,21 +1349,32 @@ class BackendTester:
                 if response.status == 200:
                     data = await response.json()
                     print(f"   ✅ Stats retrieved successfully")
-                    print(f"   📊 Total signals: {data.get('total_signals')}")
-                    print(f"   📊 Total trades: {data.get('total_trades')}")
-                    print(f"   📊 Wins: {data.get('wins')}")
-                    print(f"   📊 Losses: {data.get('losses')}")
-                    print(f"   📊 Win rate: {data.get('win_rate')}%")
-                    print(f"   📊 Total profit: ${data.get('total_profit')}")
+                    print(f"   📊 Success: {data.get('success')}")
+                    
+                    stats = data.get('stats', {})
+                    print(f"   📊 Total signals: {stats.get('total_signals')}")
+                    print(f"   📊 Total trades: {stats.get('total_trades')}")
+                    print(f"   📊 Wins: {stats.get('wins')}")
+                    print(f"   📊 Losses: {stats.get('losses')}")
+                    print(f"   📊 Win rate: {stats.get('win_rate')}%")
+                    print(f"   📊 Total profit: ${stats.get('total_profit')}")
                     
                     # Verify response structure
-                    required_fields = ['total_signals', 'total_trades', 'wins', 'losses', 'win_rate']
+                    required_fields = ['success', 'stats']
                     missing_fields = [f for f in required_fields if f not in data]
                     
-                    if not missing_fields:
-                        return True
+                    if not missing_fields and data.get('success'):
+                        # Verify stats structure
+                        stats_fields = ['total_signals', 'total_trades', 'wins', 'losses', 'win_rate']
+                        missing_stats = [f for f in stats_fields if f not in stats]
+                        
+                        if not missing_stats:
+                            return True
+                        else:
+                            print(f"   ❌ Missing stats fields: {missing_stats}")
+                            return False
                     else:
-                        print(f"   ❌ Missing required fields: {missing_fields}")
+                        print(f"   ❌ Missing required fields or failed: {missing_fields}")
                         return False
                 else:
                     print(f"   ❌ Get stats failed: {response.status}")
