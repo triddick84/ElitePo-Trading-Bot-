@@ -199,6 +199,8 @@ function App() {
         );
       case "automated-trading":
         return <AutomatedTradingPage />;
+      case "telegram-bot":
+        return <TelegramBotPage />;
       case "signal-center":
         return <SignalCenterPage />;
       case "ai-ml-models":
