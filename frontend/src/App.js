@@ -171,6 +171,7 @@ function App() {
   const navigation = [
     { id: "dashboard", label: "Dashboard", icon: "📊" },
     { id: "automated-trading", label: "Automated Trading", icon: "🤖" },
+    { id: "telegram-bot", label: "Telegram Bot", icon: "📱" },
     { id: "signal-center", label: "Signal Center", icon: "⚡" },
     { id: "ai-ml-models", label: "AI/ML Models", icon: "🧠" },
     { id: "strategy-builder", label: "Strategy Builder", icon: "🔧" },
