@@ -135,27 +135,34 @@ class TelegramBotService:
             return {'success': False, 'error': str(e)}
     
     async def send_signal(self, signal: TradingSignal, chat_id: str = None) -> Dict:
-        """Send trading signal notification to Telegram"""
+        """Send trading signal notification to Telegram - optimized for manual trading"""
         try:
-            # Format signal message
-            direction_emoji = "🟢" if signal.direction in ['CALL', 'BUY'] else "🔴"
+            # Format signal message for MANUAL TRADING
+            direction_emoji = "🟢 📈 CALL (UP)" if signal.direction in ['CALL', 'BUY'] else "🔴 📉 PUT (DOWN)"
             confidence_stars = "⭐" * min(int(signal.confidence / 20), 5)
             
+            # Calculate urgency
+            urgency = "🔥 HIGH" if signal.confidence >= 80 else "⚡ MEDIUM" if signal.confidence >= 65 else "📊 LOW"
+            
             message = f"""
-<b>📊 TRADING SIGNAL</b>
+🚨 <b>TRADING SIGNAL - ACT NOW!</b> 🚨
 
-{direction_emoji} <b>{signal.direction}</b> {signal.symbol}
+<b>{direction_emoji}</b>
 
-💰 Entry Price: <code>{signal.entry_price}</code>
-⏰ Timeframe: <code>{signal.timeframe}</code>
-⏳ Expiration: <code>{signal.expiration_seconds}s</code>
-🎯 Confidence: <code>{signal.confidence:.1f}%</code> {confidence_stars}
-📝 Strategy: <code>{signal.strategy}</code>
+📊 <b>Asset:</b> <code>{signal.symbol.replace('_otc', ' (OTC)').replace('_regular', '')}</code>
+⏱️ <b>Expiry:</b> <code>{signal.expiration_seconds}s</code> ({signal.expiration_seconds // 60}m {signal.expiration_seconds % 60}s)
+🎯 <b>Confidence:</b> <code>{signal.confidence:.0f}%</code> {confidence_stars}
+{urgency} URGENCY
 
-<i>{signal.reasoning[:200]}...</i> 
+<b>📋 HOW TO TRADE:</b>
+1. Open Pocket Option
+2. Select <code>{signal.symbol.replace('_otc', '').replace('_regular', '')}</code>
+3. Set expiry to <code>{signal.expiration_seconds}s</code>
+4. Click <b>{'⬆️ UP/CALL' if signal.direction in ['CALL', 'BUY'] else '⬇️ DOWN/PUT'}</b>
 
-🔔 Signal ID: <code>{signal.id}</code>
-⏰ Time: <code>{signal.timestamp}</code>
+💡 Strategy: <code>{signal.strategy}</code>
+
+⏰ Generated: {signal.timestamp}
 """
             
             result = await self.send_message(message, chat_id)
@@ -167,16 +174,12 @@ class TelegramBotService:
                     'symbol': signal.symbol,
                     'direction': signal.direction,
                     'confidence': signal.confidence,
+                    'expiration_seconds': signal.expiration_seconds,
                     'sent_at': datetime.now(timezone.utc).isoformat(),
                     'chat_id': chat_id or self.default_chat_id,
-                    'message_sent': result.get('success', False)
+                    'message_sent': result.get('success', False),
+                    'mode': 'manual_trading'
                 })
-            
-            # Auto-trade if enabled
-            if self.auto_trading_enabled:
-                trade_result = await self._execute_auto_trade(signal)
-                if trade_result:
-                    await self.send_trade_result(trade_result, chat_id)
             
             return result
             
