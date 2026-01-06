@@ -584,11 +584,15 @@ const StrategyBuilder = () => {
       setIsSaving(true);
       
       // Convert our simplified format to the backend format
+      // Consider reversal: if reversed, swap CALL/PUT assignment
       const callConditions = strategyForm.conditions
         .filter(c => {
           const template = INDICATOR_TEMPLATES[c.indicator];
           const cond = template?.conditions.find(x => x.id === c.conditionType);
-          return cond?.signal === 'CALL';
+          const originalSignal = cond?.signal;
+          // If reversed, CALL becomes PUT signal condition, so we want original PUT here
+          // If not reversed, we want original CALL
+          return c.reversal ? originalSignal === 'PUT' : originalSignal === 'CALL';
         })
         .map(c => ({
           id: c.id,
@@ -596,7 +600,8 @@ const StrategyBuilder = () => {
             id: `${c.id}_inner`,
             indicator: c.indicator,
             parameters: c.parameters || {},
-            conditionType: c.conditionType
+            conditionType: c.conditionType,
+            reversal: c.reversal || false  // Include reversal flag
           }],
           logical_operator: 'AND'
         }));
@@ -605,7 +610,10 @@ const StrategyBuilder = () => {
         .filter(c => {
           const template = INDICATOR_TEMPLATES[c.indicator];
           const cond = template?.conditions.find(x => x.id === c.conditionType);
-          return cond?.signal === 'PUT';
+          const originalSignal = cond?.signal;
+          // If reversed, PUT becomes CALL signal condition, so we want original CALL here
+          // If not reversed, we want original PUT
+          return c.reversal ? originalSignal === 'CALL' : originalSignal === 'PUT';
         })
         .map(c => ({
           id: c.id,
@@ -613,7 +621,8 @@ const StrategyBuilder = () => {
             id: `${c.id}_inner`,
             indicator: c.indicator,
             parameters: c.parameters || {},
-            conditionType: c.conditionType
+            conditionType: c.conditionType,
+            reversal: c.reversal || false  // Include reversal flag
           }],
           logical_operator: 'AND'
         }));
