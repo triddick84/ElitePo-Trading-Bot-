@@ -95,7 +95,7 @@ class AuthService:
                        role: UserRole = UserRole.USER) -> Dict:
         """Register a new user"""
         try:
-            if not self.db:
+            if self.db is None:
                 return {'success': False, 'error': 'Database not available'}
             
             # Check if user already exists
@@ -157,7 +157,7 @@ class AuthService:
     async def login(self, username: str, password: str) -> Dict:
         """Login user and return token"""
         try:
-            if not self.db:
+            if self.db is None:
                 return {'success': False, 'error': 'Database not available'}
             
             # Find user by username or email
@@ -208,7 +208,7 @@ class AuthService:
     
     async def get_user(self, user_id: str) -> Optional[Dict]:
         """Get user by ID"""
-        if not self.db:
+        if self.db is None:
             return None
         
         user = await self.db.users.find_one({'id': user_id}, {'_id': 0, 'password_hash': 0})
@@ -217,7 +217,7 @@ class AuthService:
     async def update_user(self, user_id: str, updates: Dict) -> Dict:
         """Update user profile"""
         try:
-            if not self.db:
+            if self.db is None:
                 return {'success': False, 'error': 'Database not available'}
             
             # Remove protected fields
@@ -239,7 +239,7 @@ class AuthService:
     async def change_password(self, user_id: str, old_password: str, new_password: str) -> Dict:
         """Change user password"""
         try:
-            if not self.db:
+            if self.db is None:
                 return {'success': False, 'error': 'Database not available'}
             
             user = await self.db.users.find_one({'id': user_id})
@@ -265,7 +265,7 @@ class AuthService:
     
     async def list_users(self, admin_only: bool = False) -> List[Dict]:
         """List all users (admin function)"""
-        if not self.db:
+        if self.db is None:
             return []
         
         query = {'role': 'admin'} if admin_only else {}
@@ -275,7 +275,7 @@ class AuthService:
     async def set_user_role(self, admin_user_id: str, target_user_id: str, new_role: UserRole) -> Dict:
         """Set user role (admin function)"""
         try:
-            if not self.db:
+            if self.db is None:
                 return {'success': False, 'error': 'Database not available'}
             
             # Verify admin
@@ -297,7 +297,7 @@ class AuthService:
     async def link_telegram(self, user_id: str, telegram_chat_id: str) -> Dict:
         """Link Telegram chat ID to user account"""
         try:
-            if not self.db:
+            if self.db is None:
                 return {'success': False, 'error': 'Database not available'}
             
             await self.db.users.update_one(
