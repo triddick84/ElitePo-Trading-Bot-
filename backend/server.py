@@ -10276,6 +10276,290 @@ async def get_model_performance(asset: str, timeframe: str):
         return {"success": False, "error": str(e)}
 
 
+# ==========================================
+# AUTHENTICATION ENDPOINTS
+# ==========================================
+
+class UserRegisterRequest(BaseModel):
+    username: str
+    email: str
+    password: str
+
+class UserLoginRequest(BaseModel):
+    username: str
+    password: str
+
+class ChangePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str
+
+class UpdateUserRequest(BaseModel):
+    email: Optional[str] = None
+    telegram_chat_id: Optional[str] = None
+    settings: Optional[Dict] = None
+
+@api_router.post("/auth/register")
+async def register_user(request: UserRegisterRequest):
+    """Register a new user"""
+    auth_service = get_auth_service(db)
+    result = await auth_service.register(
+        username=request.username,
+        email=request.email,
+        password=request.password,
+        role=UserRole.USER
+    )
+    if not result['success']:
+        raise HTTPException(status_code=400, detail=result['error'])
+    return result
+
+@api_router.post("/auth/login")
+async def login_user(request: UserLoginRequest):
+    """Login user and return JWT token"""
+    auth_service = get_auth_service(db)
+    result = await auth_service.login(
+        username=request.username,
+        password=request.password
+    )
+    if not result['success']:
+        raise HTTPException(status_code=401, detail=result['error'])
+    return result
+
+@api_router.get("/auth/me")
+async def get_current_user(request: Request):
+    """Get current user from JWT token"""
+    from auth_middleware import get_current_user as get_user
+    user = await get_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    auth_service = get_auth_service(db)
+    full_user = await auth_service.get_user(user['user_id'])
+    if not full_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {"success": True, "user": full_user}
+
+@api_router.put("/auth/me")
+async def update_current_user(request: Request, updates: UpdateUserRequest):
+    """Update current user profile"""
+    from auth_middleware import get_current_user as get_user
+    user = await get_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    auth_service = get_auth_service(db)
+    result = await auth_service.update_user(user['user_id'], updates.dict(exclude_none=True))
+    return result
+
+@api_router.post("/auth/change-password")
+async def change_password(request: Request, data: ChangePasswordRequest):
+    """Change user password"""
+    from auth_middleware import get_current_user as get_user
+    user = await get_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    auth_service = get_auth_service(db)
+    result = await auth_service.change_password(
+        user['user_id'],
+        data.old_password,
+        data.new_password
+    )
+    if not result['success']:
+        raise HTTPException(status_code=400, detail=result['error'])
+    return result
+
+@api_router.get("/auth/users")
+async def list_users(request: Request):
+    """List all users (admin only)"""
+    from auth_middleware import get_current_user as get_user
+    user = await get_user(request, db)
+    if not user or user.get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    auth_service = get_auth_service(db)
+    users = await auth_service.list_users()
+    return {"success": True, "users": users}
+
+@api_router.post("/auth/users/{user_id}/role")
+async def set_user_role(request: Request, user_id: str, role: str):
+    """Set user role (admin only)"""
+    from auth_middleware import get_current_user as get_user
+    user = await get_user(request, db)
+    if not user or user.get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        new_role = UserRole(role)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid role: {role}")
+    
+    auth_service = get_auth_service(db)
+    result = await auth_service.set_user_role(user['user_id'], user_id, new_role)
+    return result
+
+
+# ==========================================
+# TELEGRAM BOT ENDPOINTS
+# ==========================================
+
+class TelegramMessageRequest(BaseModel):
+    message: str
+    chat_id: Optional[str] = None
+
+class TelegramSettingsRequest(BaseModel):
+    auto_trading_enabled: Optional[bool] = None
+    demo_mode: Optional[bool] = None
+    trade_amount: Optional[float] = None
+
+@api_router.get("/telegram/status")
+async def get_telegram_status():
+    """Get Telegram bot status"""
+    telegram_bot = get_telegram_bot(db)
+    return {
+        "success": True,
+        "status": {
+            "is_running": telegram_bot.is_running,
+            "auto_trading_enabled": telegram_bot.auto_trading_enabled,
+            "demo_mode": telegram_bot.demo_mode,
+            "trade_amount": telegram_bot.trade_amount,
+            "default_chat_id": telegram_bot.default_chat_id,
+            "bot_token_configured": bool(telegram_bot.bot_token)
+        }
+    }
+
+@api_router.post("/telegram/send")
+async def send_telegram_message(request: TelegramMessageRequest):
+    """Send a message to Telegram"""
+    telegram_bot = get_telegram_bot(db)
+    result = await telegram_bot.send_message(request.message, request.chat_id)
+    return result
+
+@api_router.post("/telegram/send-signal")
+async def send_signal_to_telegram(signal_data: Dict):
+    """Send a trading signal to Telegram"""
+    telegram_bot = get_telegram_bot(db)
+    
+    signal = TelegramTradingSignal(
+        id=signal_data.get('id', str(uuid.uuid4())),
+        symbol=signal_data.get('symbol', 'UNKNOWN'),
+        direction=signal_data.get('direction', 'NEUTRAL'),
+        confidence=signal_data.get('confidence', 0),
+        entry_price=signal_data.get('entry_price', 0),
+        timeframe=signal_data.get('timeframe', '1m'),
+        expiration_seconds=signal_data.get('expiration_seconds', 60),
+        strategy=signal_data.get('strategy', 'unknown'),
+        timestamp=signal_data.get('timestamp', datetime.now(timezone.utc).isoformat()),
+        reasoning=signal_data.get('reasoning', '')
+    )
+    
+    result = await telegram_bot.send_signal(signal)
+    return result
+
+@api_router.put("/telegram/settings")
+async def update_telegram_settings(settings: TelegramSettingsRequest):
+    """Update Telegram bot settings"""
+    telegram_bot = get_telegram_bot(db)
+    
+    if settings.auto_trading_enabled is not None:
+        telegram_bot.auto_trading_enabled = settings.auto_trading_enabled
+    if settings.demo_mode is not None:
+        telegram_bot.demo_mode = settings.demo_mode
+    if settings.trade_amount is not None:
+        telegram_bot.trade_amount = settings.trade_amount
+    
+    return {
+        "success": True,
+        "settings": {
+            "auto_trading_enabled": telegram_bot.auto_trading_enabled,
+            "demo_mode": telegram_bot.demo_mode,
+            "trade_amount": telegram_bot.trade_amount
+        }
+    }
+
+@api_router.post("/telegram/start")
+async def start_telegram_bot(background_tasks: BackgroundTasks):
+    """Start Telegram bot polling"""
+    telegram_bot = get_telegram_bot(db)
+    
+    if telegram_bot.is_running:
+        return {"success": True, "message": "Bot already running"}
+    
+    # Set up signal callback
+    async def signal_callback():
+        try:
+            # Generate a signal and send it
+            result = await force_signal_generator.generate_signal(
+                symbol="EURUSD_otc",
+                timeframe="1m"
+            )
+            if result and result.get('signals'):
+                signal = result['signals'][0]
+                await send_signal_to_telegram(signal)
+        except Exception as e:
+            logger.error(f"Signal callback error: {e}")
+    
+    telegram_bot.set_signal_callback(signal_callback)
+    
+    # Start polling in background
+    background_tasks.add_task(telegram_bot.start_polling)
+    
+    return {"success": True, "message": "Telegram bot started"}
+
+@api_router.post("/telegram/stop")
+async def stop_telegram_bot():
+    """Stop Telegram bot polling"""
+    telegram_bot = get_telegram_bot(db)
+    await telegram_bot.stop_polling()
+    return {"success": True, "message": "Telegram bot stopped"}
+
+@api_router.get("/telegram/history")
+async def get_telegram_history(limit: int = 50):
+    """Get Telegram signal and trade history"""
+    signals = await db.telegram_signals.find(
+        {}, {'_id': 0}
+    ).sort('sent_at', -1).limit(limit).to_list(limit)
+    
+    trades = await db.telegram_trades.find(
+        {}, {'_id': 0}
+    ).sort('timestamp', -1).limit(limit).to_list(limit)
+    
+    return {
+        "success": True,
+        "signals": signals,
+        "trades": trades
+    }
+
+@api_router.get("/telegram/stats")
+async def get_telegram_stats():
+    """Get Telegram trading statistics"""
+    total_signals = await db.telegram_signals.count_documents({})
+    total_trades = await db.telegram_trades.count_documents({})
+    wins = await db.telegram_trades.count_documents({'status': 'won'})
+    losses = await db.telegram_trades.count_documents({'status': 'lost'})
+    
+    win_rate = (wins / total_trades * 100) if total_trades > 0 else 0
+    
+    # Calculate profit/loss
+    pipeline = [
+        {'$group': {'_id': None, 'total_profit': {'$sum': '$profit'}}}
+    ]
+    profit_result = await db.telegram_trades.aggregate(pipeline).to_list(1)
+    total_profit = profit_result[0]['total_profit'] if profit_result else 0
+    
+    return {
+        "success": True,
+        "stats": {
+            "total_signals": total_signals,
+            "total_trades": total_trades,
+            "wins": wins,
+            "losses": losses,
+            "win_rate": round(win_rate, 2),
+            "total_profit": round(total_profit, 2)
+        }
+    }
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
