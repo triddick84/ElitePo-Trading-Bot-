@@ -267,9 +267,7 @@ function ProtectedApp() {
 
           {/* Main Content */}
           <main className="flex-1 p-6 bg-gradient-to-br from-[#0a0a0f] via-[#0f0f16] to-[#0a0a0f]">
-            <Routes>
-              <Route path="/*" element={renderActiveView()} />
-            </Routes>
+            {renderActiveView()}
           </main>
         </div>
 
