@@ -1,36 +1,18 @@
 import React, { useState, useEffect } from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter } from "react-router-dom";
 import axios from "axios";
 import { Toaster } from "sonner";
 import "./App.css";
 
 import SignalNotificationManager from "./components/SignalNotificationManager";
 
-// Components
-import Dashboard from "./components/Dashboard";
+// Core Components
 import DashboardRestructured from "./components/DashboardRestructured";
-import SignalsPanel from "./components/SignalsPanel";
-import MarketData from "./components/MarketData";
-import PerformanceMetrics from "./components/PerformanceMetrics";
-import BotControls from "./components/BotControls";
-import BacktestPanel from "./components/BacktestPanel";
-import ApiConfiguration from "./components/ApiConfiguration";
-import IntegrationPage from "./components/IntegrationPage";
-import StrategySelector from "./components/StrategySelector";
-import StrategySelectorEnhanced from "./components/StrategySelectorEnhanced";
-import MoneyManagement from "./components/MoneyManagement";
-import AdaptiveStrategyConfig from "./components/AdaptiveStrategyConfig";
-import RealtimeMarketDashboard from "./components/RealtimeMarketDashboard";
-import SignalStatistics from "./components/SignalStatistics";
-import PocketOptionSettings from "./components/PocketOptionSettings";
-import StrategyBuilder from "./components/StrategyBuilder";
-import SSIDConnectionManager from "./components/SSIDConnectionManager";
-// New Pages
-import AutomatedTradingPage from "./components/AutomatedTradingPage";
-import AIMLModelsPage from "./components/AIMLModelsPage";
-import SignalCenterPage from "./components/SignalCenterPage";
-import BacktestingPage from "./components/BacktestingPage";
 import TelegramBotPage from "./components/TelegramBotPage";
+import StrategyBuilder from "./components/StrategyBuilder";
+import AIMLModelsPage from "./components/AIMLModelsPage";
+import PerformancePage from "./components/PerformancePage";
+import SettingsPage from "./components/SettingsPage";
 import { AuthProvider, LoginPage, useAuth } from "./components/AuthComponents";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
