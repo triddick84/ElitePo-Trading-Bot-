@@ -152,19 +152,11 @@ function ProtectedApp() {
 
   const navigation = [
     { id: "dashboard", label: "Dashboard", icon: "📊" },
-    { id: "automated-trading", label: "Automated Trading", icon: "🤖" },
     { id: "telegram-bot", label: "Telegram Bot", icon: "📱" },
-    { id: "signal-center", label: "Signal Center", icon: "⚡" },
-    { id: "ai-ml-models", label: "AI/ML Models", icon: "🧠" },
-    { id: "strategy-builder", label: "Strategy Builder", icon: "🔧" },
-    { id: "ssid-manager", label: "SSID Connection", icon: "🔗" },
-    { id: "pocket-option", label: "Pocket Option", icon: "🎰" },
-    { id: "realtime", label: "Real-Time Market", icon: "📡" },
-    { id: "statistics", label: "Signal Performance", icon: "📈" },
-    { id: "strategies", label: "Strategy Selector", icon: "🎯" },
-    { id: "backtest", label: "Backtesting", icon: "🧪" },
-    { id: "integrations", label: "Integrations", icon: "🔌" },
-    { id: "api", label: "API Config", icon: "🔑" }
+    { id: "strategies", label: "Strategies", icon: "🎯" },
+    { id: "ai-models", label: "AI Models", icon: "🧠" },
+    { id: "performance", label: "Performance", icon: "📈" },
+    { id: "settings", label: "Settings", icon: "⚙️" }
   ];
 
   const renderActiveView = () => {
@@ -179,40 +171,26 @@ function ProtectedApp() {
             setNotificationSettings={setGlobalNotificationSettings}
           />
         );
-      case "automated-trading":
-        return <AutomatedTradingPage />;
       case "telegram-bot":
         return <TelegramBotPage />;
-      case "signal-center":
-        return <SignalCenterPage />;
-      case "ai-ml-models":
-        return <AIMLModelsPage />;
-      case "pocket-option":
-        return <PocketOptionSettings />;
-      case "ssid-manager":
-        return <SSIDConnectionManager />;
-      case "strategy-builder":
-        return <StrategyBuilder />;
-      case "realtime":
-        return <RealtimeMarketDashboard />;
-      case "statistics":
-        return <SignalStatistics />;
       case "strategies":
-        return <StrategySelectorEnhanced />;
-      case "market":
-        return <MarketData />;
+        return <StrategyBuilder />;
+      case "ai-models":
+        return <AIMLModelsPage />;
       case "performance":
-        return <PerformanceMetrics />;
-      case "controls":
-        return <BotControls onStatusUpdate={fetchBotStatus} />;
-      case "backtest":
-        return <BacktestingPage />;
-      case "integrations":
-        return <IntegrationPage />;
-      case "api":
-        return <ApiConfiguration />;
+        return <PerformancePage />;
+      case "settings":
+        return <SettingsPage />;
       default:
-        return <Dashboard botStatus={botStatus} />;
+        return (
+          <DashboardRestructured 
+            botStatus={botStatus} 
+            liveSignals={liveSignals} 
+            setLiveSignals={setLiveSignals}
+            notificationSettings={globalNotificationSettings}
+            setNotificationSettings={setGlobalNotificationSettings}
+          />
+        );
     }
   };
 
