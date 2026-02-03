@@ -1801,6 +1801,66 @@ async def flexible_signal_generation(request: FlexibleStrategyRequest):
         raise HTTPException(status_code=500, detail=f"Flexible signal generation failed: {str(e)}")
 
 
+# =====================================================
+# GENERAL SETTINGS ENDPOINTS
+# =====================================================
+
+@api_router.get("/settings")
+async def get_settings():
+    """Get general application settings"""
+    try:
+        settings = await db.app_settings.find_one({"type": "general"}, {"_id": 0})
+        
+        if not settings:
+            # Return default settings
+            default_settings = {
+                "type": "general",
+                "defaultTimeframe": "1m",
+                "defaultAsset": "EURUSD_otc",
+                "soundEnabled": True,
+                "notificationsEnabled": True,
+                "minimumConfidence": 70,
+                "signalCooldown": 30,
+                "telegramBotToken": "",
+                "telegramChatId": ""
+            }
+            return default_settings
+        
+        return settings
+        
+    except Exception as e:
+        logger.error(f"Error fetching settings: {e}")
+        return {
+            "defaultTimeframe": "1m",
+            "defaultAsset": "EURUSD_otc",
+            "soundEnabled": True,
+            "notificationsEnabled": True,
+            "minimumConfidence": 70,
+            "signalCooldown": 30
+        }
+
+
+@api_router.post("/settings")
+async def save_settings(settings: dict):
+    """Save general application settings"""
+    try:
+        settings["type"] = "general"
+        settings["updated_at"] = datetime.now(timezone.utc).isoformat()
+        
+        # Upsert settings
+        await db.app_settings.update_one(
+            {"type": "general"},
+            {"$set": settings},
+            upsert=True
+        )
+        
+        logger.info(f"✅ Settings saved successfully")
+        return {"success": True, "message": "Settings saved successfully"}
+        
+    except Exception as e:
+        logger.error(f"Error saving settings: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to save settings: {str(e)}")
+
 
 @api_router.get("/integrations/settings")
 async def get_integration_settings():
