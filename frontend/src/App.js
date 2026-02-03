@@ -136,6 +136,7 @@ function ProtectedApp() {
   const navigation = [
     { id: "dashboard", label: "Dashboard", icon: "📊" },
     { id: "telegram-bot", label: "Telegram Bot", icon: "📱" },
+    { id: "pocket-option", label: "Pocket Option", icon: "🎰" },
     { id: "strategies", label: "Strategies", icon: "🎯" },
     { id: "ai-models", label: "AI Models", icon: "🧠" },
     { id: "performance", label: "Performance", icon: "📈" },
@@ -156,6 +157,8 @@ function ProtectedApp() {
         );
       case "telegram-bot":
         return <TelegramBotPage />;
+      case "pocket-option":
+        return <PocketOptionPage />;
       case "strategies":
         return <StrategyBuilder />;
       case "ai-models":
