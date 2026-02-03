@@ -289,7 +289,7 @@ const BridgeScriptGuide = ({ isOpen, onClose }) => {
   );
 };
 
-const PocketOptionSettings = () => {
+const PocketOptionPage = () => {
   // Connection states
   const [autoTradeStatus, setAutoTradeStatus] = useState(null);
   const [bridgeStatus, setBridgeStatus] = useState(null);
