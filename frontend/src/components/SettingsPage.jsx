@@ -11,12 +11,71 @@ import { toast } from 'sonner';
 
 const API = process.env.REACT_APP_BACKEND_URL ? `${process.env.REACT_APP_BACKEND_URL}/api` : '/api';
 
+// All available timeframes
+const ALL_TIMEFRAMES = [
+  { value: '5s', label: '5 Seconds' },
+  { value: '10s', label: '10 Seconds' },
+  { value: '15s', label: '15 Seconds' },
+  { value: '30s', label: '30 Seconds' },
+  { value: '1m', label: '1 Minute' },
+  { value: '2m', label: '2 Minutes' },
+  { value: '3m', label: '3 Minutes' },
+  { value: '5m', label: '5 Minutes' },
+  { value: '10m', label: '10 Minutes' },
+  { value: '15m', label: '15 Minutes' },
+  { value: '30m', label: '30 Minutes' },
+  { value: '1h', label: '1 Hour' },
+];
+
+// All available assets
+const ALL_ASSETS = [
+  // Forex OTC
+  { value: 'EURUSD_otc', label: 'EUR/USD (OTC)', category: 'Forex OTC' },
+  { value: 'GBPUSD_otc', label: 'GBP/USD (OTC)', category: 'Forex OTC' },
+  { value: 'USDJPY_otc', label: 'USD/JPY (OTC)', category: 'Forex OTC' },
+  { value: 'AUDUSD_otc', label: 'AUD/USD (OTC)', category: 'Forex OTC' },
+  { value: 'USDCAD_otc', label: 'USD/CAD (OTC)', category: 'Forex OTC' },
+  { value: 'USDCHF_otc', label: 'USD/CHF (OTC)', category: 'Forex OTC' },
+  { value: 'NZDUSD_otc', label: 'NZD/USD (OTC)', category: 'Forex OTC' },
+  { value: 'EURGBP_otc', label: 'EUR/GBP (OTC)', category: 'Forex OTC' },
+  { value: 'EURJPY_otc', label: 'EUR/JPY (OTC)', category: 'Forex OTC' },
+  { value: 'GBPJPY_otc', label: 'GBP/JPY (OTC)', category: 'Forex OTC' },
+  // Forex Regular
+  { value: 'EURUSD_regular', label: 'EUR/USD (Regular)', category: 'Forex Regular' },
+  { value: 'GBPUSD_regular', label: 'GBP/USD (Regular)', category: 'Forex Regular' },
+  { value: 'USDJPY_regular', label: 'USD/JPY (Regular)', category: 'Forex Regular' },
+  { value: 'AUDUSD_regular', label: 'AUD/USD (Regular)', category: 'Forex Regular' },
+  // Crypto OTC
+  { value: 'BTCUSD_otc', label: 'BTC/USD (OTC)', category: 'Crypto OTC' },
+  { value: 'ETHUSD_otc', label: 'ETH/USD (OTC)', category: 'Crypto OTC' },
+  { value: 'LTCUSD_otc', label: 'LTC/USD (OTC)', category: 'Crypto OTC' },
+  // Indices
+  { value: 'US100_otc', label: 'US100 (OTC)', category: 'Indices' },
+  { value: 'US500_otc', label: 'US500 (OTC)', category: 'Indices' },
+];
+
+// Available strategies
+const ALL_STRATEGIES = [
+  { value: 'rsi_oversold_overbought', label: 'RSI Oversold/Overbought', description: 'Classic RSI reversal strategy' },
+  { value: 'ema_crossover', label: 'EMA Crossover', description: 'Trend-following with EMA' },
+  { value: 'bollinger_bands', label: 'Bollinger Bands', description: 'Volatility breakout strategy' },
+  { value: 'macd_signal', label: 'MACD Signal', description: 'MACD crossover signals' },
+  { value: 'stochastic', label: 'Stochastic', description: 'Stochastic oscillator reversals' },
+  { value: 'supertrend', label: 'SuperTrend', description: 'Trend direction with SuperTrend' },
+  { value: 'triple_confluence', label: 'Triple Confluence', description: 'Multiple indicator confirmation' },
+  { value: 'vwap_momentum', label: 'VWAP Momentum', description: 'Volume-weighted momentum' },
+  { value: 'williams_adx', label: 'Williams %R + ADX', description: 'Williams with trend strength' },
+  { value: 'ai_ensemble', label: 'AI Ensemble', description: 'AI-powered multi-strategy' },
+];
+
 const SettingsPage = () => {
   const [activeTab, setActiveTab] = useState('general');
   const [settings, setSettings] = useState({
     // General settings
     defaultTimeframe: '1m',
     defaultAsset: 'EURUSD_otc',
+    selectedTimeframes: ['1m', '5m'],
+    selectedAssets: ['EURUSD_otc', 'GBPUSD_otc'],
     soundEnabled: true,
     notificationsEnabled: true,
     
@@ -24,17 +83,26 @@ const SettingsPage = () => {
     minimumConfidence: 70,
     signalCooldown: 30,
     
-    // API Keys (display only - masked)
+    // Strategy settings per timeframe
+    strategySettings: {
+      '5s': ['triple_confluence'],
+      '15s': ['triple_confluence', 'ema_crossover'],
+      '30s': ['vwap_momentum', 'williams_adx'],
+      '1m': ['rsi_oversold_overbought', 'macd_signal', 'bollinger_bands'],
+      '5m': ['supertrend', 'ema_crossover'],
+    },
+    
+    // Telegram
     telegramBotToken: '',
     telegramChatId: '',
   });
   
   const [integrationStatus, setIntegrationStatus] = useState({
     telegram: false,
-    alphaVantage: false,
   });
   
   const [isLoading, setIsLoading] = useState(false);
+  const [isFetching, setIsFetching] = useState(true);
 
   useEffect(() => {
     fetchSettings();
@@ -42,6 +110,7 @@ const SettingsPage = () => {
   }, []);
 
   const fetchSettings = async () => {
+    setIsFetching(true);
     try {
       const response = await axios.get(`${API}/settings`);
       if (response.data) {
@@ -49,6 +118,8 @@ const SettingsPage = () => {
       }
     } catch (error) {
       console.log('Using default settings');
+    } finally {
+      setIsFetching(false);
     }
   };
 
@@ -67,10 +138,15 @@ const SettingsPage = () => {
   const saveSettings = async () => {
     setIsLoading(true);
     try {
-      await axios.post(`${API}/settings`, settings);
-      toast.success('Settings saved successfully!');
+      const response = await axios.post(`${API}/settings`, settings);
+      if (response.data?.success) {
+        toast.success('Settings saved successfully!');
+      } else {
+        toast.error('Failed to save settings');
+      }
     } catch (error) {
-      toast.error('Failed to save settings');
+      console.error('Save settings error:', error);
+      toast.error('Failed to save settings: ' + (error.response?.data?.detail || error.message));
     } finally {
       setIsLoading(false);
     }
@@ -91,13 +167,59 @@ const SettingsPage = () => {
     }
   };
 
+  const toggleTimeframe = (tf) => {
+    setSettings(prev => ({
+      ...prev,
+      selectedTimeframes: prev.selectedTimeframes.includes(tf)
+        ? prev.selectedTimeframes.filter(t => t !== tf)
+        : [...prev.selectedTimeframes, tf]
+    }));
+  };
+
+  const toggleAsset = (asset) => {
+    setSettings(prev => ({
+      ...prev,
+      selectedAssets: prev.selectedAssets.includes(asset)
+        ? prev.selectedAssets.filter(a => a !== asset)
+        : [...prev.selectedAssets, asset]
+    }));
+  };
+
+  const toggleStrategy = (timeframe, strategy) => {
+    setSettings(prev => {
+      const currentStrategies = prev.strategySettings[timeframe] || [];
+      const newStrategies = currentStrategies.includes(strategy)
+        ? currentStrategies.filter(s => s !== strategy)
+        : [...currentStrategies, strategy];
+      
+      return {
+        ...prev,
+        strategySettings: {
+          ...prev.strategySettings,
+          [timeframe]: newStrategies
+        }
+      };
+    });
+  };
+
+  if (isFetching) {
+    return (
+      <div className="p-6 flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+          <p className="text-slate-400">Loading settings...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">⚙️ Settings</h1>
-          <p className="text-slate-400">Configure your trading bot preferences and integrations</p>
+          <p className="text-slate-400">Configure your trading bot preferences</p>
         </div>
         <Button 
           onClick={saveSettings} 
@@ -110,12 +232,15 @@ const SettingsPage = () => {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3 bg-slate-800/50 max-w-lg">
+        <TabsList className="grid w-full grid-cols-4 bg-slate-800/50 max-w-2xl">
           <TabsTrigger value="general" className="data-[state=active]:bg-purple-600">
             ⚙️ General
           </TabsTrigger>
-          <TabsTrigger value="signals" className="data-[state=active]:bg-purple-600">
-            📊 Signals
+          <TabsTrigger value="assets" className="data-[state=active]:bg-purple-600">
+            📊 Assets
+          </TabsTrigger>
+          <TabsTrigger value="strategies" className="data-[state=active]:bg-purple-600">
+            🎯 Strategies
           </TabsTrigger>
           <TabsTrigger value="integrations" className="data-[state=active]:bg-purple-600">
             🔌 Integrations
@@ -138,10 +263,9 @@ const SettingsPage = () => {
                     value={settings.defaultTimeframe}
                     onChange={(e) => setSettings({...settings, defaultTimeframe: e.target.value})}
                   >
-                    <option value="15s">15 Seconds</option>
-                    <option value="30s">30 Seconds</option>
-                    <option value="1m">1 Minute</option>
-                    <option value="5m">5 Minutes</option>
+                    {ALL_TIMEFRAMES.map(tf => (
+                      <option key={tf.value} value={tf.value}>{tf.label}</option>
+                    ))}
                   </select>
                 </div>
                 <div className="space-y-2">
@@ -151,11 +275,44 @@ const SettingsPage = () => {
                     value={settings.defaultAsset}
                     onChange={(e) => setSettings({...settings, defaultAsset: e.target.value})}
                   >
-                    <option value="EURUSD_otc">EUR/USD (OTC)</option>
-                    <option value="GBPUSD_otc">GBP/USD (OTC)</option>
-                    <option value="BTCUSD_otc">BTC/USD (OTC)</option>
-                    <option value="EURUSD_regular">EUR/USD (Regular)</option>
+                    {ALL_ASSETS.map(asset => (
+                      <option key={asset.value} value={asset.value}>{asset.label}</option>
+                    ))}
                   </select>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-slate-900/50 border-slate-700">
+              <CardHeader>
+                <CardTitle className="text-white text-lg">Signal Quality</CardTitle>
+                <CardDescription>Set minimum thresholds for signals</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Minimum Confidence (%)</Label>
+                  <div className="flex items-center gap-4">
+                    <input 
+                      type="range"
+                      min="50"
+                      max="95"
+                      value={settings.minimumConfidence}
+                      onChange={(e) => setSettings({...settings, minimumConfidence: parseInt(e.target.value)})}
+                      className="flex-1 accent-purple-500"
+                    />
+                    <span className="text-purple-400 font-bold w-12">{settings.minimumConfidence}%</span>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Signal Cooldown (seconds)</Label>
+                  <Input 
+                    type="number"
+                    min="10"
+                    max="300"
+                    value={settings.signalCooldown}
+                    onChange={(e) => setSettings({...settings, signalCooldown: parseInt(e.target.value)})}
+                    className="bg-slate-800 border-slate-600"
+                  />
                 </div>
               </CardContent>
             </Card>
@@ -191,86 +348,111 @@ const SettingsPage = () => {
           </div>
         </TabsContent>
 
-        {/* Signal Settings */}
-        <TabsContent value="signals" className="mt-6">
+        {/* Assets & Timeframes */}
+        <TabsContent value="assets" className="mt-6">
           <div className="grid gap-6 md:grid-cols-2">
             <Card className="bg-slate-900/50 border-slate-700">
               <CardHeader>
-                <CardTitle className="text-white text-lg">Signal Quality</CardTitle>
-                <CardDescription>Set minimum thresholds for signals</CardDescription>
+                <CardTitle className="text-white text-lg">⏱️ Active Timeframes</CardTitle>
+                <CardDescription>Select timeframes for signal generation</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Minimum Confidence (%)</Label>
-                  <div className="flex items-center gap-4">
-                    <Input 
-                      type="range"
-                      min="50"
-                      max="95"
-                      value={settings.minimumConfidence}
-                      onChange={(e) => setSettings({...settings, minimumConfidence: parseInt(e.target.value)})}
-                      className="flex-1"
-                    />
-                    <span className="text-purple-400 font-bold w-12">{settings.minimumConfidence}%</span>
-                  </div>
-                  <p className="text-xs text-slate-400">Signals below this confidence will be filtered out</p>
+              <CardContent>
+                <div className="grid grid-cols-3 gap-2">
+                  {ALL_TIMEFRAMES.map(tf => (
+                    <Button
+                      key={tf.value}
+                      variant="outline"
+                      size="sm"
+                      onClick={() => toggleTimeframe(tf.value)}
+                      className={settings.selectedTimeframes?.includes(tf.value) 
+                        ? 'bg-purple-600 border-purple-600 text-white' 
+                        : 'bg-slate-800 border-slate-600 text-slate-300'}
+                    >
+                      {tf.label}
+                    </Button>
+                  ))}
                 </div>
-                <div className="space-y-2">
-                  <Label>Signal Cooldown (seconds)</Label>
-                  <Input 
-                    type="number"
-                    min="10"
-                    max="300"
-                    value={settings.signalCooldown}
-                    onChange={(e) => setSettings({...settings, signalCooldown: parseInt(e.target.value)})}
-                    className="bg-slate-800 border-slate-600"
-                  />
-                  <p className="text-xs text-slate-400">Minimum time between signals for same asset</p>
-                </div>
+                <p className="text-xs text-slate-400 mt-4">
+                  Selected: {settings.selectedTimeframes?.length || 0} timeframes
+                </p>
               </CardContent>
             </Card>
 
             <Card className="bg-slate-900/50 border-slate-700">
               <CardHeader>
-                <CardTitle className="text-white text-lg">Signal Filters</CardTitle>
-                <CardDescription>Filter signals based on market conditions</CardDescription>
+                <CardTitle className="text-white text-lg">📊 Active Assets</CardTitle>
+                <CardDescription>Select assets for signal generation</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="p-4 bg-slate-800/50 rounded-lg">
-                  <p className="text-slate-300 text-sm">
-                    💡 <strong>Tip:</strong> Higher confidence thresholds mean fewer but more accurate signals.
-                    For manual trading, we recommend 70-80% minimum confidence.
-                  </p>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => setSettings({...settings, minimumConfidence: 60})}
-                    className={settings.minimumConfidence === 60 ? 'bg-purple-600 border-purple-600' : ''}
-                  >
-                    60% (More)
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => setSettings({...settings, minimumConfidence: 75})}
-                    className={settings.minimumConfidence === 75 ? 'bg-purple-600 border-purple-600' : ''}
-                  >
-                    75% (Balanced)
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => setSettings({...settings, minimumConfidence: 85})}
-                    className={settings.minimumConfidence === 85 ? 'bg-purple-600 border-purple-600' : ''}
-                  >
-                    85% (Quality)
-                  </Button>
-                </div>
+              <CardContent className="max-h-[400px] overflow-y-auto">
+                {['Forex OTC', 'Forex Regular', 'Crypto OTC', 'Indices'].map(category => (
+                  <div key={category} className="mb-4">
+                    <Label className="text-purple-400 text-xs uppercase mb-2 block">{category}</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {ALL_ASSETS.filter(a => a.category === category).map(asset => (
+                        <Button
+                          key={asset.value}
+                          variant="outline"
+                          size="sm"
+                          onClick={() => toggleAsset(asset.value)}
+                          className={settings.selectedAssets?.includes(asset.value) 
+                            ? 'bg-green-600 border-green-600 text-white text-xs' 
+                            : 'bg-slate-800 border-slate-600 text-slate-300 text-xs'}
+                        >
+                          {asset.label.replace(` (${category.includes('OTC') ? 'OTC' : 'Regular'})`, '')}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                <p className="text-xs text-slate-400 mt-2">
+                  Selected: {settings.selectedAssets?.length || 0} assets
+                </p>
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        {/* Strategy Selection */}
+        <TabsContent value="strategies" className="mt-6">
+          <Card className="bg-slate-900/50 border-slate-700">
+            <CardHeader>
+              <CardTitle className="text-white text-lg">🎯 Strategy Selection by Timeframe</CardTitle>
+              <CardDescription>Choose which strategies to use for each timeframe</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-6">
+                {ALL_TIMEFRAMES.filter(tf => settings.selectedTimeframes?.includes(tf.value)).map(tf => (
+                  <div key={tf.value} className="p-4 bg-slate-800/50 rounded-lg">
+                    <Label className="text-purple-400 font-medium mb-3 block">
+                      ⏱️ {tf.label} Strategies
+                    </Label>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
+                      {ALL_STRATEGIES.map(strategy => (
+                        <Button
+                          key={strategy.value}
+                          variant="outline"
+                          size="sm"
+                          onClick={() => toggleStrategy(tf.value, strategy.value)}
+                          className={settings.strategySettings?.[tf.value]?.includes(strategy.value)
+                            ? 'bg-purple-600 border-purple-600 text-white text-xs'
+                            : 'bg-slate-700 border-slate-600 text-slate-300 text-xs'}
+                          title={strategy.description}
+                        >
+                          {strategy.label}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                
+                {(!settings.selectedTimeframes || settings.selectedTimeframes.length === 0) && (
+                  <div className="text-center py-8 text-slate-400">
+                    <p>No timeframes selected. Go to Assets tab to select timeframes first.</p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* Integrations */}
