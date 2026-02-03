@@ -959,4 +959,4 @@ const PocketOptionSettings = () => {
   );
 };
 
-export default PocketOptionSettings;
+export default PocketOptionPage;
