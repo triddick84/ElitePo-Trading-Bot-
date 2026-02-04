@@ -89,7 +89,7 @@ class ThreeCommasService:
     
     async def save_config(self, config: Dict) -> bool:
         """Save configuration to database"""
-        if self.db:
+        if self.db is not None:
             try:
                 config["type"] = "config"
                 config["updated_at"] = datetime.now(timezone.utc).isoformat()
