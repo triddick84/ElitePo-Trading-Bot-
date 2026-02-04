@@ -11035,6 +11035,10 @@ async def startup_event():
             telegram_bot = get_telegram_bot(db)
             logger.info("🤖 Telegram bot service initialized")
             
+            # Initialize 3Commas service
+            await initialize_threecommas_service(db)
+            logger.info("📊 3Commas service initialized")
+            
             app_initialized = True
             logger.info("✅ Application initialization complete")
         except Exception as e:
