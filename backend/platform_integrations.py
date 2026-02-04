@@ -403,5 +403,26 @@ class PlatformIntegrationService:
                 "signal_id": signal.id
             }
 
+    async def send_threecommas_signal(self, signal: TradingSignal):
+        """Send signal to 3Commas signal bot"""
+        try:
+            from threecommas_service import get_threecommas_service
+            
+            service = get_threecommas_service()
+            
+            if not service or not service.is_enabled:
+                logger.debug("3Commas not enabled, skipping")
+                return
+            
+            result = await service.send_signal(signal)
+            
+            if result.get("success"):
+                logger.info(f"✅ 3Commas signal sent: {result.get('action')} {result.get('ticker')}")
+            else:
+                logger.warning(f"⚠️ 3Commas signal failed: {result.get('error')}")
+                
+        except Exception as e:
+            logger.error(f"Error sending 3Commas signal: {e}")
+
 # Global instance
 platform_integration = PlatformIntegrationService()
