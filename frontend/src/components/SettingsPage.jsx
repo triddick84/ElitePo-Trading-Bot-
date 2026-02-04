@@ -495,6 +495,82 @@ const SettingsPage = () => {
               </CardContent>
             </Card>
 
+            {/* 3Commas Integration */}
+            <Card className="bg-slate-900/50 border-slate-700">
+              <CardHeader>
+                <CardTitle className="text-white text-lg flex items-center gap-2">
+                  🤖 3Commas Signal Bot
+                  <Badge className={settings.threeCommasEnabled ? 'bg-green-500/20 text-green-400' : 'bg-slate-500/20 text-slate-400'}>
+                    {settings.threeCommasEnabled ? '✅ Enabled' : '❌ Disabled'}
+                  </Badge>
+                </CardTitle>
+                <CardDescription>Send signals to 3Commas trading bots</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <Label>Enable 3Commas</Label>
+                    <p className="text-xs text-slate-400">Send signals to 3Commas webhook</p>
+                  </div>
+                  <Switch 
+                    checked={settings.threeCommasEnabled || false}
+                    onCheckedChange={(checked) => setSettings({...settings, threeCommasEnabled: checked})}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Secret (JWT Token)</Label>
+                  <Input 
+                    type="password"
+                    placeholder="eyJhbGciOiJIUzI1NiJ9..."
+                    value={settings.threeCommasSecret || ''}
+                    onChange={(e) => setSettings({...settings, threeCommasSecret: e.target.value})}
+                    className="bg-slate-800 border-slate-600 font-mono text-xs"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Bot UUID</Label>
+                  <Input 
+                    type="text"
+                    placeholder="30f00a77-616f-4013-9d36-55aa5dcbc101"
+                    value={settings.threeCommasBotUuid || ''}
+                    onChange={(e) => setSettings({...settings, threeCommasBotUuid: e.target.value})}
+                    className="bg-slate-800 border-slate-600 font-mono text-xs"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Exchange</Label>
+                  <select 
+                    className="w-full p-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm"
+                    value={settings.threeCommasExchange || 'BINANCE'}
+                    onChange={(e) => setSettings({...settings, threeCommasExchange: e.target.value})}
+                  >
+                    <option value="BINANCE">Binance</option>
+                    <option value="BYBIT">Bybit</option>
+                    <option value="KUCOIN">KuCoin</option>
+                    <option value="OKX">OKX</option>
+                    <option value="BITGET">Bitget</option>
+                    <option value="COINBASE">Coinbase</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Max Lag (seconds)</Label>
+                  <Input 
+                    type="number"
+                    placeholder="300"
+                    value={settings.threeCommasMaxLag || '300'}
+                    onChange={(e) => setSettings({...settings, threeCommasMaxLag: e.target.value})}
+                    className="bg-slate-800 border-slate-600"
+                  />
+                </div>
+                <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                  <p className="text-blue-400 text-xs">
+                    💡 <strong>Tip:</strong> Get your Secret and Bot UUID from 3Commas Signal Bot settings.
+                    Webhook URL: <code className="text-purple-400">https://api.3commas.io/signal_bots/webhooks</code>
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
             <Card className="bg-slate-900/50 border-slate-700">
               <CardHeader>
                 <CardTitle className="text-white text-lg">📡 Data Sources</CardTitle>
