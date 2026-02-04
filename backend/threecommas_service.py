@@ -68,7 +68,7 @@ class ThreeCommasService:
         
     async def initialize(self):
         """Load configuration from database"""
-        if self.db:
+        if self.db is not None:
             try:
                 config_doc = await self.db.threecommas_config.find_one(
                     {"type": "config"}, 
