@@ -71,6 +71,12 @@ from money_management_system import money_management, get_optimal_stake, run_ris
 from auth_service import get_auth_service, UserRole
 from telegram_bot_service import get_telegram_bot, TradingSignal as TelegramTradingSignal
 
+# Import 3Commas Service
+from threecommas_service import (
+    get_threecommas_service, initialize_threecommas_service,
+    ThreeCommasService
+)
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
