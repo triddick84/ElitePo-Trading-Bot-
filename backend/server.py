@@ -10754,6 +10754,96 @@ async def get_telegram_bot_stats():
 
 
 # =====================================================
+# 3COMMAS SIGNAL BOT ENDPOINTS
+# =====================================================
+
+@api_router.get("/3commas/status")
+async def get_threecommas_status():
+    """Get 3Commas integration status"""
+    service = get_threecommas_service()
+    
+    if service:
+        config = await service.get_config()
+        return {
+            "success": True,
+            "configured": service.is_configured,
+            "enabled": service.is_enabled,
+            "config": {
+                "secret": "***" + config.get("secret", "")[-10:] if config.get("secret") else "",
+                "bot_uuid": config.get("bot_uuid", ""),
+                "max_lag": config.get("max_lag", "300"),
+                "tv_exchange": config.get("tv_exchange", "BINANCE"),
+                "enabled": config.get("enabled", False)
+            }
+        }
+    
+    return {
+        "success": True,
+        "configured": False,
+        "enabled": False,
+        "config": {}
+    }
+
+
+@api_router.post("/3commas/config")
+async def save_threecommas_config(config: dict):
+    """Save 3Commas configuration"""
+    service = get_threecommas_service()
+    
+    if not service:
+        # Initialize service if not exists
+        service = await initialize_threecommas_service(db)
+    
+    success = await service.save_config(config)
+    
+    if success:
+        return {
+            "success": True,
+            "message": "3Commas configuration saved successfully"
+        }
+    else:
+        raise HTTPException(status_code=500, detail="Failed to save 3Commas configuration")
+
+
+@api_router.post("/3commas/test")
+async def test_threecommas_connection():
+    """Test 3Commas webhook connection"""
+    service = get_threecommas_service()
+    
+    if not service:
+        return {
+            "success": False,
+            "error": "3Commas service not initialized"
+        }
+    
+    result = await service.test_connection()
+    return result
+
+
+@api_router.post("/3commas/send-signal")
+async def send_threecommas_signal(signal_data: dict):
+    """Manually send a signal to 3Commas"""
+    service = get_threecommas_service()
+    
+    if not service or not service.is_enabled:
+        return {
+            "success": False,
+            "error": "3Commas integration not enabled"
+        }
+    
+    # Create a simple signal object
+    class SimpleSignal:
+        def __init__(self, data):
+            self.direction = data.get("direction", "CALL")
+            self.symbol = data.get("symbol", "BTCUSD")
+            self.entry_price = data.get("entry_price", 0)
+    
+    signal = SimpleSignal(signal_data)
+    result = await service.send_signal(signal)
+    return result
+
+
+# =====================================================
 # SSID AUTO-REFRESH ENDPOINTS
 # =====================================================
 
