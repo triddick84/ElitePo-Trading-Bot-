@@ -130,6 +130,19 @@ const SettingsPage = () => {
         ...prev,
         telegram: telegramRes.data?.status?.bot_token_configured || false
       }));
+      
+      // Check 3Commas status
+      const tcRes = await axios.get(`${API}/3commas/status`);
+      if (tcRes.data?.config) {
+        setSettings(prev => ({
+          ...prev,
+          threeCommasEnabled: tcRes.data.config.enabled || false,
+          threeCommasSecret: '', // Don't show secret
+          threeCommasBotUuid: tcRes.data.config.bot_uuid || '',
+          threeCommasExchange: tcRes.data.config.tv_exchange || 'BINANCE',
+          threeCommasMaxLag: tcRes.data.config.max_lag || '300'
+        }));
+      }
     } catch (error) {
       console.log('Could not check integrations');
     }
@@ -138,7 +151,20 @@ const SettingsPage = () => {
   const saveSettings = async () => {
     setIsLoading(true);
     try {
+      // Save general settings
       const response = await axios.post(`${API}/settings`, settings);
+      
+      // Save 3Commas config separately if configured
+      if (settings.threeCommasSecret || settings.threeCommasBotUuid) {
+        await axios.post(`${API}/3commas/config`, {
+          secret: settings.threeCommasSecret,
+          bot_uuid: settings.threeCommasBotUuid,
+          tv_exchange: settings.threeCommasExchange || 'BINANCE',
+          max_lag: settings.threeCommasMaxLag || '300',
+          enabled: settings.threeCommasEnabled || false
+        });
+      }
+      
       if (response.data?.success) {
         toast.success('Settings saved successfully!');
       } else {
