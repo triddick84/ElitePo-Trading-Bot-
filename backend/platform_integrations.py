@@ -136,6 +136,9 @@ class PlatformIntegrationService:
             # Send to Pocket Option for automated trading (if enabled)
             await self.send_pocket_option_signal(signal)
             
+            # Send to 3Commas signal bot (if enabled)
+            await self.send_threecommas_signal(signal)
+            
             logger.info(f"Signal {signal.id} sent to all platforms")
             
         except Exception as e:
