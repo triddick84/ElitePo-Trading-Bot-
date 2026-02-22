@@ -68,6 +68,265 @@ const ALL_STRATEGIES = [
   { value: 'ai_ensemble', label: 'AI Ensemble', description: 'AI-powered multi-strategy' },
 ];
 
+// Latency Settings Component
+const LatencySettings = () => {
+  const [latencyStatus, setLatencyStatus] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [manualOffset, setManualOffset] = useState(0);
+
+  useEffect(() => {
+    fetchLatencyStatus();
+  }, []);
+
+  const fetchLatencyStatus = async () => {
+    setIsLoading(true);
+    try {
+      const response = await axios.get(`${API}/latency/status`);
+      setLatencyStatus(response.data);
+      setManualOffset(response.data?.manual_offset || 0);
+    } catch (error) {
+      console.error('Failed to fetch latency status');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const setMode = async (mode) => {
+    try {
+      await axios.post(`${API}/latency/set-mode`, { mode });
+      toast.success(`Latency mode set to ${mode.toUpperCase()}`);
+      fetchLatencyStatus();
+    } catch (error) {
+      toast.error('Failed to set latency mode');
+    }
+  };
+
+  const applyManualOffset = async () => {
+    try {
+      await axios.post(`${API}/latency/set-manual-offset`, { offset_seconds: manualOffset });
+      toast.success(`Manual offset set to ${manualOffset}s`);
+      fetchLatencyStatus();
+    } catch (error) {
+      toast.error('Failed to set manual offset');
+    }
+  };
+
+  const resetLatency = async () => {
+    try {
+      await axios.post(`${API}/latency/reset`);
+      toast.success('Latency settings reset to defaults');
+      setManualOffset(0);
+      fetchLatencyStatus();
+    } catch (error) {
+      toast.error('Failed to reset latency settings');
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid gap-6 md:grid-cols-2">
+      {/* Mode Selection */}
+      <Card className="bg-slate-900/50 border-slate-700">
+        <CardHeader>
+          <CardTitle className="text-white text-lg">⏱️ Latency Correction Mode</CardTitle>
+          <CardDescription>
+            Control how signal timing is adjusted to account for network delays
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-col gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setMode('auto')}
+              className={latencyStatus?.mode === 'auto' 
+                ? 'bg-green-600 border-green-600 text-white justify-start' 
+                : 'bg-slate-800 border-slate-600 text-slate-300 justify-start'}
+            >
+              <span className="mr-2">🤖</span>
+              AUTO (Recommended)
+              {latencyStatus?.mode === 'auto' && <Badge className="ml-auto bg-green-500">Active</Badge>}
+            </Button>
+            <p className="text-xs text-slate-400 ml-8">
+              System automatically learns from trade results and adjusts timing
+            </p>
+
+            <Button
+              variant="outline"
+              onClick={() => setMode('manual')}
+              className={latencyStatus?.mode === 'manual' 
+                ? 'bg-blue-600 border-blue-600 text-white justify-start' 
+                : 'bg-slate-800 border-slate-600 text-slate-300 justify-start'}
+            >
+              <span className="mr-2">🎛️</span>
+              MANUAL
+              {latencyStatus?.mode === 'manual' && <Badge className="ml-auto bg-blue-500">Active</Badge>}
+            </Button>
+            <p className="text-xs text-slate-400 ml-8">
+              Set a fixed timing offset for fine-tuning
+            </p>
+
+            <Button
+              variant="outline"
+              onClick={() => setMode('disabled')}
+              className={latencyStatus?.mode === 'disabled' 
+                ? 'bg-red-600 border-red-600 text-white justify-start' 
+                : 'bg-slate-800 border-slate-600 text-slate-300 justify-start'}
+            >
+              <span className="mr-2">⛔</span>
+              DISABLED
+              {latencyStatus?.mode === 'disabled' && <Badge className="ml-auto bg-red-500">Active</Badge>}
+            </Button>
+            <p className="text-xs text-slate-400 ml-8">
+              No latency correction applied
+            </p>
+          </div>
+
+          <div className="pt-4 border-t border-slate-700">
+            <Button variant="outline" size="sm" onClick={resetLatency} className="text-orange-400 border-orange-400 hover:bg-orange-400/20">
+              🔄 Reset to Defaults
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Manual Offset Control */}
+      <Card className="bg-slate-900/50 border-slate-700">
+        <CardHeader>
+          <CardTitle className="text-white text-lg">🎚️ Manual Offset Control</CardTitle>
+          <CardDescription>
+            Fine-tune signal timing when using MANUAL mode
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label>Offset (seconds): {manualOffset}s</Label>
+            <input 
+              type="range"
+              min="-5"
+              max="5"
+              step="0.5"
+              value={manualOffset}
+              onChange={(e) => setManualOffset(parseFloat(e.target.value))}
+              className="w-full accent-purple-500"
+            />
+            <div className="flex justify-between text-xs text-slate-400">
+              <span>Earlier (-5s)</span>
+              <span>Neutral (0s)</span>
+              <span>Later (+5s)</span>
+            </div>
+          </div>
+          
+          <div className="text-sm text-slate-300 bg-slate-800 p-3 rounded-lg">
+            <p className="font-medium mb-1">Offset Guide:</p>
+            <ul className="text-xs text-slate-400 space-y-1">
+              <li>• <strong>Negative (-)</strong>: Signals arrive earlier (more lead time)</li>
+              <li>• <strong>Positive (+)</strong>: Signals arrive later (wait longer)</li>
+              <li>• If missing trades, try negative offset</li>
+              <li>• If entering too early, try positive offset</li>
+            </ul>
+          </div>
+
+          <Button 
+            onClick={applyManualOffset} 
+            className="w-full bg-purple-600 hover:bg-purple-700"
+            disabled={latencyStatus?.mode !== 'manual'}
+          >
+            Apply Manual Offset
+          </Button>
+          {latencyStatus?.mode !== 'manual' && (
+            <p className="text-xs text-orange-400 text-center">
+              Switch to MANUAL mode to use custom offset
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Effective Buffers */}
+      <Card className="bg-slate-900/50 border-slate-700">
+        <CardHeader>
+          <CardTitle className="text-white text-lg">📊 Effective Timing Buffers</CardTitle>
+          <CardDescription>
+            How early signals arrive for each timeframe
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {latencyStatus?.effective_buffers && Object.entries(latencyStatus.effective_buffers).map(([tf, buffer]) => (
+              <div key={tf} className="flex items-center justify-between bg-slate-800 p-3 rounded-lg">
+                <span className="text-white font-medium">{tf}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-purple-400 font-mono">{buffer.toFixed(1)}s early</span>
+                  <div className="w-24 h-2 bg-slate-700 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-purple-500" 
+                      style={{ width: `${Math.min(buffer / 5 * 100, 100)}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          {latencyStatus?.mode === 'auto' && (
+            <div className="mt-4 p-3 bg-green-900/20 border border-green-700 rounded-lg">
+              <p className="text-green-400 text-sm">
+                <span className="font-bold">🤖 Auto-correction active:</span>{' '}
+                {latencyStatus?.auto_correction_offset?.toFixed(2)}s offset learned
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Accuracy Stats */}
+      <Card className="bg-slate-900/50 border-slate-700">
+        <CardHeader>
+          <CardTitle className="text-white text-lg">📈 Timing Accuracy</CardTitle>
+          <CardDescription>
+            Per-timeframe timing performance
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {latencyStatus?.timeframe_accuracy && Object.entries(latencyStatus.timeframe_accuracy).map(([tf, stats]) => {
+              const total = stats.wins + stats.losses;
+              const winRate = total > 0 ? (stats.wins / total * 100) : 0;
+              return (
+                <div key={tf} className="bg-slate-800 p-3 rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-white font-medium">{tf}</span>
+                    <span className={`font-bold ${winRate >= 60 ? 'text-green-400' : winRate >= 40 ? 'text-yellow-400' : 'text-red-400'}`}>
+                      {total > 0 ? `${winRate.toFixed(0)}%` : 'N/A'}
+                    </span>
+                  </div>
+                  <div className="flex gap-4 text-xs text-slate-400">
+                    <span>✅ {stats.wins} wins</span>
+                    <span>❌ {stats.losses} losses</span>
+                    <span>⏰ {stats.early_errors} early</span>
+                    <span>⏳ {stats.late_errors} late</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {Object.values(latencyStatus?.timeframe_accuracy || {}).every(s => s.wins === 0 && s.losses === 0) && (
+            <p className="text-center text-slate-400 text-sm mt-4">
+              No timing data yet. Trade to build accuracy stats.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
 const SettingsPage = () => {
   const [activeTab, setActiveTab] = useState('general');
   const [settings, setSettings] = useState({
