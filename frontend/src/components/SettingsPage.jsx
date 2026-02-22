@@ -377,6 +377,11 @@ const SettingsPage = () => {
           </div>
         </TabsContent>
 
+        {/* Latency Correction Settings */}
+        <TabsContent value="latency" className="mt-6">
+          <LatencySettings />
+        </TabsContent>
+
         {/* Assets & Timeframes */}
         <TabsContent value="assets" className="mt-6">
           <div className="grid gap-6 md:grid-cols-2">
