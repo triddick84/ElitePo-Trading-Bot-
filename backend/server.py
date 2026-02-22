@@ -7562,7 +7562,7 @@ async def get_trade_history(limit: int = 50):
 # ============================================================================
 
 @api_router.post("/trading/record-result")
-async def record_trade_result(request: Request):
+async def trading_record_result(request: Request):
     """
     Record a trade result to update the Market Regime Detector
     
@@ -7634,7 +7634,7 @@ async def record_trade_result(request: Request):
 
 
 @api_router.get("/trading/regime-status")
-async def get_regime_status():
+async def trading_regime_status():
     """
     Get current Market Regime Detector status
     
@@ -7670,7 +7670,7 @@ async def get_regime_status():
 
 
 @api_router.post("/trading/reset-streak")
-async def reset_regime_streak():
+async def trading_reset_streak():
     """
     Manually reset the streak counter and disable streak inversion
     Use this when you want to start fresh
