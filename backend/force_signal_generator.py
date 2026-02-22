@@ -44,6 +44,14 @@ from support_resistance_analyzer import support_resistance_analyzer
 from strategy_registry import strategy_registry
 from strategies.candlestick_bible_strategy import candlestick_bible_strategy, analyze_candles
 
+# Import Market Regime Detector for streak-aware signal generation
+try:
+    from market_regime_detector import get_regime_detector
+    REGIME_DETECTOR_AVAILABLE = True
+except ImportError:
+    REGIME_DETECTOR_AVAILABLE = False
+    get_regime_detector = lambda: None
+
 logger = logging.getLogger(__name__)
 
 # Import enhanced systems for improved quality and speed
