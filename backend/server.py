@@ -10826,6 +10826,102 @@ async def test_threecommas_connection():
     return result
 
 
+# =====================================================
+# MARKET REGIME DETECTOR ENDPOINTS
+# =====================================================
+
+@api_router.get("/regime/status")
+async def get_regime_status():
+    """Get current market regime and streak status"""
+    detector = get_regime_detector()
+    
+    if detector:
+        return {
+            "success": True,
+            **detector.get_status()
+        }
+    
+    return {
+        "success": False,
+        "error": "Regime detector not initialized"
+    }
+
+
+@api_router.post("/regime/record-trade")
+async def record_trade_result(trade_data: dict):
+    """
+    Record a trade result for regime tracking
+    
+    Body: {
+        "direction": "CALL" or "PUT",
+        "symbol": "EURUSD_otc",
+        "is_win": true/false
+    }
+    """
+    detector = get_regime_detector()
+    
+    if not detector:
+        return {
+            "success": False,
+            "error": "Regime detector not initialized"
+        }
+    
+    direction = trade_data.get("direction", "CALL")
+    symbol = trade_data.get("symbol", "UNKNOWN")
+    is_win = trade_data.get("is_win", False)
+    
+    detector.record_trade_result(direction, symbol, is_win)
+    
+    return {
+        "success": True,
+        "message": f"Trade recorded: {'WIN' if is_win else 'LOSS'}",
+        **detector.get_status()
+    }
+
+
+@api_router.post("/regime/reset-streak")
+async def reset_streak():
+    """Reset the streak counter and disable inversion"""
+    detector = get_regime_detector()
+    
+    if not detector:
+        return {
+            "success": False,
+            "error": "Regime detector not initialized"
+        }
+    
+    detector.current_streak = 0
+    detector.streak_inversion_active = False
+    detector.win_loss_history.clear()
+    
+    return {
+        "success": True,
+        "message": "Streak reset successfully",
+        **detector.get_status()
+    }
+
+
+@api_router.post("/regime/toggle-inversion")
+async def toggle_streak_inversion(data: dict):
+    """Manually toggle streak inversion"""
+    detector = get_regime_detector()
+    
+    if not detector:
+        return {
+            "success": False,
+            "error": "Regime detector not initialized"
+        }
+    
+    enabled = data.get("enabled", not detector.streak_inversion_active)
+    detector.streak_inversion_active = enabled
+    
+    return {
+        "success": True,
+        "message": f"Streak inversion {'enabled' if enabled else 'disabled'}",
+        "streak_inversion_active": detector.streak_inversion_active
+    }
+
+
 @api_router.post("/3commas/send-signal")
 async def send_threecommas_signal(signal_data: dict):
     """Manually send a signal to 3Commas"""
