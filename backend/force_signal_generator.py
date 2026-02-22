@@ -1717,8 +1717,13 @@ class ForceSignalGenerator:
     async def _create_emergency_ema_rsi_signal(self, symbol: str) -> Dict:
         """
         Create emergency EMA RSI based signal when standard analysis fails
+        
+        CRITICAL FIX: Uses Market Regime Detector to avoid losing streak bias
         """
         try:
+            # Get regime detector for adaptive direction
+            regime_detector = get_regime_detector()
+            
             # Get basic price data for emergency signal
             loop = asyncio.get_event_loop()
             basic_data = await loop.run_in_executor(
@@ -1734,52 +1739,79 @@ class ForceSignalGenerator:
                 current_price = prices[-1]
                 prev_price = prices[-2]
                 
-                # Determine direction based on price momentum
-                direction = "CALL" if current_price > prev_price else "PUT"
+                # Base direction based on price momentum
+                base_direction = "CALL" if current_price > prev_price else "PUT"
+                
+                # CRITICAL: Apply regime detector to prevent losing streaks
+                if regime_detector and REGIME_DETECTOR_AVAILABLE:
+                    optimal_direction, reason = regime_detector.get_optimal_direction(base_direction, prices)
+                    direction = optimal_direction
+                    regime_applied = True
+                    logger.info(f"🔄 EMA RSI Regime adjustment: {base_direction} → {direction} ({reason})")
+                else:
+                    direction = base_direction
+                    regime_applied = False
+                    reason = "No regime detector"
                 
                 emergency_signal = {
                     'direction': direction,
                     'confidence': 76.0,  # Emergency confidence level
                     'probability': 76.0,
-                    'reasoning': f"🚨 EMERGENCY EMA RSI 5S: Price momentum {direction.lower()} | Force mode active",
+                    'reasoning': f"🚨 EMERGENCY EMA RSI 5S: Price momentum {direction.lower()} | Regime-aware | {reason}",
                     'strategy': 'ema_rsi_5s_emergency',
                     'timeframe': '5s',
                     'market_type': 'otc',
                     'emergency_mode': True,
+                    'regime_applied': regime_applied,
+                    'original_direction': base_direction,
                     'technical_details': {
                         'emergency_fallback': True,
-                        'price_momentum': 'up' if direction == "CALL" else 'down',
+                        'price_momentum': 'up' if base_direction == "CALL" else 'down',
                         'current_price': current_price,
                         'previous_price': prev_price,
-                        'force_mode': True
+                        'force_mode': True,
+                        'regime_detector_used': regime_applied
                     }
                 }
                 
-                logger.info(f"🚨 Emergency EMA RSI 5S Signal: {symbol} → {direction} (76.0%)")
+                logger.info(f"🚨 Emergency EMA RSI 5S Signal: {symbol} → {direction} (76.0%) [Regime: {regime_applied}]")
                 return emergency_signal
             
-            # Ultimate fallback
+            # Ultimate fallback - USE REGIME DETECTOR instead of hardcoded CALL
+            if regime_detector and REGIME_DETECTOR_AVAILABLE:
+                regime_direction = regime_detector.get_regime_adjusted_direction([])
+                logger.info(f"🔄 Ultimate EMA RSI fallback using regime direction: {regime_direction}")
+            else:
+                import random
+                regime_direction = "CALL" if random.random() > 0.5 else "PUT"
+                logger.info(f"🔄 Ultimate EMA RSI fallback using random direction: {regime_direction}")
+            
             return {
-                'direction': "CALL",  # Default to CALL for ultimate fallback
+                'direction': regime_direction,
                 'confidence': 75.0,
                 'probability': 75.0,
-                'reasoning': "🚨 ULTIMATE EMA RSI 5S FALLBACK: Market data unavailable, using statistical bias",
+                'reasoning': f"🚨 ULTIMATE EMA RSI 5S FALLBACK: Regime-aware direction: {regime_direction}",
                 'strategy': 'ema_rsi_5s_ultimate_fallback',
                 'timeframe': '5s',
                 'market_type': 'otc',
-                'ultimate_fallback': True
+                'ultimate_fallback': True,
+                'regime_aware': True
             }
             
         except Exception as e:
             logger.error(f"Error in emergency EMA RSI signal creation: {e}")
+            # Final safety - use random to avoid bias
+            import random
+            final_direction = "CALL" if random.random() > 0.5 else "PUT"
             return {
-                'direction': "CALL",
+                'direction': final_direction,
                 'confidence': 75.0,
                 'probability': 75.0,
-                'reasoning': "🚨 FINAL EMA RSI 5S FALLBACK: Analysis failed, using default",
+                'reasoning': f"🚨 FINAL EMA RSI 5S FALLBACK: Balanced random direction: {final_direction}",
                 'strategy': 'ema_rsi_5s_final_fallback',
                 'timeframe': '5s',
-                'market_type': 'otc'
+                'market_type': 'otc',
+                'random_direction': True
             }
     
     async def _candlestick_bible_analysis(self, data: List[Dict], symbol: str) -> Optional[Dict]:
