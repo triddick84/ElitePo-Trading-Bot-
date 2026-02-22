@@ -11,7 +11,7 @@ import sys
 from datetime import datetime
 
 # Test configuration
-BACKEND_URL = "https://sigbot.preview.emergentagent.com/api"
+BACKEND_URL = "https://algo-signal-hub-2.preview.emergentagent.com/api"
 
 async def test_1m_sell_bias_fix():
     """Test the 1M timeframe SELL bias fix"""
