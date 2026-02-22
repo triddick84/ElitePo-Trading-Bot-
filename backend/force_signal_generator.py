@@ -2817,17 +2817,17 @@ class ForceSignalGenerator:
                                       f"Market: {market_type.upper()}. "
                                       f"Buy score: {buy_score:.1f}, Sell score: {sell_score:.1f}. "
                                       f"{'OTC boost applied. ' if market_type == 'otc' else ''}"
-                                      f"Synchronized timing for {user_timeframes[0]} timeframe.",
+                                      f"Synchronized timing for {user_expirations[0]} timeframe.",
                 justification=f"🎯 PRECISION {market_type.upper()} SIGNAL - {len(analysis_results)} advanced strategies combined. "
                             f"Confidence: {final_confidence:.1f}% (Target: 90%+). "
                             f"{'📈 OTC Market - 24/7 availability. ' if market_type == 'otc' else '📊 Regular Market - Exchange hours. '}"
                             f"⚡ SPEED OPTIMIZED - Ultra-fast generation with precise entry timing. "
                             f"🎯 DIRECT ANALYSIS - Pure technical signals. "
-                            f"🕐 ENTRY: {user_timeframes[0]} candle @ {optimal_entry_time.strftime('%H:%M:%S')} CT (in {int(seconds_to_entry)}s).",
+                            f"🕐 ENTRY: {user_expirations[0]} candle @ {optimal_entry_time.strftime('%H:%M:%S')} CT (in {int(seconds_to_entry)}s).",
                 risk_assessment=f"Risk Level: {'LOW' if final_confidence >= 90 else 'MEDIUM' if final_confidence >= 80 else 'HIGH'}. "
                               f"Forced generation with {final_confidence:.1f}% confidence. "
                               f"{'OTC market volatility considered. ' if market_type == 'otc' else 'Regular market conditions. '}"
-                              f"Timed for {user_timeframes[0]} Pocket Option candle formation. Use proper risk management.",
+                              f"Timed for {user_expirations[0]} Pocket Option candle formation. Use proper risk management.",
                 suggested_stake=suggested_stake,
                 precision_entry_time=optimal_entry_time,  # Real entry time for trade execution
                 popup_display_time=popup_display_time,  # When to show popup (NOW)
@@ -2836,7 +2836,7 @@ class ForceSignalGenerator:
             )
             
             # Apply Pocket Option timing synchronization
-            synchronized_signal = pocket_option_sync.sync_signal_with_pocket_option_timing(signal, user_timeframes)
+            synchronized_signal = pocket_option_sync.sync_signal_with_pocket_option_timing(signal, user_expirations)
             
             # APPLY MAXIMUM ACCURACY OPTIMIZATION
             # This is the final quality gate - only highest quality signals pass
