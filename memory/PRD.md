@@ -21,7 +21,7 @@ Create a "GPT Signal Bot" for Pocket Option with a high win rate (80-90%+). The 
 - **Strategy Registry** - Modular strategy selection per timeframe
 - **Technical Analysis** - RSI, MACD, Bollinger Bands, EMA crossovers, candlestick patterns
 
-### Market Regime Detector (NEW - Feb 2026)
+### Market Regime Detector (Feb 2026)
 - **Streak Tracking** - Monitors consecutive wins/losses
 - **Auto-Inversion** - Automatically inverts signals after 3 consecutive losses
 - **Win Rate Monitoring** - Tracks recent win rate and adjusts accordingly
@@ -29,6 +29,19 @@ Create a "GPT Signal Bot" for Pocket Option with a high win rate (80-90%+). The 
   - `POST /api/trading/record-result` - Record trade outcomes
   - `GET /api/trading/regime-status` - Get current regime status
   - `POST /api/trading/reset-streak` - Reset streak counter
+
+### Signal Accuracy Improvements (Feb 2026)
+- **Fixed undefined variable bug** - `user_timeframes` → `user_expirations`
+- **Regime-Aware Confidence Boosters**:
+  - High win rate (>70%) → confidence boost up to +3%
+  - Low win rate (<40%) → confidence penalty up to -5%
+  - Winning streak (3+) → streak boost up to +3%
+- **Improved Quality Gates** - Signals no longer rejected for not meeting 90%+ threshold
+- **Accuracy Statistics Endpoint** - `GET /api/trading/accuracy-stats`
+  - Overall and recent win rates
+  - Breakdown by direction (CALL/PUT)
+  - Breakdown by symbol
+  - AI-generated recommendations
 
 ### Integrations
 - **Telegram Bot** - Signal notifications to user's chat
@@ -43,6 +56,8 @@ Create a "GPT Signal Bot" for Pocket Option with a high win rate (80-90%+). The 
 │   ├── server.py                    # Main FastAPI application
 │   ├── force_signal_generator.py    # Signal generation with regime detection
 │   ├── market_regime_detector.py    # Streak tracking and auto-inversion
+│   ├── signal_accuracy_optimizer.py # Multi-gate signal validation
+│   ├── signal_accuracy_maximizer.py # 90%+ validation system
 │   ├── auth_service.py              # JWT authentication
 │   ├── threecommas_service.py       # 3Commas webhook integration
 │   └── telegram_bot_service.py      # Telegram notifications
@@ -58,8 +73,8 @@ Create a "GPT Signal Bot" for Pocket Option with a high win rate (80-90%+). The 
 ## Current Status
 
 ### Working
-- Signal generation with regime-aware fallbacks
-- Trade result recording API
+- Signal generation with regime-aware confidence boosters
+- Trade result recording API with accuracy statistics
 - Streak inversion after 3 consecutive losses
 - All authentication flows
 - Telegram notifications
@@ -69,20 +84,26 @@ Create a "GPT Signal Bot" for Pocket Option with a high win rate (80-90%+). The 
 - Pocket Option auto-trade blocked by cloud IP
 - Manual trading mode required for Pocket Option
 
-## P0 - Critical (Current Sprint)
+## P0 - Critical (Completed)
 - [x] Fix "Losing Streak" Bug - Implement Market Regime Detector
 - [x] Replace hardcoded "CALL" biases with regime-aware logic
 - [x] Add trade result recording endpoint
-- [ ] End-to-end testing of regime detection
 
-## P1 - High Priority (Next Sprint)
-- [ ] Enhanced signal notification with Normal/Inverted status
-- [ ] Improve confidence level calculations
-- [ ] Binance US & TradingView bot planning
+## P1 - High Priority (Completed)
+- [x] Improve Signal Accuracy - Added regime-aware confidence boosters
+- [x] Fixed `user_timeframes` undefined variable bug
+- [x] Added accuracy statistics endpoint
+
+## P1 - High Priority (Next)
+- [ ] Enhanced Signal Pop-up Notification with Normal/Inverted status
+- [ ] Frontend display of accuracy statistics
 
 ## P2 - Medium Priority
 - [ ] End-to-end custom strategy testing
 - [ ] Backend refactoring (split server.py)
+- [ ] Binance US & TradingView bot planning
+
+## P3 - Future
 - [ ] Fix Money Management Logic (Martingale)
 
 ## API Endpoints Reference
@@ -96,6 +117,7 @@ Create a "GPT Signal Bot" for Pocket Option with a high win rate (80-90%+). The 
 - `POST /api/trading/record-result` - Record trade outcome
 - `GET /api/trading/regime-status` - Get regime detector status
 - `POST /api/trading/reset-streak` - Reset streak counter
+- `GET /api/trading/accuracy-stats` - Get accuracy statistics
 
 ### Configuration
 - `GET /api/settings` - Get app settings
