@@ -7822,6 +7822,195 @@ async def get_accuracy_statistics():
 
 
 # ============================================================================
+# LATENCY CORRECTION CONTROL ENDPOINTS
+# ============================================================================
+
+@api_router.get("/latency/status")
+async def get_latency_status():
+    """
+    Get current latency correction status and settings
+    
+    Returns mode, offsets, and per-timeframe effective buffers
+    """
+    try:
+        from latency_optimizer import latency_optimizer
+        
+        return {
+            "success": True,
+            "mode": latency_optimizer.correction_mode.value,
+            "auto_correction_offset": latency_optimizer.auto_correction_offset,
+            "manual_offset": latency_optimizer.manual_offset_seconds,
+            "effective_buffers": {
+                "5s": latency_optimizer.get_effective_buffer("5s"),
+                "15s": latency_optimizer.get_effective_buffer("15s"),
+                "30s": latency_optimizer.get_effective_buffer("30s"),
+                "1m": latency_optimizer.get_effective_buffer("1m"),
+                "2m": latency_optimizer.get_effective_buffer("2m")
+            },
+            "timeframe_accuracy": latency_optimizer.timeframe_accuracy,
+            "total_latency_ms": latency_optimizer.total_latency_ms,
+            "latency_stats": latency_optimizer.get_latency_stats()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting latency status: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@api_router.post("/latency/set-mode")
+async def set_latency_mode(request: Request):
+    """
+    Set latency correction mode
+    
+    Body:
+    - mode: 'auto' (default, auto-correction), 'manual', or 'disabled'
+    
+    AUTO mode (default): System automatically learns from trade results and adjusts timing
+    MANUAL mode: User sets a fixed offset for fine-tuning
+    DISABLED mode: No latency correction applied
+    """
+    try:
+        data = await request.json()
+        mode = data.get('mode', 'auto')
+        
+        from latency_optimizer import latency_optimizer
+        
+        result = latency_optimizer.set_mode(mode)
+        
+        logger.info(f"🔧 Latency mode changed to: {mode}")
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error setting latency mode: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@api_router.post("/latency/set-manual-offset")
+async def set_latency_manual_offset(request: Request):
+    """
+    Set manual latency offset (switches to MANUAL mode)
+    
+    Body:
+    - offset_seconds: Offset in seconds (-10 to +10)
+        - Positive: signals arrive later (wait longer before executing)
+        - Negative: signals arrive earlier (more lead time for execution)
+        - 0: neutral timing
+    
+    Example: If signals are consistently arriving too late, set a negative offset (e.g., -2.0)
+    """
+    try:
+        data = await request.json()
+        offset = float(data.get('offset_seconds', 0.0))
+        
+        from latency_optimizer import latency_optimizer
+        
+        result = latency_optimizer.set_manual_offset(offset)
+        
+        logger.info(f"🎛️ Manual latency offset set to: {offset}s")
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error setting manual offset: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@api_router.post("/latency/record-timing-feedback")
+async def record_latency_timing_feedback(request: Request):
+    """
+    Record timing feedback to improve auto-correction (AUTO mode only)
+    
+    Body:
+    - timeframe: '5s', '15s', '30s', '1m', etc.
+    - was_early: true if signal arrived too early (price moved away)
+    - was_late: true if signal arrived too late (missed entry)
+    - was_win: true if the trade was successful
+    
+    This feedback helps the system learn optimal timing for each timeframe
+    """
+    try:
+        data = await request.json()
+        timeframe = data.get('timeframe', '5s')
+        was_early = data.get('was_early', False)
+        was_late = data.get('was_late', False)
+        was_win = data.get('was_win', False)
+        
+        from latency_optimizer import latency_optimizer
+        
+        latency_optimizer.record_trade_timing_feedback(
+            timeframe=timeframe,
+            was_early=was_early,
+            was_late=was_late,
+            was_win=was_win
+        )
+        
+        return {
+            "success": True,
+            "message": "Timing feedback recorded",
+            "mode": latency_optimizer.correction_mode.value,
+            "auto_correction_offset": latency_optimizer.auto_correction_offset,
+            "timeframe_accuracy": latency_optimizer.timeframe_accuracy.get(timeframe, {})
+        }
+        
+    except Exception as e:
+        logger.error(f"Error recording timing feedback: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@api_router.post("/latency/reset")
+async def reset_latency_corrections():
+    """
+    Reset latency corrections to default values
+    
+    Clears auto-correction history and resets to base values
+    """
+    try:
+        from latency_optimizer import latency_optimizer
+        
+        # Reset auto-correction
+        latency_optimizer.auto_correction_offset = 0.0
+        latency_optimizer.manual_offset_seconds = 0.0
+        latency_optimizer.auto_correction_history = []
+        latency_optimizer.correction_mode = latency_optimizer.LatencyCorrectionMode.AUTO
+        
+        # Reset accuracy tracking
+        for tf in latency_optimizer.timeframe_accuracy:
+            latency_optimizer.timeframe_accuracy[tf] = {
+                'wins': 0, 'losses': 0, 'early_errors': 0, 'late_errors': 0
+            }
+        
+        logger.info("🔄 Latency corrections reset to defaults")
+        
+        return {
+            "success": True,
+            "message": "Latency corrections reset to defaults",
+            "mode": "auto",
+            "auto_correction_offset": 0.0,
+            "manual_offset": 0.0
+        }
+        
+    except Exception as e:
+        logger.error(f"Error resetting latency: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+# ============================================================================
 # POCKET OPTION API CLIENT ENDPOINTS (pocketoptionapi-async)
 # ============================================================================
 
