@@ -11045,6 +11045,10 @@ async def startup_event():
             await initialize_threecommas_service(db)
             logger.info("📊 3Commas service initialized")
             
+            # Initialize Market Regime Detector
+            await initialize_regime_detector(db)
+            logger.info("📈 Market Regime Detector initialized")
+            
             app_initialized = True
             logger.info("✅ Application initialization complete")
         except Exception as e:
