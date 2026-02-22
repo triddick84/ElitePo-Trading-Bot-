@@ -7705,6 +7705,122 @@ async def trading_reset_streak():
         }
 
 
+@api_router.get("/trading/accuracy-stats")
+async def get_accuracy_statistics():
+    """
+    Get comprehensive accuracy statistics based on recorded trade results
+    
+    Returns:
+    - overall_win_rate: Win rate across all trades
+    - recent_win_rate: Win rate of last 20 trades
+    - by_direction: Win rate breakdown by CALL/PUT
+    - by_symbol: Win rate breakdown by trading symbol
+    - streak_history: Recent streak patterns
+    - recommendations: AI-generated trading recommendations
+    """
+    try:
+        # Get regime detector status
+        regime_detector = get_regime_detector()
+        regime_status = regime_detector.get_status() if regime_detector else {}
+        
+        # Get historical trade results from database
+        trade_results = await db.trade_results.find(
+            {},
+            {"_id": 0}
+        ).sort("timestamp", -1).limit(100).to_list(100)
+        
+        if not trade_results:
+            return {
+                "success": True,
+                "total_trades": 0,
+                "message": "No trade results recorded yet. Use /api/trading/record-result to track your trades.",
+                "regime_status": regime_status
+            }
+        
+        # Calculate statistics
+        total_trades = len(trade_results)
+        wins = sum(1 for t in trade_results if t.get('is_win', False))
+        overall_win_rate = (wins / total_trades * 100) if total_trades > 0 else 0
+        
+        # Recent win rate (last 20)
+        recent_trades = trade_results[:20]
+        recent_wins = sum(1 for t in recent_trades if t.get('is_win', False))
+        recent_win_rate = (recent_wins / len(recent_trades) * 100) if recent_trades else 0
+        
+        # By direction
+        calls = [t for t in trade_results if t.get('direction', '').upper() in ['CALL', 'BUY']]
+        puts = [t for t in trade_results if t.get('direction', '').upper() in ['PUT', 'SELL']]
+        
+        call_wins = sum(1 for t in calls if t.get('is_win', False))
+        put_wins = sum(1 for t in puts if t.get('is_win', False))
+        
+        by_direction = {
+            'CALL': {
+                'total': len(calls),
+                'wins': call_wins,
+                'win_rate': (call_wins / len(calls) * 100) if calls else 0
+            },
+            'PUT': {
+                'total': len(puts),
+                'wins': put_wins,
+                'win_rate': (put_wins / len(puts) * 100) if puts else 0
+            }
+        }
+        
+        # By symbol
+        symbols = {}
+        for trade in trade_results:
+            symbol = trade.get('symbol', 'UNKNOWN')
+            if symbol not in symbols:
+                symbols[symbol] = {'total': 0, 'wins': 0}
+            symbols[symbol]['total'] += 1
+            if trade.get('is_win', False):
+                symbols[symbol]['wins'] += 1
+        
+        by_symbol = {
+            sym: {
+                **data,
+                'win_rate': (data['wins'] / data['total'] * 100) if data['total'] > 0 else 0
+            }
+            for sym, data in symbols.items()
+        }
+        
+        # Generate recommendations
+        recommendations = []
+        
+        if overall_win_rate < 50:
+            recommendations.append("⚠️ Win rate below 50%. Consider: 1) Using higher confidence signals only, 2) Inverting signal direction")
+        elif overall_win_rate >= 70:
+            recommendations.append("✅ Strong win rate! Continue current strategy.")
+        
+        if by_direction['CALL']['win_rate'] > by_direction['PUT']['win_rate'] + 15:
+            recommendations.append(f"📈 CALL signals performing better ({by_direction['CALL']['win_rate']:.1f}% vs {by_direction['PUT']['win_rate']:.1f}%)")
+        elif by_direction['PUT']['win_rate'] > by_direction['CALL']['win_rate'] + 15:
+            recommendations.append(f"📉 PUT signals performing better ({by_direction['PUT']['win_rate']:.1f}% vs {by_direction['CALL']['win_rate']:.1f}%)")
+        
+        if regime_status.get('streak_inversion_active'):
+            recommendations.append("🔄 Streak inversion is ACTIVE - signals are being auto-inverted due to recent losses")
+        
+        return {
+            "success": True,
+            "total_trades": total_trades,
+            "overall_win_rate": round(overall_win_rate, 1),
+            "recent_win_rate": round(recent_win_rate, 1),
+            "by_direction": by_direction,
+            "by_symbol": by_symbol,
+            "regime_status": regime_status,
+            "recommendations": recommendations,
+            "last_updated": datetime.now(timezone.utc).isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting accuracy stats: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
 # ============================================================================
 # POCKET OPTION API CLIENT ENDPOINTS (pocketoptionapi-async)
 # ============================================================================
