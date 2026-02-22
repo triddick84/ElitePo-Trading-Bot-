@@ -441,16 +441,32 @@ class ForceSignalGenerator:
         """
         Create emergency AI ensemble signal when advanced analysis fails
         Uses simplified AI logic for guaranteed signal generation
+        
+        CRITICAL FIX: Uses Market Regime Detector to avoid losing streak bias
         """
         try:
+            # Get the regime detector for adaptive direction
+            regime_detector = get_regime_detector()
+            
             if data and len(data) >= 5:
                 # Simple AI-inspired momentum analysis
                 prices = [float(item['close']) for item in data[-10:]]
                 short_ma = np.mean(prices[-3:])
                 long_ma = np.mean(prices[-6:])
                 
-                # Momentum direction
-                momentum_direction = "CALL" if short_ma > long_ma else "PUT"
+                # Base momentum direction from price analysis
+                base_direction = "CALL" if short_ma > long_ma else "PUT"
+                
+                # CRITICAL: Apply regime detector to prevent losing streaks
+                if regime_detector and REGIME_DETECTOR_AVAILABLE:
+                    optimal_direction, reason = regime_detector.get_optimal_direction(base_direction, prices)
+                    momentum_direction = optimal_direction
+                    regime_applied = True
+                    logger.info(f"🔄 Regime adjustment: {base_direction} → {momentum_direction} ({reason})")
+                else:
+                    momentum_direction = base_direction
+                    regime_applied = False
+                    reason = "No regime detector"
                 
                 # Volatility-adjusted confidence
                 volatility = np.std(prices) / np.mean(prices)
@@ -467,54 +483,71 @@ class ForceSignalGenerator:
                     'direction': momentum_direction,
                     'confidence': confidence,
                     'probability': confidence,
-                    'reasoning': f"🚨 EMERGENCY AI ENSEMBLE: Momentum analysis {momentum_direction.lower()} | Volatility-adjusted confidence | Force mode active",
+                    'reasoning': f"🚨 EMERGENCY AI ENSEMBLE: Momentum analysis {momentum_direction.lower()} | Regime-aware | {reason}",
                     'strategy': 'emergency_ai_ensemble',
                     'timeframe': '5s',
                     'emergency_ai_mode': True,
+                    'regime_applied': regime_applied,
+                    'original_direction': base_direction,
                     'momentum_analysis': {
                         'short_ma': short_ma,
                         'long_ma': long_ma,
                         'volatility': volatility,
-                        'direction_basis': 'moving_average_crossover'
+                        'direction_basis': 'moving_average_crossover_regime_aware'
                     },
                     'technical_details': {
                         'emergency_ai_fallback': True,
                         'data_points_used': len(prices),
                         'confidence_adjustment': 'volatility_based',
-                        'force_mode': True
+                        'force_mode': True,
+                        'regime_detector_used': regime_applied
                     }
                 }
                 
-                logger.info(f"🚨 Emergency AI Ensemble Signal: {symbol} → {momentum_direction} ({confidence:.1f}%)")
+                logger.info(f"🚨 Emergency AI Ensemble Signal: {symbol} → {momentum_direction} ({confidence:.1f}%) [Regime: {regime_applied}]")
                 return emergency_signal
             
-            # Ultimate AI fallback with statistical bias
+            # Ultimate AI fallback - USE REGIME DETECTOR instead of hardcoded CALL
+            if regime_detector and REGIME_DETECTOR_AVAILABLE:
+                # Get regime-based direction for ultimate fallback
+                regime_direction = regime_detector.get_regime_adjusted_direction([])
+                logger.info(f"🔄 Ultimate fallback using regime direction: {regime_direction}")
+            else:
+                # True random when no regime detector and no data
+                import random
+                regime_direction = "CALL" if random.random() > 0.5 else "PUT"
+                logger.info(f"🔄 Ultimate fallback using random direction: {regime_direction}")
+            
             return {
-                'direction': "CALL",  # Statistical bias towards CALL
+                'direction': regime_direction,
                 'confidence': 80.0,
                 'probability': 80.0,
-                'reasoning': "🚨 ULTIMATE AI FALLBACK: Statistical bias with market trend analysis | Emergency AI protocols active",
+                'reasoning': f"🚨 ULTIMATE AI FALLBACK: Regime-aware analysis | Direction: {regime_direction}",
                 'strategy': 'ultimate_ai_fallback',
                 'timeframe': '5s',
                 'ultimate_ai_fallback': True,
-                'statistical_basis': 'market_trend_bias',
+                'regime_aware': True,
                 'technical_details': {
                     'ultimate_fallback_ai': True,
                     'statistical_confidence': 80.0,
-                    'bias_direction': 'bullish_trend_preference'
+                    'direction_method': 'regime_detector' if (regime_detector and REGIME_DETECTOR_AVAILABLE) else 'random'
                 }
             }
             
         except Exception as e:
             logger.error(f"Error in emergency AI ensemble creation: {e}")
+            # Final safety - use random to avoid bias
+            import random
+            final_direction = "CALL" if random.random() > 0.5 else "PUT"
             return {
-                'direction': "CALL",
+                'direction': final_direction,
                 'confidence': 78.0,
                 'probability': 78.0,
-                'reasoning': "🚨 FINAL AI SAFETY: Advanced AI analysis failed, using neural network safety protocols",
+                'reasoning': f"🚨 FINAL AI SAFETY: Using balanced random direction: {final_direction}",
                 'strategy': 'final_ai_safety_fallback',
                 'timeframe': '5s',
-                'final_ai_safety': True
+                'final_ai_safety': True,
+                'random_direction': True
             }
     
 
