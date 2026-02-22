@@ -7558,6 +7558,154 @@ async def get_trade_history(limit: int = 50):
 
 
 # ============================================================================
+# MARKET REGIME DETECTOR & TRADE RESULT TRACKING
+# ============================================================================
+
+@api_router.post("/trading/record-result")
+async def record_trade_result(request: Request):
+    """
+    Record a trade result to update the Market Regime Detector
+    
+    This endpoint is critical for the streak-breaking logic. Call it after each trade:
+    - win: true/false
+    - signal_id: optional - the signal ID that generated this trade
+    - direction: CALL/PUT or BUY/SELL
+    - symbol: trading symbol
+    
+    The regime detector will use this to:
+    1. Track win/loss streaks
+    2. Automatically invert signals after consecutive losses
+    3. Adapt to market regime changes
+    """
+    try:
+        data = await request.json()
+        
+        direction = data.get('direction', 'CALL')
+        symbol = data.get('symbol', 'EURUSD')
+        is_win = data.get('win', False)
+        signal_id = data.get('signal_id', None)
+        
+        # Get regime detector
+        regime_detector = get_regime_detector()
+        
+        if not regime_detector:
+            return {
+                "success": False,
+                "error": "Market Regime Detector not initialized"
+            }
+        
+        # Record the trade result
+        regime_detector.record_trade_result(direction, symbol, is_win)
+        
+        # Get updated status
+        status = regime_detector.get_status()
+        
+        # Log the result
+        result_emoji = "✅" if is_win else "❌"
+        logger.info(f"{result_emoji} Trade result recorded: {symbol} {direction} = {'WIN' if is_win else 'LOSS'}")
+        logger.info(f"📊 Streak: {status['current_streak']} | Inversion: {'ACTIVE' if status['streak_inversion_active'] else 'inactive'} | Win Rate: {status['recent_win_rate']:.1f}%")
+        
+        # Save to database for persistence
+        await db.trade_results.insert_one({
+            "signal_id": signal_id,
+            "direction": direction,
+            "symbol": symbol,
+            "is_win": is_win,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "streak_at_time": status['current_streak'],
+            "win_rate_at_time": status['recent_win_rate']
+        })
+        
+        return {
+            "success": True,
+            "message": f"Trade result recorded: {'WIN' if is_win else 'LOSS'}",
+            "regime_status": status,
+            "streak_inversion_active": status['streak_inversion_active'],
+            "current_streak": status['current_streak'],
+            "recent_win_rate": status['recent_win_rate']
+        }
+        
+    except Exception as e:
+        logger.error(f"Error recording trade result: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@api_router.get("/trading/regime-status")
+async def get_regime_status():
+    """
+    Get current Market Regime Detector status
+    
+    Returns:
+    - current_regime: bullish/bearish/neutral
+    - current_streak: positive = wins, negative = losses
+    - streak_inversion_active: true if signals are being auto-inverted
+    - recent_win_rate: win rate of last 10 trades
+    """
+    try:
+        regime_detector = get_regime_detector()
+        
+        if not regime_detector:
+            return {
+                "success": False,
+                "error": "Market Regime Detector not initialized",
+                "status": None
+            }
+        
+        status = regime_detector.get_status()
+        
+        return {
+            "success": True,
+            "status": status
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting regime status: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@api_router.post("/trading/reset-streak")
+async def reset_regime_streak():
+    """
+    Manually reset the streak counter and disable streak inversion
+    Use this when you want to start fresh
+    """
+    try:
+        regime_detector = get_regime_detector()
+        
+        if not regime_detector:
+            return {
+                "success": False,
+                "error": "Market Regime Detector not initialized"
+            }
+        
+        # Reset streak tracking
+        regime_detector.current_streak = 0
+        regime_detector.streak_inversion_active = False
+        regime_detector.win_loss_history.clear()
+        
+        logger.info("🔄 Market Regime Detector streak reset manually")
+        
+        return {
+            "success": True,
+            "message": "Streak reset successfully",
+            "new_status": regime_detector.get_status()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error resetting streak: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+# ============================================================================
 # POCKET OPTION API CLIENT ENDPOINTS (pocketoptionapi-async)
 # ============================================================================
 
