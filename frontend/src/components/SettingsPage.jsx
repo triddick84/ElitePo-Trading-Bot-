@@ -258,9 +258,12 @@ const SettingsPage = () => {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-4 bg-slate-800/50 max-w-2xl">
+        <TabsList className="grid w-full grid-cols-5 bg-slate-800/50 max-w-3xl">
           <TabsTrigger value="general" className="data-[state=active]:bg-purple-600">
             ⚙️ General
+          </TabsTrigger>
+          <TabsTrigger value="latency" className="data-[state=active]:bg-purple-600">
+            ⏱️ Latency
           </TabsTrigger>
           <TabsTrigger value="assets" className="data-[state=active]:bg-purple-600">
             📊 Assets
