@@ -7978,13 +7978,13 @@ async def reset_latency_corrections():
     Clears auto-correction history and resets to base values
     """
     try:
-        from latency_optimizer import latency_optimizer
+        from latency_optimizer import latency_optimizer, LatencyCorrectionMode
         
         # Reset auto-correction
         latency_optimizer.auto_correction_offset = 0.0
         latency_optimizer.manual_offset_seconds = 0.0
         latency_optimizer.auto_correction_history = []
-        latency_optimizer.correction_mode = latency_optimizer.LatencyCorrectionMode.AUTO
+        latency_optimizer.correction_mode = LatencyCorrectionMode.AUTO
         
         # Reset accuracy tracking
         for tf in latency_optimizer.timeframe_accuracy:
