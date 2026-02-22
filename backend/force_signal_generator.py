@@ -2921,20 +2921,29 @@ class ForceSignalGenerator:
                                     return synchronized_signal
                                 else:
                                     # Signal did not meet 90%+ accuracy criteria
-                                    logger.warning(f"❌ Signal rejected by 90%+ Accuracy Maximizer - does not meet criteria")
-                                    return None
+                                    # IMPROVED: Don't reject, but mark as unvalidated and continue
+                                    logger.warning(f"⚠️ Signal did not achieve 90%+ validation - using original confidence")
+                                    if synchronized_signal.technical_analysis:
+                                        synchronized_signal.technical_analysis['accuracy_validated'] = False
+                                        synchronized_signal.technical_analysis['validation_status'] = 'below_90_threshold'
                             except Exception as acc_error:
                                 logger.warning(f"⚠️ Accuracy maximizer error: {acc_error}, using optimized signal")
                         
-                        # If accuracy maximizer not available, use optimized signal
-                        quality_badge = "🏆 PREMIUM QUALITY" if optimized_signal['confidence'] >= 90 else "⭐ HIGH QUALITY"
+                        # If accuracy maximizer not available or signal didn't pass 90%+, use optimized signal
+                        quality_badge = "🏆 PREMIUM QUALITY" if optimized_signal['confidence'] >= 90 else "⭐ HIGH QUALITY" if optimized_signal['confidence'] >= 85 else "📊 STANDARD QUALITY"
                         synchronized_signal.justification = f"{quality_badge} | {synchronized_signal.justification}"
                         
                         return synchronized_signal
                     else:
-                        # Signal failed quality gates - return None to skip it
-                        logger.warning(f"❌ Signal failed Maximum Accuracy Optimizer quality gates - REJECTED")
-                        return None
+                        # Signal failed quality gates - but for force mode, we should still return a signal
+                        # IMPROVED: Don't reject completely, just lower confidence and add warning
+                        logger.warning(f"⚠️ Signal failed some quality gates - adjusting confidence")
+                        if synchronized_signal.probability > 85:
+                            synchronized_signal.probability = min(synchronized_signal.probability * 0.9, 85.0)
+                        synchronized_signal.justification = f"⚠️ QUALITY WARNING | {synchronized_signal.justification}"
+                        if synchronized_signal.technical_analysis:
+                            synchronized_signal.technical_analysis['quality_gates_failed'] = True
+                        return synchronized_signal
                         
             except Exception as opt_error:
                 logger.warning(f"⚠️ Optimizer error (using original signal): {opt_error}")
