@@ -2646,10 +2646,35 @@ class ForceSignalGenerator:
                 logger.info(f"   📊 Multiple Strategies Boost: +{strategy_boost}%")
             
             # 4. Ultra-short timeframe precision boost (5s, 15s)
-            if user_timeframes and user_timeframes[0] in ['5s', '15s']:
+            if user_expirations and user_expirations[0] in ['5s', '15s']:
                 ultra_short_boost = 2.5
                 confidence_boosters += ultra_short_boost
                 logger.info(f"   ⚡ Ultra-Short Timeframe Boost: +{ultra_short_boost}%")
+            
+            # 5. REGIME-AWARE CONFIDENCE ADJUSTMENT (NEW)
+            regime_detector = get_regime_detector()
+            if regime_detector and REGIME_DETECTOR_AVAILABLE:
+                regime_status = regime_detector.get_status()
+                recent_win_rate = regime_status.get('recent_win_rate', 50.0)
+                current_streak = regime_status.get('current_streak', 0)
+                
+                # Adjust confidence based on recent performance
+                if recent_win_rate >= 70:
+                    # High win rate - boost confidence
+                    win_rate_boost = min((recent_win_rate - 60) / 10, 3.0)
+                    confidence_boosters += win_rate_boost
+                    logger.info(f"   📈 High Win Rate Boost: +{win_rate_boost:.1f}% (Win Rate: {recent_win_rate:.1f}%)")
+                elif recent_win_rate < 40:
+                    # Low win rate - reduce confidence
+                    win_rate_penalty = min((40 - recent_win_rate) / 10, 5.0)
+                    confidence_boosters -= win_rate_penalty
+                    logger.info(f"   📉 Low Win Rate Penalty: -{win_rate_penalty:.1f}% (Win Rate: {recent_win_rate:.1f}%)")
+                
+                # Boost confidence during winning streaks
+                if current_streak >= 3:
+                    streak_boost = min(current_streak * 0.5, 3.0)
+                    confidence_boosters += streak_boost
+                    logger.info(f"   🔥 Winning Streak Boost: +{streak_boost:.1f}% (Streak: {current_streak})")
             
             # Apply all confidence boosters
             final_confidence = min(final_confidence + confidence_boosters, 99.0)
