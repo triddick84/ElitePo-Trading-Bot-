@@ -362,7 +362,7 @@
 
     async function checkForNewSignals() {
         if (isTrading) {
-            log('Already processing a trade, skipping check', 'info');
+            log('Trade in progress, skipping signal check', 'info');
             return;
         }
         
@@ -370,37 +370,53 @@
             const signal = await fetchLatestSignal();
             
             if (signal) {
-                // Create a unique ID based on signal properties AND timestamp
-                // This prevents processing the same signal twice
-                const signalTimestamp = signal.timestamp || signal.created_at || '';
-                const signalUniqueId = `${signal.symbol}_${signal.direction}_${signalTimestamp}`;
+                // Create a unique ID based on the signal's actual ID or timestamp
+                // Use the server-generated ID if available (most reliable)
+                const signalId = signal.id || '';
+                const signalTimestamp = signal.timestamp || '';
+                
+                // Create unique identifier - prefer server ID, fallback to composite
+                let signalUniqueId;
+                if (signalId && signalId.length > 10) {
+                    // Use server-generated ID (e.g., "EMERGENCY_OTC_20260224_194402_AUDUSD_OTC")
+                    signalUniqueId = signalId;
+                } else {
+                    // Fallback to composite ID
+                    signalUniqueId = `${signal.symbol}_${signal.direction}_${signalTimestamp}`;
+                }
                 
                 // Check if we've already processed this exact signal
                 if (signalUniqueId === lastSignalId) {
-                    // Same signal, don't process again
+                    // Same signal, don't process again - but this is normal, not an error
                     return;
                 }
                 
-                // CRITICAL: Set flag IMMEDIATELY before any async operations
-                isTrading = true;
+                // NEW SIGNAL DETECTED!
+                log(`🚨 NEW SIGNAL DETECTED: ${signal.direction} ${signal.symbol}`, 'success');
+                log(`Signal ID: ${signalUniqueId}`, 'info');
                 
-                log(`🚨 NEW SIGNAL: ${signal.direction} ${signal.symbol}`, 'success');
+                // Save the signal ID BEFORE setting isTrading to prevent race conditions
                 lastSignalId = signalUniqueId;
                 GM_setValue('lastSignalId', lastSignalId);
                 
+                // Set trading flag
+                isTrading = true;
+                
+                // Update UI
                 updateLastSignal(signal);
                 
                 if (CONFIG.AUTO_TRADE_ENABLED) {
                     await executeTradeFromSignal(signal);
                 } else {
-                    log('Auto-trade disabled, signal ignored', 'warn');
-                    showNotification('New Signal (Manual)', `${signal.direction} ${signal.symbol} - Auto-trade is OFF`);
-                    isTrading = false; // Reset since we're not trading
+                    log('Auto-trade is OFF - signal displayed but not executed', 'warn');
+                    showNotification('New Signal (Manual Mode)', `${signal.direction} ${signal.symbol} - Auto-trade is OFF`);
+                    isTrading = false; // Reset immediately if not trading
                 }
             }
         } catch (error) {
-            log(`Check signal error: ${error.message}`, 'error');
-            isTrading = false; // Reset on error
+            log(`Signal check error: ${error.message}`, 'error');
+            // Reset trading flag on error to prevent getting stuck
+            isTrading = false;
         }
     }
 
