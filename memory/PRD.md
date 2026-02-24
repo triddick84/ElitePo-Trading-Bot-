@@ -93,10 +93,12 @@ Create a "GPT Signal Bot" for Pocket Option with a high win rate (80-90%+). The 
 - All authentication flows
 - Telegram notifications with /win /loss tracking
 - 3Commas webhook integration
+- **Dashboard Quick Controls** - Invert Signals toggle and Lost? Invert & Generate button
+- **Mobile Auto-Trader** - Tampermonkey userscript for Pocket Option on Android
 
 ### Known Limitations
-- Pocket Option auto-trade blocked by cloud IP
-- Manual trading mode required for Pocket Option
+- Pocket Option auto-trade blocked by cloud IP (workaround: mobile userscript)
+- Manual trading mode required for Pocket Option desktop
 
 ## Completed Tasks
 - [x] Fix "Losing Streak" Bug - Market Regime Detector
@@ -104,10 +106,15 @@ Create a "GPT Signal Bot" for Pocket Option with a high win rate (80-90%+). The 
 - [x] Latency Correction System - AUTO/MANUAL/DISABLED modes
 - [x] Settings UI - Latency tab with mode switching and stats
 - [x] Telegram Commands - /win /loss /regime /latency commands
+- [x] Dashboard UI Controls - Invert Signal toggle + "Lost? Invert & Generate" quick button
+- [x] Latency Mode Toggle on Dashboard - Auto/Manual quick switcher
+- [x] Mobile Auto-Trader Userscript - Tampermonkey-based client-side automation
+- [x] Expanded Asset Lists - Full forex, crypto, stocks, commodities, indices coverage
 
 ## P1 - High Priority (Next)
-- [ ] Enhanced Signal Pop-up with Normal/Inverted status indicator
-- [ ] Frontend accuracy statistics dashboard widget
+- [ ] Implement actual trading logic for custom PDF strategies in force_signal_generator.py
+- [ ] MetaTrader5 integration (playbook received, needs implementation)
+- [ ] TradingView webhook integration (playbook received, needs implementation)
 
 ## P2 - Medium Priority
 - [ ] End-to-end custom strategy testing
