@@ -97,6 +97,8 @@ const Dashboard = ({ botStatus, liveSignals, setLiveSignals, notificationSetting
     fetchDashboardData();
     fetchConfiguration();
     fetchCandleSyncStatus();
+    fetchInvertStatus();
+    fetchLatencyStatus();
     
     const dataInterval = setInterval(fetchDashboardData, 10000);
     const syncInterval = setInterval(fetchCandleSyncStatus, 2000); // Update sync status every 2s
@@ -106,6 +108,61 @@ const Dashboard = ({ botStatus, liveSignals, setLiveSignals, notificationSetting
       clearInterval(syncInterval);
     };
   }, []);
+
+  // Fetch inversion status
+  const fetchInvertStatus = async () => {
+    try {
+      const response = await axios.get(`${API}/signals/invert-status`);
+      setInvertSignals(response.data.invert_signals || false);
+      setConfig(prev => ({ ...prev, invert_signals: response.data.invert_signals || false }));
+    } catch (error) {
+      console.error('Error fetching invert status:', error);
+    }
+  };
+
+  // Fetch latency mode
+  const fetchLatencyStatus = async () => {
+    try {
+      const response = await axios.get(`${API}/latency/status`);
+      setLatencyMode(response.data.mode || 'auto');
+    } catch (error) {
+      console.error('Error fetching latency status:', error);
+    }
+  };
+
+  // Toggle signal inversion (for losing streaks)
+  const handleToggleInvert = async () => {
+    setIsInvertLoading(true);
+    try {
+      const response = await axios.post(`${API}/signals/toggle-invert`);
+      const newInvertState = response.data.invert_signals;
+      setInvertSignals(newInvertState);
+      setConfig(prev => ({ ...prev, invert_signals: newInvertState }));
+      console.log(`🔄 Signal inversion ${newInvertState ? 'ENABLED' : 'DISABLED'}`);
+    } catch (error) {
+      console.error('Error toggling signal inversion:', error);
+      alert('Failed to toggle signal inversion: ' + (error.response?.data?.detail || error.message));
+    } finally {
+      setIsInvertLoading(false);
+    }
+  };
+
+  // Change latency mode
+  const handleLatencyModeChange = async (newMode) => {
+    setIsLatencyLoading(true);
+    try {
+      const response = await axios.post(`${API}/latency/set-mode`, { mode: newMode });
+      if (response.data.success) {
+        setLatencyMode(newMode);
+        console.log(`⏱️ Latency mode changed to: ${newMode.toUpperCase()}`);
+      }
+    } catch (error) {
+      console.error('Error changing latency mode:', error);
+      alert('Failed to change latency mode: ' + (error.response?.data?.detail || error.message));
+    } finally {
+      setIsLatencyLoading(false);
+    }
+  };
 
   const fetchConfiguration = async () => {
     try {
