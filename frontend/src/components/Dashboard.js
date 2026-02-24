@@ -308,6 +308,73 @@ const Dashboard = ({ botStatus, liveSignals, setLiveSignals, notificationSetting
         }}
       />
 
+      {/* Quick Controls - Invert Signals & Latency Mode */}
+      <Card className="p-4 glass-dark border-orange-500/30 bg-gradient-to-r from-orange-900/10 to-red-900/10" data-testid="quick-controls">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          {/* Invert Signal Button - For Losing Streaks */}
+          <div className="flex items-center gap-4">
+            <div className="flex-1 md:flex-none">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-lg">🔄</span>
+                <span className="text-sm font-semibold text-orange-400">Invert Signals</span>
+                {invertSignals && (
+                  <Badge className="bg-orange-500/20 text-orange-400 border-orange-500 animate-pulse text-xs">
+                    ACTIVE
+                  </Badge>
+                )}
+              </div>
+              <p className="text-xs text-slate-400">
+                Flip BUY↔SELL when on a losing streak
+              </p>
+            </div>
+            <Button
+              onClick={handleToggleInvert}
+              disabled={isInvertLoading}
+              className={`min-w-[120px] font-semibold transition-all ${
+                invertSignals 
+                  ? 'bg-orange-500 hover:bg-orange-600 text-white' 
+                  : 'bg-slate-700 hover:bg-slate-600 text-slate-200 border border-slate-600'
+              }`}
+              data-testid="invert-signals-btn"
+            >
+              {isInvertLoading ? '...' : invertSignals ? '🔄 ON' : '⏸️ OFF'}
+            </Button>
+          </div>
+
+          {/* Divider */}
+          <div className="hidden md:block w-px h-12 bg-slate-700"></div>
+
+          {/* Latency Mode Toggle */}
+          <div className="flex items-center gap-4">
+            <div className="flex-1 md:flex-none">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-lg">⏱️</span>
+                <span className="text-sm font-semibold text-blue-400">Latency Mode</span>
+              </div>
+              <p className="text-xs text-slate-400">
+                {latencyMode === 'auto' ? 'Auto-adjusting timing' : latencyMode === 'manual' ? 'Fixed offset' : 'No correction'}
+              </p>
+            </div>
+            <div className="flex gap-1" data-testid="latency-mode-toggle">
+              {['auto', 'manual', 'disabled'].map((mode) => (
+                <Button
+                  key={mode}
+                  onClick={() => handleLatencyModeChange(mode)}
+                  disabled={isLatencyLoading}
+                  className={`px-3 py-1 text-xs font-medium capitalize transition-all ${
+                    latencyMode === mode
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-slate-700 hover:bg-slate-600 text-slate-300 border border-slate-600'
+                  }`}
+                >
+                  {mode}
+                </Button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </Card>
+
       {/* Market Asset & Timeframe Selector */}
       <MarketAssetSelector 
         onSelectionChange={(selection) => {
