@@ -138,6 +138,7 @@ function ProtectedApp() {
     { id: "dashboard", label: "Dashboard", icon: "📊" },
     { id: "telegram-bot", label: "Telegram Bot", icon: "📱" },
     { id: "pocket-option", label: "Pocket Option", icon: "🎰" },
+    { id: "mobile-trader", label: "Mobile Auto-Trade", icon: "📲" },
     { id: "strategies", label: "Strategies", icon: "🎯" },
     { id: "ai-models", label: "AI Models", icon: "🧠" },
     { id: "performance", label: "Performance", icon: "📈" },
@@ -160,6 +161,8 @@ function ProtectedApp() {
         return <TelegramBotPage />;
       case "pocket-option":
         return <PocketOptionPage />;
+      case "mobile-trader":
+        return <MobileAutoTraderPage />;
       case "strategies":
         return <StrategyBuilder />;
       case "ai-models":
