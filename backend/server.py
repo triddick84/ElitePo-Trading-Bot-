@@ -1229,8 +1229,8 @@ async def get_latest_signal():
     Returns the latest signal if it was generated within the last 5 minutes.
     """
     try:
-        # Get the most recent signal from database
-        latest_signal = await db.generated_signals.find_one(
+        # Get the most recent signal from database (check trading_signals collection)
+        latest_signal = await db.trading_signals.find_one(
             {},
             {"_id": 0},
             sort=[("timestamp", -1)]
@@ -1239,7 +1239,7 @@ async def get_latest_signal():
         if not latest_signal:
             return {
                 "success": False,
-                "message": "No signals generated yet",
+                "message": "No signals generated yet. Use Dashboard to generate a signal.",
                 "signal": None
             }
         
@@ -1262,16 +1262,27 @@ async def get_latest_signal():
                 if age_seconds > 300:  # 5 minutes
                     return {
                         "success": False,
-                        "message": "No recent signals (last signal is too old)",
+                        "message": f"No recent signals (last signal is {int(age_seconds)}s old). Generate a new signal from Dashboard.",
                         "signal": None,
                         "last_signal_age_seconds": age_seconds
                     }
-            except:
-                pass  # If we can't parse the time, return the signal anyway
+            except Exception as parse_error:
+                logger.warning(f"Could not parse signal timestamp: {parse_error}")
         
         # Add unique ID if not present
         if 'id' not in latest_signal:
             latest_signal['id'] = f"sig_{latest_signal.get('symbol', 'UNK')}_{signal_time}"
+        
+        # Normalize direction for userscript
+        direction = latest_signal.get('direction', 'CALL')
+        if isinstance(direction, str):
+            if 'BUY' in direction.upper() or 'CALL' in direction.upper():
+                latest_signal['direction'] = 'CALL'
+            else:
+                latest_signal['direction'] = 'PUT'
+        
+        # Add confidence for display
+        latest_signal['confidence'] = latest_signal.get('probability', 85)
         
         return {
             "success": True,
