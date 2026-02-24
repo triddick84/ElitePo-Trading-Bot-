@@ -26,7 +26,7 @@
         API_URL: 'https://algo-signal-hub-2.preview.emergentagent.com/api',
         
         // How often to check for new signals (milliseconds)
-        POLL_INTERVAL: 3000, // 3 seconds
+        POLL_INTERVAL: 2000, // 2 seconds (faster polling)
         
         // Auto-trading settings
         AUTO_TRADE_ENABLED: true,
@@ -40,7 +40,7 @@
         // Sound alerts
         SOUND_ENABLED: true,
         
-        // Debug mode
+        // Debug mode - shows more logs
         DEBUG: true
     };
 
