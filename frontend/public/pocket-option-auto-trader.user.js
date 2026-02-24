@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
-// @namespace    https://algo-signal-hub-2.preview.emergentagent.com
+// @namespace    https://auto-trader-pro-3.preview.emergentagent.com
 // @version      1.0.0
 // @description  Automatically execute trades on Pocket Option based on GPT Signal Bot signals. Works on Android (Kiwi Browser) and Desktop.
 // @author       GPT Signal Bot
@@ -23,7 +23,7 @@
     // ===========================================
     const CONFIG = {
         // Your GPT Signal Bot API URL
-        API_URL: 'https://algo-signal-hub-2.preview.emergentagent.com/api',
+        API_URL: 'https://auto-trader-pro-3.preview.emergentagent.com/api',
         
         // How often to check for new signals (milliseconds)
         POLL_INTERVAL: 2000, // 2 seconds (faster polling)

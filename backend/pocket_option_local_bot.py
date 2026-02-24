@@ -35,7 +35,7 @@ PO_EMAIL = "thomas.riddick84@gmail.com"
 PO_PASSWORD = "Tonyistheman#1"
 
 # Your cloud server URL (the trading bot server)
-CLOUD_SERVER_URL = "https://algo-signal-hub-2.preview.emergentagent.com"
+CLOUD_SERVER_URL = "https://auto-trader-pro-3.preview.emergentagent.com"
 
 # Account type: "demo" or "live"
 ACCOUNT_TYPE = "live"
