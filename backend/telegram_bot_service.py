@@ -594,6 +594,193 @@ Please:
 """
     
     # ==========================================
+    # TRADE RESULT RECORDING (feeds Market Regime Detector)
+    # ==========================================
+    
+    async def _cmd_record_win(self, chat_id: str, args: List[str]) -> str:
+        """Record a winning trade - feeds into market regime detector"""
+        try:
+            from market_regime_detector import get_regime_detector
+            
+            detector = get_regime_detector()
+            if not detector:
+                return "⚠️ Market Regime Detector not initialized."
+            
+            # Parse optional arguments: /win EURUSD CALL
+            symbol = args[0] if len(args) > 0 else 'EURUSD'
+            direction = args[1].upper() if len(args) > 1 else 'CALL'
+            
+            # Record the win
+            detector.record_trade_result(direction, symbol, is_win=True)
+            status = detector.get_status()
+            
+            # Store in database
+            if self.db:
+                await self.db.trade_results.insert_one({
+                    'direction': direction,
+                    'symbol': symbol,
+                    'is_win': True,
+                    'timestamp': datetime.now(timezone.utc).isoformat(),
+                    'streak_at_time': status['current_streak'],
+                    'win_rate_at_time': status['recent_win_rate'],
+                    'source': 'telegram'
+                })
+            
+            streak_emoji = "🔥" if status['current_streak'] >= 3 else "✅"
+            
+            return f"""
+{streak_emoji} <b>WIN RECORDED!</b>
+
+📊 {direction} {symbol}
+📈 Current Streak: <b>{status['current_streak']}</b>
+🎯 Recent Win Rate: <b>{status['recent_win_rate']:.1f}%</b>
+🔄 Inversion: <b>{'ACTIVE' if status['streak_inversion_active'] else 'Inactive'}</b>
+
+Keep it going! 💪
+"""
+        except Exception as e:
+            logger.error(f"Record win error: {e}")
+            return f"⚠️ Error recording win: {str(e)}"
+    
+    async def _cmd_record_loss(self, chat_id: str, args: List[str]) -> str:
+        """Record a losing trade - feeds into market regime detector"""
+        try:
+            from market_regime_detector import get_regime_detector
+            
+            detector = get_regime_detector()
+            if not detector:
+                return "⚠️ Market Regime Detector not initialized."
+            
+            # Parse optional arguments: /loss EURUSD PUT
+            symbol = args[0] if len(args) > 0 else 'EURUSD'
+            direction = args[1].upper() if len(args) > 1 else 'CALL'
+            
+            # Record the loss
+            detector.record_trade_result(direction, symbol, is_win=False)
+            status = detector.get_status()
+            
+            # Store in database
+            if self.db:
+                await self.db.trade_results.insert_one({
+                    'direction': direction,
+                    'symbol': symbol,
+                    'is_win': False,
+                    'timestamp': datetime.now(timezone.utc).isoformat(),
+                    'streak_at_time': status['current_streak'],
+                    'win_rate_at_time': status['recent_win_rate'],
+                    'source': 'telegram'
+                })
+            
+            # Check if inversion just activated
+            if status['streak_inversion_active']:
+                inversion_msg = "\n\n🔄 <b>AUTO-INVERSION ACTIVATED!</b>\nNext signals will be inverted to break the losing streak."
+            else:
+                inversion_msg = ""
+            
+            return f"""
+❌ <b>LOSS RECORDED</b>
+
+📊 {direction} {symbol}
+📉 Current Streak: <b>{status['current_streak']}</b>
+🎯 Recent Win Rate: <b>{status['recent_win_rate']:.1f}%</b>
+🔄 Inversion: <b>{'ACTIVE' if status['streak_inversion_active'] else 'Inactive'}</b>
+{inversion_msg}
+
+Stay focused! 💪
+"""
+        except Exception as e:
+            logger.error(f"Record loss error: {e}")
+            return f"⚠️ Error recording loss: {str(e)}"
+    
+    async def _cmd_regime_status(self, chat_id: str, args: List[str]) -> str:
+        """Get current market regime detector status"""
+        try:
+            from market_regime_detector import get_regime_detector
+            
+            detector = get_regime_detector()
+            if not detector:
+                return "⚠️ Market Regime Detector not initialized."
+            
+            status = detector.get_status()
+            
+            # Determine streak indicator
+            streak = status['current_streak']
+            if streak >= 3:
+                streak_indicator = f"🔥 {streak} WINS IN A ROW!"
+            elif streak <= -3:
+                streak_indicator = f"❄️ {abs(streak)} losses in a row"
+            elif streak > 0:
+                streak_indicator = f"📈 +{streak} wins"
+            elif streak < 0:
+                streak_indicator = f"📉 {streak} losses"
+            else:
+                streak_indicator = "➡️ Neutral (no streak)"
+            
+            win_rate = status['recent_win_rate']
+            win_rate_color = "🟢" if win_rate >= 60 else "🟡" if win_rate >= 40 else "🔴"
+            
+            return f"""
+<b>📊 MARKET REGIME STATUS</b>
+
+{streak_indicator}
+
+{win_rate_color} <b>Win Rate:</b> {win_rate:.1f}%
+📊 <b>Trades Tracked:</b> {status['total_trades_tracked']}
+🔄 <b>Signal Inversion:</b> {'🟢 ACTIVE' if status['streak_inversion_active'] else '⚪ Inactive'}
+
+<b>💡 How it works:</b>
+• After 3 consecutive losses, signals are auto-inverted
+• Record your results with /win or /loss
+• System learns and adapts to improve accuracy
+
+<b>Commands:</b>
+/win [symbol] [direction] - Record a win
+/loss [symbol] [direction] - Record a loss
+"""
+        except Exception as e:
+            logger.error(f"Regime status error: {e}")
+            return f"⚠️ Error getting regime status: {str(e)}"
+    
+    async def _cmd_latency_status(self, chat_id: str, args: List[str]) -> str:
+        """Get current latency correction status"""
+        try:
+            from latency_optimizer import latency_optimizer
+            
+            status = {
+                'mode': latency_optimizer.correction_mode.value,
+                'auto_offset': latency_optimizer.auto_correction_offset,
+                'manual_offset': latency_optimizer.manual_offset_seconds,
+            }
+            
+            buffers = {
+                '5s': latency_optimizer.get_effective_buffer('5s'),
+                '15s': latency_optimizer.get_effective_buffer('15s'),
+                '30s': latency_optimizer.get_effective_buffer('30s'),
+                '1m': latency_optimizer.get_effective_buffer('1m'),
+            }
+            
+            mode_emoji = "🤖" if status['mode'] == 'auto' else "🎛️" if status['mode'] == 'manual' else "⛔"
+            
+            return f"""
+<b>⏱️ LATENCY CORRECTION STATUS</b>
+
+{mode_emoji} <b>Mode:</b> {status['mode'].upper()}
+🔧 <b>Auto Offset:</b> {status['auto_offset']:.2f}s
+🎚️ <b>Manual Offset:</b> {status['manual_offset']:.2f}s
+
+<b>📊 Effective Buffers (signals arrive early by):</b>
+• 5s timeframe: <code>{buffers['5s']:.1f}s</code>
+• 15s timeframe: <code>{buffers['15s']:.1f}s</code>
+• 30s timeframe: <code>{buffers['30s']:.1f}s</code>
+• 1m timeframe: <code>{buffers['1m']:.1f}s</code>
+
+<b>💡 Tip:</b> If signals are arriving too late, adjust in Settings → Latency tab.
+"""
+        except Exception as e:
+            logger.error(f"Latency status error: {e}")
+            return f"⚠️ Error getting latency status: {str(e)}"
+    
+    # ==========================================
     # MESSAGE HANDLING
     # ==========================================
     
