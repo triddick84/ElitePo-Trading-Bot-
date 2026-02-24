@@ -153,6 +153,11 @@ Create a "GPT Signal Bot" for Pocket Option with a high win rate (80-90%+). The 
 - `GET /api/config` - Get trading config
 - `PUT /api/config` - Update trading config
 
+### Signal Inversion
+- `POST /api/signals/toggle-invert` - Toggle global signal inversion ON/OFF
+- `GET /api/signals/invert-status` - Get current inversion status
+- `POST /api/signals/invert/{signal_id}` - Invert a specific signal
+
 ### Integrations
 - `POST /api/3commas/send-signal` - Send signal to 3Commas
 - `POST /api/telegram-bot/send-signal` - Send signal via Telegram
