@@ -7,13 +7,14 @@ Create a "GPT Signal Bot" for Pocket Option with a high win rate (80-90%+). The 
 - Telegram integration for signal notifications
 - 3Commas signal bot integration via webhooks
 - Market Regime Detection to prevent losing streaks
+- Latency correction for optimal signal timing
 
 ## Completed Features
 
 ### Core Infrastructure
 - **JWT Authentication System** - Single admin user (triddick84) with protected routes
 - **FastAPI Backend** - Full REST API with MongoDB persistence
-- **React Frontend** - Streamlined 7-page navigation
+- **React Frontend** - Streamlined 7-page navigation with Latency settings tab
 
 ### Trading Signal System
 - **Force Signal Generation** - Generate high-confidence signals on demand
@@ -29,24 +30,36 @@ Create a "GPT Signal Bot" for Pocket Option with a high win rate (80-90%+). The 
   - `POST /api/trading/record-result` - Record trade outcomes
   - `GET /api/trading/regime-status` - Get current regime status
   - `POST /api/trading/reset-streak` - Reset streak counter
+  - `GET /api/trading/accuracy-stats` - Get detailed accuracy statistics
 
-### Signal Accuracy Improvements (Feb 2026)
-- **Fixed undefined variable bug** - `user_timeframes` → `user_expirations`
-- **Regime-Aware Confidence Boosters**:
-  - High win rate (>70%) → confidence boost up to +3%
-  - Low win rate (<40%) → confidence penalty up to -5%
-  - Winning streak (3+) → streak boost up to +3%
-- **Improved Quality Gates** - Signals no longer rejected for not meeting 90%+ threshold
-- **Accuracy Statistics Endpoint** - `GET /api/trading/accuracy-stats`
-  - Overall and recent win rates
-  - Breakdown by direction (CALL/PUT)
-  - Breakdown by symbol
-  - AI-generated recommendations
+### Latency Correction System (Feb 2026)
+- **Three Modes**:
+  - **AUTO (default)** - System learns from trade results and auto-adjusts timing
+  - **MANUAL** - User sets a fixed offset for fine-tuning
+  - **DISABLED** - No latency correction applied
+- **Per-Timeframe Buffers** - Optimized for each timeframe:
+  - 5s: 2.5s early, 15s: 3.0s early, 30s: 3.5s early, 1m: 4.0s early, 2m: 5.0s early
+- **API Endpoints**:
+  - `GET /api/latency/status` - Get current latency settings
+  - `POST /api/latency/set-mode` - Switch between auto/manual/disabled
+  - `POST /api/latency/set-manual-offset` - Set manual offset (-10s to +10s)
+  - `POST /api/latency/record-timing-feedback` - Feed timing feedback for auto-learning
+  - `POST /api/latency/reset` - Reset to defaults
+
+### Telegram Bot Commands (Feb 2026)
+- **/signal** - Generate trading signal
+- **/win [symbol] [direction]** - Record a winning trade (feeds regime detector)
+- **/loss [symbol] [direction]** - Record a losing trade (feeds regime detector)
+- **/regime** - Get market regime detector status
+- **/latency** - Get latency correction status
+- **/status** - Bot status
+- **/settings** - Current settings
+- **/help** - All commands
 
 ### Integrations
-- **Telegram Bot** - Signal notifications to user's chat
+- **Telegram Bot** - Signal notifications with trade tracking commands
 - **3Commas Webhooks** - Send signals to 3Commas bots
-- **Pocket Option** - Manual trading mode (auto-trade blocked by IP)
+- **Pocket Option** - Manual trading mode (auto-trade blocked by cloud IP)
 
 ## Architecture
 
@@ -56,17 +69,17 @@ Create a "GPT Signal Bot" for Pocket Option with a high win rate (80-90%+). The 
 │   ├── server.py                    # Main FastAPI application
 │   ├── force_signal_generator.py    # Signal generation with regime detection
 │   ├── market_regime_detector.py    # Streak tracking and auto-inversion
+│   ├── latency_optimizer.py         # Latency correction with 3 modes
 │   ├── signal_accuracy_optimizer.py # Multi-gate signal validation
-│   ├── signal_accuracy_maximizer.py # 90%+ validation system
+│   ├── telegram_bot_service.py      # Telegram bot with win/loss tracking
 │   ├── auth_service.py              # JWT authentication
-│   ├── threecommas_service.py       # 3Commas webhook integration
-│   └── telegram_bot_service.py      # Telegram notifications
+│   └── threecommas_service.py       # 3Commas webhook integration
 └── frontend/
     └── src/
         ├── App.js                   # Main app with protected routes
         └── components/
             ├── Dashboard.jsx        # Main trading dashboard
-            ├── SettingsPage.jsx     # Configuration hub
+            ├── SettingsPage.jsx     # Settings with Latency tab
             └── TelegramBotPage.jsx  # Telegram management
 ```
 
@@ -74,29 +87,27 @@ Create a "GPT Signal Bot" for Pocket Option with a high win rate (80-90%+). The 
 
 ### Working
 - Signal generation with regime-aware confidence boosters
-- Trade result recording API with accuracy statistics
+- Latency correction with AUTO/MANUAL/DISABLED modes
+- Trade result recording via API and Telegram commands
 - Streak inversion after 3 consecutive losses
 - All authentication flows
-- Telegram notifications
+- Telegram notifications with /win /loss tracking
 - 3Commas webhook integration
 
 ### Known Limitations
 - Pocket Option auto-trade blocked by cloud IP
 - Manual trading mode required for Pocket Option
 
-## P0 - Critical (Completed)
-- [x] Fix "Losing Streak" Bug - Implement Market Regime Detector
-- [x] Replace hardcoded "CALL" biases with regime-aware logic
-- [x] Add trade result recording endpoint
-
-## P1 - High Priority (Completed)
-- [x] Improve Signal Accuracy - Added regime-aware confidence boosters
-- [x] Fixed `user_timeframes` undefined variable bug
-- [x] Added accuracy statistics endpoint
+## Completed Tasks
+- [x] Fix "Losing Streak" Bug - Market Regime Detector
+- [x] Signal Accuracy Improvements - Regime-aware confidence boosters
+- [x] Latency Correction System - AUTO/MANUAL/DISABLED modes
+- [x] Settings UI - Latency tab with mode switching and stats
+- [x] Telegram Commands - /win /loss /regime /latency commands
 
 ## P1 - High Priority (Next)
-- [ ] Enhanced Signal Pop-up Notification with Normal/Inverted status
-- [ ] Frontend display of accuracy statistics
+- [ ] Enhanced Signal Pop-up with Normal/Inverted status indicator
+- [ ] Frontend accuracy statistics dashboard widget
 
 ## P2 - Medium Priority
 - [ ] End-to-end custom strategy testing
@@ -105,6 +116,7 @@ Create a "GPT Signal Bot" for Pocket Option with a high win rate (80-90%+). The 
 
 ## P3 - Future
 - [ ] Fix Money Management Logic (Martingale)
+- [ ] Residential proxy integration for Pocket Option auto-trade
 
 ## API Endpoints Reference
 
@@ -112,12 +124,19 @@ Create a "GPT Signal Bot" for Pocket Option with a high win rate (80-90%+). The 
 - `POST /api/auth/login` - User login
 - `POST /api/auth/verify` - Verify JWT token
 
-### Trading
+### Trading & Regime
 - `POST /api/signals/force-generate` - Force generate signals
 - `POST /api/trading/record-result` - Record trade outcome
 - `GET /api/trading/regime-status` - Get regime detector status
 - `POST /api/trading/reset-streak` - Reset streak counter
 - `GET /api/trading/accuracy-stats` - Get accuracy statistics
+
+### Latency
+- `GET /api/latency/status` - Get latency settings
+- `POST /api/latency/set-mode` - Set mode (auto/manual/disabled)
+- `POST /api/latency/set-manual-offset` - Set manual offset
+- `POST /api/latency/record-timing-feedback` - Record timing feedback
+- `POST /api/latency/reset` - Reset latency to defaults
 
 ### Configuration
 - `GET /api/settings` - Get app settings
@@ -132,5 +151,9 @@ Create a "GPT Signal Bot" for Pocket Option with a high win rate (80-90%+). The 
 ## Credentials
 - **App Login**: username: `triddick84`, password: `Fallinone#1`
 
+## Test Reports
+- `/app/test_reports/iteration_1.json` - Market Regime Detector tests (11/11 passed)
+- `/app/test_reports/iteration_2.json` - Latency Correction tests (22/22 passed)
+
 ## Last Updated
-February 22, 2026
+February 24, 2026
