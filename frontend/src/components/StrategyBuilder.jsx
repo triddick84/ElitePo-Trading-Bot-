@@ -520,7 +520,12 @@ const StrategyBuilder = () => {
   const [selectedStrategy, setSelectedStrategy] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState('builder');
+  const [activeTab, setActiveTab] = useState('quick-select');
+  
+  // Quick Strategy Selection state
+  const [availableStrategies, setAvailableStrategies] = useState({});
+  const [selectedStrategies, setSelectedStrategies] = useState({});
+  const [loadingStrategies, setLoadingStrategies] = useState(true);
 
   // Strategy form state
   const [strategyForm, setStrategyForm] = useState({
