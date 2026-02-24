@@ -461,52 +461,125 @@
     }
 
     async function clickTradeButton(isCall) {
-        // Pocket Option button selectors
+        // Pocket Option button selectors - Updated for current PO interface
         const callSelectors = [
+            // Primary PO selectors
             '.btn-call',
-            '.call-btn',
+            '.call-btn', 
+            '.btn.btn-call',
+            '#put-call-buttons-chart-1 .btn-call',
+            // Alternative selectors
+            '[class*="btn-call"]',
+            '[class*="call"][class*="btn"]',
+            'button[class*="call"]',
+            'button[class*="green"]',
+            'button[class*="up"]',
+            '.trading-panel button.call',
             '[data-testid="call-button"]',
             'button.up',
-            '.trading-panel button.call',
-            '#put-call-buttons-chart-1 .btn-call',
-            '.btn.btn-call'
+            // Color-based fallback (green = call)
+            'button[style*="green"]',
+            '.deal-btn--call',
+            '.option-call'
         ];
         
         const putSelectors = [
+            // Primary PO selectors
             '.btn-put',
             '.put-btn',
+            '.btn.btn-put',
+            '#put-call-buttons-chart-1 .btn-put',
+            // Alternative selectors
+            '[class*="btn-put"]',
+            '[class*="put"][class*="btn"]',
+            'button[class*="put"]',
+            'button[class*="red"]',
+            'button[class*="down"]',
+            '.trading-panel button.put',
             '[data-testid="put-button"]',
             'button.down',
-            '.trading-panel button.put',
-            '#put-call-buttons-chart-1 .btn-put',
-            '.btn.btn-put'
+            // Color-based fallback (red = put)
+            'button[style*="red"]',
+            '.deal-btn--put',
+            '.option-put'
         ];
         
         const selectors = isCall ? callSelectors : putSelectors;
+        const buttonType = isCall ? 'CALL' : 'PUT';
+        
+        log(`Looking for ${buttonType} button...`);
+        
+        // First, log all buttons on the page for debugging
+        if (CONFIG.DEBUG) {
+            const allButtons = document.querySelectorAll('button');
+            log(`Found ${allButtons.length} buttons on page`);
+            allButtons.forEach((btn, i) => {
+                if (btn.className.toLowerCase().includes('call') || 
+                    btn.className.toLowerCase().includes('put') ||
+                    btn.className.toLowerCase().includes('btn') ||
+                    btn.textContent.toLowerCase().includes('call') ||
+                    btn.textContent.toLowerCase().includes('put')) {
+                    log(`Button ${i}: class="${btn.className}" text="${btn.textContent.substring(0,30)}"`);
+                }
+            });
+        }
         
         for (const selector of selectors) {
-            const button = document.querySelector(selector);
-            if (button) {
-                log(`Found button: ${selector}`);
-                
-                // Scroll into view
-                button.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                await sleep(200);
-                
-                // Click the button
-                button.click();
-                
-                // Also try dispatching events for stubborn buttons
-                button.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-                await sleep(50);
-                button.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
-                button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-                
+            try {
+                const button = document.querySelector(selector);
+                if (button && button.offsetParent !== null) { // Check if visible
+                    log(`Found ${buttonType} button: ${selector}`);
+                    
+                    // Scroll into view
+                    button.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    await sleep(300);
+                    
+                    // Multiple click attempts for reliability
+                    // Method 1: Direct click
+                    button.click();
+                    log(`Clicked ${buttonType} button (method 1)`);
+                    
+                    await sleep(100);
+                    
+                    // Method 2: Mouse events
+                    button.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+                    await sleep(50);
+                    button.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+                    button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+                    log(`Clicked ${buttonType} button (method 2)`);
+                    
+                    // Method 3: Focus and Enter key
+                    button.focus();
+                    button.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+                    
+                    return true;
+                }
+            } catch (e) {
+                log(`Selector ${selector} error: ${e.message}`, 'warn');
+            }
+        }
+        
+        // Last resort: try to find by text content
+        log('Trying text-based button search...', 'warn');
+        const allButtons = document.querySelectorAll('button, [role="button"], .btn');
+        for (const btn of allButtons) {
+            const text = (btn.textContent || '').toLowerCase();
+            const classes = (btn.className || '').toLowerCase();
+            
+            if (isCall && (text.includes('call') || text.includes('up') || text.includes('higher') || classes.includes('green'))) {
+                log(`Found CALL by text/class: "${text.substring(0,20)}"`);
+                btn.click();
+                return true;
+            }
+            if (!isCall && (text.includes('put') || text.includes('down') || text.includes('lower') || classes.includes('red'))) {
+                log(`Found PUT by text/class: "${text.substring(0,20)}"`);
+                btn.click();
                 return true;
             }
         }
         
-        log('Trade button not found! Make sure you are on the trading page.', 'error');
+        log(`${buttonType} button NOT FOUND! Make sure you are on the Pocket Option trading chart page.`, 'error');
+        log('Tip: Navigate to the binary options trading page with the chart visible.', 'warn');
         return false;
     }
 
