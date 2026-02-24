@@ -14,6 +14,7 @@ import AIMLModelsPage from "./components/AIMLModelsPage";
 import PerformancePage from "./components/PerformancePage";
 import SettingsPage from "./components/SettingsPage";
 import PocketOptionPage from "./components/PocketOptionPage";
+import MobileAutoTraderPage from "./components/MobileAutoTraderPage";
 import { AuthProvider, LoginPage, useAuth } from "./components/AuthComponents";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
