@@ -362,16 +362,43 @@
 
     // Manual signal fetch button
     window.manualFetchSignal = async function() {
-        log('Manual fetch triggered...');
-        const signal = await fetchLatestSignal();
-        if (signal) {
-            updateLastSignal(signal);
-            if (CONFIG.AUTO_TRADE_ENABLED) {
-                await executeTradeFromSignal(signal);
-            }
-        } else {
-            log('No new signal available', 'warn');
+        // Prevent manual fetch if already trading
+        if (isTrading) {
+            log('Cannot fetch - trade already in progress', 'warn');
+            return;
         }
+        
+        log('Manual fetch triggered...');
+        
+        // Set trading flag immediately to prevent race conditions
+        isTrading = true;
+        
+        try {
+            const signal = await fetchLatestSignal();
+            if (signal) {
+                // Update the lastSignalId to prevent double-processing
+                const signalId = signal.id || `${signal.symbol}_${signal.direction}_${signal.timestamp}`;
+                lastSignalId = signalId;
+                GM_setValue('lastSignalId', lastSignalId);
+                
+                updateLastSignal(signal);
+                
+                if (CONFIG.AUTO_TRADE_ENABLED) {
+                    await executeTradeFromSignal(signal);
+                    // Note: executeTradeFromSignal handles resetting isTrading
+                    return;
+                } else {
+                    log('Auto-trade OFF - signal displayed only', 'warn');
+                }
+            } else {
+                log('No signal available', 'warn');
+            }
+        } catch (error) {
+            log(`Manual fetch error: ${error.message}`, 'error');
+        }
+        
+        // Reset if we didn't execute a trade
+        isTrading = false;
     };
 
     async function checkForNewSignals() {
