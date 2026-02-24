@@ -710,6 +710,53 @@ const DashboardRestructured = ({
                   </>
                 )}
               </Button>
+              
+              {/* Quick Invert Signal Button - Press on Loss */}
+              <Button
+                onClick={handleInvertOnLoss}
+                disabled={isGenerating}
+                className="w-full bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white font-bold py-3 mt-2"
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                🔄 Lost? Invert & Generate
+              </Button>
+              <p className="text-xs text-orange-300 text-center">Press after a loss to invert signal direction</p>
+            </div>
+
+            {/* Latency Mode Toggle */}
+            <div className="bg-slate-800/50 rounded-lg p-4 border border-purple-500/30">
+              <div className="flex items-center justify-between mb-2">
+                <Label className="text-purple-300 font-semibold flex items-center gap-2">
+                  <Clock className="w-4 h-4" />
+                  Latency Correction
+                </Label>
+                <Badge className={latencyMode === 'auto' ? 'bg-green-600' : 'bg-blue-600'}>
+                  {latencyMode === 'auto' ? '🤖 AUTO' : '🎛️ MANUAL'}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-4">
+                <Button
+                  size="sm"
+                  onClick={() => handleLatencyModeChange('auto')}
+                  className={latencyMode === 'auto' 
+                    ? 'bg-green-600 hover:bg-green-700' 
+                    : 'bg-slate-700 hover:bg-slate-600'}
+                >
+                  Auto
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => handleLatencyModeChange('manual')}
+                  className={latencyMode === 'manual' 
+                    ? 'bg-blue-600 hover:bg-blue-700' 
+                    : 'bg-slate-700 hover:bg-slate-600'}
+                >
+                  Manual
+                </Button>
+                <span className="text-xs text-slate-400 ml-2">
+                  {latencyMode === 'auto' ? 'System auto-adjusts timing' : 'Use Settings for manual offset'}
+                </span>
+              </div>
             </div>
 
             <div className="border-t border-purple-500/30 pt-4" />
