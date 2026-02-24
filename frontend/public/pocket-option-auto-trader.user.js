@@ -220,6 +220,9 @@
                 <button id="auto-trade-toggle" class="toggle-btn enabled" onclick="toggleAutoTrade()">
                     🟢 AUTO-TRADE ON
                 </button>
+                <button class="toggle-btn" style="background: linear-gradient(135deg, #3b82f6, #1d4ed8); margin-top: 5px;" onclick="manualFetchSignal()">
+                    🔄 Fetch Signal Now
+                </button>
                 <div class="last-signal" id="last-signal-box">
                     <div class="signal-direction" id="last-signal-direction">Waiting for signal...</div>
                     <div id="last-signal-details"></div>
