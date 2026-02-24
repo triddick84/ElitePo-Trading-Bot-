@@ -545,21 +545,6 @@
         
         log(`Looking for ${buttonType} button...`);
         
-        // First, log all buttons on the page for debugging
-        if (CONFIG.DEBUG) {
-            const allButtons = document.querySelectorAll('button');
-            log(`Found ${allButtons.length} buttons on page`);
-            allButtons.forEach((btn, i) => {
-                if (btn.className.toLowerCase().includes('call') || 
-                    btn.className.toLowerCase().includes('put') ||
-                    btn.className.toLowerCase().includes('btn') ||
-                    btn.textContent.toLowerCase().includes('call') ||
-                    btn.textContent.toLowerCase().includes('put')) {
-                    log(`Button ${i}: class="${btn.className}" text="${btn.textContent.substring(0,30)}"`);
-                }
-            });
-        }
-        
         for (const selector of selectors) {
             try {
                 const button = document.querySelector(selector);
@@ -570,23 +555,9 @@
                     button.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     await sleep(300);
                     
-                    // Multiple click attempts for reliability
-                    // Method 1: Direct click
+                    // SINGLE CLICK ONLY - Don't use multiple methods!
                     button.click();
-                    log(`Clicked ${buttonType} button (method 1)`);
-                    
-                    await sleep(100);
-                    
-                    // Method 2: Mouse events
-                    button.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
-                    await sleep(50);
-                    button.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
-                    button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
-                    log(`Clicked ${buttonType} button (method 2)`);
-                    
-                    // Method 3: Focus and Enter key
-                    button.focus();
-                    button.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+                    log(`✅ Clicked ${buttonType} button`, 'success');
                     
                     return true;
                 }
@@ -602,12 +573,12 @@
             const text = (btn.textContent || '').toLowerCase();
             const classes = (btn.className || '').toLowerCase();
             
-            if (isCall && (text.includes('call') || text.includes('up') || text.includes('higher') || classes.includes('green'))) {
+            if (isCall && (text.includes('call') || text.includes('higher') || (classes.includes('call') && !classes.includes('put')))) {
                 log(`Found CALL by text/class: "${text.substring(0,20)}"`);
                 btn.click();
                 return true;
             }
-            if (!isCall && (text.includes('put') || text.includes('down') || text.includes('lower') || classes.includes('red'))) {
+            if (!isCall && (text.includes('put') || text.includes('lower') || (classes.includes('put') && !classes.includes('call')))) {
                 log(`Found PUT by text/class: "${text.substring(0,20)}"`);
                 btn.click();
                 return true;
@@ -615,7 +586,6 @@
         }
         
         log(`${buttonType} button NOT FOUND! Make sure you are on the Pocket Option trading chart page.`, 'error');
-        log('Tip: Navigate to the binary options trading page with the chart visible.', 'warn');
         return false;
     }
 
