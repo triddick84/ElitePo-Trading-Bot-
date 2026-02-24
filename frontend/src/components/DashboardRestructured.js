@@ -69,6 +69,9 @@ const DashboardRestructured = ({
   const [autoForceCountdown, setAutoForceCountdown] = useState(0);
   const [autoForceIntervalId, setAutoForceIntervalId] = useState(null);
   
+  // Latency Mode State
+  const [latencyMode, setLatencyMode] = useState('auto');
+  
   // Enhanced Auto-Generate Settings
   const [enhancedSettings, setEnhancedSettings] = useState({
     scanAllAssets: false,
