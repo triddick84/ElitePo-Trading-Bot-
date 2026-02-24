@@ -424,9 +424,9 @@
     // TRADE EXECUTION
     // ===========================================
     async function executeTradeFromSignal(signal) {
-        // Double-check we're not already trading
+        // Safety check
         if (!isTrading) {
-            log('Trade execution called but isTrading is false - aborting', 'warn');
+            log('executeTradeFromSignal called but isTrading is false - aborting', 'warn');
             return;
         }
         
@@ -434,9 +434,9 @@
         
         try {
             const direction = signal.direction?.toUpperCase();
-            const isCall = direction === 'CALL' || direction === 'BUY';
+            const isCall = direction === 'CALL' || direction === 'BUY' || direction === 'UP';
             
-            log(`Executing ${isCall ? 'CALL' : 'PUT'} trade...`);
+            log(`🎯 EXECUTING TRADE: ${isCall ? 'CALL ⬆️' : 'PUT ⬇️'} on ${signal.symbol}`);
             
             // Play sound alert
             if (CONFIG.SOUND_ENABLED) {
@@ -445,7 +445,7 @@
             
             // Show notification
             showNotification(
-                `🚨 Trading: ${isCall ? 'CALL ⬆️' : 'PUT ⬇️'}`,
+                `🚨 TRADING: ${isCall ? 'CALL ⬆️' : 'PUT ⬇️'}`,
                 `${signal.symbol} | ${signal.confidence || signal.probability}% confidence`
             );
             
@@ -455,24 +455,30 @@
             if (success) {
                 tradeCount++;
                 updateStats();
-                log(`✅ Trade executed: ${isCall ? 'CALL' : 'PUT'}`, 'success');
+                log(`✅ TRADE EXECUTED: ${isCall ? 'CALL' : 'PUT'} on ${signal.symbol}`, 'success');
                 
                 // Record the trade result after expiration
-                setTimeout(() => checkTradeResult(signal), (signal.expiration_seconds || 60) * 1000 + 2000);
+                const expirationMs = ((signal.expiration_minutes || 1) * 60 * 1000) + 2000;
+                log(`Will check trade result in ${Math.round(expirationMs/1000)}s`);
+                setTimeout(() => checkTradeResult(signal), expirationMs);
             } else {
-                log('Failed to click trade button', 'error');
+                log('❌ TRADE FAILED: Could not find/click trade button', 'error');
+                showNotification('Trade Failed', 'Could not find CALL/PUT button. Make sure you are on the trading page.');
             }
             
         } catch (error) {
-            log(`Trade execution error: ${error.message}`, 'error');
+            log(`❌ Trade execution error: ${error.message}`, 'error');
         } finally {
-            // Add a cooldown period before allowing new trades (5 seconds)
-            log('Trade complete. Cooldown for 5 seconds...', 'info');
+            // CRITICAL: Reset trading flag with cooldown
+            // This ensures we don't get stuck and don't process same signal twice
+            const cooldownSeconds = 10; // 10 second cooldown between trades
+            log(`Trade complete. ${cooldownSeconds}s cooldown before next trade...`, 'info');
+            
             setTimeout(() => {
                 isTrading = false;
                 updateConnectionStatus('connected');
-                log('Ready for new signals', 'info');
-            }, 5000);
+                log('✅ Ready for new signals', 'success');
+            }, cooldownSeconds * 1000);
         }
     }
 
