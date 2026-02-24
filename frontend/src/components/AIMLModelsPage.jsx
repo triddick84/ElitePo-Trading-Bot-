@@ -626,12 +626,60 @@ const AIMLModelsPage = () => {
                       <SelectTrigger className="bg-slate-800/50 border-slate-600 mt-1">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent className="bg-slate-800 border-slate-600">
-                        <SelectItem value="EURUSD">EURUSD</SelectItem>
-                        <SelectItem value="GBPUSD">GBPUSD</SelectItem>
-                        <SelectItem value="USDJPY">USDJPY</SelectItem>
-                        <SelectItem value="BTCUSDT">BTCUSDT</SelectItem>
-                        <SelectItem value="ETHUSDT">ETHUSDT</SelectItem>
+                      <SelectContent className="bg-slate-800 border-slate-600 max-h-60 overflow-y-auto">
+                        {/* Forex OTC */}
+                        <SelectItem value="EURUSD_otc">EUR/USD (OTC)</SelectItem>
+                        <SelectItem value="GBPUSD_otc">GBP/USD (OTC)</SelectItem>
+                        <SelectItem value="USDJPY_otc">USD/JPY (OTC)</SelectItem>
+                        <SelectItem value="AUDUSD_otc">AUD/USD (OTC)</SelectItem>
+                        <SelectItem value="USDCAD_otc">USD/CAD (OTC)</SelectItem>
+                        <SelectItem value="USDCHF_otc">USD/CHF (OTC)</SelectItem>
+                        <SelectItem value="NZDUSD_otc">NZD/USD (OTC)</SelectItem>
+                        <SelectItem value="EURGBP_otc">EUR/GBP (OTC)</SelectItem>
+                        <SelectItem value="EURJPY_otc">EUR/JPY (OTC)</SelectItem>
+                        <SelectItem value="GBPJPY_otc">GBP/JPY (OTC)</SelectItem>
+                        <SelectItem value="AUDCAD_otc">AUD/CAD (OTC)</SelectItem>
+                        <SelectItem value="AUDJPY_otc">AUD/JPY (OTC)</SelectItem>
+                        <SelectItem value="CADJPY_otc">CAD/JPY (OTC)</SelectItem>
+                        <SelectItem value="EURAUD_otc">EUR/AUD (OTC)</SelectItem>
+                        <SelectItem value="EURCAD_otc">EUR/CAD (OTC)</SelectItem>
+                        <SelectItem value="GBPAUD_otc">GBP/AUD (OTC)</SelectItem>
+                        <SelectItem value="GBPCAD_otc">GBP/CAD (OTC)</SelectItem>
+                        {/* Forex Regular */}
+                        <SelectItem value="EURUSD">EUR/USD</SelectItem>
+                        <SelectItem value="GBPUSD">GBP/USD</SelectItem>
+                        <SelectItem value="USDJPY">USD/JPY</SelectItem>
+                        <SelectItem value="AUDUSD">AUD/USD</SelectItem>
+                        <SelectItem value="USDCAD">USD/CAD</SelectItem>
+                        <SelectItem value="NZDUSD">NZD/USD</SelectItem>
+                        <SelectItem value="EURGBP">EUR/GBP</SelectItem>
+                        <SelectItem value="EURJPY">EUR/JPY</SelectItem>
+                        <SelectItem value="GBPJPY">GBP/JPY</SelectItem>
+                        {/* Crypto OTC */}
+                        <SelectItem value="BTCUSD_otc">BTC/USD (OTC)</SelectItem>
+                        <SelectItem value="ETHUSD_otc">ETH/USD (OTC)</SelectItem>
+                        <SelectItem value="LTCUSD_otc">LTC/USD (OTC)</SelectItem>
+                        <SelectItem value="XRPUSD_otc">XRP/USD (OTC)</SelectItem>
+                        <SelectItem value="BNBUSD_otc">BNB/USD (OTC)</SelectItem>
+                        <SelectItem value="ADAUSD_otc">ADA/USD (OTC)</SelectItem>
+                        <SelectItem value="SOLUSD_otc">SOL/USD (OTC)</SelectItem>
+                        {/* Crypto Regular */}
+                        <SelectItem value="BTCUSD">BTC/USD</SelectItem>
+                        <SelectItem value="ETHUSD">ETH/USD</SelectItem>
+                        <SelectItem value="LTCUSD">LTC/USD</SelectItem>
+                        {/* Indices OTC */}
+                        <SelectItem value="US100_otc">US100/NASDAQ (OTC)</SelectItem>
+                        <SelectItem value="US500_otc">US500/S&P500 (OTC)</SelectItem>
+                        <SelectItem value="US30_otc">US30/Dow Jones (OTC)</SelectItem>
+                        <SelectItem value="DE30_otc">DE30/DAX (OTC)</SelectItem>
+                        <SelectItem value="UK100_otc">UK100/FTSE (OTC)</SelectItem>
+                        {/* Commodities OTC */}
+                        <SelectItem value="XAUUSD_otc">Gold/XAU (OTC)</SelectItem>
+                        <SelectItem value="XAGUSD_otc">Silver/XAG (OTC)</SelectItem>
+                        <SelectItem value="WTIUSD_otc">Oil/WTI (OTC)</SelectItem>
+                        {/* Commodities Regular */}
+                        <SelectItem value="XAUUSD">Gold/XAU</SelectItem>
+                        <SelectItem value="XAGUSD">Silver/XAG</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
