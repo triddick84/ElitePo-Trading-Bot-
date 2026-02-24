@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://auto-trader-pro-3.preview.emergentagent.com
-// @version      1.0.0
-// @description  Automatically execute trades on Pocket Option based on GPT Signal Bot signals. Works on Android (Kiwi Browser) and Desktop.
+// @version      1.1.0
+// @description  Automatically execute trades on Pocket Option based on GPT Signal Bot signals. Works on Android (Kiwi Browser) and Desktop. v1.1.0 - Fixed button detection, added reset function.
 // @author       GPT Signal Bot
 // @match        *://pocketoption.com/*
 // @match        *://po.trade/*
@@ -11,7 +11,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
 // @grant        GM_getValue
-// @connect      algo-signal-hub-2.preview.emergentagent.com
+// @connect      auto-trader-pro-3.preview.emergentagent.com
 // @run-at       document-idle
 // ==/UserScript==
 
