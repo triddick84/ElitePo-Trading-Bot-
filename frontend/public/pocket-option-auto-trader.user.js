@@ -321,6 +321,17 @@
         GM_setValue('autoTradeEnabled', CONFIG.AUTO_TRADE_ENABLED);
     };
 
+    // Reset function to unstick the trader
+    window.resetTrader = function() {
+        log('🔧 RESETTING TRADER...', 'warn');
+        isTrading = false;
+        lastSignalId = '';
+        GM_setValue('lastSignalId', '');
+        updateConnectionStatus('connected');
+        log('✅ Trader reset complete. Ready for new signals.', 'success');
+        showNotification('Trader Reset', 'Auto-trader has been reset and is ready for new signals.');
+    };
+
     // ===========================================
     // SIGNAL FETCHING
     // ===========================================
