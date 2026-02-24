@@ -408,12 +408,12 @@
     // TRADE EXECUTION
     // ===========================================
     async function executeTradeFromSignal(signal) {
-        if (isTrading) {
-            log('Already trading, skipping...', 'warn');
+        // Double-check we're not already trading
+        if (!isTrading) {
+            log('Trade execution called but isTrading is false - aborting', 'warn');
             return;
         }
         
-        isTrading = true;
         updateConnectionStatus('trading');
         
         try {
@@ -439,7 +439,7 @@
             if (success) {
                 tradeCount++;
                 updateStats();
-                log(`Trade executed: ${isCall ? 'CALL' : 'PUT'}`, 'success');
+                log(`✅ Trade executed: ${isCall ? 'CALL' : 'PUT'}`, 'success');
                 
                 // Record the trade result after expiration
                 setTimeout(() => checkTradeResult(signal), (signal.expiration_seconds || 60) * 1000 + 2000);
@@ -450,8 +450,13 @@
         } catch (error) {
             log(`Trade execution error: ${error.message}`, 'error');
         } finally {
-            isTrading = false;
-            updateConnectionStatus('connected');
+            // Add a cooldown period before allowing new trades (5 seconds)
+            log('Trade complete. Cooldown for 5 seconds...', 'info');
+            setTimeout(() => {
+                isTrading = false;
+                updateConnectionStatus('connected');
+                log('Ready for new signals', 'info');
+            }, 5000);
         }
     }
 
