@@ -917,11 +917,17 @@ const StrategyBuilder = () => {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="bg-slate-800/50">
+        <TabsList className="bg-slate-800/50 grid grid-cols-4 w-full max-w-2xl">
+          <TabsTrigger value="quick-select">⚡ Quick Select</TabsTrigger>
           <TabsTrigger value="builder">🛠️ Builder</TabsTrigger>
-          <TabsTrigger value="templates">📋 Quick Templates</TabsTrigger>
-          <TabsTrigger value="strategies">💾 My Strategies ({strategies.length})</TabsTrigger>
+          <TabsTrigger value="templates">📋 Templates</TabsTrigger>
+          <TabsTrigger value="strategies">💾 Saved ({strategies.length})</TabsTrigger>
         </TabsList>
+
+        {/* Quick Strategy Selection Tab */}
+        <TabsContent value="quick-select" className="mt-6">
+          <QuickStrategySelector />
+        </TabsContent>
 
         {/* Templates Tab */}
         <TabsContent value="templates">
