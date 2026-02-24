@@ -241,6 +241,71 @@ const DashboardRestructured = ({
     }
   };
 
+  // Handle Invert on Loss - Records loss and generates inverted signal
+  const handleInvertOnLoss = async () => {
+    setIsGenerating(true);
+    try {
+      // First record the loss to the regime detector
+      await axios.post(`${API}/trading/record-result`, {
+        direction: 'CALL', // Will be used for tracking
+        symbol: config.selected_assets?.[0] || 'EURUSD',
+        win: false
+      });
+      
+      toast.info('📉 Loss recorded - inverting next signal');
+      
+      // Now generate a new signal (regime detector will invert if needed)
+      const asset = config.selected_assets?.[0] || 'EURUSD_otc';
+      const [symbol, market] = asset.includes('_') ? asset.split('_') : [asset, 'regular'];
+      
+      const response = await axios.post(`${API}/signals/force-generate`, {
+        asset_symbol: symbol,
+        market_type: market,
+        selected_timeframe: config.selected_timeframe || '1m',
+        selected_strategy: config.selected_strategy || 'enhanced_rsi_bb_volume'
+      });
+
+      if (response.data.success && response.data.signal) {
+        setLiveSignals(prev => [response.data.signal, ...prev]);
+        toast.success('🔄 Inverted signal generated!');
+      } else {
+        toast.warning(response.data.message || 'No signal generated');
+      }
+    } catch (error) {
+      console.error('Error generating inverted signal:', error);
+      toast.error('Failed to generate signal');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // Handle Latency Mode Change
+  const handleLatencyModeChange = async (mode) => {
+    try {
+      await axios.post(`${API}/latency/set-mode`, { mode });
+      setLatencyMode(mode);
+      toast.success(`Latency mode: ${mode.toUpperCase()}`);
+    } catch (error) {
+      console.error('Error setting latency mode:', error);
+      toast.error('Failed to change latency mode');
+    }
+  };
+
+  // Fetch latency status on mount
+  useEffect(() => {
+    const fetchLatencyStatus = async () => {
+      try {
+        const response = await axios.get(`${API}/latency/status`);
+        if (response.data.success) {
+          setLatencyMode(response.data.mode);
+        }
+      } catch (error) {
+        console.error('Failed to fetch latency status');
+      }
+    };
+    fetchLatencyStatus();
+  }, []);
+
   // Single scan function (used by both one-time and continuous scanning)
   const performSingleScan = async () => {
     try {
