@@ -28,7 +28,8 @@ import {
   AlertCircle,
   BarChart3,
   Settings,
-  Target
+  Target,
+  RefreshCw
 } from 'lucide-react';
 import { toast } from 'sonner';
 import MarketAssetSelector from './MarketAssetSelector';
