@@ -1013,6 +1013,66 @@ async def invert_signal(signal_id: str):
         logging.error(f"Error inverting signal {signal_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@api_router.post("/signals/toggle-invert")
+async def toggle_global_signal_inversion():
+    """
+    Toggle global signal inversion setting.
+    When enabled, ALL generated signals will have their direction inverted (BUY -> SELL, SELL -> BUY).
+    This is useful when the bot is experiencing a losing streak.
+    """
+    try:
+        # Get current config
+        config_doc = await db.trading_configurations.find_one({"user_id": "default_user"})
+        current_invert = config_doc.get('invert_signals', False) if config_doc else False
+        
+        # Toggle the value
+        new_invert = not current_invert
+        
+        # Update in database
+        await db.trading_configurations.update_one(
+            {"user_id": "default_user"},
+            {"$set": {
+                "invert_signals": new_invert,
+                "updated_at": datetime.now(timezone.utc)
+            }},
+            upsert=True
+        )
+        
+        # Also update the trading bot config
+        trading_bot.config.invert_signals = new_invert
+        
+        logger.info(f"🔄 Global signal inversion {'ENABLED' if new_invert else 'DISABLED'}")
+        
+        return {
+            "success": True,
+            "invert_signals": new_invert,
+            "message": f"Signal inversion {'enabled' if new_invert else 'disabled'}. All signals will now be {'inverted' if new_invert else 'normal'}.",
+            "note": "BUY signals become SELL, SELL signals become BUY" if new_invert else "Signals generated as normal"
+        }
+        
+    except Exception as e:
+        logging.error(f"Error toggling signal inversion: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/signals/invert-status")
+async def get_signal_inversion_status():
+    """Get the current global signal inversion status"""
+    try:
+        config_doc = await db.trading_configurations.find_one({"user_id": "default_user"})
+        invert_enabled = config_doc.get('invert_signals', False) if config_doc else False
+        
+        return {
+            "success": True,
+            "invert_signals": invert_enabled,
+            "status": "ACTIVE - Signals are being inverted" if invert_enabled else "INACTIVE - Normal signal direction"
+        }
+        
+    except Exception as e:
+        logging.error(f"Error getting inversion status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @api_router.post("/signals/generate/single")
 async def generate_single_signal():
     """Generate a single trading signal on-demand"""
