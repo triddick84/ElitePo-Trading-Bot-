@@ -1213,6 +1213,81 @@ async def get_auto_signal_generation_status():
         logging.error(f"Error getting auto signal generation status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# ============================================================================
+# LATEST SIGNAL ENDPOINT (for Mobile Auto-Trader Userscript)
+# ============================================================================
+
+@api_router.get("/signals/latest")
+async def get_latest_signal():
+    """
+    Get the most recent trading signal for the auto-trader userscript
+    
+    This endpoint is polled by the Tampermonkey userscript running on 
+    the user's mobile device (Kiwi Browser) to auto-execute trades.
+    
+    Returns the latest signal if it was generated within the last 5 minutes.
+    """
+    try:
+        # Get the most recent signal from database
+        latest_signal = await db.generated_signals.find_one(
+            {},
+            {"_id": 0},
+            sort=[("timestamp", -1)]
+        )
+        
+        if not latest_signal:
+            return {
+                "success": False,
+                "message": "No signals generated yet",
+                "signal": None
+            }
+        
+        # Check if signal is recent (within last 5 minutes)
+        signal_time = latest_signal.get('timestamp')
+        if signal_time:
+            try:
+                if isinstance(signal_time, str):
+                    from dateutil import parser
+                    signal_dt = parser.parse(signal_time)
+                else:
+                    signal_dt = signal_time
+                
+                # Make timezone-aware if needed
+                if signal_dt.tzinfo is None:
+                    signal_dt = signal_dt.replace(tzinfo=timezone.utc)
+                
+                age_seconds = (datetime.now(timezone.utc) - signal_dt).total_seconds()
+                
+                if age_seconds > 300:  # 5 minutes
+                    return {
+                        "success": False,
+                        "message": "No recent signals (last signal is too old)",
+                        "signal": None,
+                        "last_signal_age_seconds": age_seconds
+                    }
+            except:
+                pass  # If we can't parse the time, return the signal anyway
+        
+        # Add unique ID if not present
+        if 'id' not in latest_signal:
+            latest_signal['id'] = f"sig_{latest_signal.get('symbol', 'UNK')}_{signal_time}"
+        
+        return {
+            "success": True,
+            "signal": latest_signal,
+            "message": "Signal available for auto-trading"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting latest signal: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "signal": None
+        }
+
+
 @api_router.post("/signals/force-generate")
 async def force_generate_signals(wait_for_candle: bool = Query(False)):
     """
