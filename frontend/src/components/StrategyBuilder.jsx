@@ -689,6 +689,143 @@ const StrategyBuilder = () => {
     });
   };
 
+  // =====================================================
+  // QUICK STRATEGY SELECTION FUNCTIONS
+  // =====================================================
+  
+  const fetchAvailableStrategies = useCallback(async () => {
+    try {
+      setLoadingStrategies(true);
+      const response = await axios.get(`${API_URL}/api/strategies/available`);
+      if (response.data.success) {
+        setAvailableStrategies(response.data.strategies);
+      }
+    } catch (error) {
+      console.error('Failed to fetch available strategies:', error);
+      toast.error('Failed to load strategies');
+    } finally {
+      setLoadingStrategies(false);
+    }
+  }, []);
+
+  const fetchSelectedStrategies = useCallback(async () => {
+    try {
+      const response = await axios.get(`${API_URL}/api/strategies/selected`);
+      if (response.data.success) {
+        setSelectedStrategies(response.data.selections || {});
+      }
+    } catch (error) {
+      console.error('Failed to fetch selected strategies:', error);
+    }
+  }, []);
+
+  const selectStrategyForTimeframe = async (timeframe, strategyId) => {
+    try {
+      await axios.post(`${API_URL}/api/strategies/select`, {
+        timeframe,
+        strategy_id: strategyId
+      });
+      
+      setSelectedStrategies(prev => ({
+        ...prev,
+        [timeframe]: strategyId
+      }));
+      
+      const strategyName = availableStrategies[timeframe]?.find(s => s.id === strategyId)?.name || strategyId;
+      toast.success(`${timeframe}: ${strategyName} selected`);
+    } catch (error) {
+      toast.error('Failed to select strategy');
+    }
+  };
+
+  useEffect(() => {
+    fetchAvailableStrategies();
+    fetchSelectedStrategies();
+  }, [fetchAvailableStrategies, fetchSelectedStrategies]);
+
+  // =====================================================
+  // QUICK STRATEGY SELECTION COMPONENT
+  // =====================================================
+  
+  const QuickStrategySelector = () => {
+    const timeframeOrder = ['5s', '15s', '30s', '1m', '2m', '3m', '5m'];
+    
+    if (loadingStrategies) {
+      return (
+        <div className="flex items-center justify-center p-12">
+          <div className="w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      );
+    }
+    
+    return (
+      <div className="space-y-6">
+        <Alert className="bg-purple-900/30 border-purple-600">
+          <Zap className="w-4 h-4" />
+          <AlertTitle>Quick Strategy Selection</AlertTitle>
+          <AlertDescription>
+            Select a pre-built trading strategy for each timeframe. Strategies marked with ⭐ are from your uploaded PDFs.
+          </AlertDescription>
+        </Alert>
+        
+        <div className="grid gap-4">
+          {timeframeOrder.map(tf => {
+            const strategies = availableStrategies[tf] || [];
+            const currentSelection = selectedStrategies[tf] || 'default';
+            
+            return (
+              <Card key={tf} className="bg-slate-800/50 border-slate-700">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-white text-lg flex items-center gap-2">
+                      <Badge variant="outline" className="border-purple-500 text-purple-400">
+                        {tf}
+                      </Badge>
+                      Timeframe Strategy
+                    </CardTitle>
+                    <Badge className={currentSelection !== 'default' ? 'bg-green-600' : 'bg-slate-600'}>
+                      {currentSelection !== 'default' ? '✓ Custom' : 'Default'}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid gap-2">
+                    {strategies.map(strategy => (
+                      <div
+                        key={strategy.id}
+                        onClick={() => selectStrategyForTimeframe(tf, strategy.id)}
+                        className={`p-3 rounded-lg cursor-pointer transition-all ${
+                          currentSelection === strategy.id
+                            ? 'bg-purple-600/30 border-2 border-purple-500'
+                            : 'bg-slate-700/50 border border-slate-600 hover:border-purple-500/50'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="font-medium text-white flex items-center gap-2">
+                              {strategy.name}
+                              {strategy.win_rate && (
+                                <Badge className="bg-green-600 text-xs">{strategy.win_rate}</Badge>
+                              )}
+                            </div>
+                            <div className="text-xs text-slate-400 mt-1">{strategy.description}</div>
+                          </div>
+                          {currentSelection === strategy.id && (
+                            <CheckCircle className="w-5 h-5 text-green-400" />
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   const toggleAsset = (asset) => {
     setStrategyForm(prev => {
       const current = prev.assets || [];
