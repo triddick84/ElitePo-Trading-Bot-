@@ -361,32 +361,46 @@
     };
 
     async function checkForNewSignals() {
-        if (isTrading) return;
+        if (isTrading) {
+            log('Already processing a trade, skipping check', 'info');
+            return;
+        }
         
         try {
             const signal = await fetchLatestSignal();
             
             if (signal) {
-                // Create a unique ID based on signal properties
-                const signalUniqueId = signal.id || `${signal.symbol}_${signal.direction}_${signal.timestamp}`;
+                // Create a unique ID based on signal properties AND timestamp
+                // This prevents processing the same signal twice
+                const signalTimestamp = signal.timestamp || signal.created_at || '';
+                const signalUniqueId = `${signal.symbol}_${signal.direction}_${signalTimestamp}`;
                 
-                if (signalUniqueId !== lastSignalId) {
-                    log(`🚨 NEW SIGNAL: ${signal.direction} ${signal.symbol}`, 'success');
-                    lastSignalId = signalUniqueId;
-                    GM_setValue('lastSignalId', lastSignalId);
-                    
-                    updateLastSignal(signal);
-                    
-                    if (CONFIG.AUTO_TRADE_ENABLED) {
-                        await executeTradeFromSignal(signal);
-                    } else {
-                        log('Auto-trade disabled, signal ignored', 'warn');
-                        showNotification('New Signal (Manual)', `${signal.direction} ${signal.symbol} - Auto-trade is OFF`);
-                    }
+                // Check if we've already processed this exact signal
+                if (signalUniqueId === lastSignalId) {
+                    // Same signal, don't process again
+                    return;
+                }
+                
+                // CRITICAL: Set flag IMMEDIATELY before any async operations
+                isTrading = true;
+                
+                log(`🚨 NEW SIGNAL: ${signal.direction} ${signal.symbol}`, 'success');
+                lastSignalId = signalUniqueId;
+                GM_setValue('lastSignalId', lastSignalId);
+                
+                updateLastSignal(signal);
+                
+                if (CONFIG.AUTO_TRADE_ENABLED) {
+                    await executeTradeFromSignal(signal);
+                } else {
+                    log('Auto-trade disabled, signal ignored', 'warn');
+                    showNotification('New Signal (Manual)', `${signal.direction} ${signal.symbol} - Auto-trade is OFF`);
+                    isTrading = false; // Reset since we're not trading
                 }
             }
         } catch (error) {
             log(`Check signal error: ${error.message}`, 'error');
+            isTrading = false; // Reset on error
         }
     }
 
