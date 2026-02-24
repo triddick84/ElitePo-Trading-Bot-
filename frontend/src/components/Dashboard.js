@@ -59,6 +59,12 @@ const Dashboard = ({ botStatus, liveSignals, setLiveSignals, notificationSetting
   // Force Generate State
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedSignal, setGeneratedSignal] = useState(null);
+  
+  // Quick Controls State
+  const [invertSignals, setInvertSignals] = useState(false);
+  const [latencyMode, setLatencyMode] = useState('auto');
+  const [isInvertLoading, setIsInvertLoading] = useState(false);
+  const [isLatencyLoading, setIsLatencyLoading] = useState(false);
 
   const handleSignalExecute = (signal) => {
     console.log("Executing signal from dashboard:", signal);
