@@ -117,9 +117,11 @@ Create a "GPT Signal Bot" for Pocket Option with a high win rate (80-90%+). The 
 - [ ] TradingView webhook integration (playbook received, needs implementation)
 
 ## P2 - Medium Priority
-- [ ] End-to-end custom strategy testing
-- [ ] Backend refactoring (split server.py)
-- [ ] Binance US & TradingView bot planning
+- [ ] End-to-end custom strategy testing (verify strategy logic is actually executed)
+- [ ] Backend refactoring (split server.py into routes modules)
+- [ ] Clean up Pocket Option page - remove unused code
+- [ ] Enhanced Signal Pop-up with Normal/Inverted status indicator
+- [ ] Frontend accuracy statistics dashboard widget
 
 ## P3 - Future
 - [ ] Fix Money Management Logic (Martingale)
