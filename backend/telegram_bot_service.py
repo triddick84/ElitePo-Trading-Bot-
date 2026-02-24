@@ -101,6 +101,11 @@ class TelegramBotService:
             '/history': self._cmd_trade_history,
             '/stats': self._cmd_stats,
             '/settings': self._cmd_settings,
+            # NEW: Trade result recording commands
+            '/win': self._cmd_record_win,
+            '/loss': self._cmd_record_loss,
+            '/regime': self._cmd_regime_status,
+            '/latency': self._cmd_latency_status,
         }
     
     async def _get_client(self):
