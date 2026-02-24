@@ -344,19 +344,28 @@ Signals are sent here for you to trade manually.
     
     async def _cmd_help(self, chat_id: str, args: List[str]) -> str:
         return """
-<b>📚 AVAILABLE COMMANDS</b>
+<b>📚 GPT SIGNAL BOT - COMMANDS</b>
 
-<b>📊 Signals:</b>
-/signal - Generate a trading signal
-/connect - Connection info
+━━━━━━━━━━━━━━━━━━━━
+<b>🎯 Signal Commands:</b>
+/signal - Generate trading signal
+/status - Bot status
+
+<b>📊 Trade Tracking (feeds AI learning):</b>
+/win [symbol] [dir] - Record a WIN
+/loss [symbol] [dir] - Record a LOSS
+/regime - Market regime status
+/stats - Signal statistics
+
+<b>⏱️ Timing & Latency:</b>
+/latency - Latency correction status
 
 <b>⚙️ Settings:</b>
-/status - Bot status
+/connect - Connection info
 /settings - Current settings
 
-<b>📈 History & Stats:</b>
+<b>📈 History:</b>
 /history - Recent signals
-/stats - Signal statistics
 
 <b>ℹ️ Info:</b>
 /start - Welcome message
@@ -365,11 +374,12 @@ Signals are sent here for you to trade manually.
 ━━━━━━━━━━━━━━━━━━━━
 <b>📱 MANUAL TRADING MODE</b>
 
-Signals are sent here for you to trade manually on Pocket Option. When you receive a signal:
-1. Open Pocket Option
-2. Find the asset
-3. Set the expiry time
-4. Click UP or DOWN as indicated
+1. Use /signal to generate a signal
+2. Trade manually on Pocket Option
+3. Record result with /win or /loss
+
+<b>🤖 AI Learning:</b>
+Recording results helps the bot adapt and improve accuracy!
 """
     
     async def _cmd_status(self, chat_id: str, args: List[str]) -> str:
