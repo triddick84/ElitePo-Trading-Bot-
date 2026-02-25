@@ -785,22 +785,28 @@
         }
     }
 
-    async function reportResultToServer(signalId, isWin) {
-        try {
-            await fetch(`${CONFIG.API_URL}/trading/record-result`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    signal_id: signalId,
-                    win: isWin,
-                    direction: 'CALL', // Will be updated from actual signal
-                    symbol: 'EURUSD'
-                })
-            });
-            log('Result reported to server');
-        } catch (error) {
-            log('Failed to report result', 'error');
-        }
+    function reportResultToServer(signalId, isWin) {
+        GM_xmlhttpRequest({
+            method: 'POST',
+            url: `${CONFIG.API_URL}/trading/record-result`,
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            data: JSON.stringify({
+                signal_id: signalId,
+                win: isWin,
+                direction: 'CALL',
+                symbol: 'EURUSD'
+            }),
+            onload: function(response) {
+                if (response.status === 200) {
+                    log('Result reported to server');
+                }
+            },
+            onerror: function() {
+                log('Failed to report result', 'error');
+            }
+        });
     }
 
     // ===========================================
