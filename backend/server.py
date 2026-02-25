@@ -12333,6 +12333,152 @@ async def stop_price_stream():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# ========================================
+# AUTO SIGNAL GENERATION SYSTEM
+# ========================================
+
+# Global state for auto-signal generation
+auto_signal_state = {
+    "enabled": False,
+    "interval_seconds": 60,
+    "instruments": ["EUR_USD"],
+    "timeframe": "M1",
+    "min_confidence": 70,
+    "last_signal_time": None,
+    "signals_generated": 0,
+    "task": None
+}
+
+async def auto_signal_generator_task():
+    """Background task that continuously generates signals"""
+    global auto_signal_state
+    
+    logger.info("🚀 Auto Signal Generator started")
+    
+    while auto_signal_state["enabled"]:
+        try:
+            for instrument in auto_signal_state["instruments"]:
+                if not auto_signal_state["enabled"]:
+                    break
+                
+                # Generate trend signal
+                trend_signal = enhanced_oanda.generate_trend_signal(
+                    instrument, 
+                    auto_signal_state["timeframe"]
+                )
+                
+                if trend_signal and trend_signal.recommended_action != "HOLD":
+                    if trend_signal.confidence >= auto_signal_state["min_confidence"]:
+                        # Create and save signal
+                        new_signal = {
+                            "id": f"AUTO_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{instrument.replace('_', '')}",
+                            "symbol": instrument.replace("_", ""),
+                            "direction": trend_signal.recommended_action,
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                            "confidence": trend_signal.confidence,
+                            "probability": trend_signal.confidence,
+                            "expiration_minutes": 1,
+                            "strategy": "Auto Signal Generator",
+                            "trend_direction": trend_signal.direction,
+                            "trend_strength": trend_signal.strength.value,
+                            "entry_price": trend_signal.entry_price,
+                            "stop_loss": trend_signal.stop_loss,
+                            "take_profit": trend_signal.take_profit,
+                            "supporting_indicators": trend_signal.supporting_indicators,
+                            "source": "auto_generator"
+                        }
+                        
+                        await db.trading_signals.insert_one({**new_signal})
+                        auto_signal_state["signals_generated"] += 1
+                        auto_signal_state["last_signal_time"] = datetime.now(timezone.utc).isoformat()
+                        
+                        logger.info(f"📊 Auto-generated signal: {new_signal['direction']} {new_signal['symbol']} ({new_signal['confidence']:.1f}%)")
+            
+            # Wait for next interval
+            await asyncio.sleep(auto_signal_state["interval_seconds"])
+            
+        except Exception as e:
+            logger.error(f"Auto signal generator error: {e}")
+            await asyncio.sleep(10)  # Wait before retrying
+    
+    logger.info("🛑 Auto Signal Generator stopped")
+
+@api_router.post("/signals/auto/start")
+async def start_auto_signal_generation(
+    instruments: str = Query("EUR_USD", description="Comma-separated instruments"),
+    timeframe: str = Query("M1", description="Timeframe for analysis"),
+    interval_seconds: int = Query(60, ge=30, le=300, description="Interval between signal checks"),
+    min_confidence: int = Query(70, ge=50, le=95, description="Minimum confidence to generate signal")
+):
+    """
+    Start automatic signal generation in the background.
+    Signals will be continuously generated and available for the auto-trader.
+    """
+    global auto_signal_state
+    
+    if auto_signal_state["enabled"]:
+        return {"success": False, "message": "Auto signal generator already running"}
+    
+    if not enhanced_oanda.is_configured:
+        return {"success": False, "message": "OANDA not configured"}
+    
+    # Configure
+    auto_signal_state["enabled"] = True
+    auto_signal_state["instruments"] = [i.strip() for i in instruments.split(",")]
+    auto_signal_state["timeframe"] = timeframe
+    auto_signal_state["interval_seconds"] = interval_seconds
+    auto_signal_state["min_confidence"] = min_confidence
+    
+    # Start background task
+    auto_signal_state["task"] = asyncio.create_task(auto_signal_generator_task())
+    
+    return {
+        "success": True,
+        "message": "Auto signal generator started",
+        "config": {
+            "instruments": auto_signal_state["instruments"],
+            "timeframe": timeframe,
+            "interval_seconds": interval_seconds,
+            "min_confidence": min_confidence
+        }
+    }
+
+@api_router.post("/signals/auto/stop")
+async def stop_auto_signal_generation():
+    """Stop automatic signal generation"""
+    global auto_signal_state
+    
+    auto_signal_state["enabled"] = False
+    
+    if auto_signal_state["task"]:
+        auto_signal_state["task"].cancel()
+        auto_signal_state["task"] = None
+    
+    return {
+        "success": True,
+        "message": "Auto signal generator stopped",
+        "stats": {
+            "signals_generated": auto_signal_state["signals_generated"],
+            "last_signal_time": auto_signal_state["last_signal_time"]
+        }
+    }
+
+@api_router.get("/signals/auto/status")
+async def get_auto_signal_status():
+    """Get auto signal generator status"""
+    global auto_signal_state
+    
+    return {
+        "enabled": auto_signal_state["enabled"],
+        "instruments": auto_signal_state["instruments"],
+        "timeframe": auto_signal_state["timeframe"],
+        "interval_seconds": auto_signal_state["interval_seconds"],
+        "min_confidence": auto_signal_state["min_confidence"],
+        "signals_generated": auto_signal_state["signals_generated"],
+        "last_signal_time": auto_signal_state["last_signal_time"]
+    }
+
 class ArbitrageCheckRequest(BaseModel):
     pairs: List[List[str]] = [["EUR_USD", "GBP_USD"], ["EUR_USD", "USD_JPY"]]
 
