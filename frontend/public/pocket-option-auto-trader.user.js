@@ -418,18 +418,13 @@
     }
 
     function updateLastSignal(signal) {
-        const directionEl = document.getElementById('last-signal-direction');
-        const detailsEl = document.getElementById('last-signal-details');
+        const badgeEl = document.getElementById('last-signal-badge');
         
-        if (directionEl && detailsEl) {
+        if (badgeEl) {
             const isCall = signal.direction === 'CALL' || signal.direction === 'BUY';
-            directionEl.textContent = isCall ? '📈 CALL (UP)' : '📉 PUT (DOWN)';
-            directionEl.className = 'signal-direction ' + (isCall ? 'call' : 'put');
-            detailsEl.innerHTML = `
-                <div>Asset: ${signal.symbol}</div>
-                <div>Confidence: ${signal.confidence || signal.probability}%</div>
-                <div>Time: ${new Date().toLocaleTimeString()}</div>
-            `;
+            badgeEl.textContent = isCall ? '📈 CALL' : '📉 PUT';
+            badgeEl.className = 'signal-badge ' + (isCall ? 'call' : 'put');
+            badgeEl.title = `${signal.symbol} | ${signal.confidence || signal.probability}% | ${new Date().toLocaleTimeString()}`;
         }
     }
 
@@ -452,12 +447,12 @@
         
         if (btn) {
             if (CONFIG.AUTO_TRADE_ENABLED) {
-                btn.className = 'toggle-btn enabled';
-                btn.textContent = '🟢 AUTO-TRADE ON';
+                btn.className = 'compact-btn enabled';
+                btn.textContent = '🟢 AUTO ON';
                 log('Auto-trading ENABLED', 'success');
             } else {
-                btn.className = 'toggle-btn disabled';
-                btn.textContent = '🔴 AUTO-TRADE OFF';
+                btn.className = 'compact-btn disabled';
+                btn.textContent = '🔴 AUTO OFF';
                 log('Auto-trading DISABLED', 'warn');
             }
         }
