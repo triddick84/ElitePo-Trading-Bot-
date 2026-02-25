@@ -85,8 +85,8 @@
                     box-shadow: 0 4px 20px rgba(124, 58, 237, 0.5);
                 }
                 #gpt-panel .dot {
-                    width: 10px;
-                    height: 10px;
+                    width: 12px;
+                    height: 12px;
                     border-radius: 50%;
                     background: #ef4444;
                 }
@@ -116,19 +116,29 @@
                 #gpt-panel .btn-fetch { background: #3b82f6; color: white; }
                 #gpt-panel .btn-reset { background: #f59e0b; color: white; }
                 #gpt-panel .info { font-size: 11px; color: #94a3b8; }
-                #gpt-log { font-size: 10px; color: #64748b; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+                #gpt-log { 
+                    font-size: 10px; 
+                    color: #22c55e; 
+                    max-width: 250px; 
+                    overflow: hidden; 
+                    text-overflow: ellipsis; 
+                    white-space: nowrap;
+                    background: rgba(0,0,0,0.3);
+                    padding: 3px 8px;
+                    border-radius: 4px;
+                }
             </style>
             <span class="dot" id="gpt-dot"></span>
-            <span class="title">🤖 GPT Bot</span>
-            <span class="signal wait" id="gpt-signal">WAITING</span>
+            <span class="title">🤖 GPT Bot v2.0</span>
+            <span class="signal wait" id="gpt-signal">CONNECTING...</span>
             <span class="info">Trades: <span id="gpt-trades">0</span></span>
             <button class="btn-auto" id="gpt-auto" onclick="window.toggleAuto()">AUTO ON</button>
             <button class="btn-fetch" onclick="window.fetchNow()">FETCH</button>
             <button class="btn-reset" onclick="window.resetBot()">RESET</button>
-            <span id="gpt-log">Starting...</span>
+            <span id="gpt-log">Initializing...</span>
         `;
         document.body.appendChild(panel);
-        log('Panel created v2.0');
+        log('Panel created v2.0.1');
     }
 
     function updateUI(status, signal = null) {
