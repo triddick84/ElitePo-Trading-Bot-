@@ -115,6 +115,9 @@ Create a "GPT Signal Bot" for Pocket Option with a high win rate (80-90%+). The 
 - [ ] Implement actual trading logic for custom PDF strategies in force_signal_generator.py
 - [ ] MetaTrader5 integration (playbook received, needs implementation)
 - [ ] TradingView webhook integration (playbook received, needs implementation)
+- [x] **OANDA V20 API Integration** - Historical data, real-time prices for AI training
+- [x] **Enhanced AI/ML System** - Trend following, mean reversion, pattern recognition
+- [x] **Strategy Builder Integration** - Select saved strategies for signal generation
 
 ## P2 - Medium Priority
 - [ ] End-to-end custom strategy testing (verify strategy logic is actually executed)
