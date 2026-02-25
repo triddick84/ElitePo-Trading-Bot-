@@ -173,8 +173,10 @@ Create a "GPT Signal Bot" for Pocket Option with a high win rate (80-90%+). The 
 - `/app/test_reports/iteration_2.json` - Latency Correction tests (22/22 passed)
 
 ## Last Updated
-February 25, 2026 - OANDA API fully connected (LIVE environment) and AI models trained:
-- TrendFollowing: 54.5% accuracy
-- MeanReversion: 50.7% accuracy  
-- PatternRecognition: 56.8% accuracy
-- Real-time EUR/USD data flowing, market snapshot with all technical indicators working
+February 25, 2026 - Implemented Enhanced OANDA Service (oandapyV20):
+- Full technical analysis: SMA, EMA, RSI, MACD, Bollinger Bands, ATR, ADX, Stochastic
+- InstrumentsCandlesFactory for large data fetches (>5000 candles)
+- Multi-instrument price fetching for correlation/arbitrage
+- Trend signal generation with entry/stop-loss/take-profit
+- Combined AI + Technical signal generation
+- Model accuracies improved: TrendFollowing 57%, MeanReversion 55%, PatternRecognition 79%
