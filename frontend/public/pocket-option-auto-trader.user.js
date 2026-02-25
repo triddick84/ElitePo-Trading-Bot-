@@ -381,52 +381,13 @@
             document.removeEventListener('touchend', stopDrag);
         }
     }
-            <div class="panel-content">
-                <div class="panel-row">
-                    <span class="panel-label">Status:</span>
-                    <span class="panel-value">
-                        <span id="status-indicator" class="status-indicator status-disconnected"></span>
-                        <span id="connection-status">Connecting...</span>
-                    </span>
-                </div>
-                <div class="panel-row">
-                    <span class="panel-label">Trades:</span>
-                    <span class="panel-value"><span id="trade-count">0</span></span>
-                </div>
-                <div class="panel-row">
-                    <span class="panel-label">Win/Loss:</span>
-                    <span class="panel-value">
-                        <span id="win-count" class="green">0</span> / 
-                        <span id="loss-count" class="red">0</span>
-                    </span>
-                </div>
-                <button id="auto-trade-toggle" class="toggle-btn enabled" onclick="toggleAutoTrade()">
-                    🟢 AUTO-TRADE ON
-                </button>
-                <button class="toggle-btn" style="background: linear-gradient(135deg, #3b82f6, #1d4ed8); margin-top: 5px;" onclick="manualFetchSignal()">
-                    🔄 Fetch Signal Now
-                </button>
-                <button class="toggle-btn" style="background: linear-gradient(135deg, #f59e0b, #d97706); margin-top: 5px;" onclick="resetTrader()">
-                    🔧 Reset (if stuck)
-                </button>
-                <div class="last-signal" id="last-signal-box">
-                    <div class="signal-direction" id="last-signal-direction">Waiting for signal...</div>
-                    <div id="last-signal-details"></div>
-                </div>
-                <div id="status-log"></div>
-            </div>
-        `;
-        
-        document.body.appendChild(panel);
-        log('Control panel created', 'success');
-    }
 
     function updateStatusPanel(message) {
         const logEl = document.getElementById('status-log');
         if (logEl) {
             const time = new Date().toLocaleTimeString();
             logEl.innerHTML = `<div>${time}: ${message}</div>` + logEl.innerHTML;
-            if (logEl.children.length > 10) {
+            if (logEl.children.length > 5) {
                 logEl.removeChild(logEl.lastChild);
             }
         }
@@ -434,8 +395,8 @@
 
     function updateConnectionStatus(status) {
         connectionStatus = status;
-        const indicator = document.getElementById('status-indicator');
-        const statusText = document.getElementById('connection-status');
+        const indicator = document.getElementById('status-dot');
+        const statusText = document.getElementById('connection-text');
         
         if (indicator && statusText) {
             indicator.className = 'status-indicator';
