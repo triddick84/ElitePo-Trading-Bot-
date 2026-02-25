@@ -173,10 +173,10 @@ Create a "GPT Signal Bot" for Pocket Option with a high win rate (80-90%+). The 
 - `/app/test_reports/iteration_2.json` - Latency Correction tests (22/22 passed)
 
 ## Last Updated
-February 25, 2026 - Implemented Enhanced OANDA Service (oandapyV20):
-- Full technical analysis: SMA, EMA, RSI, MACD, Bollinger Bands, ATR, ADX, Stochastic
-- InstrumentsCandlesFactory for large data fetches (>5000 candles)
-- Multi-instrument price fetching for correlation/arbitrage
-- Trend signal generation with entry/stop-loss/take-profit
-- Combined AI + Technical signal generation
-- Model accuracies improved: TrendFollowing 57%, MeanReversion 55%, PatternRecognition 79%
+February 25, 2026 - Implemented complete trading infrastructure:
+- Enhanced OANDA Service with oandapyV20 (17 technical indicators, large data fetches)
+- Auto Signal Generator (background task generating signals every 60s)
+- TradingView Webhook Integration (receive alerts from TV strategies)
+- MetaTrader 5 Integration endpoints (requires Windows VPS)
+- Model accuracies: TrendFollowing 57%, MeanReversion 55%, PatternRecognition 79%
+- Connected enhanced signals to Tampermonkey auto-trader
