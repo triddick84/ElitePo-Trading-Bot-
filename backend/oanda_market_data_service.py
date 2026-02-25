@@ -132,13 +132,14 @@ class OandaMarketDataService:
     Provides historical OHLCV data and real-time price streaming.
     """
     
-    def __init__(self, access_token: str = None, account_id: str = None, environment: str = "practice"):
+    def __init__(self, access_token: str = None, account_id: str = None, environment: str = None):
+        # Load from environment if not provided
         self.access_token = access_token or os.environ.get("OANDA_ACCESS_TOKEN", "")
         self.account_id = account_id or os.environ.get("OANDA_ACCOUNT_ID", "")
-        self.environment = environment
+        self.environment = environment or os.environ.get("OANDA_ENVIRONMENT", "practice")
         
         # API URLs based on environment
-        if environment == "live":
+        if self.environment == "live":
             self.api_url = "https://api-fxtrade.oanda.com"
             self.stream_url = "https://stream-fxtrade.oanda.com"
         else:
@@ -152,7 +153,10 @@ class OandaMarketDataService:
         self._candle_cache: Dict[str, List[OHLCVCandle]] = {}
         self._price_cache: Dict[str, Dict] = {}
         
-        logger.info(f"OandaMarketDataService initialized - configured: {self.is_configured}, env: {environment}")
+        if self.is_configured:
+            logger.info(f"OandaMarketDataService initialized - configured: True, env: {self.environment}, account: {self.account_id[:10]}...")
+        else:
+            logger.info(f"OandaMarketDataService initialized - configured: False (credentials not found)")
     
     async def _get_session(self) -> aiohttp.ClientSession:
         """Get or create aiohttp session"""
