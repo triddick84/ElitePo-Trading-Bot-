@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Tampermonkey Connection Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #1a1a2e;
+            color: white;
+            padding: 20px;
+        }
+        .panel {
+            background: #16213e;
+            border: 2px solid #7c3aed;
+            border-radius: 10px;
+            padding: 20px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .dot {
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            background: #ef4444;
+        }
+        .dot.connected { background: #22c55e; }
+        .signal-box {
+            background: #1a1a2e;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+        .signal-direction {
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .signal-direction.call { color: #22c55e; }
+        .signal-direction.put { color: #ef4444; }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .btn-fetch { background: #3b82f6; color: white; }
+        .btn-auto { background: #22c55e; color: white; }
+        #log {
+            background: #0f172a;
+            padding: 10px;
+            border-radius: 5px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-size: 12px;
+            font-family: monospace;
+            margin-top: 15px;
+        }
+        .log-entry { margin: 3px 0; }
+        .log-entry.error { color: #ef4444; }
+        .log-entry.success { color: #22c55e; }
+    </style>
+</head>
+<body>
+    <div class="panel">
+        <h2>🤖 Tampermonkey Connection Test</h2>
+        
+        <div class="status">
+            <span class="dot" id="dot"></span>
+            <span id="status-text">Checking connection...</span>
+        </div>
+        
+        <div class="signal-box">
+            <div>Latest Signal:</div>
+            <div class="signal-direction" id="signal-direction">Waiting...</div>
+            <div id="signal-details"></div>
+        </div>
+        
+        <div>
+            <button class="btn-fetch" onclick="fetchSignal()">🔄 Fetch Signal</button>
+            <button class="btn-auto" onclick="startAutoFetch()">▶️ Start Auto-Fetch (3s)</button>
+            <button onclick="stopAutoFetch()">⏹️ Stop</button>
+        </div>
+        
+        <div id="log"></div>
+    </div>
+    
+    <script>
+        const API_URL = 'https://auto-trader-pro-3.preview.emergentagent.com/api';
+        let autoFetchInterval = null;
+        let lastSignalTime = 0;
+        
+        function log(msg, type = 'info') {
+            const logEl = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry ' + type;
+            entry.textContent = new Date().toLocaleTimeString() + ': ' + msg;
+            logEl.insertBefore(entry, logEl.firstChild);
+            console.log(msg);
+        }
+        
+        function updateUI(connected, signal = null) {
+            const dot = document.getElementById('dot');
+            const statusText = document.getElementById('status-text');
+            
+            if (connected) {
+                dot.classList.add('connected');
+                statusText.textContent = 'Connected to API';
+            } else {
+                dot.classList.remove('connected');
+                statusText.textContent = 'Disconnected';
+            }
+            
+            if (signal) {
+                const dirEl = document.getElementById('signal-direction');
+                const detailsEl = document.getElementById('signal-details');
+                
+                const isCall = signal.direction === 'CALL' || signal.direction === 'BUY';
+                dirEl.textContent = isCall ? '📈 CALL' : '📉 PUT';
+                dirEl.className = 'signal-direction ' + (isCall ? 'call' : 'put');
+                
+                detailsEl.innerHTML = `
+                    <div>Symbol: ${signal.symbol}</div>
+                    <div>Confidence: ${(signal.confidence || signal.probability || 0).toFixed(1)}%</div>
+                    <div>Time: ${new Date(signal.timestamp).toLocaleTimeString()}</div>
+                    <div>Strategy: ${signal.strategy || 'N/A'}</div>
+                    <div>ID: ${signal.id || 'N/A'}</div>
+                `;
+            }
+        }
+        
+        async function fetchSignal() {
+            log('Fetching signal from ' + API_URL + '/signals/latest');
+            
+            try {
+                const response = await fetch(API_URL + '/signals/latest');
+                const data = await response.json();
+                
+                log('Response: ' + JSON.stringify(data).substring(0, 100) + '...', 'success');
+                
+                updateUI(true);
+                
+                if (data.success && data.signal) {
+                    const signal = data.signal;
+                    const signalTime = new Date(signal.timestamp).getTime();
+                    
+                    if (signalTime > lastSignalTime) {
+                        log('🚨 NEW SIGNAL: ' + signal.direction + ' ' + signal.symbol, 'success');
+                        lastSignalTime = signalTime;
+                    } else {
+                        log('Same signal (already processed)');
+                    }
+                    
+                    updateUI(true, signal);
+                } else {
+                    log('No signal available: ' + (data.message || 'Unknown'));
+                }
+            } catch (error) {
+                log('Error: ' + error.message, 'error');
+                updateUI(false);
+            }
+        }
+        
+        function startAutoFetch() {
+            if (autoFetchInterval) {
+                log('Auto-fetch already running');
+                return;
+            }
+            log('Starting auto-fetch every 3 seconds...');
+            autoFetchInterval = setInterval(fetchSignal, 3000);
+            fetchSignal();
+        }
+        
+        function stopAutoFetch() {
+            if (autoFetchInterval) {
+                clearInterval(autoFetchInterval);
+                autoFetchInterval = null;
+                log('Auto-fetch stopped');
+            }
+        }
+        
+        // Initial fetch
+        fetchSignal();
+    </script>
+</body>
+</html>
