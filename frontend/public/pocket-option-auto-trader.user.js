@@ -472,31 +472,55 @@
     };
 
     // ===========================================
-    // SIGNAL FETCHING
+    // SIGNAL FETCHING (using GM_xmlhttpRequest for cross-origin)
     // ===========================================
-    async function fetchLatestSignal() {
-        try {
-            const response = await fetch(`${CONFIG.API_URL}/signals/latest`);
-            if (!response.ok) throw new Error('API error');
-            
-            const data = await response.json();
-            updateConnectionStatus('connected');
-            
-            if (data.success && data.signal) {
-                log(`Signal found: ${data.signal.direction} ${data.signal.symbol}`);
-                return data.signal;
-            } else {
-                // Not an error, just no new signal
-                if (CONFIG.DEBUG && data.message) {
-                    log(data.message, 'info');
-                }
-            }
-            return null;
-        } catch (error) {
-            log(`API Error: ${error.message}`, 'error');
-            updateConnectionStatus('disconnected');
-            return null;
-        }
+    function fetchLatestSignal() {
+        return new Promise((resolve, reject) => {
+            GM_xmlhttpRequest({
+                method: 'GET',
+                url: `${CONFIG.API_URL}/signals/latest`,
+                headers: {
+                    'Accept': 'application/json'
+                },
+                onload: function(response) {
+                    try {
+                        if (response.status === 200) {
+                            const data = JSON.parse(response.responseText);
+                            updateConnectionStatus('connected');
+                            
+                            if (data.success && data.signal) {
+                                log(`Signal found: ${data.signal.direction} ${data.signal.symbol}`);
+                                resolve(data.signal);
+                            } else {
+                                // Not an error, just no new signal
+                                if (CONFIG.DEBUG && data.message) {
+                                    log(data.message, 'info');
+                                }
+                                resolve(null);
+                            }
+                        } else {
+                            log(`API returned status ${response.status}`, 'error');
+                            updateConnectionStatus('disconnected');
+                            resolve(null);
+                        }
+                    } catch (e) {
+                        log(`Parse error: ${e.message}`, 'error');
+                        resolve(null);
+                    }
+                },
+                onerror: function(error) {
+                    log(`API Error: ${error.statusText || 'Connection failed'}`, 'error');
+                    updateConnectionStatus('disconnected');
+                    resolve(null);
+                },
+                ontimeout: function() {
+                    log('API Timeout', 'error');
+                    updateConnectionStatus('disconnected');
+                    resolve(null);
+                },
+                timeout: 10000
+            });
+        });
     }
 
     // Manual signal fetch button
