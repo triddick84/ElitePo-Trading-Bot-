@@ -1,18 +1,26 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://auto-trader-pro-3.preview.emergentagent.com
-// @version      2.0.0
-// @description  Auto-trade on Pocket Option. v2.0 - Complete rewrite for reliability.
+// @version      2.0.1
+// @description  Auto-trade on Pocket Option. v2.0.1 - Enhanced debugging and connection.
 // @author       GPT Signal Bot
+// @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
+// @match        *://*.po.trade/*
 // @match        *://po.trade/*
+// @match        *://*.pocket-option.com/*
 // @match        *://pocket-option.com/*
+// @match        *://*.po.market/*
+// @match        *://po.market/*
 // @grant        GM_notification
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
 // @grant        GM_getValue
+// @grant        GM_log
 // @connect      auto-trader-pro-3.preview.emergentagent.com
+// @connect      *
 // @run-at       document-idle
+// @noframes
 // ==/UserScript==
 
 (function() {
