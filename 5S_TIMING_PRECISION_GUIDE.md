@@ -32,7 +32,7 @@ User Reaction:       1300ms  (Read signal + click)
 TOTAL LATENCY:       3000ms  (3.0 seconds)
 
 Buffer Applied:      3100ms  (3.1 seconds)
-Safety Margin:        100ms  (0.1 second buffer)
+Safety Margin:        100ms  (0.1 second buffer)fofor 
 ```
 
 **This ensures:**

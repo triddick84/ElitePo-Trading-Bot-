@@ -12479,6 +12479,307 @@ async def get_auto_signal_status():
         "last_signal_time": auto_signal_state["last_signal_time"]
     }
 
+
+# ========================================
+# TRADINGVIEW WEBHOOK INTEGRATION
+# ========================================
+
+class TradingViewAlert(BaseModel):
+    """Model for TradingView webhook alerts"""
+    ticker: str
+    action: str  # "buy", "sell", "call", "put"
+    price: Optional[float] = None
+    timeframe: Optional[str] = "1m"
+    strategy: Optional[str] = "TradingView Alert"
+    message: Optional[str] = ""
+
+@api_router.post("/tradingview/webhook")
+async def receive_tradingview_alert(alert: TradingViewAlert):
+    """
+    Receive and process TradingView webhook alerts.
+    
+    Configure in TradingView:
+    1. Create alert on your indicator/strategy
+    2. Set webhook URL to: https://your-domain/api/tradingview/webhook
+    3. Set message body to JSON:
+       {"ticker": "{{ticker}}", "action": "{{strategy.order.action}}", "price": "{{close}}"}
+    
+    Supported actions: buy, sell, call, put
+    """
+    try:
+        logger.info(f"📊 TradingView Alert: {alert.ticker} - {alert.action} @ {alert.price}")
+        
+        # Normalize action
+        action_upper = alert.action.upper()
+        if action_upper in ["BUY", "CALL", "LONG"]:
+            direction = "CALL"
+        elif action_upper in ["SELL", "PUT", "SHORT"]:
+            direction = "PUT"
+        else:
+            return {"success": False, "error": f"Unknown action: {alert.action}"}
+        
+        # Convert ticker to OANDA format
+        ticker = alert.ticker.replace("/", "").replace("-", "")
+        if len(ticker) == 6 and "_" not in ticker:
+            oanda_ticker = f"{ticker[:3]}_{ticker[3:]}"
+        else:
+            oanda_ticker = ticker
+        
+        # Create signal from TradingView alert
+        new_signal = {
+            "id": f"TV_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{ticker}",
+            "symbol": ticker,
+            "direction": direction,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "confidence": 85,  # TradingView signals assumed high confidence
+            "probability": 85,
+            "expiration_minutes": 1,
+            "strategy": alert.strategy,
+            "entry_price": alert.price,
+            "message": alert.message,
+            "source": "tradingview"
+        }
+        
+        # Save to database
+        await db.trading_signals.insert_one({**new_signal})
+        
+        logger.info(f"✅ TradingView signal saved: {new_signal['direction']} {new_signal['symbol']}")
+        
+        return {
+            "success": True,
+            "message": f"Alert processed: {direction} {ticker}",
+            "signal_id": new_signal["id"]
+        }
+        
+    except Exception as e:
+        logger.error(f"TradingView webhook error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/tradingview/status")
+async def get_tradingview_status():
+    """Get TradingView integration status and webhook URL"""
+    return {
+        "configured": True,
+        "webhook_url": "/api/tradingview/webhook",
+        "instructions": {
+            "step1": "In TradingView, create an alert on your indicator/strategy",
+            "step2": "Enable 'Webhook URL' and paste your endpoint URL",
+            "step3": "Set message to: {\"ticker\": \"{{ticker}}\", \"action\": \"{{strategy.order.action}}\", \"price\": \"{{close}}\"}",
+            "supported_actions": ["buy", "sell", "call", "put", "long", "short"]
+        },
+        "recent_signals": await get_recent_tv_signals()
+    }
+
+async def get_recent_tv_signals():
+    """Get recent TradingView signals"""
+    signals = []
+    async for signal in db.trading_signals.find(
+        {"source": "tradingview"},
+        {"_id": 0}
+    ).sort("timestamp", -1).limit(10):
+        signals.append(signal)
+    return signals
+
+
+# ========================================
+# METATRADER 5 INTEGRATION (Placeholder)
+# ========================================
+
+class MT5Config(BaseModel):
+    """MetaTrader 5 configuration"""
+    login: int
+    password: str
+    server: str
+    path: Optional[str] = None
+
+class MT5TradeRequest(BaseModel):
+    """MT5 trade request"""
+    symbol: str
+    order_type: str  # "BUY" or "SELL"
+    volume: float
+    stop_loss: Optional[float] = None
+    take_profit: Optional[float] = None
+
+# MT5 state
+mt5_state = {
+    "configured": False,
+    "connected": False,
+    "login": None,
+    "server": None
+}
+
+@api_router.post("/mt5/configure")
+async def configure_mt5(config: MT5Config):
+    """
+    Configure MetaTrader 5 connection.
+    
+    NOTE: MT5 integration requires:
+    1. MetaTrader 5 terminal running on the same machine as the backend
+    2. pip install MetaTrader5 (Windows only)
+    3. AutoTrading enabled in MT5 settings
+    
+    For cloud deployment, use a VPS with MT5 installed.
+    """
+    global mt5_state
+    
+    try:
+        # Check if MT5 module is available
+        try:
+            import MetaTrader5 as mt5
+            mt5_available = True
+        except ImportError:
+            mt5_available = False
+            return {
+                "success": False,
+                "error": "MetaTrader5 Python package not installed. Run: pip install MetaTrader5",
+                "note": "MT5 integration only works on Windows with MT5 terminal installed"
+            }
+        
+        # Try to initialize
+        if not mt5.initialize(
+            login=config.login,
+            password=config.password,
+            server=config.server,
+            path=config.path
+        ):
+            error = mt5.last_error()
+            return {
+                "success": False,
+                "error": f"MT5 initialization failed: {error}"
+            }
+        
+        # Get account info
+        account_info = mt5.account_info()
+        
+        mt5_state["configured"] = True
+        mt5_state["connected"] = True
+        mt5_state["login"] = config.login
+        mt5_state["server"] = config.server
+        
+        return {
+            "success": True,
+            "account": {
+                "login": account_info.login,
+                "balance": account_info.balance,
+                "equity": account_info.equity,
+                "currency": account_info.currency,
+                "server": config.server
+            }
+        }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+@api_router.get("/mt5/status")
+async def get_mt5_status():
+    """Get MetaTrader 5 connection status"""
+    global mt5_state
+    
+    # Check if MT5 is available
+    try:
+        import MetaTrader5 as mt5
+        mt5_available = True
+        
+        if mt5_state["connected"]:
+            # Check if still connected
+            account_info = mt5.account_info()
+            if account_info:
+                return {
+                    "available": True,
+                    "configured": True,
+                    "connected": True,
+                    "account": {
+                        "login": account_info.login,
+                        "balance": account_info.balance,
+                        "equity": account_info.equity,
+                        "profit": account_info.profit
+                    }
+                }
+    except ImportError:
+        mt5_available = False
+    
+    return {
+        "available": mt5_available,
+        "configured": mt5_state["configured"],
+        "connected": mt5_state["connected"],
+        "note": "MT5 integration requires Windows with MT5 terminal installed" if not mt5_available else None
+    }
+
+@api_router.post("/mt5/trade")
+async def execute_mt5_trade(request: MT5TradeRequest):
+    """
+    Execute a trade on MetaTrader 5.
+    
+    Requires MT5 to be configured and connected.
+    """
+    global mt5_state
+    
+    if not mt5_state["connected"]:
+        return {"success": False, "error": "MT5 not connected. Configure MT5 first."}
+    
+    try:
+        import MetaTrader5 as mt5
+        
+        # Get symbol info
+        symbol_info = mt5.symbol_info(request.symbol)
+        if not symbol_info:
+            return {"success": False, "error": f"Symbol not found: {request.symbol}"}
+        
+        # Get current price
+        tick = mt5.symbol_info_tick(request.symbol)
+        if not tick:
+            return {"success": False, "error": "Could not get current price"}
+        
+        # Determine order type and price
+        if request.order_type.upper() == "BUY":
+            order_type = mt5.ORDER_TYPE_BUY
+            price = tick.ask
+        else:
+            order_type = mt5.ORDER_TYPE_SELL
+            price = tick.bid
+        
+        # Build trade request
+        trade_request = {
+            "action": mt5.TRADE_ACTION_DEAL,
+            "symbol": request.symbol,
+            "volume": request.volume,
+            "type": order_type,
+            "price": price,
+            "deviation": 20,
+            "magic": 234000,
+            "comment": "GPT Signal Bot",
+            "type_time": mt5.ORDER_TIME_GTC,
+            "type_filling": mt5.ORDER_FILLING_IOC,
+        }
+        
+        if request.stop_loss:
+            trade_request["sl"] = request.stop_loss
+        if request.take_profit:
+            trade_request["tp"] = request.take_profit
+        
+        # Send order
+        result = mt5.order_send(trade_request)
+        
+        if result.retcode != mt5.TRADE_RETCODE_DONE:
+            return {
+                "success": False,
+                "error": f"Trade failed: {result.comment}",
+                "retcode": result.retcode
+            }
+        
+        return {
+            "success": True,
+            "order_ticket": result.order,
+            "volume": result.volume,
+            "price": result.price
+        }
+        
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
 class ArbitrageCheckRequest(BaseModel):
     pairs: List[List[str]] = [["EUR_USD", "GBP_USD"], ["EUR_USD", "USD_JPY"]]
 
