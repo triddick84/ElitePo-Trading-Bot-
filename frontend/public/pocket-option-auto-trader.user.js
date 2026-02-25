@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://auto-trader-pro-3.preview.emergentagent.com
-// @version      1.3.0
-// @description  Auto-trade on Pocket Option. v1.3.0 - Fixed: only clicks PO trade buttons, not navigation.
+// @version      1.4.0
+// @description  Auto-trade on Pocket Option. v1.4.0 - Compact draggable UI, centered top position.
 // @author       GPT Signal Bot
 // @match        *://pocketoption.com/*
 // @match        *://po.trade/*
@@ -73,61 +73,84 @@
     }
 
     // ===========================================
-    // UI PANEL
+    // UI PANEL - COMPACT DRAGGABLE TOP CENTER
     // ===========================================
     function createControlPanel() {
+        // Load saved position or use default center-top
+        const savedPos = GM_getValue('panelPosition', { x: null, y: 5 });
+        
         const panel = document.createElement('div');
         panel.id = 'gpt-signal-panel';
         panel.innerHTML = `
             <style>
                 #gpt-signal-panel {
                     position: fixed;
-                    top: 10px;
-                    right: 10px;
-                    width: 280px;
-                    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-                    border: 2px solid #7c3aed;
-                    border-radius: 12px;
-                    padding: 15px;
+                    top: ${savedPos.y}px;
+                    left: ${savedPos.x !== null ? savedPos.x + 'px' : '50%'};
+                    transform: ${savedPos.x !== null ? 'none' : 'translateX(-50%)'};
+                    background: linear-gradient(135deg, #1a1a2e 0%, #0d1421 100%);
+                    border: 1px solid #7c3aed;
+                    border-radius: 8px;
+                    padding: 6px 12px;
                     z-index: 999999;
                     font-family: 'Segoe UI', Arial, sans-serif;
-                    box-shadow: 0 4px 20px rgba(124, 58, 237, 0.3);
+                    box-shadow: 0 2px 15px rgba(124, 58, 237, 0.4);
                     color: white;
+                    cursor: move;
+                    user-select: none;
+                    min-width: 420px;
+                    max-width: 600px;
                 }
                 #gpt-signal-panel.minimized {
-                    width: auto;
-                    padding: 10px;
+                    min-width: auto;
+                    max-width: none;
                 }
                 #gpt-signal-panel.minimized .panel-content {
                     display: none;
                 }
+                #gpt-signal-panel.minimized .panel-header {
+                    margin: 0;
+                    padding: 0;
+                    border: none;
+                }
                 .panel-header {
                     display: flex;
-                    justify-content: space-between;
                     align-items: center;
-                    margin-bottom: 10px;
-                    padding-bottom: 10px;
-                    border-bottom: 1px solid #7c3aed;
+                    gap: 10px;
+                    margin-bottom: 6px;
+                    padding-bottom: 6px;
+                    border-bottom: 1px solid rgba(124, 58, 237, 0.3);
+                }
+                .panel-drag-handle {
+                    cursor: move;
+                    color: #64748b;
+                    font-size: 12px;
+                    padding: 0 4px;
                 }
                 .panel-title {
                     font-weight: bold;
-                    font-size: 14px;
+                    font-size: 12px;
                     color: #a78bfa;
+                    white-space: nowrap;
                 }
                 .panel-toggle {
-                    background: none;
-                    border: none;
+                    background: rgba(124, 58, 237, 0.2);
+                    border: 1px solid #7c3aed;
                     color: #a78bfa;
                     cursor: pointer;
-                    font-size: 18px;
-                    padding: 0 5px;
+                    font-size: 14px;
+                    padding: 2px 8px;
+                    border-radius: 4px;
+                    margin-left: auto;
+                }
+                .panel-toggle:hover {
+                    background: rgba(124, 58, 237, 0.4);
                 }
                 .status-indicator {
                     display: inline-block;
-                    width: 10px;
-                    height: 10px;
+                    width: 8px;
+                    height: 8px;
                     border-radius: 50%;
-                    margin-right: 8px;
                     animation: pulse 2s infinite;
                 }
                 .status-connected { background: #22c55e; }
@@ -137,67 +160,227 @@
                     0%, 100% { opacity: 1; }
                     50% { opacity: 0.5; }
                 }
-                .panel-row {
+                .panel-content {
                     display: flex;
-                    justify-content: space-between;
-                    margin: 8px 0;
-                    font-size: 12px;
+                    align-items: center;
+                    gap: 12px;
+                    flex-wrap: wrap;
                 }
-                .panel-label { color: #94a3b8; }
-                .panel-value { color: #e2e8f0; font-weight: 500; }
+                .panel-section {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    font-size: 11px;
+                    background: rgba(15, 23, 42, 0.6);
+                    padding: 4px 8px;
+                    border-radius: 4px;
+                }
+                .panel-label { 
+                    color: #64748b; 
+                    font-size: 10px;
+                }
+                .panel-value { 
+                    color: #e2e8f0; 
+                    font-weight: 600;
+                    font-size: 11px;
+                }
                 .panel-value.green { color: #22c55e; }
                 .panel-value.red { color: #ef4444; }
                 .panel-value.yellow { color: #f59e0b; }
-                .toggle-btn {
-                    width: 100%;
-                    padding: 10px;
-                    margin-top: 10px;
+                .compact-btn {
+                    padding: 4px 10px;
                     border: none;
-                    border-radius: 8px;
+                    border-radius: 4px;
                     font-weight: bold;
+                    font-size: 10px;
                     cursor: pointer;
                     transition: all 0.2s;
+                    white-space: nowrap;
                 }
-                .toggle-btn.enabled {
+                .compact-btn.enabled {
                     background: linear-gradient(135deg, #22c55e, #16a34a);
                     color: white;
                 }
-                .toggle-btn.disabled {
+                .compact-btn.disabled {
                     background: linear-gradient(135deg, #ef4444, #dc2626);
                     color: white;
                 }
-                .toggle-btn:hover {
-                    transform: scale(1.02);
+                .compact-btn.blue {
+                    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+                    color: white;
                 }
-                .last-signal {
-                    background: #1e293b;
-                    border-radius: 8px;
-                    padding: 10px;
-                    margin-top: 10px;
+                .compact-btn.orange {
+                    background: linear-gradient(135deg, #f59e0b, #d97706);
+                    color: white;
+                }
+                .compact-btn:hover {
+                    transform: scale(1.05);
+                    filter: brightness(1.1);
+                }
+                .signal-badge {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 4px;
+                    padding: 3px 8px;
+                    border-radius: 4px;
+                    font-weight: bold;
                     font-size: 11px;
                 }
-                .signal-direction {
-                    font-size: 16px;
-                    font-weight: bold;
-                    margin-bottom: 5px;
+                .signal-badge.call {
+                    background: rgba(34, 197, 94, 0.2);
+                    border: 1px solid #22c55e;
+                    color: #22c55e;
                 }
-                .signal-direction.call { color: #22c55e; }
-                .signal-direction.put { color: #ef4444; }
-                #status-log {
-                    max-height: 60px;
-                    overflow-y: auto;
-                    font-size: 10px;
+                .signal-badge.put {
+                    background: rgba(239, 68, 68, 0.2);
+                    border: 1px solid #ef4444;
+                    color: #ef4444;
+                }
+                .signal-badge.none {
+                    background: rgba(100, 116, 139, 0.2);
+                    border: 1px solid #64748b;
                     color: #64748b;
-                    margin-top: 10px;
-                    padding: 5px;
-                    background: #0f172a;
-                    border-radius: 4px;
+                }
+                #status-log {
+                    display: none;
                 }
             </style>
             <div class="panel-header">
+                <span class="panel-drag-handle">⋮⋮</span>
+                <span class="status-indicator status-disconnected" id="status-dot"></span>
                 <span class="panel-title">🤖 GPT Signal Bot</span>
-                <button class="panel-toggle" onclick="document.getElementById('gpt-signal-panel').classList.toggle('minimized')">−</button>
+                <span id="connection-text" style="font-size:10px;color:#64748b;">Connecting...</span>
+                <button class="panel-toggle" onclick="togglePanel()">−</button>
             </div>
+            <div class="panel-content">
+                <div class="panel-section">
+                    <span class="panel-label">Signal:</span>
+                    <span id="last-signal-badge" class="signal-badge none">WAITING</span>
+                </div>
+                <div class="panel-section">
+                    <span class="panel-label">Trades:</span>
+                    <span id="trade-count" class="panel-value">0</span>
+                </div>
+                <div class="panel-section">
+                    <span class="panel-label">W/L:</span>
+                    <span id="win-count" class="panel-value green">0</span>
+                    <span style="color:#64748b">/</span>
+                    <span id="loss-count" class="panel-value red">0</span>
+                </div>
+                <button id="auto-trade-toggle" class="compact-btn enabled" onclick="toggleAutoTrade()">
+                    🟢 AUTO ON
+                </button>
+                <button class="compact-btn blue" onclick="manualFetchSignal()">
+                    🔄 Fetch
+                </button>
+                <button class="compact-btn orange" onclick="resetTrader()">
+                    🔧 Reset
+                </button>
+            </div>
+            <div id="status-log"></div>
+        `;
+        
+        document.body.appendChild(panel);
+        
+        // Make panel draggable
+        makeDraggable(panel);
+        
+        log('Control panel created (v1.4.0 - Compact UI)', 'info');
+    }
+    
+    // Toggle panel minimize/expand
+    window.togglePanel = function() {
+        const panel = document.getElementById('gpt-signal-panel');
+        const btn = panel.querySelector('.panel-toggle');
+        panel.classList.toggle('minimized');
+        btn.textContent = panel.classList.contains('minimized') ? '+' : '−';
+    };
+    
+    // Make element draggable
+    function makeDraggable(element) {
+        let isDragging = false;
+        let startX, startY, initialX, initialY;
+        
+        element.addEventListener('mousedown', startDrag);
+        element.addEventListener('touchstart', startDrag, { passive: false });
+        
+        function startDrag(e) {
+            // Don't drag if clicking on buttons
+            if (e.target.tagName === 'BUTTON') return;
+            
+            isDragging = true;
+            
+            if (e.type === 'touchstart') {
+                startX = e.touches[0].clientX;
+                startY = e.touches[0].clientY;
+            } else {
+                startX = e.clientX;
+                startY = e.clientY;
+            }
+            
+            const rect = element.getBoundingClientRect();
+            initialX = rect.left;
+            initialY = rect.top;
+            
+            // Remove transform to use absolute positioning
+            element.style.transform = 'none';
+            element.style.left = initialX + 'px';
+            element.style.top = initialY + 'px';
+            
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('mouseup', stopDrag);
+            document.addEventListener('touchmove', drag, { passive: false });
+            document.addEventListener('touchend', stopDrag);
+            
+            e.preventDefault();
+        }
+        
+        function drag(e) {
+            if (!isDragging) return;
+            
+            let currentX, currentY;
+            if (e.type === 'touchmove') {
+                currentX = e.touches[0].clientX;
+                currentY = e.touches[0].clientY;
+            } else {
+                currentX = e.clientX;
+                currentY = e.clientY;
+            }
+            
+            const deltaX = currentX - startX;
+            const deltaY = currentY - startY;
+            
+            let newX = initialX + deltaX;
+            let newY = initialY + deltaY;
+            
+            // Keep within viewport
+            const maxX = window.innerWidth - element.offsetWidth - 10;
+            const maxY = window.innerHeight - element.offsetHeight - 10;
+            
+            newX = Math.max(10, Math.min(newX, maxX));
+            newY = Math.max(5, Math.min(newY, maxY));
+            
+            element.style.left = newX + 'px';
+            element.style.top = newY + 'px';
+            
+            e.preventDefault();
+        }
+        
+        function stopDrag() {
+            if (isDragging) {
+                isDragging = false;
+                
+                // Save position
+                const rect = element.getBoundingClientRect();
+                GM_setValue('panelPosition', { x: rect.left, y: rect.top });
+            }
+            
+            document.removeEventListener('mousemove', drag);
+            document.removeEventListener('mouseup', stopDrag);
+            document.removeEventListener('touchmove', drag);
+            document.removeEventListener('touchend', stopDrag);
+        }
+    }
             <div class="panel-content">
                 <div class="panel-row">
                     <span class="panel-label">Status:</span>
