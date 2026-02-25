@@ -11686,6 +11686,391 @@ async def update_ssid_settings(
         }
 
 
+# ========================================
+# OANDA MARKET DATA ENDPOINTS
+# ========================================
+
+class OandaConfigRequest(BaseModel):
+    access_token: str
+    account_id: str
+    environment: str = "practice"
+
+@api_router.post("/oanda/configure")
+async def configure_oanda(config: OandaConfigRequest):
+    """Configure OANDA API credentials"""
+    try:
+        oanda_service.access_token = config.access_token
+        oanda_service.account_id = config.account_id
+        oanda_service.environment = config.environment
+        
+        if config.environment == "live":
+            oanda_service.api_url = "https://api-fxtrade.oanda.com"
+            oanda_service.stream_url = "https://stream-fxtrade.oanda.com"
+        else:
+            oanda_service.api_url = "https://api-fxpractice.oanda.com"
+            oanda_service.stream_url = "https://stream-fxpractice.oanda.com"
+        
+        oanda_service.is_configured = True
+        
+        # Test connection
+        test_result = await oanda_service.test_connection()
+        
+        return {
+            "success": test_result.get("success", False),
+            "message": "OANDA configured successfully" if test_result.get("success") else "Configuration saved but connection test failed",
+            "connection_test": test_result
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/oanda/status")
+async def get_oanda_status():
+    """Get OANDA connection status"""
+    try:
+        if not oanda_service.is_configured:
+            return {
+                "configured": False,
+                "connected": False,
+                "message": "OANDA not configured. Please provide API credentials."
+            }
+        
+        test_result = await oanda_service.test_connection()
+        
+        return {
+            "configured": True,
+            "connected": test_result.get("success", False),
+            "environment": oanda_service.environment,
+            "account_info": test_result if test_result.get("success") else None
+        }
+    except Exception as e:
+        return {
+            "configured": oanda_service.is_configured,
+            "connected": False,
+            "error": str(e)
+        }
+
+@api_router.get("/oanda/candles/{instrument}")
+async def get_oanda_candles(
+    instrument: str,
+    granularity: str = Query("M1", description="Timeframe (S5, M1, H1, D, etc)"),
+    count: int = Query(100, ge=1, le=5000),
+    include_indicators: bool = Query(False)
+):
+    """Fetch historical candlestick data from OANDA"""
+    try:
+        candles = await oanda_service.get_candles(
+            instrument=instrument,
+            granularity=granularity,
+            count=count
+        )
+        
+        result = {
+            "instrument": instrument,
+            "granularity": granularity,
+            "count": len(candles),
+            "candles": [c.to_dict() for c in candles]
+        }
+        
+        if include_indicators and candles:
+            ohlcv_data = {
+                "open": [c.open for c in candles],
+                "high": [c.high for c in candles],
+                "low": [c.low for c in candles],
+                "close": [c.close for c in candles],
+                "volume": [c.volume for c in candles]
+            }
+            import numpy as np
+            for key in ohlcv_data:
+                ohlcv_data[key] = np.array(ohlcv_data[key])
+            
+            indicators = oanda_service.calculate_technical_indicators(candles)
+            result["indicators"] = _convert_numpy_types(indicators)
+        
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/oanda/price/{instrument}")
+async def get_oanda_price(instrument: str):
+    """Get current price for an instrument"""
+    try:
+        price = await oanda_service.get_current_price(instrument)
+        if price:
+            return {"success": True, "price": price}
+        else:
+            return {"success": False, "error": "Could not fetch price"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/oanda/market-snapshot/{instrument}")
+async def get_market_snapshot(instrument: str, timeframe: str = "1m"):
+    """Get complete market snapshot with price and indicators"""
+    try:
+        snapshot = await oanda_service.get_market_snapshot(instrument, timeframe)
+        if snapshot:
+            return {
+                "success": True,
+                "symbol": snapshot.symbol,
+                "timeframe": snapshot.timeframe,
+                "current_price": snapshot.current_price,
+                "bid": snapshot.bid,
+                "ask": snapshot.ask,
+                "spread": snapshot.spread,
+                "indicators": {
+                    "sma_20": snapshot.sma_20,
+                    "sma_50": snapshot.sma_50,
+                    "ema_12": snapshot.ema_12,
+                    "ema_26": snapshot.ema_26,
+                    "rsi_14": snapshot.rsi_14,
+                    "macd": snapshot.macd,
+                    "macd_signal": snapshot.macd_signal,
+                    "bb_upper": snapshot.bb_upper,
+                    "bb_middle": snapshot.bb_middle,
+                    "bb_lower": snapshot.bb_lower,
+                    "atr_14": snapshot.atr_14
+                },
+                "trend": {
+                    "direction": snapshot.trend_direction,
+                    "strength": snapshot.trend_strength
+                },
+                "mean_reversion": {
+                    "is_overbought": snapshot.is_overbought,
+                    "is_oversold": snapshot.is_oversold,
+                    "distance_from_mean": snapshot.distance_from_mean
+                }
+            }
+        return {"success": False, "error": "Could not get market snapshot"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ========================================
+# ENHANCED AI/ML TRADING SYSTEM ENDPOINTS
+# ========================================
+
+@api_router.get("/ai-system/status")
+async def get_ai_system_status():
+    """Get Enhanced AI Trading System status"""
+    try:
+        status = enhanced_ai_system.get_system_status()
+        return {"success": True, **_convert_numpy_types(status)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class AITrainingRequest(BaseModel):
+    instrument: str = "EUR_USD"
+    timeframe: str = "M1"
+    candle_count: int = 500
+
+@api_router.post("/ai-system/train")
+async def train_ai_models(request: AITrainingRequest):
+    """
+    Train AI models with historical data.
+    Uses OANDA data if configured, otherwise uses cached/simulated data.
+    """
+    try:
+        # Fetch data from OANDA if configured
+        if oanda_service.is_configured:
+            candles = await oanda_service.get_candles(
+                instrument=request.instrument,
+                granularity=request.timeframe,
+                count=request.candle_count
+            )
+            
+            if candles:
+                import numpy as np
+                ohlcv_data = {
+                    "open": np.array([c.open for c in candles]),
+                    "high": np.array([c.high for c in candles]),
+                    "low": np.array([c.low for c in candles]),
+                    "close": np.array([c.close for c in candles]),
+                    "volume": np.array([c.volume for c in candles])
+                }
+                
+                result = await enhanced_ai_system.train_models(ohlcv_data)
+                return {
+                    "success": result.get("success", False),
+                    "data_source": "OANDA",
+                    **_convert_numpy_types(result)
+                }
+        
+        # Fallback: Use simulated/cached data for training
+        return {
+            "success": False,
+            "error": "OANDA not configured. Please configure OANDA API to train with real market data.",
+            "data_source": "none"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class AISignalRequest(BaseModel):
+    instrument: str = "EUR_USD"
+    timeframe: str = "M1"
+    custom_strategy_id: Optional[str] = None
+
+@api_router.post("/ai-system/generate-signal")
+async def generate_ai_signal(request: AISignalRequest):
+    """
+    Generate AI-powered trading signal.
+    Combines trend following, mean reversion, and pattern recognition.
+    """
+    try:
+        ohlcv_data = None
+        
+        # Get market data
+        if oanda_service.is_configured:
+            candles = await oanda_service.get_candles(
+                instrument=request.instrument,
+                granularity=request.timeframe,
+                count=100
+            )
+            
+            if candles:
+                import numpy as np
+                ohlcv_data = {
+                    "open": np.array([c.open for c in candles]),
+                    "high": np.array([c.high for c in candles]),
+                    "low": np.array([c.low for c in candles]),
+                    "close": np.array([c.close for c in candles]),
+                    "volume": np.array([c.volume for c in candles])
+                }
+        
+        if ohlcv_data is None:
+            return {
+                "success": False,
+                "error": "No market data available. Configure OANDA API for real market data."
+            }
+        
+        # Load custom strategy if specified
+        custom_strategy = None
+        if request.custom_strategy_id:
+            strategy_doc = await db.custom_strategies.find_one({"id": request.custom_strategy_id})
+            if strategy_doc:
+                custom_strategy = {
+                    "name": strategy_doc.get("name"),
+                    "conditions": strategy_doc.get("conditions", [])
+                }
+        
+        # Generate signal
+        signal = await enhanced_ai_system.generate_signal(ohlcv_data, custom_strategy)
+        
+        if signal:
+            return {
+                "success": True,
+                "signal": _convert_numpy_types(signal.to_dict()),
+                "custom_strategy_used": request.custom_strategy_id is not None
+            }
+        
+        return {
+            "success": False,
+            "error": "Could not generate signal. Models may need training."
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class TradeResultRequest(BaseModel):
+    signal_id: str
+    outcome: str  # "WIN" or "LOSS"
+
+@api_router.post("/ai-system/record-result")
+async def record_ai_trade_result(request: TradeResultRequest):
+    """Record trade result for continuous learning"""
+    try:
+        result = await enhanced_ai_system.record_trade_result(
+            signal_id=request.signal_id,
+            outcome=request.outcome
+        )
+        return _convert_numpy_types(result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ========================================
+# STRATEGY BUILDER INTEGRATION ENDPOINTS
+# ========================================
+
+@api_router.get("/strategies/saved")
+async def get_saved_strategies():
+    """Get all saved custom strategies from Strategy Builder"""
+    try:
+        strategies = []
+        async for strategy in db.custom_strategies.find({}, {"_id": 0}):
+            strategies.append(strategy)
+        
+        return {
+            "success": True,
+            "count": len(strategies),
+            "strategies": strategies
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/strategies/activate/{strategy_id}")
+async def activate_strategy_for_signals(strategy_id: str, timeframe: str = "1m"):
+    """
+    Activate a saved strategy to be used for signal generation.
+    The selected strategy will be used by the AI system when generating signals.
+    """
+    try:
+        # Find the strategy
+        strategy = await db.custom_strategies.find_one({"id": strategy_id})
+        if not strategy:
+            raise HTTPException(status_code=404, detail="Strategy not found")
+        
+        # Save as active strategy for the timeframe
+        await db.active_strategies.update_one(
+            {"timeframe": timeframe},
+            {"$set": {
+                "timeframe": timeframe,
+                "strategy_id": strategy_id,
+                "strategy_name": strategy.get("name"),
+                "activated_at": datetime.now(timezone.utc)
+            }},
+            upsert=True
+        )
+        
+        return {
+            "success": True,
+            "message": f"Strategy '{strategy.get('name')}' activated for {timeframe} signals",
+            "strategy_id": strategy_id,
+            "timeframe": timeframe
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/strategies/active")
+async def get_active_strategies():
+    """Get currently active strategies for each timeframe"""
+    try:
+        active = []
+        async for item in db.active_strategies.find({}, {"_id": 0}):
+            active.append(item)
+        
+        return {
+            "success": True,
+            "active_strategies": active
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.delete("/strategies/deactivate/{timeframe}")
+async def deactivate_strategy(timeframe: str):
+    """Deactivate the custom strategy for a timeframe (use default AI)"""
+    try:
+        result = await db.active_strategies.delete_one({"timeframe": timeframe})
+        return {
+            "success": True,
+            "message": f"Custom strategy deactivated for {timeframe}. Using default AI.",
+            "deleted": result.deleted_count > 0
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
