@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://auto-trader-pro-3.preview.emergentagent.com
-// @version      1.4.0
-// @description  Auto-trade on Pocket Option. v1.4.0 - Compact draggable UI, centered top position.
+// @version      1.5.0
+// @description  Auto-trade on Pocket Option. v1.5.0 - Fixed cross-origin API calls, compact draggable UI.
 // @author       GPT Signal Bot
 // @match        *://pocketoption.com/*
 // @match        *://po.trade/*
