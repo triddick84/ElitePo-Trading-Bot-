@@ -83,6 +83,10 @@ from market_regime_detector import (
     MarketRegimeDetector
 )
 
+# Import Enhanced AI Trading System and OANDA Market Data
+from enhanced_ai_trading_system import enhanced_ai_system
+from oanda_market_data_service import oanda_service
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
