@@ -193,14 +193,30 @@
     // ===========================================
     function checkSignal(force = false) {
         if (isTrading && !force) {
+            log('Busy trading...');
             return;
         }
 
+        log('Checking API...');
+        
         GM_xmlhttpRequest({
             method: 'GET',
             url: CONFIG.API_URL + '/signals/latest',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            },
+            timeout: 10000,
             onload: function(res) {
                 try {
+                    log('API Response: ' + res.status);
+                    
+                    if (res.status !== 200) {
+                        log('API Error: ' + res.status);
+                        updateUI('disconnected');
+                        return;
+                    }
+                    
                     const data = JSON.parse(res.responseText);
                     updateUI('connected');
                     
@@ -208,35 +224,49 @@
                         const signal = data.signal;
                         const signalTime = new Date(signal.timestamp).getTime();
                         
-                        log(`Signal: ${signal.direction} ${signal.symbol}`);
+                        log('Signal: ' + signal.direction + ' ' + signal.symbol);
                         
                         // Check if this is a NEW signal (newer than last processed)
                         if (signalTime > lastProcessedSignalTime || force) {
-                            log('🚨 NEW SIGNAL!');
+                            log('🚨 NEW SIGNAL DETECTED!');
                             
                             // Update UI immediately
                             updateUI('trading', signal);
                             
-                            // Mark as processed
+                            // Mark as processed BEFORE executing
                             lastProcessedSignalTime = signalTime;
                             GM_setValue('lastProcessedSignalTime', signalTime);
                             
                             if (CONFIG.AUTO_TRADE_ENABLED) {
                                 executeTrade(signal);
                             } else {
-                                log('Auto OFF - not trading');
+                                log('Auto OFF - signal shown only');
+                                updateUI('connected', signal);
                             }
+                        } else {
+                            log('Same signal (age: ' + Math.round((Date.now() - signalTime)/1000) + 's)');
+                            updateUI('connected', signal);
                         }
                     } else {
-                        log(data.message || 'No signal');
+                        log(data.message || 'No signal available');
+                        const sigEl = document.getElementById('gpt-signal');
+                        if (sigEl) {
+                            sigEl.textContent = 'NO SIGNAL';
+                            sigEl.className = 'signal wait';
+                        }
                     }
                 } catch (e) {
                     log('Parse error: ' + e.message);
+                    updateUI('disconnected');
                 }
             },
-            onerror: function() {
+            onerror: function(err) {
+                log('Connection error!');
                 updateUI('disconnected');
-                log('Connection failed');
+            },
+            ontimeout: function() {
+                log('Request timeout!');
+                updateUI('disconnected');
             }
         });
     }
