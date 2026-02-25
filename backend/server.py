@@ -12072,6 +12072,328 @@ async def deactivate_strategy(timeframe: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ========================================
+# ENHANCED OANDA SERVICE ENDPOINTS (oandapyV20)
+# ========================================
+
+@api_router.get("/oanda/enhanced/status")
+async def get_enhanced_oanda_status():
+    """Get enhanced OANDA service status with account details"""
+    try:
+        result = enhanced_oanda.test_connection()
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/oanda/enhanced/candles/{instrument}")
+async def get_enhanced_candles(
+    instrument: str,
+    granularity: str = Query("M1", description="Timeframe: S5, M1, M5, M15, H1, H4, D"),
+    count: int = Query(100, ge=10, le=5000)
+):
+    """
+    Get candles with full technical analysis using oandapyV20.
+    Returns OHLCV data with all indicators pre-calculated.
+    """
+    try:
+        df = enhanced_oanda.get_candles(instrument, granularity, count)
+        
+        if df.empty:
+            return {"success": False, "error": "No data returned"}
+        
+        # Convert DataFrame to list of dicts with proper serialization
+        candles = []
+        for idx, row in df.iterrows():
+            candle = {
+                "timestamp": idx.isoformat() if hasattr(idx, 'isoformat') else str(idx),
+                "open": float(row['open']),
+                "high": float(row['high']),
+                "low": float(row['low']),
+                "close": float(row['close']),
+                "volume": int(row['volume']),
+                "indicators": {}
+            }
+            
+            # Add indicators (handle NaN values)
+            indicator_cols = ['sma_10', 'sma_20', 'sma_50', 'ema_12', 'ema_26', 'rsi',
+                            'macd', 'macd_signal', 'macd_histogram', 'bb_upper', 'bb_middle',
+                            'bb_lower', 'bb_percent', 'atr', 'adx', 'stochastic_k', 'stochastic_d']
+            
+            for col in indicator_cols:
+                if col in row and not pd.isna(row[col]):
+                    candle["indicators"][col] = float(row[col])
+            
+            candles.append(candle)
+        
+        return {
+            "success": True,
+            "instrument": instrument,
+            "granularity": granularity,
+            "count": len(candles),
+            "candles": candles[-50:],  # Return last 50 with indicators
+            "summary": {
+                "latest_close": float(df['close'].iloc[-1]),
+                "latest_rsi": float(df['rsi'].iloc[-1]) if 'rsi' in df and not pd.isna(df['rsi'].iloc[-1]) else None,
+                "latest_macd": float(df['macd'].iloc[-1]) if 'macd' in df and not pd.isna(df['macd'].iloc[-1]) else None,
+                "trend_sma": "BULLISH" if df['close'].iloc[-1] > df['sma_20'].iloc[-1] else "BEARISH" if 'sma_20' in df and not pd.isna(df['sma_20'].iloc[-1]) else "UNKNOWN"
+            }
+        }
+    except Exception as e:
+        logger.error(f"Enhanced candles error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+class LargeDataRequest(BaseModel):
+    instrument: str = "EUR_USD"
+    granularity: str = "H1"
+    from_time: str  # ISO format: "2024-01-01T00:00:00Z"
+    to_time: str    # ISO format: "2024-12-31T23:59:59Z"
+
+@api_router.post("/oanda/enhanced/candles-large")
+async def get_large_historical_data(request: LargeDataRequest):
+    """
+    Fetch large amounts of historical data (>5000 candles).
+    Uses InstrumentsCandlesFactory for automatic batching.
+    Ideal for AI model training.
+    """
+    try:
+        df = enhanced_oanda.get_candles_large(
+            instrument=request.instrument,
+            granularity=request.granularity,
+            from_time=request.from_time,
+            to_time=request.to_time
+        )
+        
+        if df.empty:
+            return {"success": False, "error": "No data returned"}
+        
+        return {
+            "success": True,
+            "instrument": request.instrument,
+            "granularity": request.granularity,
+            "total_candles": len(df),
+            "date_range": {
+                "from": df.index[0].isoformat() if hasattr(df.index[0], 'isoformat') else str(df.index[0]),
+                "to": df.index[-1].isoformat() if hasattr(df.index[-1], 'isoformat') else str(df.index[-1])
+            },
+            "message": f"Fetched {len(df)} candles for AI training"
+        }
+    except Exception as e:
+        logger.error(f"Large data fetch error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/oanda/enhanced/prices")
+async def get_multi_instrument_prices(
+    instruments: str = Query("EUR_USD,GBP_USD,USD_JPY", description="Comma-separated instruments")
+):
+    """
+    Get current prices for multiple instruments.
+    Useful for correlation analysis and arbitrage detection.
+    """
+    try:
+        instrument_list = [i.strip() for i in instruments.split(",")]
+        prices = enhanced_oanda.get_current_prices(instrument_list)
+        
+        return {
+            "success": True,
+            "prices": prices,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/oanda/enhanced/trend-signal/{instrument}")
+async def get_trend_signal(
+    instrument: str,
+    timeframe: str = Query("M1", description="Timeframe for analysis")
+):
+    """
+    Generate comprehensive trend signal using multiple indicators.
+    Returns direction, strength, confidence, and trade recommendations.
+    """
+    try:
+        signal = enhanced_oanda.generate_trend_signal(instrument, timeframe)
+        
+        if signal is None:
+            return {"success": False, "error": "Could not generate signal - insufficient data"}
+        
+        return {
+            "success": True,
+            "instrument": instrument,
+            "timeframe": timeframe,
+            "signal": signal.to_dict(),
+            "generated_at": datetime.now(timezone.utc).isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Trend signal error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/oanda/enhanced/stream/start")
+async def start_price_stream(
+    instruments: str = Query("EUR_USD,GBP_USD", description="Comma-separated instruments to stream")
+):
+    """
+    Start real-time price streaming (background thread).
+    Prices are cached and can be fetched via /oanda/enhanced/prices
+    """
+    try:
+        instrument_list = [i.strip() for i in instruments.split(",")]
+        success = enhanced_oanda.start_price_stream(instrument_list)
+        
+        return {
+            "success": success,
+            "message": "Price stream started" if success else "Failed to start stream",
+            "instruments": instrument_list
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/oanda/enhanced/stream/stop")
+async def stop_price_stream():
+    """Stop the real-time price streaming"""
+    try:
+        enhanced_oanda.stop_price_stream()
+        return {"success": True, "message": "Price stream stopped"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class ArbitrageCheckRequest(BaseModel):
+    pairs: List[List[str]] = [["EUR_USD", "GBP_USD"], ["EUR_USD", "USD_JPY"]]
+
+@api_router.post("/oanda/enhanced/arbitrage/detect")
+async def detect_arbitrage_opportunities(request: ArbitrageCheckRequest):
+    """
+    Detect potential arbitrage opportunities between correlated pairs.
+    """
+    try:
+        # Convert list of lists to list of tuples
+        pairs = [tuple(p) for p in request.pairs]
+        opportunities = enhanced_oanda.detect_arbitrage(pairs)
+        
+        return {
+            "success": True,
+            "opportunities_found": len(opportunities),
+            "opportunities": [o.to_dict() for o in opportunities],
+            "checked_at": datetime.now(timezone.utc).isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ========================================
+# COMBINED AI + OANDA SIGNAL GENERATION
+# ========================================
+
+@api_router.post("/signals/generate-enhanced")
+async def generate_enhanced_signal(
+    instrument: str = "EUR_USD",
+    timeframe: str = "M1",
+    use_custom_strategy: bool = False,
+    strategy_id: Optional[str] = None
+):
+    """
+    Generate enhanced trading signal combining:
+    - OANDA real-time data with technical indicators
+    - AI/ML ensemble predictions
+    - Custom strategy (optional)
+    
+    Returns comprehensive signal with high confidence.
+    """
+    try:
+        result = {
+            "success": True,
+            "instrument": instrument,
+            "timeframe": timeframe,
+            "signals": {},
+            "final_recommendation": None,
+            "confidence": 0
+        }
+        
+        # 1. Get trend signal from enhanced OANDA service
+        trend_signal = enhanced_oanda.generate_trend_signal(instrument, timeframe)
+        if trend_signal:
+            result["signals"]["trend_analysis"] = trend_signal.to_dict()
+        
+        # 2. Get AI ensemble signal
+        if oanda_service.is_configured:
+            candles = await oanda_service.get_candles(instrument, timeframe, count=100)
+            if candles:
+                import numpy as np
+                ohlcv_data = {
+                    "open": np.array([c.open for c in candles]),
+                    "high": np.array([c.high for c in candles]),
+                    "low": np.array([c.low for c in candles]),
+                    "close": np.array([c.close for c in candles]),
+                    "volume": np.array([c.volume for c in candles])
+                }
+                
+                # Load custom strategy if requested
+                custom_strategy = None
+                if use_custom_strategy and strategy_id:
+                    strategy_doc = await db.custom_strategies.find_one({"id": strategy_id})
+                    if strategy_doc:
+                        custom_strategy = {
+                            "name": strategy_doc.get("name"),
+                            "conditions": strategy_doc.get("conditions", [])
+                        }
+                
+                ai_signal = await enhanced_ai_system.generate_signal(ohlcv_data, custom_strategy)
+                if ai_signal:
+                    result["signals"]["ai_ensemble"] = _convert_numpy_types(ai_signal.to_dict())
+        
+        # 3. Combine signals for final recommendation
+        call_votes = 0
+        put_votes = 0
+        total_confidence = 0
+        vote_count = 0
+        
+        if trend_signal:
+            vote_count += 1
+            total_confidence += trend_signal.confidence
+            if trend_signal.recommended_action == "CALL":
+                call_votes += trend_signal.confidence
+            elif trend_signal.recommended_action == "PUT":
+                put_votes += trend_signal.confidence
+        
+        if "ai_ensemble" in result["signals"]:
+            ai_data = result["signals"]["ai_ensemble"]
+            vote_count += 1
+            total_confidence += ai_data.get("final_confidence", 0)
+            if ai_data.get("final_direction") == "CALL":
+                call_votes += ai_data.get("final_confidence", 0)
+            elif ai_data.get("final_direction") == "PUT":
+                put_votes += ai_data.get("final_confidence", 0)
+        
+        # Determine final recommendation
+        if vote_count > 0:
+            avg_confidence = total_confidence / vote_count
+            
+            if call_votes > put_votes:
+                result["final_recommendation"] = "CALL"
+                result["confidence"] = (call_votes / (call_votes + put_votes)) * 100 if (call_votes + put_votes) > 0 else 0
+            elif put_votes > call_votes:
+                result["final_recommendation"] = "PUT"
+                result["confidence"] = (put_votes / (call_votes + put_votes)) * 100 if (call_votes + put_votes) > 0 else 0
+            else:
+                result["final_recommendation"] = "HOLD"
+                result["confidence"] = 50
+            
+            # Risk assessment
+            if result["confidence"] >= 75:
+                result["risk_level"] = "LOW"
+            elif result["confidence"] >= 60:
+                result["risk_level"] = "MEDIUM"
+            else:
+                result["risk_level"] = "HIGH"
+        
+        result["generated_at"] = datetime.now(timezone.utc).isoformat()
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Enhanced signal generation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
