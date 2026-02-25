@@ -11812,31 +11812,31 @@ async def get_market_snapshot(instrument: str, timeframe: str = "1m"):
                 "success": True,
                 "symbol": snapshot.symbol,
                 "timeframe": snapshot.timeframe,
-                "current_price": snapshot.current_price,
-                "bid": snapshot.bid,
-                "ask": snapshot.ask,
-                "spread": snapshot.spread,
+                "current_price": float(snapshot.current_price) if snapshot.current_price else None,
+                "bid": float(snapshot.bid) if snapshot.bid else None,
+                "ask": float(snapshot.ask) if snapshot.ask else None,
+                "spread": float(snapshot.spread) if snapshot.spread else None,
                 "indicators": {
-                    "sma_20": snapshot.sma_20,
-                    "sma_50": snapshot.sma_50,
-                    "ema_12": snapshot.ema_12,
-                    "ema_26": snapshot.ema_26,
-                    "rsi_14": snapshot.rsi_14,
-                    "macd": snapshot.macd,
-                    "macd_signal": snapshot.macd_signal,
-                    "bb_upper": snapshot.bb_upper,
-                    "bb_middle": snapshot.bb_middle,
-                    "bb_lower": snapshot.bb_lower,
-                    "atr_14": snapshot.atr_14
+                    "sma_20": float(snapshot.sma_20) if snapshot.sma_20 is not None else None,
+                    "sma_50": float(snapshot.sma_50) if snapshot.sma_50 is not None else None,
+                    "ema_12": float(snapshot.ema_12) if snapshot.ema_12 is not None else None,
+                    "ema_26": float(snapshot.ema_26) if snapshot.ema_26 is not None else None,
+                    "rsi_14": float(snapshot.rsi_14) if snapshot.rsi_14 is not None else None,
+                    "macd": float(snapshot.macd) if snapshot.macd is not None else None,
+                    "macd_signal": float(snapshot.macd_signal) if snapshot.macd_signal is not None else None,
+                    "bb_upper": float(snapshot.bb_upper) if snapshot.bb_upper is not None else None,
+                    "bb_middle": float(snapshot.bb_middle) if snapshot.bb_middle is not None else None,
+                    "bb_lower": float(snapshot.bb_lower) if snapshot.bb_lower is not None else None,
+                    "atr_14": float(snapshot.atr_14) if snapshot.atr_14 is not None else None
                 },
                 "trend": {
                     "direction": snapshot.trend_direction,
-                    "strength": snapshot.trend_strength
+                    "strength": float(snapshot.trend_strength) if snapshot.trend_strength is not None else None
                 },
                 "mean_reversion": {
-                    "is_overbought": snapshot.is_overbought,
-                    "is_oversold": snapshot.is_oversold,
-                    "distance_from_mean": snapshot.distance_from_mean
+                    "is_overbought": bool(snapshot.is_overbought),
+                    "is_oversold": bool(snapshot.is_oversold),
+                    "distance_from_mean": float(snapshot.distance_from_mean) if snapshot.distance_from_mean is not None else None
                 }
             }
         return {"success": False, "error": "Could not get market snapshot"}
