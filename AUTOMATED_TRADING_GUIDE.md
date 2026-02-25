@@ -17,7 +17,7 @@ This guide explains how the automated trading system works and how to set it up 
 │  └────────────────────────────────────────────────────────────┘│
 │                              │                                  │
 │                         Trades ↓                                │
-│  ┌────────────────────────────────────────────────────────────┐│
+│  ┌───────────────────────────────────────────────────I─────────┐│
 │  │             Pocket Option Website                          ││
 │  │  - Real trading platform                                   ││
 │  │  - Your account balance                                    ││
