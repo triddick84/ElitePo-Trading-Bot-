@@ -1284,7 +1284,7 @@ async def get_auto_signal_generation_status():
 # ============================================================================
 
 @api_router.get("/signals/latest")
-async def get_latest_signal():
+async def get_latest_signal(use_enhanced: bool = Query(True, description="Use enhanced AI signal if no recent signal")):
     """
     Get the most recent trading signal for the auto-trader userscript
     
@@ -1292,6 +1292,7 @@ async def get_latest_signal():
     the user's mobile device (Kiwi Browser) to auto-execute trades.
     
     Returns the latest signal if it was generated within the last 5 minutes.
+    If use_enhanced=True and no recent signal exists, generates a new one.
     """
     try:
         # Get the most recent signal from database (check trading_signals collection)
@@ -1301,6 +1302,100 @@ async def get_latest_signal():
             sort=[("timestamp", -1)]
         )
         
+        signal_is_stale = False
+        age_seconds = 999999
+        
+        if latest_signal:
+            # Check if signal is recent (within last 5 minutes)
+            signal_time = latest_signal.get('timestamp')
+            if signal_time:
+                try:
+                    if isinstance(signal_time, str):
+                        from dateutil import parser
+                        signal_dt = parser.parse(signal_time)
+                    else:
+                        signal_dt = signal_time
+                    
+                    # Make timezone-aware if needed
+                    if signal_dt.tzinfo is None:
+                        signal_dt = signal_dt.replace(tzinfo=timezone.utc)
+                    
+                    age_seconds = (datetime.now(timezone.utc) - signal_dt).total_seconds()
+                    signal_is_stale = age_seconds > 300  # 5 minutes
+                except Exception as parse_error:
+                    logger.warning(f"Could not parse signal timestamp: {parse_error}")
+                    signal_is_stale = True
+        else:
+            signal_is_stale = True
+        
+        # If signal is stale and enhanced mode is enabled, generate new signal
+        if signal_is_stale and use_enhanced and enhanced_oanda.is_configured:
+            try:
+                # Get the default trading asset from config
+                config_doc = await db.trading_configurations.find_one({"user_id": "default_user"})
+                default_asset = "EUR_USD"
+                if config_doc and config_doc.get('selected_assets'):
+                    # Get first selected asset, convert to OANDA format
+                    first_asset = config_doc['selected_assets'][0]
+                    if '_' not in first_asset:
+                        # Convert EURUSD to EUR_USD
+                        if len(first_asset) == 6:
+                            default_asset = f"{first_asset[:3]}_{first_asset[3:]}"
+                        else:
+                            default_asset = first_asset.replace("_OTC", "").replace("-", "_")
+                    else:
+                        default_asset = first_asset.replace("_OTC", "")
+                
+                # Generate enhanced signal
+                trend_signal = enhanced_oanda.generate_trend_signal(default_asset, "M1")
+                
+                if trend_signal and trend_signal.recommended_action != "HOLD":
+                    # Create signal record
+                    new_signal = {
+                        "id": f"ENHANCED_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{default_asset}",
+                        "symbol": default_asset.replace("_", ""),
+                        "direction": trend_signal.recommended_action,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "confidence": trend_signal.confidence,
+                        "probability": trend_signal.confidence,
+                        "expiration_minutes": 1,
+                        "strategy": "Enhanced AI + Technical",
+                        "trend_direction": trend_signal.direction,
+                        "trend_strength": trend_signal.strength.value,
+                        "entry_price": trend_signal.entry_price,
+                        "stop_loss": trend_signal.stop_loss,
+                        "take_profit": trend_signal.take_profit,
+                        "supporting_indicators": trend_signal.supporting_indicators,
+                        "source": "enhanced_oanda"
+                    }
+                    
+                    # Save to database
+                    await db.trading_signals.insert_one({**new_signal, "_id": None})
+                    
+                    # Remove _id before returning
+                    if "_id" in new_signal:
+                        del new_signal["_id"]
+                    
+                    logger.info(f"Generated enhanced signal: {new_signal['direction']} {new_signal['symbol']} ({new_signal['confidence']:.1f}%)")
+                    
+                    return {
+                        "success": True,
+                        "signal": new_signal,
+                        "message": "Enhanced signal generated for auto-trading",
+                        "auto_generated": True
+                    }
+                else:
+                    return {
+                        "success": False,
+                        "message": "Market conditions unclear - no signal generated (HOLD recommended)",
+                        "signal": None,
+                        "recommendation": "HOLD"
+                    }
+                    
+            except Exception as enhanced_error:
+                logger.error(f"Enhanced signal generation failed: {enhanced_error}")
+                # Fall through to return stale signal info
+        
         if not latest_signal:
             return {
                 "success": False,
@@ -1308,31 +1403,13 @@ async def get_latest_signal():
                 "signal": None
             }
         
-        # Check if signal is recent (within last 5 minutes)
-        signal_time = latest_signal.get('timestamp')
-        if signal_time:
-            try:
-                if isinstance(signal_time, str):
-                    from dateutil import parser
-                    signal_dt = parser.parse(signal_time)
-                else:
-                    signal_dt = signal_time
-                
-                # Make timezone-aware if needed
-                if signal_dt.tzinfo is None:
-                    signal_dt = signal_dt.replace(tzinfo=timezone.utc)
-                
-                age_seconds = (datetime.now(timezone.utc) - signal_dt).total_seconds()
-                
-                if age_seconds > 300:  # 5 minutes
-                    return {
-                        "success": False,
-                        "message": f"No recent signals (last signal is {int(age_seconds)}s old). Generate a new signal from Dashboard.",
-                        "signal": None,
-                        "last_signal_age_seconds": age_seconds
-                    }
-            except Exception as parse_error:
-                logger.warning(f"Could not parse signal timestamp: {parse_error}")
+        if signal_is_stale:
+            return {
+                "success": False,
+                "message": f"No recent signals (last signal is {int(age_seconds)}s old). Generate a new signal from Dashboard.",
+                "signal": None,
+                "last_signal_age_seconds": age_seconds
+            }
         
         # Add unique ID if not present
         if 'id' not in latest_signal:
