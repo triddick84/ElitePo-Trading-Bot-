@@ -176,11 +176,24 @@
     };
 
     window.resetBot = function() {
+        log('RESETTING...');
         isTrading = false;
         lastProcessedSignalTime = 0;
         GM_setValue('lastProcessedSignalTime', 0);
+        
+        // Reset UI
+        const sigEl = document.getElementById('gpt-signal');
+        if (sigEl) {
+            sigEl.textContent = 'RESET - READY';
+            sigEl.className = 'signal wait';
+        }
         updateUI('connected');
-        log('Bot reset - ready for signals');
+        
+        // Fetch immediately after reset
+        setTimeout(() => {
+            log('Fetching after reset...');
+            checkSignal(true);  // Force fetch
+        }, 500);
     };
 
     window.fetchNow = function() {
