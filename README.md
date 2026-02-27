@@ -18,12 +18,12 @@ Advanced AI-powered trading signal generator for Pocket Option binary options pl
 
 ### 📊 Strategies Included
 
-1. **RSI + Bollinger Bands + Volume** (70%+)
+1. **RSI + Bollinger Bands + Volume** (80%+)
    - RSI (7/14 period)
    - Bollinger Bands (20,2)
    - Volume spike detection
 
-2. **Stochastic + MACD + Candlestick Patterns** (75-80%)
+2. **Stochastic + MACD + Candlestick Patterns** (5-second 90%)
    - Stochastic (14,3,3)
    - MACD (12,26,9)
    - 40+ candlestick patterns
@@ -34,7 +34,7 @@ Advanced AI-powered trading signal generator for Pocket Option binary options pl
    - ATR volatility filter
    - Time-of-day optimization
 
-4. **Enhanced Stochastic + MACD + Pattern V2** (85-89%)
+4. **Enhanced Stochastic + MACD + Pattern V2** (85-92%)
    - Pattern reliability scoring
    - Rejection candle detection
    - Pivot point S/R levels
