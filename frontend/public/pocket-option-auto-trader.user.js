@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         GPT Signal Bot - Pocket Option Auto Trader
+// @name         GPT Signal Bot - Pocket Option Auto Trader v3.0
 // @namespace    https://signal-generator-pro.preview.emergentagent.com
-// @version      2.0.1
-// @description  Auto-trade on Pocket Option. v2.0.1 - Enhanced debugging and connection.
+// @version      3.0.0
+// @description  Advanced auto-trader with comprehensive data display, auto on/off, fetch, and reset controls
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -17,7 +17,7 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_log
-// @connect      auto-trader-pro-3.preview.emergentagent.com
+// @connect      signal-generator-pro.preview.emergentagent.com
 // @connect      *
 // @run-at       document-idle
 // @noframes
@@ -31,38 +31,73 @@
     // ===========================================
     const CONFIG = {
         API_URL: 'https://signal-generator-pro.preview.emergentagent.com/api',
-        POLL_INTERVAL: 3000,
-        AUTO_TRADE_ENABLED: true,
-        SOUND_ENABLED: true,
-        DEBUG: true
+        POLL_INTERVAL: 5000,  // Poll every 5 seconds
+        AUTO_TRADE_ENABLED: GM_getValue('autoEnabled', true),
+        SOUND_ENABLED: GM_getValue('soundEnabled', true),
+        DEBUG: true,
+        COOLDOWN_MS: 5000,  // Cooldown between trades
+        MAX_SIGNAL_AGE_SECONDS: 60  // Max age of signal to consider valid
     };
 
     // ===========================================
     // STATE
     // ===========================================
-    let lastProcessedSignalTime = GM_getValue('lastProcessedSignalTime', 0);
-    let isTrading = false;
-    let tradeCount = 0;
+    let state = {
+        lastProcessedSignalId: GM_getValue('lastProcessedSignalId', null),
+        lastProcessedSignalTime: GM_getValue('lastProcessedSignalTime', 0),
+        isTrading: false,
+        tradeCount: GM_getValue('tradeCount', 0),
+        winCount: GM_getValue('winCount', 0),
+        lossCount: GM_getValue('lossCount', 0),
+        connectionStatus: 'disconnected',
+        lastSignal: null,
+        lastFetchTime: null,
+        lastError: null,
+        pollInterval: null,
+        apiStatus: 'unknown'
+    };
 
     // ===========================================
-    // LOGGING
+    // LOGGING SYSTEM
     // ===========================================
+    const logHistory = [];
+    const MAX_LOG_ENTRIES = 50;
+
     function log(msg, type = 'info') {
         const ts = new Date().toLocaleTimeString();
-        const prefix = '[GPT Bot]';
-        console.log(`${prefix} ${ts}: ${msg}`);
+        const logEntry = { time: ts, message: msg, type: type };
+        logHistory.unshift(logEntry);
         
-        // Update UI log
-        const logEl = document.getElementById('gpt-log');
+        if (logHistory.length > MAX_LOG_ENTRIES) {
+            logHistory.pop();
+        }
+
+        const prefix = '[GPT Bot v3]';
+        const emoji = type === 'error' ? '❌' : type === 'success' ? '✅' : type === 'warn' ? '⚠️' : '📡';
+        console.log(`${prefix} ${ts} ${emoji}: ${msg}`);
+        
+        // Update UI log display
+        updateLogDisplay(logEntry);
+    }
+
+    function updateLogDisplay(entry) {
+        const logEl = document.getElementById('gpt-log-text');
         if (logEl) {
-            logEl.textContent = msg;
+            const color = entry.type === 'error' ? '#ef4444' : 
+                         entry.type === 'success' ? '#22c55e' : 
+                         entry.type === 'warn' ? '#f59e0b' : '#94a3b8';
+            logEl.innerHTML = `<span style="color:${color}">[${entry.time}] ${entry.message}</span>`;
         }
     }
 
     // ===========================================
-    // UI PANEL
+    // UI PANEL CREATION
     // ===========================================
     function createPanel() {
+        // Remove existing panel if present
+        const existing = document.getElementById('gpt-panel');
+        if (existing) existing.remove();
+
         const panel = document.createElement('div');
         panel.id = 'gpt-panel';
         panel.innerHTML = `
@@ -72,306 +107,750 @@
                     top: 10px;
                     left: 50%;
                     transform: translateX(-50%);
-                    background: #1a1a2e;
+                    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
                     border: 2px solid #7c3aed;
-                    border-radius: 10px;
-                    padding: 8px 15px;
+                    border-radius: 12px;
+                    padding: 12px 16px;
                     z-index: 999999;
-                    font-family: Arial, sans-serif;
+                    font-family: 'Segoe UI', Arial, sans-serif;
                     color: white;
+                    box-shadow: 0 8px 32px rgba(124, 58, 237, 0.4);
+                    min-width: 380px;
+                    max-width: 500px;
+                    cursor: move;
+                    user-select: none;
+                }
+                #gpt-panel * {
+                    user-select: none;
+                }
+                #gpt-panel .header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 10px;
+                    padding-bottom: 8px;
+                    border-bottom: 1px solid rgba(124, 58, 237, 0.3);
+                }
+                #gpt-panel .title {
+                    font-weight: bold;
+                    color: #a78bfa;
+                    font-size: 14px;
                     display: flex;
                     align-items: center;
-                    gap: 15px;
-                    box-shadow: 0 4px 20px rgba(124, 58, 237, 0.5);
+                    gap: 8px;
                 }
-                #gpt-panel .dot {
-                    width: 12px;
-                    height: 12px;
+                #gpt-panel .status-dot {
+                    width: 10px;
+                    height: 10px;
                     border-radius: 50%;
                     background: #ef4444;
+                    animation: pulse 2s infinite;
                 }
-                #gpt-panel .dot.connected { background: #22c55e; }
-                #gpt-panel .dot.trading { background: #f59e0b; animation: blink 0.5s infinite; }
-                @keyframes blink { 50% { opacity: 0.3; } }
-                #gpt-panel .title { font-weight: bold; color: #a78bfa; font-size: 13px; }
-                #gpt-panel .signal { 
-                    padding: 4px 10px; 
-                    border-radius: 5px; 
+                #gpt-panel .status-dot.connected { background: #22c55e; }
+                #gpt-panel .status-dot.trading { background: #f59e0b; animation: blink 0.3s infinite; }
+                #gpt-panel .status-dot.error { background: #ef4444; }
+                @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+                @keyframes blink { 50% { opacity: 0.2; } }
+                
+                #gpt-panel .data-grid {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 8px;
+                    margin-bottom: 10px;
+                }
+                #gpt-panel .data-item {
+                    background: rgba(0,0,0,0.3);
+                    padding: 8px;
+                    border-radius: 6px;
+                    font-size: 11px;
+                }
+                #gpt-panel .data-label {
+                    color: #94a3b8;
+                    font-size: 10px;
+                    margin-bottom: 2px;
+                }
+                #gpt-panel .data-value {
                     font-weight: bold;
-                    font-size: 12px;
+                    font-size: 13px;
                 }
-                #gpt-panel .signal.call { background: #22c55e; }
-                #gpt-panel .signal.put { background: #ef4444; }
-                #gpt-panel .signal.wait { background: #64748b; }
+                #gpt-panel .data-value.call { color: #22c55e; }
+                #gpt-panel .data-value.put { color: #ef4444; }
+                #gpt-panel .data-value.hold { color: #f59e0b; }
+                #gpt-panel .data-value.none { color: #64748b; }
+                
+                #gpt-panel .signal-box {
+                    background: rgba(0,0,0,0.4);
+                    border-radius: 8px;
+                    padding: 10px;
+                    margin-bottom: 10px;
+                    text-align: center;
+                }
+                #gpt-panel .signal-direction {
+                    font-size: 24px;
+                    font-weight: bold;
+                    margin-bottom: 4px;
+                }
+                #gpt-panel .signal-direction.call { color: #22c55e; text-shadow: 0 0 10px rgba(34,197,94,0.5); }
+                #gpt-panel .signal-direction.put { color: #ef4444; text-shadow: 0 0 10px rgba(239,68,68,0.5); }
+                #gpt-panel .signal-direction.waiting { color: #64748b; }
+                #gpt-panel .signal-meta {
+                    font-size: 11px;
+                    color: #94a3b8;
+                }
+                
+                #gpt-panel .controls {
+                    display: flex;
+                    gap: 8px;
+                    margin-bottom: 10px;
+                }
                 #gpt-panel button {
-                    padding: 5px 12px;
+                    flex: 1;
+                    padding: 8px 12px;
                     border: none;
-                    border-radius: 5px;
+                    border-radius: 6px;
                     font-weight: bold;
                     font-size: 11px;
                     cursor: pointer;
+                    transition: all 0.2s;
                 }
-                #gpt-panel .btn-auto { background: #22c55e; color: white; }
-                #gpt-panel .btn-auto.off { background: #ef4444; }
-                #gpt-panel .btn-fetch { background: #3b82f6; color: white; }
-                #gpt-panel .btn-reset { background: #f59e0b; color: white; }
-                #gpt-panel .info { font-size: 11px; color: #94a3b8; }
-                #gpt-log { 
-                    font-size: 10px; 
-                    color: #22c55e; 
-                    max-width: 250px; 
-                    overflow: hidden; 
-                    text-overflow: ellipsis; 
-                    white-space: nowrap;
-                    background: rgba(0,0,0,0.3);
-                    padding: 3px 8px;
+                #gpt-panel button:hover {
+                    transform: translateY(-1px);
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                }
+                #gpt-panel button:active {
+                    transform: translateY(0);
+                }
+                #gpt-panel .btn-auto {
+                    background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+                    color: white;
+                }
+                #gpt-panel .btn-auto.off {
+                    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+                }
+                #gpt-panel .btn-fetch {
+                    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+                    color: white;
+                }
+                #gpt-panel .btn-reset {
+                    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+                    color: white;
+                }
+                #gpt-panel .btn-sound {
+                    background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+                    color: white;
+                    max-width: 80px;
+                }
+                
+                #gpt-panel .stats-row {
+                    display: flex;
+                    justify-content: space-between;
+                    font-size: 11px;
+                    margin-bottom: 8px;
+                    padding: 6px 8px;
+                    background: rgba(0,0,0,0.2);
                     border-radius: 4px;
                 }
+                #gpt-panel .stat {
+                    display: flex;
+                    align-items: center;
+                    gap: 4px;
+                }
+                #gpt-panel .stat-label { color: #94a3b8; }
+                #gpt-panel .stat-value { font-weight: bold; }
+                #gpt-panel .stat-value.win { color: #22c55e; }
+                #gpt-panel .stat-value.loss { color: #ef4444; }
+                
+                #gpt-panel .log-box {
+                    background: rgba(0,0,0,0.4);
+                    border-radius: 6px;
+                    padding: 8px;
+                    font-size: 10px;
+                    max-height: 60px;
+                    overflow-y: auto;
+                }
+                #gpt-panel .log-box::-webkit-scrollbar {
+                    width: 4px;
+                }
+                #gpt-panel .log-box::-webkit-scrollbar-thumb {
+                    background: #7c3aed;
+                    border-radius: 2px;
+                }
+                
+                #gpt-panel .footer {
+                    margin-top: 8px;
+                    font-size: 9px;
+                    color: #64748b;
+                    text-align: center;
+                }
             </style>
-            <span class="dot" id="gpt-dot"></span>
-            <span class="title">🤖 GPT Bot v2.0</span>
-            <span class="signal wait" id="gpt-signal">CONNECTING...</span>
-            <span class="info">Trades: <span id="gpt-trades">0</span></span>
-            <button class="btn-auto" id="gpt-auto" onclick="window.toggleAuto()">AUTO ON</button>
-            <button class="btn-fetch" onclick="window.fetchNow()">FETCH</button>
-            <button class="btn-reset" onclick="window.resetBot()">RESET</button>
-            <span id="gpt-log">Initializing...</span>
+            
+            <div class="header">
+                <div class="title">
+                    <span class="status-dot" id="gpt-status-dot"></span>
+                    <span>GPT Signal Bot v3.0</span>
+                </div>
+                <div id="gpt-connection-status" style="font-size:10px;color:#94a3b8;">Initializing...</div>
+            </div>
+            
+            <div class="signal-box">
+                <div class="signal-direction waiting" id="gpt-signal-direction">WAITING</div>
+                <div class="signal-meta" id="gpt-signal-meta">No signal received yet</div>
+            </div>
+            
+            <div class="data-grid">
+                <div class="data-item">
+                    <div class="data-label">Symbol</div>
+                    <div class="data-value" id="gpt-symbol">--</div>
+                </div>
+                <div class="data-item">
+                    <div class="data-label">Confidence</div>
+                    <div class="data-value" id="gpt-confidence">--%</div>
+                </div>
+                <div class="data-item">
+                    <div class="data-label">Signal Age</div>
+                    <div class="data-value" id="gpt-signal-age">--</div>
+                </div>
+                <div class="data-item">
+                    <div class="data-label">Last Fetch</div>
+                    <div class="data-value" id="gpt-last-fetch">--</div>
+                </div>
+            </div>
+            
+            <div class="stats-row">
+                <div class="stat">
+                    <span class="stat-label">Trades:</span>
+                    <span class="stat-value" id="gpt-trade-count">0</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Wins:</span>
+                    <span class="stat-value win" id="gpt-win-count">0</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Losses:</span>
+                    <span class="stat-value loss" id="gpt-loss-count">0</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Win Rate:</span>
+                    <span class="stat-value" id="gpt-win-rate">--%</span>
+                </div>
+            </div>
+            
+            <div class="controls">
+                <button class="btn-auto" id="gpt-btn-auto">AUTO: ON</button>
+                <button class="btn-fetch" id="gpt-btn-fetch">FETCH NOW</button>
+                <button class="btn-reset" id="gpt-btn-reset">RESET</button>
+                <button class="btn-sound" id="gpt-btn-sound">SOUND</button>
+            </div>
+            
+            <div class="log-box" id="gpt-log-box">
+                <div id="gpt-log-text">Initializing bot...</div>
+            </div>
+            
+            <div class="footer">
+                Poll: ${CONFIG.POLL_INTERVAL/1000}s | Cooldown: ${CONFIG.COOLDOWN_MS/1000}s | Max Age: ${CONFIG.MAX_SIGNAL_AGE_SECONDS}s
+            </div>
         `;
+        
         document.body.appendChild(panel);
-        log('Panel created v2.0.1');
+        
+        // Make panel draggable
+        makeDraggable(panel);
+        
+        // Attach button handlers
+        document.getElementById('gpt-btn-auto').addEventListener('click', toggleAutoTrade);
+        document.getElementById('gpt-btn-fetch').addEventListener('click', () => fetchSignal(true));
+        document.getElementById('gpt-btn-reset').addEventListener('click', resetBot);
+        document.getElementById('gpt-btn-sound').addEventListener('click', toggleSound);
+        
+        // Initialize button states
+        updateAutoButton();
+        updateSoundButton();
+        
+        log('Panel created successfully', 'success');
     }
 
-    function updateUI(status, signal = null) {
-        const dot = document.getElementById('gpt-dot');
-        const sigEl = document.getElementById('gpt-signal');
-        const tradesEl = document.getElementById('gpt-trades');
+    function makeDraggable(element) {
+        let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
         
+        element.onmousedown = dragMouseDown;
+        element.ontouchstart = dragTouchStart;
+        
+        function dragMouseDown(e) {
+            if (e.target.tagName === 'BUTTON') return;
+            e.preventDefault();
+            pos3 = e.clientX;
+            pos4 = e.clientY;
+            document.onmouseup = closeDragElement;
+            document.onmousemove = elementDrag;
+        }
+        
+        function dragTouchStart(e) {
+            if (e.target.tagName === 'BUTTON') return;
+            const touch = e.touches[0];
+            pos3 = touch.clientX;
+            pos4 = touch.clientY;
+            document.ontouchend = closeDragElement;
+            document.ontouchmove = elementTouchDrag;
+        }
+        
+        function elementDrag(e) {
+            e.preventDefault();
+            pos1 = pos3 - e.clientX;
+            pos2 = pos4 - e.clientY;
+            pos3 = e.clientX;
+            pos4 = e.clientY;
+            element.style.top = (element.offsetTop - pos2) + "px";
+            element.style.left = (element.offsetLeft - pos1) + "px";
+            element.style.transform = 'none';
+        }
+        
+        function elementTouchDrag(e) {
+            const touch = e.touches[0];
+            pos1 = pos3 - touch.clientX;
+            pos2 = pos4 - touch.clientY;
+            pos3 = touch.clientX;
+            pos4 = touch.clientY;
+            element.style.top = (element.offsetTop - pos2) + "px";
+            element.style.left = (element.offsetLeft - pos1) + "px";
+            element.style.transform = 'none';
+        }
+        
+        function closeDragElement() {
+            document.onmouseup = null;
+            document.onmousemove = null;
+            document.ontouchend = null;
+            document.ontouchmove = null;
+        }
+    }
+
+    // ===========================================
+    // UI UPDATE FUNCTIONS
+    // ===========================================
+    function updateUI() {
+        // Update status dot
+        const dot = document.getElementById('gpt-status-dot');
         if (dot) {
-            dot.className = 'dot';
-            if (status === 'connected') dot.classList.add('connected');
-            else if (status === 'trading') dot.classList.add('trading');
+            dot.className = 'status-dot';
+            if (state.isTrading) {
+                dot.classList.add('trading');
+            } else if (state.connectionStatus === 'connected') {
+                dot.classList.add('connected');
+            } else {
+                dot.classList.add('error');
+            }
         }
         
-        if (signal && sigEl) {
-            const isCall = signal.direction === 'CALL' || signal.direction === 'BUY';
-            sigEl.textContent = isCall ? '📈 CALL' : '📉 PUT';
-            sigEl.className = 'signal ' + (isCall ? 'call' : 'put');
+        // Update connection status text
+        const connStatus = document.getElementById('gpt-connection-status');
+        if (connStatus) {
+            if (state.isTrading) {
+                connStatus.textContent = 'Executing trade...';
+                connStatus.style.color = '#f59e0b';
+            } else if (state.connectionStatus === 'connected') {
+                connStatus.textContent = 'Connected';
+                connStatus.style.color = '#22c55e';
+            } else {
+                connStatus.textContent = state.lastError || 'Disconnected';
+                connStatus.style.color = '#ef4444';
+            }
         }
         
-        if (tradesEl) tradesEl.textContent = tradeCount;
+        // Update signal display
+        updateSignalDisplay();
+        
+        // Update stats
+        const tradeCount = document.getElementById('gpt-trade-count');
+        const winCount = document.getElementById('gpt-win-count');
+        const lossCount = document.getElementById('gpt-loss-count');
+        const winRate = document.getElementById('gpt-win-rate');
+        
+        if (tradeCount) tradeCount.textContent = state.tradeCount;
+        if (winCount) winCount.textContent = state.winCount;
+        if (lossCount) lossCount.textContent = state.lossCount;
+        if (winRate) {
+            const total = state.winCount + state.lossCount;
+            winRate.textContent = total > 0 ? `${Math.round((state.winCount / total) * 100)}%` : '--%';
+        }
+        
+        // Update last fetch time
+        const lastFetch = document.getElementById('gpt-last-fetch');
+        if (lastFetch && state.lastFetchTime) {
+            const secondsAgo = Math.round((Date.now() - state.lastFetchTime) / 1000);
+            lastFetch.textContent = `${secondsAgo}s ago`;
+        }
+    }
+
+    function updateSignalDisplay() {
+        const directionEl = document.getElementById('gpt-signal-direction');
+        const metaEl = document.getElementById('gpt-signal-meta');
+        const symbolEl = document.getElementById('gpt-symbol');
+        const confidenceEl = document.getElementById('gpt-confidence');
+        const ageEl = document.getElementById('gpt-signal-age');
+        
+        if (!state.lastSignal) {
+            if (directionEl) {
+                directionEl.textContent = 'WAITING';
+                directionEl.className = 'signal-direction waiting';
+            }
+            if (metaEl) metaEl.textContent = 'Polling for new signals...';
+            if (symbolEl) symbolEl.textContent = '--';
+            if (confidenceEl) confidenceEl.textContent = '--%';
+            if (ageEl) ageEl.textContent = '--';
+            return;
+        }
+        
+        const signal = state.lastSignal;
+        const isCall = signal.direction === 'CALL' || signal.direction === 'BUY';
+        
+        if (directionEl) {
+            directionEl.textContent = isCall ? 'CALL' : 'PUT';
+            directionEl.className = `signal-direction ${isCall ? 'call' : 'put'}`;
+        }
+        
+        if (symbolEl) {
+            symbolEl.textContent = signal.symbol || '--';
+        }
+        
+        if (confidenceEl) {
+            const conf = signal.confidence || signal.probability || 0;
+            confidenceEl.textContent = `${Math.round(conf)}%`;
+            confidenceEl.style.color = conf >= 80 ? '#22c55e' : conf >= 60 ? '#f59e0b' : '#ef4444';
+        }
+        
+        // Calculate and display signal age
+        if (ageEl && signal.timestamp) {
+            try {
+                const signalTime = new Date(signal.timestamp).getTime();
+                const ageSeconds = Math.round((Date.now() - signalTime) / 1000);
+                ageEl.textContent = `${ageSeconds}s`;
+                ageEl.style.color = ageSeconds < 30 ? '#22c55e' : ageSeconds < 60 ? '#f59e0b' : '#ef4444';
+            } catch (e) {
+                ageEl.textContent = '--';
+            }
+        }
+        
+        if (metaEl) {
+            const strategy = signal.strategy || 'Unknown Strategy';
+            const timestamp = signal.timestamp ? new Date(signal.timestamp).toLocaleTimeString() : '--';
+            metaEl.textContent = `${strategy} | ${timestamp}`;
+        }
+    }
+
+    function updateAutoButton() {
+        const btn = document.getElementById('gpt-btn-auto');
+        if (btn) {
+            btn.textContent = CONFIG.AUTO_TRADE_ENABLED ? 'AUTO: ON' : 'AUTO: OFF';
+            btn.className = CONFIG.AUTO_TRADE_ENABLED ? 'btn-auto' : 'btn-auto off';
+        }
+    }
+
+    function updateSoundButton() {
+        const btn = document.getElementById('gpt-btn-sound');
+        if (btn) {
+            btn.textContent = CONFIG.SOUND_ENABLED ? 'SOUND' : 'MUTE';
+            btn.style.opacity = CONFIG.SOUND_ENABLED ? '1' : '0.6';
+        }
     }
 
     // ===========================================
-    // TOGGLE FUNCTIONS
+    // CONTROL FUNCTIONS
     // ===========================================
-    window.toggleAuto = function() {
+    function toggleAutoTrade() {
         CONFIG.AUTO_TRADE_ENABLED = !CONFIG.AUTO_TRADE_ENABLED;
-        const btn = document.getElementById('gpt-auto');
-        if (btn) {
-            btn.textContent = CONFIG.AUTO_TRADE_ENABLED ? 'AUTO ON' : 'AUTO OFF';
-            btn.className = 'btn-auto' + (CONFIG.AUTO_TRADE_ENABLED ? '' : ' off');
-        }
         GM_setValue('autoEnabled', CONFIG.AUTO_TRADE_ENABLED);
-        log('Auto-trade: ' + (CONFIG.AUTO_TRADE_ENABLED ? 'ON' : 'OFF'));
-    };
+        updateAutoButton();
+        log(`Auto-trade ${CONFIG.AUTO_TRADE_ENABLED ? 'ENABLED' : 'DISABLED'}`, CONFIG.AUTO_TRADE_ENABLED ? 'success' : 'warn');
+        
+        if (CONFIG.AUTO_TRADE_ENABLED) {
+            // Immediately check for signals when enabled
+            fetchSignal(true);
+        }
+    }
 
-    window.resetBot = function() {
-        log('RESETTING...');
-        isTrading = false;
-        lastProcessedSignalTime = 0;
+    function toggleSound() {
+        CONFIG.SOUND_ENABLED = !CONFIG.SOUND_ENABLED;
+        GM_setValue('soundEnabled', CONFIG.SOUND_ENABLED);
+        updateSoundButton();
+        log(`Sound ${CONFIG.SOUND_ENABLED ? 'enabled' : 'disabled'}`);
+        
+        // Play test sound if enabled
+        if (CONFIG.SOUND_ENABLED) {
+            playSound('test');
+        }
+    }
+
+    function resetBot() {
+        log('Resetting bot...', 'warn');
+        
+        // Reset state
+        state.lastProcessedSignalId = null;
+        state.lastProcessedSignalTime = 0;
+        state.lastSignal = null;
+        state.isTrading = false;
+        state.lastError = null;
+        
+        // Save reset state
+        GM_setValue('lastProcessedSignalId', null);
         GM_setValue('lastProcessedSignalTime', 0);
         
-        // Reset UI
-        const sigEl = document.getElementById('gpt-signal');
-        if (sigEl) {
-            sigEl.textContent = 'RESET - READY';
-            sigEl.className = 'signal wait';
-        }
-        updateUI('connected');
+        // Update UI
+        updateUI();
+        
+        log('Bot reset complete - ready for new signals', 'success');
         
         // Fetch immediately after reset
-        setTimeout(() => {
-            log('Fetching after reset...');
-            checkSignal(true);  // Force fetch
-        }, 500);
-    };
+        setTimeout(() => fetchSignal(true), 500);
+    }
 
-    window.fetchNow = function() {
-        log('Manual fetch...');
-        checkSignal(true);
-    };
+    function resetStats() {
+        state.tradeCount = 0;
+        state.winCount = 0;
+        state.lossCount = 0;
+        
+        GM_setValue('tradeCount', 0);
+        GM_setValue('winCount', 0);
+        GM_setValue('lossCount', 0);
+        
+        updateUI();
+        log('Stats reset', 'success');
+    }
 
     // ===========================================
     // SIGNAL FETCHING
     // ===========================================
-    function checkSignal(force = false) {
-        if (isTrading && !force) {
-            log('Busy trading...');
+    function fetchSignal(force = false) {
+        if (state.isTrading && !force) {
+            log('Busy trading, skipping fetch');
             return;
         }
 
-        log('Checking API...');
+        log('Fetching signal from API...');
+        state.lastFetchTime = Date.now();
         
         GM_xmlhttpRequest({
             method: 'GET',
-            url: CONFIG.API_URL + '/signals/latest',
+            url: `${CONFIG.API_URL}/signals/latest?use_enhanced=true`,
             headers: {
                 'Accept': 'application/json',
                 'Content-Type': 'application/json'
             },
-            timeout: 10000,
-            onload: function(res) {
-                try {
-                    log('API Response: ' + res.status);
-                    
-                    if (res.status !== 200) {
-                        log('API Error: ' + res.status);
-                        updateUI('disconnected');
-                        return;
-                    }
-                    
-                    const data = JSON.parse(res.responseText);
-                    updateUI('connected');
-                    
-                    if (data.success && data.signal) {
-                        const signal = data.signal;
-                        const signalTime = new Date(signal.timestamp).getTime();
-                        
-                        log('Signal: ' + signal.direction + ' ' + signal.symbol);
-                        
-                        // Check if this is a NEW signal (newer than last processed)
-                        if (signalTime > lastProcessedSignalTime || force) {
-                            log('🚨 NEW SIGNAL DETECTED!');
-                            
-                            // Update UI immediately
-                            updateUI('trading', signal);
-                            
-                            // Mark as processed BEFORE executing
-                            lastProcessedSignalTime = signalTime;
-                            GM_setValue('lastProcessedSignalTime', signalTime);
-                            
-                            if (CONFIG.AUTO_TRADE_ENABLED) {
-                                executeTrade(signal);
-                            } else {
-                                log('Auto OFF - signal shown only');
-                                updateUI('connected', signal);
-                            }
-                        } else {
-                            log('Same signal (age: ' + Math.round((Date.now() - signalTime)/1000) + 's)');
-                            updateUI('connected', signal);
-                        }
-                    } else {
-                        log(data.message || 'No signal available');
-                        const sigEl = document.getElementById('gpt-signal');
-                        if (sigEl) {
-                            sigEl.textContent = 'NO SIGNAL';
-                            sigEl.className = 'signal wait';
-                        }
-                    }
-                } catch (e) {
-                    log('Parse error: ' + e.message);
-                    updateUI('disconnected');
-                }
+            timeout: 15000,
+            onload: function(response) {
+                handleSignalResponse(response, force);
             },
-            onerror: function(err) {
-                log('Connection error!');
-                updateUI('disconnected');
+            onerror: function(error) {
+                state.connectionStatus = 'error';
+                state.lastError = 'Connection failed';
+                log('API connection error', 'error');
+                updateUI();
             },
             ontimeout: function() {
-                log('Request timeout!');
-                updateUI('disconnected');
+                state.connectionStatus = 'error';
+                state.lastError = 'Request timeout';
+                log('API request timeout', 'error');
+                updateUI();
             }
         });
+    }
+
+    function handleSignalResponse(response, force) {
+        try {
+            if (response.status !== 200) {
+                state.connectionStatus = 'error';
+                state.lastError = `HTTP ${response.status}`;
+                log(`API error: HTTP ${response.status}`, 'error');
+                updateUI();
+                return;
+            }
+
+            const data = JSON.parse(response.responseText);
+            state.connectionStatus = 'connected';
+            state.lastError = null;
+            
+            log(`API response: success=${data.success}`);
+
+            if (!data.success || !data.signal) {
+                log(data.message || 'No signal available');
+                state.lastSignal = null;
+                updateUI();
+                return;
+            }
+
+            const signal = data.signal;
+            const signalId = signal.id;
+            
+            // Get signal timestamp
+            let signalTime = 0;
+            if (signal.timestamp) {
+                try {
+                    signalTime = new Date(signal.timestamp).getTime();
+                } catch (e) {
+                    signalTime = Date.now();
+                }
+            }
+            
+            // Calculate signal age
+            const signalAgeSeconds = (Date.now() - signalTime) / 1000;
+            
+            // Update display regardless of whether we trade
+            state.lastSignal = signal;
+            updateUI();
+            
+            // Check if signal is too old
+            if (signalAgeSeconds > CONFIG.MAX_SIGNAL_AGE_SECONDS) {
+                log(`Signal too old (${Math.round(signalAgeSeconds)}s > ${CONFIG.MAX_SIGNAL_AGE_SECONDS}s)`, 'warn');
+                return;
+            }
+
+            // Check if this is a new signal we haven't processed
+            const isNewSignal = signalId !== state.lastProcessedSignalId || force;
+            const isNewerTime = signalTime > state.lastProcessedSignalTime;
+            
+            if ((isNewSignal && isNewerTime) || force) {
+                log(`NEW signal: ${signal.direction} ${signal.symbol} (${Math.round(signal.confidence || signal.probability || 0)}%)`, 'success');
+                
+                // Mark as processed BEFORE executing
+                state.lastProcessedSignalId = signalId;
+                state.lastProcessedSignalTime = signalTime;
+                GM_setValue('lastProcessedSignalId', signalId);
+                GM_setValue('lastProcessedSignalTime', signalTime);
+                
+                // Execute trade if auto-trade is enabled
+                if (CONFIG.AUTO_TRADE_ENABLED) {
+                    executeTrade(signal);
+                } else {
+                    log('Auto-trade OFF - signal displayed only', 'warn');
+                    playSound('signal');
+                }
+            } else {
+                log(`Same signal (${signalId}) - waiting for new signal`);
+            }
+            
+        } catch (error) {
+            state.connectionStatus = 'error';
+            state.lastError = 'Parse error';
+            log(`Response parse error: ${error.message}`, 'error');
+        }
+        
+        updateUI();
     }
 
     // ===========================================
     // TRADE EXECUTION
     // ===========================================
     function executeTrade(signal) {
-        if (isTrading) {
-            log('Already trading...');
+        if (state.isTrading) {
+            log('Already executing a trade', 'warn');
             return;
         }
-        
-        isTrading = true;
-        updateUI('trading', signal);
+
+        state.isTrading = true;
+        updateUI();
         
         const isCall = signal.direction === 'CALL' || signal.direction === 'BUY';
-        log(`Executing ${isCall ? 'CALL' : 'PUT'}...`);
+        const direction = isCall ? 'CALL' : 'PUT';
         
-        // Play sound
-        if (CONFIG.SOUND_ENABLED) {
-            try {
-                const ctx = new (window.AudioContext || window.webkitAudioContext)();
-                const osc = ctx.createOscillator();
-                osc.frequency.value = isCall ? 800 : 400;
-                osc.connect(ctx.destination);
-                osc.start();
-                setTimeout(() => osc.stop(), 200);
-            } catch(e) {}
+        log(`Executing ${direction} trade...`, 'success');
+        
+        // Play trade sound
+        playSound(isCall ? 'call' : 'put');
+        
+        // Show notification
+        try {
+            GM_notification({
+                title: `${direction} Signal`,
+                text: `${signal.symbol} - ${Math.round(signal.confidence || signal.probability || 0)}% confidence`,
+                timeout: 5000
+            });
+        } catch (e) {
+            // Notification may not be available
         }
         
         // Try to click the trade button
-        const clicked = clickButton(isCall);
+        const clicked = clickTradeButton(isCall);
         
         if (clicked) {
-            tradeCount++;
-            updateUI('trading', signal);
-            log('✅ Trade executed!');
-            
-            // Show notification
-            try {
-                GM_notification({
-                    title: isCall ? '📈 CALL Executed' : '📉 PUT Executed',
-                    text: signal.symbol + ' - ' + (signal.confidence || 85) + '%',
-                    timeout: 3000
-                });
-            } catch(e) {}
+            state.tradeCount++;
+            GM_setValue('tradeCount', state.tradeCount);
+            log(`Trade executed: ${direction}`, 'success');
         } else {
-            log('❌ Button not found!');
+            log('Trade button not found - manual action required', 'error');
         }
         
-        // Reset after cooldown
+        // Reset trading state after cooldown
         setTimeout(() => {
-            isTrading = false;
-            updateUI('connected');
+            state.isTrading = false;
+            updateUI();
             log('Ready for next signal');
-        }, 5000);
+        }, CONFIG.COOLDOWN_MS);
     }
 
-    function clickButton(isCall) {
-        // Pocket Option specific selectors
-        const selectors = isCall 
-            ? ['.btn-call', '.call-btn', '#put-call-buttons-chart-1 .btn-call', '[class*="btn-call"]']
-            : ['.btn-put', '.put-btn', '#put-call-buttons-chart-1 .btn-put', '[class*="btn-put"]'];
+    function clickTradeButton(isCall) {
+        // Pocket Option specific button selectors (mobile and desktop)
+        const callSelectors = [
+            '.btn-call',
+            '.call-btn', 
+            '[class*="btn-call"]',
+            '[class*="call"]button',
+            '#put-call-buttons-chart-1 .btn-call',
+            '.trading-panel__call',
+            '[data-testid="call-button"]',
+            'button.green',
+            '[class*="green"][class*="btn"]'
+        ];
         
-        for (const sel of selectors) {
-            const btn = document.querySelector(sel);
-            if (btn && btn.offsetParent !== null) {
-                log('Found button: ' + sel);
-                btn.click();
-                return true;
-            }
-        }
+        const putSelectors = [
+            '.btn-put',
+            '.put-btn',
+            '[class*="btn-put"]',
+            '[class*="put"]button',
+            '#put-call-buttons-chart-1 .btn-put',
+            '.trading-panel__put',
+            '[data-testid="put-button"]',
+            'button.red',
+            '[class*="red"][class*="btn"]'
+        ];
         
-        // Fallback: look for green/red buttons
-        const allBtns = document.querySelectorAll('button, .btn');
-        for (const btn of allBtns) {
-            const classes = (btn.className || '').toLowerCase();
-            const text = (btn.textContent || '').toLowerCase();
-            
-            if (isCall && (classes.includes('call') || classes.includes('green') || text.includes('call') || text.includes('higher'))) {
-                if (btn.offsetParent !== null && !classes.includes('put')) {
-                    log('Found CALL via fallback');
+        const selectors = isCall ? callSelectors : putSelectors;
+        
+        for (const selector of selectors) {
+            try {
+                const btn = document.querySelector(selector);
+                if (btn && btn.offsetParent !== null) {
+                    log(`Found ${isCall ? 'CALL' : 'PUT'} button: ${selector}`);
                     btn.click();
                     return true;
                 }
+            } catch (e) {
+                // Continue to next selector
             }
-            if (!isCall && (classes.includes('put') || classes.includes('red') || text.includes('put') || text.includes('lower'))) {
-                if (btn.offsetParent !== null && !classes.includes('call')) {
-                    log('Found PUT via fallback');
-                    btn.click();
-                    return true;
+        }
+        
+        // Fallback: Find button by text content
+        const allButtons = document.querySelectorAll('button, .btn, [role="button"]');
+        for (const btn of allButtons) {
+            if (btn.offsetParent === null) continue;
+            
+            const text = (btn.textContent || '').toLowerCase();
+            const classes = (btn.className || '').toLowerCase();
+            
+            if (isCall) {
+                if (text.includes('call') || text.includes('up') || text.includes('higher') ||
+                    classes.includes('call') || classes.includes('green') || classes.includes('up')) {
+                    if (!classes.includes('put') && !text.includes('put')) {
+                        log('Found CALL button via fallback');
+                        btn.click();
+                        return true;
+                    }
+                }
+            } else {
+                if (text.includes('put') || text.includes('down') || text.includes('lower') ||
+                    classes.includes('put') || classes.includes('red') || classes.includes('down')) {
+                    if (!classes.includes('call') && !text.includes('call')) {
+                        log('Found PUT button via fallback');
+                        btn.click();
+                        return true;
+                    }
                 }
             }
         }
@@ -380,32 +859,115 @@
     }
 
     // ===========================================
+    // SOUND FUNCTIONS
+    // ===========================================
+    function playSound(type) {
+        if (!CONFIG.SOUND_ENABLED) return;
+        
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            
+            // Different sounds for different events
+            switch (type) {
+                case 'call':
+                    osc.frequency.value = 880;  // High pitch for CALL
+                    gain.gain.value = 0.3;
+                    osc.start();
+                    setTimeout(() => osc.stop(), 200);
+                    break;
+                case 'put':
+                    osc.frequency.value = 440;  // Low pitch for PUT
+                    gain.gain.value = 0.3;
+                    osc.start();
+                    setTimeout(() => osc.stop(), 200);
+                    break;
+                case 'signal':
+                    osc.frequency.value = 660;  // Medium pitch for new signal
+                    gain.gain.value = 0.2;
+                    osc.start();
+                    setTimeout(() => { osc.frequency.value = 880; }, 100);
+                    setTimeout(() => osc.stop(), 200);
+                    break;
+                case 'test':
+                    osc.frequency.value = 523;  // C note
+                    gain.gain.value = 0.1;
+                    osc.start();
+                    setTimeout(() => osc.stop(), 100);
+                    break;
+            }
+        } catch (e) {
+            // Audio context may not be available
+        }
+    }
+
+    // ===========================================
+    // POLLING
+    // ===========================================
+    function startPolling() {
+        if (state.pollInterval) {
+            clearInterval(state.pollInterval);
+        }
+        
+        state.pollInterval = setInterval(() => {
+            fetchSignal(false);
+        }, CONFIG.POLL_INTERVAL);
+        
+        log(`Polling started (every ${CONFIG.POLL_INTERVAL/1000}s)`);
+    }
+
+    function stopPolling() {
+        if (state.pollInterval) {
+            clearInterval(state.pollInterval);
+            state.pollInterval = null;
+        }
+    }
+
+    // ===========================================
+    // MANUAL WIN/LOSS RECORDING
+    // ===========================================
+    window.recordWin = function() {
+        state.winCount++;
+        GM_setValue('winCount', state.winCount);
+        updateUI();
+        log('Win recorded!', 'success');
+    };
+
+    window.recordLoss = function() {
+        state.lossCount++;
+        GM_setValue('lossCount', state.lossCount);
+        updateUI();
+        log('Loss recorded', 'warn');
+    };
+
+    // ===========================================
     // INITIALIZATION
     // ===========================================
     function init() {
-        log('Initializing v2.0...');
+        log('Initializing GPT Signal Bot v3.0...');
         
+        // Wait for page to fully load
         setTimeout(() => {
             createPanel();
             
-            // Restore settings
-            CONFIG.AUTO_TRADE_ENABLED = GM_getValue('autoEnabled', true);
-            if (!CONFIG.AUTO_TRADE_ENABLED) {
-                const btn = document.getElementById('gpt-auto');
-                if (btn) {
-                    btn.textContent = 'AUTO OFF';
-                    btn.className = 'btn-auto off';
-                }
-            }
+            // Initial fetch
+            fetchSignal(false);
             
             // Start polling
-            setInterval(checkSignal, CONFIG.POLL_INTERVAL);
-            checkSignal();
+            startPolling();
             
-            log('Ready! Polling every ' + (CONFIG.POLL_INTERVAL/1000) + 's');
-        }, 2000);
+            // Update UI periodically (for signal age, etc.)
+            setInterval(updateUI, 1000);
+            
+            log('Bot initialized and ready!', 'success');
+        }, 2500);
     }
 
+    // Start initialization
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
     } else {
