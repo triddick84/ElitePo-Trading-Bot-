@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         GPT Signal Bot - Pocket Option Auto Trader v3.0
+// @name         GPT Signal Bot - Pocket Option Auto Trader v3.1
 // @namespace    https://signal-generator-pro.preview.emergentagent.com
-// @version      3.0.0
-// @description  Advanced auto-trader with comprehensive data display, auto on/off, fetch, and reset controls
+// @version      3.1.0
+// @description  Advanced auto-trader with floating/movable window, minimize, pin to corner, and comprehensive data display
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
