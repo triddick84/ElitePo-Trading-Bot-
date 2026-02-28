@@ -687,11 +687,16 @@
         const symbolEl = document.getElementById('gpt-symbol');
         const confidenceEl = document.getElementById('gpt-confidence');
         const ageEl = document.getElementById('gpt-signal-age');
+        const miniDirectionEl = document.getElementById('gpt-mini-direction');
         
         if (!state.lastSignal) {
             if (directionEl) {
                 directionEl.textContent = 'WAITING';
                 directionEl.className = 'signal-direction waiting';
+            }
+            if (miniDirectionEl) {
+                miniDirectionEl.textContent = 'WAITING';
+                miniDirectionEl.className = 'direction waiting';
             }
             if (metaEl) metaEl.textContent = 'Polling for new signals...';
             if (symbolEl) symbolEl.textContent = '--';
@@ -706,6 +711,13 @@
         if (directionEl) {
             directionEl.textContent = isCall ? 'CALL' : 'PUT';
             directionEl.className = `signal-direction ${isCall ? 'call' : 'put'}`;
+        }
+        
+        // Update minimized view
+        if (miniDirectionEl) {
+            const conf = signal.confidence || signal.probability || 0;
+            miniDirectionEl.textContent = `${isCall ? 'CALL' : 'PUT'} ${Math.round(conf)}%`;
+            miniDirectionEl.className = `direction ${isCall ? 'call' : 'put'}`;
         }
         
         if (symbolEl) {
@@ -748,7 +760,7 @@
     function updateSoundButton() {
         const btn = document.getElementById('gpt-btn-sound');
         if (btn) {
-            btn.textContent = CONFIG.SOUND_ENABLED ? 'SOUND' : 'MUTE';
+            btn.textContent = CONFIG.SOUND_ENABLED ? '🔊' : '🔇';
             btn.style.opacity = CONFIG.SOUND_ENABLED ? '1' : '0.6';
         }
     }
