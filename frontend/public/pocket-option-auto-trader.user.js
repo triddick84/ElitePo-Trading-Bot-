@@ -112,35 +112,93 @@
                     background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
                     border: 2px solid #7c3aed;
                     border-radius: 12px;
-                    padding: 12px 16px;
+                    padding: 0;
                     z-index: 999999;
                     font-family: 'Segoe UI', Arial, sans-serif;
                     color: white;
                     box-shadow: 0 8px 32px rgba(124, 58, 237, 0.4);
-                    min-width: 380px;
-                    max-width: 500px;
-                    cursor: move;
+                    min-width: 320px;
+                    max-width: 420px;
                     user-select: none;
+                    transition: box-shadow 0.2s, border-color 0.2s;
+                }
+                #gpt-panel.dragging {
+                    box-shadow: 0 12px 48px rgba(124, 58, 237, 0.6);
+                    border-color: #a78bfa;
+                }
+                #gpt-panel.minimized .panel-body {
+                    display: none;
+                }
+                #gpt-panel.minimized {
+                    min-width: 200px;
+                    max-width: 250px;
                 }
                 #gpt-panel * {
                     user-select: none;
                 }
-                #gpt-panel .header {
+                
+                /* Drag Handle */
+                #gpt-panel .drag-handle {
+                    background: linear-gradient(90deg, #7c3aed 0%, #6366f1 100%);
+                    padding: 8px 12px;
+                    border-radius: 10px 10px 0 0;
+                    cursor: move;
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
-                    margin-bottom: 10px;
-                    padding-bottom: 8px;
-                    border-bottom: 1px solid rgba(124, 58, 237, 0.3);
                 }
-                #gpt-panel .title {
-                    font-weight: bold;
-                    color: #a78bfa;
-                    font-size: 14px;
+                #gpt-panel .drag-handle:active {
+                    cursor: grabbing;
+                }
+                #gpt-panel .drag-handle .grip {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 2px;
+                    margin-right: 8px;
+                }
+                #gpt-panel .drag-handle .grip span {
+                    width: 16px;
+                    height: 2px;
+                    background: rgba(255,255,255,0.5);
+                    border-radius: 1px;
+                }
+                #gpt-panel .drag-handle .title-area {
                     display: flex;
                     align-items: center;
                     gap: 8px;
+                    flex: 1;
                 }
+                #gpt-panel .drag-handle .title {
+                    font-weight: bold;
+                    color: white;
+                    font-size: 13px;
+                }
+                #gpt-panel .drag-handle .controls-area {
+                    display: flex;
+                    gap: 6px;
+                }
+                #gpt-panel .drag-handle .mini-btn {
+                    width: 24px;
+                    height: 24px;
+                    border-radius: 4px;
+                    border: none;
+                    background: rgba(255,255,255,0.2);
+                    color: white;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 14px;
+                    transition: background 0.2s;
+                }
+                #gpt-panel .drag-handle .mini-btn:hover {
+                    background: rgba(255,255,255,0.3);
+                }
+                
+                #gpt-panel .panel-body {
+                    padding: 12px 16px;
+                }
+                
                 #gpt-panel .status-dot {
                     width: 10px;
                     height: 10px;
@@ -240,7 +298,7 @@
                 #gpt-panel .btn-sound {
                     background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
                     color: white;
-                    max-width: 80px;
+                    max-width: 70px;
                 }
                 
                 #gpt-panel .stats-row {
@@ -284,102 +342,214 @@
                     color: #64748b;
                     text-align: center;
                 }
+                
+                /* Minimized state indicator */
+                #gpt-panel .mini-signal {
+                    display: none;
+                    padding: 8px 12px;
+                    text-align: center;
+                }
+                #gpt-panel.minimized .mini-signal {
+                    display: block;
+                }
+                #gpt-panel .mini-signal .direction {
+                    font-weight: bold;
+                    font-size: 16px;
+                }
+                #gpt-panel .mini-signal .direction.call { color: #22c55e; }
+                #gpt-panel .mini-signal .direction.put { color: #ef4444; }
+                #gpt-panel .mini-signal .direction.waiting { color: #64748b; }
             </style>
             
-            <div class="header">
-                <div class="title">
+            <!-- Drag Handle -->
+            <div class="drag-handle" id="gpt-drag-handle">
+                <div class="grip">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+                <div class="title-area">
                     <span class="status-dot" id="gpt-status-dot"></span>
-                    <span>GPT Signal Bot v3.0</span>
+                    <span class="title">GPT Bot v3.0</span>
                 </div>
-                <div id="gpt-connection-status" style="font-size:10px;color:#94a3b8;">Initializing...</div>
-            </div>
-            
-            <div class="signal-box">
-                <div class="signal-direction waiting" id="gpt-signal-direction">WAITING</div>
-                <div class="signal-meta" id="gpt-signal-meta">No signal received yet</div>
-            </div>
-            
-            <div class="data-grid">
-                <div class="data-item">
-                    <div class="data-label">Symbol</div>
-                    <div class="data-value" id="gpt-symbol">--</div>
-                </div>
-                <div class="data-item">
-                    <div class="data-label">Confidence</div>
-                    <div class="data-value" id="gpt-confidence">--%</div>
-                </div>
-                <div class="data-item">
-                    <div class="data-label">Signal Age</div>
-                    <div class="data-value" id="gpt-signal-age">--</div>
-                </div>
-                <div class="data-item">
-                    <div class="data-label">Last Fetch</div>
-                    <div class="data-value" id="gpt-last-fetch">--</div>
+                <div class="controls-area">
+                    <button class="mini-btn" id="gpt-btn-minimize" title="Minimize/Expand">−</button>
+                    <button class="mini-btn" id="gpt-btn-pin" title="Pin to corner">📌</button>
                 </div>
             </div>
             
-            <div class="stats-row">
-                <div class="stat">
-                    <span class="stat-label">Trades:</span>
-                    <span class="stat-value" id="gpt-trade-count">0</span>
-                </div>
-                <div class="stat">
-                    <span class="stat-label">Wins:</span>
-                    <span class="stat-value win" id="gpt-win-count">0</span>
-                </div>
-                <div class="stat">
-                    <span class="stat-label">Losses:</span>
-                    <span class="stat-value loss" id="gpt-loss-count">0</span>
-                </div>
-                <div class="stat">
-                    <span class="stat-label">Win Rate:</span>
-                    <span class="stat-value" id="gpt-win-rate">--%</span>
-                </div>
+            <!-- Minimized View -->
+            <div class="mini-signal">
+                <span class="direction waiting" id="gpt-mini-direction">WAITING</span>
             </div>
             
-            <div class="controls">
-                <button class="btn-auto" id="gpt-btn-auto">AUTO: ON</button>
-                <button class="btn-fetch" id="gpt-btn-fetch">FETCH NOW</button>
-                <button class="btn-reset" id="gpt-btn-reset">RESET</button>
-                <button class="btn-sound" id="gpt-btn-sound">SOUND</button>
-            </div>
-            
-            <div class="log-box" id="gpt-log-box">
-                <div id="gpt-log-text">Initializing bot...</div>
-            </div>
-            
-            <div class="footer">
-                Poll: ${CONFIG.POLL_INTERVAL/1000}s | Cooldown: ${CONFIG.COOLDOWN_MS/1000}s | Max Age: ${CONFIG.MAX_SIGNAL_AGE_SECONDS}s
+            <!-- Full Panel Body -->
+            <div class="panel-body">
+                <div class="signal-box">
+                    <div class="signal-direction waiting" id="gpt-signal-direction">WAITING</div>
+                    <div class="signal-meta" id="gpt-signal-meta">No signal received yet</div>
+                </div>
+                
+                <div class="data-grid">
+                    <div class="data-item">
+                        <div class="data-label">Symbol</div>
+                        <div class="data-value" id="gpt-symbol">--</div>
+                    </div>
+                    <div class="data-item">
+                        <div class="data-label">Confidence</div>
+                        <div class="data-value" id="gpt-confidence">--%</div>
+                    </div>
+                    <div class="data-item">
+                        <div class="data-label">Signal Age</div>
+                        <div class="data-value" id="gpt-signal-age">--</div>
+                    </div>
+                    <div class="data-item">
+                        <div class="data-label">Last Fetch</div>
+                        <div class="data-value" id="gpt-last-fetch">--</div>
+                    </div>
+                </div>
+                
+                <div class="stats-row">
+                    <div class="stat">
+                        <span class="stat-label">Trades:</span>
+                        <span class="stat-value" id="gpt-trade-count">0</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Wins:</span>
+                        <span class="stat-value win" id="gpt-win-count">0</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Losses:</span>
+                        <span class="stat-value loss" id="gpt-loss-count">0</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Win Rate:</span>
+                        <span class="stat-value" id="gpt-win-rate">--%</span>
+                    </div>
+                </div>
+                
+                <div class="controls">
+                    <button class="btn-auto" id="gpt-btn-auto">AUTO: ON</button>
+                    <button class="btn-fetch" id="gpt-btn-fetch">FETCH</button>
+                    <button class="btn-reset" id="gpt-btn-reset">RESET</button>
+                    <button class="btn-sound" id="gpt-btn-sound">🔊</button>
+                </div>
+                
+                <div class="log-box" id="gpt-log-box">
+                    <div id="gpt-log-text">Initializing bot...</div>
+                </div>
+                
+                <div class="footer">
+                    Drag header to move | Click − to minimize
+                </div>
             </div>
         `;
         
         document.body.appendChild(panel);
         
-        // Make panel draggable
-        makeDraggable(panel);
+        // Restore saved position
+        if (state.panelPosition.left !== null) {
+            panel.style.left = state.panelPosition.left + 'px';
+            panel.style.top = state.panelPosition.top + 'px';
+            panel.style.transform = 'none';
+        }
+        
+        // Restore minimized state
+        if (state.panelMinimized) {
+            panel.classList.add('minimized');
+            document.getElementById('gpt-btn-minimize').textContent = '+';
+        }
+        
+        // Make panel draggable (only via drag handle)
+        makeDraggable(panel, document.getElementById('gpt-drag-handle'));
         
         // Attach button handlers
         document.getElementById('gpt-btn-auto').addEventListener('click', toggleAutoTrade);
         document.getElementById('gpt-btn-fetch').addEventListener('click', () => fetchSignal(true));
         document.getElementById('gpt-btn-reset').addEventListener('click', resetBot);
         document.getElementById('gpt-btn-sound').addEventListener('click', toggleSound);
+        document.getElementById('gpt-btn-minimize').addEventListener('click', toggleMinimize);
+        document.getElementById('gpt-btn-pin').addEventListener('click', pinToCorner);
         
         // Initialize button states
         updateAutoButton();
         updateSoundButton();
         
-        log('Panel created successfully', 'success');
+        log('Panel created - drag header to move', 'success');
     }
 
-    function makeDraggable(element) {
-        let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+    function toggleMinimize() {
+        const panel = document.getElementById('gpt-panel');
+        const btn = document.getElementById('gpt-btn-minimize');
         
-        element.onmousedown = dragMouseDown;
-        element.ontouchstart = dragTouchStart;
+        state.panelMinimized = !state.panelMinimized;
+        GM_setValue('panelMinimized', state.panelMinimized);
+        
+        if (state.panelMinimized) {
+            panel.classList.add('minimized');
+            btn.textContent = '+';
+        } else {
+            panel.classList.remove('minimized');
+            btn.textContent = '−';
+        }
+        
+        log(state.panelMinimized ? 'Panel minimized' : 'Panel expanded');
+    }
+
+    function pinToCorner() {
+        const panel = document.getElementById('gpt-panel');
+        
+        // Cycle through corners: top-left, top-right, bottom-right, bottom-left, center
+        const corners = [
+            { top: 10, left: 10 },
+            { top: 10, left: window.innerWidth - panel.offsetWidth - 10 },
+            { top: window.innerHeight - panel.offsetHeight - 10, left: window.innerWidth - panel.offsetWidth - 10 },
+            { top: window.innerHeight - panel.offsetHeight - 10, left: 10 },
+            { top: 10, left: (window.innerWidth - panel.offsetWidth) / 2 }
+        ];
+        
+        // Find current closest corner and move to next
+        let currentCorner = 0;
+        let minDist = Infinity;
+        const currentTop = panel.offsetTop;
+        const currentLeft = panel.offsetLeft;
+        
+        corners.forEach((corner, i) => {
+            const dist = Math.abs(corner.top - currentTop) + Math.abs(corner.left - currentLeft);
+            if (dist < minDist) {
+                minDist = dist;
+                currentCorner = i;
+            }
+        });
+        
+        const nextCorner = (currentCorner + 1) % corners.length;
+        const newPos = corners[nextCorner];
+        
+        panel.style.top = newPos.top + 'px';
+        panel.style.left = newPos.left + 'px';
+        panel.style.transform = 'none';
+        
+        // Save position
+        state.panelPosition = { top: newPos.top, left: newPos.left };
+        GM_setValue('panelPosition', state.panelPosition);
+        
+        log(`Pinned to ${['top-left', 'top-right', 'bottom-right', 'bottom-left', 'center'][nextCorner]}`);
+    }
+
+    function makeDraggable(element, handle) {
+        let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+        let isDragging = false;
+        
+        const dragTarget = handle || element;
+        
+        dragTarget.onmousedown = dragMouseDown;
+        dragTarget.ontouchstart = dragTouchStart;
         
         function dragMouseDown(e) {
             if (e.target.tagName === 'BUTTON') return;
             e.preventDefault();
+            isDragging = true;
+            element.classList.add('dragging');
             pos3 = e.clientX;
             pos4 = e.clientY;
             document.onmouseup = closeDragElement;
@@ -388,6 +558,8 @@
         
         function dragTouchStart(e) {
             if (e.target.tagName === 'BUTTON') return;
+            isDragging = true;
+            element.classList.add('dragging');
             const touch = e.touches[0];
             pos3 = touch.clientX;
             pos4 = touch.clientY;
@@ -396,32 +568,59 @@
         }
         
         function elementDrag(e) {
+            if (!isDragging) return;
             e.preventDefault();
             pos1 = pos3 - e.clientX;
             pos2 = pos4 - e.clientY;
             pos3 = e.clientX;
             pos4 = e.clientY;
-            element.style.top = (element.offsetTop - pos2) + "px";
-            element.style.left = (element.offsetLeft - pos1) + "px";
+            
+            let newTop = element.offsetTop - pos2;
+            let newLeft = element.offsetLeft - pos1;
+            
+            // Keep within viewport bounds
+            newTop = Math.max(0, Math.min(newTop, window.innerHeight - 50));
+            newLeft = Math.max(0, Math.min(newLeft, window.innerWidth - 50));
+            
+            element.style.top = newTop + "px";
+            element.style.left = newLeft + "px";
             element.style.transform = 'none';
         }
         
         function elementTouchDrag(e) {
+            if (!isDragging) return;
             const touch = e.touches[0];
             pos1 = pos3 - touch.clientX;
             pos2 = pos4 - touch.clientY;
             pos3 = touch.clientX;
             pos4 = touch.clientY;
-            element.style.top = (element.offsetTop - pos2) + "px";
-            element.style.left = (element.offsetLeft - pos1) + "px";
+            
+            let newTop = element.offsetTop - pos2;
+            let newLeft = element.offsetLeft - pos1;
+            
+            // Keep within viewport bounds
+            newTop = Math.max(0, Math.min(newTop, window.innerHeight - 50));
+            newLeft = Math.max(0, Math.min(newLeft, window.innerWidth - 50));
+            
+            element.style.top = newTop + "px";
+            element.style.left = newLeft + "px";
             element.style.transform = 'none';
         }
         
         function closeDragElement() {
+            isDragging = false;
+            element.classList.remove('dragging');
             document.onmouseup = null;
             document.onmousemove = null;
             document.ontouchend = null;
             document.ontouchmove = null;
+            
+            // Save position
+            state.panelPosition = { 
+                top: element.offsetTop, 
+                left: element.offsetLeft 
+            };
+            GM_setValue('panelPosition', state.panelPosition);
         }
     }
 
