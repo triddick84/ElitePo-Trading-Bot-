@@ -12341,7 +12341,7 @@ async def stop_price_stream():
 # Global state for auto-signal generation
 auto_signal_state = {
     "enabled": False,
-    "interval_seconds": 60,
+    "interval_seconds": 15,  # Changed from 60 to 15 seconds for faster signal generation
     "instruments": ["EUR_USD"],
     "timeframe": "M1",
     "min_confidence": 70,
