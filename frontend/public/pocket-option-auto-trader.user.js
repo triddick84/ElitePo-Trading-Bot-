@@ -54,7 +54,9 @@
         lastFetchTime: null,
         lastError: null,
         pollInterval: null,
-        apiStatus: 'unknown'
+        apiStatus: 'unknown',
+        panelMinimized: GM_getValue('panelMinimized', false),
+        panelPosition: GM_getValue('panelPosition', { top: 10, left: null })
     };
 
     // ===========================================
