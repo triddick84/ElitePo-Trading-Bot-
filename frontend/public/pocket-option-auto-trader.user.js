@@ -370,7 +370,7 @@
                 </div>
                 <div class="title-area">
                     <span class="status-dot" id="gpt-status-dot"></span>
-                    <span class="title">GPT Bot v3.0</span>
+                    <span class="title">GPT Bot v3.1</span>
                 </div>
                 <div class="controls-area">
                     <button class="mini-btn" id="gpt-btn-minimize" title="Minimize/Expand">−</button>
