@@ -1,0 +1,64 @@
+{
+  "summary": "Backend testing completed for GPT Signal Bot Auto Signal Generator APIs. All 9 tests passed. Verified 15-second signal generation interval, auto start/stop functionality, and latest signal endpoint for Tampermonkey userscript.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "notes": "Frontend testing skipped per request - backend only testing"
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_auto_signal_generator.py",
+    "/app/test_reports/pytest/pytest_auto_signal_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "OANDA integration may not be configured in all environments - auto signal generator gracefully handles this with error message"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_auto_signal_generator.py"
+  ],
+  "success_rate": {
+    "backend": "100% (9/9 tests passed)",
+    "frontend": "N/A (skipped per request)"
+  },
+  "test_credentials": {
+    "username": "triddick84",
+    "password": "Fallinone#1"
+  },
+  "seed_data_creation": "None - used existing auto-generated signals",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Auto Signal Generator APIs fully tested. Key verified features: 1) GET /api/signals/auto/status returns interval_seconds=15 (confirmed default). 2) POST /api/signals/auto/start successfully starts generator with 15s interval. 3) POST /api/signals/auto/stop correctly stops generator and returns stats. 4) GET /api/signals/latest returns signal with proper structure for userscript (id, symbol, direction, timestamp, confidence). 5) Signal generation verified to occur every ~15 seconds when running. 6) GET /api/health returns healthy status.",
+  "features_tested": {
+    "backend_endpoints": [
+      "GET /api/health - Returns healthy status with service info ✅",
+      "GET /api/signals/auto/status - Returns interval_seconds: 15, enabled status ✅",
+      "POST /api/signals/auto/start - Starts auto generation with 15s interval ✅",
+      "POST /api/signals/auto/stop - Stops generation and returns stats ✅",
+      "GET /api/signals/latest - Returns latest signal with proper structure ✅",
+      "GET /api/signals/latest?use_enhanced=true - Works with enhanced mode ✅"
+    ],
+    "signal_structure_verified": {
+      "id": "AUTO_YYYYMMDD_HHMMSS_SYMBOL format",
+      "symbol": "EURUSD",
+      "direction": "CALL or PUT (normalized)",
+      "timestamp": "ISO format",
+      "confidence": "Numeric percentage",
+      "probability": "Same as confidence",
+      "strategy": "Auto Signal Generator",
+      "source": "auto_generator"
+    },
+    "interval_verification": {
+      "default_interval": "15 seconds (confirmed in code and API response)",
+      "signal_generation_observed": "3 signals generated in ~30 seconds during testing"
+    }
+  },
+  "userscript_compatibility": {
+    "verified": true,
+    "notes": "Signal structure matches userscript expectations - id, symbol, direction, timestamp, confidence fields all present"
+  }
+}
