@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
-// @namespace    https://auto-trader-pro-3.preview.emergentagent.com
+// @namespace    https://signal-generator-pro.preview.emergentagent.com
 // @version      2.0.1
 // @description  Auto-trade on Pocket Option. v2.0.1 - Enhanced debugging and connection.
 // @author       GPT Signal Bot
@@ -30,7 +30,7 @@
     // CONFIGURATION
     // ===========================================
     const CONFIG = {
-        API_URL: 'https://auto-trader-pro-3.preview.emergentagent.com/api',
+        API_URL: 'https://signal-generator-pro.preview.emergentagent.com/api',
         POLL_INTERVAL: 3000,
         AUTO_TRADE_ENABLED: true,
         SOUND_ENABLED: true,
