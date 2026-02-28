@@ -12408,7 +12408,7 @@ async def auto_signal_generator_task():
 async def start_auto_signal_generation(
     instruments: str = Query("EUR_USD", description="Comma-separated instruments"),
     timeframe: str = Query("M1", description="Timeframe for analysis"),
-    interval_seconds: int = Query(60, ge=30, le=300, description="Interval between signal checks"),
+    interval_seconds: int = Query(15, ge=10, le=300, description="Interval between signal checks (default 15s)"),
     min_confidence: int = Query(70, ge=50, le=95, description="Minimum confidence to generate signal")
 ):
     """
