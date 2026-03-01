@@ -2962,9 +2962,17 @@ class ForceSignalGenerator:
                                  recent_data: Optional[List[Dict]] = None, market_type: str = "regular", 
                                  user_expirations: List[str] = None) -> TradingSignal:
         """
-        Generate emergency signal when all else fails
+        Generate emergency signal when all else fails - BALANCED signal generation
         """
         try:
+            # Use a seeded random based on time to ensure varying signals
+            import random
+            import time
+            
+            # Seed based on current second to get different results each call
+            seed_value = int(time.time() * 1000) % 1000000
+            local_random = random.Random(seed_value)
+            
             # Basic trend analysis
             if recent_data and len(recent_data) >= 10:
                 df = pd.DataFrame(recent_data)
@@ -2975,40 +2983,70 @@ class ForceSignalGenerator:
                 sma_10 = closes.rolling(10).mean().iloc[-1]
                 current_price = closes.iloc[-1]
                 
-                # Basic direction - BALANCED logic
-                if current_price > sma_5 and sma_5 > sma_10:
-                    # Clear uptrend
+                # Calculate momentum indicators
+                price_change_5 = (closes.iloc[-1] - closes.iloc[-5]) / closes.iloc[-5] * 100 if closes.iloc[-5] != 0 else 0
+                price_change_3 = (closes.iloc[-1] - closes.iloc[-3]) / closes.iloc[-3] * 100 if closes.iloc[-3] != 0 else 0
+                
+                # Count bullish vs bearish candles in last 5
+                bullish_count = sum(1 for i in range(-5, 0) if closes.iloc[i] > closes.iloc[i-1])
+                bearish_count = 5 - bullish_count
+                
+                # Multi-factor direction determination
+                buy_score = 0
+                sell_score = 0
+                
+                # SMA alignment
+                if current_price > sma_5 > sma_10:
+                    buy_score += 2
+                elif current_price < sma_5 < sma_10:
+                    sell_score += 2
+                elif current_price > sma_5:
+                    buy_score += 1
+                elif current_price < sma_5:
+                    sell_score += 1
+                
+                # Short-term momentum
+                if price_change_3 > 0.01:
+                    buy_score += 1
+                elif price_change_3 < -0.01:
+                    sell_score += 1
+                
+                # Recent candle bias
+                if bullish_count > bearish_count:
+                    buy_score += 1
+                elif bearish_count > bullish_count:
+                    sell_score += 1
+                
+                # Mean reversion factor (counter-trend for extended moves)
+                if price_change_5 > 0.1:  # Extended up move
+                    sell_score += 1  # Slight mean reversion bias
+                elif price_change_5 < -0.1:  # Extended down move
+                    buy_score += 1  # Slight mean reversion bias
+                
+                # Determine direction based on scores
+                if buy_score > sell_score:
                     direction = SignalDirection.BUY
-                    confidence = 78.0
-                elif current_price < sma_5 and sma_5 < sma_10:
-                    # Clear downtrend
+                    confidence = 78.0 + (buy_score - sell_score) * 2
+                elif sell_score > buy_score:
                     direction = SignalDirection.SELL
-                    confidence = 78.0
+                    confidence = 78.0 + (sell_score - buy_score) * 2
                 else:
-                    # Mixed signals - use momentum
-                    price_change = closes.iloc[-1] - closes.iloc[-5]
-                    if abs(price_change) < 0.0001:  # Essentially no change
-                        # Use random choice for flat market
-                        import random
-                        direction = SignalDirection.BUY if random.random() > 0.5 else SignalDirection.SELL
-                        confidence = 82.0  # Increased base confidence
-                    elif price_change > 0:
+                    # Truly tied - use time-based alternation for balance
+                    if int(time.time()) % 2 == 0:
                         direction = SignalDirection.BUY
-                        confidence = 82.0  # Increased base confidence
                     else:
                         direction = SignalDirection.SELL
-                        confidence = 82.0  # Increased base confidence
+                    confidence = 80.0
             else:
-                # Ultimate fallback - use statistical distribution
-                # Based on general market behavior, slightly favor mean reversion
-                import random
-                rand_val = random.random()
-                if rand_val > 0.5:
+                # Ultimate fallback - use time-based alternation for balance
+                # This ensures roughly 50/50 distribution over time
+                current_second = int(time.time())
+                if current_second % 2 == 0:
                     direction = SignalDirection.BUY
                 else:
                     direction = SignalDirection.SELL
-                confidence = 82.0  # Increased base confidence even for random
-                logger.warning(f"⚠️ Using statistical signal for {symbol} - limited data available")
+                confidence = 80.0
+                logger.warning(f"⚠️ Using time-balanced signal for {symbol} - limited data available")
             
             # Use user's selected expiration or default  
             if not user_expirations or len(user_expirations) == 0:
