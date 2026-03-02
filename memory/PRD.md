@@ -128,6 +128,12 @@ Complete rewrite with comprehensive features:
 
 ## API Endpoints Reference
 
+### High Accuracy Signal Generation (NEW)
+- `POST /api/signals/high-accuracy/generate` - Generate signal with multi-confirmation
+- `GET /api/signals/high-accuracy/strategies` - Get list of available strategies
+- `GET /api/signals/high-accuracy/performance` - Get performance statistics
+- `POST /api/signals/high-accuracy/record-result` - Record win/loss for tracking
+
 ### Pocket Option Real-Time Market Data (NEW)
 - `POST /api/pocket-option/realtime/connect` - Connect to PO WebSocket for live data
 - `POST /api/pocket-option/realtime/subscribe/{symbol}` - Subscribe to asset price updates
@@ -168,8 +174,11 @@ Complete rewrite with comprehensive features:
 - [x] Market Regime Detector
 - [x] Latency Correction System
 - [x] Dashboard UI Controls
-- [x] Pocket Option Real-Time Market Data Integration (NEW)
+- [x] Pocket Option Real-Time Market Data Integration
 - [x] Combined signal generation (OANDA + Pocket Option)
+- [x] High-Accuracy Trading Strategies (5s, 15s, 30s, 1m expiries)
+- [x] Multi-confirmation signal generation (4-5 confirmations required)
+- [x] AI Learning config save/load functionality verified
 
 ## P1 - High Priority (Next)
 - [ ] MetaTrader5 integration (playbook received, needs implementation)
