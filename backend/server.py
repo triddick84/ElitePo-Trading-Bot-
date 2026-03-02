@@ -91,6 +91,9 @@ from enhanced_oanda_service import enhanced_oanda, TechnicalAnalyzer
 # Import Pocket Option Real-Time Market Data
 from pocket_option_market_data import po_market_data, get_po_market_data_service
 
+# Import High Accuracy Trading Strategies
+from high_accuracy_strategies import high_accuracy_generator, get_high_accuracy_signal
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
@@ -4520,6 +4523,193 @@ async def disconnect_po_realtime():
     except Exception as e:
         logger.error(f"PO disconnect error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== HIGH ACCURACY SIGNAL GENERATION ====================
+
+@api_router.post("/signals/high-accuracy/generate")
+async def generate_high_accuracy_signal(
+    symbol: str = Query("EURUSD", description="Trading symbol"),
+    expiry: int = Query(None, description="Preferred expiry in seconds (5, 15, 30, 60)"),
+    use_pocket_option: bool = Query(True, description="Use Pocket Option real-time data if available")
+):
+    """
+    Generate high-accuracy trading signal using advanced multi-confirmation strategies
+    
+    Strategies by expiry:
+    - 5s: Ultra Scalping (RSI + BB + MACD + Price Patterns)
+    - 15s: Momentum Breakout (S/R Breakout + Volume + Momentum)
+    - 30s: Mean Reversion (Extreme RSI + Stochastic + BB)
+    - 60s: Trend Confirmation (EMA Alignment + ADX + Pullbacks)
+    
+    Returns signal only if confidence >= 65% with 4+ confirmations
+    """
+    try:
+        candles = []
+        current_price = 0
+        
+        # Try Pocket Option data first
+        if use_pocket_option and po_market_data.connection and po_market_data.connection.state.connected:
+            po_symbol = symbol.upper().replace("_", "")
+            market_data = po_market_data.get_market_data(po_symbol)
+            
+            if market_data:
+                current_price = market_data.current_price
+                
+                # Get candles from PO
+                if po_symbol in po_market_data.candle_history:
+                    if "1m" in po_market_data.candle_history[po_symbol]:
+                        candles = [c.to_dict() for c in po_market_data.candle_history[po_symbol]["1m"]]
+        
+        # Fallback to OANDA if no PO data
+        if not candles or not current_price:
+            oanda_symbol = symbol if "_" in symbol else f"{symbol[:3]}_{symbol[3:]}" if len(symbol) == 6 else symbol
+            try:
+                # Use the OANDA service to fetch candles - returns DataFrame
+                oanda_df = enhanced_oanda.get_candles(oanda_symbol, "M1", 100)
+                
+                if oanda_df is not None and not oanda_df.empty:
+                    # Convert DataFrame to list of dicts
+                    candles = oanda_df.reset_index().to_dict('records')
+                    # Ensure proper column names
+                    for c in candles:
+                        if 'timestamp' not in c and oanda_df.index.name == 'timestamp':
+                            pass  # index was reset, timestamp should be in dict
+                    
+                    if candles:
+                        last_candle = candles[-1]
+                        current_price = float(last_candle.get("close", 0))
+            except Exception as e:
+                logger.debug(f"OANDA candle fetch error: {e}")
+        
+        if not candles or not current_price:
+            return {
+                "success": False,
+                "message": "No market data available. Connect to Pocket Option or ensure OANDA is configured."
+            }
+        
+        # Generate high-accuracy signal
+        signal = get_high_accuracy_signal(candles, current_price, expiry)
+        
+        if signal:
+            # Save to database
+            signal_doc = {
+                "id": f"HA_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{symbol}",
+                "symbol": symbol,
+                "direction": signal["direction"],
+                "confidence": signal["confidence"],
+                "probability": signal["confidence"],
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "expiration_minutes": signal["expiry_seconds"] / 60,
+                "strategy": signal["strategy_name"],
+                "confirmations": signal["confirmations"],
+                "confirmations_count": signal["confirmations_count"],
+                "market_condition": signal["market_condition"],
+                "entry_price": signal["entry_price"],
+                "strength": signal["strength"],
+                "is_high_probability": signal["is_high_probability"],
+                "source": "high_accuracy_generator"
+            }
+            
+            await db.trading_signals.insert_one({**signal_doc})
+            
+            return {
+                "success": True,
+                "signal": signal,
+                "message": f"High accuracy {signal['direction']} signal generated with {signal['confirmations_count']} confirmations"
+            }
+        else:
+            return {
+                "success": False,
+                "message": "No high-probability setup found. Waiting for better conditions.",
+                "signal": None
+            }
+            
+    except Exception as e:
+        logger.error(f"High accuracy signal error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/signals/high-accuracy/performance")
+async def get_high_accuracy_performance():
+    """
+    Get performance statistics for high-accuracy strategies
+    """
+    try:
+        performance = high_accuracy_generator.get_performance()
+        
+        return {
+            "success": True,
+            "strategies": performance,
+            "total_signals_generated": len(high_accuracy_generator.signal_history)
+        }
+    except Exception as e:
+        logger.error(f"Performance stats error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/signals/high-accuracy/record-result")
+async def record_high_accuracy_result(
+    signal_timestamp: str,
+    won: bool
+):
+    """
+    Record trade result for high-accuracy strategy performance tracking
+    """
+    try:
+        high_accuracy_generator.record_result(signal_timestamp, won)
+        
+        return {
+            "success": True,
+            "message": f"Result recorded: {'WIN' if won else 'LOSS'}"
+        }
+    except Exception as e:
+        logger.error(f"Record result error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/signals/high-accuracy/strategies")
+async def get_high_accuracy_strategies():
+    """
+    Get list of available high-accuracy strategies with descriptions
+    """
+    return {
+        "success": True,
+        "strategies": [
+            {
+                "name": "ultra_scalping_5s",
+                "expiry": 5,
+                "description": "Ultra-fast scalping using RSI, Bollinger Bands, MACD with micro-confirmations",
+                "min_confirmations": 4,
+                "best_market": "Ranging/Low volatility",
+                "indicators": ["RSI(7)", "BB(10,1.5)", "MACD(8,17,6)", "Price Patterns"]
+            },
+            {
+                "name": "momentum_breakout_15s",
+                "expiry": 15,
+                "description": "Momentum breakout at key support/resistance levels with volume confirmation",
+                "min_confirmations": 4,
+                "best_market": "Trending/Breakout",
+                "indicators": ["Support/Resistance", "Volume Spike", "RSI(14)", "MACD(12,26,9)"]
+            },
+            {
+                "name": "mean_reversion_30s",
+                "expiry": 30,
+                "description": "Mean reversion at extreme levels with Stochastic crossover confirmation",
+                "min_confirmations": 4,
+                "best_market": "Ranging",
+                "indicators": ["RSI(14)", "Stochastic(14,3)", "BB(20,2)", "Candle Patterns"]
+            },
+            {
+                "name": "trend_confirmation_1m",
+                "expiry": 60,
+                "description": "Trend continuation with EMA alignment and ADX strength confirmation",
+                "min_confirmations": 5,
+                "best_market": "Strong trending",
+                "indicators": ["EMA(9,21,50)", "ADX(14)", "RSI(14)", "MACD(12,26,9)"]
+            }
+        ]
+    }
 
 
 # ==================== MULTI-TIMEFRAME ANALYSIS ENDPOINTS ====================
@@ -12536,10 +12726,10 @@ auto_signal_state = {
 }
 
 async def auto_signal_generator_task():
-    """Background task that continuously generates signals using OANDA and Pocket Option data"""
+    """Background task that continuously generates signals using OANDA, Pocket Option, and High-Accuracy strategies"""
     global auto_signal_state
     
-    logger.info("🚀 Auto Signal Generator started")
+    logger.info("🚀 Auto Signal Generator started with High-Accuracy Strategies")
     
     while auto_signal_state["enabled"]:
         try:
@@ -12547,12 +12737,24 @@ async def auto_signal_generator_task():
                 if not auto_signal_state["enabled"]:
                     break
                 
+                candles = []
+                current_price = 0
+                
                 # Try Pocket Option data first if connected
                 po_signal = None
                 try:
                     if po_market_data.connection and po_market_data.connection.state.connected:
-                        # Map OANDA symbol to PO symbol
                         po_symbol = instrument.replace("_", "")
+                        market_data = po_market_data.get_market_data(po_symbol)
+                        
+                        if market_data:
+                            current_price = market_data.current_price
+                            
+                            # Get candles from PO for high-accuracy analysis
+                            if po_symbol in po_market_data.candle_history:
+                                if "1m" in po_market_data.candle_history[po_symbol]:
+                                    candles = [c.to_dict() for c in po_market_data.candle_history[po_symbol]["1m"]]
+                        
                         po_result = po_market_data.generate_signal(po_symbol, "1m")
                         if po_result.get("success") and po_result.get("direction") != "HOLD":
                             po_signal = po_result
@@ -12560,9 +12762,16 @@ async def auto_signal_generator_task():
                 except Exception as e:
                     logger.debug(f"PO signal generation skipped: {e}")
                 
-                # Generate OANDA trend signal
+                # Generate OANDA trend signal and get candles
                 oanda_signal = None
                 try:
+                    oanda_data = enhanced_oanda.get_candles_with_analysis(instrument, "M1", 100)
+                    if oanda_data.get("candles"):
+                        if not candles:
+                            candles = oanda_data["candles"]
+                        if not current_price and candles:
+                            current_price = candles[-1].get("close", 0)
+                    
                     trend_signal = enhanced_oanda.generate_trend_signal(
                         instrument, 
                         auto_signal_state["timeframe"]
@@ -12572,74 +12781,89 @@ async def auto_signal_generator_task():
                             "direction": trend_signal.recommended_action,
                             "confidence": trend_signal.confidence,
                             "entry_price": trend_signal.entry_price,
-                            "stop_loss": trend_signal.stop_loss,
-                            "take_profit": trend_signal.take_profit,
-                            "trend_direction": trend_signal.direction,
-                            "trend_strength": trend_signal.strength.value,
                             "supporting_indicators": trend_signal.supporting_indicators
                         }
                         logger.info(f"📊 OANDA Signal: {oanda_signal['direction']} {instrument} ({oanda_signal['confidence']:.1f}%)")
                 except Exception as e:
                     logger.debug(f"OANDA signal generation skipped: {e}")
                 
-                # Combine signals for best result
+                # Generate HIGH-ACCURACY signal using advanced strategies
+                ha_signal = None
+                try:
+                    if candles and current_price:
+                        ha_result = get_high_accuracy_signal(candles, current_price, expiry=60)
+                        if ha_result and ha_result.get("confidence", 0) >= 65:
+                            ha_signal = ha_result
+                            logger.info(f"🎯 HIGH-ACCURACY Signal: {ha_signal['direction']} ({ha_signal['confidence']:.1f}%) [{ha_signal['confirmations_count']} confirmations]")
+                except Exception as e:
+                    logger.debug(f"High-accuracy signal generation skipped: {e}")
+                
+                # Combine all signals using voting and confidence weighting
                 final_signal = None
                 source = "auto_generator"
                 
-                if po_signal and oanda_signal:
-                    # Both sources available - combine them
-                    po_dir = po_signal.get("direction")
-                    oanda_dir = oanda_signal.get("direction")
-                    po_conf = po_signal.get("confidence", 0)
-                    oanda_conf = oanda_signal.get("confidence", 0)
+                signals_available = []
+                if ha_signal:
+                    signals_available.append(("high_accuracy", ha_signal.get("direction"), ha_signal.get("confidence", 0)))
+                if po_signal:
+                    signals_available.append(("pocket_option", po_signal.get("direction"), po_signal.get("confidence", 0)))
+                if oanda_signal:
+                    signals_available.append(("oanda", oanda_signal.get("direction"), oanda_signal.get("confidence", 0)))
+                
+                if signals_available:
+                    # Count votes for each direction
+                    call_votes = sum(1 for s in signals_available if s[1] in ["CALL", "BUY"])
+                    put_votes = sum(1 for s in signals_available if s[1] in ["PUT", "SELL"])
                     
-                    if po_dir == oanda_dir:
-                        # Agreement - high confidence
+                    call_conf = sum(s[2] for s in signals_available if s[1] in ["CALL", "BUY"]) / max(1, call_votes) if call_votes else 0
+                    put_conf = sum(s[2] for s in signals_available if s[1] in ["PUT", "SELL"]) / max(1, put_votes) if put_votes else 0
+                    
+                    # Prioritize HIGH-ACCURACY signal if available and strong
+                    if ha_signal and ha_signal.get("is_high_probability"):
                         final_signal = {
-                            "direction": po_dir,
-                            "confidence": min(95, (po_conf + oanda_conf) / 2 + 10),
-                            "entry_price": oanda_signal.get("entry_price", po_signal.get("current_price", 0)),
-                            "supporting_indicators": oanda_signal.get("supporting_indicators", [])
+                            "direction": ha_signal["direction"],
+                            "confidence": ha_signal["confidence"],
+                            "entry_price": ha_signal.get("entry_price", current_price),
+                            "supporting_indicators": ha_signal.get("confirmations", []),
+                            "strategy": ha_signal.get("strategy_name", "high_accuracy")
                         }
-                        source = "combined_oanda_po"
-                        logger.info(f"✅ Signals AGREE: {po_dir}")
-                    else:
-                        # Disagreement - use higher confidence source
-                        if po_conf > oanda_conf:
-                            final_signal = {
-                                "direction": po_dir,
-                                "confidence": po_conf,
-                                "entry_price": po_signal.get("current_price", 0),
-                                "supporting_indicators": po_signal.get("reasons", [])
-                            }
-                            source = "pocket_option"
-                        else:
-                            final_signal = {
-                                "direction": oanda_dir,
-                                "confidence": oanda_conf,
-                                "entry_price": oanda_signal.get("entry_price", 0),
-                                "supporting_indicators": oanda_signal.get("supporting_indicators", [])
-                            }
-                            source = "oanda"
-                        logger.info(f"⚠️ Signals DISAGREE: PO={po_dir}, OANDA={oanda_dir}. Using {source}")
-                        
-                elif po_signal:
-                    final_signal = {
-                        "direction": po_signal.get("direction"),
-                        "confidence": po_signal.get("confidence", 75),
-                        "entry_price": po_signal.get("current_price", 0),
-                        "supporting_indicators": po_signal.get("reasons", [])
-                    }
-                    source = "pocket_option"
+                        source = "high_accuracy"
+                        logger.info(f"✨ Using HIGH-ACCURACY signal with {ha_signal['confirmations_count']} confirmations")
                     
-                elif oanda_signal:
-                    final_signal = {
-                        "direction": oanda_signal.get("direction"),
-                        "confidence": oanda_signal.get("confidence", 75),
-                        "entry_price": oanda_signal.get("entry_price", 0),
-                        "supporting_indicators": oanda_signal.get("supporting_indicators", [])
-                    }
-                    source = "oanda"
+                    # Otherwise use consensus/voting
+                    elif call_votes > put_votes and call_conf >= auto_signal_state["min_confidence"]:
+                        confidence_boost = 5 if call_votes >= 2 else 0
+                        final_signal = {
+                            "direction": "CALL",
+                            "confidence": min(95, call_conf + confidence_boost),
+                            "entry_price": current_price,
+                            "supporting_indicators": [f"{s[0]}:{s[1]}" for s in signals_available],
+                            "strategy": "consensus"
+                        }
+                        source = f"consensus_{call_votes}_sources"
+                        
+                    elif put_votes > call_votes and put_conf >= auto_signal_state["min_confidence"]:
+                        confidence_boost = 5 if put_votes >= 2 else 0
+                        final_signal = {
+                            "direction": "PUT",
+                            "confidence": min(95, put_conf + confidence_boost),
+                            "entry_price": current_price,
+                            "supporting_indicators": [f"{s[0]}:{s[1]}" for s in signals_available],
+                            "strategy": "consensus"
+                        }
+                        source = f"consensus_{put_votes}_sources"
+                    
+                    # Single source fallback
+                    elif len(signals_available) == 1:
+                        best = signals_available[0]
+                        final_signal = {
+                            "direction": best[1],
+                            "confidence": best[2],
+                            "entry_price": current_price,
+                            "supporting_indicators": [],
+                            "strategy": best[0]
+                        }
+                        source = best[0]
                 
                 # Save signal if meets confidence threshold
                 if final_signal and final_signal["confidence"] >= auto_signal_state["min_confidence"]:
@@ -12651,7 +12875,7 @@ async def auto_signal_generator_task():
                         "confidence": final_signal["confidence"],
                         "probability": final_signal["confidence"],
                         "expiration_minutes": 1,
-                        "strategy": "Auto Signal Generator",
+                        "strategy": final_signal.get("strategy", "Auto Signal Generator"),
                         "entry_price": final_signal.get("entry_price", 0),
                         "supporting_indicators": final_signal.get("supporting_indicators", []),
                         "source": source
