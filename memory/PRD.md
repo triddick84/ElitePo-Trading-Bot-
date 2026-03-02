@@ -128,6 +128,15 @@ Complete rewrite with comprehensive features:
 
 ## API Endpoints Reference
 
+### Pocket Option Real-Time Market Data (NEW)
+- `POST /api/pocket-option/realtime/connect` - Connect to PO WebSocket for live data
+- `POST /api/pocket-option/realtime/subscribe/{symbol}` - Subscribe to asset price updates
+- `GET /api/pocket-option/realtime/market-data/{symbol}` - Get current price + indicators
+- `GET /api/pocket-option/realtime/signal/{symbol}` - Generate signal from PO data
+- `GET /api/pocket-option/realtime/candles/{symbol}` - Get candle history
+- `GET /api/pocket-option/realtime/status` - Check connection status
+- `POST /api/pocket-option/realtime/disconnect` - Disconnect from PO
+
 ### Auto Signal Generator (15-second interval)
 - `POST /api/signals/auto/start` - Start auto generation
 - `POST /api/signals/auto/stop` - Stop auto generation
@@ -159,6 +168,8 @@ Complete rewrite with comprehensive features:
 - [x] Market Regime Detector
 - [x] Latency Correction System
 - [x] Dashboard UI Controls
+- [x] Pocket Option Real-Time Market Data Integration (NEW)
+- [x] Combined signal generation (OANDA + Pocket Option)
 
 ## P1 - High Priority (Next)
 - [ ] MetaTrader5 integration (playbook received, needs implementation)

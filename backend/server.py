@@ -88,6 +88,9 @@ from enhanced_ai_trading_system import enhanced_ai_system
 from oanda_market_data_service import oanda_service
 from enhanced_oanda_service import enhanced_oanda, TechnicalAnalyzer
 
+# Import Pocket Option Real-Time Market Data
+from pocket_option_market_data import po_market_data, get_po_market_data_service
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
@@ -4334,6 +4337,188 @@ async def get_pocket_option_candles(
         }
     except Exception as e:
         logger.error(f"Error getting candles: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== POCKET OPTION REAL-TIME MARKET DATA ====================
+
+@api_router.post("/pocket-option/realtime/connect")
+async def connect_po_realtime(ssid: str, is_demo: bool = True):
+    """
+    Connect to Pocket Option for real-time market data
+    
+    Args:
+        ssid: Full SSID string (42["auth",...] format) or simple session cookie
+        is_demo: Whether to connect to demo account
+    """
+    try:
+        # Build full SSID if simple format provided
+        if not ssid.startswith('42["auth"'):
+            # Simple SSID format - build full auth message
+            uid = int(os.getenv('POCKET_OPTION_UID', '0'))
+            auth_data = {
+                "session": ssid,
+                "isDemo": 1 if is_demo else 0,
+                "uid": uid
+            }
+            full_ssid = f'42["auth",{json.dumps(auth_data)}]'
+        else:
+            full_ssid = ssid
+        
+        success = await po_market_data.connect(full_ssid, is_demo)
+        
+        if success:
+            return {
+                "success": True,
+                "message": "Connected to Pocket Option real-time data",
+                "is_demo": is_demo
+            }
+        else:
+            return {
+                "success": False,
+                "message": "Failed to connect to Pocket Option"
+            }
+    except Exception as e:
+        logger.error(f"PO realtime connect error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/pocket-option/realtime/subscribe/{symbol}")
+async def subscribe_po_asset(symbol: str):
+    """
+    Subscribe to real-time price updates for an asset
+    
+    Args:
+        symbol: Asset symbol (e.g., EURUSD, EURUSD_OTC, BTCUSD)
+    """
+    try:
+        success = await po_market_data.subscribe_asset(symbol.upper())
+        
+        return {
+            "success": success,
+            "symbol": symbol.upper(),
+            "message": f"Subscribed to {symbol}" if success else f"Failed to subscribe to {symbol}"
+        }
+    except Exception as e:
+        logger.error(f"PO subscribe error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/pocket-option/realtime/market-data/{symbol}")
+async def get_po_market_data(symbol: str):
+    """
+    Get current market data for a symbol from Pocket Option
+    
+    Returns real-time price, indicators, and trend analysis
+    """
+    try:
+        market_data = po_market_data.get_market_data(symbol.upper())
+        
+        if market_data:
+            # Calculate indicators
+            indicators = po_market_data.calculate_indicators(symbol.upper(), "1m")
+            
+            return {
+                "success": True,
+                "symbol": symbol.upper(),
+                "data": market_data.to_dict(),
+                "indicators": indicators
+            }
+        else:
+            return {
+                "success": False,
+                "message": f"No market data available for {symbol}. Subscribe to the asset first."
+            }
+    except Exception as e:
+        logger.error(f"PO market data error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/pocket-option/realtime/signal/{symbol}")
+async def get_po_realtime_signal(symbol: str, timeframe: str = "1m"):
+    """
+    Generate trading signal from Pocket Option real-time data
+    
+    Args:
+        symbol: Asset symbol
+        timeframe: Timeframe for analysis (5s, 1m, 5m, etc.)
+    """
+    try:
+        signal = po_market_data.generate_signal(symbol.upper(), timeframe)
+        return signal
+    except Exception as e:
+        logger.error(f"PO signal generation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/pocket-option/realtime/candles/{symbol}")
+async def get_po_candles(symbol: str, timeframe: str = "1m", count: int = 100):
+    """
+    Get candle history from Pocket Option
+    
+    Args:
+        symbol: Asset symbol
+        timeframe: Candle timeframe (5s, 1m, 5m, 15m, 1h)
+        count: Number of candles to retrieve
+    """
+    try:
+        candles = await po_market_data.get_candles(symbol.upper(), timeframe, count)
+        
+        return {
+            "success": True,
+            "symbol": symbol.upper(),
+            "timeframe": timeframe,
+            "count": len(candles),
+            "candles": candles
+        }
+    except Exception as e:
+        logger.error(f"PO candles error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/pocket-option/realtime/status")
+async def get_po_realtime_status():
+    """
+    Get Pocket Option real-time connection status
+    """
+    try:
+        connection = po_market_data.connection
+        
+        if connection:
+            state = connection.get_state()
+            return {
+                "success": True,
+                "connected": state.get("connected", False),
+                "authenticated": state.get("authenticated", False),
+                "balance": state.get("balance", 0),
+                "subscribed_assets": po_market_data.subscribed_assets,
+                "market_data_count": len(po_market_data.market_data),
+                "state": state
+            }
+        else:
+            return {
+                "success": False,
+                "connected": False,
+                "message": "Not connected to Pocket Option"
+            }
+    except Exception as e:
+        logger.error(f"PO status error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/pocket-option/realtime/disconnect")
+async def disconnect_po_realtime():
+    """
+    Disconnect from Pocket Option real-time data
+    """
+    try:
+        await po_market_data.disconnect()
+        return {
+            "success": True,
+            "message": "Disconnected from Pocket Option"
+        }
+    except Exception as e:
+        logger.error(f"PO disconnect error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -12351,7 +12536,7 @@ auto_signal_state = {
 }
 
 async def auto_signal_generator_task():
-    """Background task that continuously generates signals"""
+    """Background task that continuously generates signals using OANDA and Pocket Option data"""
     global auto_signal_state
     
     logger.info("🚀 Auto Signal Generator started")
@@ -12362,38 +12547,121 @@ async def auto_signal_generator_task():
                 if not auto_signal_state["enabled"]:
                     break
                 
-                # Generate trend signal
-                trend_signal = enhanced_oanda.generate_trend_signal(
-                    instrument, 
-                    auto_signal_state["timeframe"]
-                )
+                # Try Pocket Option data first if connected
+                po_signal = None
+                try:
+                    if po_market_data.connection and po_market_data.connection.state.connected:
+                        # Map OANDA symbol to PO symbol
+                        po_symbol = instrument.replace("_", "")
+                        po_result = po_market_data.generate_signal(po_symbol, "1m")
+                        if po_result.get("success") and po_result.get("direction") != "HOLD":
+                            po_signal = po_result
+                            logger.info(f"📊 PO Signal: {po_signal.get('direction')} {po_symbol} ({po_signal.get('confidence', 0):.1f}%)")
+                except Exception as e:
+                    logger.debug(f"PO signal generation skipped: {e}")
                 
-                if trend_signal and trend_signal.recommended_action != "HOLD":
-                    if trend_signal.confidence >= auto_signal_state["min_confidence"]:
-                        # Create and save signal
-                        new_signal = {
-                            "id": f"AUTO_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{instrument.replace('_', '')}",
-                            "symbol": instrument.replace("_", ""),
+                # Generate OANDA trend signal
+                oanda_signal = None
+                try:
+                    trend_signal = enhanced_oanda.generate_trend_signal(
+                        instrument, 
+                        auto_signal_state["timeframe"]
+                    )
+                    if trend_signal and trend_signal.recommended_action != "HOLD":
+                        oanda_signal = {
                             "direction": trend_signal.recommended_action,
-                            "timestamp": datetime.now(timezone.utc).isoformat(),
                             "confidence": trend_signal.confidence,
-                            "probability": trend_signal.confidence,
-                            "expiration_minutes": 1,
-                            "strategy": "Auto Signal Generator",
-                            "trend_direction": trend_signal.direction,
-                            "trend_strength": trend_signal.strength.value,
                             "entry_price": trend_signal.entry_price,
                             "stop_loss": trend_signal.stop_loss,
                             "take_profit": trend_signal.take_profit,
-                            "supporting_indicators": trend_signal.supporting_indicators,
-                            "source": "auto_generator"
+                            "trend_direction": trend_signal.direction,
+                            "trend_strength": trend_signal.strength.value,
+                            "supporting_indicators": trend_signal.supporting_indicators
                         }
+                        logger.info(f"📊 OANDA Signal: {oanda_signal['direction']} {instrument} ({oanda_signal['confidence']:.1f}%)")
+                except Exception as e:
+                    logger.debug(f"OANDA signal generation skipped: {e}")
+                
+                # Combine signals for best result
+                final_signal = None
+                source = "auto_generator"
+                
+                if po_signal and oanda_signal:
+                    # Both sources available - combine them
+                    po_dir = po_signal.get("direction")
+                    oanda_dir = oanda_signal.get("direction")
+                    po_conf = po_signal.get("confidence", 0)
+                    oanda_conf = oanda_signal.get("confidence", 0)
+                    
+                    if po_dir == oanda_dir:
+                        # Agreement - high confidence
+                        final_signal = {
+                            "direction": po_dir,
+                            "confidence": min(95, (po_conf + oanda_conf) / 2 + 10),
+                            "entry_price": oanda_signal.get("entry_price", po_signal.get("current_price", 0)),
+                            "supporting_indicators": oanda_signal.get("supporting_indicators", [])
+                        }
+                        source = "combined_oanda_po"
+                        logger.info(f"✅ Signals AGREE: {po_dir}")
+                    else:
+                        # Disagreement - use higher confidence source
+                        if po_conf > oanda_conf:
+                            final_signal = {
+                                "direction": po_dir,
+                                "confidence": po_conf,
+                                "entry_price": po_signal.get("current_price", 0),
+                                "supporting_indicators": po_signal.get("reasons", [])
+                            }
+                            source = "pocket_option"
+                        else:
+                            final_signal = {
+                                "direction": oanda_dir,
+                                "confidence": oanda_conf,
+                                "entry_price": oanda_signal.get("entry_price", 0),
+                                "supporting_indicators": oanda_signal.get("supporting_indicators", [])
+                            }
+                            source = "oanda"
+                        logger.info(f"⚠️ Signals DISAGREE: PO={po_dir}, OANDA={oanda_dir}. Using {source}")
                         
-                        await db.trading_signals.insert_one({**new_signal})
-                        auto_signal_state["signals_generated"] += 1
-                        auto_signal_state["last_signal_time"] = datetime.now(timezone.utc).isoformat()
-                        
-                        logger.info(f"📊 Auto-generated signal: {new_signal['direction']} {new_signal['symbol']} ({new_signal['confidence']:.1f}%)")
+                elif po_signal:
+                    final_signal = {
+                        "direction": po_signal.get("direction"),
+                        "confidence": po_signal.get("confidence", 75),
+                        "entry_price": po_signal.get("current_price", 0),
+                        "supporting_indicators": po_signal.get("reasons", [])
+                    }
+                    source = "pocket_option"
+                    
+                elif oanda_signal:
+                    final_signal = {
+                        "direction": oanda_signal.get("direction"),
+                        "confidence": oanda_signal.get("confidence", 75),
+                        "entry_price": oanda_signal.get("entry_price", 0),
+                        "supporting_indicators": oanda_signal.get("supporting_indicators", [])
+                    }
+                    source = "oanda"
+                
+                # Save signal if meets confidence threshold
+                if final_signal and final_signal["confidence"] >= auto_signal_state["min_confidence"]:
+                    new_signal = {
+                        "id": f"AUTO_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{instrument.replace('_', '')}",
+                        "symbol": instrument.replace("_", ""),
+                        "direction": final_signal["direction"],
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "confidence": final_signal["confidence"],
+                        "probability": final_signal["confidence"],
+                        "expiration_minutes": 1,
+                        "strategy": "Auto Signal Generator",
+                        "entry_price": final_signal.get("entry_price", 0),
+                        "supporting_indicators": final_signal.get("supporting_indicators", []),
+                        "source": source
+                    }
+                    
+                    await db.trading_signals.insert_one({**new_signal})
+                    auto_signal_state["signals_generated"] += 1
+                    auto_signal_state["last_signal_time"] = datetime.now(timezone.utc).isoformat()
+                    
+                    logger.info(f"📊 Auto-generated signal: {new_signal['direction']} {new_signal['symbol']} ({new_signal['confidence']:.1f}%) [source: {source}]")
             
             # Wait for next interval
             await asyncio.sleep(auto_signal_state["interval_seconds"])
