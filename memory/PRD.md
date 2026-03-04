@@ -134,6 +134,18 @@ Complete rewrite with comprehensive features:
 - `GET /api/signals/high-accuracy/performance` - Get performance statistics
 - `POST /api/signals/high-accuracy/record-result` - Record win/loss for tracking
 
+### MetaTrader 5 Integration (NEW)
+- `GET /api/mt5/status` - Get MT5 connection status
+- `POST /api/mt5/connect` - Connect to MT5 terminal
+- `GET /api/mt5/account` - Get account info (balance, equity, margin)
+- `GET /api/mt5/symbol/{symbol}` - Get symbol info (bid, ask, spread)
+- `POST /api/mt5/order` - Execute trading order
+- `POST /api/mt5/signal/process` - Process signal with confidence threshold
+- `GET /api/mt5/positions` - Get open positions
+- `POST /api/mt5/positions/{ticket}/close` - Close position
+- `PUT /api/mt5/positions/{ticket}/modify` - Modify SL/TP
+- `GET /api/mt5/history` - Get trade history
+
 ### Pocket Option Real-Time Market Data (NEW)
 - `POST /api/pocket-option/realtime/connect` - Connect to PO WebSocket for live data
 - `POST /api/pocket-option/realtime/subscribe/{symbol}` - Subscribe to asset price updates
@@ -179,6 +191,10 @@ Complete rewrite with comprehensive features:
 - [x] High-Accuracy Trading Strategies (5s, 15s, 30s, 1m expiries)
 - [x] Multi-confirmation signal generation (4-5 confirmations required)
 - [x] AI Learning config save/load functionality verified
+- [x] **MetaTrader 5 Integration** (simulation mode on Linux, full support on Windows)
+- [x] MT5 Order Execution (BUY/SELL/CALL/PUT)
+- [x] MT5 Position Management (open, close, modify)
+- [x] MT5 Account Monitoring (balance, equity, margin)
 
 ## P1 - High Priority (Next)
 - [ ] MetaTrader5 integration (playbook received, needs implementation)
