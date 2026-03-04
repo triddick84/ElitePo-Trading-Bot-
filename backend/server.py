@@ -94,6 +94,9 @@ from pocket_option_market_data import po_market_data, get_po_market_data_service
 # Import High Accuracy Trading Strategies
 from high_accuracy_strategies import high_accuracy_generator, get_high_accuracy_signal
 
+# Import MetaTrader 5 Trading Service
+from mt5_trading_service import mt5_service, get_mt5_service
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
@@ -4751,6 +4754,186 @@ async def analyze_multi_timeframe(asset: str):
     except Exception as e:
         logger.error(f"Error in multi-timeframe analysis: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== METATRADER 5 INTEGRATION ENDPOINTS ====================
+
+@api_router.get("/mt5/status")
+async def get_mt5_status():
+    """Get MetaTrader 5 connection status"""
+    return {
+        "success": True,
+        "status": mt5_service.connection.get_status()
+    }
+
+
+@api_router.post("/mt5/connect")
+async def connect_mt5(
+    login: int = Query(None, description="MT5 account number"),
+    password: str = Query(None, description="MT5 password"),
+    server: str = Query(None, description="MT5 broker server name")
+):
+    """
+    Connect to MetaTrader 5
+    
+    Credentials can be provided via query parameters or environment variables:
+    - MT5_LOGIN
+    - MT5_PASSWORD
+    - MT5_SERVER
+    """
+    result = mt5_service.connect(login=login, password=password, server=server)
+    return result
+
+
+@api_router.post("/mt5/disconnect")
+async def disconnect_mt5():
+    """Disconnect from MetaTrader 5"""
+    return mt5_service.disconnect()
+
+
+@api_router.get("/mt5/account")
+async def get_mt5_account():
+    """Get MetaTrader 5 account information"""
+    account = mt5_service.get_account_info()
+    
+    if account:
+        return {
+            "success": True,
+            "account": account.to_dict()
+        }
+    else:
+        return {
+            "success": False,
+            "message": "Failed to get account info. Is MT5 connected?"
+        }
+
+
+@api_router.get("/mt5/symbol/{symbol}")
+async def get_mt5_symbol_info(symbol: str):
+    """Get information about a trading symbol"""
+    info = mt5_service.get_symbol_info(symbol)
+    
+    if info:
+        return {
+            "success": True,
+            "symbol_info": info
+        }
+    else:
+        return {
+            "success": False,
+            "message": f"Symbol {symbol} not found"
+        }
+
+
+@api_router.post("/mt5/order")
+async def execute_mt5_order(
+    symbol: str = Query(..., description="Trading symbol (e.g., EURUSD)"),
+    direction: str = Query(..., description="BUY/CALL or SELL/PUT"),
+    volume: float = Query(0.1, description="Trade volume in lots"),
+    stop_loss: float = Query(None, description="Stop loss price"),
+    take_profit: float = Query(None, description="Take profit price"),
+    comment: str = Query("Signal Bot", description="Order comment")
+):
+    """
+    Execute a trading order on MetaTrader 5
+    
+    Args:
+        symbol: Trading symbol (e.g., EURUSD)
+        direction: BUY/CALL or SELL/PUT
+        volume: Trade volume in lots (default 0.1)
+        stop_loss: Stop loss price (optional)
+        take_profit: Take profit price (optional)
+        comment: Order comment
+    """
+    result = mt5_service.execute_order(
+        symbol=symbol,
+        direction=direction,
+        volume=volume,
+        stop_loss=stop_loss,
+        take_profit=take_profit,
+        comment=comment
+    )
+    
+    return {
+        "success": result.success,
+        "trade": result.to_dict()
+    }
+
+
+@api_router.post("/mt5/signal/process")
+async def process_mt5_signal(
+    symbol: str = Query(..., description="Trading symbol"),
+    direction: str = Query(..., description="CALL/BUY or PUT/SELL"),
+    confidence: float = Query(..., description="Signal confidence 0-100"),
+    volume: float = Query(0.1, description="Trade volume in lots"),
+    stop_loss: float = Query(None, description="Stop loss price"),
+    take_profit: float = Query(None, description="Take profit price"),
+    strategy_name: str = Query("High Accuracy Bot", description="Strategy name")
+):
+    """
+    Process a trading signal and execute on MetaTrader 5
+    
+    Only executes if confidence >= 65%
+    """
+    result = mt5_service.process_signal(
+        symbol=symbol,
+        direction=direction,
+        confidence=confidence,
+        volume=volume,
+        stop_loss=stop_loss,
+        take_profit=take_profit,
+        strategy_name=strategy_name
+    )
+    
+    return result
+
+
+@api_router.get("/mt5/positions")
+async def get_mt5_positions():
+    """Get all open positions in MetaTrader 5"""
+    positions = mt5_service.get_positions()
+    
+    return {
+        "success": True,
+        "positions": [p.to_dict() for p in positions],
+        "count": len(positions),
+        "total_profit": sum(p.profit for p in positions)
+    }
+
+
+@api_router.post("/mt5/positions/{ticket}/close")
+async def close_mt5_position(ticket: int, comment: str = "Closed by API"):
+    """Close an open position by ticket number"""
+    result = mt5_service.close_position(ticket, comment)
+    
+    return {
+        "success": result.success,
+        "result": result.to_dict()
+    }
+
+
+@api_router.put("/mt5/positions/{ticket}/modify")
+async def modify_mt5_position(
+    ticket: int,
+    stop_loss: float = Query(None, description="New stop loss"),
+    take_profit: float = Query(None, description="New take profit")
+):
+    """Modify stop loss and/or take profit of an open position"""
+    if stop_loss is None and take_profit is None:
+        raise HTTPException(status_code=400, detail="Must specify stop_loss or take_profit")
+    
+    result = mt5_service.modify_position(ticket, stop_loss, take_profit)
+    
+    return {
+        "success": result.success,
+        "result": result.to_dict()
+    }
+
+
+@api_router.get("/mt5/history")
+async def get_mt5_trade_history(limit: int = 50):
+    """Get recent trade execution history"""
+    return mt5_service.get_trade_history(limit)
 
 
 # ==================== LSTM AI PREDICTOR ENDPOINTS ====================
