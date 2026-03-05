@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://gpt-signal-bot-2.preview.emergentagent.com
-// @version      4.8.1
-// @description  Auto-trade OTC forex on Pocket Option. v4.8.1 - Fixed draggable panel + touch support
+// @version      4.9.0
+// @description  Auto-trade OTC forex on Pocket Option. v4.9.0 - Smart SWITCH sync: OFF=current asset only, ON=multi-asset scan. Auto-timeframe switching to match signal expiry.
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -33,13 +33,26 @@
         API_URL: 'https://gpt-signal-bot-2.preview.emergentagent.com/api',
         POLL_INTERVAL: 5000,  // 5 seconds between checks
         AUTO_TRADE_ENABLED: true,
-        AUTO_SWITCH_ASSET: true,
+        AUTO_SWITCH_ASSET: true,  // When ON: scan multiple assets. When OFF: scan current asset only
         SCAN_MODE: false,
         SCAN_ASSETS: 'EURUSD_OTC,GBPUSD_OTC,USDJPY_OTC,AUDUSD_OTC,EURJPY_OTC,GBPJPY_OTC,EURGBP_OTC,USDCAD_OTC,USDCHF_OTC,NZDUSD_OTC',
         MIN_CONFIDENCE: 70,
         TRADE_COOLDOWN: 3000,  // 3 seconds cooldown between trades
         SOUND_ENABLED: true,
+        AUTO_SWITCH_TIMEFRAME: true,  // Auto-switch Pocket Option timeframe to match signal expiry
+        PREFERRED_EXPIRY: null,  // null = auto-select best, or set to 5, 15, 30, 60
         DEBUG: true
+    };
+
+    // Expiry to Pocket Option timeframe mapping (in seconds)
+    const EXPIRY_TO_PO_TIMEFRAME = {
+        5: 5,
+        15: 15,
+        30: 30,
+        60: 60,
+        120: 120,
+        180: 180,
+        300: 300
     };
 
     // Asset mappings for OTC pairs
@@ -89,7 +102,7 @@
     // ===========================================
     function log(msg, type = 'info') {
         const ts = new Date().toLocaleTimeString();
-        const prefix = '[GPT v4.8.1]';
+        const prefix = '[GPT v4.9.0]';
         console.log(`${prefix} ${ts}: ${msg}`);
         
         const logEl = document.getElementById('gpt-log');
@@ -171,7 +184,7 @@
             <div class="drag-header" id="gpt-drag-handle">
                 <div class="row">
                     <span class="dot" id="gpt-dot"></span>
-                    <span class="title">GPT Bot v4.8.1</span>
+                    <span class="title">GPT Bot v4.9.0</span>
                     <span style="flex:1"></span>
                     <span style="font-size:10px;color:#94a3b8;">☰ drag</span>
                 </div>
@@ -182,9 +195,13 @@
             </div>
             <div class="row">
                 <span class="asset-info" id="gpt-asset">Asset: --</span>
+                <span class="asset-info" id="gpt-expiry" style="background: rgba(139, 92, 246, 0.2);">Expiry: --</span>
+            </div>
+            <div class="row">
                 <div style="display:flex;gap:6px;">
                     <span class="status-badge" id="gpt-btn-status">BTN: ?</span>
                     <span class="status-badge" id="gpt-mode-status">SINGLE</span>
+                    <span class="status-badge" id="gpt-switch-status">SW: ON</span>
                 </div>
             </div>
             <div class="row">
@@ -212,7 +229,7 @@
         updateInvertButton();
 
         makeDraggable(panel);
-        log('Panel ready v4.8.1');
+        log('Panel ready v4.9.0');
     }
     
     function toggleInvertSignals() {
@@ -353,7 +370,9 @@
         const tradesEl = document.getElementById('gpt-trades');
         const btnStatus = document.getElementById('gpt-btn-status');
         const modeStatus = document.getElementById('gpt-mode-status');
+        const switchStatus = document.getElementById('gpt-switch-status');
         const assetInfo = document.getElementById('gpt-asset');
+        const expiryInfo = document.getElementById('gpt-expiry');
         
         if (dot) {
             dot.className = 'dot';
@@ -380,11 +399,20 @@
         if (assetInfo && signal && signal.symbol) {
             assetInfo.textContent = `Asset: ${signal.symbol.replace('_OTC', '')}`;
         }
+        if (expiryInfo && signal && signal.expiry_seconds) {
+            const expSec = signal.expiry_seconds;
+            const expDisplay = expSec >= 60 ? `${Math.floor(expSec/60)}m` : `${expSec}s`;
+            expiryInfo.textContent = `Expiry: ${expDisplay}`;
+        }
         if (modeStatus) {
             let modeText = CONFIG.SCAN_MODE ? 'SCAN' : 'SINGLE';
             if (invertSignals) modeText += ' 🔄';
             modeStatus.textContent = modeText;
             modeStatus.className = 'status-badge ' + (CONFIG.SCAN_MODE ? 'ok' : '');
+        }
+        if (switchStatus) {
+            switchStatus.textContent = CONFIG.AUTO_SWITCH_ASSET ? 'SW: MULTI' : 'SW: CURR';
+            switchStatus.className = 'status-badge ' + (CONFIG.AUTO_SWITCH_ASSET ? 'ok' : 'no');
         }
     }
 
@@ -667,6 +695,125 @@
         } catch (e) {}
     }
 
+    // ===========================================
+    // TIMEFRAME SWITCHING
+    // ===========================================
+    async function switchToTimeframe(expirySeconds) {
+        if (!CONFIG.AUTO_SWITCH_TIMEFRAME || !expirySeconds) {
+            return true; // Skip if disabled
+        }
+        
+        log(`Switching timeframe to ${expirySeconds}s...`);
+        
+        try {
+            // Pocket Option timeframe selector
+            // Try to find and click the time selector
+            const timeSelectors = [
+                '.option-time-wrap',
+                '.time-select',
+                '[data-test="time-picker"]',
+                '.expiration-time',
+                '.time-picker'
+            ];
+            
+            let timeSelector = null;
+            for (const sel of timeSelectors) {
+                timeSelector = document.querySelector(sel);
+                if (timeSelector) break;
+            }
+            
+            if (!timeSelector) {
+                // Try to find by looking for current time display
+                const timeDisplays = document.querySelectorAll('[class*="time"], [class*="expir"]');
+                for (const el of timeDisplays) {
+                    if (el.textContent && (el.textContent.includes(':') || el.textContent.includes('s') || el.textContent.includes('m'))) {
+                        timeSelector = el;
+                        break;
+                    }
+                }
+            }
+            
+            if (!timeSelector) {
+                log('Time selector not found');
+                return false;
+            }
+            
+            // Click to open time dropdown
+            timeSelector.click();
+            await sleep(600);
+            
+            // Look for time options
+            const timeOptions = document.querySelectorAll('.option-time-item, .time-option, [class*="time-item"]');
+            
+            // Convert expiry to display format (e.g., 60 -> "1:00" or "1m", 30 -> "0:30" or "30s")
+            let targetTimeText = '';
+            if (expirySeconds < 60) {
+                targetTimeText = `${expirySeconds}`; // "30", "15", "5"
+            } else {
+                const minutes = Math.floor(expirySeconds / 60);
+                const seconds = expirySeconds % 60;
+                targetTimeText = seconds === 0 ? `${minutes}:00` : `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            }
+            
+            log(`Looking for time: ${targetTimeText}`);
+            
+            let found = false;
+            for (const opt of timeOptions) {
+                const text = opt.textContent.trim();
+                // Match various formats: "30s", "30", "0:30", "1:00", "1m"
+                if (text === targetTimeText || 
+                    text === `${expirySeconds}s` ||
+                    text === `0:${expirySeconds.toString().padStart(2, '0')}` ||
+                    (expirySeconds === 60 && (text === '1:00' || text === '1m' || text === '60s')) ||
+                    (expirySeconds === 30 && (text === '0:30' || text === '30s' || text === '30')) ||
+                    (expirySeconds === 15 && (text === '0:15' || text === '15s' || text === '15')) ||
+                    (expirySeconds === 5 && (text === '0:05' || text === '5s' || text === '5'))) {
+                    log(`Clicking timeframe: ${text}`);
+                    opt.click();
+                    found = true;
+                    await sleep(300);
+                    break;
+                }
+            }
+            
+            if (!found) {
+                log(`Timeframe ${expirySeconds}s not found in options`);
+                // Close dropdown
+                document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+                return false;
+            }
+            
+            log(`Timeframe set to ${expirySeconds}s`);
+            return true;
+            
+        } catch (e) {
+            log(`Timeframe switch error: ${e.message}`);
+            return false;
+        }
+    }
+    
+    // Get current timeframe from Pocket Option UI
+    function getCurrentTimeframe() {
+        const timeDisplays = document.querySelectorAll('.option-time-wrap, .time-select, [class*="time-value"], [class*="expir"]');
+        for (const el of timeDisplays) {
+            const text = el.textContent.trim();
+            // Parse time text
+            if (text.includes(':')) {
+                const parts = text.split(':');
+                const mins = parseInt(parts[0]) || 0;
+                const secs = parseInt(parts[1]) || 0;
+                return mins * 60 + secs;
+            }
+            if (text.endsWith('s')) {
+                return parseInt(text) || 0;
+            }
+            if (text.endsWith('m')) {
+                return (parseInt(text) || 0) * 60;
+            }
+        }
+        return null;
+    }
+
     function sleep(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
@@ -777,7 +924,7 @@
     }
 
     // ===========================================
-    // MARKET SCANNING - IMPROVED WITH TIME-BASED COOLDOWNS
+    // MARKET SCANNING - WITH SWITCH SYNC
     // ===========================================
     function scanMarkets() {
         if (isTrading) {
@@ -792,13 +939,37 @@
             return;
         }
 
-        // Count available assets (not on cooldown)
-        const cooldownCount = Object.keys(recentlyTradedAssets).filter(a => isAssetOnCooldown(a)).length;
-        log(`Scanning... (${cooldownCount} assets on cooldown)`);
+        // SWITCH determines scan behavior:
+        // - SWITCH ON: Scan multiple assets (can switch between them)
+        // - SWITCH OFF: Scan only current asset (stay on current)
+        let assetsToScan = CONFIG.SCAN_ASSETS;
+        
+        if (!CONFIG.AUTO_SWITCH_ASSET) {
+            // SWITCH OFF - Only scan current asset
+            const currentAssetRaw = getCurrentAsset();
+            if (currentAssetRaw) {
+                // Convert display format to API format (e.g., "EUR/USD OTC" -> "EURUSD_OTC")
+                const normalized = currentAssetRaw.replace('/', '').replace(' ', '_').toUpperCase();
+                assetsToScan = normalized;
+                log(`SWITCH OFF - Scanning current only: ${normalized}`);
+            } else {
+                log('Cannot detect current asset, using defaults');
+            }
+        } else {
+            // Count available assets (not on cooldown)
+            const cooldownCount = Object.keys(recentlyTradedAssets).filter(a => isAssetOnCooldown(a)).length;
+            log(`SWITCH ON - Scanning multiple (${cooldownCount} on cooldown)`);
+        }
+        
+        // Build URL with optional preferred expiry
+        let url = `${CONFIG.API_URL}/signals/scan-markets?assets=${assetsToScan}&min_confidence=${CONFIG.MIN_CONFIDENCE}&max_signals=10`;
+        if (CONFIG.PREFERRED_EXPIRY) {
+            url += `&preferred_expiry=${CONFIG.PREFERRED_EXPIRY}`;
+        }
         
         GM_xmlhttpRequest({
             method: 'GET',
-            url: `${CONFIG.API_URL}/signals/scan-markets?assets=${CONFIG.SCAN_ASSETS}&min_confidence=${CONFIG.MIN_CONFIDENCE}&max_signals=10`,
+            url: url,
             headers: { 'Accept': 'application/json' },
             timeout: 20000,
             onload: function(res) {
@@ -817,11 +988,21 @@
                         // Find the best signal that:
                         // 1. Is not on cooldown (recently traded)
                         // 2. Has not exceeded switch attempt limit
+                        // 3. If SWITCH OFF, must match current asset
                         let selectedSignal = null;
                         let skippedReasons = [];
                         
                         for (const signal of data.top_signals) {
                             const assetBase = signal.symbol.replace('_OTC', '').replace('_', '');
+                            
+                            // If SWITCH OFF, only accept signals for current asset
+                            if (!CONFIG.AUTO_SWITCH_ASSET) {
+                                const currentAssetBase = getCurrentAsset()?.replace('/', '').replace(' OTC', '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+                                if (currentAssetBase && assetBase !== currentAssetBase) {
+                                    skippedReasons.push(`${assetBase}: not current asset`);
+                                    continue;
+                                }
+                            }
                             
                             // Check time-based cooldown
                             if (isAssetOnCooldown(assetBase)) {
@@ -830,8 +1011,8 @@
                                 continue;
                             }
                             
-                            // Check if switch has failed too many times
-                            if (hasExceededSwitchAttempts(assetBase)) {
+                            // Check if switch has failed too many times (only relevant if SWITCH ON)
+                            if (CONFIG.AUTO_SWITCH_ASSET && hasExceededSwitchAttempts(assetBase)) {
                                 skippedReasons.push(`${assetBase}: switch failed`);
                                 continue;
                             }
@@ -842,7 +1023,7 @@
                         
                         // Log skipped assets for debugging
                         if (skippedReasons.length > 0) {
-                            log(`Skipped: ${skippedReasons.join(', ')}`);
+                            log(`Skipped: ${skippedReasons.slice(0, 3).join(', ')}${skippedReasons.length > 3 ? '...' : ''}`);
                         }
                         
                         // If all assets are blocked, wait for cooldowns to expire
@@ -853,7 +1034,9 @@
                             return;
                         }
                         
-                        log(`Selected: ${selectedSignal.direction} ${selectedSignal.symbol} (${selectedSignal.confidence.toFixed(0)}%)`);
+                        // Log selected signal with expiry info
+                        const expiry = selectedSignal.expiry_seconds || 60;
+                        log(`Selected: ${selectedSignal.direction} ${selectedSignal.symbol} (${selectedSignal.confidence.toFixed(0)}%) @ ${expiry}s`);
                         
                         updateUI('trading', selectedSignal);
                         
@@ -945,7 +1128,7 @@
     }
 
     // ===========================================
-    // TRADE EXECUTION - WITH PROPER SWITCH FAILURE HANDLING
+    // TRADE EXECUTION - WITH ASSET + TIMEFRAME SWITCHING
     // ===========================================
     async function executeTradeWithAssetSwitch(signal) {
         if (isTrading) {
@@ -968,10 +1151,11 @@
         }
         
         const assetBase = signal.symbol.replace('_OTC', '').replace('_', '');
-        log(`Executing: ${isCall ? 'CALL' : 'PUT'} on ${signal.symbol}${invertSignals ? ' (INVERTED)' : ''}`);
+        const signalExpiry = signal.expiry_seconds || 60;
+        log(`Executing: ${isCall ? 'CALL' : 'PUT'} on ${signal.symbol} @ ${signalExpiry}s${invertSignals ? ' (INVERTED)' : ''}`);
         
         try {
-            // Switch asset if enabled
+            // Step 1: Switch asset if SWITCH is enabled
             if (CONFIG.AUTO_SWITCH_ASSET && signal.symbol) {
                 const switched = await switchToAsset(signal.symbol);
                 if (!switched) {
@@ -987,7 +1171,23 @@
                 await sleep(300);
             }
             
-            // Wait for buttons
+            // Step 2: Switch timeframe if enabled and expiry differs from current
+            if (CONFIG.AUTO_SWITCH_TIMEFRAME && signalExpiry) {
+                const currentTF = getCurrentTimeframe();
+                if (currentTF !== signalExpiry) {
+                    log(`Timeframe mismatch: current=${currentTF}s, signal=${signalExpiry}s`);
+                    const tfSwitched = await switchToTimeframe(signalExpiry);
+                    if (!tfSwitched) {
+                        log(`WARNING: Could not switch to ${signalExpiry}s timeframe`);
+                        // Continue anyway - some timeframes might not be available
+                    }
+                    await sleep(300);
+                } else {
+                    log(`Timeframe OK: ${signalExpiry}s`);
+                }
+            }
+            
+            // Step 3: Wait for buttons
             const buttonsFound = await waitForButtons(3000);
             if (!buttonsFound) {
                 log('Buttons not found!');
@@ -1010,7 +1210,7 @@
                 } catch(e) {}
             }
             
-            // Click button
+            // Step 4: Click trade button
             const clicked = clickTradeButton(isCall);
             
             if (clicked) {
@@ -1021,12 +1221,12 @@
                 
                 const tradeType = isCall ? 'CALL' : 'PUT';
                 const invLabel = invertSignals ? ' [INV]' : '';
-                log(`TRADE #${tradeCount}: ${tradeType}${invLabel} on ${assetBase}`);
+                log(`TRADE #${tradeCount}: ${tradeType}${invLabel} on ${assetBase} @ ${signalExpiry}s`);
                 
                 try {
                     GM_notification({
                         title: `${tradeType} Executed${invLabel}`,
-                        text: `${signal.symbol} - ${signal.confidence || 85}%${invertSignals ? ' (Inverted)' : ''}`,
+                        text: `${signal.symbol} - ${signal.confidence || 85}% @ ${signalExpiry}s${invertSignals ? ' (Inverted)' : ''}`,
                         timeout: 2000
                     });
                 } catch(e) {}
@@ -1070,7 +1270,7 @@
     // INITIALIZATION
     // ===========================================
     function init() {
-        log('Initializing v4.8.1...');
+        log('Initializing v4.9.0...');
         
         setTimeout(() => {
             createPanel();
@@ -1079,6 +1279,7 @@
             CONFIG.AUTO_TRADE_ENABLED = GM_getValue('autoEnabled', true);
             CONFIG.AUTO_SWITCH_ASSET = GM_getValue('autoSwitch', true);
             CONFIG.SCAN_MODE = GM_getValue('scanMode', false);
+            CONFIG.AUTO_SWITCH_TIMEFRAME = GM_getValue('autoSwitchTimeframe', true);
             
             // Update buttons based on saved settings
             if (!CONFIG.AUTO_TRADE_ENABLED) {
@@ -1102,7 +1303,7 @@
             setInterval(checkSignal, CONFIG.POLL_INTERVAL);
             checkSignal();
             
-            log('Ready!');
+            log('Ready! SWITCH=' + (CONFIG.AUTO_SWITCH_ASSET ? 'MULTI' : 'CURRENT'));
         }, 2000);
     }
 

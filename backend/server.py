@@ -4715,7 +4715,8 @@ async def get_high_accuracy_strategies():
 async def scan_markets_for_signals(
     assets: str = Query("EURUSD_OTC,GBPUSD_OTC,USDJPY_OTC,AUDUSD_OTC", description="Comma-separated list of assets to scan"),
     min_confidence: int = Query(70, ge=50, le=95, description="Minimum confidence threshold"),
-    max_signals: int = Query(10, ge=1, le=20, description="Maximum number of signals to return")
+    max_signals: int = Query(10, ge=1, le=20, description="Maximum number of signals to return"),
+    preferred_expiry: int = Query(None, description="Preferred expiry in seconds (5, 15, 30, 60). If not set, best strategy is auto-selected")
 ):
     """
     Scan multiple markets for high-probability trading signals.
@@ -4724,10 +4725,14 @@ async def scan_markets_for_signals(
     trading opportunity across multiple OTC assets.
     
     Returns signals sorted by confidence (highest first).
+    Each signal includes expiry_seconds for timeframe synchronization.
     """
     try:
         asset_list = [a.strip() for a in assets.split(',') if a.strip()]
         signals_found = []
+        
+        # Use preferred expiry or let generator pick best strategy
+        expiry_to_use = preferred_expiry if preferred_expiry in [5, 15, 30, 60] else None
         
         for asset in asset_list:
             try:
@@ -4753,12 +4758,15 @@ async def scan_markets_for_signals(
                 if not candles or not current_price:
                     continue
                 
-                # Generate high-accuracy signal
-                signal = get_high_accuracy_signal(candles, current_price, expiry=60)
+                # Generate high-accuracy signal with optional preferred expiry
+                signal = get_high_accuracy_signal(candles, current_price, expiry=expiry_to_use)
                 
                 if signal and signal.get("confidence", 0) >= min_confidence:
                     signal["symbol"] = asset  # Use original OTC symbol
                     signal["oanda_symbol"] = oanda_symbol
+                    # Ensure expiry_seconds is present for timeframe sync
+                    if "expiry_seconds" not in signal:
+                        signal["expiry_seconds"] = expiry_to_use or 60
                     signals_found.append(signal)
                     
             except Exception as e:
@@ -4776,6 +4784,7 @@ async def scan_markets_for_signals(
             "scanned_assets": len(asset_list),
             "signals_found": len(signals_found),
             "top_signals": top_signals,
+            "preferred_expiry": expiry_to_use,
             "message": f"Found {len(signals_found)} signals above {min_confidence}% confidence"
         }
         
