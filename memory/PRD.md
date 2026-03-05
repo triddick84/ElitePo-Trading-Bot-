@@ -113,18 +113,22 @@ Complete rewrite with comprehensive features:
 
 ## Current Status
 
-### ✅ Working
+### ✅ Working (March 5, 2026)
+- **User Authentication** - Login working correctly with JWT tokens
 - Signal generation with 15-second intervals
-- Tampermonkey v3.0 with all requested features
+- Tampermonkey v4.8.1 with advanced features (SCAN mode, asset switching, cooldowns)
 - Strategy selection (end-to-end verified)
 - Latency correction with AUTO/MANUAL/DISABLED modes
 - Trade result recording via API and Telegram commands
 - Streak inversion after 3 consecutive losses
-- All authentication flows
+- High-accuracy strategies endpoint (4 strategies)
+- Market scan endpoint for multi-asset signal scanning
+- All navigation pages working (Dashboard, Telegram Bot, Pocket Option, Mobile Auto-Trade, Strategies, AI Models, Performance, Settings)
 
 ### ⚠️ Known Limitations
 - Pocket Option auto-trade blocked by cloud IP (workaround: mobile userscript)
 - OANDA may return HOLD during unclear market conditions
+- **MetaTrader5 runs in SIMULATION mode** (requires Windows for real connection)
 
 ## API Endpoints Reference
 
@@ -218,10 +222,10 @@ Complete rewrite with comprehensive features:
 - `/app/test_reports/iteration_1.json` - Market Regime Detector tests
 - `/app/test_reports/iteration_2.json` - Latency Correction tests
 - `/app/test_reports/iteration_3.json` - Auto Signal Generator tests (9/9 passed)
+- `/app/test_reports/iteration_6.json` - **Full regression test (17/17 backend, 100% frontend)** - March 5, 2026
 
 ## Last Updated
-February 28, 2026
-- Tampermonkey userscript v3.0 with comprehensive data display
-- Auto signal generator now runs at 15-second intervals
-- Strategy selection verified end-to-end
-- All tests passing (100% success rate)
+March 5, 2026
+- **Fixed critical login bug** - SyntaxError in server.py caused by incomplete function and orphaned code
+- All tests passing (100% success rate - 17/17 backend, all frontend)
+- Verified: Login, Dashboard, Navigation, Timeframe selection, High-accuracy strategies, Market scanning
