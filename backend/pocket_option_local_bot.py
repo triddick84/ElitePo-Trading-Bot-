@@ -35,7 +35,7 @@ PO_EMAIL = "thomas.riddick84@gmail.com"
 PO_PASSWORD = "Tonyistheman#1"
 
 # Your cloud server URL (the trading bot server)
-CLOUD_SERVER_URL = "https://signal-generator-pro.preview.emergentagent.com"
+CLOUD_SERVER_URL = "https://gpt-signal-bot-2.preview.emergentagent.com"
 
 # Account type: "demo" or "live"
 ACCOUNT_TYPE = "live"

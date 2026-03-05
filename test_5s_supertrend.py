@@ -11,7 +11,7 @@ import random
 from datetime import datetime, timedelta
 
 # Test configuration
-BACKEND_URL = "https://signal-generator-pro.preview.emergentagent.com/api"
+BACKEND_URL = "https://gpt-signal-bot-2.preview.emergentagent.com/api"
 
 class SupertrendTester:
     def __init__(self):

@@ -206,7 +206,7 @@ signal.technical_analysis = {
 ### Enable Candle Sync:
 ```bash
 # Start bot first
-curl -X POST https://signal-generator-pro.preview.emergentagent.com/api/bot/start \
+curl -X POST https://gpt-signal-bot-2.preview.emergentagent.com/api/bot/start \
   -H "Content-Type: application/json" \
   -d '{
     "trading_mode": "demo",
@@ -215,17 +215,17 @@ curl -X POST https://signal-generator-pro.preview.emergentagent.com/api/bot/star
   }'
 
 # Enable candle sync
-curl -X POST https://signal-generator-pro.preview.emergentagent.com/api/bot/candle-sync/enable
+curl -X POST https://gpt-signal-bot-2.preview.emergentagent.com/api/bot/candle-sync/enable
 ```
 
 ### Check Status:
 ```bash
-curl https://signal-generator-pro.preview.emergentagent.com/api/bot/candle-sync/status
+curl https://gpt-signal-bot-2.preview.emergentagent.com/api/bot/candle-sync/status
 ```
 
 ### Disable Candle Sync:
 ```bash
-curl -X POST https://signal-generator-pro.preview.emergentagent.com/api/bot/candle-sync/disable
+curl -X POST https://gpt-signal-bot-2.preview.emergentagent.com/api/bot/candle-sync/disable
 ```
 
 ---

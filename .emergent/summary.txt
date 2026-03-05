@@ -1,201 +1,203 @@
 <analysis>**original_problem_statement:**
-The user's primary goal is to create a GPT Signal Bot for Pocket Option with a high win rate (80-90%+). This has expanded to include a user login system, major UI decluttering, integration with 3Commas, fixing critical bugs (losing streaks, signal accuracy), implementing a sophisticated latency correction system, and building a mobile auto-trader via a userscript to bypass IP blocks. The current focus is on implementing new trading strategies from user-provided PDFs, adding UI controls to the dashboard, fixing bugs with the mobile auto-trader, and integrating with MetaTrader5 and TradingView.
+The user wants to build a GPT Signal Bot for Pocket Option with a high win rate (80-90%+). The project scope has expanded significantly to include:
+- A full-stack application with user authentication.
+- A sophisticated AI/ML system that can be trained on market data and uses strategies like Trend Following, Mean Reversion, and Pattern Recognition.
+- Integration with the OANDA V20 API for fetching real-time and historical market data.
+- Integration with Pocket Option's own WebSocket for real-time data.
+- A mobile auto-trader using a Tampermonkey userscript to bypass Pocket Option's IP blocks.
+- A UI to select and manage trading strategies.
+- Future integrations with MetaTrader5 and TradingView.
+The user's immediate priorities are to fix any application-breaking bugs, fully implement and test the latest auto-trader script, and then continue with planned integrations.
 
 **PRODUCT REQUIREMENTS:**
-1.  **Improve AI/ML Model Accuracy (P0):** Develop models to achieve an 80-90%+ win rate. This includes implementing user-provided strategies.
-2.  **Implement New Trading Strategies (P0):** Implement the logic for strategies extracted from user-provided PDFs and allow users to select them.
-3.  **Fix Bugs (P1):**
-    - Resolve the double trade issue in the Tampermonkey userscript.
-    - Ensure asset lists in the UI are comprehensive.
-4.  **Build New Integrations (P1):** Integrate with MetaTrader5 and TradingView for automated trading.
-5.  **Enhance UI/UX (P2):** Add controls to the dashboard for inverting signals and managing latency.
+1.  **Fix Login Functionality (P0):** The user login is currently broken due to a connection error, which prevents any use of the application. This is a critical blocker.
+2.  **Implement and Validate Advanced Auto-Trader (P0):** The new user-provided Tampermonkey script (v4.8.1) must be fully functional. This includes its advanced features like market scanning, asset switching, and per-asset cooldowns.
+3.  **Improve AI/ML Model Accuracy (P1):** Research and implement high-win-rate strategies for short timeframes (5s, 15s, 30s, 1m) to achieve the goal of winning trades on every signal.
+4.  **Build New Integrations (P1):** Integrate with MetaTrader5 and TradingView for automated trading and analysis.
+5.  **Enhance UI/UX (P2):** The userscript control panel should be a movable, floating window. The AI Models page must correctly save user configurations.
 
 **User's preferred language**: English
 
 **what currently exists?**
-The application is a full-stack React/FastAPI project with JWT authentication. Key systems include:
--   **Market Regime Detector:** A service to prevent losing streaks by adapting to market conditions.
--   **Advanced Latency Correction:** A system with AUTO, MANUAL, and DISABLED modes, configurable via the UI, to ensure timely signal execution.
--   **Mobile Auto-Trader:** A Tampermonkey userscript for the Kiwi Android browser that allows automated trading on Pocket Option by interacting with the website directly, successfully bypassing cloud IP blocks.
--   **Custom Strategy Framework:** A Quick Select UI on the Strategies page allows users to assign strategies to specific timeframes. The backend has services to manage and store these strategies, with over a dozen extracted from user-provided PDFs.
--   **Comprehensive UI:** The UI has been significantly refactored and includes pages for Dashboard, Settings, Strategies, AI Models, and a dedicated page with instructions for the Mobile Auto-Trader.
+A full-stack React/FastAPI application with JWT authentication (currently broken). The backend is a large monolith () featuring:
+-   **Multi-Source Data Integration:** Services to connect to the OANDA V20 API () and Pocket Option's real-time WebSocket ().
+-   **Advanced AI/ML Systems:** An initial AI system () and a newer  built to find high-probability signals on short timeframes.
+-   **MetaTrader5 Integration:** A simulated MT5 service () and API endpoints have been created.
+-   **Advanced Tampermonkey Script:** The application was updated to use a new, feature-rich userscript (v4.8.1) provided by the user. A new backend endpoint () was added to support its market scanning feature.
 
 **Last working item**:
-The agent was multitasking on several user requests. The most recent actions were implementing UI changes on the dashboard and initiating research for new integrations.
+The user reported a connection error when trying to log in. The agent investigated the backend logs and found the root cause.
 
--   **Last item agent was working**: Adding an Invert Signal button and a latency mode toggle switch to the  page. The agent added the JSX for the new components and the necessary  hooks. It also began research for MetaTrader5 and TradingView integrations by calling the  tool.
+-   **Last item agent was working**: Diagnosing a critical login failure.
 -   **Status**: IN PROGRESS
 -   **Agent Testing Done**: N
--   **Which testing method agent to use?**: frontend testing agent for the UI changes on the Dashboard. The agent will also need to create new backend endpoints for these controls and test them.
+-   **Which testing method agent to use?**: backend testing agent. First, the agent must fix the bug in . After the fix, test the login with a  command. Once login is confirmed working, run a full regression test using the testing agent to ensure the fix didn't introduce other issues.
 -   **User Testing Done**: N
 
 **All Pending/In progress Issue list**:
--   **Issue 1**: Tampermonkey script places two trades for a single signal (P0)
--   **Issue 2**: Limited asset selection in Settings and AI Models pages (P1)
--   **Issue 3**: Telegram Bot does not place trades on Pocket Option (P2 / BLOCKED)
+-   **Issue 1**: User login is broken due to a  (P0)
+-   **Issue 2**: Full end-to-end testing of the new Tampermonkey script (v4.8.1) is pending (P1)
+-   **Issue 3**: MetaTrader5 integration is not yet functional and runs only in simulation mode (P1)
 
 **Issues Detail**:
--   **Issue 1: Tampermonkey script places two trades for a single signal**
-    -   **Attempted fixes**: The agent modified the userscript () to include a  check and a 10-second cooldown period after a trade is executed. This prevents the script from processing the same signal multiple times.
+-   **Issue 1: User login is broken due to a **
+    -   **Attempted fixes**: None. The agent identified the error in : .
     -   **Next debug checklist**:
-        1.  Instruct the user to update the Tampermonkey script in their browser with the new version.
-        2.  Ask the user to generate a signal and confirm that only one trade is placed.
-    -   **Why fix this issue and what will be achieved with the fix?**: This is a critical bug that causes financial risk by doubling down on trades unintentionally. Fixing it is essential for the reliability of the auto-trader.
-    -   **Status**: USER VERIFICATION PENDING
+        1.  Open .
+        2.  Search for the  function call inside the  endpoint.
+        3.  Replace the incorrect function name with the correct one (likely ).
+        4.  Restart the backend service.
+        5.  Verify the fix by sending a  request to the login endpoint with user credentials.
+    -   **Why fix this issue and what will be achieved with the fix?**: This is a critical blocker that prevents the user from accessing the application. Fixing it will restore basic functionality.
+    -   **Status**: IN PROGRESS
     -   **Is recurring issue?**: N
-    -   **Should Test frontend/backend/both after fix?**: Frontend (Userscript)
+    -   **Should Test frontend/backend/both after fix?**: Backend
     -   **Blocked on other issue**: None
 
--   **Issue 2: Limited asset selection in Settings and AI Models pages**
-    -   **Attempted fixes**: The agent significantly expanded the hardcoded asset lists in  and  to include a wide range of crypto, forex, and stock assets.
+-   **Issue 2: Full end-to-end testing of the new Tampermonkey script (v4.8.1) is pending**
+    -   **Attempted fixes**: The agent replaced the old userscript and added the required  backend endpoint.
     -   **Next debug checklist**:
-        1.  Ask the user to check the Assets tab in Settings and the asset dropdown on the AI Models page to confirm the list is now sufficient.
-    -   **Why fix this issue and what will be achieved with the fix?**: This allows the user to configure and train the bot on the full range of assets they trade.
-    -   **Status**: USER VERIFICATION PENDING
-    -   **Is recurring issue?**: N
-    -   **Should Test frontend/backend/both after fix?**: Frontend
-    -   **Blocked on other issue**: None
-
--   **Issue 3: Telegram Bot Does Not Place Trades on Pocket Option**
-    -   **Attempted fixes**: This was identified as an IP block by Pocket Option. The successful workaround was to create the mobile userscript for client-side automation.
-    -   **Next debug checklist**: This issue is considered obsolete. The focus should be on the userscript. Confirm with the user that this approach is sufficient.
-    -   **Why fix this issue and what will be achieved with the fix?**: Resolving this would enable server-side trading, but it's blocked by an external factor. The userscript provides a better alternative.
-    -   **Status**: BLOCKED
+        1.  After fixing the login, use the browser to install the userscript.
+        2.  Navigate to the Pocket Option website and verify the v4.8.1 panel appears and functions correctly.
+        3.  Test the SCAN mode to ensure it calls the backend and processes the list of top signals.
+        4.  Verify that asset switching, trade execution, signal inversion, and cooldown logic all work as expected.
+    -   **Why fix this issue and what will be achieved with the fix?**: This validates the core auto-trading functionality, which is the user's primary goal.
+    -   **Status**: NOT STARTED
     -   **Is recurring issue?**: Y
-    -   **Should Test frontend/backend/both after fix?**: backend
-    -   **Blocked on other issue**: Blocked by Pocket Option's security policy.
+    -   **Should Test frontend/backend/both after fix?**: both
+    -   **Blocked on other issue**: Issue 1: User login is broken due to a 
+
+-   **Issue 3: MetaTrader5 integration is not yet functional and runs only in simulation mode**
+    -   **Attempted fixes**: An  was created, but it cannot connect to the MT5 terminal, which requires a Windows environment.
+    -   **Next debug checklist**:
+        1.  Research solutions for connecting a Python script in a Linux container to a remote MT5 terminal (e.g., using a ZeroMQ bridge).
+        2.  Propose a plan to the user for setting up the connection.
+        3.  Implement the necessary code changes in  to connect to a remote host and port.
+    -   **Why fix this issue and what will be achieved with the fix?**: Fulfills a key P1 requirement from the user for advanced integrations.
+    -   **Status**: BLOCKED
+    -   **Is recurring issue?**: N
+    -   **Should Test frontend/backend/both after fix?**: Backend
+    -   **Blocked on other issue**: Requires external setup/user action.
 
 **In progress Task List**:
--   **Task 1: Complete Dashboard UI Enhancements (P0)**
-    -   **Where to resume**: In , implement the handler functions (, ). This requires creating two new backend API endpoints in : one to toggle signal inversion () and one to set the latency mode (), then connecting the frontend to them.
-    -   **What will be achieved with this?**: The user will have immediate one-click access to critical trading controls directly on the dashboard.
+-   **Task 1: Debug and Fix Login Failure (P0)**
+    -   **Where to resume**: The agent has found the  in the logs. The next action is to edit  to correct the invalid function call.
+    -   **What will be achieved with this?**: This will restore user authentication, unblocking all other work.
     -   **Status**: IN PROGRESS
-    -   **Should Test frontend/backend/both after fix?**: both
-    -   **Blocked on something**: None
-
--   **Task 2: Implement PDF Trading Strategies Logic (P1)**
-    -   **Where to resume**: The agent has extracted strategy rules from multiple PDFs and added them as data to . The next step is to process the latest batch of PDFs and, most importantly, implement the actual trading logic for these strategies within . The system needs to be modified to use the logic of the user-selected strategy for a given timeframe.
-    -   **What will be achieved with this?**: The bot's core functionality will be complete, allowing it to generate high-accuracy signals based on the user's proven strategies.
-    -   **Status**: IN PROGRESS
-    -   **Should Test frontend/backend/both after fix?**: backend
+    -   **Should Test frontend/backend/both after fix?**: Backend
     -   **Blocked on something**: None
 
 **Upcoming and Future Tasks**
 -   **Upcoming Tasks**:
-    -   **(P1) Implement MetaTrader5 Integration:** Analyze the playbook from  and create a phased implementation plan to connect the signal generator to an MT5 account.
-    -   **(P1) Implement TradingView Integration:** Analyze the playbook and create a plan to receive webhook alerts from TradingView to trigger trades or analysis.
-    -   **(P2)** Clean up Pocket Option Page: As requested by the user, review  and associated backend code to identify and remove any components or logic that are no longer used since the pivot to the userscript.
+    -   **(P1) Implement TradingView Integration:** Analyze the playbook from  and create a service to handle webhook alerts.
+    -   **(P2) Refactor :** The main server file is over 5,000 lines. It needs to be broken down into a  directory with separate files for each domain (e.g., , , ) to improve maintainability.
 -   **Future Tasks**:
-    -   Fix Money Management Logic (e.g., Martingale system).
-    -   Conduct an end-to-end test of the custom strategy feature (from UI selection to backend execution).
+    -   Implement advanced Money Management Logic (e.g., Martingale system).
 
 **Completed work in this session**
--   **Fixed Losing Streak Bug:** Completed and tested the  integration.
--   **Improved Signal Accuracy:** Enhanced confidence calculations and made the signal generator more robust.
--   **Implemented Latency Correction System:** Built and tested a full-featured latency management system with API and UI controls.
--   **Created Mobile Auto-Trader Solution:** Successfully developed and deployed a Tampermonkey userscript to automate trades on Android, bypassing Pocket Option's IP block.
--   **Implemented Custom Strategy UI:** Created the Quick Select feature for users to assign strategies to timeframes.
--   **Extracted Multiple Trading Strategies:** Processed numerous user-provided PDFs and stored the strategy rules in the backend.
--   **Fixed Critical Bugs:** Resolved the double trade userscript bug and expanded the available asset lists in the UI.
+-   Changed signal generation interval from 30 to 15 seconds.
+-   Investigated and fixed a signal bias issue by disabling an inversion setting.
+-   Integrated Pocket Option's real-time WebSocket data via .
+-   Researched and implemented a  for high-win-rate strategies on short timeframes.
+-   Implemented a simulated MetaTrader5 integration ().
+-   Replaced the existing Tampermonkey userscript with an advanced version (v4.8.1) from the user and added the required  endpoint.
+-   Enhanced the userscript UI to be a draggable, floating panel.
 
 **Earlier issues found/mentioned but not fixed**
 -   **Issue 1: End-to-End Test for Custom Strategy Usage**
-    -   **Debug checklist**:
-        1.  In the UI, select one of the new custom strategies for the 1m timeframe.
-        2.  Use the Force Generate feature for a 1-minute signal.
-        3.  Check backend logs to confirm that the  specifically loaded and executed the logic for the selected custom strategy, not a default one.
-    -   **Why to solve this issue and what will be achieved with this?**: This is a critical verification step to ensure the entire custom strategy feature works as intended.
+    -   **Debug checklist**: This was previously marked as complete, but a regression test is needed after the numerous backend changes to ensure a user can still select a strategy from the UI and have it be used by the signal generator.
+    -   **Why to solve this issue and what will be achieved with this?**: To re-validate a core feature.
     -   **Should Test frontend/backend/both after fix**: both
     -   **Is recurring issue?**: Y
+-   **Issue 2: Deployment  fix**
+    -   **Debug checklist**: The fix was implemented in a previous session. The user needs to be reminded to try deploying again to confirm it is resolved.
+    -   **Why to solve this issue and what will be achieved with this?**: Unblocks production deployment.
+    -   **Should Test frontend/backend/both after fix**: NA
+    -   **Is recurring issue?**: N
 
 **Known issue recurrence from previous fork**
--   **Issue recurrence in previous fork**: Pocket Option blocks cloud/datacenter IPs. This is a persistent external constraint.
+-   **Issue recurrence in previous fork**: Pocket Option blocks cloud/datacenter IPs.
 -   **Recurrence count**: 3+
--   **Status**: BLOCKED (Workaround implemented via mobile userscript).
+-   **Status**: BLOCKED (The mobile userscript is the active workaround for this).
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
--   **Userscript Auto-Trading:** Using Tampermonkey on an Android browser (Kiwi) to automate web interactions, bypassing server IP restrictions.
--   **Stateful Latency Correction:** A system that dynamically adjusts signal timing based on measured network and execution delays.
--   **Dynamic Strategy Selection:** Allowing users to choose and apply different trading algorithms per timeframe via a UI.
--   **PDF Data Extraction:** Using  to parse trading strategy rules from PDF documents.
+-   **Userscript Auto-Trading:** An advanced Tampermonkey script that scans multiple assets, manages cooldowns, and executes trades via UI interaction.
+-   **Multi-Source Signal Generation:** The system can generate signals using data from the OANDA API, Pocket Option's WebSocket, or a combination.
+-   **High-Frequency Trading Strategies:** AI models designed specifically for 5s, 15s, 30s, and 1m timeframes.
+-   **Simulated Integration:** The MetaTrader5 service is currently mocked and does not connect to a real trading terminal.
 
 **key DB schema**
 -   **users**: 
 -   **generated_signals**: 
 -   **strategy_selections**: 
--   **custom_strategies**: 
 -   **trade_results**: 
 
 **All files of reference**
--   : The main server file where new API endpoints are needed.
--   : Core logic for signal generation; needs to be updated with custom strategy logic.
--   : Service that holds the extracted strategy data.
--   : The file being actively modified for new UI controls.
--   : The source for the userscript, which was recently fixed.
--   : The UI for selecting strategies.
+-   : The monolithic server file that contains the critical login bug.
+-   : The log file where the  was identified.
+-   : The new v4.8.1 script that needs to be tested.
+-   : The service implementing the user's request for high-win-rate strategies.
+-   : The service for the simulated MT5 integration.
 
 **Areas that need refactoring**:
--    and  are both becoming monoliths. They should be broken down into smaller, more focused modules (e.g., by creating a  directory for API endpoints and a  directory for individual strategy logic files).
+-    is critically bloated (over 5000 lines) and is becoming a source of bugs. It must be broken down into a proper  directory structure to improve maintainability and prevent errors like the current login bug.
 
 **key api endpoints**
--   : (Needs to be created) Toggles the signal inversion setting.
--   : (Needs to be created, or an existing one modified) To support the new dashboard toggle.
--   : Fetches the most recent signal for the mobile userscript.
--   : Manages the user's selected strategies for each timeframe.
--   : Retrieves all available custom strategies for the UI.
--   : Records trade outcomes for the market regime detector.
+-   : **(BROKEN)** The endpoint that is failing due to a .
+-   : **(New)** Endpoint to support the market scanning feature of the v4.8.1 userscript.
+-   : **(New)** Generates a signal using the new high-win-rate models.
+-   : **(New)** Initializes the simulated MT5 connection.
 
 **Critical Info for New Agent**
-1.  **Prioritize Dashboard UI:** Your first task is to complete the Invert Signal button and Latency Toggle on the . This involves creating the backend endpoints and wiring up the frontend handlers.
-2.  **Guide User on Bug Fix Verification:** The user must be instructed to update their Tampermonkey script to get the double trade fix. Confirm with them that it's resolved before closing the issue.
-3.  **Focus on Strategy LOGIC:** The next major task is implementing the *logic* for the custom strategies from the PDFs in . Simply adding them as selectable options is not enough; they must be coded to generate signals.
-4.  **Plan New Integrations:** After the dashboard UI is done, analyze the playbooks for MetaTrader5 and TradingView and present a clear, phased implementation plan to the user for approval.
-5.  **Userscript is the Path for Pocket Option:** Do not invest time in server-side Pocket Option integration. The userscript is the working and accepted solution.
+1.  **FIX THE LOGIN (P0):** The absolute first priority is to fix the  bug in . The user is completely blocked. The error is in the  endpoint.
+2.  **User-Defined Priorities:** The user wants to proceed in this order after the login is fixed: P0 (Fix/Test Tampermonkey) -> P2 (Test Custom Strategies) -> P1 (MT5/TradingView Integrations). Follow this plan.
+3.  **Test the New Userscript (v4.8.1):** Once the login is fixed, perform a full end-to-end test of the new Tampermonkey script. This is the user's core requirement and includes testing the SCAN mode, asset switching, and trade execution.
+4.  **MT5 is Simulated:** The MetaTrader5 integration is not functional. Be prepared to discuss a plan with the user to connect it to a real terminal, as it cannot run in the current Linux environment.
 
 **documents and test reports created in this job**
+-    (Updated multiple times)
 -   
--    (Market Regime Detector tests)
--    (Latency System tests)
+-   
+-   
 
 **Last 10 User Messages and any pending HUMAN messages**
--   **10.**  - **Resolved**. User reported the IP block. The agent pivoted to the mobile userscript solution.
--   **9.**  - **Done**. User approved the mobile userscript approach.
--   **8.**  - **Resolved**. Agent fixed the backend API that was failing to send signals to the script.
--   **7.**  - **In Progress**. User confirmed the auto-trader works and requested the custom strategy feature.
--   **6.**  (user uploaded 5 PDFs) - **In Progress**. Agent acknowledged and began processing.
--   **5.**  - **In Progress**. User reported the critical double trade bug and limited asset lists. The agent has implemented fixes for both, which are pending user verification.
--   **4.**  - **In Progress**. This is the current set of high-priority tasks the agent is working on.
--   **3.**  - User approving the plan after latency test results.
--   **2.**  (user uploaded 5 more PDFs) - **In Progress**.
--   **1.**  - User approval.
+-   **1.**  - The user reporting the current P0 bug. **(PENDING FIX)**
+-   **2.**  - The user provided the new v4.8.1 script. **(Implemented, but testing is blocked)**
+-   **3.**  - User approval.
+-   **4.**  - User provided credentials and confirmed MT5 integration. **(Done)**
+-   **5.**  - User requested the high-accuracy strategies. **(Done)**
+-   **6.**  - User approval.
+-   **7.**  - User requested the Pocket Option WebSocket integration. **(Done)**
+-   **8.**  - User reported a signal bias. **(Resolved)**
+-   **9.**  - User requested UI enhancements for the userscript. **(Done)**
+-   **10.**  - Previous agent's final command.
 
 **Project Health Check:**
 -   **Broken**:
-    -   The core logic for custom strategies is not yet implemented, so selecting them in the UI has no effect on signal generation.
--   **Mocked**: No mocked components. The strategy selection is data-driven but the underlying execution logic is missing.
+    -   User authentication is non-functional, blocking all access to the application.
+-   **Mocked**:
+    -   The MetaTrader5 integration is in simulation mode only.
+    -   The TradingView integration remains a placeholder.
 
 **3rd Party Integrations**
--   : Used for Telegram bot features.
--   : Webhook integration is complete.
--   , : For JWT authentication.
--   : (Client-side) The userscript for mobile auto-trading runs on this platform.
--   : (Planned) Integration research has been initiated. Requires User credentials.
--   : (Planned) Integration research has been initiated. Requires User webhooks.
+-   : Used for OANDA V20 API integration. Requires User API Key.
+-   , , : Used for the AI/ML trading system.
+-   : For MT5 integration (currently simulated). Requires User credentials.
+-   : Platform for the mobile auto-trading userscript.
+-   : (Planned) Requires User webhooks.
 
 **Testing status**
--   Testing agent used after significant changes: YES (for Market Regime and Latency features).
+-   Testing agent used after significant changes: YES
 -   Troubleshoot agent used after agent stuck in loop: NO
--   Test files created:
-    -   
-    -   
--   Known regressions: None.
+-   Test files created: None in this session.
+-   Known regressions: User login functionality is critically broken.
 
 **Credentials to test flow:**
 -   **Application Login:** , 
+-   **OANDA (Live):** Stored in .
 
 **What agent forgot to execute**
--   The agent has consistently deferred the **end-to-end verification for custom strategies**. The full loop from creating/selecting a strategy in the UI to confirming it's used by the backend signal generator has not been tested.
--   The agent has extracted new strategies from the latest batch of PDFs but hasn't started implementing the logic for them.</analysis>
+-   The agent introduced a critical  bug that broke the login functionality. This happened during the final changes of the session, and the agent did not perform a regression test on the login endpoint before finishing.</analysis>

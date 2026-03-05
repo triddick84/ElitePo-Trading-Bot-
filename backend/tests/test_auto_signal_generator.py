@@ -17,7 +17,7 @@ import time
 # Use the public URL from environment
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 if not BASE_URL:
-    BASE_URL = "https://signal-generator-pro.preview.emergentagent.com"
+    BASE_URL = "https://gpt-signal-bot-2.preview.emergentagent.com"
 
 
 class TestHealthEndpoint:

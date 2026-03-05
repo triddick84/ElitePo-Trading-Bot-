@@ -4680,39 +4680,108 @@ async def get_high_accuracy_strategies():
         "success": True,
         "strategies": [
             {
-                "name": "ultra_scalping_5s",
-                "expiry": 5,
-                "description": "Ultra-fast scalping using RSI, Bollinger Bands, MACD with micro-confirmations",
-                "min_confirmations": 4,
-                "best_market": "Ranging/Low volatility",
-                "indicators": ["RSI(7)", "BB(10,1.5)", "MACD(8,17,6)", "Price Patterns"]
+                "id": "ultra_scalper",
+                "name": "Ultra Scalper",
+                "description": "Aggressive scalping strategy for 5-15s timeframes",
+                "timeframes": ["5s", "15s"],
+                "target_accuracy": "85%+"
             },
             {
-                "name": "momentum_breakout_15s",
-                "expiry": 15,
-                "description": "Momentum breakout at key support/resistance levels with volume confirmation",
-                "min_confirmations": 4,
-                "best_market": "Trending/Breakout",
-                "indicators": ["Support/Resistance", "Volume Spike", "RSI(14)", "MACD(12,26,9)"]
+                "id": "micro_trend",
+                "name": "Micro Trend",
+                "description": "Micro trend following for 30s-1m timeframes",
+                "timeframes": ["30s", "1m"],
+                "target_accuracy": "80%+"
             },
             {
-                "name": "mean_reversion_30s",
-                "expiry": 30,
-                "description": "Mean reversion at extreme levels with Stochastic crossover confirmation",
-                "min_confirmations": 4,
-                "best_market": "Ranging",
-                "indicators": ["RSI(14)", "Stochastic(14,3)", "BB(20,2)", "Candle Patterns"]
+                "id": "reversal_hunter",
+                "name": "Reversal Hunter",
+                "description": "Mean reversion strategy for overbought/oversold conditions",
+                "timeframes": ["15s", "30s", "1m"],
+                "target_accuracy": "82%+"
             },
             {
-                "name": "trend_confirmation_1m",
-                "expiry": 60,
-                "description": "Trend continuation with EMA alignment and ADX strength confirmation",
-                "min_confirmations": 5,
-                "best_market": "Strong trending",
-                "indicators": ["EMA(9,21,50)", "ADX(14)", "RSI(14)", "MACD(12,26,9)"]
+                "id": "momentum_burst",
+                "name": "Momentum Burst",
+                "description": "Captures strong momentum moves",
+                "timeframes": ["5s", "15s", "30s"],
+                "target_accuracy": "78%+"
             }
         ]
     }
+
+
+@api_router.get("/signals/scan-markets")
+async def scan_markets_for_signals(
+    assets: str = Query("EURUSD_OTC,GBPUSD_OTC,USDJPY_OTC,AUDUSD_OTC", description="Comma-separated list of assets to scan"),
+    min_confidence: int = Query(70, ge=50, le=95, description="Minimum confidence threshold"),
+    max_signals: int = Query(10, ge=1, le=20, description="Maximum number of signals to return")
+):
+    """
+    Scan multiple markets for high-probability trading signals.
+    
+    Used by the Tampermonkey auto-trader in SCAN mode to find the best
+    trading opportunity across multiple OTC assets.
+    
+    Returns signals sorted by confidence (highest first).
+    """
+    try:
+        asset_list = [a.strip() for a in assets.split(',') if a.strip()]
+        signals_found = []
+        
+        for asset in asset_list:
+            try:
+                # Normalize asset symbol for OANDA
+                oanda_symbol = asset.replace('_OTC', '').replace('OTC', '')
+                if '_' not in oanda_symbol and len(oanda_symbol) == 6:
+                    oanda_symbol = f"{oanda_symbol[:3]}_{oanda_symbol[3:]}"
+                
+                # Get candles from OANDA
+                candles = []
+                current_price = 0
+                
+                try:
+                    oanda_df = enhanced_oanda.get_candles(oanda_symbol, "M1", 100)
+                    if oanda_df is not None and not oanda_df.empty:
+                        candles = oanda_df.reset_index().to_dict('records')
+                        if candles:
+                            current_price = float(candles[-1].get("close", 0))
+                except Exception as e:
+                    logger.debug(f"OANDA fetch for {asset} failed: {e}")
+                    continue
+                
+                if not candles or not current_price:
+                    continue
+                
+                # Generate high-accuracy signal
+                signal = get_high_accuracy_signal(candles, current_price, expiry=60)
+                
+                if signal and signal.get("confidence", 0) >= min_confidence:
+                    signal["symbol"] = asset  # Use original OTC symbol
+                    signal["oanda_symbol"] = oanda_symbol
+                    signals_found.append(signal)
+                    
+            except Exception as e:
+                logger.debug(f"Scan error for {asset}: {e}")
+                continue
+        
+        # Sort by confidence (highest first)
+        signals_found.sort(key=lambda x: x.get("confidence", 0), reverse=True)
+        
+        # Limit results
+        top_signals = signals_found[:max_signals]
+        
+        return {
+            "success": True,
+            "scanned_assets": len(asset_list),
+            "signals_found": len(signals_found),
+            "top_signals": top_signals,
+            "message": f"Found {len(signals_found)} signals above {min_confidence}% confidence"
+        }
+        
+    except Exception as e:
+        logger.error(f"Market scan error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ==================== MULTI-TIMEFRAME ANALYSIS ENDPOINTS ====================
