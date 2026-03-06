@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://gpt-signal-bot-2.preview.emergentagent.com
-// @version      5.2.0
-// @description  Auto-trade OTC forex on Pocket Option. v5.2.0 - Improved timeframe auto-switching with multiple selector strategies
+// @version      5.3.0
+// @description  Auto-trade OTC forex on Pocket Option. v5.3.0 - Fixed to change TRADE EXPIRATION (near amount), not chart timeframe
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -107,7 +107,7 @@
     // ===========================================
     function log(msg, type = 'info') {
         const ts = new Date().toLocaleTimeString();
-        const prefix = '[GPT v5.2.0]';
+        const prefix = '[GPT v5.3.0]';
         console.log(`${prefix} ${ts}: ${msg}`);
         
         const logEl = document.getElementById('gpt-log');
@@ -189,7 +189,7 @@
             <div class="drag-header" id="gpt-drag-handle">
                 <div class="row">
                     <span class="dot" id="gpt-dot"></span>
-                    <span class="title">GPT Bot v5.2.0</span>
+                    <span class="title">GPT Bot v5.3.0</span>
                     <span style="flex:1"></span>
                     <span style="font-size:10px;color:#94a3b8;">☰ drag</span>
                 </div>
@@ -235,7 +235,7 @@
         updateInvertButton();
 
         makeDraggable(panel);
-        log('Panel ready v5.2.0');
+        log('Panel ready v5.3.0');
     }
     
     function toggleInvertSignals() {
@@ -906,143 +906,199 @@
     // TIMEFRAME SWITCHING
     // ===========================================
     // ===========================================
-    // TIMEFRAME SWITCHING - POCKET OPTION SPECIFIC
+    // TRADE EXPIRATION SWITCHING - NOT CHART TIMEFRAME
     // ===========================================
+    // This changes the TRADE EXPIRATION (near amount section), not chart timeframe (M1, M5, etc.)
+    
     async function switchToTimeframe(expirySeconds) {
         if (!CONFIG.AUTO_SWITCH_TIMEFRAME || !expirySeconds) {
             return true; // Skip if disabled
         }
         
-        log(`⏱️ Switching to ${expirySeconds}s expiry...`);
+        log(`⏱️ Setting trade expiration to ${expirySeconds}s...`);
         
         try {
-            // Pocket Option expiration time selector
-            // Usually located near the trade buttons showing current time like "1:00" or "30s"
+            // IMPORTANT: We need the TRADE EXPIRATION selector, not chart timeframe
+            // Trade expiration is in the trading panel near the amount input
+            // It shows values like "1:00", "0:30", "5:00" (minutes:seconds)
             
-            // Step 1: Find the time/expiration display element
-            // PO uses different selectors depending on version
-            const timeSelectors = [
-                // Common PO selectors
-                '.time-item__value',
-                '.time-item',
-                '.option-time-wrap .value',
-                '.option-time-wrap',
-                '.expiration-time .value',
-                '.expiration-time',
-                // Input-based selectors
-                'input[name*="expiration"]',
-                'input[placeholder*="time"]',
-                // Generic time display
-                '[class*="time-picker"] .value',
-                '[class*="time-select"]',
-                '[class*="expiry"]',
-                // Data attributes
-                '[data-testid="expiration"]',
-                '[data-test="time-picker"]'
+            // First, find the trading panel / trade controls area
+            const tradingPanelSelectors = [
+                '.trading-panel',
+                '.trade-panel', 
+                '.option-panel',
+                '.deals-group',
+                '.trading-block',
+                '[class*="trading-panel"]',
+                '[class*="trade-controls"]'
             ];
             
-            let timeElement = null;
-            for (const sel of timeSelectors) {
-                timeElement = document.querySelector(sel);
-                if (timeElement && timeElement.offsetParent !== null) {
-                    log(`Found time element: ${sel}`);
+            let tradingPanel = null;
+            for (const sel of tradingPanelSelectors) {
+                tradingPanel = document.querySelector(sel);
+                if (tradingPanel) break;
+            }
+            
+            // Look for amount input to help locate the trade expiration nearby
+            const amountInput = document.querySelector('input[name*="amount"]') ||
+                               document.querySelector('input[class*="amount"]') ||
+                               document.querySelector('.amount-input') ||
+                               document.querySelector('[class*="deal-amount"] input');
+            
+            // Trade expiration is typically ABOVE or NEAR the amount input
+            // Look for time display specifically in trade panel area
+            
+            // Specific selectors for TRADE EXPIRATION (not chart timeframe)
+            const expirationSelectors = [
+                // Most common PO trade expiration selectors
+                '.deal-time__value',
+                '.deal-time',
+                '.option__time-item',
+                '.option-time-item',
+                '.trading-panel__time',
+                '.time-wrapper__item',
+                '.time-wrap__value',
+                // Near amount section
+                '.deals-group .time-item',
+                '.trading-panel .time-item',
+                // Generic but within trade panel
+                '[class*="deal"][class*="time"]',
+                '[class*="expir"][class*="value"]',
+                '[class*="trade"][class*="time"]'
+            ];
+            
+            let expirationElement = null;
+            
+            // Try specific selectors first
+            for (const sel of expirationSelectors) {
+                expirationElement = document.querySelector(sel);
+                if (expirationElement && expirationElement.offsetParent !== null) {
+                    log(`Found expiration element: ${sel}`);
                     break;
                 }
             }
             
-            // Fallback: Look for element displaying time format
-            if (!timeElement) {
-                const candidates = document.querySelectorAll('div, span, button');
-                for (const el of candidates) {
+            // If not found, look within trading panel for time display
+            if (!expirationElement && tradingPanel) {
+                const panelElements = tradingPanel.querySelectorAll('*');
+                for (const el of panelElements) {
                     if (el.offsetParent === null) continue;
                     const text = el.textContent.trim();
-                    // Match time formats: "0:30", "1:00", "30s", "1m"
-                    if (/^(\d{1,2}:\d{2}|\d+[sm])$/.test(text)) {
-                        // Make sure it's not inside a chart or unrelated area
-                        const parent = el.closest('.trade-panel, .trading-panel, .option-panel, [class*="trade"], [class*="option"]');
-                        if (parent || el.closest('header, .header, .toolbar, .controls')) {
-                            timeElement = el;
-                            log(`Found time by content: "${text}"`);
+                    const classes = el.className || '';
+                    
+                    // Skip if it looks like chart timeframe (M1, M5, H1, etc.)
+                    if (/^[MHD]\d+$/i.test(text)) continue;
+                    
+                    // Match trade expiration format: "0:30", "1:00", "5:00"
+                    if (/^\d{1,2}:\d{2}$/.test(text) && !classes.includes('chart')) {
+                        expirationElement = el;
+                        log(`Found expiration in panel: "${text}"`);
+                        break;
+                    }
+                }
+            }
+            
+            // Fallback: Look near amount input
+            if (!expirationElement && amountInput) {
+                const parent = amountInput.closest('.deals-group, .trading-panel, .option-panel, [class*="trade"]');
+                if (parent) {
+                    const timeElements = parent.querySelectorAll('[class*="time"]');
+                    for (const el of timeElements) {
+                        const text = el.textContent.trim();
+                        if (/^\d{1,2}:\d{2}$/.test(text)) {
+                            expirationElement = el;
+                            log(`Found expiration near amount: "${text}"`);
                             break;
                         }
                     }
                 }
             }
             
-            if (!timeElement) {
-                log('⚠️ Time selector not found');
-                return false;
-            }
-            
-            // Step 2: Click to open the time dropdown/picker
-            log('Opening time picker...');
-            timeElement.click();
-            await sleep(500);
-            
-            // Also try clicking parent if needed
-            if (!document.querySelector('[class*="time-list"], [class*="dropdown"], [class*="picker-list"]')) {
-                const parent = timeElement.parentElement;
-                if (parent) {
-                    parent.click();
-                    await sleep(500);
-                }
-            }
-            
-            // Step 3: Find and click the correct time option
-            const targetFormats = getTimeFormats(expirySeconds);
-            log(`Looking for: ${targetFormats.join(', ')}`);
-            
-            // Look for dropdown/list items
-            const optionSelectors = [
-                '.time-item',
-                '.time-list__item',
-                '[class*="time-option"]',
-                '[class*="time-list"] > *',
-                '[class*="dropdown"] [class*="item"]',
-                '[class*="picker-list"] > *',
-                '.option-time-item',
-                '[role="option"]',
-                '[role="listitem"]'
-            ];
-            
-            let options = [];
-            for (const sel of optionSelectors) {
-                options = document.querySelectorAll(sel);
-                if (options.length > 2) {
-                    log(`Found ${options.length} time options via ${sel}`);
-                    break;
-                }
-            }
-            
-            // Fallback: find any visible list items
-            if (options.length < 2) {
-                const lists = document.querySelectorAll('[class*="list"], [class*="dropdown"], [class*="picker"]');
-                for (const list of lists) {
-                    if (list.offsetParent !== null && list.children.length > 2) {
-                        options = list.children;
-                        log(`Found ${options.length} options in list`);
+            // Last resort: Find clickable time display that's NOT in chart area
+            if (!expirationElement) {
+                const allTimeElements = document.querySelectorAll('[class*="time"]');
+                for (const el of allTimeElements) {
+                    if (el.offsetParent === null) continue;
+                    
+                    // Skip chart timeframe elements
+                    const isChart = el.closest('.chart, [class*="chart"], .candles, [class*="candle"]');
+                    if (isChart) continue;
+                    
+                    const text = el.textContent.trim();
+                    // Trade expiration format: "0:30", "1:00", etc. (not "M1", "M5")
+                    if (/^\d{1,2}:\d{2}$/.test(text)) {
+                        expirationElement = el;
+                        log(`Found expiration (fallback): "${text}"`);
                         break;
                     }
                 }
             }
             
+            if (!expirationElement) {
+                log('⚠️ Trade expiration selector not found');
+                return false;
+            }
+            
+            // Click to open expiration dropdown
+            log('Opening expiration picker...');
+            expirationElement.click();
+            await sleep(600);
+            
+            // Try parent if dropdown didn't open
+            const dropdownOpened = document.querySelector('[class*="time-list"], [class*="dropdown"]:not([class*="chart"]), [class*="picker-list"]');
+            if (!dropdownOpened) {
+                const parent = expirationElement.parentElement;
+                if (parent) {
+                    parent.click();
+                    await sleep(600);
+                }
+            }
+            
+            // Find and click the correct expiration time
+            const targetTime = formatExpirationTime(expirySeconds);
+            log(`Looking for expiration: ${targetTime}`);
+            
+            // Get expiration options (NOT chart timeframe options)
+            let options = [];
+            const optionSelectors = [
+                '.time-list__item',
+                '.time-item:not([class*="chart"])',
+                '[class*="time-option"]',
+                '[class*="dropdown"]:not([class*="chart"]) [class*="item"]',
+                '.option-time-item'
+            ];
+            
+            for (const sel of optionSelectors) {
+                options = document.querySelectorAll(sel);
+                // Filter out chart timeframe options
+                options = Array.from(options).filter(opt => {
+                    const text = opt.textContent.trim();
+                    // Exclude M1, M5, H1, D1 style (chart timeframes)
+                    return !/^[MHD]\d+$/i.test(text);
+                });
+                if (options.length > 0) {
+                    log(`Found ${options.length} expiration options`);
+                    break;
+                }
+            }
+            
             if (options.length === 0) {
-                log('⚠️ No time options found');
+                log('⚠️ No expiration options found');
                 closeDropdowns();
                 return false;
             }
             
-            // Step 4: Click matching option
+            // Click matching expiration option
             let clicked = false;
+            const targetFormats = getExpirationFormats(expirySeconds);
+            
             for (const opt of options) {
-                if (opt.offsetParent === null || opt.style.display === 'none') continue;
-                
-                const text = opt.textContent.trim().toLowerCase().replace(/\s/g, '');
+                if (opt.offsetParent === null) continue;
+                const text = opt.textContent.trim();
                 
                 for (const target of targetFormats) {
-                    const targetLower = target.toLowerCase().replace(/\s/g, '');
-                    if (text === targetLower || text.includes(targetLower)) {
-                        log(`✓ Clicking: "${opt.textContent.trim()}"`);
+                    if (text === target || text.includes(target)) {
+                        log(`✓ Clicking expiration: "${text}"`);
                         opt.click();
                         clicked = true;
                         await sleep(300);
@@ -1052,60 +1108,49 @@
                 if (clicked) break;
             }
             
-            // Fallback: Try by index position
-            // PO typically orders: 5s, 10s, 15s, 30s, 1m, 2m, 3m, 5m, 10m, 15m...
-            if (!clicked && options.length > 0) {
-                const timeToIndex = {
-                    5: 0, 10: 1, 15: 2, 30: 3, 
-                    60: 4, 120: 5, 180: 6, 300: 7, 600: 8, 900: 9
-                };
-                const idx = timeToIndex[expirySeconds];
-                if (idx !== undefined && options[idx]) {
-                    log(`Trying index ${idx}...`);
-                    options[idx].click();
-                    clicked = true;
-                    await sleep(300);
-                }
-            }
-            
             closeDropdowns();
             
             if (clicked) {
-                log(`✓ Set expiry to ${expirySeconds}s`);
+                log(`✓ Trade expiration set to ${expirySeconds}s`);
                 return true;
             } else {
-                log(`⚠️ Could not find ${expirySeconds}s option`);
+                log(`⚠️ Could not find ${expirySeconds}s expiration option`);
                 return false;
             }
             
         } catch (e) {
-            log(`Timeframe error: ${e.message}`);
+            log(`Expiration switch error: ${e.message}`);
             closeDropdowns();
             return false;
         }
     }
     
-    // Generate various time format strings to match
-    function getTimeFormats(seconds) {
+    // Format seconds to expiration display format (mm:ss)
+    function formatExpirationTime(seconds) {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    }
+    
+    // Generate various expiration time formats to match
+    function getExpirationFormats(seconds) {
         const formats = [];
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
         
+        // Primary format: "0:30", "1:00", "5:00"
+        formats.push(`${mins}:${secs.toString().padStart(2, '0')}`);
+        
+        // Alternative formats
         if (seconds < 60) {
-            formats.push(`${seconds}s`);
-            formats.push(`${seconds}`);
             formats.push(`0:${seconds.toString().padStart(2, '0')}`);
-            formats.push(`00:${seconds.toString().padStart(2, '0')}`);
+            formats.push(`${seconds}s`);
+            formats.push(`${seconds} sec`);
         } else {
-            const mins = Math.floor(seconds / 60);
-            const secs = seconds % 60;
-            
-            formats.push(`${mins}:${secs.toString().padStart(2, '0')}`);
             formats.push(`${mins}m`);
-            formats.push(`${mins}min`);
             formats.push(`${mins} min`);
-            
             if (secs === 0) {
                 formats.push(`${mins}:00`);
-                formats.push(`${seconds}s`);
             }
         }
         
@@ -1125,29 +1170,25 @@
         } catch (e) {}
     }
     
-    // Get current expiration time from PO UI
+    // Get current trade expiration from PO UI
     function getCurrentTimeframe() {
+        // Look for trade expiration display (NOT chart timeframe)
         const selectors = [
-            '.time-item__value',
-            '.time-item .value',
-            '.option-time-wrap .value',
-            '.expiration-time .value',
-            '[class*="time-picker"] .value'
+            '.deal-time__value',
+            '.deal-time',
+            '.option__time-item',
+            '.time-wrap__value',
+            '.trading-panel .time-item'
         ];
         
         for (const sel of selectors) {
             const el = document.querySelector(sel);
             if (el && el.textContent) {
-                return parseTimeToSeconds(el.textContent.trim());
+                const text = el.textContent.trim();
+                // Skip chart timeframes (M1, M5, H1, etc.)
+                if (/^[MHD]\d+$/i.test(text)) continue;
+                return parseTimeToSeconds(text);
             }
-        }
-        
-        // Fallback: search for time-like text
-        const candidates = document.querySelectorAll('[class*="time"], [class*="expir"]');
-        for (const el of candidates) {
-            const text = el.textContent.trim();
-            const seconds = parseTimeToSeconds(text);
-            if (seconds > 0) return seconds;
         }
         
         return null;
@@ -1158,7 +1199,7 @@
         if (!text) return 0;
         text = text.trim().toLowerCase();
         
-        // "1:30" or "0:30"
+        // "1:30" or "0:30" format
         const colonMatch = text.match(/^(\d{1,2}):(\d{2})$/);
         if (colonMatch) {
             return parseInt(colonMatch[1]) * 60 + parseInt(colonMatch[2]);
@@ -1173,10 +1214,6 @@
         if (text.includes('m')) {
             return (parseInt(text) || 0) * 60;
         }
-        
-        // Plain number (assume seconds if small)
-        const num = parseInt(text);
-        if (num > 0 && num <= 900) return num;
         
         return 0;
     }
@@ -1751,7 +1788,7 @@
     // INITIALIZATION
     // ===========================================
     function init() {
-        log('Initializing v5.2.0...');
+        log('Initializing v5.3.0...');
         
         setTimeout(() => {
             createPanel();
