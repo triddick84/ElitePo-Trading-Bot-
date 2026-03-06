@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://gpt-signal-bot-2.preview.emergentagent.com
-// @version      4.9.0
-// @description  Auto-trade OTC forex on Pocket Option. v4.9.0 - Smart SWITCH sync: OFF=current asset only, ON=multi-asset scan. Auto-timeframe switching to match signal expiry.
+// @version      5.0.0
+// @description  Auto-trade OTC forex on Pocket Option. v5.0.0 - Favorites-only scanning + 65%+ payout filter + auto-timeframe sync
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -37,6 +37,8 @@
         SCAN_MODE: false,
         SCAN_ASSETS: 'EURUSD_OTC,GBPUSD_OTC,USDJPY_OTC,AUDUSD_OTC,EURJPY_OTC,GBPJPY_OTC,EURGBP_OTC,USDCAD_OTC,USDCHF_OTC,NZDUSD_OTC',
         MIN_CONFIDENCE: 70,
+        MIN_PAYOUT: 65,  // Minimum payout percentage required (65%+)
+        SCAN_FAVORITES_ONLY: true,  // Only scan assets marked as favorites in Pocket Option
         TRADE_COOLDOWN: 3000,  // 3 seconds cooldown between trades
         SOUND_ENABLED: true,
         AUTO_SWITCH_TIMEFRAME: true,  // Auto-switch Pocket Option timeframe to match signal expiry
@@ -102,7 +104,7 @@
     // ===========================================
     function log(msg, type = 'info') {
         const ts = new Date().toLocaleTimeString();
-        const prefix = '[GPT v4.9.0]';
+        const prefix = '[GPT v5.0.0]';
         console.log(`${prefix} ${ts}: ${msg}`);
         
         const logEl = document.getElementById('gpt-log');
@@ -184,7 +186,7 @@
             <div class="drag-header" id="gpt-drag-handle">
                 <div class="row">
                     <span class="dot" id="gpt-dot"></span>
-                    <span class="title">GPT Bot v4.9.0</span>
+                    <span class="title">GPT Bot v5.0.0</span>
                     <span style="flex:1"></span>
                     <span style="font-size:10px;color:#94a3b8;">☰ drag</span>
                 </div>
@@ -195,7 +197,8 @@
             </div>
             <div class="row">
                 <span class="asset-info" id="gpt-asset">Asset: --</span>
-                <span class="asset-info" id="gpt-expiry" style="background: rgba(139, 92, 246, 0.2);">Expiry: --</span>
+                <span class="asset-info" id="gpt-payout" style="background: rgba(34, 197, 94, 0.2);">Pay: --%</span>
+                <span class="asset-info" id="gpt-expiry" style="background: rgba(139, 92, 246, 0.2);">Exp: --</span>
             </div>
             <div class="row">
                 <div style="display:flex;gap:6px;">
@@ -229,7 +232,7 @@
         updateInvertButton();
 
         makeDraggable(panel);
-        log('Panel ready v4.9.0');
+        log('Panel ready v5.0.0');
     }
     
     function toggleInvertSignals() {
@@ -372,6 +375,7 @@
         const modeStatus = document.getElementById('gpt-mode-status');
         const switchStatus = document.getElementById('gpt-switch-status');
         const assetInfo = document.getElementById('gpt-asset');
+        const payoutInfo = document.getElementById('gpt-payout');
         const expiryInfo = document.getElementById('gpt-expiry');
         
         if (dot) {
@@ -399,13 +403,26 @@
         if (assetInfo && signal && signal.symbol) {
             assetInfo.textContent = `Asset: ${signal.symbol.replace('_OTC', '')}`;
         }
+        if (payoutInfo) {
+            if (signal && signal.payout) {
+                payoutInfo.textContent = `Pay: ${signal.payout}%`;
+                payoutInfo.style.background = signal.payout >= CONFIG.MIN_PAYOUT ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)';
+            } else {
+                // Try to get current payout from UI
+                const currentPay = getCurrentPayout();
+                if (currentPay !== null) {
+                    payoutInfo.textContent = `Pay: ${currentPay}%`;
+                    payoutInfo.style.background = currentPay >= CONFIG.MIN_PAYOUT ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)';
+                }
+            }
+        }
         if (expiryInfo && signal && signal.expiry_seconds) {
             const expSec = signal.expiry_seconds;
             const expDisplay = expSec >= 60 ? `${Math.floor(expSec/60)}m` : `${expSec}s`;
-            expiryInfo.textContent = `Expiry: ${expDisplay}`;
+            expiryInfo.textContent = `Exp: ${expDisplay}`;
         }
         if (modeStatus) {
-            let modeText = CONFIG.SCAN_MODE ? 'SCAN' : 'SINGLE';
+            let modeText = CONFIG.SCAN_MODE ? (CONFIG.SCAN_FAVORITES_ONLY ? 'FAV' : 'ALL') : 'SINGLE';
             if (invertSignals) modeText += ' 🔄';
             modeStatus.textContent = modeText;
             modeStatus.className = 'status-badge ' + (CONFIG.SCAN_MODE ? 'ok' : '');
@@ -432,6 +449,193 @@
             }
         }
         return null;
+    }
+    
+    // Get current asset's payout percentage from Pocket Option UI
+    function getCurrentPayout() {
+        // Try multiple selectors for payout display
+        const payoutSelectors = [
+            '.pair-number-wrap .pair-profit',
+            '.pair-profit',
+            '.profit-percent',
+            '.payout',
+            '[class*="profit"]',
+            '[class*="payout"]'
+        ];
+        
+        for (const sel of payoutSelectors) {
+            const el = document.querySelector(sel);
+            if (el && el.textContent) {
+                const text = el.textContent.trim();
+                // Extract number from text like "+85%" or "85%"
+                const match = text.match(/(\d+)\s*%/);
+                if (match) {
+                    return parseInt(match[1]);
+                }
+            }
+        }
+        return null;
+    }
+    
+    // Get list of favorite assets from Pocket Option
+    async function getFavoriteAssets() {
+        const favorites = [];
+        
+        try {
+            // Open asset selector
+            const pairSelector = document.querySelector('.pair-number-wrap');
+            if (!pairSelector) {
+                log('Cannot open asset selector for favorites');
+                return null;
+            }
+            
+            pairSelector.click();
+            await sleep(1000);
+            
+            // Look for favorites section or starred items
+            // Pocket Option typically shows favorites with a star icon or in a "Favorites" tab
+            const favoriteSelectors = [
+                '.alist__item--favorite',
+                '.alist__item.favorite',
+                '[class*="favorite"]',
+                '.asset-item.starred',
+                '.alist__item:has(.star-icon.active)',
+                '.alist__item:has([class*="star"][class*="active"])'
+            ];
+            
+            let favoriteItems = [];
+            
+            // First try to click on Favorites tab if it exists
+            const favTabs = document.querySelectorAll('.alist__tab, .tab-item, [class*="tab"]');
+            for (const tab of favTabs) {
+                const tabText = tab.textContent.toLowerCase();
+                if (tabText.includes('favor') || tabText.includes('star')) {
+                    log('Found Favorites tab, clicking...');
+                    tab.click();
+                    await sleep(500);
+                    break;
+                }
+            }
+            
+            // Now get visible items (should be favorites if tab was clicked)
+            for (const sel of favoriteSelectors) {
+                favoriteItems = document.querySelectorAll(sel);
+                if (favoriteItems.length > 0) break;
+            }
+            
+            // If no favorites found via class, look for starred items
+            if (favoriteItems.length === 0) {
+                const allItems = document.querySelectorAll('.alist__item:not(.alist__item--no-active)');
+                for (const item of allItems) {
+                    // Check if item has an active star
+                    const star = item.querySelector('[class*="star"], [class*="fav"], .ico-star');
+                    if (star) {
+                        const starClasses = star.className || '';
+                        const isActive = starClasses.includes('active') || 
+                                        starClasses.includes('filled') ||
+                                        starClasses.includes('selected') ||
+                                        star.style.color === 'gold' ||
+                                        star.style.color === 'yellow';
+                        if (isActive) {
+                            favoriteItems = [...favoriteItems, item];
+                        }
+                    }
+                }
+            }
+            
+            // Extract asset names and payouts from favorite items
+            for (const item of favoriteItems) {
+                if (item.style.display === 'none' || item.offsetParent === null) continue;
+                
+                const nameEl = item.querySelector('.alist__label, .asset-name, [class*="name"]');
+                const payoutEl = item.querySelector('.alist__profit, .profit, [class*="profit"], [class*="payout"]');
+                
+                if (nameEl) {
+                    const assetName = nameEl.textContent.trim();
+                    let payout = 0;
+                    
+                    if (payoutEl) {
+                        const payoutText = payoutEl.textContent.trim();
+                        const match = payoutText.match(/(\d+)/);
+                        if (match) payout = parseInt(match[1]);
+                    }
+                    
+                    // Convert to API format
+                    const apiFormat = assetName.replace('/', '').replace(' ', '_').toUpperCase();
+                    
+                    favorites.push({
+                        name: assetName,
+                        apiSymbol: apiFormat,
+                        payout: payout
+                    });
+                }
+            }
+            
+            // Close dropdown
+            closeDropdown();
+            
+            log(`Found ${favorites.length} favorites`);
+            return favorites;
+            
+        } catch (e) {
+            log(`Error getting favorites: ${e.message}`);
+            closeDropdown();
+            return null;
+        }
+    }
+    
+    // Get payout for a specific asset by opening selector and finding it
+    async function getAssetPayout(assetSymbol) {
+        try {
+            const pairSelector = document.querySelector('.pair-number-wrap');
+            if (!pairSelector) return null;
+            
+            pairSelector.click();
+            await sleep(800);
+            
+            // Search for the asset
+            const searchField = document.querySelector('.search__field') || 
+                               document.querySelector('input[type="search"]');
+            
+            if (searchField) {
+                const searchTerm = assetSymbol.replace('_OTC', '').replace('_', '').substring(0, 6);
+                searchField.value = '';
+                searchField.focus();
+                
+                for (const char of searchTerm) {
+                    searchField.value += char;
+                    searchField.dispatchEvent(new Event('input', { bubbles: true }));
+                    await sleep(50);
+                }
+                await sleep(500);
+            }
+            
+            // Find the asset and its payout
+            const items = document.querySelectorAll('.alist__item:not(.alist__item--no-active)');
+            for (const item of items) {
+                if (item.style.display === 'none' || item.offsetParent === null) continue;
+                
+                const nameEl = item.querySelector('.alist__label, .asset-name');
+                const payoutEl = item.querySelector('.alist__profit, .profit, [class*="profit"]');
+                
+                if (nameEl && nameEl.textContent.toUpperCase().includes(assetSymbol.substring(0, 3))) {
+                    let payout = 0;
+                    if (payoutEl) {
+                        const match = payoutEl.textContent.match(/(\d+)/);
+                        if (match) payout = parseInt(match[1]);
+                    }
+                    closeDropdown();
+                    return payout;
+                }
+            }
+            
+            closeDropdown();
+            return null;
+            
+        } catch (e) {
+            closeDropdown();
+            return null;
+        }
     }
 
     function normalizeAssetSymbol(symbol) {
@@ -924,9 +1128,15 @@
     }
 
     // ===========================================
-    // MARKET SCANNING - WITH SWITCH SYNC
+    // MARKET SCANNING - FAVORITES + PAYOUT FILTER
     // ===========================================
-    function scanMarkets() {
+    
+    // Cache for favorites and payouts (refresh periodically)
+    let cachedFavorites = null;
+    let favoritesLastUpdate = 0;
+    const FAVORITES_CACHE_MS = 60000; // Refresh favorites every 60 seconds
+    
+    async function scanMarkets() {
         if (isTrading) {
             log('Busy, skip scan');
             return;
@@ -939,26 +1149,67 @@
             return;
         }
 
-        // SWITCH determines scan behavior:
-        // - SWITCH ON: Scan multiple assets (can switch between them)
-        // - SWITCH OFF: Scan only current asset (stay on current)
+        // Determine assets to scan
         let assetsToScan = CONFIG.SCAN_ASSETS;
+        let assetPayouts = {}; // {symbol: payout}
         
         if (!CONFIG.AUTO_SWITCH_ASSET) {
             // SWITCH OFF - Only scan current asset
             const currentAssetRaw = getCurrentAsset();
             if (currentAssetRaw) {
-                // Convert display format to API format (e.g., "EUR/USD OTC" -> "EURUSD_OTC")
                 const normalized = currentAssetRaw.replace('/', '').replace(' ', '_').toUpperCase();
                 assetsToScan = normalized;
-                log(`SWITCH OFF - Scanning current only: ${normalized}`);
+                
+                // Get current asset's payout
+                const currentPayout = getCurrentPayout();
+                if (currentPayout !== null) {
+                    assetPayouts[normalized] = currentPayout;
+                    log(`SWITCH OFF - Current: ${normalized} (${currentPayout}%)`);
+                    
+                    // Check payout requirement
+                    if (currentPayout < CONFIG.MIN_PAYOUT) {
+                        log(`⚠️ Payout ${currentPayout}% < ${CONFIG.MIN_PAYOUT}% required. Skipping.`);
+                        const sigEl = document.getElementById('gpt-signal');
+                        if (sigEl) { sigEl.textContent = 'LOW PAY'; sigEl.className = 'signal wait'; }
+                        return;
+                    }
+                } else {
+                    log(`SWITCH OFF - Current: ${normalized} (payout unknown)`);
+                }
             } else {
                 log('Cannot detect current asset, using defaults');
             }
         } else {
-            // Count available assets (not on cooldown)
-            const cooldownCount = Object.keys(recentlyTradedAssets).filter(a => isAssetOnCooldown(a)).length;
-            log(`SWITCH ON - Scanning multiple (${cooldownCount} on cooldown)`);
+            // SWITCH ON - Scan favorites with 65%+ payout
+            if (CONFIG.SCAN_FAVORITES_ONLY) {
+                // Check if we need to refresh favorites cache
+                if (!cachedFavorites || (now - favoritesLastUpdate > FAVORITES_CACHE_MS)) {
+                    log('Refreshing favorites list...');
+                    cachedFavorites = await getFavoriteAssets();
+                    favoritesLastUpdate = now;
+                }
+                
+                if (cachedFavorites && cachedFavorites.length > 0) {
+                    // Filter by minimum payout
+                    const eligibleAssets = cachedFavorites.filter(a => a.payout >= CONFIG.MIN_PAYOUT);
+                    
+                    if (eligibleAssets.length > 0) {
+                        assetsToScan = eligibleAssets.map(a => a.apiSymbol).join(',');
+                        eligibleAssets.forEach(a => { assetPayouts[a.apiSymbol] = a.payout; });
+                        log(`FAVORITES: ${eligibleAssets.length}/${cachedFavorites.length} with ${CONFIG.MIN_PAYOUT}%+ payout`);
+                    } else {
+                        log(`⚠️ No favorites with ${CONFIG.MIN_PAYOUT}%+ payout found`);
+                        const sigEl = document.getElementById('gpt-signal');
+                        if (sigEl) { sigEl.textContent = 'NO FAV'; sigEl.className = 'signal wait'; }
+                        return;
+                    }
+                } else {
+                    log('No favorites found, using default assets');
+                }
+            } else {
+                const cooldownCount = Object.keys(recentlyTradedAssets).filter(a => isAssetOnCooldown(a)).length;
+                log(`SWITCH ON - Scanning all (${cooldownCount} on cooldown)`);
+            }
         }
         
         // Build URL with optional preferred expiry
@@ -986,20 +1237,29 @@
                         log(`Found ${data.top_signals.length} signals`);
                         
                         // Find the best signal that:
-                        // 1. Is not on cooldown (recently traded)
-                        // 2. Has not exceeded switch attempt limit
-                        // 3. If SWITCH OFF, must match current asset
+                        // 1. Meets payout requirement (65%+)
+                        // 2. Is not on cooldown (recently traded)
+                        // 3. Has not exceeded switch attempt limit
+                        // 4. If SWITCH OFF, must match current asset
                         let selectedSignal = null;
                         let skippedReasons = [];
                         
                         for (const signal of data.top_signals) {
                             const assetBase = signal.symbol.replace('_OTC', '').replace('_', '');
+                            const assetKey = signal.symbol;
+                            
+                            // Check payout requirement
+                            const payout = assetPayouts[assetKey] || assetPayouts[assetBase];
+                            if (payout !== undefined && payout < CONFIG.MIN_PAYOUT) {
+                                skippedReasons.push(`${assetBase}: payout ${payout}%`);
+                                continue;
+                            }
                             
                             // If SWITCH OFF, only accept signals for current asset
                             if (!CONFIG.AUTO_SWITCH_ASSET) {
                                 const currentAssetBase = getCurrentAsset()?.replace('/', '').replace(' OTC', '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
                                 if (currentAssetBase && assetBase !== currentAssetBase) {
-                                    skippedReasons.push(`${assetBase}: not current asset`);
+                                    skippedReasons.push(`${assetBase}: not current`);
                                     continue;
                                 }
                             }
@@ -1017,6 +1277,11 @@
                                 continue;
                             }
                             
+                            // Add payout info to signal for display
+                            if (payout !== undefined) {
+                                signal.payout = payout;
+                            }
+                            
                             selectedSignal = signal;
                             break;
                         }
@@ -1028,15 +1293,16 @@
                         
                         // If all assets are blocked, wait for cooldowns to expire
                         if (!selectedSignal) {
-                            log('All assets on cooldown or blocked. Waiting...');
+                            log('No eligible signals. Waiting...');
                             const sigEl = document.getElementById('gpt-signal');
                             if (sigEl) { sigEl.textContent = 'WAIT'; sigEl.className = 'signal wait'; }
                             return;
                         }
                         
-                        // Log selected signal with expiry info
+                        // Log selected signal with expiry and payout info
                         const expiry = selectedSignal.expiry_seconds || 60;
-                        log(`Selected: ${selectedSignal.direction} ${selectedSignal.symbol} (${selectedSignal.confidence.toFixed(0)}%) @ ${expiry}s`);
+                        const payoutInfo = selectedSignal.payout ? ` ${selectedSignal.payout}%` : '';
+                        log(`✓ ${selectedSignal.direction} ${selectedSignal.symbol} (${selectedSignal.confidence.toFixed(0)}%${payoutInfo}) @ ${expiry}s`);
                         
                         updateUI('trading', selectedSignal);
                         
@@ -1270,7 +1536,7 @@
     // INITIALIZATION
     // ===========================================
     function init() {
-        log('Initializing v4.9.0...');
+        log('Initializing v5.0.0...');
         
         setTimeout(() => {
             createPanel();
@@ -1280,6 +1546,8 @@
             CONFIG.AUTO_SWITCH_ASSET = GM_getValue('autoSwitch', true);
             CONFIG.SCAN_MODE = GM_getValue('scanMode', false);
             CONFIG.AUTO_SWITCH_TIMEFRAME = GM_getValue('autoSwitchTimeframe', true);
+            CONFIG.SCAN_FAVORITES_ONLY = GM_getValue('scanFavoritesOnly', true);
+            CONFIG.MIN_PAYOUT = GM_getValue('minPayout', 65);
             
             // Update buttons based on saved settings
             if (!CONFIG.AUTO_TRADE_ENABLED) {
@@ -1303,7 +1571,7 @@
             setInterval(checkSignal, CONFIG.POLL_INTERVAL);
             checkSignal();
             
-            log('Ready! SWITCH=' + (CONFIG.AUTO_SWITCH_ASSET ? 'MULTI' : 'CURRENT'));
+            log(`Ready! FAV=${CONFIG.SCAN_FAVORITES_ONLY} PAY>=${CONFIG.MIN_PAYOUT}%`);
         }, 2000);
     }
 
