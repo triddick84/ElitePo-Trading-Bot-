@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://gpt-signal-bot-2.preview.emergentagent.com
-// @version      5.1.0
-// @description  Auto-trade OTC forex on Pocket Option. v5.1.0 - Enhanced timeframe auto-switching + Favorites-only + 65%+ payout filter
+// @version      5.2.0
+// @description  Auto-trade OTC forex on Pocket Option. v5.2.0 - Improved timeframe auto-switching with multiple selector strategies
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -107,7 +107,7 @@
     // ===========================================
     function log(msg, type = 'info') {
         const ts = new Date().toLocaleTimeString();
-        const prefix = '[GPT v5.1.0]';
+        const prefix = '[GPT v5.2.0]';
         console.log(`${prefix} ${ts}: ${msg}`);
         
         const logEl = document.getElementById('gpt-log');
@@ -189,7 +189,7 @@
             <div class="drag-header" id="gpt-drag-handle">
                 <div class="row">
                     <span class="dot" id="gpt-dot"></span>
-                    <span class="title">GPT Bot v5.1.0</span>
+                    <span class="title">GPT Bot v5.2.0</span>
                     <span style="flex:1"></span>
                     <span style="font-size:10px;color:#94a3b8;">☰ drag</span>
                 </div>
@@ -235,7 +235,7 @@
         updateInvertButton();
 
         makeDraggable(panel);
-        log('Panel ready v5.1.0');
+        log('Panel ready v5.2.0');
     }
     
     function toggleInvertSignals() {
@@ -916,129 +916,162 @@
         log(`⏱️ Switching to ${expirySeconds}s expiry...`);
         
         try {
-            // Pocket Option uses specific selectors for the time picker
-            // The expiration time is shown in a dropdown/selector near the trade buttons
+            // Pocket Option expiration time selector
+            // Usually located near the trade buttons showing current time like "1:00" or "30s"
             
-            // Method 1: Try the main time picker button (most common)
-            let timePickerBtn = document.querySelector('.time-item__value') ||
-                               document.querySelector('.option-time') ||
-                               document.querySelector('[class*="time-picker"]') ||
-                               document.querySelector('[class*="expiry-time"]') ||
-                               document.querySelector('.expiration-time-wrap');
+            // Step 1: Find the time/expiration display element
+            // PO uses different selectors depending on version
+            const timeSelectors = [
+                // Common PO selectors
+                '.time-item__value',
+                '.time-item',
+                '.option-time-wrap .value',
+                '.option-time-wrap',
+                '.expiration-time .value',
+                '.expiration-time',
+                // Input-based selectors
+                'input[name*="expiration"]',
+                'input[placeholder*="time"]',
+                // Generic time display
+                '[class*="time-picker"] .value',
+                '[class*="time-select"]',
+                '[class*="expiry"]',
+                // Data attributes
+                '[data-testid="expiration"]',
+                '[data-test="time-picker"]'
+            ];
             
-            // Method 2: Look for the time display area
-            if (!timePickerBtn) {
-                const allElements = document.querySelectorAll('*');
-                for (const el of allElements) {
-                    const classes = el.className || '';
-                    if (typeof classes === 'string' && 
-                        (classes.includes('time') || classes.includes('expir')) &&
-                        el.offsetParent !== null) {
-                        const text = el.textContent.trim();
-                        if (/^\d+[sm:]/.test(text) || /^\d{1,2}:\d{2}$/.test(text)) {
-                            timePickerBtn = el;
+            let timeElement = null;
+            for (const sel of timeSelectors) {
+                timeElement = document.querySelector(sel);
+                if (timeElement && timeElement.offsetParent !== null) {
+                    log(`Found time element: ${sel}`);
+                    break;
+                }
+            }
+            
+            // Fallback: Look for element displaying time format
+            if (!timeElement) {
+                const candidates = document.querySelectorAll('div, span, button');
+                for (const el of candidates) {
+                    if (el.offsetParent === null) continue;
+                    const text = el.textContent.trim();
+                    // Match time formats: "0:30", "1:00", "30s", "1m"
+                    if (/^(\d{1,2}:\d{2}|\d+[sm])$/.test(text)) {
+                        // Make sure it's not inside a chart or unrelated area
+                        const parent = el.closest('.trade-panel, .trading-panel, .option-panel, [class*="trade"], [class*="option"]');
+                        if (parent || el.closest('header, .header, .toolbar, .controls')) {
+                            timeElement = el;
+                            log(`Found time by content: "${text}"`);
                             break;
                         }
                     }
                 }
             }
             
-            if (!timePickerBtn) {
-                log('Time picker not found - looking for alternative');
-                // Try clicking on the time display directly
-                const timeDisplay = document.evaluate(
-                    "//*[contains(text(), ':') and string-length(text()) < 6]",
-                    document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null
-                ).singleNodeValue;
-                if (timeDisplay) timePickerBtn = timeDisplay;
-            }
-            
-            if (!timePickerBtn) {
-                log('⚠️ Could not find time picker element');
+            if (!timeElement) {
+                log('⚠️ Time selector not found');
                 return false;
             }
             
-            // Click to open the time selector dropdown
-            log('Opening time selector...');
-            timePickerBtn.click();
-            await sleep(800);
+            // Step 2: Click to open the time dropdown/picker
+            log('Opening time picker...');
+            timeElement.click();
+            await sleep(500);
             
-            // Look for the time options dropdown/list
-            const timeOptionsSelectors = [
+            // Also try clicking parent if needed
+            if (!document.querySelector('[class*="time-list"], [class*="dropdown"], [class*="picker-list"]')) {
+                const parent = timeElement.parentElement;
+                if (parent) {
+                    parent.click();
+                    await sleep(500);
+                }
+            }
+            
+            // Step 3: Find and click the correct time option
+            const targetFormats = getTimeFormats(expirySeconds);
+            log(`Looking for: ${targetFormats.join(', ')}`);
+            
+            // Look for dropdown/list items
+            const optionSelectors = [
                 '.time-item',
-                '.option-time-item', 
-                '[class*="time-list"] > *',
+                '.time-list__item',
                 '[class*="time-option"]',
-                '.dropdown-time-item',
-                '[class*="expiry"] [class*="item"]'
+                '[class*="time-list"] > *',
+                '[class*="dropdown"] [class*="item"]',
+                '[class*="picker-list"] > *',
+                '.option-time-item',
+                '[role="option"]',
+                '[role="listitem"]'
             ];
             
-            let timeOptions = [];
-            for (const sel of timeOptionsSelectors) {
-                timeOptions = document.querySelectorAll(sel);
-                if (timeOptions.length > 0) {
-                    log(`Found ${timeOptions.length} time options via ${sel}`);
+            let options = [];
+            for (const sel of optionSelectors) {
+                options = document.querySelectorAll(sel);
+                if (options.length > 2) {
+                    log(`Found ${options.length} time options via ${sel}`);
                     break;
                 }
             }
             
-            // If still no options, try to find any clickable time elements that appeared
-            if (timeOptions.length === 0) {
-                await sleep(300);
-                timeOptions = document.querySelectorAll('[class*="time"][class*="item"], [class*="expir"][class*="item"]');
-            }
-            
-            if (timeOptions.length === 0) {
-                log('⚠️ No time options found');
-                closeTimeDropdown();
-                return false;
-            }
-            
-            // Build target time formats to match
-            const targetFormats = buildTimeFormats(expirySeconds);
-            log(`Looking for: ${targetFormats.join(' or ')}`);
-            
-            // Find and click the matching time option
-            let found = false;
-            for (const opt of timeOptions) {
-                if (opt.style.display === 'none' || opt.offsetParent === null) continue;
-                
-                const text = opt.textContent.trim().toLowerCase();
-                const cleanText = text.replace(/\s+/g, '');
-                
-                for (const target of targetFormats) {
-                    if (cleanText === target.toLowerCase() || 
-                        cleanText.includes(target.toLowerCase()) ||
-                        text === target) {
-                        log(`✓ Found matching time: ${text}`);
-                        opt.click();
-                        found = true;
-                        await sleep(400);
+            // Fallback: find any visible list items
+            if (options.length < 2) {
+                const lists = document.querySelectorAll('[class*="list"], [class*="dropdown"], [class*="picker"]');
+                for (const list of lists) {
+                    if (list.offsetParent !== null && list.children.length > 2) {
+                        options = list.children;
+                        log(`Found ${options.length} options in list`);
                         break;
                     }
                 }
-                if (found) break;
             }
             
-            if (!found) {
-                // Try clicking by index based on common PO time order
-                // PO typically has: 5s, 10s, 15s, 30s, 1m, 2m, 3m, 5m...
-                const timeIndexMap = {
-                    5: 0, 10: 1, 15: 2, 30: 3, 60: 4, 120: 5, 180: 6, 300: 7
+            if (options.length === 0) {
+                log('⚠️ No time options found');
+                closeDropdowns();
+                return false;
+            }
+            
+            // Step 4: Click matching option
+            let clicked = false;
+            for (const opt of options) {
+                if (opt.offsetParent === null || opt.style.display === 'none') continue;
+                
+                const text = opt.textContent.trim().toLowerCase().replace(/\s/g, '');
+                
+                for (const target of targetFormats) {
+                    const targetLower = target.toLowerCase().replace(/\s/g, '');
+                    if (text === targetLower || text.includes(targetLower)) {
+                        log(`✓ Clicking: "${opt.textContent.trim()}"`);
+                        opt.click();
+                        clicked = true;
+                        await sleep(300);
+                        break;
+                    }
+                }
+                if (clicked) break;
+            }
+            
+            // Fallback: Try by index position
+            // PO typically orders: 5s, 10s, 15s, 30s, 1m, 2m, 3m, 5m, 10m, 15m...
+            if (!clicked && options.length > 0) {
+                const timeToIndex = {
+                    5: 0, 10: 1, 15: 2, 30: 3, 
+                    60: 4, 120: 5, 180: 6, 300: 7, 600: 8, 900: 9
                 };
-                const idx = timeIndexMap[expirySeconds];
-                if (idx !== undefined && timeOptions[idx]) {
-                    log(`Trying by index: ${idx}`);
-                    timeOptions[idx].click();
-                    found = true;
-                    await sleep(400);
+                const idx = timeToIndex[expirySeconds];
+                if (idx !== undefined && options[idx]) {
+                    log(`Trying index ${idx}...`);
+                    options[idx].click();
+                    clicked = true;
+                    await sleep(300);
                 }
             }
             
-            closeTimeDropdown();
+            closeDropdowns();
             
-            if (found) {
-                log(`✓ Timeframe set to ${expirySeconds}s`);
+            if (clicked) {
+                log(`✓ Set expiry to ${expirySeconds}s`);
                 return true;
             } else {
                 log(`⚠️ Could not find ${expirySeconds}s option`);
@@ -1046,14 +1079,14 @@
             }
             
         } catch (e) {
-            log(`Timeframe switch error: ${e.message}`);
-            closeTimeDropdown();
+            log(`Timeframe error: ${e.message}`);
+            closeDropdowns();
             return false;
         }
     }
     
-    // Build various time format strings to match
-    function buildTimeFormats(seconds) {
+    // Generate various time format strings to match
+    function getTimeFormats(seconds) {
         const formats = [];
         
         if (seconds < 60) {
@@ -1064,9 +1097,12 @@
         } else {
             const mins = Math.floor(seconds / 60);
             const secs = seconds % 60;
-            formats.push(`${mins}m`);
+            
             formats.push(`${mins}:${secs.toString().padStart(2, '0')}`);
+            formats.push(`${mins}m`);
             formats.push(`${mins}min`);
+            formats.push(`${mins} min`);
+            
             if (secs === 0) {
                 formats.push(`${mins}:00`);
                 formats.push(`${seconds}s`);
@@ -1076,70 +1112,71 @@
         return formats;
     }
     
-    // Close any open time dropdown
-    function closeTimeDropdown() {
+    // Close any open dropdowns
+    function closeDropdowns() {
         try {
+            // Click outside
             document.body.click();
-            document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+            // Press Escape
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+            // Click any overlay/backdrop
+            const overlays = document.querySelectorAll('[class*="overlay"], [class*="backdrop"]');
+            overlays.forEach(o => o.click());
         } catch (e) {}
     }
     
-    // Get current timeframe from Pocket Option UI
+    // Get current expiration time from PO UI
     function getCurrentTimeframe() {
         const selectors = [
             '.time-item__value',
-            '.option-time',
-            '[class*="time-picker"]',
-            '[class*="expiry-time"]'
+            '.time-item .value',
+            '.option-time-wrap .value',
+            '.expiration-time .value',
+            '[class*="time-picker"] .value'
         ];
         
         for (const sel of selectors) {
             const el = document.querySelector(sel);
             if (el && el.textContent) {
-                const text = el.textContent.trim();
-                return parseTimeText(text);
+                return parseTimeToSeconds(el.textContent.trim());
             }
         }
         
         // Fallback: search for time-like text
-        const timeDisplays = document.querySelectorAll('[class*="time"], [class*="expir"]');
-        for (const el of timeDisplays) {
+        const candidates = document.querySelectorAll('[class*="time"], [class*="expir"]');
+        for (const el of candidates) {
             const text = el.textContent.trim();
-            const parsed = parseTimeText(text);
-            if (parsed > 0) return parsed;
+            const seconds = parseTimeToSeconds(text);
+            if (seconds > 0) return seconds;
         }
         
         return null;
     }
     
     // Parse time text to seconds
-    function parseTimeText(text) {
+    function parseTimeToSeconds(text) {
         if (!text) return 0;
         text = text.trim().toLowerCase();
         
-        // Format: "1:30" or "0:30"
-        if (text.includes(':')) {
-            const parts = text.split(':');
-            const mins = parseInt(parts[0]) || 0;
-            const secs = parseInt(parts[1]) || 0;
-            return mins * 60 + secs;
+        // "1:30" or "0:30"
+        const colonMatch = text.match(/^(\d{1,2}):(\d{2})$/);
+        if (colonMatch) {
+            return parseInt(colonMatch[1]) * 60 + parseInt(colonMatch[2]);
         }
         
-        // Format: "30s" or "30"
+        // "30s"
         if (text.endsWith('s')) {
             return parseInt(text) || 0;
         }
         
-        // Format: "1m" or "2min"
+        // "1m" or "2min"
         if (text.includes('m')) {
             return (parseInt(text) || 0) * 60;
         }
         
-        // Just a number
+        // Plain number (assume seconds if small)
         const num = parseInt(text);
-        if (num > 0 && num <= 300) {
-            return num; // Assume seconds if small number
-        }
+        if (num > 0 && num <= 900) return num;
         
         return 0;
     }
@@ -1714,7 +1751,7 @@
     // INITIALIZATION
     // ===========================================
     function init() {
-        log('Initializing v5.1.0...');
+        log('Initializing v5.2.0...');
         
         setTimeout(() => {
             createPanel();
