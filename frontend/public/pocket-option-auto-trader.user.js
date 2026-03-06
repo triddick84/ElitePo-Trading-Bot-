@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://gpt-signal-bot-2.preview.emergentagent.com
-// @version      5.0.0
-// @description  Auto-trade OTC forex on Pocket Option. v5.0.0 - Favorites-only scanning + 65%+ payout filter + auto-timeframe sync
+// @version      5.0.1
+// @description  Auto-trade OTC forex on Pocket Option. v5.0.1 - Fixed double trade bug + Favorites-only + 65%+ payout filter
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -79,7 +79,9 @@
     // STATE
     // ===========================================
     let lastProcessedSignalId = '';
+    let lastProcessedSignalTimestamp = 0;  // Track when last signal was processed
     let isTrading = false;
+    let isScanning = false;  // Prevent concurrent scans
     let tradeCount = 0;
     let currentAsset = null;
     let buttonsReady = false;
@@ -91,6 +93,7 @@
     // Constants for asset cycling
     const ASSET_COOLDOWN_MS = 60000;  // 60 seconds cooldown per asset after trading
     const MAX_SWITCH_ATTEMPTS = 2;     // Max times to try switching to a failing asset
+    const MIN_SIGNAL_INTERVAL_MS = 10000;  // Minimum 10 seconds between processing same signal type
     
     // Load saved settings
     try {
@@ -104,7 +107,7 @@
     // ===========================================
     function log(msg, type = 'info') {
         const ts = new Date().toLocaleTimeString();
-        const prefix = '[GPT v5.0.0]';
+        const prefix = '[GPT v5.0.1]';
         console.log(`${prefix} ${ts}: ${msg}`);
         
         const logEl = document.getElementById('gpt-log');
@@ -186,7 +189,7 @@
             <div class="drag-header" id="gpt-drag-handle">
                 <div class="row">
                     <span class="dot" id="gpt-dot"></span>
-                    <span class="title">GPT Bot v5.0.0</span>
+                    <span class="title">GPT Bot v5.0.1</span>
                     <span style="flex:1"></span>
                     <span style="font-size:10px;color:#94a3b8;">☰ drag</span>
                 </div>
@@ -232,7 +235,7 @@
         updateInvertButton();
 
         makeDraggable(panel);
-        log('Panel ready v5.0.0');
+        log('Panel ready v5.0.1');
     }
     
     function toggleInvertSignals() {
@@ -1138,7 +1141,12 @@
     
     async function scanMarkets() {
         if (isTrading) {
-            log('Busy, skip scan');
+            log('Busy trading, skip scan');
+            return;
+        }
+        
+        if (isScanning) {
+            log('Already scanning, skip');
             return;
         }
 
@@ -1148,6 +1156,8 @@
             log(`Cooldown: ${((CONFIG.TRADE_COOLDOWN - (now - lastTradeTime)) / 1000).toFixed(1)}s`);
             return;
         }
+        
+        isScanning = true;  // Lock scanning
 
         // Determine assets to scan
         let assetsToScan = CONFIG.SCAN_ASSETS;
@@ -1224,6 +1234,8 @@
             headers: { 'Accept': 'application/json' },
             timeout: 20000,
             onload: function(res) {
+                isScanning = false;  // Release scan lock
+                
                 try {
                     if (res.status !== 200) {
                         log('Scan error: ' + res.status);
@@ -1247,6 +1259,15 @@
                         for (const signal of data.top_signals) {
                             const assetBase = signal.symbol.replace('_OTC', '').replace('_', '');
                             const assetKey = signal.symbol;
+                            
+                            // Generate unique signal ID for deduplication
+                            const signalId = `${signal.symbol}_${signal.direction}_${signal.timestamp || Date.now()}`;
+                            
+                            // Check if this is a duplicate signal (same asset+direction within interval)
+                            if (signalId === lastProcessedSignalId && (Date.now() - lastProcessedSignalTimestamp) < MIN_SIGNAL_INTERVAL_MS) {
+                                skippedReasons.push(`${assetBase}: duplicate`);
+                                continue;
+                            }
                             
                             // Check payout requirement
                             const payout = assetPayouts[assetKey] || assetPayouts[assetBase];
@@ -1282,6 +1303,9 @@
                                 signal.payout = payout;
                             }
                             
+                            // Store signal ID to prevent duplicates
+                            signal._signalId = signalId;
+                            
                             selectedSignal = signal;
                             break;
                         }
@@ -1298,6 +1322,16 @@
                             if (sigEl) { sigEl.textContent = 'WAIT'; sigEl.className = 'signal wait'; }
                             return;
                         }
+                        
+                        // Check if already trading to prevent double execution
+                        if (isTrading) {
+                            log('Trade already in progress, skip');
+                            return;
+                        }
+                        
+                        // Mark signal as processed BEFORE execution
+                        lastProcessedSignalId = selectedSignal._signalId;
+                        lastProcessedSignalTimestamp = Date.now();
                         
                         // Log selected signal with expiry and payout info
                         const expiry = selectedSignal.expiry_seconds || 60;
@@ -1321,8 +1355,14 @@
                     log('Parse error: ' + e.message);
                 }
             },
-            onerror: function() { log('Connection error'); },
-            ontimeout: function() { log('Timeout'); }
+            onerror: function() { 
+                isScanning = false;  // Release scan lock on error
+                log('Connection error'); 
+            },
+            ontimeout: function() { 
+                isScanning = false;  // Release scan lock on timeout
+                log('Timeout'); 
+            }
         });
     }
 
@@ -1331,7 +1371,12 @@
     // ===========================================
     function checkSignal(force = false) {
         if (isTrading && !force) {
-            log('Busy...');
+            log('Busy trading...');
+            return;
+        }
+        
+        if (isScanning) {
+            log('Busy scanning...');
             return;
         }
 
@@ -1367,17 +1412,34 @@
                         
                         log(`Signal: ${signal.direction} ${signal.symbol}`);
                         
-                        if (signalId !== lastProcessedSignalId || force) {
-                            log('NEW SIGNAL!');
-                            lastProcessedSignalId = signalId;
-                            updateUI('trading', signal);
-                            
-                            if (CONFIG.AUTO_TRADE_ENABLED) {
-                                executeTradeWithAssetSwitch(signal);
-                            } else {
-                                updateUI('connected', signal);
-                            }
+                        // Check if same signal and within minimum interval
+                        const now = Date.now();
+                        const isSameSignal = signalId === lastProcessedSignalId;
+                        const withinInterval = (now - lastProcessedSignalTimestamp) < MIN_SIGNAL_INTERVAL_MS;
+                        
+                        if (isSameSignal && withinInterval && !force) {
+                            log('Same signal, waiting...');
+                            updateUI('connected', signal);
+                            return;
+                        }
+                        
+                        // Double-check not already trading
+                        if (isTrading) {
+                            log('Trade in progress, skip');
+                            return;
+                        }
+                        
+                        log('NEW SIGNAL!');
+                        lastProcessedSignalId = signalId;
+                        lastProcessedSignalTimestamp = now;
+                        updateUI('trading', signal);
+                        
+                        if (CONFIG.AUTO_TRADE_ENABLED) {
+                            executeTradeWithAssetSwitch(signal);
                         } else {
+                            updateUI('connected', signal);
+                        }
+                    } else {
                             log('Same signal');
                             updateUI('connected', signal);
                         }
@@ -1518,12 +1580,9 @@
         
         if (btn && btn.offsetParent !== null) {
             log(`Clicking ${selector}`);
-            btn.click();
             
-            // Also dispatch events
-            btn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-            btn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
-            btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            // Single click only - avoid double execution
+            btn.click();
             
             return true;
         }
@@ -1536,7 +1595,7 @@
     // INITIALIZATION
     // ===========================================
     function init() {
-        log('Initializing v5.0.0...');
+        log('Initializing v5.0.1...');
         
         setTimeout(() => {
             createPanel();
