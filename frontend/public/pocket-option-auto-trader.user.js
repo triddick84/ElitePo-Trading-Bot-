@@ -1440,10 +1440,6 @@
                             updateUI('connected', signal);
                         }
                     } else {
-                            log('Same signal');
-                            updateUI('connected', signal);
-                        }
-                    } else {
                         log(data.message || 'No signal');
                     }
                 } catch (e) {
