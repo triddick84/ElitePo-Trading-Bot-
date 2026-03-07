@@ -94,6 +94,9 @@ from pocket_option_market_data import po_market_data, get_po_market_data_service
 # Import High Accuracy Trading Strategies
 from high_accuracy_strategies import high_accuracy_generator, get_high_accuracy_signal
 
+# Import Deep Market Analyzer for improved signal accuracy
+from deep_market_analyzer import deep_analyzer, get_deep_analysis_signal
+
 # Import MetaTrader 5 Trading Service
 from mt5_trading_service import mt5_service, get_mt5_service
 
@@ -4706,33 +4709,99 @@ async def get_high_accuracy_strategies():
                 "description": "Captures strong momentum moves",
                 "timeframes": ["5s", "15s", "30s"],
                 "target_accuracy": "78%+"
+            },
+            {
+                "id": "deep_confluence",
+                "name": "Deep Confluence Analysis",
+                "description": "Multi-indicator confluence with divergence detection, support/resistance, and pattern recognition",
+                "timeframes": ["30s", "1m", "2m", "5m"],
+                "target_accuracy": "75-85%",
+                "features": ["RSI/MACD Divergence", "Support/Resistance", "Candlestick Patterns", "Volume Confirmation"]
             }
         ]
     }
 
 
-@api_router.get("/signals/scan-markets")
-async def scan_markets_for_signals(
+@api_router.get("/signals/deep-analysis")
+async def get_deep_analysis_signal_endpoint(
+    symbol: str = Query("EUR_USD", description="Trading symbol"),
+    expiry: int = Query(60, ge=5, le=300, description="Expiry in seconds")
+):
+    """
+    Generate a deep market analysis signal with:
+    - Multi-indicator confluence (4+ confirmations required)
+    - RSI/MACD divergence detection
+    - Support/Resistance levels
+    - Candlestick pattern recognition
+    - Volume confirmation
+    - Market structure analysis
+    """
+    try:
+        # Normalize symbol for OANDA
+        oanda_symbol = symbol.replace('_OTC', '').replace('OTC', '')
+        if '_' not in oanda_symbol and len(oanda_symbol) == 6:
+            oanda_symbol = f"{oanda_symbol[:3]}_{oanda_symbol[3:]}"
+        
+        # Get candles from OANDA (need more for deep analysis)
+        candles = []
+        current_price = 0
+        
+        try:
+            oanda_df = enhanced_oanda.get_candles(oanda_symbol, "M1", 100)
+            if oanda_df is not None and not oanda_df.empty:
+                candles = oanda_df.reset_index().to_dict('records')
+                if candles:
+                    current_price = float(candles[-1].get("close", 0))
+        except Exception as e:
+            logger.error(f"OANDA fetch error for {symbol}: {e}")
+            raise HTTPException(status_code=500, detail=f"Data fetch error: {e}")
+        
+        if not candles or not current_price:
+            raise HTTPException(status_code=404, detail="No market data available")
+        
+        # Generate deep analysis signal
+        signal = get_deep_analysis_signal(candles, current_price, expiry)
+        
+        if signal:
+            signal["symbol"] = symbol
+            return {
+                "success": True,
+                "signal": signal,
+                "analysis_type": "deep_confluence",
+                "message": f"Signal generated with {signal.get('confirmations_count', 0)} confirmations"
+            }
+        else:
+            return {
+                "success": False,
+                "signal": None,
+                "message": "No high-confidence signal found. Market conditions may be unclear or lacking sufficient confirmations."
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Deep analysis error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/signals/scan-markets-deep")
+async def scan_markets_deep_analysis(
     assets: str = Query("EURUSD_OTC,GBPUSD_OTC,USDJPY_OTC,AUDUSD_OTC", description="Comma-separated list of assets to scan"),
     min_confidence: int = Query(70, ge=50, le=95, description="Minimum confidence threshold"),
     max_signals: int = Query(10, ge=1, le=20, description="Maximum number of signals to return"),
-    preferred_expiry: int = Query(None, description="Preferred expiry in seconds (5, 15, 30, 60). If not set, best strategy is auto-selected")
+    preferred_expiry: int = Query(60, description="Preferred expiry in seconds")
 ):
     """
-    Scan multiple markets for high-probability trading signals.
+    Scan multiple markets using DEEP ANALYSIS for highest quality signals.
     
-    Used by the Tampermonkey auto-trader in SCAN mode to find the best
-    trading opportunity across multiple OTC assets.
+    Uses multi-indicator confluence, divergence detection, support/resistance,
+    candlestick patterns, and volume confirmation.
     
-    Returns signals sorted by confidence (highest first).
-    Each signal includes expiry_seconds for timeframe synchronization.
+    Returns only HIGH or PREMIUM quality signals.
     """
     try:
         asset_list = [a.strip() for a in assets.split(',') if a.strip()]
         signals_found = []
-        
-        # Use preferred expiry or let generator pick best strategy
-        expiry_to_use = preferred_expiry if preferred_expiry in [5, 15, 30, 60] else None
         
         for asset in asset_list:
             try:
@@ -4758,16 +4827,116 @@ async def scan_markets_for_signals(
                 if not candles or not current_price:
                     continue
                 
-                # Generate high-accuracy signal with optional preferred expiry
-                signal = get_high_accuracy_signal(candles, current_price, expiry=expiry_to_use)
+                # Generate DEEP analysis signal
+                signal = get_deep_analysis_signal(candles, current_price, preferred_expiry)
                 
                 if signal and signal.get("confidence", 0) >= min_confidence:
-                    signal["symbol"] = asset  # Use original OTC symbol
-                    signal["oanda_symbol"] = oanda_symbol
-                    # Ensure expiry_seconds is present for timeframe sync
-                    if "expiry_seconds" not in signal:
-                        signal["expiry_seconds"] = expiry_to_use or 60
-                    signals_found.append(signal)
+                    # Only include HIGH or PREMIUM quality signals
+                    if signal.get("quality") in ["high", "premium"]:
+                        signal["symbol"] = asset
+                        signal["oanda_symbol"] = oanda_symbol
+                        signals_found.append(signal)
+                    
+            except Exception as e:
+                logger.debug(f"Deep scan error for {asset}: {e}")
+                continue
+        
+        # Sort by confidence (highest first)
+        signals_found.sort(key=lambda x: x.get("confidence", 0), reverse=True)
+        
+        # Limit results
+        top_signals = signals_found[:max_signals]
+        
+        return {
+            "success": True,
+            "analysis_type": "deep_confluence",
+            "scanned_assets": len(asset_list),
+            "signals_found": len(signals_found),
+            "top_signals": top_signals,
+            "message": f"Found {len(signals_found)} high-quality signals above {min_confidence}% confidence"
+        }
+        
+    except Exception as e:
+        logger.error(f"Deep market scan error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/signals/scan-markets")
+async def scan_markets_for_signals(
+    assets: str = Query("EURUSD_OTC,GBPUSD_OTC,USDJPY_OTC,AUDUSD_OTC", description="Comma-separated list of assets to scan"),
+    min_confidence: int = Query(70, ge=50, le=95, description="Minimum confidence threshold"),
+    max_signals: int = Query(10, ge=1, le=20, description="Maximum number of signals to return"),
+    preferred_expiry: int = Query(None, description="Preferred expiry in seconds (5, 15, 30, 60). If not set, best strategy is auto-selected"),
+    use_deep_analysis: bool = Query(True, description="Use deep market analysis for better accuracy (recommended)")
+):
+    """
+    Scan multiple markets for high-probability trading signals.
+    
+    Uses DEEP ANALYSIS by default for improved win rate:
+    - Multi-indicator confluence (4+ confirmations)
+    - RSI/MACD divergence detection
+    - Support/Resistance levels
+    - Candlestick pattern recognition
+    - Volume confirmation
+    
+    Returns signals sorted by confidence (highest first).
+    Each signal includes expiry_seconds for timeframe synchronization.
+    """
+    try:
+        asset_list = [a.strip() for a in assets.split(',') if a.strip()]
+        signals_found = []
+        
+        # Use preferred expiry or default to 60
+        expiry_to_use = preferred_expiry if preferred_expiry in [5, 15, 30, 60, 120, 180, 300] else 60
+        
+        for asset in asset_list:
+            try:
+                # Normalize asset symbol for OANDA
+                oanda_symbol = asset.replace('_OTC', '').replace('OTC', '')
+                if '_' not in oanda_symbol and len(oanda_symbol) == 6:
+                    oanda_symbol = f"{oanda_symbol[:3]}_{oanda_symbol[3:]}"
+                
+                # Get candles from OANDA
+                candles = []
+                current_price = 0
+                
+                try:
+                    oanda_df = enhanced_oanda.get_candles(oanda_symbol, "M1", 100)
+                    if oanda_df is not None and not oanda_df.empty:
+                        candles = oanda_df.reset_index().to_dict('records')
+                        if candles:
+                            current_price = float(candles[-1].get("close", 0))
+                except Exception as e:
+                    logger.debug(f"OANDA fetch for {asset} failed: {e}")
+                    continue
+                
+                if not candles or not current_price:
+                    continue
+                
+                # Use DEEP ANALYSIS for better accuracy (default)
+                if use_deep_analysis:
+                    signal = get_deep_analysis_signal(candles, current_price, expiry_to_use)
+                    
+                    if signal and signal.get("confidence", 0) >= min_confidence:
+                        # Prefer HIGH or PREMIUM quality signals
+                        quality = signal.get("quality", "low")
+                        if quality in ["high", "premium", "medium"]:
+                            signal["symbol"] = asset
+                            signal["oanda_symbol"] = oanda_symbol
+                            signal["expiry_seconds"] = expiry_to_use
+                            signal["analysis_type"] = "deep_confluence"
+                            signals_found.append(signal)
+                else:
+                    # Fallback to old high-accuracy signal
+                    signal = get_high_accuracy_signal(candles, current_price, expiry=expiry_to_use)
+                    
+                    if signal and signal.get("confidence", 0) >= min_confidence:
+                        signal["symbol"] = asset
+                        signal["oanda_symbol"] = oanda_symbol
+                        if "expiry_seconds" not in signal:
+                            signal["expiry_seconds"] = expiry_to_use
+                        signal["analysis_type"] = "high_accuracy"
+                        signals_found.append(signal)
                     
             except Exception as e:
                 logger.debug(f"Scan error for {asset}: {e}")
@@ -4781,6 +4950,7 @@ async def scan_markets_for_signals(
         
         return {
             "success": True,
+            "analysis_type": "deep_confluence" if use_deep_analysis else "high_accuracy",
             "scanned_assets": len(asset_list),
             "signals_found": len(signals_found),
             "top_signals": top_signals,
