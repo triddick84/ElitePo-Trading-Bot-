@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://gpt-signal-bot-2.preview.emergentagent.com
-// @version      5.3.0
-// @description  Auto-trade OTC forex on Pocket Option. v5.3.0 - Fixed to change TRADE EXPIRATION (near amount), not chart timeframe
+// @version      5.4.0
+// @description  Auto-trade OTC forex on Pocket Option. v5.4.0 - Fixed double trade bug with stronger locks and 5s trade debounce
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -80,6 +80,7 @@
     // ===========================================
     let lastProcessedSignalId = '';
     let lastProcessedSignalTimestamp = 0;  // Track when last signal was processed
+    let lastTradeExecutionTime = 0;  // Track actual trade execution time
     let isTrading = false;
     let isScanning = false;  // Prevent concurrent scans
     let tradeCount = 0;
@@ -94,6 +95,7 @@
     const ASSET_COOLDOWN_MS = 60000;  // 60 seconds cooldown per asset after trading
     const MAX_SWITCH_ATTEMPTS = 2;     // Max times to try switching to a failing asset
     const MIN_SIGNAL_INTERVAL_MS = 10000;  // Minimum 10 seconds between processing same signal type
+    const MIN_TRADE_INTERVAL_MS = 5000;  // Minimum 5 seconds between actual trades (prevents double click)
     
     // Load saved settings
     try {
@@ -107,7 +109,7 @@
     // ===========================================
     function log(msg, type = 'info') {
         const ts = new Date().toLocaleTimeString();
-        const prefix = '[GPT v5.3.0]';
+        const prefix = '[GPT v5.4.0]';
         console.log(`${prefix} ${ts}: ${msg}`);
         
         const logEl = document.getElementById('gpt-log');
@@ -189,7 +191,7 @@
             <div class="drag-header" id="gpt-drag-handle">
                 <div class="row">
                     <span class="dot" id="gpt-dot"></span>
-                    <span class="title">GPT Bot v5.3.0</span>
+                    <span class="title">GPT Bot v5.4.0</span>
                     <span style="flex:1"></span>
                     <span style="font-size:10px;color:#94a3b8;">☰ drag</span>
                 </div>
@@ -235,7 +237,7 @@
         updateInvertButton();
 
         makeDraggable(panel);
-        log('Panel ready v5.3.0');
+        log('Panel ready v5.4.0');
     }
     
     function toggleInvertSignals() {
@@ -1523,8 +1525,13 @@
                         // Check if already trading to prevent double execution
                         if (isTrading) {
                             log('Trade already in progress, skip');
+                            isScanning = false;  // Release scan lock
                             return;
                         }
+                        
+                        // Set trading lock IMMEDIATELY before any async operations
+                        isTrading = true;
+                        isScanning = false;  // Release scan lock since we're moving to trading
                         
                         // Mark signal as processed BEFORE execution
                         lastProcessedSignalId = selectedSignal._signalId;
@@ -1541,14 +1548,17 @@
                             executeTradeWithAssetSwitch(selectedSignal);
                         } else {
                             log('Auto OFF');
+                            isTrading = false;  // Release if not executing
                             updateUI('connected', selectedSignal);
                         }
                     } else {
                         log('No signals found');
+                        isScanning = false;  // Release scan lock
                         const sigEl = document.getElementById('gpt-signal');
                         if (sigEl) { sigEl.textContent = 'WAIT'; sigEl.className = 'signal wait'; }
                     }
                 } catch (e) {
+                    isScanning = false;  // Release scan lock on error
                     log('Parse error: ' + e.message);
                 }
             },
@@ -1652,12 +1662,12 @@
     // TRADE EXECUTION - WITH ASSET + TIMEFRAME SWITCHING
     // ===========================================
     async function executeTradeWithAssetSwitch(signal) {
-        if (isTrading) {
-            log('Already trading');
-            return;
+        // Double-check trading lock (should already be true from caller)
+        if (!isTrading) {
+            log('WARNING: Trading lock not set, setting now');
+            isTrading = true;
         }
         
-        isTrading = true;
         lastTradeTime = Date.now();
         updateUI('trading', signal);
         
@@ -1768,10 +1778,20 @@
     }
 
     function clickTradeButton(isCall) {
+        // Prevent double clicks - check if we just executed a trade
+        const now = Date.now();
+        if (now - lastTradeExecutionTime < MIN_TRADE_INTERVAL_MS) {
+            log(`⚠️ Trade blocked - too soon (${Math.round((MIN_TRADE_INTERVAL_MS - (now - lastTradeExecutionTime))/1000)}s cooldown)`);
+            return false;
+        }
+        
         const selector = isCall ? '.btn-call' : '.btn-put';
         const btn = document.querySelector(selector);
         
         if (btn && btn.offsetParent !== null) {
+            // Mark execution time BEFORE clicking
+            lastTradeExecutionTime = now;
+            
             log(`Clicking ${selector}`);
             
             // Single click only - avoid double execution
@@ -1788,7 +1808,7 @@
     // INITIALIZATION
     // ===========================================
     function init() {
-        log('Initializing v5.3.0...');
+        log('Initializing v5.4.0...');
         
         setTimeout(() => {
             createPanel();
