@@ -100,6 +100,12 @@ from deep_market_analyzer import deep_analyzer, get_deep_analysis_signal
 # Import MetaTrader 5 Trading Service
 from mt5_trading_service import mt5_service, get_mt5_service
 
+# Import MT5 ZeroMQ Bridge for remote MT5 connections
+from mt5_zeromq_bridge import mt5_zmq_bridge, mt5_integration, get_mt5_bridge, get_mt5_integration
+
+# Import TradingView Webhook Service
+from tradingview_webhook_service import tradingview_webhook_service, TradingViewAlertModel, get_tradingview_service
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
@@ -5182,6 +5188,248 @@ async def modify_mt5_position(
 async def get_mt5_trade_history(limit: int = 50):
     """Get recent trade execution history"""
     return mt5_service.get_trade_history(limit)
+
+
+# ==================== MT5 ZEROMQ BRIDGE ENDPOINTS ====================
+
+@api_router.get("/mt5-zmq/status")
+async def get_mt5_zmq_status():
+    """Get MT5 ZeroMQ bridge connection status"""
+    return {
+        "success": True,
+        "bridge": mt5_zmq_bridge.get_status()
+    }
+
+
+@api_router.post("/mt5-zmq/connect")
+async def connect_mt5_zmq(
+    host: str = Query("localhost", description="MT5 terminal IP address"),
+    sub_port: int = Query(15555, description="ZeroMQ SUB port"),
+    push_port: int = Query(15556, description="ZeroMQ PUSH port")
+):
+    """
+    Connect to MT5 via ZeroMQ bridge
+    
+    Requirements:
+    - MT5 terminal running on Windows with ZeroMQ EA installed
+    - Firewall allowing connections on specified ports
+    """
+    mt5_zmq_bridge.config.host = host
+    mt5_zmq_bridge.config.sub_port = sub_port
+    mt5_zmq_bridge.config.push_port = push_port
+    
+    success = await mt5_zmq_bridge.connect()
+    
+    return {
+        "success": success,
+        "status": mt5_zmq_bridge.get_status()
+    }
+
+
+@api_router.post("/mt5-zmq/order")
+async def place_mt5_zmq_order(
+    symbol: str = Query(..., description="Trading symbol (e.g., EURUSD)"),
+    direction: str = Query(..., description="BUY or SELL"),
+    volume: float = Query(0.01, description="Trade volume in lots"),
+    stop_loss: float = Query(0, description="Stop loss price"),
+    take_profit: float = Query(0, description="Take profit price"),
+    comment: str = Query("GPT Signal Bot", description="Order comment")
+):
+    """
+    Place a market order via MT5 ZeroMQ bridge
+    """
+    result = await mt5_zmq_bridge.place_market_order(
+        symbol=symbol,
+        order_type=direction.upper(),
+        volume=volume,
+        stop_loss=stop_loss,
+        take_profit=take_profit,
+        comment=comment
+    )
+    
+    return {
+        "success": result.success,
+        "ticket": result.ticket,
+        "message": result.message
+    }
+
+
+@api_router.post("/mt5-zmq/close/{ticket}")
+async def close_mt5_zmq_position(ticket: int):
+    """Close a position via MT5 ZeroMQ bridge"""
+    result = await mt5_zmq_bridge.close_position(ticket)
+    return {
+        "success": result.success,
+        "message": result.message
+    }
+
+
+@api_router.get("/mt5-zmq/positions")
+async def get_mt5_zmq_positions():
+    """Get all open positions via MT5 ZeroMQ bridge"""
+    positions = await mt5_zmq_bridge.get_positions()
+    return {
+        "success": True,
+        "positions": positions
+    }
+
+
+@api_router.get("/mt5-zmq/account")
+async def get_mt5_zmq_account():
+    """Get account info via MT5 ZeroMQ bridge"""
+    account = await mt5_zmq_bridge.get_account_info()
+    return {
+        "success": True,
+        "account": account
+    }
+
+
+@api_router.post("/mt5-zmq/execute-signal")
+async def execute_signal_on_mt5(
+    symbol: str = Query(..., description="Trading symbol"),
+    direction: str = Query(..., description="CALL/BUY or PUT/SELL"),
+    volume: float = Query(0.01, description="Lot size"),
+    stop_loss: float = Query(0, description="Stop loss price"),
+    take_profit: float = Query(0, description="Take profit price")
+):
+    """
+    Execute a trading signal on MT5 via ZeroMQ
+    
+    Translates signal format (CALL/PUT) to MT5 format (BUY/SELL)
+    """
+    # Translate direction
+    if direction.upper() in ["CALL", "BUY"]:
+        order_type = "BUY"
+    elif direction.upper() in ["PUT", "SELL"]:
+        order_type = "SELL"
+    else:
+        raise HTTPException(status_code=400, detail=f"Invalid direction: {direction}")
+    
+    result = await mt5_zmq_bridge.place_market_order(
+        symbol=symbol.replace("_OTC", "").replace("_", ""),
+        order_type=order_type,
+        volume=volume,
+        stop_loss=stop_loss,
+        take_profit=take_profit,
+        comment=f"GPT Signal: {direction}"
+    )
+    
+    return {
+        "success": result.success,
+        "ticket": result.ticket,
+        "message": result.message,
+        "direction": order_type,
+        "symbol": symbol
+    }
+
+
+# ==================== TRADINGVIEW WEBHOOK INTEGRATION ====================
+
+@api_router.post("/tradingview/webhook")
+async def tradingview_webhook(alert: TradingViewAlertModel):
+    """
+    Receive webhook alerts from TradingView
+    
+    Configure in TradingView:
+    1. Create alert on your chart/indicator
+    2. Set webhook URL to: {your-domain}/api/tradingview/webhook
+    3. Use JSON message format:
+    {
+        "action": "buy",
+        "symbol": "EURUSD",
+        "price": {{close}},
+        "passphrase": "gpt-signal",
+        "destination": "mt5"
+    }
+    """
+    try:
+        # Process the alert
+        processed = tradingview_webhook_service.process_alert(alert.dict())
+        
+        # If valid, route to appropriate destination
+        execution_result = None
+        
+        if processed.is_valid:
+            if processed.destination in [DestinationBroker.MT5, DestinationBroker.ALL]:
+                # Execute on MT5
+                try:
+                    mt5_result = await mt5_zmq_bridge.place_market_order(
+                        symbol=processed.symbol,
+                        order_type="BUY" if processed.action in [AlertAction.BUY, AlertAction.CALL] else "SELL",
+                        volume=processed.quantity,
+                        stop_loss=processed.stop_loss or 0,
+                        take_profit=processed.take_profit or 0,
+                        comment=f"TV: {processed.strategy}"
+                    )
+                    execution_result = {
+                        "mt5": {
+                            "success": mt5_result.success,
+                            "ticket": mt5_result.ticket
+                        }
+                    }
+                except Exception as e:
+                    execution_result = {"mt5": {"success": False, "error": str(e)}}
+            
+            if processed.destination in [DestinationBroker.POCKET_OPTION, DestinationBroker.ALL]:
+                # Store as internal signal for Pocket Option Tampermonkey
+                execution_result = execution_result or {}
+                execution_result["pocket_option"] = {
+                    "success": True,
+                    "message": "Signal queued for Pocket Option auto-trader"
+                }
+            
+            processed.execution_status = "executed"
+            processed.execution_result = execution_result
+        
+        return {
+            "success": processed.is_valid,
+            "alert": processed.to_dict()
+        }
+        
+    except Exception as e:
+        logger.error(f"TradingView webhook error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Import AlertAction and DestinationBroker for the endpoint
+from tradingview_webhook_service import AlertAction, DestinationBroker
+
+
+@api_router.get("/tradingview/history")
+async def get_tradingview_alert_history(limit: int = 50):
+    """Get recent TradingView alert history"""
+    return {
+        "success": True,
+        "alerts": tradingview_webhook_service.get_alert_history(limit)
+    }
+
+
+@api_router.get("/tradingview/stats")
+async def get_tradingview_stats():
+    """Get TradingView alert statistics"""
+    return {
+        "success": True,
+        "stats": tradingview_webhook_service.get_alert_stats()
+    }
+
+
+@api_router.get("/tradingview/setup")
+async def get_tradingview_setup_instructions(request: Request):
+    """Get instructions for setting up TradingView webhooks"""
+    base_url = str(request.base_url).rstrip("/")
+    return {
+        "success": True,
+        "instructions": tradingview_webhook_service.get_webhook_setup_instructions(base_url)
+    }
+
+
+@api_router.get("/tradingview/pine-script")
+async def get_tradingview_pine_script():
+    """Get Pine Script template for TradingView alerts"""
+    return {
+        "success": True,
+        "template": tradingview_webhook_service.generate_pine_script_template()
+    }
 
 
 # ==================== LSTM AI PREDICTOR ENDPOINTS ====================

@@ -113,24 +113,33 @@ Complete rewrite with comprehensive features:
 
 ## Current Status
 
-### ✅ Working (March 7, 2026)
+### ✅ Working (March 8, 2026)
 - **User Authentication** - Login working correctly with JWT tokens
-- **Deep Market Analysis System** - NEW! Multi-indicator confluence for improved win rate
+- **Deep Market Analysis System** - Multi-indicator confluence for improved win rate
   - RSI/MACD divergence detection
   - Support/Resistance level detection
-  - Candlestick pattern recognition (engulfing, hammer, shooting star, pin bar, morning/evening star)
+  - Candlestick pattern recognition
   - Volume confirmation filtering
-  - Market structure analysis (trend + phase)
-  - Minimum 4 confirmations required for signal
+  - Market structure analysis
+  - Minimum 4 confirmations required
+- **MetaTrader 5 Integration** - ZeroMQ bridge for remote MT5 trading
+  - Place market orders
+  - Manage positions (open/close)
+  - Get account info
+  - Simulated mode when MT5 not connected
+- **TradingView Webhook Integration** - Receive alerts and execute trades
+  - Webhook endpoint for alerts
+  - Pine Script template generator
+  - Multi-destination routing (MT5, Pocket Option, Internal)
+  - Alert history and statistics
 - Signal generation with 15-second intervals
 - Tampermonkey v5.3.0 with trade expiration switching
-- Strategy selection (end-to-end verified)
 - All navigation pages working
 
 ### ⚠️ Known Limitations
 - Pocket Option auto-trade blocked by cloud IP (workaround: mobile userscript)
-- OANDA may return HOLD during unclear market conditions
-- **MetaTrader5 runs in SIMULATION mode** (requires Windows for real connection)
+- MT5 ZeroMQ requires Windows MT5 terminal with ZeroMQ EA installed
+- TradingView webhooks require TradingView Pro subscription
 
 ## API Endpoints Reference
 
