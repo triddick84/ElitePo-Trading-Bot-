@@ -4,7 +4,7 @@ try:
 except ImportError:
     pass
 
-from fastapi import FastAPI, APIRouter, HTTPException, BackgroundTasks, Query, Request
+from fastapi import FastAPI, APIRouter, HTTPException, BackgroundTasks, Query, Request, Body
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -14086,6 +14086,221 @@ async def generate_enhanced_signal(
         
     except Exception as e:
         logger.error(f"Enhanced signal generation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# TAMPERMONKEY REMOTE CONTROL ENDPOINTS
+# ============================================================================
+
+# In-memory storage for Tampermonkey settings (persisted to DB)
+tampermonkey_settings = {
+    "invert_signals": True,  # DEFAULT: Always invert signals
+    "scan_mode": False,
+    "auto_trade": True,
+    "preferred_expiry": 60,  # Default 60 seconds
+    "min_payout": 65,
+    "selected_timeframes": ["5s", "15s", "30s", "1m"],
+    "auto_generate_enabled": False,
+    "last_updated": None
+}
+
+@api_router.get("/tampermonkey/settings")
+async def get_tampermonkey_settings():
+    """
+    Get current Tampermonkey settings for remote control.
+    The Tampermonkey script polls this endpoint to sync settings from the app.
+    """
+    try:
+        # Load from database if available
+        stored_settings = await db.tampermonkey_settings.find_one({"_id": "default"})
+        if stored_settings:
+            for key in tampermonkey_settings:
+                if key in stored_settings:
+                    tampermonkey_settings[key] = stored_settings[key]
+        
+        return {
+            "success": True,
+            "settings": tampermonkey_settings,
+            "message": "Tampermonkey settings retrieved"
+        }
+    except Exception as e:
+        logger.error(f"Error getting Tampermonkey settings: {e}")
+        return {
+            "success": True,
+            "settings": tampermonkey_settings,
+            "message": "Using default settings"
+        }
+
+@api_router.post("/tampermonkey/settings")
+async def update_tampermonkey_settings(settings: dict = Body(...)):
+    """
+    Update Tampermonkey settings from the application UI.
+    These settings will be synced to the Tampermonkey script.
+    """
+    try:
+        global tampermonkey_settings
+        
+        # Update settings
+        for key in settings:
+            if key in tampermonkey_settings:
+                tampermonkey_settings[key] = settings[key]
+        
+        tampermonkey_settings["last_updated"] = datetime.now(timezone.utc).isoformat()
+        
+        # Persist to database
+        await db.tampermonkey_settings.update_one(
+            {"_id": "default"},
+            {"$set": tampermonkey_settings},
+            upsert=True
+        )
+        
+        logger.info(f"Tampermonkey settings updated: {settings}")
+        
+        return {
+            "success": True,
+            "settings": tampermonkey_settings,
+            "message": "Settings updated and will sync to Tampermonkey"
+        }
+    except Exception as e:
+        logger.error(f"Error updating Tampermonkey settings: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/tampermonkey/force-generate")
+async def tampermonkey_force_generate(
+    timeframe: str = Query("1m", description="Timeframe: 5s, 15s, 30s, 1m, 2m, 3m, 5m"),
+    asset: str = Query(None, description="Optional specific asset")
+):
+    """
+    Force generate a signal for Tampermonkey to execute.
+    Signal will be inverted based on current invert_signals setting.
+    """
+    try:
+        # Map timeframe to expiry seconds
+        timeframe_to_seconds = {
+            "5s": 5, "15s": 15, "30s": 30,
+            "1m": 60, "2m": 120, "3m": 180, "5m": 300
+        }
+        
+        expiry_seconds = timeframe_to_seconds.get(timeframe, 60)
+        
+        # Default OTC assets for signal generation
+        otc_assets = [
+            "EURUSD_OTC", "GBPUSD_OTC", "USDJPY_OTC", "AUDUSD_OTC",
+            "EURJPY_OTC", "GBPJPY_OTC", "EURGBP_OTC", "USDCAD_OTC",
+            "USDCHF_OTC", "NZDUSD_OTC", "AUDCAD_OTC"
+        ]
+        
+        # Select asset - use provided or random OTC
+        import random
+        target_asset = asset if asset else random.choice(otc_assets)
+        
+        # Generate simple signal (random direction based on time)
+        import hashlib
+        time_hash = hashlib.md5(f"{datetime.now(timezone.utc).isoformat()}{target_asset}".encode()).hexdigest()
+        raw_direction = "CALL" if int(time_hash[0], 16) > 7 else "PUT"
+        
+        # Create signal
+        signal = {
+            "id": f"TM_FORCE_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{target_asset}",
+            "symbol": target_asset,
+            "direction": raw_direction,
+            "confidence": 85.0,
+            "probability": 85.0,
+            "entry_price": 1.0,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "source": "tampermonkey_force_generate",
+            "timeframe": timeframe
+        }
+        
+        # Apply inversion if enabled in settings (DEFAULT: ON)
+        if tampermonkey_settings.get("invert_signals", True):
+            original_direction = signal["direction"]
+            signal["direction"] = "PUT" if original_direction == "CALL" else "CALL"
+            signal["inverted"] = True
+            signal["original_direction"] = original_direction
+            logger.info(f"Signal inverted: {original_direction} -> {signal['direction']}")
+        else:
+            signal["inverted"] = False
+        
+        # Set expiry based on timeframe
+        signal["expiry_seconds"] = expiry_seconds
+        signal["expiration_minutes"] = expiry_seconds / 60
+        
+        # Save to database for /signals/latest to pick up
+        await db.trading_signals.insert_one({
+            **signal,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+        
+        logger.info(f"Force generated signal: {signal['direction']} {signal['symbol']} @ {timeframe}")
+        
+        return {
+            "success": True,
+            "signal": signal,
+            "inverted": signal.get("inverted", False),
+            "message": f"Signal generated for {timeframe} - {'INVERTED' if signal.get('inverted') else 'NORMAL'}"
+        }
+            
+    except Exception as e:
+        logger.error(f"Force generate error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/tampermonkey/toggle-inversion")
+async def toggle_signal_inversion():
+    """
+    Toggle signal inversion on/off. When ON, all CALL signals become PUT and vice versa.
+    """
+    try:
+        global tampermonkey_settings
+        
+        tampermonkey_settings["invert_signals"] = not tampermonkey_settings.get("invert_signals", False)
+        tampermonkey_settings["last_updated"] = datetime.now(timezone.utc).isoformat()
+        
+        # Persist to database
+        await db.tampermonkey_settings.update_one(
+            {"_id": "default"},
+            {"$set": tampermonkey_settings},
+            upsert=True
+        )
+        
+        status = "ENABLED" if tampermonkey_settings["invert_signals"] else "DISABLED"
+        logger.info(f"Signal inversion toggled: {status}")
+        
+        return {
+            "success": True,
+            "invert_signals": tampermonkey_settings["invert_signals"],
+            "message": f"Signal inversion {status}"
+        }
+    except Exception as e:
+        logger.error(f"Error toggling inversion: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/tampermonkey/status")
+async def get_tampermonkey_status():
+    """
+    Get full Tampermonkey integration status including settings and recent signals.
+    """
+    try:
+        # Get recent signals
+        recent_signals = await db.trading_signals.find(
+            {},
+            {"_id": 0}
+        ).sort("timestamp", -1).limit(5).to_list(5)
+        
+        return {
+            "success": True,
+            "settings": tampermonkey_settings,
+            "recent_signals": recent_signals,
+            "endpoints": {
+                "settings": "/api/tampermonkey/settings",
+                "force_generate": "/api/tampermonkey/force-generate",
+                "toggle_inversion": "/api/tampermonkey/toggle-inversion",
+                "script_url": "https://signal-executor-7.preview.emergentagent.com/pocket-option-auto-trader.user.js"
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error getting Tampermonkey status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://signal-executor-7.preview.emergentagent.com
-// @version      5.8.0
-// @description  Auto-trade OTC forex on Pocket Option. v5.8.0 - Fixed expiry_minutes handling, improved signal deduplication
+// @version      5.9.0
+// @description  Auto-trade OTC forex on Pocket Option. v5.9.0 - Fixed double-trade bug, added remote control from app
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -105,11 +105,119 @@
     }
 
     // ===========================================
+    // REMOTE CONTROL - Fetch settings from app
+    // ===========================================
+    let remoteSettingsInterval = null;
+    let lastRemoteSettingsCheck = 0;
+    
+    async function fetchRemoteSettings() {
+        try {
+            GM_xmlhttpRequest({
+                method: 'GET',
+                url: CONFIG.API_URL + '/tampermonkey/settings',
+                headers: { 'Accept': 'application/json' },
+                timeout: 5000,
+                onload: function(res) {
+                    try {
+                        if (res.status === 200) {
+                            const data = JSON.parse(res.responseText);
+                            if (data.success && data.settings) {
+                                applyRemoteSettings(data.settings);
+                            }
+                        }
+                    } catch (e) {
+                        console.log('[GPT Remote] Parse error:', e.message);
+                    }
+                },
+                onerror: function() {
+                    // Silent fail - remote control is optional
+                }
+            });
+        } catch (e) {
+            console.log('[GPT Remote] Fetch error:', e.message);
+        }
+    }
+    
+    function applyRemoteSettings(settings) {
+        let changed = false;
+        
+        // Apply inversion setting from app (CRITICAL - affects all signals)
+        if (settings.invert_signals !== undefined && settings.invert_signals !== invertSignals) {
+            invertSignals = settings.invert_signals;
+            GM_setValue('invertSignals', invertSignals);
+            updateInvertButton();
+            log(`🔄 Remote: Inversion ${invertSignals ? 'ENABLED' : 'DISABLED'}`);
+            changed = true;
+        }
+        
+        // Apply scan mode from app
+        if (settings.scan_mode !== undefined && settings.scan_mode !== CONFIG.SCAN_MODE) {
+            CONFIG.SCAN_MODE = settings.scan_mode;
+            GM_setValue('scanMode', CONFIG.SCAN_MODE);
+            updateScanButton();
+            log(`🔄 Remote: Scan ${CONFIG.SCAN_MODE ? 'ON' : 'OFF'}`);
+            changed = true;
+        }
+        
+        // Apply auto trade from app
+        if (settings.auto_trade !== undefined && settings.auto_trade !== CONFIG.AUTO_TRADE_ENABLED) {
+            CONFIG.AUTO_TRADE_ENABLED = settings.auto_trade;
+            GM_setValue('autoEnabled', CONFIG.AUTO_TRADE_ENABLED);
+            updateAutoButton();
+            log(`🔄 Remote: Auto ${CONFIG.AUTO_TRADE_ENABLED ? 'ON' : 'OFF'}`);
+            changed = true;
+        }
+        
+        // Apply preferred timeframe/expiry from app
+        if (settings.preferred_expiry !== undefined) {
+            CONFIG.PREFERRED_EXPIRY = settings.preferred_expiry;
+            log(`🔄 Remote: Preferred expiry ${CONFIG.PREFERRED_EXPIRY}s`);
+            changed = true;
+        }
+        
+        // Apply min payout from app
+        if (settings.min_payout !== undefined && settings.min_payout !== CONFIG.MIN_PAYOUT) {
+            CONFIG.MIN_PAYOUT = settings.min_payout;
+            GM_setValue('minPayout', CONFIG.MIN_PAYOUT);
+            log(`🔄 Remote: Min payout ${CONFIG.MIN_PAYOUT}%`);
+            changed = true;
+        }
+        
+        if (changed) {
+            log('📡 Remote settings applied');
+        }
+    }
+    
+    function updateInvertButton() {
+        const btn = document.getElementById('gpt-invert');
+        if (btn) {
+            btn.textContent = invertSignals ? 'INV ON' : 'INVERT';
+            btn.className = 'btn-invert' + (invertSignals ? ' on' : '');
+        }
+    }
+    
+    function updateScanButton() {
+        const btn = document.getElementById('gpt-scan');
+        if (btn) {
+            btn.textContent = CONFIG.SCAN_MODE ? 'SCAN ON' : 'SCAN OFF';
+            btn.className = 'btn-scan' + (CONFIG.SCAN_MODE ? ' on' : '');
+        }
+    }
+    
+    function updateAutoButton() {
+        const btn = document.getElementById('gpt-auto');
+        if (btn) {
+            btn.textContent = CONFIG.AUTO_TRADE_ENABLED ? 'AUTO ON' : 'AUTO OFF';
+            btn.className = 'btn-auto' + (CONFIG.AUTO_TRADE_ENABLED ? '' : ' off');
+        }
+    }
+
+    // ===========================================
     // LOGGING
     // ===========================================
     function log(msg, type = 'info') {
         const ts = new Date().toLocaleTimeString();
-        const prefix = '[GPT v5.8.0]';
+        const prefix = '[GPT v5.9.0]';
         console.log(`${prefix} ${ts}: ${msg}`);
         
         const logEl = document.getElementById('gpt-log');
@@ -191,7 +299,7 @@
             <div class="drag-header" id="gpt-drag-handle">
                 <div class="row">
                     <span class="dot" id="gpt-dot"></span>
-                    <span class="title">GPT Bot v5.8.0</span>
+                    <span class="title">GPT Bot v5.9.0</span>
                     <span style="flex:1"></span>
                     <span style="font-size:10px;color:#94a3b8;">☰ drag</span>
                 </div>
@@ -1720,33 +1828,52 @@
     // ===========================================
     // TRADE EXECUTION - WITH ASSET + TIMEFRAME SWITCHING
     // ===========================================
+    let activeTradeExecution = null;  // Track active trade to prevent double execution
+    
     async function executeTradeWithAssetSwitch(signal) {
+        // CRITICAL: Check if another trade is already being executed
+        if (activeTradeExecution) {
+            log(`🛑 BLOCKED: Trade already executing for ${activeTradeExecution.direction} ${activeTradeExecution.symbol}`);
+            return;
+        }
+        
         // Double-check trading lock (should already be true from caller)
         if (!isTrading) {
             log('WARNING: Trading lock not set, setting now');
             isTrading = true;
         }
         
-        lastTradeTime = Date.now();
-        updateUI('trading', signal);
-        
-        // Determine original direction - handle various formats
+        // Determine original direction FIRST - before any other operations
         const dir = (signal.direction || '').toUpperCase();
         let originalIsCall = dir === 'CALL' || dir === 'BUY' || dir === 'UP';
         let originalIsPut = dir === 'PUT' || dir === 'SELL' || dir === 'DOWN';
         
         if (!originalIsCall && !originalIsPut) {
-            log(`ERROR: Unknown direction "${signal.direction}" - aborting`);
+            log(`❌ ERROR: Unknown direction "${signal.direction}" - aborting`);
             isTrading = false;
             updateUI('connected');
             return;
         }
+        
+        // CRITICAL: Lock this trade execution with direction info
+        const finalDirection = originalIsCall ? 'CALL' : 'PUT';
+        activeTradeExecution = {
+            direction: finalDirection,
+            symbol: signal.symbol,
+            timestamp: Date.now()
+        };
+        
+        log(`🔒 Trade execution locked: ${finalDirection} ${signal.symbol}`);
+        
+        lastTradeTime = Date.now();
+        updateUI('trading', signal);
         
         // Apply inversion if enabled
         let isCall = originalIsCall;
         if (invertSignals) {
             isCall = !isCall;
             log(`🔄 INVERTED: ${originalIsCall ? 'CALL' : 'PUT'} → ${isCall ? 'CALL' : 'PUT'}`);
+            activeTradeExecution.direction = isCall ? 'CALL' : 'PUT';  // Update lock
         }
         
         const assetBase = signal.symbol.replace('_OTC', '').replace('_', '');
@@ -1859,36 +1986,45 @@
             log(`Error: ${e.message}`);
         }
         
-        // Short cooldown
+        // Release active trade execution lock and cooldown
         setTimeout(() => {
+            activeTradeExecution = null;  // Release execution lock
             isTrading = false;
             updateUI('connected');
-            log('Ready for next trade');
+            log('🔓 Trade complete - ready for next');
         }, CONFIG.TRADE_COOLDOWN);
     }
 
     let lastClickedDirection = null;  // Track which direction we last clicked
     let lastClickTime = 0;  // Track when we last clicked
+    let tradeExecutionLock = false;  // CRITICAL: Single execution lock
+    let lastTradeDirection = null;   // CRITICAL: Track the direction of active trade
     
     function clickTradeButton(isCall) {
         const now = Date.now();
         const direction = isCall ? 'CALL' : 'PUT';
         
-        // Prevent double clicks - check if we just executed a trade
+        // CRITICAL GUARD 1: Absolute execution lock
+        if (tradeExecutionLock) {
+            log(`🛑 BLOCKED: Trade execution lock active (${lastTradeDirection})`);
+            return false;
+        }
+        
+        // CRITICAL GUARD 2: Prevent any trade within MIN_TRADE_INTERVAL_MS
         if (now - lastTradeExecutionTime < MIN_TRADE_INTERVAL_MS) {
-            log(`⚠️ Trade blocked - too soon (${Math.round((MIN_TRADE_INTERVAL_MS - (now - lastTradeExecutionTime))/1000)}s cooldown)`);
+            log(`🛑 Trade blocked - cooldown (${Math.round((MIN_TRADE_INTERVAL_MS - (now - lastTradeExecutionTime))/1000)}s remaining)`);
             return false;
         }
         
-        // Extra check: prevent clicking opposite direction within 10 seconds
-        if (lastClickedDirection && lastClickedDirection !== direction && (now - lastClickTime) < 10000) {
-            log(`⚠️ BLOCKED: Tried to click ${direction} but just clicked ${lastClickedDirection} ${Math.round((now - lastClickTime)/1000)}s ago`);
+        // CRITICAL GUARD 3: Prevent opposite direction within 30 seconds
+        if (lastClickedDirection && lastClickedDirection !== direction && (now - lastClickTime) < 30000) {
+            log(`🛑 BLOCKED: Cannot click ${direction} - just executed ${lastClickedDirection} ${Math.round((now - lastClickTime)/1000)}s ago`);
             return false;
         }
         
-        // Extra check: prevent clicking same direction within 5 seconds
-        if (lastClickedDirection === direction && (now - lastClickTime) < 5000) {
-            log(`⚠️ BLOCKED: Duplicate ${direction} click within 5s`);
+        // CRITICAL GUARD 4: Prevent same direction within 10 seconds  
+        if (lastClickedDirection === direction && (now - lastClickTime) < 10000) {
+            log(`🛑 BLOCKED: Duplicate ${direction} within 10s`);
             return false;
         }
         
@@ -1896,20 +2032,29 @@
         const btn = document.querySelector(selector);
         
         if (btn && btn.offsetParent !== null) {
-            // Mark execution time and direction BEFORE clicking
+            // LOCK BEFORE CLICK
+            tradeExecutionLock = true;
+            lastTradeDirection = direction;
             lastTradeExecutionTime = now;
             lastClickedDirection = direction;
             lastClickTime = now;
             
-            log(`✓ Clicking ${selector} (${direction})`);
+            log(`✅ EXECUTING: Clicking ${selector} (${direction})`);
+            console.log(`[GPT TRADE] ${new Date().toISOString()} - Clicking ${direction} button`);
             
             // Single click only
             btn.click();
             
+            // Release lock after 3 seconds
+            setTimeout(() => {
+                tradeExecutionLock = false;
+                log(`🔓 Trade lock released`);
+            }, 3000);
+            
             return true;
         }
         
-        log(`Button ${selector} not found`);
+        log(`❌ Button ${selector} not found`);
         return false;
     }
 
@@ -1927,7 +2072,7 @@
         }
         isInitialized = true;
         
-        log('Initializing v5.8.0...');
+        log('Initializing v5.9.0...');
         
         setTimeout(() => {
             createPanel();
@@ -1964,7 +2109,13 @@
                 checkSignal();
             }
             
-            log(`Ready! FAV=${CONFIG.SCAN_FAVORITES_ONLY} PAY>=${CONFIG.MIN_PAYOUT}%`);
+            // Start remote settings polling (every 10 seconds)
+            if (!remoteSettingsInterval) {
+                fetchRemoteSettings();  // Initial fetch
+                remoteSettingsInterval = setInterval(fetchRemoteSettings, 10000);
+            }
+            
+            log(`Ready! FAV=${CONFIG.SCAN_FAVORITES_ONLY} PAY>=${CONFIG.MIN_PAYOUT}% INV=${invertSignals}`);
         }, 2000);
     }
 

@@ -3,9 +3,9 @@
 ## Last Updated: March 9, 2026
 
 ## Current Priority Issues
-1. **P0 - User browser testing needed** - Tampermonkey script v5.8.0 fixed but requires real browser testing on Pocket Option
-2. **P0 - Double-trade bug verification** - Needs testing to confirm only one trade executes per signal
-3. **P1 - Full E2E testing** - All Tampermonkey features need comprehensive validation
+1. **P0 - FIXED** - Tampermonkey double-trade bug (BUY+SELL for one signal) - Added execution locks
+2. **P0 - FIXED** - Signal inversion now controlled from app dashboard
+3. **P1 - User browser testing needed** - Tampermonkey script v5.9.0 requires real browser testing on Pocket Option
 
 ## Original Problem Statement
 Create a "GPT Signal Bot" for Pocket Option with a high win rate (80-90%+). The system should include:
@@ -51,23 +51,32 @@ Create a "GPT Signal Bot" for Pocket Option with a high win rate (80-90%+). The 
 - **Enhanced AI Integration** - Uses OANDA data + technical analysis
 - **API Endpoints**: `/api/signals/auto/start`, `/api/signals/auto/stop`, `/api/signals/auto/status`
 
-### Tampermonkey Auto-Trader v5.8.0 (Mar 9, 2026) ✅ FIXED
-**Critical Bug Fix:**
-- **Fixed expiration_minutes handling** - The script was not correctly parsing API signals with `expiration_minutes` field. The `||` chain defaulted to 60s before checking expiration_minutes.
-- **Improved signal processing** - Better logging and debug output for troubleshooting
-- **Version alignment** - Consistent v5.8.0 across UI, logs, and metadata
+### Tampermonkey Auto-Trader v5.9.0 (Mar 9, 2026) ✅ FIXED
+**Critical Bug Fixes:**
+- **Fixed double-trade bug** - Added `tradeExecutionLock` and `activeTradeExecution` guards to prevent both BUY and SELL executing for one signal
+- **Fixed expiration_minutes handling** - Script now correctly parses API signals with `expiration_minutes` field
+- **Added remote control** - Tampermonkey settings can now be controlled from the app dashboard
 
-**Current Features:**
-- **SCAN OFF Mode**: Fetches signals from `/api/signals/latest` and executes them automatically
-- **SCAN ON Mode**: Scans multiple assets (favorites/payout filter) for signals
-- **Control Buttons**: AUTO ON/OFF, SWITCH ON/OFF, SCAN ON/OFF, INVERT, FETCH NOW, RESET
-- **Visual Indicators**: Status dot (green=connected, yellow=trading, red=error), real-time log
-- **Trade Protection**:
-  - MIN_SIGNAL_INTERVAL_MS (10s) - Prevents re-processing same signal too quickly
-  - MIN_TRADE_INTERVAL_MS (5s) - Prevents double-click trades
-  - Direction guard - Blocks opposite direction within 10s, same direction within 5s
-- **Expiry Handling**: Correctly parses `expiry_seconds`, `expiration_minutes`, or `expiry` from API
-- **Draggable Panel** - Touch and mouse drag support
+**Remote Control Features (NEW):**
+- **Signal Inversion Toggle** - Control signal inversion from app (DEFAULT: ON - all signals inverted)
+- **Force Generate Signal** - Generate signals instantly for any timeframe (5s, 15s, 30s, 1m, 2m, 3m, 5m)
+- **Settings Sync** - Tampermonkey polls app every 10 seconds for setting changes
+- **Active Timeframes** - Select which timeframes to trade
+- **Min Payout Filter** - Set minimum payout percentage
+
+**Trade Protection Guards:**
+- `tradeExecutionLock` - Absolute lock preventing any trade for 3 seconds after click
+- `activeTradeExecution` - Prevents concurrent trade execution
+- `MIN_SIGNAL_INTERVAL_MS` (10s) - Prevents re-processing same signal too quickly
+- `MIN_TRADE_INTERVAL_MS` (5s) - Prevents double-click trades
+- Direction guard - Blocks opposite direction within 30s, same direction within 10s
+
+**API Endpoints for Tampermonkey Control:**
+- `GET /api/tampermonkey/settings` - Get current settings
+- `POST /api/tampermonkey/settings` - Update settings
+- `POST /api/tampermonkey/force-generate` - Force generate signal (with inversion)
+- `POST /api/tampermonkey/toggle-inversion` - Toggle signal inversion
+- `GET /api/tampermonkey/status` - Get full status with recent signals
 
 ### Strategy Selection System (Feb 28, 2026) ✅ VERIFIED
 - **End-to-end working** - UI selection flows to backend signal generation

@@ -2,11 +2,13 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
+import TampermonkeyControlPanel from './TampermonkeyControlPanel';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
 const MobileAutoTraderPage = () => {
   const [copied, setCopied] = useState(false);
+  const [showSetup, setShowSetup] = useState(false);
 
   const userscriptUrl = `${API.replace('/api', '')}/pocket-option-auto-trader.user.js`;
 
@@ -22,7 +24,7 @@ const MobileAutoTraderPage = () => {
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">
-            📱 Mobile Auto-Trader Setup
+            📱 Mobile Auto-Trader
           </h1>
           <p className="text-slate-400">
             Run automated trading on your Android phone using your residential IP
@@ -30,7 +32,28 @@ const MobileAutoTraderPage = () => {
           <Badge className="mt-2 bg-green-600">Bypasses Cloud IP Block</Badge>
         </div>
 
-        {/* Why This Works */}
+        {/* Tab Navigation */}
+        <div className="flex gap-2 mb-6">
+          <Button
+            onClick={() => setShowSetup(false)}
+            className={!showSetup ? 'bg-purple-600' : 'bg-slate-700'}
+          >
+            🎮 Control Panel
+          </Button>
+          <Button
+            onClick={() => setShowSetup(true)}
+            className={showSetup ? 'bg-purple-600' : 'bg-slate-700'}
+          >
+            📖 Setup Guide
+          </Button>
+        </div>
+
+        {/* Control Panel or Setup Guide */}
+        {!showSetup ? (
+          <TampermonkeyControlPanel />
+        ) : (
+          <>
+            {/* Why This Works */}
         <Card className="bg-slate-800/50 border-slate-700 mb-6">
           <CardHeader>
             <CardTitle className="text-white flex items-center gap-2">
@@ -241,6 +264,8 @@ const MobileAutoTraderPage = () => {
             </div>
           </CardContent>
         </Card>
+          </>
+        )}
       </div>
     </div>
   );
