@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://gpt-signal-bot-2.preview.emergentagent.com
-// @version      5.4.0
-// @description  Auto-trade OTC forex on Pocket Option. v5.4.0 - Fixed double trade bug with stronger locks and 5s trade debounce
+// @version      5.5.0
+// @description  Auto-trade OTC forex on Pocket Option. v5.5.0 - Fixed buy+sell double trade bug with direction tracking
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -109,7 +109,7 @@
     // ===========================================
     function log(msg, type = 'info') {
         const ts = new Date().toLocaleTimeString();
-        const prefix = '[GPT v5.4.0]';
+        const prefix = '[GPT v5.5.0]';
         console.log(`${prefix} ${ts}: ${msg}`);
         
         const logEl = document.getElementById('gpt-log');
@@ -191,7 +191,7 @@
             <div class="drag-header" id="gpt-drag-handle">
                 <div class="row">
                     <span class="dot" id="gpt-dot"></span>
-                    <span class="title">GPT Bot v5.4.0</span>
+                    <span class="title">GPT Bot v5.5.0</span>
                     <span style="flex:1"></span>
                     <span style="font-size:10px;color:#94a3b8;">☰ drag</span>
                 </div>
@@ -237,7 +237,7 @@
         updateInvertButton();
 
         makeDraggable(panel);
-        log('Panel ready v5.4.0');
+        log('Panel ready v5.5.0');
     }
     
     function toggleInvertSignals() {
@@ -1777,11 +1777,28 @@
         }, CONFIG.TRADE_COOLDOWN);
     }
 
+    let lastClickedDirection = null;  // Track which direction we last clicked
+    let lastClickTime = 0;  // Track when we last clicked
+    
     function clickTradeButton(isCall) {
-        // Prevent double clicks - check if we just executed a trade
         const now = Date.now();
+        const direction = isCall ? 'CALL' : 'PUT';
+        
+        // Prevent double clicks - check if we just executed a trade
         if (now - lastTradeExecutionTime < MIN_TRADE_INTERVAL_MS) {
             log(`⚠️ Trade blocked - too soon (${Math.round((MIN_TRADE_INTERVAL_MS - (now - lastTradeExecutionTime))/1000)}s cooldown)`);
+            return false;
+        }
+        
+        // Extra check: prevent clicking opposite direction within 10 seconds
+        if (lastClickedDirection && lastClickedDirection !== direction && (now - lastClickTime) < 10000) {
+            log(`⚠️ BLOCKED: Tried to click ${direction} but just clicked ${lastClickedDirection} ${Math.round((now - lastClickTime)/1000)}s ago`);
+            return false;
+        }
+        
+        // Extra check: prevent clicking same direction within 5 seconds
+        if (lastClickedDirection === direction && (now - lastClickTime) < 5000) {
+            log(`⚠️ BLOCKED: Duplicate ${direction} click within 5s`);
             return false;
         }
         
@@ -1789,12 +1806,14 @@
         const btn = document.querySelector(selector);
         
         if (btn && btn.offsetParent !== null) {
-            // Mark execution time BEFORE clicking
+            // Mark execution time and direction BEFORE clicking
             lastTradeExecutionTime = now;
+            lastClickedDirection = direction;
+            lastClickTime = now;
             
-            log(`Clicking ${selector}`);
+            log(`✓ Clicking ${selector} (${direction})`);
             
-            // Single click only - avoid double execution
+            // Single click only
             btn.click();
             
             return true;
@@ -1807,8 +1826,18 @@
     // ===========================================
     // INITIALIZATION
     // ===========================================
+    let isInitialized = false;  // Prevent double initialization
+    let pollingInterval = null;  // Store interval reference
+    
     function init() {
-        log('Initializing v5.4.0...');
+        // Prevent double initialization
+        if (isInitialized) {
+            log('Already initialized, skipping');
+            return;
+        }
+        isInitialized = true;
+        
+        log('Initializing v5.5.0...');
         
         setTimeout(() => {
             createPanel();
@@ -1839,9 +1868,11 @@
             getCurrentAsset();
             updateUI('connected');
             
-            // Start polling
-            setInterval(checkSignal, CONFIG.POLL_INTERVAL);
-            checkSignal();
+            // Start polling - only if not already started
+            if (!pollingInterval) {
+                pollingInterval = setInterval(checkSignal, CONFIG.POLL_INTERVAL);
+                checkSignal();
+            }
             
             log(`Ready! FAV=${CONFIG.SCAN_FAVORITES_ONLY} PAY>=${CONFIG.MIN_PAYOUT}%`);
         }, 2000);
