@@ -338,7 +338,7 @@ const TampermonkeyControlPanel = () => {
         <CardContent className="text-slate-300 text-sm space-y-2">
           <div className="flex justify-between">
             <span>Script Version:</span>
-            <span className="text-purple-400 font-mono">v5.9.0</span>
+            <span className="text-purple-400 font-mono">v5.9.1</span>
           </div>
           <div className="flex justify-between">
             <span>Settings Sync:</span>

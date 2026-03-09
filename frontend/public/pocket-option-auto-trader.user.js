@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://signal-executor-7.preview.emergentagent.com
-// @version      5.9.0
-// @description  Auto-trade OTC forex on Pocket Option. v5.9.0 - Fixed double-trade bug, added remote control from app
+// @version      5.9.1
+// @description  Auto-trade OTC forex on Pocket Option. v5.9.1 - Fixed lock release on errors, better logging
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -217,7 +217,7 @@
     // ===========================================
     function log(msg, type = 'info') {
         const ts = new Date().toLocaleTimeString();
-        const prefix = '[GPT v5.9.0]';
+        const prefix = '[GPT v5.9.1]';
         console.log(`${prefix} ${ts}: ${msg}`);
         
         const logEl = document.getElementById('gpt-log');
@@ -299,7 +299,7 @@
             <div class="drag-header" id="gpt-drag-handle">
                 <div class="row">
                     <span class="dot" id="gpt-dot"></span>
-                    <span class="title">GPT Bot v5.9.0</span>
+                    <span class="title">GPT Bot v5.9.1</span>
                     <span style="flex:1"></span>
                     <span style="font-size:10px;color:#94a3b8;">☰ drag</span>
                 </div>
@@ -1901,22 +1901,27 @@
         
         log(`>>> EXECUTING TRADE <<<`);
         log(`Direction: ${isCall ? 'CALL' : 'PUT'} | Asset: ${signal.symbol} | Expiry: ${signalExpiry}s`);
+        log(`Config: SWITCH=${CONFIG.AUTO_SWITCH_ASSET ? 'ON' : 'OFF'} | TF_SWITCH=${CONFIG.AUTO_SWITCH_TIMEFRAME ? 'ON' : 'OFF'}`);
         
         try {
             // Step 1: Switch asset if SWITCH is enabled
             if (CONFIG.AUTO_SWITCH_ASSET && signal.symbol) {
+                log('SWITCH ON - attempting asset switch...');
                 const switched = await switchToAsset(signal.symbol);
                 if (!switched) {
                     log(`Switch to ${assetBase} FAILED - recording attempt`);
                     recordFailedSwitch(assetBase);
                     
-                    // Release trading lock and let next scan try a different asset
+                    // Release ALL locks and let next scan try a different asset
+                    activeTradeExecution = null;
                     isTrading = false;
                     updateUI('connected');
                     log('Will try different asset on next scan');
                     return;  // Don't trade on wrong asset
                 }
                 await sleep(300);
+            } else {
+                log('SWITCH OFF - trading on current asset');
             }
             
             // Step 2: Switch timeframe if enabled and expiry differs from current
@@ -1939,6 +1944,7 @@
             const buttonsFound = await waitForButtons(3000);
             if (!buttonsFound) {
                 log('Buttons not found!');
+                activeTradeExecution = null;
                 isTrading = false;
                 updateUI('connected');
                 return;
@@ -1984,6 +1990,9 @@
             
         } catch (e) {
             log(`Error: ${e.message}`);
+            // Release locks on error
+            activeTradeExecution = null;
+            isTrading = false;
         }
         
         // Release active trade execution lock and cooldown
@@ -2072,7 +2081,7 @@
         }
         isInitialized = true;
         
-        log('Initializing v5.9.0...');
+        log('Initializing v5.9.1...');
         
         setTimeout(() => {
             createPanel();
