@@ -16,7 +16,7 @@ import time
 from datetime import datetime, timezone
 
 # Test configuration
-BACKEND_URL = "https://gpt-signal-bot-2.preview.emergentagent.com/api"
+BACKEND_URL = "https://signal-executor-7.preview.emergentagent.com/api"
 
 class ComprehensiveBotTester:
     def __init__(self):

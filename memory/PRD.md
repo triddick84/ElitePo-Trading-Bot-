@@ -1,5 +1,12 @@
 # GPT Signal Bot - Product Requirements Document
 
+## Last Updated: March 9, 2026
+
+## Current Priority Issues
+1. **P0 - User browser testing needed** - Tampermonkey script v5.8.0 fixed but requires real browser testing on Pocket Option
+2. **P0 - Double-trade bug verification** - Needs testing to confirm only one trade executes per signal
+3. **P1 - Full E2E testing** - All Tampermonkey features need comprehensive validation
+
 ## Original Problem Statement
 Create a "GPT Signal Bot" for Pocket Option with a high win rate (80-90%+). The system should include:
 - User login system for security
@@ -44,30 +51,22 @@ Create a "GPT Signal Bot" for Pocket Option with a high win rate (80-90%+). The 
 - **Enhanced AI Integration** - Uses OANDA data + technical analysis
 - **API Endpoints**: `/api/signals/auto/start`, `/api/signals/auto/stop`, `/api/signals/auto/status`
 
-### Tampermonkey Auto-Trader v3.0 (Feb 28, 2026) ✅ NEW
-Complete rewrite with comprehensive features:
-- **Comprehensive Data Display**:
-  - Signal direction (CALL/PUT) with color coding
-  - Symbol, confidence percentage
-  - Signal age in seconds
-  - Last fetch timestamp
-  - Trade statistics (wins/losses/win rate)
-- **Control Buttons**:
-  - **AUTO ON/OFF** - Toggle automatic trade execution
-  - **FETCH NOW** - Manual signal fetch
-  - **RESET** - Reset bot state and start fresh
-  - **SOUND** - Toggle sound notifications
-- **Visual Indicators**:
-  - Status dot (green=connected, yellow=trading, red=error)
-  - Connection status text
-  - Real-time log display
-- **Enhanced Functionality**:
-  - 5-second polling interval
-  - Signal age validation (max 60 seconds)
-  - Trade cooldown (5 seconds)
-  - Persistent state via GM_setValue/GM_getValue
-  - Sound alerts for CALL/PUT signals
-  - Desktop notifications
+### Tampermonkey Auto-Trader v5.8.0 (Mar 9, 2026) ✅ FIXED
+**Critical Bug Fix:**
+- **Fixed expiration_minutes handling** - The script was not correctly parsing API signals with `expiration_minutes` field. The `||` chain defaulted to 60s before checking expiration_minutes.
+- **Improved signal processing** - Better logging and debug output for troubleshooting
+- **Version alignment** - Consistent v5.8.0 across UI, logs, and metadata
+
+**Current Features:**
+- **SCAN OFF Mode**: Fetches signals from `/api/signals/latest` and executes them automatically
+- **SCAN ON Mode**: Scans multiple assets (favorites/payout filter) for signals
+- **Control Buttons**: AUTO ON/OFF, SWITCH ON/OFF, SCAN ON/OFF, INVERT, FETCH NOW, RESET
+- **Visual Indicators**: Status dot (green=connected, yellow=trading, red=error), real-time log
+- **Trade Protection**:
+  - MIN_SIGNAL_INTERVAL_MS (10s) - Prevents re-processing same signal too quickly
+  - MIN_TRADE_INTERVAL_MS (5s) - Prevents double-click trades
+  - Direction guard - Blocks opposite direction within 10s, same direction within 5s
+- **Expiry Handling**: Correctly parses `expiry_seconds`, `expiration_minutes`, or `expiry` from API
 - **Draggable Panel** - Touch and mouse drag support
 
 ### Strategy Selection System (Feb 28, 2026) ✅ VERIFIED

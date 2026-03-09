@@ -7,7 +7,7 @@ import asyncio
 import aiohttp
 import json
 
-BACKEND_URL = "https://gpt-signal-bot-2.preview.emergentagent.com/api"
+BACKEND_URL = "https://signal-executor-7.preview.emergentagent.com/api"
 
 async def debug_specific_asset():
     async with aiohttp.ClientSession() as session:

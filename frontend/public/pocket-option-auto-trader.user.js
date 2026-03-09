@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
-// @namespace    https://gpt-signal-bot-2.preview.emergentagent.com
-// @version      5.6.0
-// @description  Auto-trade OTC forex on Pocket Option. v5.6.0 - SCAN ON=auto-scan, SCAN OFF=receive from app. Fixed trade execution.
+// @namespace    https://signal-executor-7.preview.emergentagent.com
+// @version      5.8.0
+// @description  Auto-trade OTC forex on Pocket Option. v5.8.0 - Fixed expiry_minutes handling, improved signal deduplication
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -30,7 +30,7 @@
     // CONFIGURATION
     // ===========================================
     const CONFIG = {
-        API_URL: 'https://gpt-signal-bot-2.preview.emergentagent.com/api',
+        API_URL: 'https://signal-executor-7.preview.emergentagent.com/api',
         POLL_INTERVAL: 5000,  // 5 seconds between checks
         AUTO_TRADE_ENABLED: true,
         AUTO_SWITCH_ASSET: true,  // When ON: scan multiple assets. When OFF: scan current asset only
@@ -109,7 +109,7 @@
     // ===========================================
     function log(msg, type = 'info') {
         const ts = new Date().toLocaleTimeString();
-        const prefix = '[GPT v5.6.0]';
+        const prefix = '[GPT v5.8.0]';
         console.log(`${prefix} ${ts}: ${msg}`);
         
         const logEl = document.getElementById('gpt-log');
@@ -191,7 +191,7 @@
             <div class="drag-header" id="gpt-drag-handle">
                 <div class="row">
                     <span class="dot" id="gpt-dot"></span>
-                    <span class="title">GPT Bot v5.6.0</span>
+                    <span class="title">GPT Bot v5.8.0</span>
                     <span style="flex:1"></span>
                     <span style="font-size:10px;color:#94a3b8;">☰ drag</span>
                 </div>
@@ -1618,7 +1618,7 @@
         }
 
         // SCAN OFF = Fetch signals from app API
-        log('Fetching app signal...');
+        log('Fetching app signal (SCAN OFF mode)...');
         
         GM_xmlhttpRequest({
             method: 'GET',
@@ -1640,49 +1640,80 @@
                         const signal = data.signal;
                         const signalId = signal.signal_id || signal.id || signal.timestamp || `${signal.symbol}_${signal.direction}_${Date.now()}`;
                         
-                        log(`App Signal: ${signal.direction} ${signal.symbol}`);
+                        // Calculate expiry for display
+                        let displayExpiry = 60;
+                        if (signal.expiry_seconds && signal.expiry_seconds > 0) {
+                            displayExpiry = signal.expiry_seconds;
+                        } else if (signal.expiration_minutes && signal.expiration_minutes > 0) {
+                            displayExpiry = Math.round(signal.expiration_minutes * 60);
+                        }
+                        
+                        log(`📥 Received: ${signal.direction} ${signal.symbol} | Exp: ${displayExpiry}s | ID: ${signalId.substring(0,25)}...`);
                         
                         // Check if same signal and within minimum interval
                         const now = Date.now();
                         const isSameSignal = signalId === lastProcessedSignalId;
-                        const withinInterval = (now - lastProcessedSignalTimestamp) < MIN_SIGNAL_INTERVAL_MS;
+                        const timeSinceLast = now - lastProcessedSignalTimestamp;
+                        const withinInterval = timeSinceLast < MIN_SIGNAL_INTERVAL_MS;
                         
-                        if (isSameSignal && withinInterval && !force) {
-                            log('Same signal, waiting...');
+                        // Debug logging
+                        if (CONFIG.DEBUG) {
+                            console.log('[GPT DEBUG] Signal check:', {
+                                signalId: signalId.substring(0, 30),
+                                lastProcessedSignalId: lastProcessedSignalId.substring(0, 30),
+                                isSameSignal,
+                                timeSinceLast: Math.round(timeSinceLast/1000) + 's',
+                                minInterval: MIN_SIGNAL_INTERVAL_MS/1000 + 's',
+                                withinInterval,
+                                isTrading,
+                                autoEnabled: CONFIG.AUTO_TRADE_ENABLED
+                            });
+                        }
+                        
+                        if (isSameSignal && withinInterval) {
+                            const waitTime = Math.round((MIN_SIGNAL_INTERVAL_MS - timeSinceLast)/1000);
+                            log(`⏳ Same signal - wait ${waitTime}s before re-exec`);
                             updateUI('connected', signal);
                             return;
                         }
                         
                         // Double-check not already trading
                         if (isTrading) {
-                            log('Trade in progress, skip');
+                            log('🔒 Trade in progress, skipping');
                             return;
                         }
                         
                         // Set trading lock IMMEDIATELY
                         isTrading = true;
                         
-                        log('NEW APP SIGNAL - Executing!');
+                        log(`🚀 >>> NEW SIGNAL - EXECUTING TRADE! <<<`);
                         lastProcessedSignalId = signalId;
                         lastProcessedSignalTimestamp = now;
                         updateUI('trading', signal);
                         
                         if (CONFIG.AUTO_TRADE_ENABLED) {
+                            log('✅ AUTO enabled - executing trade');
                             executeTradeWithAssetSwitch(signal);
                         } else {
-                            log('Auto trade OFF - signal displayed only');
+                            log('⚠️ AUTO disabled - signal shown only');
                             isTrading = false;
                             updateUI('connected', signal);
                         }
                     } else {
-                        log(data.message || 'No signal');
+                        log(data.message || 'No signal available');
                     }
                 } catch (e) {
-                    log('Error: ' + e.message);
+                    log('Parse Error: ' + e.message);
+                    console.error('[GPT ERROR]', e);
                 }
             },
-            onerror: function() { log('Connection error'); updateUI('disconnected'); },
-            ontimeout: function() { log('Timeout'); }
+            onerror: function(e) { 
+                log('❌ Connection error: ' + (e.error || 'unknown')); 
+                updateUI('disconnected'); 
+            },
+            ontimeout: function() { 
+                log('⏱️ Request timeout'); 
+            }
         });
     }
 
@@ -1699,19 +1730,50 @@
         lastTradeTime = Date.now();
         updateUI('trading', signal);
         
-        // Determine original direction
-        let originalIsCall = signal.direction === 'CALL' || signal.direction === 'BUY';
+        // Determine original direction - handle various formats
+        const dir = (signal.direction || '').toUpperCase();
+        let originalIsCall = dir === 'CALL' || dir === 'BUY' || dir === 'UP';
+        let originalIsPut = dir === 'PUT' || dir === 'SELL' || dir === 'DOWN';
+        
+        if (!originalIsCall && !originalIsPut) {
+            log(`ERROR: Unknown direction "${signal.direction}" - aborting`);
+            isTrading = false;
+            updateUI('connected');
+            return;
+        }
         
         // Apply inversion if enabled
         let isCall = originalIsCall;
         if (invertSignals) {
-            isCall = !originalIsCall;
+            isCall = !isCall;
             log(`🔄 INVERTED: ${originalIsCall ? 'CALL' : 'PUT'} → ${isCall ? 'CALL' : 'PUT'}`);
         }
         
         const assetBase = signal.symbol.replace('_OTC', '').replace('_', '');
-        const signalExpiry = signal.expiry_seconds || 60;
-        log(`Executing: ${isCall ? 'CALL' : 'PUT'} on ${signal.symbol} @ ${signalExpiry}s${invertSignals ? ' (INVERTED)' : ''}`);
+        
+        // Handle expiry - FIXED: Properly check expiration_minutes FIRST
+        // API returns expiration_minutes (e.g., 0.083 for 5 seconds, 1 for 60 seconds)
+        let signalExpiry = 60;  // default
+        
+        if (signal.expiry_seconds && signal.expiry_seconds > 0) {
+            signalExpiry = signal.expiry_seconds;
+            log(`Expiry from expiry_seconds: ${signalExpiry}s`);
+        } else if (signal.expiration_minutes && signal.expiration_minutes > 0) {
+            signalExpiry = Math.round(signal.expiration_minutes * 60);
+            log(`Expiry from expiration_minutes: ${signal.expiration_minutes} min = ${signalExpiry}s`);
+        } else if (signal.expiry && signal.expiry > 0) {
+            signalExpiry = signal.expiry;
+            log(`Expiry from expiry: ${signalExpiry}s`);
+        }
+        
+        // Ensure minimum 5 seconds (valid for Pocket Option)
+        if (signalExpiry < 5) {
+            log(`Expiry ${signalExpiry}s too short, defaulting to 60s`);
+            signalExpiry = 60;
+        }
+        
+        log(`>>> EXECUTING TRADE <<<`);
+        log(`Direction: ${isCall ? 'CALL' : 'PUT'} | Asset: ${signal.symbol} | Expiry: ${signalExpiry}s`);
         
         try {
             // Step 1: Switch asset if SWITCH is enabled
@@ -1865,7 +1927,7 @@
         }
         isInitialized = true;
         
-        log('Initializing v5.6.0...');
+        log('Initializing v5.8.0...');
         
         setTimeout(() => {
             createPanel();

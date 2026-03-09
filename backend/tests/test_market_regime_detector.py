@@ -18,7 +18,7 @@ import os
 import time
 
 # Get BASE_URL from environment - production URL for testing
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://gpt-signal-bot-2.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://signal-executor-7.preview.emergentagent.com').rstrip('/')
 
 
 class TestHealthAndSetup:
