@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://gpt-signal-bot-2.preview.emergentagent.com
-// @version      5.5.0
-// @description  Auto-trade OTC forex on Pocket Option. v5.5.0 - Fixed buy+sell double trade bug with direction tracking
+// @version      5.6.0
+// @description  Auto-trade OTC forex on Pocket Option. v5.6.0 - SCAN ON=auto-scan, SCAN OFF=receive from app. Fixed trade execution.
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -109,7 +109,7 @@
     // ===========================================
     function log(msg, type = 'info') {
         const ts = new Date().toLocaleTimeString();
-        const prefix = '[GPT v5.5.0]';
+        const prefix = '[GPT v5.6.0]';
         console.log(`${prefix} ${ts}: ${msg}`);
         
         const logEl = document.getElementById('gpt-log');
@@ -191,7 +191,7 @@
             <div class="drag-header" id="gpt-drag-handle">
                 <div class="row">
                     <span class="dot" id="gpt-dot"></span>
-                    <span class="title">GPT Bot v5.5.0</span>
+                    <span class="title">GPT Bot v5.6.0</span>
                     <span style="flex:1"></span>
                     <span style="font-size:10px;color:#94a3b8;">☰ drag</span>
                 </div>
@@ -237,7 +237,7 @@
         updateInvertButton();
 
         makeDraggable(panel);
-        log('Panel ready v5.5.0');
+        log('Panel ready v5.6.0');
     }
     
     function toggleInvertSignals() {
@@ -427,10 +427,15 @@
             expiryInfo.textContent = `Exp: ${expDisplay}`;
         }
         if (modeStatus) {
-            let modeText = CONFIG.SCAN_MODE ? (CONFIG.SCAN_FAVORITES_ONLY ? 'FAV' : 'ALL') : 'SINGLE';
+            // SCAN ON = Auto-scan markets, SCAN OFF = Receive from app
+            let modeText = CONFIG.SCAN_MODE ? 'AUTO' : 'APP';
+            if (CONFIG.SCAN_MODE && CONFIG.SCAN_FAVORITES_ONLY) {
+                modeText = 'FAV';
+            }
             if (invertSignals) modeText += ' 🔄';
             modeStatus.textContent = modeText;
             modeStatus.className = 'status-badge ' + (CONFIG.SCAN_MODE ? 'ok' : '');
+            modeStatus.title = CONFIG.SCAN_MODE ? 'Auto-scanning markets' : 'Receiving signals from app';
         }
         if (switchStatus) {
             switchStatus.textContent = CONFIG.AUTO_SWITCH_ASSET ? 'SW: MULTI' : 'SW: CURR';
@@ -1269,14 +1274,26 @@
 
     function toggleScanMode() {
         CONFIG.SCAN_MODE = !CONFIG.SCAN_MODE;
+        
+        // Save to storage
+        try {
+            GM_setValue('scanMode', CONFIG.SCAN_MODE);
+        } catch (e) {}
+        
         const btn = document.getElementById('gpt-scan');
         if (btn) {
-            btn.textContent = CONFIG.SCAN_MODE ? 'SCAN ON' : 'SCAN';
-            btn.className = 'btn-scan' + (CONFIG.SCAN_MODE ? ' on' : '');
+            btn.textContent = CONFIG.SCAN_MODE ? 'SCAN ON' : 'SCAN OFF';
+            btn.className = 'btn-scan' + (CONFIG.SCAN_MODE ? ' on' : ' off');
         }
         updateUI('connected');
-        log('Scan: ' + (CONFIG.SCAN_MODE ? 'ON' : 'OFF'));
-        if (CONFIG.SCAN_MODE) scanMarkets();
+        
+        // Log clear description of mode
+        if (CONFIG.SCAN_MODE) {
+            log('SCAN ON: Auto-scanning markets for signals');
+            scanMarkets();
+        } else {
+            log('SCAN OFF: Waiting for signals from app');
+        }
     }
 
     function resetBot() {
@@ -1576,6 +1593,10 @@
     // ===========================================
     // SIGNAL FETCHING
     // ===========================================
+    // SCAN MODE BEHAVIOR:
+    // - SCAN ON: Auto-scan markets and generate signals (Tampermonkey finds trades)
+    // - SCAN OFF: Receive signals from app API and execute them (App sends trades)
+    
     function checkSignal(force = false) {
         if (isTrading && !force) {
             log('Busy trading...');
@@ -1590,12 +1611,14 @@
         findTradeButtons();
         getCurrentAsset();
 
+        // SCAN ON = Tampermonkey scans markets automatically
         if (CONFIG.SCAN_MODE) {
             scanMarkets();
             return;
         }
 
-        log('Fetching signal...');
+        // SCAN OFF = Fetch signals from app API
+        log('Fetching app signal...');
         
         GM_xmlhttpRequest({
             method: 'GET',
@@ -1615,9 +1638,9 @@
                     
                     if (data.success && data.signal) {
                         const signal = data.signal;
-                        const signalId = signal.signal_id || signal.id || signal.timestamp;
+                        const signalId = signal.signal_id || signal.id || signal.timestamp || `${signal.symbol}_${signal.direction}_${Date.now()}`;
                         
-                        log(`Signal: ${signal.direction} ${signal.symbol}`);
+                        log(`App Signal: ${signal.direction} ${signal.symbol}`);
                         
                         // Check if same signal and within minimum interval
                         const now = Date.now();
@@ -1636,7 +1659,10 @@
                             return;
                         }
                         
-                        log('NEW SIGNAL!');
+                        // Set trading lock IMMEDIATELY
+                        isTrading = true;
+                        
+                        log('NEW APP SIGNAL - Executing!');
                         lastProcessedSignalId = signalId;
                         lastProcessedSignalTimestamp = now;
                         updateUI('trading', signal);
@@ -1644,6 +1670,8 @@
                         if (CONFIG.AUTO_TRADE_ENABLED) {
                             executeTradeWithAssetSwitch(signal);
                         } else {
+                            log('Auto trade OFF - signal displayed only');
+                            isTrading = false;
                             updateUI('connected', signal);
                         }
                     } else {
@@ -1837,7 +1865,7 @@
         }
         isInitialized = true;
         
-        log('Initializing v5.5.0...');
+        log('Initializing v5.6.0...');
         
         setTimeout(() => {
             createPanel();
