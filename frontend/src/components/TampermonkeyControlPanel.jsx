@@ -5,7 +5,8 @@ import { Badge } from '../components/ui/badge';
 import { Switch } from '../components/ui/switch';
 import { Slider } from '../components/ui/slider';
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API_BASE = process.env.REACT_APP_BACKEND_URL;
+const API = `${API_BASE}/api`;  // Add /api prefix for all endpoints
 
 const TampermonkeyControlPanel = () => {
   const [settings, setSettings] = useState({
@@ -350,7 +351,7 @@ const TampermonkeyControlPanel = () => {
           <div className="mt-4 p-3 bg-slate-900 rounded-lg">
             <p className="text-xs text-slate-400 mb-2">Script URL:</p>
             <code className="text-xs text-purple-400 break-all">
-              {API?.replace('/api', '')}/pocket-option-auto-trader.user.js
+              {API_BASE}/pocket-option-auto-trader.user.js
             </code>
           </div>
         </CardContent>
