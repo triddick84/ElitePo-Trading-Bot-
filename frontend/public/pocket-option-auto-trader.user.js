@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://signal-executor-7.preview.emergentagent.com
-// @version      6.3.0
-// @description  Auto-trade OTC forex on Pocket Option. v6.3.0 - Completely rewrote asset switching with verification
+// @version      6.3.1
+// @description  Auto-trade OTC forex on Pocket Option. v6.3.1 - Fixed: no longer types in trade amount field
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -105,7 +105,7 @@
     // ===========================================
     function log(msg) {
         const ts = new Date().toLocaleTimeString();
-        console.log(`[GPT v6.3.0] ${ts}: ${msg}`);
+        console.log(`[GPT v6.3.1] ${ts}: ${msg}`);
         const logEl = document.getElementById('gpt-log');
         if (logEl) logEl.textContent = msg;
     }
@@ -304,7 +304,7 @@
             <div class="header" id="gpt-drag">
                 <div class="header-left">
                     <span class="status-dot" id="gpt-dot"></span>
-                    <span class="title">GPT Bot v6.3.0</span>
+                    <span class="title">GPT Bot v6.3.1</span>
                 </div>
                 <div class="header-right">
                     <span style="font-size:10px;color:#64748b;">Trades: <span id="gpt-trades">0</span></span>
@@ -1019,19 +1019,84 @@
                 return false;
             }
             
-            // Step 2: Find and use search input
-            log('Step 2: Looking for search input...');
-            await sleep(500);
+            // Step 2: Find and use search input IN THE DROPDOWN/MODAL ONLY
+            log('Step 2: Looking for search input in dropdown...');
+            await sleep(800);
             
-            // Find any visible input field
-            const inputs = document.querySelectorAll('input');
+            // Look for a modal/dropdown that appeared after clicking
             let searchInput = null;
             
-            for (const inp of inputs) {
-                if (inp && inp.offsetParent !== null && !inp.disabled && inp.offsetWidth > 30) {
-                    searchInput = inp;
-                    log(`Found input: type="${inp.type}", placeholder="${inp.placeholder}"`);
-                    break;
+            // First, try to find the dropdown/modal container
+            const modalSelectors = [
+                '.modal', '.dropdown', '.popup', '.dialog', '.overlay',
+                '[class*="modal"]', '[class*="dropdown"]', '[class*="popup"]',
+                '[class*="assets"]', '[class*="pair"]', '[class*="instrument"]',
+                '[role="dialog"]', '[role="listbox"]'
+            ];
+            
+            for (const modalSel of modalSelectors) {
+                const modal = document.querySelector(modalSel);
+                if (modal && modal.offsetParent !== null) {
+                    // Look for input INSIDE this modal
+                    const modalInput = modal.querySelector('input[type="search"], input[type="text"], input:not([type="number"])');
+                    if (modalInput && modalInput.offsetParent !== null) {
+                        searchInput = modalInput;
+                        log(`Found search input in ${modalSel}`);
+                        break;
+                    }
+                }
+            }
+            
+            // If no modal input found, look for a search-specific input
+            if (!searchInput) {
+                const searchSelectors = [
+                    'input[type="search"]',
+                    'input[placeholder*="search" i]',
+                    'input[placeholder*="find" i]',
+                    'input[placeholder*="Search" i]',
+                    'input[class*="search"]',
+                    '.search input',
+                    '[class*="search"] input'
+                ];
+                
+                for (const sel of searchSelectors) {
+                    const inp = document.querySelector(sel);
+                    if (inp && inp.offsetParent !== null && !inp.disabled) {
+                        searchInput = inp;
+                        log(`Found search input: ${sel}`);
+                        break;
+                    }
+                }
+            }
+            
+            // IMPORTANT: Don't use number inputs or trade amount fields
+            if (!searchInput) {
+                const allInputs = document.querySelectorAll('input');
+                for (const inp of allInputs) {
+                    if (!inp || !inp.offsetParent || inp.disabled) continue;
+                    
+                    // Skip number inputs (trade amount)
+                    if (inp.type === 'number') continue;
+                    
+                    // Skip inputs that look like amount fields
+                    const placeholder = (inp.placeholder || '').toLowerCase();
+                    const className = (inp.className || '').toLowerCase();
+                    if (placeholder.includes('amount') || placeholder.includes('$') ||
+                        className.includes('amount') || className.includes('trade')) {
+                        continue;
+                    }
+                    
+                    // Skip inputs that are small (likely amount fields)
+                    if (inp.offsetWidth < 100) continue;
+                    
+                    // This might be the search input
+                    // Check if it's in upper part of screen (dropdown area)
+                    const rect = inp.getBoundingClientRect();
+                    if (rect.top > 50 && rect.top < window.innerHeight - 100) {
+                        searchInput = inp;
+                        log(`Found potential search input at y=${Math.round(rect.top)}`);
+                        break;
+                    }
                 }
             }
             
@@ -1050,7 +1115,7 @@
                 await sleep(800);
                 log(`Input value: ${searchInput.value}`);
             } else {
-                log('No search input found');
+                log('No search input found - will browse list directly');
             }
             
             // Step 3: Find and click the target asset in results
@@ -1122,7 +1187,7 @@
     // INITIALIZATION
     // ===========================================
     function init() {
-        log('Initializing v6.3.0...');
+        log('Initializing v6.3.1...');
 
         // Load saved settings (all default to false)
         autoEnabled = GM_getValue('autoEnabled', false);
