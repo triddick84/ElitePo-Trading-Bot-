@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://signal-executor-7.preview.emergentagent.com
-// @version      6.2.0
-// @description  Auto-trade OTC forex on Pocket Option. v6.2.0 - Added minimize button and improved drag/touch support
+// @version      6.2.1
+// @description  Auto-trade OTC forex on Pocket Option. v6.2.1 - Fixed scan to use top_signals from API
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -105,7 +105,7 @@
     // ===========================================
     function log(msg) {
         const ts = new Date().toLocaleTimeString();
-        console.log(`[GPT v6.2.0] ${ts}: ${msg}`);
+        console.log(`[GPT v6.2.1] ${ts}: ${msg}`);
         const logEl = document.getElementById('gpt-log');
         if (logEl) logEl.textContent = msg;
     }
@@ -304,7 +304,7 @@
             <div class="header" id="gpt-drag">
                 <div class="header-left">
                     <span class="status-dot" id="gpt-dot"></span>
-                    <span class="title">GPT Bot v6.2.0</span>
+                    <span class="title">GPT Bot v6.2.1</span>
                 </div>
                 <div class="header-right">
                     <span style="font-size:10px;color:#64748b;">Trades: <span id="gpt-trades">0</span></span>
@@ -334,7 +334,7 @@
                 
                 <div class="mode-indicator idle" id="gpt-mode">IDLE - All buttons OFF</div>
                 
-                <div id="gpt-log">Ready - v6.2.0</div>
+                <div id="gpt-log">Ready - v6.2.1</div>
             </div>
         `;
 
@@ -774,6 +774,9 @@
             return;
         }
 
+        log('🔍 Scanning markets...');
+        updateStatusDot('trading');
+
         // Determine scope based on SWITCH
         const scope = switchEnabled ? 'favorites' : 'current';
         
@@ -781,41 +784,71 @@
             method: 'GET',
             url: CONFIG.API_URL + `/signals/scan-markets?scope=${scope}&min_confidence=${CONFIG.MIN_CONFIDENCE}&min_payout=${CONFIG.MIN_PAYOUT}`,
             headers: { 'Accept': 'application/json' },
-            timeout: 10000,
+            timeout: 15000,
             onload: function(res) {
                 try {
-                    if (res.status !== 200) return;
+                    if (res.status !== 200) {
+                        log('Scan API error: ' + res.status);
+                        updateStatusDot('connected');
+                        return;
+                    }
 
                     const data = JSON.parse(res.responseText);
                     
-                    if (data.success && data.signals && data.signals.length > 0) {
+                    // API returns top_signals not signals
+                    const signals = data.top_signals || data.signals || [];
+                    
+                    if (data.success && signals.length > 0) {
+                        log(`Found ${signals.length} signals`);
+                        
                         let bestSignal = null;
                         
                         if (switchEnabled) {
-                            // Can use any signal from favorites
-                            bestSignal = data.signals[0];
+                            // Can use any signal from favorites - pick highest confidence
+                            bestSignal = signals[0];
+                            log(`SWITCH ON: Using best signal from ${bestSignal.symbol}`);
                         } else {
                             // Must match current asset
                             const currentNorm = normalizeAsset(getCurrentAsset());
-                            for (const sig of data.signals) {
-                                if (normalizeAsset(sig.symbol) === currentNorm) {
+                            log(`SWITCH OFF: Looking for signals matching ${currentNorm}`);
+                            
+                            for (const sig of signals) {
+                                const sigNorm = normalizeAsset(sig.symbol);
+                                if (sigNorm === currentNorm || sigNorm.includes(currentNorm) || currentNorm.includes(sigNorm)) {
                                     bestSignal = sig;
                                     break;
                                 }
                             }
+                            
+                            if (!bestSignal) {
+                                log(`No signal for current asset. Available: ${signals.map(s => s.symbol).join(', ')}`);
+                                updateStatusDot('connected');
+                                return;
+                            }
                         }
 
                         if (bestSignal) {
-                            log(`🔍 SCAN SIGNAL: ${bestSignal.direction} ${bestSignal.symbol}`);
+                            log(`🔍 SCAN SIGNAL: ${bestSignal.direction} ${bestSignal.symbol} (${bestSignal.confidence}%)`);
                             executeScanTrade(bestSignal);
                         }
+                    } else {
+                        log('No signals found in scan');
+                        updateStatusDot('connected');
                     }
                 } catch (e) {
                     log('Scan error: ' + e.message);
+                    console.error('[GPT SCAN ERROR]', e);
+                    updateStatusDot('connected');
                 }
             },
-            onerror: function() {
+            onerror: function(e) {
                 log('Scan connection error');
+                console.error('[GPT SCAN]', e);
+                updateStatusDot('connected');
+            },
+            ontimeout: function() {
+                log('Scan timeout');
+                updateStatusDot('connected');
             }
         });
     }
