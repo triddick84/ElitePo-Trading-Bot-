@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://signal-executor-7.preview.emergentagent.com
-// @version      6.1.0
-// @description  Auto-trade OTC forex on Pocket Option. v6.1.0 - Fixed button logic: AUTO=app signals only, SCAN=tampermonkey trades
+// @version      6.2.0
+// @description  Auto-trade OTC forex on Pocket Option. v6.2.0 - Added minimize button and improved drag/touch support
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -105,7 +105,7 @@
     // ===========================================
     function log(msg) {
         const ts = new Date().toLocaleTimeString();
-        console.log(`[GPT v6.1.0] ${ts}: ${msg}`);
+        console.log(`[GPT v6.2.0] ${ts}: ${msg}`);
         const logEl = document.getElementById('gpt-log');
         if (logEl) logEl.textContent = msg;
     }
@@ -139,9 +139,14 @@
     // ===========================================
     // UI PANEL
     // ===========================================
+    let isMinimized = false;
+    
     function createPanel() {
         const existing = document.getElementById('gpt-panel');
         if (existing) existing.remove();
+
+        // Load minimized state
+        isMinimized = GM_getValue('isMinimized', false);
 
         const panel = document.createElement('div');
         panel.id = 'gpt-panel';
@@ -160,6 +165,16 @@
                     color: white;
                     min-width: 320px;
                     box-shadow: 0 4px 25px rgba(124, 58, 237, 0.4);
+                    transition: all 0.3s ease;
+                    user-select: none;
+                }
+                #gpt-panel.minimized {
+                    min-width: auto;
+                    width: auto;
+                    padding: 8px 12px;
+                }
+                #gpt-panel.minimized .panel-content {
+                    display: none;
                 }
                 #gpt-panel .header {
                     display: flex;
@@ -170,6 +185,20 @@
                     margin-bottom: 10px;
                     cursor: move;
                 }
+                #gpt-panel.minimized .header {
+                    border-bottom: none;
+                    padding-bottom: 0;
+                    margin-bottom: 0;
+                }
+                #gpt-panel .header-left {
+                    display: flex;
+                    align-items: center;
+                }
+                #gpt-panel .header-right {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
                 #gpt-panel .title { font-weight: bold; color: #a78bfa; font-size: 14px; }
                 #gpt-panel .status-dot { 
                     width: 10px; height: 10px; border-radius: 50%; 
@@ -178,6 +207,26 @@
                 #gpt-panel .status-dot.connected { background: #22c55e; }
                 #gpt-panel .status-dot.trading { background: #f59e0b; animation: blink 0.5s infinite; }
                 @keyframes blink { 50% { opacity: 0.3; } }
+                
+                #gpt-panel .minimize-btn {
+                    background: rgba(124, 58, 237, 0.3);
+                    border: 1px solid #7c3aed;
+                    color: #a78bfa;
+                    width: 24px;
+                    height: 24px;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 14px;
+                    font-weight: bold;
+                    transition: all 0.2s;
+                }
+                #gpt-panel .minimize-btn:hover {
+                    background: rgba(124, 58, 237, 0.5);
+                    transform: scale(1.1);
+                }
                 
                 #gpt-panel .signal-display {
                     background: rgba(0,0,0,0.3);
@@ -253,35 +302,40 @@
             </style>
             
             <div class="header" id="gpt-drag">
-                <div>
+                <div class="header-left">
                     <span class="status-dot" id="gpt-dot"></span>
-                    <span class="title">GPT Bot v6.1.0</span>
+                    <span class="title">GPT Bot v6.2.0</span>
                 </div>
-                <span style="font-size:10px;color:#64748b;">Trades: <span id="gpt-trades">0</span></span>
+                <div class="header-right">
+                    <span style="font-size:10px;color:#64748b;">Trades: <span id="gpt-trades">0</span></span>
+                    <button class="minimize-btn" id="gpt-minimize" title="Minimize/Expand">−</button>
+                </div>
             </div>
             
-            <div class="signal-display">
-                <div class="signal-direction wait" id="gpt-signal">READY</div>
-                <div style="font-size:11px;color:#94a3b8;margin-top:4px;" id="gpt-asset">-</div>
-                <div style="font-size:10px;color:#64748b;margin-top:2px;" id="gpt-source">-</div>
+            <div class="panel-content" id="gpt-content">
+                <div class="signal-display">
+                    <div class="signal-direction wait" id="gpt-signal">READY</div>
+                    <div style="font-size:11px;color:#94a3b8;margin-top:4px;" id="gpt-asset">-</div>
+                    <div style="font-size:10px;color:#64748b;margin-top:2px;" id="gpt-source">-</div>
+                </div>
+                
+                <div class="btn-row">
+                    <button class="btn-auto" id="gpt-auto" title="Receive APP signals only">AUTO OFF</button>
+                    <button class="btn-scan" id="gpt-scan" title="Tampermonkey generates trades">SCAN OFF</button>
+                </div>
+                <div class="btn-row">
+                    <button class="btn-switch" id="gpt-switch" title="Switch assets during SCAN">SWITCH OFF</button>
+                    <button class="btn-invert" id="gpt-invert" title="Invert signal direction">INVERT OFF</button>
+                </div>
+                <div class="btn-row">
+                    <button class="btn-fetch" id="gpt-fetch">FETCH</button>
+                    <button class="btn-reset" id="gpt-reset">RESET</button>
+                </div>
+                
+                <div class="mode-indicator idle" id="gpt-mode">IDLE - All buttons OFF</div>
+                
+                <div id="gpt-log">Ready - v6.2.0</div>
             </div>
-            
-            <div class="btn-row">
-                <button class="btn-auto" id="gpt-auto" title="Receive APP signals only">AUTO OFF</button>
-                <button class="btn-scan" id="gpt-scan" title="Tampermonkey generates trades">SCAN OFF</button>
-            </div>
-            <div class="btn-row">
-                <button class="btn-switch" id="gpt-switch" title="Switch assets during SCAN">SWITCH OFF</button>
-                <button class="btn-invert" id="gpt-invert" title="Invert signal direction">INVERT OFF</button>
-            </div>
-            <div class="btn-row">
-                <button class="btn-fetch" id="gpt-fetch">FETCH</button>
-                <button class="btn-reset" id="gpt-reset">RESET</button>
-            </div>
-            
-            <div class="mode-indicator idle" id="gpt-mode">IDLE - All buttons OFF</div>
-            
-            <div id="gpt-log">Ready - v6.1.0</div>
         `;
 
         document.body.appendChild(panel);
@@ -293,39 +347,115 @@
         document.getElementById('gpt-invert').addEventListener('click', toggleInvert);
         document.getElementById('gpt-fetch').addEventListener('click', handleFetch);
         document.getElementById('gpt-reset').addEventListener('click', resetToDefaults);
+        document.getElementById('gpt-minimize').addEventListener('click', toggleMinimize);
 
-        // Make draggable
+        // Make draggable with touch support
         makeDraggable(panel, document.getElementById('gpt-drag'));
+        
+        // Apply saved position
+        const savedPos = GM_getValue('panelPosition', null);
+        if (savedPos) {
+            panel.style.top = savedPos.top;
+            panel.style.left = savedPos.left;
+            panel.style.right = 'auto';
+        }
+        
+        // Apply minimized state
+        if (isMinimized) {
+            panel.classList.add('minimized');
+            document.getElementById('gpt-minimize').textContent = '+';
+        }
         
         updateAllUI();
     }
 
-    function makeDraggable(panel, handle) {
-        let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
-        handle.onmousedown = dragMouseDown;
+    function toggleMinimize() {
+        const panel = document.getElementById('gpt-panel');
+        const btn = document.getElementById('gpt-minimize');
+        
+        isMinimized = !isMinimized;
+        GM_setValue('isMinimized', isMinimized);
+        
+        if (isMinimized) {
+            panel.classList.add('minimized');
+            btn.textContent = '+';
+        } else {
+            panel.classList.remove('minimized');
+            btn.textContent = '−';
+        }
+    }
 
-        function dragMouseDown(e) {
+    function makeDraggable(panel, handle) {
+        let isDragging = false;
+        let startX, startY, startLeft, startTop;
+
+        // Mouse events
+        handle.addEventListener('mousedown', startDrag);
+        document.addEventListener('mousemove', drag);
+        document.addEventListener('mouseup', endDrag);
+        
+        // Touch events for mobile
+        handle.addEventListener('touchstart', startDragTouch, { passive: false });
+        document.addEventListener('touchmove', dragTouch, { passive: false });
+        document.addEventListener('touchend', endDrag);
+
+        function startDrag(e) {
+            // Don't drag if clicking minimize button
+            if (e.target.id === 'gpt-minimize') return;
+            
+            isDragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            startLeft = panel.offsetLeft;
+            startTop = panel.offsetTop;
             e.preventDefault();
-            pos3 = e.clientX;
-            pos4 = e.clientY;
-            document.onmouseup = closeDragElement;
-            document.onmousemove = elementDrag;
         }
 
-        function elementDrag(e) {
+        function startDragTouch(e) {
+            if (e.target.id === 'gpt-minimize') return;
+            
+            isDragging = true;
+            const touch = e.touches[0];
+            startX = touch.clientX;
+            startY = touch.clientY;
+            startLeft = panel.offsetLeft;
+            startTop = panel.offsetTop;
             e.preventDefault();
-            pos1 = pos3 - e.clientX;
-            pos2 = pos4 - e.clientY;
-            pos3 = e.clientX;
-            pos4 = e.clientY;
-            panel.style.top = (panel.offsetTop - pos2) + "px";
-            panel.style.left = (panel.offsetLeft - pos1) + "px";
+        }
+
+        function drag(e) {
+            if (!isDragging) return;
+            
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            
+            panel.style.left = (startLeft + dx) + 'px';
+            panel.style.top = (startTop + dy) + 'px';
             panel.style.right = 'auto';
         }
 
-        function closeDragElement() {
-            document.onmouseup = null;
-            document.onmousemove = null;
+        function dragTouch(e) {
+            if (!isDragging) return;
+            
+            const touch = e.touches[0];
+            const dx = touch.clientX - startX;
+            const dy = touch.clientY - startY;
+            
+            panel.style.left = (startLeft + dx) + 'px';
+            panel.style.top = (startTop + dy) + 'px';
+            panel.style.right = 'auto';
+            e.preventDefault();
+        }
+
+        function endDrag() {
+            if (isDragging) {
+                isDragging = false;
+                // Save position
+                GM_setValue('panelPosition', {
+                    top: panel.style.top,
+                    left: panel.style.left
+                });
+            }
         }
     }
 
