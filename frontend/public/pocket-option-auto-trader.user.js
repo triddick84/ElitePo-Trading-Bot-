@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://signal-executor-7.preview.emergentagent.com
-// @version      6.2.1
-// @description  Auto-trade OTC forex on Pocket Option. v6.2.1 - Fixed scan to use top_signals from API
+// @version      6.2.2
+// @description  Auto-trade OTC forex on Pocket Option. v6.2.2 - Improved asset switching with better selectors
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -105,7 +105,7 @@
     // ===========================================
     function log(msg) {
         const ts = new Date().toLocaleTimeString();
-        console.log(`[GPT v6.2.1] ${ts}: ${msg}`);
+        console.log(`[GPT v6.2.2] ${ts}: ${msg}`);
         const logEl = document.getElementById('gpt-log');
         if (logEl) logEl.textContent = msg;
     }
@@ -304,7 +304,7 @@
             <div class="header" id="gpt-drag">
                 <div class="header-left">
                     <span class="status-dot" id="gpt-dot"></span>
-                    <span class="title">GPT Bot v6.2.1</span>
+                    <span class="title">GPT Bot v6.2.2</span>
                 </div>
                 <div class="header-right">
                     <span style="font-size:10px;color:#64748b;">Trades: <span id="gpt-trades">0</span></span>
@@ -334,7 +334,7 @@
                 
                 <div class="mode-indicator idle" id="gpt-mode">IDLE - All buttons OFF</div>
                 
-                <div id="gpt-log">Ready - v6.2.1</div>
+                <div id="gpt-log">Ready - v6.2.2</div>
             </div>
         `;
 
@@ -946,47 +946,170 @@
     }
 
     // ===========================================
-    // ASSET SWITCHING
+    // ASSET SWITCHING - For Pocket Option
     // ===========================================
     async function switchToAsset(targetAsset) {
-        log(`Switching to ${targetAsset}...`);
+        log(`🔄 Switching to ${targetAsset}...`);
         
-        const selectors = ['.pair-selector', '.asset-selector', '[data-testid="asset-selector"]',
-                          '.asset-dropdown', '.trading-pair-selector'];
+        // Clean up asset name for matching
+        const cleanAsset = targetAsset.replace('_OTC', '').replace('_', '/').toUpperCase();
+        const searchTerm = targetAsset.replace('_OTC', '').replace('_', '');
         
-        for (const sel of selectors) {
-            const el = document.querySelector(sel);
-            if (el) {
-                el.click();
-                await sleep(500);
+        try {
+            // Step 1: Find and click the asset/pair selector button
+            // Pocket Option uses various classes for the asset selector
+            const selectorPatterns = [
+                // Common Pocket Option selectors
+                '.pair-title',
+                '.current-pair',
+                '.asset-select',
+                '.pair-selector',
+                '[class*="pair"]',
+                '[class*="asset"]',
+                '.chart-pair',
+                '.trading-instrument',
+                // Try clicking on the header area where asset is shown
+                '.chart-header .pair',
+                '.instrument-select',
+                '[data-testid="asset"]'
+            ];
+            
+            let selectorClicked = false;
+            
+            for (const pattern of selectorPatterns) {
+                const elements = document.querySelectorAll(pattern);
+                for (const el of elements) {
+                    if (el && el.offsetParent !== null && el.textContent) {
+                        // Check if this looks like a clickable asset selector
+                        const text = el.textContent.trim();
+                        if (text.includes('/') || text.includes('USD') || text.includes('EUR')) {
+                            log(`Found selector: ${pattern} - "${text.substring(0, 20)}..."`);
+                            el.click();
+                            selectorClicked = true;
+                            await sleep(800);
+                            break;
+                        }
+                    }
+                }
+                if (selectorClicked) break;
+            }
+            
+            if (!selectorClicked) {
+                log('Could not find asset selector');
+                return false;
+            }
+            
+            // Step 2: Wait for asset list/dropdown to appear
+            await sleep(500);
+            
+            // Step 3: Try to find search input
+            const searchSelectors = [
+                'input[type="search"]',
+                'input[type="text"]',
+                'input[placeholder*="search"]',
+                'input[placeholder*="Search"]',
+                '.search-input input',
+                '[class*="search"] input'
+            ];
+            
+            let searchInput = null;
+            for (const sel of searchSelectors) {
+                searchInput = document.querySelector(sel);
+                if (searchInput && searchInput.offsetParent !== null) {
+                    break;
+                }
+            }
+            
+            if (searchInput) {
+                log(`Typing: ${searchTerm}`);
+                searchInput.focus();
+                searchInput.value = '';
                 
-                const searchInput = document.querySelector('input[type="search"], input[type="text"]');
-                if (searchInput) {
-                    searchInput.value = targetAsset.replace('_OTC', '').replace('_', '');
+                // Type each character to trigger proper events
+                for (const char of searchTerm) {
+                    searchInput.value += char;
                     searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-                    await sleep(500);
+                    await sleep(50);
                 }
                 
-                const items = document.querySelectorAll('.asset-item, .pair-item, [data-asset]');
+                searchInput.dispatchEvent(new Event('change', { bubbles: true }));
+                await sleep(800);
+            }
+            
+            // Step 4: Find and click the target asset in the list
+            const assetListSelectors = [
+                '.assets-list .asset-item',
+                '.pair-list .pair-item',
+                '[class*="asset-item"]',
+                '[class*="pair-item"]',
+                '.assets-table tr',
+                '.instrument-list li',
+                '[data-asset]',
+                '[class*="list"] [class*="item"]'
+            ];
+            
+            for (const listSel of assetListSelectors) {
+                const items = document.querySelectorAll(listSel);
                 for (const item of items) {
-                    if (item.textContent.includes(targetAsset.replace('_', '/')) ||
-                        item.textContent.includes(targetAsset.replace('_OTC', ''))) {
-                        item.click();
-                        await sleep(500);
+                    if (item && item.offsetParent !== null) {
+                        const itemText = item.textContent.toUpperCase();
+                        
+                        // Check various formats
+                        if (itemText.includes(cleanAsset) ||
+                            itemText.includes(searchTerm.toUpperCase()) ||
+                            itemText.includes(targetAsset.replace('_', '/')) ||
+                            itemText.includes(targetAsset.replace('_OTC', '').replace('_', '/'))) {
+                            
+                            log(`Found asset: ${itemText.substring(0, 30)}...`);
+                            item.click();
+                            await sleep(1000);
+                            
+                            // Verify switch was successful
+                            const newAsset = getCurrentAsset();
+                            if (newAsset && normalizeAsset(newAsset).includes(normalizeAsset(searchTerm))) {
+                                log(`✅ Switched to ${newAsset}`);
+                                return true;
+                            }
+                            
+                            log(`Switch may have worked, new asset: ${newAsset}`);
+                            return true;
+                        }
+                    }
+                }
+            }
+            
+            // Step 5: If no match found, try clicking anything that contains the asset name
+            const allElements = document.querySelectorAll('*');
+            for (const el of allElements) {
+                if (el.offsetParent !== null && 
+                    el.children.length === 0 && 
+                    el.textContent.trim().length < 50) {
+                    const text = el.textContent.toUpperCase();
+                    if (text.includes(searchTerm.toUpperCase()) && 
+                        (text.includes('OTC') || text.includes('/'))) {
+                        log(`Trying element: ${text}`);
+                        el.click();
+                        await sleep(1000);
                         return true;
                     }
                 }
             }
+            
+            log('Could not find asset in list');
+            return false;
+            
+        } catch (e) {
+            log(`Switch error: ${e.message}`);
+            console.error('[GPT SWITCH]', e);
+            return false;
         }
-        
-        return false;
     }
 
     // ===========================================
     // INITIALIZATION
     // ===========================================
     function init() {
-        log('Initializing v6.1.0...');
+        log('Initializing v6.2.2...');
 
         // Load saved settings (all default to false)
         autoEnabled = GM_getValue('autoEnabled', false);
