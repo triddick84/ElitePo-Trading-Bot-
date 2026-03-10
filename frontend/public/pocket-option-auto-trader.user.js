@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://signal-executor-7.preview.emergentagent.com
-// @version      6.2.3
-// @description  Auto-trade OTC forex on Pocket Option. v6.2.3 - Fixed search input typing with keyboard events
+// @version      6.2.4
+// @description  Auto-trade OTC forex on Pocket Option. v6.2.4 - Added Enter key press and improved asset selection
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -105,7 +105,7 @@
     // ===========================================
     function log(msg) {
         const ts = new Date().toLocaleTimeString();
-        console.log(`[GPT v6.2.3] ${ts}: ${msg}`);
+        console.log(`[GPT v6.2.4] ${ts}: ${msg}`);
         const logEl = document.getElementById('gpt-log');
         if (logEl) logEl.textContent = msg;
     }
@@ -304,7 +304,7 @@
             <div class="header" id="gpt-drag">
                 <div class="header-left">
                     <span class="status-dot" id="gpt-dot"></span>
-                    <span class="title">GPT Bot v6.2.3</span>
+                    <span class="title">GPT Bot v6.2.4</span>
                 </div>
                 <div class="header-right">
                     <span style="font-size:10px;color:#64748b;">Trades: <span id="gpt-trades">0</span></span>
@@ -1088,16 +1088,64 @@
                 
                 // Final events
                 searchInput.dispatchEvent(new Event('change', { bubbles: true }));
-                searchInput.dispatchEvent(new Event('blur', { bubbles: true }));
                 
                 log(`Typed: ${searchInput.value}`);
-                await sleep(1000);
+                await sleep(800);
+                
+                // Press Enter to select
+                log('Pressing Enter...');
+                searchInput.dispatchEvent(new KeyboardEvent('keydown', { 
+                    key: 'Enter', 
+                    code: 'Enter',
+                    keyCode: 13,
+                    which: 13,
+                    bubbles: true 
+                }));
+                searchInput.dispatchEvent(new KeyboardEvent('keypress', { 
+                    key: 'Enter',
+                    code: 'Enter', 
+                    keyCode: 13,
+                    which: 13,
+                    bubbles: true 
+                }));
+                searchInput.dispatchEvent(new KeyboardEvent('keyup', { 
+                    key: 'Enter',
+                    code: 'Enter',
+                    keyCode: 13,
+                    which: 13,
+                    bubbles: true 
+                }));
+                
+                await sleep(500);
+                
+                // Also try to click the first visible/highlighted result
+                const highlightedSelectors = [
+                    '.highlighted',
+                    '.active',
+                    '.selected',
+                    '[class*="highlight"]',
+                    '[class*="active"]',
+                    '[class*="hover"]',
+                    '[aria-selected="true"]'
+                ];
+                
+                for (const hlSel of highlightedSelectors) {
+                    const highlighted = document.querySelector(hlSel);
+                    if (highlighted && highlighted.offsetParent !== null) {
+                        log(`Clicking highlighted: ${hlSel}`);
+                        highlighted.click();
+                        await sleep(500);
+                        break;
+                    }
+                }
+                
+                await sleep(500);
             } else {
                 log('No search input found - will search in list directly');
             }
             
             // Step 4: Find and click the target asset in the list
-            await sleep(500);
+            await sleep(300);
             log('Searching for asset in list...');
             
             const assetListSelectors = [
@@ -1118,7 +1166,10 @@
                 'tr[class*="row"]',
                 // Clickable rows
                 '[role="option"]',
-                '[role="listitem"]'
+                '[role="listitem"]',
+                // Any clickable element with asset name
+                'div[class*="row"]',
+                'a[class*="item"]'
             ];
             
             for (const listSel of assetListSelectors) {
@@ -1134,8 +1185,14 @@
                             itemText.includes(targetAsset.replace('_OTC', '').replace('_', '/'))) {
                             
                             log(`Found asset: ${itemText.substring(0, 30)}...`);
+                            
+                            // Try clicking the item
                             item.click();
-                            await sleep(1000);
+                            await sleep(300);
+                            
+                            // Double-click in case single click doesn't work
+                            item.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+                            await sleep(500);
                             
                             // Verify switch was successful
                             const newAsset = getCurrentAsset();
@@ -1151,7 +1208,34 @@
                 }
             }
             
-            // Step 5: If no match found, try clicking anything that contains the asset name
+            // Step 5: Try clicking the FIRST visible item in the list (after search filtered)
+            log('Trying to click first visible item...');
+            const firstItemSelectors = [
+                '.assets-list .asset-item:first-child',
+                '.pair-list .pair-item:first-child',
+                '[class*="asset-item"]:first-of-type',
+                '[class*="pair-item"]:first-of-type',
+                'tbody tr:first-child',
+                'ul li:first-child',
+                '[role="option"]:first-of-type'
+            ];
+            
+            for (const sel of firstItemSelectors) {
+                const firstItem = document.querySelector(sel);
+                if (firstItem && firstItem.offsetParent !== null) {
+                    log(`Clicking first item: ${sel}`);
+                    firstItem.click();
+                    await sleep(500);
+                    firstItem.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+                    await sleep(500);
+                    
+                    const newAsset = getCurrentAsset();
+                    log(`After first item click, asset: ${newAsset}`);
+                    return true;
+                }
+            }
+            
+            // Step 6: If no match found, try clicking anything that contains the asset name
             const allElements = document.querySelectorAll('*');
             for (const el of allElements) {
                 if (el.offsetParent !== null && 
@@ -1182,7 +1266,7 @@
     // INITIALIZATION
     // ===========================================
     function init() {
-        log('Initializing v6.2.3...');
+        log('Initializing v6.2.4...');
 
         // Load saved settings (all default to false)
         autoEnabled = GM_getValue('autoEnabled', false);
