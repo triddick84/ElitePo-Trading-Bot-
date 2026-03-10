@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://signal-executor-7.preview.emergentagent.com
-// @version      5.9.1
-// @description  Auto-trade OTC forex on Pocket Option. v5.9.1 - Fixed lock release on errors, better logging
+// @version      6.0.0
+// @description  Auto-trade OTC forex on Pocket Option. v6.0.0 - Complete rewrite with proper button logic
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -17,7 +17,7 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_log
-// @connect      signal-generator-pro.preview.emergentagent.com
+// @connect      signal-executor-7.preview.emergentagent.com
 // @connect      *
 // @run-at       document-idle
 // @noframes
@@ -31,199 +31,114 @@
     // ===========================================
     const CONFIG = {
         API_URL: 'https://signal-executor-7.preview.emergentagent.com/api',
-        POLL_INTERVAL: 5000,  // 5 seconds between checks
-        AUTO_TRADE_ENABLED: true,
-        AUTO_SWITCH_ASSET: true,  // When ON: scan multiple assets. When OFF: scan current asset only
-        SCAN_MODE: false,
-        SCAN_ASSETS: 'EURUSD_OTC,GBPUSD_OTC,USDJPY_OTC,AUDUSD_OTC,EURJPY_OTC,GBPJPY_OTC,EURGBP_OTC,USDCAD_OTC,USDCHF_OTC,NZDUSD_OTC',
+        POLL_INTERVAL: 3000,      // 3 seconds - fast polling for incoming signals
+        SCAN_INTERVAL: 5000,      // 5 seconds for scanning
+        TRADE_COOLDOWN_SCAN: 30000,  // 30 seconds between scan trades
+        TRADE_COOLDOWN_APP: 5000,    // 5 seconds between app signal trades
         MIN_CONFIDENCE: 70,
-        MIN_PAYOUT: 65,  // Minimum payout percentage required (65%+)
-        SCAN_FAVORITES_ONLY: true,  // Only scan assets marked as favorites in Pocket Option
-        TRADE_COOLDOWN: 3000,  // 3 seconds cooldown between trades
-        SOUND_ENABLED: true,
-        AUTO_SWITCH_TIMEFRAME: true,  // Auto-switch Pocket Option timeframe to match signal expiry
-        PREFERRED_EXPIRY: null,  // null = auto-select best, or set to 5, 15, 30, 60
+        MIN_PAYOUT: 65,
         DEBUG: true
     };
 
-    // Expiry to Pocket Option timeframe mapping (in seconds)
-    const EXPIRY_TO_PO_TIMEFRAME = {
-        5: 5,
-        15: 15,
-        30: 30,
-        60: 60,
-        120: 120,
-        180: 180,
-        300: 300
-    };
-
-    // Asset mappings for OTC pairs
-    const ASSET_MAPPINGS = {
-        'EURUSD_OTC': 'EUR/USD OTC', 'EURUSD': 'EUR/USD OTC',
-        'GBPUSD_OTC': 'GBP/USD OTC', 'GBPUSD': 'GBP/USD OTC',
-        'USDJPY_OTC': 'USD/JPY OTC', 'USDJPY': 'USD/JPY OTC',
-        'AUDUSD_OTC': 'AUD/USD OTC', 'AUDUSD': 'AUD/USD OTC',
-        'USDCAD_OTC': 'USD/CAD OTC', 'USDCAD': 'USD/CAD OTC',
-        'USDCHF_OTC': 'USD/CHF OTC', 'USDCHF': 'USD/CHF OTC',
-        'NZDUSD_OTC': 'NZD/USD OTC', 'NZDUSD': 'NZD/USD OTC',
-        'EURGBP_OTC': 'EUR/GBP OTC', 'EURGBP': 'EUR/GBP OTC',
-        'EURJPY_OTC': 'EUR/JPY OTC', 'EURJPY': 'EUR/JPY OTC',
-        'GBPJPY_OTC': 'GBP/JPY OTC', 'GBPJPY': 'GBP/JPY OTC',
-        'EURCAD_OTC': 'EUR/CAD OTC', 'EURCAD': 'EUR/CAD OTC',
-        'EUR_USD': 'EUR/USD OTC', 'GBP_USD': 'GBP/USD OTC',
-        'USD_JPY': 'USD/JPY OTC', 'AUD_USD': 'AUD/USD OTC',
-        'EUR_JPY': 'EUR/JPY OTC', 'GBP_JPY': 'GBP/JPY OTC'
-    };
-
     // ===========================================
-    // STATE
+    // STATE - ALL BUTTONS DEFAULT TO OFF
     // ===========================================
-    let lastProcessedSignalId = '';
-    let lastProcessedSignalTimestamp = 0;  // Track when last signal was processed
-    let lastTradeExecutionTime = 0;  // Track actual trade execution time
+    let autoTradeEnabled = false;   // Auto Trade button - for app signals only
+    let switchEnabled = false;      // Switch button - allows asset switching during scan
+    let scanEnabled = false;        // Scan button - Tampermonkey scans for signals
+    let invertEnabled = false;      // Invert button - LOCAL toggle (overrides app)
+    
+    // Trading state
     let isTrading = false;
-    let isScanning = false;  // Prevent concurrent scans
+    let isScanning = false;
+    let lastTradeTime = 0;
+    let lastAppSignalId = '';
+    let lastAppSignalTime = 0;
     let tradeCount = 0;
     let currentAsset = null;
     let buttonsReady = false;
-    let recentlyTradedAssets = {};  // Track recently traded assets with timestamps {asset: timestamp}
-    let lastTradeTime = 0;
-    let failedSwitchAttempts = {};  // Track failed switches to avoid retrying {asset: attempts}
-    let invertSignals = false;      // Invert signals: CALL becomes PUT, PUT becomes CALL
     
-    // Constants for asset cycling
-    const ASSET_COOLDOWN_MS = 60000;  // 60 seconds cooldown per asset after trading
-    const MAX_SWITCH_ATTEMPTS = 2;     // Max times to try switching to a failing asset
-    const MIN_SIGNAL_INTERVAL_MS = 10000;  // Minimum 10 seconds between processing same signal type
-    const MIN_TRADE_INTERVAL_MS = 5000;  // Minimum 5 seconds between actual trades (prevents double click)
-    
-    // Load saved settings
-    try {
-        invertSignals = GM_getValue('invertSignals', false);
-    } catch (e) {
-        invertSignals = false;
-    }
+    // Intervals
+    let pollingInterval = null;
+    let scanInterval = null;
 
     // ===========================================
-    // REMOTE CONTROL - Fetch settings from app
+    // SOUND NOTIFICATIONS - TWO DIFFERENT SOUNDS
     // ===========================================
-    let remoteSettingsInterval = null;
-    let lastRemoteSettingsCheck = 0;
-    
-    async function fetchRemoteSettings() {
+    function playAppSignalSound() {
+        // Higher pitched, shorter beep for app signals
         try {
-            GM_xmlhttpRequest({
-                method: 'GET',
-                url: CONFIG.API_URL + '/tampermonkey/settings',
-                headers: { 'Accept': 'application/json' },
-                timeout: 5000,
-                onload: function(res) {
-                    try {
-                        if (res.status === 200) {
-                            const data = JSON.parse(res.responseText);
-                            if (data.success && data.settings) {
-                                applyRemoteSettings(data.settings);
-                            }
-                        }
-                    } catch (e) {
-                        console.log('[GPT Remote] Parse error:', e.message);
-                    }
-                },
-                onerror: function() {
-                    // Silent fail - remote control is optional
-                }
-            });
-        } catch (e) {
-            console.log('[GPT Remote] Fetch error:', e.message);
-        }
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.frequency.value = 880; // A5 - higher pitch
+            osc.type = 'sine';
+            gain.gain.value = 0.3;
+            osc.start();
+            setTimeout(() => {
+                osc.stop();
+                ctx.close();
+            }, 150);
+        } catch(e) { console.log('Sound error:', e); }
     }
-    
-    function applyRemoteSettings(settings) {
-        let changed = false;
-        
-        // Apply inversion setting from app (CRITICAL - affects all signals)
-        if (settings.invert_signals !== undefined && settings.invert_signals !== invertSignals) {
-            invertSignals = settings.invert_signals;
-            GM_setValue('invertSignals', invertSignals);
-            updateInvertButton();
-            log(`🔄 Remote: Inversion ${invertSignals ? 'ENABLED' : 'DISABLED'}`);
-            changed = true;
-        }
-        
-        // Apply scan mode from app
-        if (settings.scan_mode !== undefined && settings.scan_mode !== CONFIG.SCAN_MODE) {
-            CONFIG.SCAN_MODE = settings.scan_mode;
-            GM_setValue('scanMode', CONFIG.SCAN_MODE);
-            updateScanButton();
-            log(`🔄 Remote: Scan ${CONFIG.SCAN_MODE ? 'ON' : 'OFF'}`);
-            changed = true;
-        }
-        
-        // Apply auto trade from app
-        if (settings.auto_trade !== undefined && settings.auto_trade !== CONFIG.AUTO_TRADE_ENABLED) {
-            CONFIG.AUTO_TRADE_ENABLED = settings.auto_trade;
-            GM_setValue('autoEnabled', CONFIG.AUTO_TRADE_ENABLED);
-            updateAutoButton();
-            log(`🔄 Remote: Auto ${CONFIG.AUTO_TRADE_ENABLED ? 'ON' : 'OFF'}`);
-            changed = true;
-        }
-        
-        // Apply preferred timeframe/expiry from app
-        if (settings.preferred_expiry !== undefined) {
-            CONFIG.PREFERRED_EXPIRY = settings.preferred_expiry;
-            log(`🔄 Remote: Preferred expiry ${CONFIG.PREFERRED_EXPIRY}s`);
-            changed = true;
-        }
-        
-        // Apply min payout from app
-        if (settings.min_payout !== undefined && settings.min_payout !== CONFIG.MIN_PAYOUT) {
-            CONFIG.MIN_PAYOUT = settings.min_payout;
-            GM_setValue('minPayout', CONFIG.MIN_PAYOUT);
-            log(`🔄 Remote: Min payout ${CONFIG.MIN_PAYOUT}%`);
-            changed = true;
-        }
-        
-        if (changed) {
-            log('📡 Remote settings applied');
-        }
-    }
-    
-    function updateInvertButton() {
-        const btn = document.getElementById('gpt-invert');
-        if (btn) {
-            btn.textContent = invertSignals ? 'INV ON' : 'INVERT';
-            btn.className = 'btn-invert' + (invertSignals ? ' on' : '');
-        }
-    }
-    
-    function updateScanButton() {
-        const btn = document.getElementById('gpt-scan');
-        if (btn) {
-            btn.textContent = CONFIG.SCAN_MODE ? 'SCAN ON' : 'SCAN OFF';
-            btn.className = 'btn-scan' + (CONFIG.SCAN_MODE ? ' on' : '');
-        }
-    }
-    
-    function updateAutoButton() {
-        const btn = document.getElementById('gpt-auto');
-        if (btn) {
-            btn.textContent = CONFIG.AUTO_TRADE_ENABLED ? 'AUTO ON' : 'AUTO OFF';
-            btn.className = 'btn-auto' + (CONFIG.AUTO_TRADE_ENABLED ? '' : ' off');
-        }
+
+    function playScanSignalSound() {
+        // Lower pitched, longer beep for scan signals
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.frequency.value = 440; // A4 - lower pitch
+            osc.type = 'square';
+            gain.gain.value = 0.2;
+            osc.start();
+            setTimeout(() => {
+                osc.stop();
+                ctx.close();
+            }, 300);
+        } catch(e) { console.log('Sound error:', e); }
     }
 
     // ===========================================
     // LOGGING
     // ===========================================
-    function log(msg, type = 'info') {
+    function log(msg) {
         const ts = new Date().toLocaleTimeString();
-        const prefix = '[GPT v5.9.1]';
-        console.log(`${prefix} ${ts}: ${msg}`);
-        
+        console.log(`[GPT v6.0.0] ${ts}: ${msg}`);
         const logEl = document.getElementById('gpt-log');
-        if (logEl) {
-            logEl.textContent = msg;
+        if (logEl) logEl.textContent = msg;
+    }
+
+    // ===========================================
+    // ASSET DETECTION
+    // ===========================================
+    function getCurrentAsset() {
+        const selectors = [
+            '.pair-title', '.asset-name', '[data-testid="asset-name"]',
+            '.trading-pair-name', '.chart-header-pair'
+        ];
+        for (const sel of selectors) {
+            const el = document.querySelector(sel);
+            if (el && el.textContent) {
+                currentAsset = el.textContent.trim();
+                return currentAsset;
+            }
         }
+        return null;
+    }
+
+    // ===========================================
+    // BUTTON DETECTION
+    // ===========================================
+    function findTradeButtons() {
+        const callBtn = document.querySelector('.btn-call');
+        const putBtn = document.querySelector('.btn-put');
+        buttonsReady = callBtn && putBtn && callBtn.offsetParent !== null;
+        return buttonsReady;
     }
 
     // ===========================================
@@ -244,1093 +159,703 @@
                     background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
                     border: 2px solid #7c3aed;
                     border-radius: 12px;
-                    padding: 10px 15px;
+                    padding: 12px 15px;
                     z-index: 999999;
                     font-family: 'Segoe UI', Arial, sans-serif;
                     color: white;
-                    display: flex;
-                    flex-direction: column;
-                    gap: 8px;
+                    min-width: 320px;
                     box-shadow: 0 4px 25px rgba(124, 58, 237, 0.4);
-                    min-width: 340px;
-                    user-select: none;
-                    touch-action: none;
                 }
-                #gpt-panel .drag-header {
-                    cursor: move;
-                    cursor: grab;
-                    padding: 2px 0 6px 0;
-                    margin: -2px 0 4px 0;
+                #gpt-panel .header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
                     border-bottom: 1px solid rgba(124, 58, 237, 0.3);
+                    padding-bottom: 8px;
+                    margin-bottom: 10px;
+                    cursor: move;
                 }
-                #gpt-panel .drag-header:active {
-                    cursor: grabbing;
-                }
-                #gpt-panel .row { display: flex; align-items: center; gap: 10px; }
-                #gpt-panel .dot { width: 10px; height: 10px; border-radius: 50%; background: #ef4444; flex-shrink: 0; }
-                #gpt-panel .dot.connected { background: #22c55e; }
-                #gpt-panel .dot.trading { background: #f59e0b; animation: blink 0.5s infinite; }
-                @keyframes blink { 50% { opacity: 0.3; } }
                 #gpt-panel .title { font-weight: bold; color: #a78bfa; font-size: 14px; }
-                #gpt-panel .signal { padding: 4px 12px; border-radius: 5px; font-weight: bold; font-size: 12px; min-width: 60px; text-align: center; }
-                #gpt-panel .signal.call { background: #22c55e; }
-                #gpt-panel .signal.put { background: #ef4444; }
-                #gpt-panel .signal.wait { background: #64748b; }
-                #gpt-panel button { padding: 5px 10px; border: none; border-radius: 5px; font-weight: bold; font-size: 11px; cursor: pointer; transition: all 0.2s; }
-                #gpt-panel button:hover { transform: scale(1.05); }
-                #gpt-panel .btn-auto { background: #22c55e; color: white; }
-                #gpt-panel .btn-auto.off { background: #ef4444; }
-                #gpt-panel .btn-switch { background: #8b5cf6; color: white; }
-                #gpt-panel .btn-switch.off { background: #6b7280; }
-                #gpt-panel .btn-scan { background: #ec4899; color: white; }
-                #gpt-panel .btn-scan.on { background: #22c55e; }
+                #gpt-panel .status-dot { 
+                    width: 10px; height: 10px; border-radius: 50%; 
+                    background: #ef4444; display: inline-block; margin-right: 8px;
+                }
+                #gpt-panel .status-dot.connected { background: #22c55e; }
+                #gpt-panel .status-dot.trading { background: #f59e0b; animation: blink 0.5s infinite; }
+                @keyframes blink { 50% { opacity: 0.3; } }
+                
+                #gpt-panel .signal-display {
+                    background: rgba(0,0,0,0.3);
+                    border-radius: 8px;
+                    padding: 8px 12px;
+                    margin-bottom: 10px;
+                    text-align: center;
+                }
+                #gpt-panel .signal-direction {
+                    font-size: 18px;
+                    font-weight: bold;
+                    padding: 4px 16px;
+                    border-radius: 5px;
+                    display: inline-block;
+                }
+                #gpt-panel .signal-direction.call { background: #22c55e; }
+                #gpt-panel .signal-direction.put { background: #ef4444; }
+                #gpt-panel .signal-direction.wait { background: #64748b; }
+                
+                #gpt-panel .btn-row {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 8px;
+                    margin-bottom: 8px;
+                }
+                #gpt-panel button {
+                    padding: 8px 12px;
+                    border: none;
+                    border-radius: 6px;
+                    font-weight: bold;
+                    font-size: 11px;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    text-transform: uppercase;
+                }
+                #gpt-panel button:hover { transform: scale(1.02); opacity: 0.9; }
+                
+                #gpt-panel .btn-auto { background: #6b7280; color: white; }
+                #gpt-panel .btn-auto.on { background: #22c55e; }
+                #gpt-panel .btn-switch { background: #6b7280; color: white; }
+                #gpt-panel .btn-switch.on { background: #8b5cf6; }
+                #gpt-panel .btn-scan { background: #6b7280; color: white; }
+                #gpt-panel .btn-scan.on { background: #ec4899; }
                 #gpt-panel .btn-invert { background: #6b7280; color: white; }
-                #gpt-panel .btn-invert.on { background: #f59e0b; animation: pulse 1s infinite; }
-                @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+                #gpt-panel .btn-invert.on { background: #f59e0b; }
                 #gpt-panel .btn-fetch { background: #3b82f6; color: white; }
-                #gpt-panel .btn-reset { background: #f59e0b; color: white; }
-                #gpt-panel .info { font-size: 11px; color: #94a3b8; }
-                #gpt-panel .asset-info { font-size: 11px; color: #fbbf24; background: rgba(251, 191, 36, 0.1); padding: 3px 8px; border-radius: 4px; }
-                #gpt-log { font-size: 10px; color: #22c55e; background: rgba(0,0,0,0.3); padding: 4px 8px; border-radius: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-                #gpt-panel .status-badge { padding: 2px 6px; border-radius: 3px; background: #374151; font-size: 10px; }
-                #gpt-panel .status-badge.ok { background: #065f46; color: #6ee7b7; }
-                #gpt-panel .status-badge.no { background: #7f1d1d; color: #fca5a5; }
+                #gpt-panel .btn-reset { background: #ef4444; color: white; }
+                
+                #gpt-panel .info-row {
+                    display: flex;
+                    justify-content: space-between;
+                    font-size: 11px;
+                    color: #94a3b8;
+                    margin-top: 8px;
+                }
+                #gpt-log {
+                    font-size: 10px;
+                    color: #22c55e;
+                    background: rgba(0,0,0,0.3);
+                    padding: 6px 10px;
+                    border-radius: 4px;
+                    margin-top: 8px;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+                #gpt-panel .mode-indicator {
+                    font-size: 10px;
+                    padding: 3px 8px;
+                    border-radius: 4px;
+                    background: #374151;
+                    margin-top: 8px;
+                    text-align: center;
+                }
+                #gpt-panel .mode-indicator.app { background: #065f46; color: #6ee7b7; }
+                #gpt-panel .mode-indicator.scan { background: #7c2d12; color: #fed7aa; }
+                #gpt-panel .mode-indicator.idle { background: #374151; color: #9ca3af; }
             </style>
-            <div class="drag-header" id="gpt-drag-handle">
-                <div class="row">
-                    <span class="dot" id="gpt-dot"></span>
-                    <span class="title">GPT Bot v5.9.1</span>
-                    <span style="flex:1"></span>
-                    <span style="font-size:10px;color:#94a3b8;">☰ drag</span>
+            
+            <div class="header" id="gpt-drag">
+                <div>
+                    <span class="status-dot" id="gpt-dot"></span>
+                    <span class="title">GPT Bot v6.0.0</span>
                 </div>
+                <span style="font-size:10px;color:#64748b;">Trades: <span id="gpt-trades">0</span></span>
             </div>
-            <div class="row">
-                <span class="signal wait" id="gpt-signal">INIT...</span>
-                <span class="info">Trades: <span id="gpt-trades">0</span></span>
+            
+            <div class="signal-display">
+                <div class="signal-direction wait" id="gpt-signal">READY</div>
+                <div style="font-size:11px;color:#94a3b8;margin-top:4px;" id="gpt-asset">-</div>
             </div>
-            <div class="row">
-                <span class="asset-info" id="gpt-asset">Asset: --</span>
-                <span class="asset-info" id="gpt-payout" style="background: rgba(34, 197, 94, 0.2);">Pay: --%</span>
-                <span class="asset-info" id="gpt-expiry" style="background: rgba(139, 92, 246, 0.2);">Exp: --</span>
+            
+            <div class="btn-row">
+                <button class="btn-auto" id="gpt-auto">AUTO OFF</button>
+                <button class="btn-switch" id="gpt-switch">SWITCH OFF</button>
             </div>
-            <div class="row">
-                <div style="display:flex;gap:6px;">
-                    <span class="status-badge" id="gpt-btn-status">BTN: ?</span>
-                    <span class="status-badge" id="gpt-mode-status">SINGLE</span>
-                    <span class="status-badge" id="gpt-switch-status">SW: ON</span>
-                </div>
+            <div class="btn-row">
+                <button class="btn-scan" id="gpt-scan">SCAN OFF</button>
+                <button class="btn-invert" id="gpt-invert">INVERT OFF</button>
             </div>
-            <div class="row">
-                <button class="btn-auto" id="gpt-auto">AUTO ON</button>
-                <button class="btn-switch" id="gpt-switch">SWITCH ON</button>
-                <button class="btn-scan" id="gpt-scan">SCAN</button>
-                <button class="btn-invert" id="gpt-invert">INVERT</button>
-            </div>
-            <div class="row">
+            <div class="btn-row">
                 <button class="btn-fetch" id="gpt-fetch">FETCH</button>
                 <button class="btn-reset" id="gpt-reset">RESET</button>
             </div>
-            <div id="gpt-log">Initializing v4.8.1...</div>
+            
+            <div class="mode-indicator idle" id="gpt-mode">IDLE - Enable buttons to start</div>
+            
+            <div id="gpt-log">Initialized - All buttons OFF by default</div>
         `;
+
         document.body.appendChild(panel);
 
-        document.getElementById('gpt-auto').addEventListener('click', toggleAuto);
-        document.getElementById('gpt-switch').addEventListener('click', toggleAssetSwitch);
-        document.getElementById('gpt-scan').addEventListener('click', toggleScanMode);
-        document.getElementById('gpt-invert').addEventListener('click', toggleInvertSignals);
-        document.getElementById('gpt-fetch').addEventListener('click', () => checkSignal(true));
-        document.getElementById('gpt-reset').addEventListener('click', resetBot);
-        
-        // Set initial invert button state
-        updateInvertButton();
+        // Button handlers
+        document.getElementById('gpt-auto').addEventListener('click', toggleAutoTrade);
+        document.getElementById('gpt-switch').addEventListener('click', toggleSwitch);
+        document.getElementById('gpt-scan').addEventListener('click', toggleScan);
+        document.getElementById('gpt-invert').addEventListener('click', toggleInvert);
+        document.getElementById('gpt-fetch').addEventListener('click', handleFetch);
+        document.getElementById('gpt-reset').addEventListener('click', resetToDefaults);
 
-        makeDraggable(panel);
-        log('Panel ready v5.6.0');
-    }
-    
-    function toggleInvertSignals() {
-        invertSignals = !invertSignals;
-        try {
-            GM_setValue('invertSignals', invertSignals);
-        } catch (e) {}
-        updateInvertButton();
-        log(`Signal inversion ${invertSignals ? 'ENABLED' : 'DISABLED'}`);
+        // Make draggable
+        makeDraggable(panel, document.getElementById('gpt-drag'));
         
-        if (invertSignals) {
+        // Update UI
+        updateButtonStates();
+        updateModeIndicator();
+    }
+
+    function makeDraggable(panel, handle) {
+        let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+        handle.onmousedown = dragMouseDown;
+
+        function dragMouseDown(e) {
+            e.preventDefault();
+            pos3 = e.clientX;
+            pos4 = e.clientY;
+            document.onmouseup = closeDragElement;
+            document.onmousemove = elementDrag;
+        }
+
+        function elementDrag(e) {
+            e.preventDefault();
+            pos1 = pos3 - e.clientX;
+            pos2 = pos4 - e.clientY;
+            pos3 = e.clientX;
+            pos4 = e.clientY;
+            panel.style.top = (panel.offsetTop - pos2) + "px";
+            panel.style.left = (panel.offsetLeft - pos1) + "px";
+            panel.style.right = 'auto';
+        }
+
+        function closeDragElement() {
+            document.onmouseup = null;
+            document.onmousemove = null;
+        }
+    }
+
+    // ===========================================
+    // BUTTON TOGGLE FUNCTIONS
+    // ===========================================
+    function toggleAutoTrade() {
+        autoTradeEnabled = !autoTradeEnabled;
+        GM_setValue('autoTradeEnabled', autoTradeEnabled);
+        updateButtonStates();
+        updateModeIndicator();
+        startOrStopPolling();
+        log(`Auto Trade: ${autoTradeEnabled ? 'ON' : 'OFF'}`);
+    }
+
+    function toggleSwitch() {
+        switchEnabled = !switchEnabled;
+        GM_setValue('switchEnabled', switchEnabled);
+        updateButtonStates();
+        updateModeIndicator();
+        log(`Switch: ${switchEnabled ? 'ON' : 'OFF'}`);
+    }
+
+    function toggleScan() {
+        scanEnabled = !scanEnabled;
+        GM_setValue('scanEnabled', scanEnabled);
+        updateButtonStates();
+        updateModeIndicator();
+        startOrStopScanning();
+        log(`Scan: ${scanEnabled ? 'ON' : 'OFF'}`);
+    }
+
+    function toggleInvert() {
+        invertEnabled = !invertEnabled;
+        GM_setValue('invertEnabled', invertEnabled);
+        updateButtonStates();
+        log(`Invert: ${invertEnabled ? 'ON' : 'OFF'} (LOCAL override)`);
+    }
+
+    function handleFetch() {
+        if (scanEnabled) {
+            // Scan mode - force scan for signals
+            log('FETCH: Forcing scan...');
+            scanForSignals(true);
+        } else {
+            // Non-scan mode - check for app signals
+            log('FETCH: Checking app signals...');
+            checkAppSignals(true);
+        }
+    }
+
+    function resetToDefaults() {
+        autoTradeEnabled = false;
+        switchEnabled = false;
+        scanEnabled = false;
+        invertEnabled = false;
+        isTrading = false;
+        isScanning = false;
+        lastAppSignalId = '';
+        lastTradeTime = 0;
+        
+        GM_setValue('autoTradeEnabled', false);
+        GM_setValue('switchEnabled', false);
+        GM_setValue('scanEnabled', false);
+        GM_setValue('invertEnabled', false);
+        
+        updateButtonStates();
+        updateModeIndicator();
+        startOrStopPolling();
+        startOrStopScanning();
+        
+        log('RESET: All settings restored to defaults');
+        updateSignalDisplay('READY', null, 'wait');
+    }
+
+    function updateButtonStates() {
+        const autoBtn = document.getElementById('gpt-auto');
+        const switchBtn = document.getElementById('gpt-switch');
+        const scanBtn = document.getElementById('gpt-scan');
+        const invertBtn = document.getElementById('gpt-invert');
+
+        if (autoBtn) {
+            autoBtn.textContent = autoTradeEnabled ? 'AUTO ON' : 'AUTO OFF';
+            autoBtn.className = 'btn-auto' + (autoTradeEnabled ? ' on' : '');
+        }
+        if (switchBtn) {
+            switchBtn.textContent = switchEnabled ? 'SWITCH ON' : 'SWITCH OFF';
+            switchBtn.className = 'btn-switch' + (switchEnabled ? ' on' : '');
+        }
+        if (scanBtn) {
+            scanBtn.textContent = scanEnabled ? 'SCAN ON' : 'SCAN OFF';
+            scanBtn.className = 'btn-scan' + (scanEnabled ? ' on' : '');
+        }
+        if (invertBtn) {
+            invertBtn.textContent = invertEnabled ? 'INVERT ON' : 'INVERT OFF';
+            invertBtn.className = 'btn-invert' + (invertEnabled ? ' on' : '');
+        }
+    }
+
+    function updateModeIndicator() {
+        const modeEl = document.getElementById('gpt-mode');
+        if (!modeEl) return;
+
+        // Determine current mode based on button states
+        if (autoTradeEnabled && !scanEnabled && !switchEnabled) {
+            modeEl.textContent = '📡 APP SIGNALS MODE - Waiting for signals';
+            modeEl.className = 'mode-indicator app';
+        } else if (scanEnabled) {
+            const scope = switchEnabled ? 'ALL FAVORITES' : 'CURRENT ASSET';
+            modeEl.textContent = `🔍 SCAN MODE - Scanning ${scope}`;
+            modeEl.className = 'mode-indicator scan';
+        } else if (!autoTradeEnabled && !scanEnabled) {
+            modeEl.textContent = 'IDLE - Enable AUTO for app signals or SCAN for scanning';
+            modeEl.className = 'mode-indicator idle';
+        } else {
+            modeEl.textContent = 'STANDBY - Adjust settings';
+            modeEl.className = 'mode-indicator idle';
+        }
+    }
+
+    function updateSignalDisplay(direction, asset, type = 'wait') {
+        const sigEl = document.getElementById('gpt-signal');
+        const assetEl = document.getElementById('gpt-asset');
+        
+        if (sigEl) {
+            sigEl.textContent = direction;
+            sigEl.className = 'signal-direction ' + type;
+        }
+        if (assetEl) {
+            assetEl.textContent = asset || getCurrentAsset() || '-';
+        }
+    }
+
+    function updateStatusDot(status) {
+        const dot = document.getElementById('gpt-dot');
+        if (dot) {
+            dot.className = 'status-dot ' + status;
+        }
+    }
+
+    function updateTradeCount() {
+        const el = document.getElementById('gpt-trades');
+        if (el) el.textContent = tradeCount;
+    }
+
+    // ===========================================
+    // POLLING FOR APP SIGNALS
+    // ===========================================
+    function startOrStopPolling() {
+        // Clear existing interval
+        if (pollingInterval) {
+            clearInterval(pollingInterval);
+            pollingInterval = null;
+        }
+
+        // Only poll for app signals when:
+        // - AUTO is ON
+        // - SCAN is OFF
+        // - SWITCH is OFF
+        if (autoTradeEnabled && !scanEnabled && !switchEnabled) {
+            log('Starting app signal polling...');
+            pollingInterval = setInterval(() => checkAppSignals(false), CONFIG.POLL_INTERVAL);
+            checkAppSignals(false); // Immediate check
+        }
+    }
+
+    function checkAppSignals(force = false) {
+        // Only process app signals when AUTO ON, SCAN OFF, SWITCH OFF
+        if (!autoTradeEnabled || scanEnabled || switchEnabled) {
+            if (force) log('App signals require: AUTO ON, SCAN OFF, SWITCH OFF');
+            return;
+        }
+
+        if (isTrading && !force) {
+            return;
+        }
+
+        updateStatusDot('connected');
+
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: CONFIG.API_URL + '/signals/latest',
+            headers: { 'Accept': 'application/json' },
+            timeout: 5000,
+            onload: function(res) {
+                try {
+                    if (res.status !== 200) {
+                        updateStatusDot('');
+                        return;
+                    }
+
+                    const data = JSON.parse(res.responseText);
+                    
+                    if (data.success && data.signal) {
+                        const signal = data.signal;
+                        const signalId = signal.id || signal.timestamp || `${signal.symbol}_${Date.now()}`;
+                        
+                        // Check if new signal
+                        const now = Date.now();
+                        if (signalId === lastAppSignalId && (now - lastAppSignalTime) < 10000) {
+                            // Same signal within 10 seconds
+                            return;
+                        }
+
+                        // Check trade cooldown
+                        if ((now - lastTradeTime) < CONFIG.TRADE_COOLDOWN_APP && !force) {
+                            log(`Cooldown: ${Math.round((CONFIG.TRADE_COOLDOWN_APP - (now - lastTradeTime))/1000)}s`);
+                            return;
+                        }
+
+                        log(`📡 APP SIGNAL: ${signal.direction} ${signal.symbol}`);
+                        lastAppSignalId = signalId;
+                        lastAppSignalTime = now;
+
+                        // Execute trade
+                        executeAppSignalTrade(signal);
+                    }
+                } catch (e) {
+                    log('Parse error: ' + e.message);
+                }
+            },
+            onerror: function() {
+                updateStatusDot('');
+            }
+        });
+    }
+
+    // ===========================================
+    // SCANNING FOR SIGNALS
+    // ===========================================
+    function startOrStopScanning() {
+        // Clear existing interval
+        if (scanInterval) {
+            clearInterval(scanInterval);
+            scanInterval = null;
+        }
+
+        // Only scan when SCAN is ON
+        if (scanEnabled) {
+            log('Starting signal scanning...');
+            scanInterval = setInterval(() => scanForSignals(false), CONFIG.SCAN_INTERVAL);
+            scanForSignals(false); // Immediate scan
+        }
+    }
+
+    function scanForSignals(force = false) {
+        if (!scanEnabled) return;
+        
+        if (isScanning && !force) return;
+        if (isTrading && !force) return;
+
+        // Check 30-second cooldown for scan trades
+        const now = Date.now();
+        if ((now - lastTradeTime) < CONFIG.TRADE_COOLDOWN_SCAN && !force) {
+            const remaining = Math.round((CONFIG.TRADE_COOLDOWN_SCAN - (now - lastTradeTime)) / 1000);
+            log(`Scan cooldown: ${remaining}s`);
+            return;
+        }
+
+        isScanning = true;
+        updateStatusDot('trading');
+
+        // Determine what to scan
+        const scanScope = switchEnabled ? 'favorites' : 'current';
+        
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: CONFIG.API_URL + `/signals/scan-markets?scope=${scanScope}&min_confidence=${CONFIG.MIN_CONFIDENCE}&min_payout=${CONFIG.MIN_PAYOUT}`,
+            headers: { 'Accept': 'application/json' },
+            timeout: 10000,
+            onload: function(res) {
+                isScanning = false;
+                try {
+                    if (res.status !== 200) {
+                        updateStatusDot('connected');
+                        return;
+                    }
+
+                    const data = JSON.parse(res.responseText);
+                    
+                    if (data.success && data.signals && data.signals.length > 0) {
+                        // Find best signal
+                        let bestSignal = null;
+                        
+                        if (switchEnabled) {
+                            // Can use any signal from favorites
+                            bestSignal = data.signals[0];
+                        } else {
+                            // Must match current asset
+                            const currentAssetNorm = normalizeAsset(getCurrentAsset());
+                            for (const sig of data.signals) {
+                                if (normalizeAsset(sig.symbol) === currentAssetNorm) {
+                                    bestSignal = sig;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (bestSignal) {
+                            log(`🔍 SCAN SIGNAL: ${bestSignal.direction} ${bestSignal.symbol}`);
+                            executeScanTrade(bestSignal);
+                        } else {
+                            log('No matching signals for current asset');
+                            updateStatusDot('connected');
+                        }
+                    } else {
+                        updateStatusDot('connected');
+                    }
+                } catch (e) {
+                    log('Scan error: ' + e.message);
+                    updateStatusDot('connected');
+                }
+            },
+            onerror: function() {
+                isScanning = false;
+                updateStatusDot('');
+                log('Scan connection error');
+            }
+        });
+    }
+
+    function normalizeAsset(asset) {
+        if (!asset) return '';
+        return asset.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+    }
+
+    // ===========================================
+    // TRADE EXECUTION
+    // ===========================================
+    async function executeAppSignalTrade(signal) {
+        if (isTrading) {
+            log('Already trading');
+            return;
+        }
+
+        isTrading = true;
+        updateStatusDot('trading');
+        
+        // Determine direction with local invert
+        let direction = (signal.direction || '').toUpperCase();
+        let isCall = direction === 'CALL' || direction === 'BUY' || direction === 'UP';
+        
+        // Apply LOCAL invert setting (overrides app)
+        if (invertEnabled) {
+            isCall = !isCall;
+            log(`🔄 INVERTED (local): ${direction} → ${isCall ? 'CALL' : 'PUT'}`);
+        }
+
+        const finalDirection = isCall ? 'CALL' : 'PUT';
+        updateSignalDisplay(finalDirection, signal.symbol, isCall ? 'call' : 'put');
+
+        // Play APP SIGNAL sound
+        playAppSignalSound();
+
+        // Wait for buttons
+        if (!findTradeButtons()) {
+            await sleep(1000);
+            if (!findTradeButtons()) {
+                log('Buttons not found');
+                isTrading = false;
+                updateStatusDot('connected');
+                return;
+            }
+        }
+
+        // Click the button
+        const clicked = clickTradeButton(isCall);
+        
+        if (clicked) {
+            tradeCount++;
+            updateTradeCount();
+            lastTradeTime = Date.now();
+            log(`✅ APP TRADE #${tradeCount}: ${finalDirection} on ${signal.symbol}`);
+            
             try {
                 GM_notification({
-                    title: '🔄 SIGNAL INVERSION ACTIVE',
-                    text: 'CALL → PUT, PUT → CALL',
+                    title: `📡 App Signal: ${finalDirection}`,
+                    text: `${signal.symbol} - Trade executed`,
                     timeout: 3000
                 });
-            } catch (e) {}
+            } catch(e) {}
         }
-    }
-    
-    function updateInvertButton() {
-        const btn = document.getElementById('gpt-invert');
-        if (btn) {
-            if (invertSignals) {
-                btn.textContent = '🔄 INVERT ON';
-                btn.classList.add('on');
-            } else {
-                btn.textContent = 'INVERT';
-                btn.classList.remove('on');
-            }
-        }
+
+        // Cooldown
+        setTimeout(() => {
+            isTrading = false;
+            updateStatusDot('connected');
+            updateSignalDisplay('READY', null, 'wait');
+        }, 2000);
     }
 
-    function makeDraggable(el) {
-        const dragHandle = document.getElementById('gpt-drag-handle') || el;
-        let isDragging = false;
-        let startX, startY, startLeft, startTop;
-        
-        // Get initial position
-        const rect = el.getBoundingClientRect();
-        el.style.left = rect.left + 'px';
-        el.style.top = rect.top + 'px';
-        el.style.right = 'auto';
-        
-        function onStart(e) {
-            // Ignore if clicking a button
-            if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
-            
-            isDragging = true;
-            
-            // Get start position
-            if (e.type === 'touchstart') {
-                startX = e.touches[0].clientX;
-                startY = e.touches[0].clientY;
-            } else {
-                startX = e.clientX;
-                startY = e.clientY;
-            }
-            
-            startLeft = el.offsetLeft;
-            startTop = el.offsetTop;
-            
-            // Prevent text selection and default behavior
-            e.preventDefault();
-            
-            // Add move and end listeners to document
-            document.addEventListener('mousemove', onMove);
-            document.addEventListener('mouseup', onEnd);
-            document.addEventListener('touchmove', onMove, { passive: false });
-            document.addEventListener('touchend', onEnd);
+    async function executeScanTrade(signal) {
+        if (isTrading) {
+            log('Already trading');
+            return;
         }
-        
-        function onMove(e) {
-            if (!isDragging) return;
-            
-            e.preventDefault();
-            
-            let currentX, currentY;
-            if (e.type === 'touchmove') {
-                currentX = e.touches[0].clientX;
-                currentY = e.touches[0].clientY;
-            } else {
-                currentX = e.clientX;
-                currentY = e.clientY;
+
+        isTrading = true;
+        updateStatusDot('trading');
+
+        // Switch asset if enabled and needed
+        if (switchEnabled && signal.symbol) {
+            const switched = await switchToAsset(signal.symbol);
+            if (!switched) {
+                log('Asset switch failed');
+                isTrading = false;
+                updateStatusDot('connected');
+                return;
             }
-            
-            // Calculate new position
-            const deltaX = currentX - startX;
-            const deltaY = currentY - startY;
-            
-            let newLeft = startLeft + deltaX;
-            let newTop = startTop + deltaY;
-            
-            // Keep panel within viewport
-            const maxLeft = window.innerWidth - el.offsetWidth;
-            const maxTop = window.innerHeight - el.offsetHeight;
-            
-            newLeft = Math.max(0, Math.min(newLeft, maxLeft));
-            newTop = Math.max(0, Math.min(newTop, maxTop));
-            
-            el.style.left = newLeft + 'px';
-            el.style.top = newTop + 'px';
+            await sleep(500);
         }
+
+        // Determine direction with local invert
+        let direction = (signal.direction || '').toUpperCase();
+        let isCall = direction === 'CALL' || direction === 'BUY' || direction === 'UP';
         
-        function onEnd() {
-            isDragging = false;
-            document.removeEventListener('mousemove', onMove);
-            document.removeEventListener('mouseup', onEnd);
-            document.removeEventListener('touchmove', onMove);
-            document.removeEventListener('touchend', onEnd);
+        // Apply LOCAL invert setting
+        if (invertEnabled) {
+            isCall = !isCall;
+            log(`🔄 INVERTED (local): ${direction} → ${isCall ? 'CALL' : 'PUT'}`);
+        }
+
+        const finalDirection = isCall ? 'CALL' : 'PUT';
+        updateSignalDisplay(finalDirection, signal.symbol, isCall ? 'call' : 'put');
+
+        // Play SCAN SIGNAL sound (different from app)
+        playScanSignalSound();
+
+        // Wait for buttons
+        if (!findTradeButtons()) {
+            await sleep(1000);
+            if (!findTradeButtons()) {
+                log('Buttons not found');
+                isTrading = false;
+                updateStatusDot('connected');
+                return;
+            }
+        }
+
+        // Click the button
+        const clicked = clickTradeButton(isCall);
+        
+        if (clicked) {
+            tradeCount++;
+            updateTradeCount();
+            lastTradeTime = Date.now();
+            log(`✅ SCAN TRADE #${tradeCount}: ${finalDirection} on ${signal.symbol}`);
             
-            // Save position
             try {
-                GM_setValue('panelLeft', el.style.left);
-                GM_setValue('panelTop', el.style.top);
-            } catch (e) {}
+                GM_notification({
+                    title: `🔍 Scan Signal: ${finalDirection}`,
+                    text: `${signal.symbol} - Trade executed`,
+                    timeout: 3000
+                });
+            } catch(e) {}
         }
-        
-        // Add event listeners to drag handle
-        dragHandle.addEventListener('mousedown', onStart);
-        dragHandle.addEventListener('touchstart', onStart, { passive: false });
-        
-        // Restore saved position
-        try {
-            const savedLeft = GM_getValue('panelLeft', null);
-            const savedTop = GM_getValue('panelTop', null);
-            if (savedLeft && savedTop) {
-                el.style.left = savedLeft;
-                el.style.top = savedTop;
-            }
-        } catch (e) {}
+
+        // Cooldown
+        setTimeout(() => {
+            isTrading = false;
+            updateStatusDot('connected');
+            updateSignalDisplay('READY', null, 'wait');
+        }, 2000);
     }
 
-    function updateUI(status, signal = null) {
-        const dot = document.getElementById('gpt-dot');
-        const sigEl = document.getElementById('gpt-signal');
-        const tradesEl = document.getElementById('gpt-trades');
-        const btnStatus = document.getElementById('gpt-btn-status');
-        const modeStatus = document.getElementById('gpt-mode-status');
-        const switchStatus = document.getElementById('gpt-switch-status');
-        const assetInfo = document.getElementById('gpt-asset');
-        const payoutInfo = document.getElementById('gpt-payout');
-        const expiryInfo = document.getElementById('gpt-expiry');
+    function clickTradeButton(isCall) {
+        const selector = isCall ? '.btn-call' : '.btn-put';
+        const btn = document.querySelector(selector);
         
-        if (dot) {
-            dot.className = 'dot';
-            if (status === 'connected') dot.classList.add('connected');
-            else if (status === 'trading') dot.classList.add('trading');
+        if (btn && btn.offsetParent !== null) {
+            log(`Clicking ${isCall ? 'CALL' : 'PUT'} button`);
+            btn.click();
+            return true;
         }
         
-        if (signal && sigEl) {
-            let isCall = signal.direction === 'CALL' || signal.direction === 'BUY';
-            // Apply inversion for display
-            if (invertSignals) {
-                isCall = !isCall;
-            }
-            const invLabel = invertSignals ? '🔄' : '';
-            sigEl.textContent = invLabel + (isCall ? 'CALL' : 'PUT');
-            sigEl.className = 'signal ' + (isCall ? 'call' : 'put');
-        }
-        
-        if (tradesEl) tradesEl.textContent = tradeCount;
-        if (btnStatus) {
-            btnStatus.textContent = buttonsReady ? 'BTN: OK' : 'BTN: NO';
-            btnStatus.className = 'status-badge ' + (buttonsReady ? 'ok' : 'no');
-        }
-        if (assetInfo && signal && signal.symbol) {
-            assetInfo.textContent = `Asset: ${signal.symbol.replace('_OTC', '')}`;
-        }
-        if (payoutInfo) {
-            if (signal && signal.payout) {
-                payoutInfo.textContent = `Pay: ${signal.payout}%`;
-                payoutInfo.style.background = signal.payout >= CONFIG.MIN_PAYOUT ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)';
-            } else {
-                // Try to get current payout from UI
-                const currentPay = getCurrentPayout();
-                if (currentPay !== null) {
-                    payoutInfo.textContent = `Pay: ${currentPay}%`;
-                    payoutInfo.style.background = currentPay >= CONFIG.MIN_PAYOUT ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)';
-                }
-            }
-        }
-        if (expiryInfo && signal && signal.expiry_seconds) {
-            const expSec = signal.expiry_seconds;
-            const expDisplay = expSec >= 60 ? `${Math.floor(expSec/60)}m` : `${expSec}s`;
-            expiryInfo.textContent = `Exp: ${expDisplay}`;
-        }
-        if (modeStatus) {
-            // SCAN ON = Auto-scan markets, SCAN OFF = Receive from app
-            let modeText = CONFIG.SCAN_MODE ? 'AUTO' : 'APP';
-            if (CONFIG.SCAN_MODE && CONFIG.SCAN_FAVORITES_ONLY) {
-                modeText = 'FAV';
-            }
-            if (invertSignals) modeText += ' 🔄';
-            modeStatus.textContent = modeText;
-            modeStatus.className = 'status-badge ' + (CONFIG.SCAN_MODE ? 'ok' : '');
-            modeStatus.title = CONFIG.SCAN_MODE ? 'Auto-scanning markets' : 'Receiving signals from app';
-        }
-        if (switchStatus) {
-            switchStatus.textContent = CONFIG.AUTO_SWITCH_ASSET ? 'SW: MULTI' : 'SW: CURR';
-            switchStatus.className = 'status-badge ' + (CONFIG.AUTO_SWITCH_ASSET ? 'ok' : 'no');
-        }
+        log('Button not found: ' + selector);
+        return false;
     }
 
     // ===========================================
-    // ASSET FUNCTIONS
+    // ASSET SWITCHING
     // ===========================================
-    function getCurrentAsset() {
-        const selectors = ['.pair-number-wrap .pair-title', '.pair-number-wrap', '.current-pair'];
-        for (const sel of selectors) {
-            const el = document.querySelector(sel);
-            if (el && el.textContent) {
-                const text = el.textContent.trim();
-                if (text.includes('/') || text.includes('OTC')) {
-                    currentAsset = text;
-                    return text;
-                }
-            }
-        }
-        return null;
-    }
-    
-    // Get current asset's payout percentage from Pocket Option UI
-    function getCurrentPayout() {
-        // Try multiple selectors for payout display
-        const payoutSelectors = [
-            '.pair-number-wrap .pair-profit',
-            '.pair-profit',
-            '.profit-percent',
-            '.payout',
-            '[class*="profit"]',
-            '[class*="payout"]'
+    async function switchToAsset(targetAsset) {
+        log(`Switching to ${targetAsset}...`);
+        
+        // Try to find asset selector
+        const selectors = [
+            '.pair-selector', '.asset-selector', '[data-testid="asset-selector"]',
+            '.asset-dropdown', '.trading-pair-selector'
         ];
         
-        for (const sel of payoutSelectors) {
+        for (const sel of selectors) {
             const el = document.querySelector(sel);
-            if (el && el.textContent) {
-                const text = el.textContent.trim();
-                // Extract number from text like "+85%" or "85%"
-                const match = text.match(/(\d+)\s*%/);
-                if (match) {
-                    return parseInt(match[1]);
-                }
-            }
-        }
-        return null;
-    }
-    
-    // Get list of favorite assets from Pocket Option
-    async function getFavoriteAssets() {
-        const favorites = [];
-        
-        try {
-            // Open asset selector
-            const pairSelector = document.querySelector('.pair-number-wrap');
-            if (!pairSelector) {
-                log('Cannot open asset selector for favorites');
-                return null;
-            }
-            
-            pairSelector.click();
-            await sleep(1000);
-            
-            // Look for favorites section or starred items
-            // Pocket Option typically shows favorites with a star icon or in a "Favorites" tab
-            const favoriteSelectors = [
-                '.alist__item--favorite',
-                '.alist__item.favorite',
-                '[class*="favorite"]',
-                '.asset-item.starred',
-                '.alist__item:has(.star-icon.active)',
-                '.alist__item:has([class*="star"][class*="active"])'
-            ];
-            
-            let favoriteItems = [];
-            
-            // First try to click on Favorites tab if it exists
-            const favTabs = document.querySelectorAll('.alist__tab, .tab-item, [class*="tab"]');
-            for (const tab of favTabs) {
-                const tabText = tab.textContent.toLowerCase();
-                if (tabText.includes('favor') || tabText.includes('star')) {
-                    log('Found Favorites tab, clicking...');
-                    tab.click();
-                    await sleep(500);
-                    break;
-                }
-            }
-            
-            // Now get visible items (should be favorites if tab was clicked)
-            for (const sel of favoriteSelectors) {
-                favoriteItems = document.querySelectorAll(sel);
-                if (favoriteItems.length > 0) break;
-            }
-            
-            // If no favorites found via class, look for starred items
-            if (favoriteItems.length === 0) {
-                const allItems = document.querySelectorAll('.alist__item:not(.alist__item--no-active)');
-                for (const item of allItems) {
-                    // Check if item has an active star
-                    const star = item.querySelector('[class*="star"], [class*="fav"], .ico-star');
-                    if (star) {
-                        const starClasses = star.className || '';
-                        const isActive = starClasses.includes('active') || 
-                                        starClasses.includes('filled') ||
-                                        starClasses.includes('selected') ||
-                                        star.style.color === 'gold' ||
-                                        star.style.color === 'yellow';
-                        if (isActive) {
-                            favoriteItems = [...favoriteItems, item];
-                        }
-                    }
-                }
-            }
-            
-            // Extract asset names and payouts from favorite items
-            for (const item of favoriteItems) {
-                if (item.style.display === 'none' || item.offsetParent === null) continue;
-                
-                const nameEl = item.querySelector('.alist__label, .asset-name, [class*="name"]');
-                const payoutEl = item.querySelector('.alist__profit, .profit, [class*="profit"], [class*="payout"]');
-                
-                if (nameEl) {
-                    const assetName = nameEl.textContent.trim();
-                    let payout = 0;
-                    
-                    if (payoutEl) {
-                        const payoutText = payoutEl.textContent.trim();
-                        const match = payoutText.match(/(\d+)/);
-                        if (match) payout = parseInt(match[1]);
-                    }
-                    
-                    // Convert to API format
-                    const apiFormat = assetName.replace('/', '').replace(' ', '_').toUpperCase();
-                    
-                    favorites.push({
-                        name: assetName,
-                        apiSymbol: apiFormat,
-                        payout: payout
-                    });
-                }
-            }
-            
-            // Close dropdown
-            closeDropdown();
-            
-            log(`Found ${favorites.length} favorites`);
-            return favorites;
-            
-        } catch (e) {
-            log(`Error getting favorites: ${e.message}`);
-            closeDropdown();
-            return null;
-        }
-    }
-    
-    // Get payout for a specific asset by opening selector and finding it
-    async function getAssetPayout(assetSymbol) {
-        try {
-            const pairSelector = document.querySelector('.pair-number-wrap');
-            if (!pairSelector) return null;
-            
-            pairSelector.click();
-            await sleep(800);
-            
-            // Search for the asset
-            const searchField = document.querySelector('.search__field') || 
-                               document.querySelector('input[type="search"]');
-            
-            if (searchField) {
-                const searchTerm = assetSymbol.replace('_OTC', '').replace('_', '').substring(0, 6);
-                searchField.value = '';
-                searchField.focus();
-                
-                for (const char of searchTerm) {
-                    searchField.value += char;
-                    searchField.dispatchEvent(new Event('input', { bubbles: true }));
-                    await sleep(50);
-                }
+            if (el) {
+                el.click();
                 await sleep(500);
-            }
-            
-            // Find the asset and its payout
-            const items = document.querySelectorAll('.alist__item:not(.alist__item--no-active)');
-            for (const item of items) {
-                if (item.style.display === 'none' || item.offsetParent === null) continue;
                 
-                const nameEl = item.querySelector('.alist__label, .asset-name');
-                const payoutEl = item.querySelector('.alist__profit, .profit, [class*="profit"]');
-                
-                if (nameEl && nameEl.textContent.toUpperCase().includes(assetSymbol.substring(0, 3))) {
-                    let payout = 0;
-                    if (payoutEl) {
-                        const match = payoutEl.textContent.match(/(\d+)/);
-                        if (match) payout = parseInt(match[1]);
-                    }
-                    closeDropdown();
-                    return payout;
-                }
-            }
-            
-            closeDropdown();
-            return null;
-            
-        } catch (e) {
-            closeDropdown();
-            return null;
-        }
-    }
-
-    function normalizeAssetSymbol(symbol) {
-        if (!symbol) return null;
-        const mapped = ASSET_MAPPINGS[symbol.toUpperCase()];
-        if (mapped) return mapped;
-        
-        let clean = symbol.toUpperCase().replace('_OTC', '').replace('_', '');
-        if (clean.length === 6) {
-            clean = clean.substring(0, 3) + '/' + clean.substring(3);
-        }
-        return clean + ' OTC';
-    }
-
-    // ===========================================
-    // ASSET SWITCHING - IMPROVED v4.7
-    // ===========================================
-    async function switchToAsset(targetSymbol) {
-        const targetDisplayName = normalizeAssetSymbol(targetSymbol);
-        if (!targetDisplayName) {
-            log(`Cannot parse: ${targetSymbol}`);
-            return false;
-        }
-        
-        // Extract components
-        const isOTC = targetSymbol.includes('OTC') || targetDisplayName.includes('OTC');
-        const baseSymbol = targetDisplayName.replace(' OTC', '').replace('/', '').toUpperCase();
-        const searchTerm = baseSymbol.substring(0, 6);
-        
-        log(`=== SWITCHING TO: ${targetSymbol} ===`);
-        log(`Base: ${baseSymbol}, OTC: ${isOTC}, Search: ${searchTerm}`);
-        
-        const current = getCurrentAsset();
-        log(`Current asset: "${current}"`);
-        
-        // Check if already on correct asset
-        if (current) {
-            const currentBase = current.replace(' OTC', '').replace('/', '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
-            const currentIsOTC = current.toLowerCase().includes('otc');
-            
-            if (currentBase === baseSymbol && currentIsOTC === isOTC) {
-                log(`Already on correct asset: ${current}`);
-                return true;
-            }
-        }
-        
-        try {
-            // Step 1: Click pair selector to open dropdown
-            const pairSelector = document.querySelector('.pair-number-wrap');
-            if (!pairSelector) {
-                log('ERROR: Pair selector not found');
-                return false;
-            }
-            
-            log('Opening asset selector...');
-            pairSelector.click();
-            await sleep(1200); // Wait for dropdown to fully open
-            
-            // Step 2: Find search field (try multiple selectors)
-            let searchField = document.querySelector('.search__field') || 
-                             document.querySelector('input[type="search"]') ||
-                             document.querySelector('input.input-search') ||
-                             document.querySelector('[placeholder*="Search"]');
-            
-            if (!searchField) {
-                log('ERROR: Search field not found, trying alternative...');
-                // Try to find any input in the dropdown
-                const dropdown = document.querySelector('.alist, .asset-list, [class*="dropdown"]');
-                if (dropdown) {
-                    searchField = dropdown.querySelector('input');
-                }
-            }
-            
-            if (!searchField) {
-                log('ERROR: No search field found');
-                closeDropdown();
-                return false;
-            }
-            
-            // Step 3: Clear and focus search field
-            log('Clearing search field...');
-            searchField.value = '';
-            searchField.focus();
-            searchField.click();
-            await sleep(200);
-            
-            // Step 4: Type search term character by character
-            log(`Typing search: "${searchTerm}"`);
-            for (const char of searchTerm) {
-                searchField.value += char;
-                searchField.dispatchEvent(new Event('input', { bubbles: true }));
-                searchField.dispatchEvent(new Event('change', { bubbles: true }));
-                searchField.dispatchEvent(new Event('keyup', { bubbles: true }));
-                await sleep(100);
-            }
-            
-            await sleep(1000); // Wait for search results
-            
-            // Step 5: Find all visible asset items
-            const assetItems = document.querySelectorAll(
-                '.alist__item:not(.alist__item--no-active), ' +
-                '.asset-item:not(.hidden), ' +
-                '[class*="asset-list"] > div:not(.hidden)'
-            );
-            log(`Found ${assetItems.length} asset items`);
-            
-            // Step 6: Score and find best match
-            let bestMatch = null;
-            let bestMatchScore = 0;
-            let bestMatchText = '';
-            
-            for (const item of assetItems) {
-                // Skip hidden items
-                if (item.style.display === 'none' || item.offsetParent === null) {
-                    continue;
+                // Search for asset
+                const searchInput = document.querySelector('input[type="search"], input[type="text"]');
+                if (searchInput) {
+                    searchInput.value = targetAsset.replace('_OTC', '').replace('_', '');
+                    searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    await sleep(500);
                 }
                 
-                const itemText = item.textContent.trim().toUpperCase();
-                const itemIsOTC = itemText.includes('OTC');
-                const itemBase = itemText.replace(/OTC/gi, '').replace(/[^A-Z0-9]/g, '').substring(0, 6);
-                
-                // Calculate match score
-                let score = 0;
-                
-                // Full base symbol match = highest priority
-                if (itemBase === baseSymbol) {
-                    score += 100;
-                } else if (itemBase.startsWith(baseSymbol.substring(0, 3))) {
-                    // Partial match (first 3 chars)
-                    score += 30;
-                } else {
-                    continue; // Skip non-matching items
-                }
-                
-                // OTC preference - critical for correct selection
-                if (isOTC && itemIsOTC) {
-                    score += 50; // We want OTC and this is OTC
-                } else if (!isOTC && !itemIsOTC) {
-                    score += 50; // We want regular and this is regular
-                } else if (isOTC && !itemIsOTC) {
-                    score -= 100; // We want OTC but this is regular - big penalty
-                } else if (!isOTC && itemIsOTC) {
-                    score -= 100; // We want regular but this is OTC - big penalty
-                }
-                
-                if (score > bestMatchScore) {
-                    bestMatchScore = score;
-                    bestMatch = item;
-                    bestMatchText = itemText;
-                    log(`Match candidate: "${itemText}" (score: ${score})`);
-                }
-            }
-            
-            // Step 7: Click best match if found
-            if (bestMatch && bestMatchScore >= 100) {
-                log(`Selecting: "${bestMatchText}" (score: ${bestMatchScore})`);
-                
-                // Try different click targets
-                const clickTargets = [
-                    bestMatch.querySelector('.alist__label'),
-                    bestMatch.querySelector('[class*="name"]'),
-                    bestMatch.querySelector('span'),
-                    bestMatch
-                ];
-                
-                for (const target of clickTargets) {
-                    if (target) {
-                        // Multiple click methods for reliability
-                        target.click();
-                        await sleep(50);
-                        
-                        // Dispatch proper mouse events
-                        const mouseDown = new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window });
-                        const mouseUp = new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window });
-                        const click = new MouseEvent('click', { bubbles: true, cancelable: true, view: window });
-                        
-                        target.dispatchEvent(mouseDown);
-                        target.dispatchEvent(mouseUp);
-                        target.dispatchEvent(click);
-                        
-                        await sleep(100);
-                    }
-                }
-                
-                await sleep(600);
-                
-                // Verify switch was successful
-                const newAsset = getCurrentAsset();
-                log(`After switch: "${newAsset}"`);
-                
-                if (newAsset) {
-                    const newBase = newAsset.replace(' OTC', '').replace('/', '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
-                    const newIsOTC = newAsset.toLowerCase().includes('otc');
-                    
-                    if (newBase === baseSymbol && newIsOTC === isOTC) {
-                        currentAsset = newAsset;
-                        log(`SUCCESS: Now on ${newAsset}`);
+                // Click on result
+                const items = document.querySelectorAll('.asset-item, .pair-item, [data-asset]');
+                for (const item of items) {
+                    if (item.textContent.includes(targetAsset.replace('_', '/')) ||
+                        item.textContent.includes(targetAsset.replace('_OTC', ''))) {
+                        item.click();
+                        await sleep(500);
                         return true;
                     }
                 }
-                
-                log('WARNING: Asset may not have switched correctly');
-            } else {
-                log(`No good OTC match found (best score: ${bestMatchScore})`);
-            }
-            
-            // Step 8: Fallback - try clicking first visible OTC item
-            if (isOTC) {
-                log('Fallback: Looking for any visible OTC item...');
-                for (const item of assetItems) {
-                    if (item.style.display !== 'none' && item.offsetParent !== null) {
-                        const text = item.textContent.trim().toUpperCase();
-                        if (text.includes('OTC') && text.includes(searchTerm.substring(0, 3))) {
-                            log(`Fallback clicking: ${text}`);
-                            item.click();
-                            await sleep(400);
-                            
-                            const newAsset = getCurrentAsset();
-                            if (newAsset && newAsset.toLowerCase().includes('otc')) {
-                                currentAsset = newAsset;
-                                log(`Fallback SUCCESS: ${newAsset}`);
-                                return true;
-                            }
-                        }
-                    }
-                }
-            }
-            
-            // Step 9: Last resort - press Enter
-            log('Last resort: pressing Enter...');
-            const enterEvent = new KeyboardEvent('keydown', {
-                key: 'Enter',
-                keyCode: 13,
-                which: 13,
-                bubbles: true,
-                cancelable: true
-            });
-            searchField.dispatchEvent(enterEvent);
-            await sleep(400);
-            
-            closeDropdown();
-            return false;
-            
-        } catch (e) {
-            log(`Switch error: ${e.message}`);
-            closeDropdown();
-            return false;
-        }
-    }
-    
-    function closeDropdown() {
-        try {
-            // Press Escape
-            document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-            
-            // Click outside dropdown
-            const overlays = document.querySelectorAll('.modal-backdrop, .dropdown-backdrop, .overlay, .alist__backdrop');
-            for (const overlay of overlays) {
-                overlay.click();
-            }
-        } catch (e) {}
-    }
-
-    // ===========================================
-    // TIMEFRAME SWITCHING
-    // ===========================================
-    // ===========================================
-    // TRADE EXPIRATION SWITCHING - NOT CHART TIMEFRAME
-    // ===========================================
-    // This changes the TRADE EXPIRATION (near amount section), not chart timeframe (M1, M5, etc.)
-    
-    async function switchToTimeframe(expirySeconds) {
-        if (!CONFIG.AUTO_SWITCH_TIMEFRAME || !expirySeconds) {
-            return true; // Skip if disabled
-        }
-        
-        log(`⏱️ Setting trade expiration to ${expirySeconds}s...`);
-        
-        try {
-            // IMPORTANT: We need the TRADE EXPIRATION selector, not chart timeframe
-            // Trade expiration is in the trading panel near the amount input
-            // It shows values like "1:00", "0:30", "5:00" (minutes:seconds)
-            
-            // First, find the trading panel / trade controls area
-            const tradingPanelSelectors = [
-                '.trading-panel',
-                '.trade-panel', 
-                '.option-panel',
-                '.deals-group',
-                '.trading-block',
-                '[class*="trading-panel"]',
-                '[class*="trade-controls"]'
-            ];
-            
-            let tradingPanel = null;
-            for (const sel of tradingPanelSelectors) {
-                tradingPanel = document.querySelector(sel);
-                if (tradingPanel) break;
-            }
-            
-            // Look for amount input to help locate the trade expiration nearby
-            const amountInput = document.querySelector('input[name*="amount"]') ||
-                               document.querySelector('input[class*="amount"]') ||
-                               document.querySelector('.amount-input') ||
-                               document.querySelector('[class*="deal-amount"] input');
-            
-            // Trade expiration is typically ABOVE or NEAR the amount input
-            // Look for time display specifically in trade panel area
-            
-            // Specific selectors for TRADE EXPIRATION (not chart timeframe)
-            const expirationSelectors = [
-                // Most common PO trade expiration selectors
-                '.deal-time__value',
-                '.deal-time',
-                '.option__time-item',
-                '.option-time-item',
-                '.trading-panel__time',
-                '.time-wrapper__item',
-                '.time-wrap__value',
-                // Near amount section
-                '.deals-group .time-item',
-                '.trading-panel .time-item',
-                // Generic but within trade panel
-                '[class*="deal"][class*="time"]',
-                '[class*="expir"][class*="value"]',
-                '[class*="trade"][class*="time"]'
-            ];
-            
-            let expirationElement = null;
-            
-            // Try specific selectors first
-            for (const sel of expirationSelectors) {
-                expirationElement = document.querySelector(sel);
-                if (expirationElement && expirationElement.offsetParent !== null) {
-                    log(`Found expiration element: ${sel}`);
-                    break;
-                }
-            }
-            
-            // If not found, look within trading panel for time display
-            if (!expirationElement && tradingPanel) {
-                const panelElements = tradingPanel.querySelectorAll('*');
-                for (const el of panelElements) {
-                    if (el.offsetParent === null) continue;
-                    const text = el.textContent.trim();
-                    const classes = el.className || '';
-                    
-                    // Skip if it looks like chart timeframe (M1, M5, H1, etc.)
-                    if (/^[MHD]\d+$/i.test(text)) continue;
-                    
-                    // Match trade expiration format: "0:30", "1:00", "5:00"
-                    if (/^\d{1,2}:\d{2}$/.test(text) && !classes.includes('chart')) {
-                        expirationElement = el;
-                        log(`Found expiration in panel: "${text}"`);
-                        break;
-                    }
-                }
-            }
-            
-            // Fallback: Look near amount input
-            if (!expirationElement && amountInput) {
-                const parent = amountInput.closest('.deals-group, .trading-panel, .option-panel, [class*="trade"]');
-                if (parent) {
-                    const timeElements = parent.querySelectorAll('[class*="time"]');
-                    for (const el of timeElements) {
-                        const text = el.textContent.trim();
-                        if (/^\d{1,2}:\d{2}$/.test(text)) {
-                            expirationElement = el;
-                            log(`Found expiration near amount: "${text}"`);
-                            break;
-                        }
-                    }
-                }
-            }
-            
-            // Last resort: Find clickable time display that's NOT in chart area
-            if (!expirationElement) {
-                const allTimeElements = document.querySelectorAll('[class*="time"]');
-                for (const el of allTimeElements) {
-                    if (el.offsetParent === null) continue;
-                    
-                    // Skip chart timeframe elements
-                    const isChart = el.closest('.chart, [class*="chart"], .candles, [class*="candle"]');
-                    if (isChart) continue;
-                    
-                    const text = el.textContent.trim();
-                    // Trade expiration format: "0:30", "1:00", etc. (not "M1", "M5")
-                    if (/^\d{1,2}:\d{2}$/.test(text)) {
-                        expirationElement = el;
-                        log(`Found expiration (fallback): "${text}"`);
-                        break;
-                    }
-                }
-            }
-            
-            if (!expirationElement) {
-                log('⚠️ Trade expiration selector not found');
-                return false;
-            }
-            
-            // Click to open expiration dropdown
-            log('Opening expiration picker...');
-            expirationElement.click();
-            await sleep(600);
-            
-            // Try parent if dropdown didn't open
-            const dropdownOpened = document.querySelector('[class*="time-list"], [class*="dropdown"]:not([class*="chart"]), [class*="picker-list"]');
-            if (!dropdownOpened) {
-                const parent = expirationElement.parentElement;
-                if (parent) {
-                    parent.click();
-                    await sleep(600);
-                }
-            }
-            
-            // Find and click the correct expiration time
-            const targetTime = formatExpirationTime(expirySeconds);
-            log(`Looking for expiration: ${targetTime}`);
-            
-            // Get expiration options (NOT chart timeframe options)
-            let options = [];
-            const optionSelectors = [
-                '.time-list__item',
-                '.time-item:not([class*="chart"])',
-                '[class*="time-option"]',
-                '[class*="dropdown"]:not([class*="chart"]) [class*="item"]',
-                '.option-time-item'
-            ];
-            
-            for (const sel of optionSelectors) {
-                options = document.querySelectorAll(sel);
-                // Filter out chart timeframe options
-                options = Array.from(options).filter(opt => {
-                    const text = opt.textContent.trim();
-                    // Exclude M1, M5, H1, D1 style (chart timeframes)
-                    return !/^[MHD]\d+$/i.test(text);
-                });
-                if (options.length > 0) {
-                    log(`Found ${options.length} expiration options`);
-                    break;
-                }
-            }
-            
-            if (options.length === 0) {
-                log('⚠️ No expiration options found');
-                closeDropdowns();
-                return false;
-            }
-            
-            // Click matching expiration option
-            let clicked = false;
-            const targetFormats = getExpirationFormats(expirySeconds);
-            
-            for (const opt of options) {
-                if (opt.offsetParent === null) continue;
-                const text = opt.textContent.trim();
-                
-                for (const target of targetFormats) {
-                    if (text === target || text.includes(target)) {
-                        log(`✓ Clicking expiration: "${text}"`);
-                        opt.click();
-                        clicked = true;
-                        await sleep(300);
-                        break;
-                    }
-                }
-                if (clicked) break;
-            }
-            
-            closeDropdowns();
-            
-            if (clicked) {
-                log(`✓ Trade expiration set to ${expirySeconds}s`);
-                return true;
-            } else {
-                log(`⚠️ Could not find ${expirySeconds}s expiration option`);
-                return false;
-            }
-            
-        } catch (e) {
-            log(`Expiration switch error: ${e.message}`);
-            closeDropdowns();
-            return false;
-        }
-    }
-    
-    // Format seconds to expiration display format (mm:ss)
-    function formatExpirationTime(seconds) {
-        const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
-    }
-    
-    // Generate various expiration time formats to match
-    function getExpirationFormats(seconds) {
-        const formats = [];
-        const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        
-        // Primary format: "0:30", "1:00", "5:00"
-        formats.push(`${mins}:${secs.toString().padStart(2, '0')}`);
-        
-        // Alternative formats
-        if (seconds < 60) {
-            formats.push(`0:${seconds.toString().padStart(2, '0')}`);
-            formats.push(`${seconds}s`);
-            formats.push(`${seconds} sec`);
-        } else {
-            formats.push(`${mins}m`);
-            formats.push(`${mins} min`);
-            if (secs === 0) {
-                formats.push(`${mins}:00`);
             }
         }
         
-        return formats;
-    }
-    
-    // Close any open dropdowns
-    function closeDropdowns() {
-        try {
-            // Click outside
-            document.body.click();
-            // Press Escape
-            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-            // Click any overlay/backdrop
-            const overlays = document.querySelectorAll('[class*="overlay"], [class*="backdrop"]');
-            overlays.forEach(o => o.click());
-        } catch (e) {}
-    }
-    
-    // Get current trade expiration from PO UI
-    function getCurrentTimeframe() {
-        // Look for trade expiration display (NOT chart timeframe)
-        const selectors = [
-            '.deal-time__value',
-            '.deal-time',
-            '.option__time-item',
-            '.time-wrap__value',
-            '.trading-panel .time-item'
-        ];
-        
-        for (const sel of selectors) {
-            const el = document.querySelector(sel);
-            if (el && el.textContent) {
-                const text = el.textContent.trim();
-                // Skip chart timeframes (M1, M5, H1, etc.)
-                if (/^[MHD]\d+$/i.test(text)) continue;
-                return parseTimeToSeconds(text);
-            }
-        }
-        
-        return null;
-    }
-    
-    // Parse time text to seconds
-    function parseTimeToSeconds(text) {
-        if (!text) return 0;
-        text = text.trim().toLowerCase();
-        
-        // "1:30" or "0:30" format
-        const colonMatch = text.match(/^(\d{1,2}):(\d{2})$/);
-        if (colonMatch) {
-            return parseInt(colonMatch[1]) * 60 + parseInt(colonMatch[2]);
-        }
-        
-        // "30s"
-        if (text.endsWith('s')) {
-            return parseInt(text) || 0;
-        }
-        
-        // "1m" or "2min"
-        if (text.includes('m')) {
-            return (parseInt(text) || 0) * 60;
-        }
-        
-        return 0;
+        return false;
     }
 
     function sleep(ms) {
@@ -1338,793 +863,26 @@
     }
 
     // ===========================================
-    // BUTTON DETECTION
-    // ===========================================
-    function findTradeButtons() {
-        const callBtn = document.querySelector('.btn-call');
-        const putBtn = document.querySelector('.btn-put');
-        buttonsReady = callBtn && putBtn && callBtn.offsetParent !== null;
-        return { callBtn, putBtn, ready: buttonsReady };
-    }
-
-    async function waitForButtons(timeout = 5000) {
-        const start = Date.now();
-        while (Date.now() - start < timeout) {
-            const { ready } = findTradeButtons();
-            if (ready) return true;
-            await sleep(300);
-        }
-        return false;
-    }
-
-    // ===========================================
-    // TOGGLE FUNCTIONS
-    // ===========================================
-    function toggleAuto() {
-        CONFIG.AUTO_TRADE_ENABLED = !CONFIG.AUTO_TRADE_ENABLED;
-        const btn = document.getElementById('gpt-auto');
-        if (btn) {
-            btn.textContent = CONFIG.AUTO_TRADE_ENABLED ? 'AUTO ON' : 'AUTO OFF';
-            btn.className = 'btn-auto' + (CONFIG.AUTO_TRADE_ENABLED ? '' : ' off');
-        }
-        log('Auto: ' + (CONFIG.AUTO_TRADE_ENABLED ? 'ON' : 'OFF'));
-    }
-
-    function toggleAssetSwitch() {
-        CONFIG.AUTO_SWITCH_ASSET = !CONFIG.AUTO_SWITCH_ASSET;
-        const btn = document.getElementById('gpt-switch');
-        if (btn) {
-            btn.textContent = CONFIG.AUTO_SWITCH_ASSET ? 'SWITCH ON' : 'SWITCH OFF';
-            btn.className = 'btn-switch' + (CONFIG.AUTO_SWITCH_ASSET ? '' : ' off');
-        }
-        log('Switch: ' + (CONFIG.AUTO_SWITCH_ASSET ? 'ON' : 'OFF'));
-    }
-
-    function toggleScanMode() {
-        CONFIG.SCAN_MODE = !CONFIG.SCAN_MODE;
-        
-        // Save to storage
-        try {
-            GM_setValue('scanMode', CONFIG.SCAN_MODE);
-        } catch (e) {}
-        
-        const btn = document.getElementById('gpt-scan');
-        if (btn) {
-            btn.textContent = CONFIG.SCAN_MODE ? 'SCAN ON' : 'SCAN OFF';
-            btn.className = 'btn-scan' + (CONFIG.SCAN_MODE ? ' on' : ' off');
-        }
-        updateUI('connected');
-        
-        // Log clear description of mode
-        if (CONFIG.SCAN_MODE) {
-            log('SCAN ON: Auto-scanning markets for signals');
-            scanMarkets();
-        } else {
-            log('SCAN OFF: Waiting for signals from app');
-        }
-    }
-
-    function resetBot() {
-        log('RESETTING...');
-        isTrading = false;
-        lastProcessedSignalId = '';
-        recentlyTradedAssets = {};  // Clear cooldown timestamps
-        failedSwitchAttempts = {};  // Clear failed switch tracking
-        lastTradeTime = 0;
-        
-        const sigEl = document.getElementById('gpt-signal');
-        if (sigEl) { sigEl.textContent = 'RESET'; sigEl.className = 'signal wait'; }
-        
-        findTradeButtons();
-        getCurrentAsset();
-        updateUI('connected');
-        
-        setTimeout(() => checkSignal(true), 500);
-    }
-    
-    // Check if an asset is on cooldown (recently traded)
-    function isAssetOnCooldown(assetBase) {
-        const tradedTime = recentlyTradedAssets[assetBase];
-        if (!tradedTime) return false;
-        
-        const elapsed = Date.now() - tradedTime;
-        if (elapsed > ASSET_COOLDOWN_MS) {
-            // Cooldown expired, remove from tracking
-            delete recentlyTradedAssets[assetBase];
-            return false;
-        }
-        return true;
-    }
-    
-    // Check if we've failed to switch to this asset too many times
-    function hasExceededSwitchAttempts(assetBase) {
-        return (failedSwitchAttempts[assetBase] || 0) >= MAX_SWITCH_ATTEMPTS;
-    }
-    
-    // Mark asset as recently traded
-    function markAssetTraded(assetBase) {
-        recentlyTradedAssets[assetBase] = Date.now();
-        // Clear any failed switch attempts since we successfully traded
-        delete failedSwitchAttempts[assetBase];
-    }
-    
-    // Record a failed switch attempt
-    function recordFailedSwitch(assetBase) {
-        failedSwitchAttempts[assetBase] = (failedSwitchAttempts[assetBase] || 0) + 1;
-        log(`Switch attempts for ${assetBase}: ${failedSwitchAttempts[assetBase]}/${MAX_SWITCH_ATTEMPTS}`);
-    }
-
-    // ===========================================
-    // MARKET SCANNING - FAVORITES + PAYOUT FILTER
-    // ===========================================
-    
-    // Cache for favorites and payouts (refresh periodically)
-    let cachedFavorites = null;
-    let favoritesLastUpdate = 0;
-    const FAVORITES_CACHE_MS = 60000; // Refresh favorites every 60 seconds
-    
-    async function scanMarkets() {
-        if (isTrading) {
-            log('Busy trading, skip scan');
-            return;
-        }
-        
-        if (isScanning) {
-            log('Already scanning, skip');
-            return;
-        }
-
-        // Check cooldown
-        const now = Date.now();
-        if (now - lastTradeTime < CONFIG.TRADE_COOLDOWN) {
-            log(`Cooldown: ${((CONFIG.TRADE_COOLDOWN - (now - lastTradeTime)) / 1000).toFixed(1)}s`);
-            return;
-        }
-        
-        isScanning = true;  // Lock scanning
-
-        // Determine assets to scan
-        let assetsToScan = CONFIG.SCAN_ASSETS;
-        let assetPayouts = {}; // {symbol: payout}
-        
-        if (!CONFIG.AUTO_SWITCH_ASSET) {
-            // SWITCH OFF - Only scan current asset
-            const currentAssetRaw = getCurrentAsset();
-            if (currentAssetRaw) {
-                const normalized = currentAssetRaw.replace('/', '').replace(' ', '_').toUpperCase();
-                assetsToScan = normalized;
-                
-                // Get current asset's payout
-                const currentPayout = getCurrentPayout();
-                if (currentPayout !== null) {
-                    assetPayouts[normalized] = currentPayout;
-                    log(`SWITCH OFF - Current: ${normalized} (${currentPayout}%)`);
-                    
-                    // Check payout requirement
-                    if (currentPayout < CONFIG.MIN_PAYOUT) {
-                        log(`⚠️ Payout ${currentPayout}% < ${CONFIG.MIN_PAYOUT}% required. Skipping.`);
-                        const sigEl = document.getElementById('gpt-signal');
-                        if (sigEl) { sigEl.textContent = 'LOW PAY'; sigEl.className = 'signal wait'; }
-                        return;
-                    }
-                } else {
-                    log(`SWITCH OFF - Current: ${normalized} (payout unknown)`);
-                }
-            } else {
-                log('Cannot detect current asset, using defaults');
-            }
-        } else {
-            // SWITCH ON - Scan favorites with 65%+ payout
-            if (CONFIG.SCAN_FAVORITES_ONLY) {
-                // Check if we need to refresh favorites cache
-                if (!cachedFavorites || (now - favoritesLastUpdate > FAVORITES_CACHE_MS)) {
-                    log('Refreshing favorites list...');
-                    cachedFavorites = await getFavoriteAssets();
-                    favoritesLastUpdate = now;
-                }
-                
-                if (cachedFavorites && cachedFavorites.length > 0) {
-                    // Filter by minimum payout
-                    const eligibleAssets = cachedFavorites.filter(a => a.payout >= CONFIG.MIN_PAYOUT);
-                    
-                    if (eligibleAssets.length > 0) {
-                        assetsToScan = eligibleAssets.map(a => a.apiSymbol).join(',');
-                        eligibleAssets.forEach(a => { assetPayouts[a.apiSymbol] = a.payout; });
-                        log(`FAVORITES: ${eligibleAssets.length}/${cachedFavorites.length} with ${CONFIG.MIN_PAYOUT}%+ payout`);
-                    } else {
-                        log(`⚠️ No favorites with ${CONFIG.MIN_PAYOUT}%+ payout found`);
-                        const sigEl = document.getElementById('gpt-signal');
-                        if (sigEl) { sigEl.textContent = 'NO FAV'; sigEl.className = 'signal wait'; }
-                        return;
-                    }
-                } else {
-                    log('No favorites found, using default assets');
-                }
-            } else {
-                const cooldownCount = Object.keys(recentlyTradedAssets).filter(a => isAssetOnCooldown(a)).length;
-                log(`SWITCH ON - Scanning all (${cooldownCount} on cooldown)`);
-            }
-        }
-        
-        // Build URL with optional preferred expiry
-        let url = `${CONFIG.API_URL}/signals/scan-markets?assets=${assetsToScan}&min_confidence=${CONFIG.MIN_CONFIDENCE}&max_signals=10`;
-        if (CONFIG.PREFERRED_EXPIRY) {
-            url += `&preferred_expiry=${CONFIG.PREFERRED_EXPIRY}`;
-        }
-        
-        GM_xmlhttpRequest({
-            method: 'GET',
-            url: url,
-            headers: { 'Accept': 'application/json' },
-            timeout: 20000,
-            onload: function(res) {
-                isScanning = false;  // Release scan lock
-                
-                try {
-                    if (res.status !== 200) {
-                        log('Scan error: ' + res.status);
-                        return;
-                    }
-                    
-                    const data = JSON.parse(res.responseText);
-                    updateUI('connected');
-                    
-                    if (data.success && data.top_signals && data.top_signals.length > 0) {
-                        log(`Found ${data.top_signals.length} signals`);
-                        
-                        // Find the best signal that:
-                        // 1. Meets payout requirement (65%+)
-                        // 2. Is not on cooldown (recently traded)
-                        // 3. Has not exceeded switch attempt limit
-                        // 4. If SWITCH OFF, must match current asset
-                        let selectedSignal = null;
-                        let skippedReasons = [];
-                        
-                        for (const signal of data.top_signals) {
-                            const assetBase = signal.symbol.replace('_OTC', '').replace('_', '');
-                            const assetKey = signal.symbol;
-                            
-                            // Generate unique signal ID for deduplication
-                            const signalId = `${signal.symbol}_${signal.direction}_${signal.timestamp || Date.now()}`;
-                            
-                            // Check if this is a duplicate signal (same asset+direction within interval)
-                            if (signalId === lastProcessedSignalId && (Date.now() - lastProcessedSignalTimestamp) < MIN_SIGNAL_INTERVAL_MS) {
-                                skippedReasons.push(`${assetBase}: duplicate`);
-                                continue;
-                            }
-                            
-                            // Check payout requirement
-                            const payout = assetPayouts[assetKey] || assetPayouts[assetBase];
-                            if (payout !== undefined && payout < CONFIG.MIN_PAYOUT) {
-                                skippedReasons.push(`${assetBase}: payout ${payout}%`);
-                                continue;
-                            }
-                            
-                            // If SWITCH OFF, only accept signals for current asset
-                            if (!CONFIG.AUTO_SWITCH_ASSET) {
-                                const currentAssetBase = getCurrentAsset()?.replace('/', '').replace(' OTC', '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
-                                if (currentAssetBase && assetBase !== currentAssetBase) {
-                                    skippedReasons.push(`${assetBase}: not current`);
-                                    continue;
-                                }
-                            }
-                            
-                            // Check time-based cooldown
-                            if (isAssetOnCooldown(assetBase)) {
-                                const remaining = Math.ceil((ASSET_COOLDOWN_MS - (Date.now() - recentlyTradedAssets[assetBase])) / 1000);
-                                skippedReasons.push(`${assetBase}: cooldown ${remaining}s`);
-                                continue;
-                            }
-                            
-                            // Check if switch has failed too many times (only relevant if SWITCH ON)
-                            if (CONFIG.AUTO_SWITCH_ASSET && hasExceededSwitchAttempts(assetBase)) {
-                                skippedReasons.push(`${assetBase}: switch failed`);
-                                continue;
-                            }
-                            
-                            // Add payout info to signal for display
-                            if (payout !== undefined) {
-                                signal.payout = payout;
-                            }
-                            
-                            // Store signal ID to prevent duplicates
-                            signal._signalId = signalId;
-                            
-                            selectedSignal = signal;
-                            break;
-                        }
-                        
-                        // Log skipped assets for debugging
-                        if (skippedReasons.length > 0) {
-                            log(`Skipped: ${skippedReasons.slice(0, 3).join(', ')}${skippedReasons.length > 3 ? '...' : ''}`);
-                        }
-                        
-                        // If all assets are blocked, wait for cooldowns to expire
-                        if (!selectedSignal) {
-                            log('No eligible signals. Waiting...');
-                            const sigEl = document.getElementById('gpt-signal');
-                            if (sigEl) { sigEl.textContent = 'WAIT'; sigEl.className = 'signal wait'; }
-                            return;
-                        }
-                        
-                        // Check if already trading to prevent double execution
-                        if (isTrading) {
-                            log('Trade already in progress, skip');
-                            isScanning = false;  // Release scan lock
-                            return;
-                        }
-                        
-                        // Set trading lock IMMEDIATELY before any async operations
-                        isTrading = true;
-                        isScanning = false;  // Release scan lock since we're moving to trading
-                        
-                        // Mark signal as processed BEFORE execution
-                        lastProcessedSignalId = selectedSignal._signalId;
-                        lastProcessedSignalTimestamp = Date.now();
-                        
-                        // Log selected signal with expiry and payout info
-                        const expiry = selectedSignal.expiry_seconds || 60;
-                        const payoutInfo = selectedSignal.payout ? ` ${selectedSignal.payout}%` : '';
-                        log(`✓ ${selectedSignal.direction} ${selectedSignal.symbol} (${selectedSignal.confidence.toFixed(0)}%${payoutInfo}) @ ${expiry}s`);
-                        
-                        updateUI('trading', selectedSignal);
-                        
-                        if (CONFIG.AUTO_TRADE_ENABLED) {
-                            executeTradeWithAssetSwitch(selectedSignal);
-                        } else {
-                            log('Auto OFF');
-                            isTrading = false;  // Release if not executing
-                            updateUI('connected', selectedSignal);
-                        }
-                    } else {
-                        log('No signals found');
-                        isScanning = false;  // Release scan lock
-                        const sigEl = document.getElementById('gpt-signal');
-                        if (sigEl) { sigEl.textContent = 'WAIT'; sigEl.className = 'signal wait'; }
-                    }
-                } catch (e) {
-                    isScanning = false;  // Release scan lock on error
-                    log('Parse error: ' + e.message);
-                }
-            },
-            onerror: function() { 
-                isScanning = false;  // Release scan lock on error
-                log('Connection error'); 
-            },
-            ontimeout: function() { 
-                isScanning = false;  // Release scan lock on timeout
-                log('Timeout'); 
-            }
-        });
-    }
-
-    // ===========================================
-    // SIGNAL FETCHING
-    // ===========================================
-    // SCAN MODE BEHAVIOR:
-    // - SCAN ON: Auto-scan markets and generate signals (Tampermonkey finds trades)
-    // - SCAN OFF: Receive signals from app API and execute them (App sends trades)
-    
-    function checkSignal(force = false) {
-        if (isTrading && !force) {
-            log('Busy trading...');
-            return;
-        }
-        
-        if (isScanning) {
-            log('Busy scanning...');
-            return;
-        }
-
-        findTradeButtons();
-        getCurrentAsset();
-
-        // SCAN ON = Tampermonkey scans markets automatically
-        if (CONFIG.SCAN_MODE) {
-            scanMarkets();
-            return;
-        }
-
-        // SCAN OFF = Fetch signals from app API
-        log('Fetching app signal (SCAN OFF mode)...');
-        
-        GM_xmlhttpRequest({
-            method: 'GET',
-            url: CONFIG.API_URL + '/signals/latest',
-            headers: { 'Accept': 'application/json' },
-            timeout: 10000,
-            onload: function(res) {
-                try {
-                    if (res.status !== 200) {
-                        log('API Error: ' + res.status);
-                        updateUI('disconnected');
-                        return;
-                    }
-                    
-                    const data = JSON.parse(res.responseText);
-                    updateUI('connected');
-                    
-                    if (data.success && data.signal) {
-                        const signal = data.signal;
-                        const signalId = signal.signal_id || signal.id || signal.timestamp || `${signal.symbol}_${signal.direction}_${Date.now()}`;
-                        
-                        // Calculate expiry for display
-                        let displayExpiry = 60;
-                        if (signal.expiry_seconds && signal.expiry_seconds > 0) {
-                            displayExpiry = signal.expiry_seconds;
-                        } else if (signal.expiration_minutes && signal.expiration_minutes > 0) {
-                            displayExpiry = Math.round(signal.expiration_minutes * 60);
-                        }
-                        
-                        log(`📥 Received: ${signal.direction} ${signal.symbol} | Exp: ${displayExpiry}s | ID: ${signalId.substring(0,25)}...`);
-                        
-                        // Check if same signal and within minimum interval
-                        const now = Date.now();
-                        const isSameSignal = signalId === lastProcessedSignalId;
-                        const timeSinceLast = now - lastProcessedSignalTimestamp;
-                        const withinInterval = timeSinceLast < MIN_SIGNAL_INTERVAL_MS;
-                        
-                        // Debug logging
-                        if (CONFIG.DEBUG) {
-                            console.log('[GPT DEBUG] Signal check:', {
-                                signalId: signalId.substring(0, 30),
-                                lastProcessedSignalId: lastProcessedSignalId.substring(0, 30),
-                                isSameSignal,
-                                timeSinceLast: Math.round(timeSinceLast/1000) + 's',
-                                minInterval: MIN_SIGNAL_INTERVAL_MS/1000 + 's',
-                                withinInterval,
-                                isTrading,
-                                autoEnabled: CONFIG.AUTO_TRADE_ENABLED
-                            });
-                        }
-                        
-                        if (isSameSignal && withinInterval) {
-                            const waitTime = Math.round((MIN_SIGNAL_INTERVAL_MS - timeSinceLast)/1000);
-                            log(`⏳ Same signal - wait ${waitTime}s before re-exec`);
-                            updateUI('connected', signal);
-                            return;
-                        }
-                        
-                        // Double-check not already trading
-                        if (isTrading) {
-                            log('🔒 Trade in progress, skipping');
-                            return;
-                        }
-                        
-                        // Set trading lock IMMEDIATELY
-                        isTrading = true;
-                        
-                        log(`🚀 >>> NEW SIGNAL - EXECUTING TRADE! <<<`);
-                        lastProcessedSignalId = signalId;
-                        lastProcessedSignalTimestamp = now;
-                        updateUI('trading', signal);
-                        
-                        if (CONFIG.AUTO_TRADE_ENABLED) {
-                            log('✅ AUTO enabled - executing trade');
-                            executeTradeWithAssetSwitch(signal);
-                        } else {
-                            log('⚠️ AUTO disabled - signal shown only');
-                            isTrading = false;
-                            updateUI('connected', signal);
-                        }
-                    } else {
-                        log(data.message || 'No signal available');
-                    }
-                } catch (e) {
-                    log('Parse Error: ' + e.message);
-                    console.error('[GPT ERROR]', e);
-                }
-            },
-            onerror: function(e) { 
-                log('❌ Connection error: ' + (e.error || 'unknown')); 
-                updateUI('disconnected'); 
-            },
-            ontimeout: function() { 
-                log('⏱️ Request timeout'); 
-            }
-        });
-    }
-
-    // ===========================================
-    // TRADE EXECUTION - WITH ASSET + TIMEFRAME SWITCHING
-    // ===========================================
-    let activeTradeExecution = null;  // Track active trade to prevent double execution
-    
-    async function executeTradeWithAssetSwitch(signal) {
-        // CRITICAL: Check if another trade is already being executed
-        if (activeTradeExecution) {
-            log(`🛑 BLOCKED: Trade already executing for ${activeTradeExecution.direction} ${activeTradeExecution.symbol}`);
-            return;
-        }
-        
-        // Double-check trading lock (should already be true from caller)
-        if (!isTrading) {
-            log('WARNING: Trading lock not set, setting now');
-            isTrading = true;
-        }
-        
-        // Determine original direction FIRST - before any other operations
-        const dir = (signal.direction || '').toUpperCase();
-        let originalIsCall = dir === 'CALL' || dir === 'BUY' || dir === 'UP';
-        let originalIsPut = dir === 'PUT' || dir === 'SELL' || dir === 'DOWN';
-        
-        if (!originalIsCall && !originalIsPut) {
-            log(`❌ ERROR: Unknown direction "${signal.direction}" - aborting`);
-            isTrading = false;
-            updateUI('connected');
-            return;
-        }
-        
-        // CRITICAL: Lock this trade execution with direction info
-        const finalDirection = originalIsCall ? 'CALL' : 'PUT';
-        activeTradeExecution = {
-            direction: finalDirection,
-            symbol: signal.symbol,
-            timestamp: Date.now()
-        };
-        
-        log(`🔒 Trade execution locked: ${finalDirection} ${signal.symbol}`);
-        
-        lastTradeTime = Date.now();
-        updateUI('trading', signal);
-        
-        // Apply inversion if enabled
-        let isCall = originalIsCall;
-        if (invertSignals) {
-            isCall = !isCall;
-            log(`🔄 INVERTED: ${originalIsCall ? 'CALL' : 'PUT'} → ${isCall ? 'CALL' : 'PUT'}`);
-            activeTradeExecution.direction = isCall ? 'CALL' : 'PUT';  // Update lock
-        }
-        
-        const assetBase = signal.symbol.replace('_OTC', '').replace('_', '');
-        
-        // Handle expiry - FIXED: Properly check expiration_minutes FIRST
-        // API returns expiration_minutes (e.g., 0.083 for 5 seconds, 1 for 60 seconds)
-        let signalExpiry = 60;  // default
-        
-        if (signal.expiry_seconds && signal.expiry_seconds > 0) {
-            signalExpiry = signal.expiry_seconds;
-            log(`Expiry from expiry_seconds: ${signalExpiry}s`);
-        } else if (signal.expiration_minutes && signal.expiration_minutes > 0) {
-            signalExpiry = Math.round(signal.expiration_minutes * 60);
-            log(`Expiry from expiration_minutes: ${signal.expiration_minutes} min = ${signalExpiry}s`);
-        } else if (signal.expiry && signal.expiry > 0) {
-            signalExpiry = signal.expiry;
-            log(`Expiry from expiry: ${signalExpiry}s`);
-        }
-        
-        // Ensure minimum 5 seconds (valid for Pocket Option)
-        if (signalExpiry < 5) {
-            log(`Expiry ${signalExpiry}s too short, defaulting to 60s`);
-            signalExpiry = 60;
-        }
-        
-        log(`>>> EXECUTING TRADE <<<`);
-        log(`Direction: ${isCall ? 'CALL' : 'PUT'} | Asset: ${signal.symbol} | Expiry: ${signalExpiry}s`);
-        log(`Config: SWITCH=${CONFIG.AUTO_SWITCH_ASSET ? 'ON' : 'OFF'} | TF_SWITCH=${CONFIG.AUTO_SWITCH_TIMEFRAME ? 'ON' : 'OFF'}`);
-        
-        try {
-            // Step 1: Switch asset if SWITCH is enabled
-            if (CONFIG.AUTO_SWITCH_ASSET && signal.symbol) {
-                log('SWITCH ON - attempting asset switch...');
-                const switched = await switchToAsset(signal.symbol);
-                if (!switched) {
-                    log(`Switch to ${assetBase} FAILED - recording attempt`);
-                    recordFailedSwitch(assetBase);
-                    
-                    // Release ALL locks and let next scan try a different asset
-                    activeTradeExecution = null;
-                    isTrading = false;
-                    updateUI('connected');
-                    log('Will try different asset on next scan');
-                    return;  // Don't trade on wrong asset
-                }
-                await sleep(300);
-            } else {
-                log('SWITCH OFF - trading on current asset');
-            }
-            
-            // Step 2: Switch timeframe if enabled and expiry differs from current
-            if (CONFIG.AUTO_SWITCH_TIMEFRAME && signalExpiry) {
-                const currentTF = getCurrentTimeframe();
-                if (currentTF !== signalExpiry) {
-                    log(`Timeframe mismatch: current=${currentTF}s, signal=${signalExpiry}s`);
-                    const tfSwitched = await switchToTimeframe(signalExpiry);
-                    if (!tfSwitched) {
-                        log(`WARNING: Could not switch to ${signalExpiry}s timeframe`);
-                        // Continue anyway - some timeframes might not be available
-                    }
-                    await sleep(300);
-                } else {
-                    log(`Timeframe OK: ${signalExpiry}s`);
-                }
-            }
-            
-            // Step 3: Wait for buttons
-            const buttonsFound = await waitForButtons(3000);
-            if (!buttonsFound) {
-                log('Buttons not found!');
-                activeTradeExecution = null;
-                isTrading = false;
-                updateUI('connected');
-                return;
-            }
-            
-            // Play sound (different tone for inverted)
-            if (CONFIG.SOUND_ENABLED) {
-                try {
-                    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-                    const osc = ctx.createOscillator();
-                    // Higher pitch if inverted, different tones for CALL/PUT
-                    const baseFreq = isCall ? 800 : 400;
-                    osc.frequency.value = invertSignals ? baseFreq + 200 : baseFreq;
-                    osc.connect(ctx.destination);
-                    osc.start();
-                    setTimeout(() => osc.stop(), invertSignals ? 200 : 150);
-                } catch(e) {}
-            }
-            
-            // Step 4: Click trade button
-            const clicked = clickTradeButton(isCall);
-            
-            if (clicked) {
-                tradeCount++;
-                
-                // Mark this asset as traded with timestamp
-                markAssetTraded(assetBase);
-                
-                const tradeType = isCall ? 'CALL' : 'PUT';
-                const invLabel = invertSignals ? ' [INV]' : '';
-                log(`TRADE #${tradeCount}: ${tradeType}${invLabel} on ${assetBase} @ ${signalExpiry}s`);
-                
-                try {
-                    GM_notification({
-                        title: `${tradeType} Executed${invLabel}`,
-                        text: `${signal.symbol} - ${signal.confidence || 85}% @ ${signalExpiry}s${invertSignals ? ' (Inverted)' : ''}`,
-                        timeout: 2000
-                    });
-                } catch(e) {}
-            } else {
-                log('Click failed!');
-            }
-            
-        } catch (e) {
-            log(`Error: ${e.message}`);
-            // Release locks on error
-            activeTradeExecution = null;
-            isTrading = false;
-        }
-        
-        // Release active trade execution lock and cooldown
-        setTimeout(() => {
-            activeTradeExecution = null;  // Release execution lock
-            isTrading = false;
-            updateUI('connected');
-            log('🔓 Trade complete - ready for next');
-        }, CONFIG.TRADE_COOLDOWN);
-    }
-
-    let lastClickedDirection = null;  // Track which direction we last clicked
-    let lastClickTime = 0;  // Track when we last clicked
-    let tradeExecutionLock = false;  // CRITICAL: Single execution lock
-    let lastTradeDirection = null;   // CRITICAL: Track the direction of active trade
-    
-    function clickTradeButton(isCall) {
-        const now = Date.now();
-        const direction = isCall ? 'CALL' : 'PUT';
-        
-        // CRITICAL GUARD 1: Absolute execution lock
-        if (tradeExecutionLock) {
-            log(`🛑 BLOCKED: Trade execution lock active (${lastTradeDirection})`);
-            return false;
-        }
-        
-        // CRITICAL GUARD 2: Prevent any trade within MIN_TRADE_INTERVAL_MS
-        if (now - lastTradeExecutionTime < MIN_TRADE_INTERVAL_MS) {
-            log(`🛑 Trade blocked - cooldown (${Math.round((MIN_TRADE_INTERVAL_MS - (now - lastTradeExecutionTime))/1000)}s remaining)`);
-            return false;
-        }
-        
-        // CRITICAL GUARD 3: Prevent opposite direction within 30 seconds
-        if (lastClickedDirection && lastClickedDirection !== direction && (now - lastClickTime) < 30000) {
-            log(`🛑 BLOCKED: Cannot click ${direction} - just executed ${lastClickedDirection} ${Math.round((now - lastClickTime)/1000)}s ago`);
-            return false;
-        }
-        
-        // CRITICAL GUARD 4: Prevent same direction within 10 seconds  
-        if (lastClickedDirection === direction && (now - lastClickTime) < 10000) {
-            log(`🛑 BLOCKED: Duplicate ${direction} within 10s`);
-            return false;
-        }
-        
-        const selector = isCall ? '.btn-call' : '.btn-put';
-        const btn = document.querySelector(selector);
-        
-        if (btn && btn.offsetParent !== null) {
-            // LOCK BEFORE CLICK
-            tradeExecutionLock = true;
-            lastTradeDirection = direction;
-            lastTradeExecutionTime = now;
-            lastClickedDirection = direction;
-            lastClickTime = now;
-            
-            log(`✅ EXECUTING: Clicking ${selector} (${direction})`);
-            console.log(`[GPT TRADE] ${new Date().toISOString()} - Clicking ${direction} button`);
-            
-            // Single click only
-            btn.click();
-            
-            // Release lock after 3 seconds
-            setTimeout(() => {
-                tradeExecutionLock = false;
-                log(`🔓 Trade lock released`);
-            }, 3000);
-            
-            return true;
-        }
-        
-        log(`❌ Button ${selector} not found`);
-        return false;
-    }
-
-    // ===========================================
     // INITIALIZATION
     // ===========================================
-    let isInitialized = false;  // Prevent double initialization
-    let pollingInterval = null;  // Store interval reference
-    
     function init() {
-        // Prevent double initialization
-        if (isInitialized) {
-            log('Already initialized, skipping');
-            return;
-        }
-        isInitialized = true;
-        
-        log('Initializing v5.9.1...');
-        
+        log('Initializing v6.0.0...');
+
+        // Load saved settings (all default to false)
+        autoTradeEnabled = GM_getValue('autoTradeEnabled', false);
+        switchEnabled = GM_getValue('switchEnabled', false);
+        scanEnabled = GM_getValue('scanEnabled', false);
+        invertEnabled = GM_getValue('invertEnabled', false);
+
         setTimeout(() => {
             createPanel();
-            
-            // Restore settings
-            CONFIG.AUTO_TRADE_ENABLED = GM_getValue('autoEnabled', true);
-            CONFIG.AUTO_SWITCH_ASSET = GM_getValue('autoSwitch', true);
-            CONFIG.SCAN_MODE = GM_getValue('scanMode', false);
-            CONFIG.AUTO_SWITCH_TIMEFRAME = GM_getValue('autoSwitchTimeframe', true);
-            CONFIG.SCAN_FAVORITES_ONLY = GM_getValue('scanFavoritesOnly', true);
-            CONFIG.MIN_PAYOUT = GM_getValue('minPayout', 65);
-            
-            // Update buttons based on saved settings
-            if (!CONFIG.AUTO_TRADE_ENABLED) {
-                const btn = document.getElementById('gpt-auto');
-                if (btn) { btn.textContent = 'AUTO OFF'; btn.className = 'btn-auto off'; }
-            }
-            if (!CONFIG.AUTO_SWITCH_ASSET) {
-                const btn = document.getElementById('gpt-switch');
-                if (btn) { btn.textContent = 'SWITCH OFF'; btn.className = 'btn-switch off'; }
-            }
-            if (CONFIG.SCAN_MODE) {
-                const btn = document.getElementById('gpt-scan');
-                if (btn) { btn.textContent = 'SCAN ON'; btn.className = 'btn-scan on'; }
-            }
-            
-            findTradeButtons();
             getCurrentAsset();
-            updateUI('connected');
             
-            // Start polling - only if not already started
-            if (!pollingInterval) {
-                pollingInterval = setInterval(checkSignal, CONFIG.POLL_INTERVAL);
-                checkSignal();
-            }
+            // Start appropriate services
+            startOrStopPolling();
+            startOrStopScanning();
             
-            // Start remote settings polling (every 10 seconds)
-            if (!remoteSettingsInterval) {
-                fetchRemoteSettings();  // Initial fetch
-                remoteSettingsInterval = setInterval(fetchRemoteSettings, 10000);
-            }
-            
-            log(`Ready! FAV=${CONFIG.SCAN_FAVORITES_ONLY} PAY>=${CONFIG.MIN_PAYOUT}% INV=${invertSignals}`);
+            log('Ready! All buttons OFF by default');
         }, 2000);
     }
 

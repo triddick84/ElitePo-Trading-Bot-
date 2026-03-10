@@ -80,18 +80,18 @@ const MobileAutoTraderPage = () => {
             <CardHeader>
               <CardTitle className="text-white">
                 <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-purple-600 mr-3">1</span>
-                Install Kiwi Browser
+                Install Firefox Nightly
               </CardTitle>
             </CardHeader>
             <CardContent className="text-slate-300">
-              <p className="mb-4">Download Kiwi Browser from the Google Play Store. It's a Chrome-based browser that supports extensions.</p>
+              <p className="mb-4">Download Firefox Nightly from the Google Play Store. It's a Firefox browser that supports userscript extensions like Tampermonkey.</p>
               <a 
-                href="https://play.google.com/store/apps/details?id=com.kiwibrowser.browser" 
+                href="https://play.google.com/store/apps/details?id=org.mozilla.fenix" 
                 target="_blank" 
                 rel="noopener noreferrer"
               >
-                <Button className="bg-green-600 hover:bg-green-700">
-                  📥 Download Kiwi Browser
+                <Button className="bg-orange-600 hover:bg-orange-700">
+                  📥 Download Firefox Nightly
                 </Button>
               </a>
             </CardContent>
@@ -107,18 +107,18 @@ const MobileAutoTraderPage = () => {
             </CardHeader>
             <CardContent className="text-slate-300">
               <ol className="list-decimal list-inside space-y-2 mb-4">
-                <li>Open Kiwi Browser</li>
-                <li>Tap the 3 dots menu (⋮) → Extensions</li>
-                <li>Tap "Get from store" or go to Chrome Web Store</li>
-                <li>Search for "Tampermonkey" and install it</li>
+                <li>Open Firefox Nightly</li>
+                <li>Go to about:addons (type in address bar)</li>
+                <li>Tap the gear icon → "Install Add-on From File"</li>
+                <li>Or visit the Firefox Add-ons site and search for "Tampermonkey"</li>
               </ol>
               <a 
-                href="https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo" 
+                href="https://addons.mozilla.org/en-US/firefox/addon/tampermonkey/" 
                 target="_blank" 
                 rel="noopener noreferrer"
               >
                 <Button variant="outline" className="border-purple-500 text-purple-400">
-                  🔧 Get Tampermonkey
+                  🔧 Get Tampermonkey for Firefox
                 </Button>
               </a>
             </CardContent>

@@ -1,11 +1,12 @@
 # GPT Signal Bot - Product Requirements Document
 
-## Last Updated: March 9, 2026
+## Last Updated: March 10, 2026
 
-## Current Priority Issues
-1. **P0 - FIXED** - Tampermonkey double-trade bug (BUY+SELL for one signal) - Added execution locks
-2. **P0 - FIXED** - Signal inversion now controlled from app dashboard
-3. **P1 - User browser testing needed** - Tampermonkey script v5.9.0 requires real browser testing on Pocket Option
+## Current Status
+✅ **Tampermonkey v6.0.0** - Complete rewrite with proper button logic
+- Android browser changed from Kiwi to Firefox Nightly
+- All buttons default to OFF
+- Two different sound notifications (app vs scan)
 
 ## Original Problem Statement
 Create a "GPT Signal Bot" for Pocket Option with a high win rate (80-90%+). The system should include:
@@ -51,32 +52,31 @@ Create a "GPT Signal Bot" for Pocket Option with a high win rate (80-90%+). The 
 - **Enhanced AI Integration** - Uses OANDA data + technical analysis
 - **API Endpoints**: `/api/signals/auto/start`, `/api/signals/auto/stop`, `/api/signals/auto/status`
 
-### Tampermonkey Auto-Trader v5.9.0 (Mar 9, 2026) ✅ FIXED
-**Critical Bug Fixes:**
-- **Fixed double-trade bug** - Added `tradeExecutionLock` and `activeTradeExecution` guards to prevent both BUY and SELL executing for one signal
-- **Fixed expiration_minutes handling** - Script now correctly parses API signals with `expiration_minutes` field
-- **Added remote control** - Tampermonkey settings can now be controlled from the app dashboard
+### Tampermonkey Auto-Trader v6.0.0 (Mar 10, 2026) ✅ COMPLETE REWRITE
+**Button Logic Reconfigured:**
 
-**Remote Control Features (NEW):**
-- **Signal Inversion Toggle** - Control signal inversion from app (DEFAULT: ON - all signals inverted)
-- **Force Generate Signal** - Generate signals instantly for any timeframe (5s, 15s, 30s, 1m, 2m, 3m, 5m)
-- **Settings Sync** - Tampermonkey polls app every 10 seconds for setting changes
-- **Active Timeframes** - Select which timeframes to trade
-- **Min Payout Filter** - Set minimum payout percentage
+| Button | Function |
+|--------|----------|
+| **AUTO** | Only places trades from incoming APP SIGNALS (requires SCAN OFF, SWITCH OFF) |
+| **SWITCH** | When ON: Tampermonkey can switch between assets during scanning. When OFF: stays on current asset |
+| **SCAN** | Tampermonkey scans for signals on current asset (SWITCH OFF) or all favorites (SWITCH ON) |
+| **INVERT** | LOCAL toggle - overrides app setting. User controls inversion in Tampermonkey |
+| **FETCH** | If SCAN ON: force scan. If SCAN OFF: check for app signals |
+| **RESET** | Restores all buttons to OFF (default state) |
 
-**Trade Protection Guards:**
-- `tradeExecutionLock` - Absolute lock preventing any trade for 3 seconds after click
-- `activeTradeExecution` - Prevents concurrent trade execution
-- `MIN_SIGNAL_INTERVAL_MS` (10s) - Prevents re-processing same signal too quickly
-- `MIN_TRADE_INTERVAL_MS` (5s) - Prevents double-click trades
-- Direction guard - Blocks opposite direction within 30s, same direction within 10s
+**For App Signals:** AUTO: ON, SWITCH: OFF, SCAN: OFF
+**For Scanning Current Asset:** SCAN: ON, SWITCH: OFF
+**For Scanning All Favorites:** SCAN: ON, SWITCH: ON
 
-**API Endpoints for Tampermonkey Control:**
-- `GET /api/tampermonkey/settings` - Get current settings
-- `POST /api/tampermonkey/settings` - Update settings
-- `POST /api/tampermonkey/force-generate` - Force generate signal (with inversion)
-- `POST /api/tampermonkey/toggle-inversion` - Toggle signal inversion
-- `GET /api/tampermonkey/status` - Get full status with recent signals
+**Trade Cooldowns:**
+- App signals: 5 seconds between trades
+- Scan signals: 30 seconds between trades
+
+**Sound Notifications (TWO DIFFERENT SOUNDS):**
+- App signal trades: High-pitched short beep (880Hz)
+- Scan signal trades: Low-pitched longer beep (440Hz)
+
+**Default State:** All buttons OFF - user enables features as needed
 
 ### Strategy Selection System (Feb 28, 2026) ✅ VERIFIED
 - **End-to-end working** - UI selection flows to backend signal generation

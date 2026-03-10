@@ -134,6 +134,31 @@ const TampermonkeyControlPanel = () => {
 
   return (
     <div className="space-y-6">
+      {/* Button Logic Guide */}
+      <Card className="bg-slate-800/50 border-slate-700">
+        <CardHeader>
+          <CardTitle className="text-white">📖 Button Logic Guide v6.0</CardTitle>
+        </CardHeader>
+        <CardContent className="text-slate-300 text-sm space-y-3">
+          <div className="bg-green-900/30 border border-green-600 rounded p-3">
+            <strong className="text-green-400">📡 For APP SIGNALS:</strong>
+            <p>AUTO: ON | SWITCH: OFF | SCAN: OFF</p>
+          </div>
+          <div className="bg-pink-900/30 border border-pink-600 rounded p-3">
+            <strong className="text-pink-400">🔍 For SCANNING (current asset):</strong>
+            <p>SCAN: ON | SWITCH: OFF</p>
+          </div>
+          <div className="bg-purple-900/30 border border-purple-600 rounded p-3">
+            <strong className="text-purple-400">🔍 For SCANNING (all favorites):</strong>
+            <p>SCAN: ON | SWITCH: ON</p>
+          </div>
+          <div className="bg-orange-900/30 border border-orange-600 rounded p-3">
+            <strong className="text-orange-400">🔄 INVERT:</strong>
+            <p>Local toggle in Tampermonkey overrides app setting</p>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Main Control Panel */}
       <Card className="bg-slate-800/50 border-slate-700">
         <CardHeader>
@@ -144,7 +169,7 @@ const TampermonkeyControlPanel = () => {
             </Badge>
           </CardTitle>
           <CardDescription>
-            Control your Tampermonkey script remotely from this dashboard
+            Note: Tampermonkey's local INVERT button overrides this setting
             {lastUpdate && <span className="ml-2 text-xs text-slate-500">Updated: {lastUpdate}</span>}
           </CardDescription>
         </CardHeader>
@@ -154,9 +179,9 @@ const TampermonkeyControlPanel = () => {
           <div className="bg-orange-900/30 border border-orange-600 rounded-lg p-4">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-orange-400 font-bold text-lg">🔄 Signal Inversion</h3>
+                <h3 className="text-orange-400 font-bold text-lg">🔄 Signal Inversion (App)</h3>
                 <p className="text-sm text-orange-200 mt-1">
-                  When ON: CALL → PUT, PUT → CALL (all timeframes)
+                  Tampermonkey's local INVERT toggle overrides this
                 </p>
               </div>
               <div className="flex items-center gap-3">
@@ -183,7 +208,7 @@ const TampermonkeyControlPanel = () => {
                   className="data-[state=checked]:bg-green-600"
                 />
               </div>
-              <p className="text-xs text-slate-400">Execute trades automatically when signals arrive</p>
+              <p className="text-xs text-slate-400">For APP SIGNALS: Enable this, disable Scan & Switch</p>
             </div>
             
             <div className="bg-slate-900 rounded-lg p-4">
@@ -195,7 +220,7 @@ const TampermonkeyControlPanel = () => {
                   className="data-[state=checked]:bg-pink-600"
                 />
               </div>
-              <p className="text-xs text-slate-400">Tampermonkey scans markets (vs receiving app signals)</p>
+              <p className="text-xs text-slate-400">Tampermonkey scans for signals (30s between trades)</p>
             </div>
           </div>
 
@@ -338,7 +363,7 @@ const TampermonkeyControlPanel = () => {
         <CardContent className="text-slate-300 text-sm space-y-2">
           <div className="flex justify-between">
             <span>Script Version:</span>
-            <span className="text-purple-400 font-mono">v5.9.1</span>
+            <span className="text-purple-400 font-mono">v6.0.0</span>
           </div>
           <div className="flex justify-between">
             <span>Settings Sync:</span>
