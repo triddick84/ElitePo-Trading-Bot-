@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://signal-executor-7.preview.emergentagent.com
-// @version      6.2.2
-// @description  Auto-trade OTC forex on Pocket Option. v6.2.2 - Improved asset switching with better selectors
+// @version      6.2.3
+// @description  Auto-trade OTC forex on Pocket Option. v6.2.3 - Fixed search input typing with keyboard events
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -105,7 +105,7 @@
     // ===========================================
     function log(msg) {
         const ts = new Date().toLocaleTimeString();
-        console.log(`[GPT v6.2.2] ${ts}: ${msg}`);
+        console.log(`[GPT v6.2.3] ${ts}: ${msg}`);
         const logEl = document.getElementById('gpt-log');
         if (logEl) logEl.textContent = msg;
     }
@@ -304,7 +304,7 @@
             <div class="header" id="gpt-drag">
                 <div class="header-left">
                     <span class="status-dot" id="gpt-dot"></span>
-                    <span class="title">GPT Bot v6.2.2</span>
+                    <span class="title">GPT Bot v6.2.3</span>
                 </div>
                 <div class="header-right">
                     <span style="font-size:10px;color:#64748b;">Trades: <span id="gpt-trades">0</span></span>
@@ -1000,52 +1000,125 @@
             }
             
             // Step 2: Wait for asset list/dropdown to appear
-            await sleep(500);
+            await sleep(1000);
             
-            // Step 3: Try to find search input
-            const searchSelectors = [
-                'input[type="search"]',
-                'input[type="text"]',
-                'input[placeholder*="search"]',
-                'input[placeholder*="Search"]',
-                '.search-input input',
-                '[class*="search"] input'
-            ];
+            // Step 3: Try to find search input - look for ANY visible input
+            log('Looking for search input...');
             
             let searchInput = null;
+            
+            // First try specific selectors
+            const searchSelectors = [
+                'input[type="search"]',
+                'input[placeholder*="earch"]',
+                'input[placeholder*="Search"]',
+                'input[placeholder*="Find"]',
+                'input[placeholder*="find"]',
+                '.search input',
+                '[class*="search"] input',
+                '.modal input',
+                '.dropdown input',
+                '.popup input',
+                '[class*="dialog"] input',
+                '[class*="modal"] input'
+            ];
+            
             for (const sel of searchSelectors) {
-                searchInput = document.querySelector(sel);
-                if (searchInput && searchInput.offsetParent !== null) {
-                    break;
+                const inputs = document.querySelectorAll(sel);
+                for (const inp of inputs) {
+                    if (inp && inp.offsetParent !== null) {
+                        searchInput = inp;
+                        log(`Found search input: ${sel}`);
+                        break;
+                    }
+                }
+                if (searchInput) break;
+            }
+            
+            // If no specific search input, find any visible text input
+            if (!searchInput) {
+                const allInputs = document.querySelectorAll('input[type="text"], input:not([type])');
+                for (const inp of allInputs) {
+                    if (inp && inp.offsetParent !== null && 
+                        !inp.disabled && !inp.readOnly &&
+                        inp.offsetWidth > 50) {
+                        searchInput = inp;
+                        log('Found generic text input');
+                        break;
+                    }
                 }
             }
             
             if (searchInput) {
-                log(`Typing: ${searchTerm}`);
-                searchInput.focus();
-                searchInput.value = '';
+                log(`Typing "${searchTerm}" into search...`);
                 
-                // Type each character to trigger proper events
+                // Clear and focus
+                searchInput.focus();
+                searchInput.select();
+                await sleep(100);
+                
+                // Clear existing value
+                searchInput.value = '';
+                searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+                await sleep(100);
+                
+                // Simulate keyboard typing with KeyboardEvent
                 for (const char of searchTerm) {
+                    // Add character
                     searchInput.value += char;
+                    
+                    // Dispatch multiple events to ensure framework catches it
                     searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-                    await sleep(50);
+                    searchInput.dispatchEvent(new KeyboardEvent('keydown', { 
+                        key: char, 
+                        code: `Key${char.toUpperCase()}`,
+                        bubbles: true 
+                    }));
+                    searchInput.dispatchEvent(new KeyboardEvent('keypress', { 
+                        key: char,
+                        bubbles: true 
+                    }));
+                    searchInput.dispatchEvent(new KeyboardEvent('keyup', { 
+                        key: char,
+                        bubbles: true 
+                    }));
+                    
+                    await sleep(80);
                 }
                 
+                // Final events
                 searchInput.dispatchEvent(new Event('change', { bubbles: true }));
-                await sleep(800);
+                searchInput.dispatchEvent(new Event('blur', { bubbles: true }));
+                
+                log(`Typed: ${searchInput.value}`);
+                await sleep(1000);
+            } else {
+                log('No search input found - will search in list directly');
             }
             
             // Step 4: Find and click the target asset in the list
+            await sleep(500);
+            log('Searching for asset in list...');
+            
             const assetListSelectors = [
+                // Specific Pocket Option selectors
                 '.assets-list .asset-item',
                 '.pair-list .pair-item',
+                '.assets-table tbody tr',
+                '.instruments-list li',
+                // Generic selectors
                 '[class*="asset-item"]',
                 '[class*="pair-item"]',
-                '.assets-table tr',
-                '.instrument-list li',
+                '[class*="instrument-item"]',
                 '[data-asset]',
-                '[class*="list"] [class*="item"]'
+                '[data-symbol]',
+                // List items
+                '.list-group-item',
+                'li[class*="item"]',
+                'tr[class*="row"]',
+                // Clickable rows
+                '[role="option"]',
+                '[role="listitem"]'
             ];
             
             for (const listSel of assetListSelectors) {
@@ -1109,7 +1182,7 @@
     // INITIALIZATION
     // ===========================================
     function init() {
-        log('Initializing v6.2.2...');
+        log('Initializing v6.2.3...');
 
         // Load saved settings (all default to false)
         autoEnabled = GM_getValue('autoEnabled', false);
