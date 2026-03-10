@@ -137,24 +137,34 @@ const TampermonkeyControlPanel = () => {
       {/* Button Logic Guide */}
       <Card className="bg-slate-800/50 border-slate-700">
         <CardHeader>
-          <CardTitle className="text-white">📖 Button Logic Guide v6.0</CardTitle>
+          <CardTitle className="text-white">📖 Button Logic Guide v6.1</CardTitle>
         </CardHeader>
         <CardContent className="text-slate-300 text-sm space-y-3">
           <div className="bg-green-900/30 border border-green-600 rounded p-3">
-            <strong className="text-green-400">📡 For APP SIGNALS:</strong>
-            <p>AUTO: ON | SWITCH: OFF | SCAN: OFF</p>
+            <strong className="text-green-400">📡 AUTO</strong> - Receives APP signals only (no generation)
+            <p className="text-xs mt-1">Enable for incoming signals from app dashboard</p>
           </div>
           <div className="bg-pink-900/30 border border-pink-600 rounded p-3">
-            <strong className="text-pink-400">🔍 For SCANNING (current asset):</strong>
-            <p>SCAN: ON | SWITCH: OFF</p>
+            <strong className="text-pink-400">🔍 SCAN</strong> - Tampermonkey generates & places trades
+            <p className="text-xs mt-1">30 second cooldown between scan trades</p>
           </div>
           <div className="bg-purple-900/30 border border-purple-600 rounded p-3">
-            <strong className="text-purple-400">🔍 For SCANNING (all favorites):</strong>
-            <p>SCAN: ON | SWITCH: ON</p>
+            <strong className="text-purple-400">🔀 SWITCH</strong> - Asset switching during SCAN only
+            <p className="text-xs mt-1">OFF = current asset | ON = all favorites</p>
           </div>
           <div className="bg-orange-900/30 border border-orange-600 rounded p-3">
-            <strong className="text-orange-400">🔄 INVERT:</strong>
-            <p>Local toggle in Tampermonkey overrides app setting</p>
+            <strong className="text-orange-400">🔄 INVERT</strong> - Local toggle (overrides app)
+            <p className="text-xs mt-1">CALL → PUT, PUT → CALL</p>
+          </div>
+          <div className="bg-slate-700 rounded p-3 mt-4">
+            <strong className="text-white">Combinations:</strong>
+            <ul className="text-xs mt-2 space-y-1">
+              <li>• <span className="text-green-400">AUTO only</span>: App signals on current asset</li>
+              <li>• <span className="text-pink-400">SCAN only</span>: Tampermonkey on current asset</li>
+              <li>• <span className="text-pink-400">SCAN + SWITCH</span>: Tampermonkey on all favorites</li>
+              <li>• <span className="text-purple-400">AUTO + SCAN</span>: BOTH sources on current asset</li>
+              <li>• <span className="text-yellow-400">AUTO + SCAN + SWITCH</span>: Only Tampermonkey (SWITCH overrides)</li>
+            </ul>
           </div>
         </CardContent>
       </Card>
@@ -363,7 +373,7 @@ const TampermonkeyControlPanel = () => {
         <CardContent className="text-slate-300 text-sm space-y-2">
           <div className="flex justify-between">
             <span>Script Version:</span>
-            <span className="text-purple-400 font-mono">v6.0.0</span>
+            <span className="text-purple-400 font-mono">v6.1.0</span>
           </div>
           <div className="flex justify-between">
             <span>Settings Sync:</span>
