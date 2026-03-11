@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://signal-executor-7.preview.emergentagent.com
-// @version      6.3.1
-// @description  Auto-trade OTC forex on Pocket Option. v6.3.1 - Fixed: no longer types in trade amount field
+// @version      6.3.2
+// @description  Auto-trade OTC forex on Pocket Option. v6.3.2 - CRITICAL FIX: Added absolute trade lock to prevent buy+sell
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -61,6 +61,12 @@
     let tradeCount = 0;
     let currentAsset = null;
     
+    // CRITICAL: Global trade lock to prevent double trades
+    let globalTradeLock = false;
+    let lastTradeClickTime = 0;
+    let lastTradeDirection = null;
+    const TRADE_LOCK_MS = 5000;  // 5 second absolute lock after any trade
+    
     // Intervals
     let appPollingInterval = null;
     let scanInterval = null;
@@ -105,7 +111,7 @@
     // ===========================================
     function log(msg) {
         const ts = new Date().toLocaleTimeString();
-        console.log(`[GPT v6.3.1] ${ts}: ${msg}`);
+        console.log(`[GPT v6.3.2] ${ts}: ${msg}`);
         const logEl = document.getElementById('gpt-log');
         if (logEl) logEl.textContent = msg;
     }
@@ -304,7 +310,7 @@
             <div class="header" id="gpt-drag">
                 <div class="header-left">
                     <span class="status-dot" id="gpt-dot"></span>
-                    <span class="title">GPT Bot v6.3.1</span>
+                    <span class="title">GPT Bot v6.3.2</span>
                 </div>
                 <div class="header-right">
                     <span style="font-size:10px;color:#64748b;">Trades: <span id="gpt-trades">0</span></span>
@@ -929,19 +935,62 @@
     }
 
     // ===========================================
-    // TRADE EXECUTION
+    // TRADE EXECUTION - WITH ABSOLUTE PROTECTION
     // ===========================================
     function clickTradeButton(isCall) {
+        const now = Date.now();
+        const direction = isCall ? 'CALL' : 'PUT';
+        
+        // GUARD 1: Global trade lock
+        if (globalTradeLock) {
+            log(`🛑 BLOCKED: Global trade lock active`);
+            return false;
+        }
+        
+        // GUARD 2: Time-based lock (5 seconds between ANY trades)
+        if (now - lastTradeClickTime < TRADE_LOCK_MS) {
+            const remaining = Math.round((TRADE_LOCK_MS - (now - lastTradeClickTime)) / 1000);
+            log(`🛑 BLOCKED: Trade cooldown ${remaining}s`);
+            return false;
+        }
+        
+        // GUARD 3: Prevent opposite direction within 30 seconds
+        if (lastTradeDirection && lastTradeDirection !== direction && (now - lastTradeClickTime) < 30000) {
+            log(`🛑 BLOCKED: Cannot ${direction} after ${lastTradeDirection} (${Math.round((now - lastTradeClickTime)/1000)}s ago)`);
+            return false;
+        }
+        
+        // GUARD 4: Prevent same direction within 10 seconds
+        if (lastTradeDirection === direction && (now - lastTradeClickTime) < 10000) {
+            log(`🛑 BLOCKED: Duplicate ${direction} within 10s`);
+            return false;
+        }
+        
         const selector = isCall ? '.btn-call' : '.btn-put';
         const btn = document.querySelector(selector);
         
         if (btn && btn.offsetParent !== null) {
-            log(`Clicking ${isCall ? 'CALL' : 'PUT'}`);
+            // SET ALL LOCKS BEFORE CLICKING
+            globalTradeLock = true;
+            lastTradeClickTime = now;
+            lastTradeDirection = direction;
+            
+            log(`✅ CLICKING: ${direction} button`);
+            console.log(`[GPT TRADE] ${new Date().toISOString()} - ${direction}`);
+            
+            // Single click only
             btn.click();
+            
+            // Release global lock after 5 seconds
+            setTimeout(() => {
+                globalTradeLock = false;
+                log(`🔓 Trade lock released`);
+            }, TRADE_LOCK_MS);
+            
             return true;
         }
         
-        log('Button not found: ' + selector);
+        log(`❌ Button ${selector} not found`);
         return false;
     }
 
@@ -1187,7 +1236,7 @@
     // INITIALIZATION
     // ===========================================
     function init() {
-        log('Initializing v6.3.1...');
+        log('Initializing v6.3.2...');
 
         // Load saved settings (all default to false)
         autoEnabled = GM_getValue('autoEnabled', false);
