@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://signal-executor-7.preview.emergentagent.com
-// @version      6.3.2
-// @description  Auto-trade OTC forex on Pocket Option. v6.3.2 - CRITICAL FIX: Added absolute trade lock to prevent buy+sell
+// @version      6.4.0
+// @description  Auto-trade OTC forex on Pocket Option. v6.4.0 - Fixed SCAN to properly use current asset when SWITCH off
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -111,7 +111,7 @@
     // ===========================================
     function log(msg) {
         const ts = new Date().toLocaleTimeString();
-        console.log(`[GPT v6.3.2] ${ts}: ${msg}`);
+        console.log(`[GPT v6.4.0] ${ts}: ${msg}`);
         const logEl = document.getElementById('gpt-log');
         if (logEl) logEl.textContent = msg;
     }
@@ -310,7 +310,7 @@
             <div class="header" id="gpt-drag">
                 <div class="header-left">
                     <span class="status-dot" id="gpt-dot"></span>
-                    <span class="title">GPT Bot v6.3.2</span>
+                    <span class="title">GPT Bot v6.4.0</span>
                 </div>
                 <div class="header-right">
                     <span style="font-size:10px;color:#64748b;">Trades: <span id="gpt-trades">0</span></span>
@@ -780,15 +780,40 @@
             return;
         }
 
-        log('🔍 Scanning markets...');
-        updateStatusDot('trading');
+        // Determine which assets to scan based on SWITCH
+        let assetsToScan = '';
+        
+        if (switchEnabled) {
+            // SWITCH ON: Scan all favorite OTC assets
+            assetsToScan = 'EURUSD_OTC,GBPUSD_OTC,USDJPY_OTC,AUDUSD_OTC,EURJPY_OTC,GBPJPY_OTC,EURGBP_OTC,USDCAD_OTC,USDCHF_OTC,NZDUSD_OTC,AUDCAD_OTC';
+            log('🔍 Scanning ALL FAVORITES...');
+        } else {
+            // SWITCH OFF: Scan ONLY current asset
+            const currentAssetRaw = getCurrentAsset();
+            if (!currentAssetRaw) {
+                log('Cannot determine current asset');
+                return;
+            }
+            
+            // Convert to API format (e.g., "EUR/USD OTC" -> "EURUSD_OTC")
+            assetsToScan = currentAssetRaw
+                .replace(/\s+/g, '')
+                .replace('/', '')
+                .replace('OTC', '_OTC')
+                .toUpperCase();
+            
+            if (!assetsToScan.includes('_OTC')) {
+                assetsToScan += '_OTC';
+            }
+            
+            log(`🔍 Scanning CURRENT ASSET: ${assetsToScan}`);
+        }
 
-        // Determine scope based on SWITCH
-        const scope = switchEnabled ? 'favorites' : 'current';
+        updateStatusDot('trading');
         
         GM_xmlhttpRequest({
             method: 'GET',
-            url: CONFIG.API_URL + `/signals/scan-markets?scope=${scope}&min_confidence=${CONFIG.MIN_CONFIDENCE}&min_payout=${CONFIG.MIN_PAYOUT}`,
+            url: CONFIG.API_URL + `/signals/scan-markets?assets=${assetsToScan}&min_confidence=${CONFIG.MIN_CONFIDENCE}`,
             headers: { 'Accept': 'application/json' },
             timeout: 15000,
             onload: function(res) {
@@ -805,40 +830,15 @@
                     const signals = data.top_signals || data.signals || [];
                     
                     if (data.success && signals.length > 0) {
-                        log(`Found ${signals.length} signals`);
+                        log(`Found ${signals.length} signal(s)`);
                         
-                        let bestSignal = null;
+                        // Pick the best signal (first one is highest confidence)
+                        const bestSignal = signals[0];
                         
-                        if (switchEnabled) {
-                            // Can use any signal from favorites - pick highest confidence
-                            bestSignal = signals[0];
-                            log(`SWITCH ON: Using best signal from ${bestSignal.symbol}`);
-                        } else {
-                            // Must match current asset
-                            const currentNorm = normalizeAsset(getCurrentAsset());
-                            log(`SWITCH OFF: Looking for signals matching ${currentNorm}`);
-                            
-                            for (const sig of signals) {
-                                const sigNorm = normalizeAsset(sig.symbol);
-                                if (sigNorm === currentNorm || sigNorm.includes(currentNorm) || currentNorm.includes(sigNorm)) {
-                                    bestSignal = sig;
-                                    break;
-                                }
-                            }
-                            
-                            if (!bestSignal) {
-                                log(`No signal for current asset. Available: ${signals.map(s => s.symbol).join(', ')}`);
-                                updateStatusDot('connected');
-                                return;
-                            }
-                        }
-
-                        if (bestSignal) {
-                            log(`🔍 SCAN SIGNAL: ${bestSignal.direction} ${bestSignal.symbol} (${bestSignal.confidence}%)`);
-                            executeScanTrade(bestSignal);
-                        }
+                        log(`🔍 SCAN SIGNAL: ${bestSignal.direction} ${bestSignal.symbol} (${Math.round(bestSignal.confidence)}%)`);
+                        executeScanTrade(bestSignal);
                     } else {
-                        log('No signals found in scan');
+                        log('No signals found');
                         updateStatusDot('connected');
                     }
                 } catch (e) {
@@ -1236,7 +1236,7 @@
     // INITIALIZATION
     // ===========================================
     function init() {
-        log('Initializing v6.3.2...');
+        log('Initializing v6.4.0...');
 
         // Load saved settings (all default to false)
         autoEnabled = GM_getValue('autoEnabled', false);
