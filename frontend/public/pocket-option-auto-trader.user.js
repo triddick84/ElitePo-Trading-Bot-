@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://signal-executor-7.preview.emergentagent.com
-// @version      6.4.0
-// @description  Auto-trade OTC forex on Pocket Option. v6.4.0 - Fixed SCAN to properly use current asset when SWITCH off
+// @version      6.4.1
+// @description  Auto-trade OTC forex on Pocket Option. v6.4.1 - Improved asset detection with multiple methods
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -111,7 +111,7 @@
     // ===========================================
     function log(msg) {
         const ts = new Date().toLocaleTimeString();
-        console.log(`[GPT v6.4.0] ${ts}: ${msg}`);
+        console.log(`[GPT v6.4.1] ${ts}: ${msg}`);
         const logEl = document.getElementById('gpt-log');
         if (logEl) logEl.textContent = msg;
     }
@@ -124,16 +124,84 @@
     }
 
     function getCurrentAsset() {
-        const selectors = ['.pair-title', '.asset-name', '[data-testid="asset-name"]',
-                          '.trading-pair-name', '.chart-header-pair'];
+        // Try multiple methods to find the current asset on Pocket Option
+        
+        // Method 1: Try specific selectors
+        const selectors = [
+            '.pair-title',
+            '.asset-name', 
+            '[data-testid="asset-name"]',
+            '.trading-pair-name',
+            '.chart-header-pair',
+            '.current-symbol',
+            '.symbol-name',
+            '[class*="pair-title"]',
+            '[class*="asset-name"]',
+            '[class*="symbol"]'
+        ];
+        
         for (const sel of selectors) {
             const el = document.querySelector(sel);
             if (el && el.textContent) {
-                currentAsset = el.textContent.trim();
-                return currentAsset;
+                const text = el.textContent.trim();
+                if (text.includes('/') || text.includes('USD') || text.includes('EUR') || text.includes('GBP')) {
+                    currentAsset = text;
+                    log(`Found asset via selector: ${currentAsset}`);
+                    return currentAsset;
+                }
             }
         }
-        return null;
+        
+        // Method 2: Search for any element containing currency pair pattern
+        const allElements = document.querySelectorAll('*');
+        for (const el of allElements) {
+            if (!el || !el.offsetParent) continue;
+            if (el.children.length > 3) continue;
+            
+            const text = (el.textContent || '').trim();
+            
+            // Look for patterns like "EUR/USD" or "EUR/USD OTC" or "EURUSD"
+            if (text.length >= 6 && text.length <= 20) {
+                // Check for forex pair patterns
+                const pairPattern = /^[A-Z]{3}\/[A-Z]{3}(\s*OTC)?$/i;
+                const compactPattern = /^[A-Z]{6}(_OTC)?$/i;
+                
+                if (pairPattern.test(text) || compactPattern.test(text)) {
+                    // Make sure it's visible and likely the main pair display
+                    const rect = el.getBoundingClientRect();
+                    if (rect.top < 150 && rect.width > 50) {  // Near top of page
+                        currentAsset = text;
+                        log(`Found asset via pattern: ${currentAsset}`);
+                        return currentAsset;
+                    }
+                }
+                
+                // Also check for "XXX/XXX" pattern anywhere in text
+                const match = text.match(/([A-Z]{3})\/([A-Z]{3})/i);
+                if (match) {
+                    const rect = el.getBoundingClientRect();
+                    if (rect.top < 200 && rect.top > 0) {
+                        currentAsset = match[0] + (text.toLowerCase().includes('otc') ? ' OTC' : '');
+                        log(`Found asset via match: ${currentAsset}`);
+                        return currentAsset;
+                    }
+                }
+            }
+        }
+        
+        // Method 3: Check page title or URL
+        const title = document.title;
+        const titleMatch = title.match(/([A-Z]{3})\/([A-Z]{3})/i);
+        if (titleMatch) {
+            currentAsset = titleMatch[0];
+            log(`Found asset in title: ${currentAsset}`);
+            return currentAsset;
+        }
+        
+        // Method 4: Default to EUR/USD OTC if nothing found (common default)
+        log('Could not detect asset - using default EUR/USD OTC');
+        currentAsset = 'EUR/USD OTC';
+        return currentAsset;
     }
 
     function findTradeButtons() {
@@ -310,7 +378,7 @@
             <div class="header" id="gpt-drag">
                 <div class="header-left">
                     <span class="status-dot" id="gpt-dot"></span>
-                    <span class="title">GPT Bot v6.4.0</span>
+                    <span class="title">GPT Bot v6.4.1</span>
                 </div>
                 <div class="header-right">
                     <span style="font-size:10px;color:#64748b;">Trades: <span id="gpt-trades">0</span></span>
@@ -1236,7 +1304,7 @@
     // INITIALIZATION
     // ===========================================
     function init() {
-        log('Initializing v6.4.0...');
+        log('Initializing v6.4.1...');
 
         // Load saved settings (all default to false)
         autoEnabled = GM_getValue('autoEnabled', false);
