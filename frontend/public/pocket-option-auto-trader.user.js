@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://signal-bot-preview.preview.emergentagent.com
-// @version      6.6.0
-// @description  Auto-trade OTC forex on Pocket Option. v6.6.0 - Win/Loss recognition with auto-invert system
+// @version      6.6.1
+// @description  Auto-trade OTC forex on Pocket Option. v6.6.1 - Fixed win/loss detection timing
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -206,9 +206,43 @@
     // ===========================================
     function log(msg) {
         const ts = new Date().toLocaleTimeString();
-        console.log(`[GPT v6.6.0] ${ts}: ${msg}`);
+        console.log(`[GPT v6.6.1] ${ts}: ${msg}`);
         const logEl = document.getElementById('gpt-log');
         if (logEl) logEl.textContent = msg;
+    }
+
+    // ===========================================
+    // HELPER FUNCTIONS
+    // ===========================================
+    
+    // Convert timeframe string to seconds
+    function getExpiryFromTimeframe(timeframe) {
+        if (!timeframe) return 60;
+        
+        const tf = timeframe.toLowerCase().trim();
+        
+        // Parse formats like "5s", "15s", "30s", "1m", "2m", "5m"
+        const match = tf.match(/^(\d+)(s|m|h)?$/);
+        if (match) {
+            const value = parseInt(match[1]);
+            const unit = match[2] || 's';
+            
+            switch (unit) {
+                case 's': return value;
+                case 'm': return value * 60;
+                case 'h': return value * 3600;
+                default: return value;
+            }
+        }
+        
+        // Default mappings
+        const mappings = {
+            '5s': 5, '15s': 15, '30s': 30,
+            '1m': 60, '2m': 120, '3m': 180, '5m': 300,
+            '15m': 900, '30m': 1800, '1h': 3600
+        };
+        
+        return mappings[tf] || 60;
     }
 
     // ===========================================
@@ -263,7 +297,8 @@
     
     // Detect trade result from popup notification
     function checkTradeResultPopup() {
-        // Pocket Option shows result popups like "Profit: +$X" or "Loss: -$X"
+        // Pocket Option shows result popups/notifications after trade expires
+        // Look for various result indicators
         const popupSelectors = [
             '.notification',
             '.popup',
@@ -274,29 +309,69 @@
             '[class*="profit"]',
             '[class*="loss"]',
             '.deal-result',
-            '.trade-result'
+            '.trade-result',
+            '[class*="payout"]',
+            '[class*="expire"]',
+            '[class*="closed"]',
+            // Pocket Option specific
+            '.trading-widget__result',
+            '.deal__result',
+            '[class*="deal-"]',
+            '.history-item'
         ];
         
         for (const sel of popupSelectors) {
-            const popups = document.querySelectorAll(sel);
-            for (const popup of popups) {
-                if (!popup || !popup.offsetParent) continue;
-                
-                const text = (popup.textContent || '').toLowerCase();
-                
-                // Check for win indicators
-                if (text.includes('profit') || text.includes('win') || text.includes('+$') || text.includes('+ $')) {
-                    const amountMatch = text.match(/[\+]?\$?\s*([\d,]+\.?\d*)/);
-                    const amount = amountMatch ? parseFloat(amountMatch[1].replace(',', '')) : 0;
-                    return { result: 'win', amount: amount };
+            try {
+                const popups = document.querySelectorAll(sel);
+                for (const popup of popups) {
+                    if (!popup || !popup.offsetParent) continue;
+                    
+                    const text = (popup.textContent || '').toLowerCase();
+                    const html = (popup.innerHTML || '').toLowerCase();
+                    
+                    // Skip if text is too long (likely not a result popup)
+                    if (text.length > 200) continue;
+                    
+                    // Check for WIN indicators
+                    // Look for: "profit", "win", "+$", green color indicators, "92%", payout percentages
+                    const isWin = 
+                        text.includes('profit') || 
+                        text.includes('win') || 
+                        text.includes('+$') || 
+                        text.includes('+ $') ||
+                        text.includes('payout') ||
+                        (html.includes('green') && text.match(/\$[\d.]+/)) ||
+                        (html.includes('#22c55e') || html.includes('#10b981') || html.includes('rgb(34, 197, 94)'));
+                    
+                    if (isWin && !text.includes('loss') && !text.includes('-$')) {
+                        const amountMatch = text.match(/[\+]?\$?\s*([\d,]+\.?\d*)/);
+                        const amount = amountMatch ? parseFloat(amountMatch[1].replace(',', '')) : 0;
+                        if (amount > 0) {
+                            return { result: 'win', amount: amount };
+                        }
+                    }
+                    
+                    // Check for LOSS indicators
+                    // Look for: "loss", "lose", "-$", red color indicators, "0%"
+                    const isLoss = 
+                        text.includes('loss') || 
+                        text.includes('lose') || 
+                        text.includes('-$') || 
+                        text.includes('- $') ||
+                        text.includes('expired') ||
+                        (html.includes('red') && text.match(/\$[\d.]+/)) ||
+                        (html.includes('#ef4444') || html.includes('#dc2626') || html.includes('rgb(239, 68, 68)'));
+                    
+                    if (isLoss && !text.includes('profit') && !text.includes('+$')) {
+                        const amountMatch = text.match(/[\-]?\$?\s*([\d,]+\.?\d*)/);
+                        const amount = amountMatch ? parseFloat(amountMatch[1].replace(',', '')) : 0;
+                        if (amount > 0) {
+                            return { result: 'loss', amount: amount };
+                        }
+                    }
                 }
-                
-                // Check for loss indicators
-                if (text.includes('loss') || text.includes('lose') || text.includes('-$') || text.includes('- $')) {
-                    const amountMatch = text.match(/[\-]?\$?\s*([\d,]+\.?\d*)/);
-                    const amount = amountMatch ? parseFloat(amountMatch[1].replace(',', '')) : 0;
-                    return { result: 'loss', amount: amount };
-                }
+            } catch (e) {
+                // Skip selector errors
             }
         }
         
@@ -304,65 +379,91 @@
     }
     
     // Start monitoring for trade result after placing a trade
-    function startTradeResultMonitor(direction, tradeAmount) {
-        const startBalance = getCurrentBalance();
-        
-        pendingTradeCheck = {
-            direction: direction,
-            amount: tradeAmount || 1,
-            startBalance: startBalance,
-            timestamp: Date.now()
-        };
-        
-        log(`📊 Monitoring trade: ${direction}, Balance: $${startBalance || 'N/A'}`);
-        
-        // Clear any existing interval
-        if (resultCheckInterval) {
-            clearInterval(resultCheckInterval);
-        }
-        
-        let checkCount = 0;
-        const maxChecks = 30; // Check for up to 30 seconds (covers 5s to 5min expiries)
-        
-        resultCheckInterval = setInterval(() => {
-            checkCount++;
+    function startTradeResultMonitor(direction, tradeAmount, expirySeconds) {
+        // IMPORTANT: Get balance AFTER the trade is placed (amount already deducted)
+        // Wait a moment for the balance to update after trade placement
+        setTimeout(() => {
+            const balanceAfterTrade = getCurrentBalance();
+            const estimatedExpiry = expirySeconds || 60; // Default 60 seconds if not provided
             
-            // Method 1: Check for popup result
-            const popupResult = checkTradeResultPopup();
-            if (popupResult) {
-                processTradeResult(popupResult.result, popupResult.amount);
+            pendingTradeCheck = {
+                direction: direction,
+                amount: tradeAmount || 1,
+                balanceAfterTrade: balanceAfterTrade, // Balance AFTER trade placed (amount deducted)
+                timestamp: Date.now(),
+                expiryTime: Date.now() + (estimatedExpiry * 1000) // When trade should expire
+            };
+            
+            log(`📊 Monitoring trade: ${direction}, Post-trade balance: $${balanceAfterTrade || 'N/A'}, Expiry: ${estimatedExpiry}s`);
+            
+            // Clear any existing interval
+            if (resultCheckInterval) {
                 clearInterval(resultCheckInterval);
-                resultCheckInterval = null;
-                pendingTradeCheck = null;
-                return;
             }
             
-            // Method 2: Check balance change (after at least 3 seconds)
-            if (checkCount >= 3 && pendingTradeCheck && pendingTradeCheck.startBalance) {
-                const currentBalance = getCurrentBalance();
-                if (currentBalance !== null) {
-                    const diff = currentBalance - pendingTradeCheck.startBalance;
-                    
-                    // Significant balance change detected (more than $0.50)
-                    if (Math.abs(diff) > 0.5) {
-                        const result = diff > 0 ? 'win' : 'loss';
-                        processTradeResult(result, Math.abs(diff));
-                        clearInterval(resultCheckInterval);
-                        resultCheckInterval = null;
-                        pendingTradeCheck = null;
-                        return;
+            let checkCount = 0;
+            const minWaitSeconds = Math.max(5, estimatedExpiry - 2); // Wait at least until near expiry
+            const maxChecks = Math.max(60, estimatedExpiry + 30); // Check for expiry + 30 seconds buffer
+            
+            resultCheckInterval = setInterval(() => {
+                checkCount++;
+                
+                // Method 1: Check for popup result (can appear anytime after expiry)
+                const popupResult = checkTradeResultPopup();
+                if (popupResult) {
+                    log(`🎯 Popup detected: ${popupResult.result} $${popupResult.amount}`);
+                    processTradeResult(popupResult.result, popupResult.amount);
+                    clearInterval(resultCheckInterval);
+                    resultCheckInterval = null;
+                    pendingTradeCheck = null;
+                    return;
+                }
+                
+                // Method 2: Check balance change ONLY after trade should have expired
+                // This prevents false triggers from the initial trade amount deduction
+                if (checkCount >= minWaitSeconds && pendingTradeCheck && pendingTradeCheck.balanceAfterTrade) {
+                    const currentBalance = getCurrentBalance();
+                    if (currentBalance !== null) {
+                        const diff = currentBalance - pendingTradeCheck.balanceAfterTrade;
+                        
+                        // WIN: Balance increased (got payout)
+                        // LOSS: Balance stayed same or very small change (no payout, but trade amount already gone)
+                        
+                        // Significant positive change = WIN (payout received)
+                        if (diff > 0.5) {
+                            log(`💰 Balance increased by $${diff.toFixed(2)} = WIN`);
+                            processTradeResult('win', diff);
+                            clearInterval(resultCheckInterval);
+                            resultCheckInterval = null;
+                            pendingTradeCheck = null;
+                            return;
+                        }
+                        
+                        // After expiry time + buffer, if no increase, it's a LOSS
+                        if (checkCount >= estimatedExpiry + 5) {
+                            // No payout received after sufficient wait = LOSS
+                            const lossAmount = pendingTradeCheck.amount || 1;
+                            log(`📉 No payout after expiry = LOSS ($${lossAmount})`);
+                            processTradeResult('loss', lossAmount);
+                            clearInterval(resultCheckInterval);
+                            resultCheckInterval = null;
+                            pendingTradeCheck = null;
+                            return;
+                        }
                     }
                 }
-            }
-            
-            // Timeout after maxChecks
-            if (checkCount >= maxChecks) {
-                log('⏱️ Trade result check timeout');
-                clearInterval(resultCheckInterval);
-                resultCheckInterval = null;
-                pendingTradeCheck = null;
-            }
-        }, 1000);
+                
+                // Timeout after maxChecks
+                if (checkCount >= maxChecks) {
+                    log('⏱️ Trade result check timeout - assuming LOSS');
+                    const lossAmount = pendingTradeCheck?.amount || 1;
+                    processTradeResult('loss', lossAmount);
+                    clearInterval(resultCheckInterval);
+                    resultCheckInterval = null;
+                    pendingTradeCheck = null;
+                }
+            }, 1000);
+        }, 1500); // Wait 1.5 seconds for balance to settle after trade placement
     }
     
     // Process detected trade result
@@ -1107,7 +1208,7 @@
             <div class="header" id="gpt-drag">
                 <div class="header-left">
                     <span class="status-dot" id="gpt-dot"></span>
-                    <span class="title">GPT Bot v6.6.0</span>
+                    <span class="title">GPT Bot v6.6.1</span>
                     <span id="gpt-connection-status" style="margin-left:6px;font-size:12px;" title="App Connection">🔴</span>
                 </div>
                 <div class="header-right">
@@ -1196,7 +1297,7 @@
                     <span class="value" id="gpt-favorites-count">0</span>
                 </div>
                 
-                <div id="gpt-log">Ready - v6.6.0</div>
+                <div id="gpt-log">Ready - v6.6.1</div>
             </div>
         `;
 
@@ -1713,7 +1814,9 @@
             log(`✅ APP TRADE: ${finalDirection} on ${signal.symbol}`);
             
             // Start monitoring for win/loss result - v6.6.0
-            startTradeResultMonitor(finalDirection, signal.amount || 1);
+            // Pass expiry time from signal or use default based on timeframe
+            const expirySeconds = signal.expiration_seconds || signal.expiry || getExpiryFromTimeframe(signal.timeframe) || 60;
+            startTradeResultMonitor(finalDirection, signal.amount || 1, expirySeconds);
             
             try {
                 GM_notification({
@@ -1925,7 +2028,9 @@
             log(`✅ SCAN TRADE: ${finalDirection} on ${signal.symbol}`);
             
             // Start monitoring for win/loss result - v6.6.0
-            startTradeResultMonitor(finalDirection, signal.amount || 1);
+            // Pass expiry time from signal or use default
+            const expirySeconds = signal.expiration_seconds || signal.expiry || getExpiryFromTimeframe(signal.timeframe) || 60;
+            startTradeResultMonitor(finalDirection, signal.amount || 1, expirySeconds);
             
             try {
                 GM_notification({
