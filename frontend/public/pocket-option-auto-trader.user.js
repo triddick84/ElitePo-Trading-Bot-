@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://signal-bot-preview.preview.emergentagent.com
-// @version      6.6.3
-// @description  Auto-trade OTC forex on Pocket Option. v6.6.3 - Detects WIN (green $) vs LOSS ($0 white) from closed trades
+// @version      6.7.0
+// @description  Auto-trade OTC forex on Pocket Option. v6.7.0 - Manual WIN/LOSS buttons with Martingale system
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -74,7 +74,7 @@
     let currentFavoriteIndex = 0; // For cycling through favorites
     
     // ===========================================
-    // WIN/LOSS RECOGNITION SYSTEM - v6.6.0
+    // MANUAL WIN/LOSS + MARTINGALE SYSTEM - v6.7.0
     // ===========================================
     let winLossStats = {
         totalWins: 0,
@@ -82,22 +82,23 @@
         consecutiveWins: 0,
         consecutiveLosses: 0,
         sessionProfit: 0,
-        lastTradeResult: null,  // 'win', 'loss', or null
-        lastTradeAmount: 0,
-        lastBalance: 0,
-        tradeHistory: []  // Array of {time, direction, result, amount, balance}
+        lastTradeResult: null,
+        tradeHistory: []
     };
     
-    // Auto-invert settings
-    let autoInvertEnabled = false;      // Master toggle for auto-invert system
-    let autoInvertActive = false;       // Currently in inverted mode due to loss
-    let autoPlaceAfterLoss = false;     // Auto-place next trade after loss (vs just invert next signal)
-    let maxConsecutiveLosses = 3;       // Stop after this many consecutive losses
-    let stopLossAmount = 0;             // Stop if session loss exceeds this (0 = disabled)
-    let soundNotificationsEnabled = true; // Sound on win/loss
+    // Manual invert on loss
+    let manualInvertActive = false;     // User pressed LOSS button - signals inverted
     
-    // Trade result monitoring
-    let pendingTradeCheck = null;       // {direction, amount, startBalance, timestamp}
+    // Martingale system
+    let martingaleEnabled = false;      // Master toggle for martingale
+    let martingaleStep = 0;             // Current step (0 = base, 1 = first double, etc.)
+    let martingaleBaseAmount = 1;       // Starting trade amount
+    let martingaleMultiplier = 2;       // Multiply by this each loss (2 = double)
+    let martingaleMaxSteps = 5;         // Max steps before stopping
+    let currentTradeAmount = 1;         // Current calculated trade amount
+    
+    // Sound notifications
+    let soundNotificationsEnabled = true;
     let resultCheckInterval = null;
     
     // Intervals
@@ -206,7 +207,7 @@
     // ===========================================
     function log(msg) {
         const ts = new Date().toLocaleTimeString();
-        console.log(`[GPT v6.6.3] ${ts}: ${msg}`);
+        console.log(`[GPT v6.7.0] ${ts}: ${msg}`);
         const logEl = document.getElementById('gpt-log');
         if (logEl) logEl.textContent = msg;
     }
@@ -246,540 +247,150 @@
     }
 
     // ===========================================
-    // WIN/LOSS DETECTION SYSTEM - v6.6.2
-    // Uses Pocket Option's Open/Closed trades UI
+    // MANUAL WIN/LOSS HANDLERS - v6.7.0
+    // User presses buttons to record wins/losses
     // ===========================================
     
-    // Track the number of closed trades to detect new closures
-    let lastClosedTradesCount = 0;
-    let lastClosedTradeIds = new Set();
-    
-    // Get count of currently open trades
-    function getOpenTradesCount() {
-        // Pocket Option open trades selectors
-        const openTradeSelectors = [
-            '.deals-list--open .deal',
-            '.deals--open .deal-item',
-            '[class*="open-deal"]',
-            '[class*="active-deal"]',
-            '.trading-deals__item--open',
-            '.open-trades .trade-item',
-            '[class*="deals"] [class*="open"]',
-            '.deals-wrapper--open .deal'
-        ];
+    // Called when user presses WIN button
+    function handleManualWin() {
+        winLossStats.totalWins++;
+        winLossStats.consecutiveWins++;
+        winLossStats.consecutiveLosses = 0;
+        winLossStats.lastTradeResult = 'win';
         
-        for (const sel of openTradeSelectors) {
-            try {
-                const trades = document.querySelectorAll(sel);
-                if (trades.length > 0) {
-                    return trades.length;
-                }
-            } catch(e) {}
-        }
+        // Calculate profit (current trade amount * payout %)
+        const profit = currentTradeAmount * 0.92; // Assume ~92% payout
+        winLossStats.sessionProfit += profit;
         
-        // Try to find open trades container and count children
-        const openContainerSelectors = [
-            '.deals-list--open',
-            '.deals--open',
-            '[class*="open-deals"]',
-            '.trading-deals--open'
-        ];
-        
-        for (const sel of openContainerSelectors) {
-            try {
-                const container = document.querySelector(sel);
-                if (container) {
-                    const items = container.querySelectorAll('[class*="deal"], [class*="item"], [class*="trade"]');
-                    if (items.length > 0) return items.length;
-                }
-            } catch(e) {}
-        }
-        
-        return 0;
-    }
-    
-    // Get the most recent closed trade result
-    function getLatestClosedTradeResult() {
-        // Pocket Option closed trades selectors
-        const closedTradeSelectors = [
-            '.deals-list--closed .deal',
-            '.deals--closed .deal-item',
-            '[class*="closed-deal"]',
-            '[class*="history-deal"]',
-            '.trading-deals__item--closed',
-            '.closed-trades .trade-item',
-            '.deals-wrapper--closed .deal',
-            '.history-list .deal'
-        ];
-        
-        for (const sel of closedTradeSelectors) {
-            try {
-                const trades = document.querySelectorAll(sel);
-                if (trades.length > 0) {
-                    // Get the first (most recent) closed trade
-                    const latestTrade = trades[0];
-                    return parseTradeResult(latestTrade);
-                }
-            } catch(e) {}
-        }
-        
-        // Try to find closed trades container
-        const closedContainerSelectors = [
-            '.deals-list--closed',
-            '.deals--closed',
-            '[class*="closed-deals"]',
-            '[class*="history-deals"]',
-            '.trading-deals--closed'
-        ];
-        
-        for (const sel of closedContainerSelectors) {
-            try {
-                const container = document.querySelector(sel);
-                if (container) {
-                    const items = container.querySelectorAll('[class*="deal"], [class*="item"], [class*="trade"]');
-                    if (items.length > 0) {
-                        return parseTradeResult(items[0]);
-                    }
-                }
-            } catch(e) {}
-        }
-        
-        return null;
-    }
-    
-    // Parse a trade element to extract win/loss result
-    // Pocket Option specific: Last $ value is GREEN with amount = WIN, "$0" in WHITE = LOSS
-    function parseTradeResult(tradeElement) {
-        if (!tradeElement) return null;
-        
-        const text = (tradeElement.textContent || '');
-        const html = (tradeElement.innerHTML || '');
-        
-        // Create a unique ID for this trade element
-        const tradeId = text.replace(/\s+/g, '').substring(0, 50);
-        
-        // Check if we've already processed this trade
-        if (lastClosedTradeIds.has(tradeId)) {
-            return null;
-        }
-        
-        // POCKET OPTION SPECIFIC DETECTION:
-        // Find all elements with $ values inside the trade element
-        const dollarElements = tradeElement.querySelectorAll('*');
-        let lastDollarElement = null;
-        let lastDollarValue = null;
-        let lastDollarColor = null;
-        
-        for (const el of dollarElements) {
-            const elText = (el.textContent || '').trim();
-            
-            // Look for $ followed by number
-            if (elText.match(/^\$[\d,.]+$/) || elText.match(/^[\d,.]+$/)) {
-                const value = parseFloat(elText.replace(/[^\d.]/g, ''));
-                if (!isNaN(value)) {
-                    lastDollarElement = el;
-                    lastDollarValue = value;
-                    
-                    // Get computed color
-                    const style = window.getComputedStyle(el);
-                    lastDollarColor = style.color;
-                }
-            }
-        }
-        
-        // Also check for spans/divs with specific styling
-        const allSpans = tradeElement.querySelectorAll('span, div, p');
-        for (const span of allSpans) {
-            const spanText = (span.textContent || '').trim();
-            
-            // Match $0, $0.00, $1.92, etc.
-            if (spanText.match(/^\$\d+(\.\d{1,2})?$/)) {
-                const value = parseFloat(spanText.replace(/[^\d.]/g, ''));
-                const style = window.getComputedStyle(span);
-                const color = style.color;
-                
-                // This could be the profit/loss indicator
-                lastDollarElement = span;
-                lastDollarValue = value;
-                lastDollarColor = color;
-            }
-        }
-        
-        // Determine WIN or LOSS based on color and value
-        let result = null;
-        let amount = 0;
-        
-        if (lastDollarElement && lastDollarColor) {
-            // Parse RGB color
-            const rgbMatch = lastDollarColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
-            
-            if (rgbMatch) {
-                const r = parseInt(rgbMatch[1]);
-                const g = parseInt(rgbMatch[2]);
-                const b = parseInt(rgbMatch[3]);
-                
-                // GREEN detection (high green, low red) = WIN
-                // Common greens: rgb(34, 197, 94), rgb(16, 185, 129), rgb(74, 222, 128)
-                if (g > 150 && g > r && g > b) {
-                    result = 'win';
-                    amount = lastDollarValue || 0;
-                    log(`🎯 Detected GREEN ($${amount}) = WIN`);
-                }
-                // WHITE detection (all values similar/high) with $0 = LOSS
-                // White is typically rgb(255, 255, 255) or similar high values
-                else if (r > 200 && g > 200 && b > 200 && lastDollarValue === 0) {
-                    result = 'loss';
-                    amount = pendingTradeCheck?.amount || 1;
-                    log(`🎯 Detected WHITE $0 = LOSS`);
-                }
-                // GRAY/WHITE with $0 = LOSS
-                else if (Math.abs(r - g) < 30 && Math.abs(g - b) < 30 && lastDollarValue === 0) {
-                    result = 'loss';
-                    amount = pendingTradeCheck?.amount || 1;
-                    log(`🎯 Detected neutral color $0 = LOSS`);
-                }
-                // RED detection (high red) - might also indicate loss
-                else if (r > 180 && r > g && r > b) {
-                    result = 'loss';
-                    amount = pendingTradeCheck?.amount || 1;
-                    log(`🎯 Detected RED = LOSS`);
-                }
-                // Any non-zero green value = WIN
-                else if (lastDollarValue > 0 && g > 100) {
-                    result = 'win';
-                    amount = lastDollarValue;
-                    log(`🎯 Detected positive value with greenish tint = WIN`);
-                }
-            }
-        }
-        
-        // Fallback: Check HTML for color classes or inline styles
-        if (!result) {
-            const htmlLower = html.toLowerCase();
-            
-            // Look for green styling
-            if (htmlLower.includes('green') || htmlLower.includes('#2') || htmlLower.includes('success') || htmlLower.includes('profit')) {
-                // Extract any dollar amount
-                const amounts = text.match(/\$[\d,.]+/g);
-                if (amounts && amounts.length > 0) {
-                    const lastAmount = amounts[amounts.length - 1];
-                    const value = parseFloat(lastAmount.replace(/[^\d.]/g, ''));
-                    if (value > 0) {
-                        result = 'win';
-                        amount = value;
-                        log(`🎯 Fallback: Green styling with $${value} = WIN`);
-                    }
-                }
-            }
-            
-            // $0 anywhere likely means loss
-            if (!result && text.includes('$0')) {
-                result = 'loss';
-                amount = pendingTradeCheck?.amount || 1;
-                log(`🎯 Fallback: Found $0 = LOSS`);
-            }
-        }
-        
-        if (result) {
-            // Mark this trade as processed
-            lastClosedTradeIds.add(tradeId);
-            // Keep only last 20 trade IDs
-            if (lastClosedTradeIds.size > 20) {
-                const idsArray = Array.from(lastClosedTradeIds);
-                lastClosedTradeIds = new Set(idsArray.slice(-20));
-            }
-            
-            return { result, amount, tradeId };
-        }
-        
-        // Debug: Log what we found
-        if (lastDollarElement) {
-            log(`⚠️ Found $ element but couldn't determine result. Value: $${lastDollarValue}, Color: ${lastDollarColor}`);
-        }
-        
-        return null;
-    }
-    
-    // Count closed trades
-    function getClosedTradesCount() {
-        const closedTradeSelectors = [
-            '.deals-list--closed .deal',
-            '.deals--closed .deal-item',
-            '[class*="closed-deal"]',
-            '.trading-deals__item--closed',
-            '.closed-trades .trade-item',
-            '.deals-wrapper--closed .deal',
-            '.history-list .deal'
-        ];
-        
-        for (const sel of closedTradeSelectors) {
-            try {
-                const trades = document.querySelectorAll(sel);
-                if (trades.length > 0) {
-                    return trades.length;
-                }
-            } catch(e) {}
-        }
-        
-        // Try container method
-        const closedContainerSelectors = [
-            '.deals-list--closed',
-            '.deals--closed',
-            '[class*="closed-deals"]',
-            '.trading-deals--closed'
-        ];
-        
-        for (const sel of closedContainerSelectors) {
-            try {
-                const container = document.querySelector(sel);
-                if (container) {
-                    const items = container.querySelectorAll('[class*="deal"], [class*="item"], [class*="trade"]');
-                    return items.length;
-                }
-            } catch(e) {}
-        }
-        
-        return 0;
-    }
-    
-    // Start monitoring for trade result after placing a trade
-    function startTradeResultMonitor(direction, tradeAmount, expirySeconds) {
-        const estimatedExpiry = expirySeconds || 60;
-        
-        // Record initial state
-        const initialOpenCount = getOpenTradesCount();
-        const initialClosedCount = getClosedTradesCount();
-        
-        pendingTradeCheck = {
-            direction: direction,
-            amount: tradeAmount || 1,
-            timestamp: Date.now(),
-            expiryTime: Date.now() + (estimatedExpiry * 1000),
-            initialOpenCount: initialOpenCount,
-            initialClosedCount: initialClosedCount
-        };
-        
-        log(`📊 Monitoring: ${direction}, Open: ${initialOpenCount}, Closed: ${initialClosedCount}, Expiry: ${estimatedExpiry}s`);
-        
-        // Clear any existing interval
-        if (resultCheckInterval) {
-            clearInterval(resultCheckInterval);
-        }
-        
-        let checkCount = 0;
-        const maxChecks = Math.max(120, estimatedExpiry + 60); // Check for expiry + 60 seconds buffer
-        
-        resultCheckInterval = setInterval(() => {
-            checkCount++;
-            
-            // Method: Check if closed trades count increased
-            const currentClosedCount = getClosedTradesCount();
-            
-            if (currentClosedCount > pendingTradeCheck.initialClosedCount) {
-                // A trade has closed! Get its result
-                const tradeResult = getLatestClosedTradeResult();
-                
-                if (tradeResult) {
-                    log(`🎯 Trade closed: ${tradeResult.result.toUpperCase()} $${tradeResult.amount}`);
-                    processTradeResult(tradeResult.result, tradeResult.amount || pendingTradeCheck.amount);
-                    clearInterval(resultCheckInterval);
-                    resultCheckInterval = null;
-                    pendingTradeCheck = null;
-                    return;
-                }
-            }
-            
-            // Also check open trades count decreased (trade moved from open to closed)
-            const currentOpenCount = getOpenTradesCount();
-            if (checkCount > 3 && currentOpenCount < pendingTradeCheck.initialOpenCount) {
-                // Open count decreased, check closed for result
-                const tradeResult = getLatestClosedTradeResult();
-                
-                if (tradeResult) {
-                    log(`🎯 Trade moved to closed: ${tradeResult.result.toUpperCase()} $${tradeResult.amount}`);
-                    processTradeResult(tradeResult.result, tradeResult.amount || pendingTradeCheck.amount);
-                    clearInterval(resultCheckInterval);
-                    resultCheckInterval = null;
-                    pendingTradeCheck = null;
-                    return;
-                }
-            }
-            
-            // Log progress every 10 seconds
-            if (checkCount % 10 === 0) {
-                log(`⏳ Waiting for result... (${checkCount}s) Open: ${currentOpenCount}, Closed: ${currentClosedCount}`);
-            }
-            
-            // Timeout after maxChecks
-            if (checkCount >= maxChecks) {
-                log('⏱️ Trade result timeout - could not detect outcome');
-                clearInterval(resultCheckInterval);
-                resultCheckInterval = null;
-                pendingTradeCheck = null;
-            }
-        }, 1000);
-    }
-    
-    // Process detected trade result
-    function processTradeResult(result, amount) {
-        const isWin = result === 'win';
-        
-        log(`${isWin ? '✅ WIN' : '❌ LOSS'}: $${amount.toFixed(2)}`);
-        
-        // Update stats
-        if (isWin) {
-            winLossStats.totalWins++;
-            winLossStats.consecutiveWins++;
-            winLossStats.consecutiveLosses = 0;
-            winLossStats.sessionProfit += amount;
-            playWinSound();
+        // Reset martingale on win
+        if (martingaleEnabled) {
+            martingaleStep = 0;
+            currentTradeAmount = martingaleBaseAmount;
+            log(`✅ WIN +$${profit.toFixed(2)} - Martingale reset to $${currentTradeAmount}`);
         } else {
-            winLossStats.totalLosses++;
-            winLossStats.consecutiveLosses++;
-            winLossStats.consecutiveWins = 0;
-            winLossStats.sessionProfit -= amount;
-            playLossSound();
+            log(`✅ WIN +$${profit.toFixed(2)}`);
         }
         
-        winLossStats.lastTradeResult = result;
-        winLossStats.lastTradeAmount = amount;
-        winLossStats.lastBalance = getCurrentBalance();
+        // Play sound
+        if (soundNotificationsEnabled) playWinSound();
         
-        // Add to history
-        winLossStats.tradeHistory.push({
-            time: new Date().toISOString(),
-            direction: pendingTradeCheck?.direction || 'unknown',
-            result: result,
-            amount: amount,
-            balance: winLossStats.lastBalance
-        });
-        
-        // Keep only last 50 trades in history
-        if (winLossStats.tradeHistory.length > 50) {
-            winLossStats.tradeHistory = winLossStats.tradeHistory.slice(-50);
-        }
-        
-        // Update UI
+        // Update displays
         updateWinLossDisplay();
-        
-        // Handle auto-invert logic
-        if (autoInvertEnabled) {
-            handleAutoInvert(isWin, amount);
-        }
-        
-        // Sync stats to backend
+        updateMartingaleDisplay();
         syncStatsToBackend();
     }
     
-    // Auto-invert logic
-    function handleAutoInvert(isWin, amount) {
-        // Check stop conditions first
-        if (checkStopConditions()) {
-            return;
-        }
+    // Called when user presses LOSS button
+    function handleManualLoss() {
+        winLossStats.totalLosses++;
+        winLossStats.consecutiveLosses++;
+        winLossStats.consecutiveWins = 0;
+        winLossStats.lastTradeResult = 'loss';
+        winLossStats.sessionProfit -= currentTradeAmount;
         
-        if (!isWin) {
-            // LOSS: Enable/toggle inversion
-            if (!autoInvertActive) {
-                // First loss - enable invert
-                autoInvertActive = true;
-                invertEnabled = true;
-                GM_setValue('invertEnabled', true);
-                log('🔄 AUTO-INVERT: Enabled due to loss');
-                updateInvertButton();
-                
-                // If auto-place mode, place inverted trade
-                if (autoPlaceAfterLoss) {
-                    log('🔄 AUTO-PLACE: Placing inverted trade...');
-                    setTimeout(() => {
-                        triggerAutoPlaceTrade();
-                    }, 2000);
-                }
+        // Toggle inversion on loss
+        manualInvertActive = !manualInvertActive;
+        invertEnabled = manualInvertActive;
+        GM_setValue('invertEnabled', invertEnabled);
+        
+        // Advance martingale step
+        if (martingaleEnabled) {
+            if (martingaleStep < martingaleMaxSteps) {
+                martingaleStep++;
+                currentTradeAmount = martingaleBaseAmount * Math.pow(martingaleMultiplier, martingaleStep);
+                log(`❌ LOSS -$${(currentTradeAmount / martingaleMultiplier).toFixed(2)} - INVERTED: ${manualInvertActive ? 'ON' : 'OFF'} - Martingale Step ${martingaleStep}: $${currentTradeAmount.toFixed(2)}`);
             } else {
-                // Loss while already inverted - flip back to normal
-                autoInvertActive = false;
-                invertEnabled = false;
-                GM_setValue('invertEnabled', false);
-                log('🔄 AUTO-INVERT: Disabled (double loss)');
-                updateInvertButton();
+                log(`❌ LOSS - MAX MARTINGALE REACHED! Step ${martingaleStep}`);
+                playStopSound();
+            }
+        } else {
+            log(`❌ LOSS - INVERTED: ${manualInvertActive ? 'ON' : 'OFF'}`);
+        }
+        
+        // Play sound
+        if (soundNotificationsEnabled) playLossSound();
+        
+        // Update displays
+        updateInvertButton();
+        updateWinLossDisplay();
+        updateMartingaleDisplay();
+        syncStatsToBackend();
+    }
+    
+    // Calculate current martingale amount
+    function calculateMartingaleAmount() {
+        if (!martingaleEnabled) return martingaleBaseAmount;
+        return martingaleBaseAmount * Math.pow(martingaleMultiplier, martingaleStep);
+    }
+    
+    // Reset martingale to base
+    function resetMartingale() {
+        martingaleStep = 0;
+        currentTradeAmount = martingaleBaseAmount;
+        manualInvertActive = false;
+        invertEnabled = false;
+        GM_setValue('invertEnabled', false);
+        updateInvertButton();
+        updateMartingaleDisplay();
+        log(`🔄 Martingale reset to $${martingaleBaseAmount}`);
+    }
+    
+    // Update martingale display
+    function updateMartingaleDisplay() {
+        const stepEl = document.getElementById('gpt-martingale-step');
+        const amountEl = document.getElementById('gpt-martingale-amount');
+        const statusEl = document.getElementById('gpt-martingale-status');
+        
+        if (stepEl) stepEl.textContent = martingaleStep;
+        if (amountEl) amountEl.textContent = `$${currentTradeAmount.toFixed(2)}`;
+        if (statusEl) {
+            if (martingaleStep >= martingaleMaxSteps) {
+                statusEl.textContent = '⚠️ MAX';
+                statusEl.style.color = '#ef4444';
+            } else if (martingaleStep > 0) {
+                statusEl.textContent = `Step ${martingaleStep}/${martingaleMaxSteps}`;
+                statusEl.style.color = '#f59e0b';
+            } else {
+                statusEl.textContent = 'Base';
+                statusEl.style.color = '#22c55e';
             }
         }
-        // If WIN: Do nothing, keep current invert state
     }
     
-    // Check if we should stop trading
-    function checkStopConditions() {
-        // Check max consecutive losses
-        if (maxConsecutiveLosses > 0 && winLossStats.consecutiveLosses >= maxConsecutiveLosses) {
-            log(`🛑 STOP: Max consecutive losses (${maxConsecutiveLosses}) reached`);
-            playStopSound();
-            disableAllTrading();
-            
-            GM_notification({
-                title: '🛑 Trading Stopped',
-                text: `Max ${maxConsecutiveLosses} consecutive losses reached`,
-                timeout: 10000
-            });
-            
-            return true;
-        }
+    // Update win/loss display
+    function updateWinLossDisplay() {
+        const winsEl = document.getElementById('gpt-wins');
+        const lossesEl = document.getElementById('gpt-losses');
+        const streakEl = document.getElementById('gpt-streak');
+        const profitEl = document.getElementById('gpt-profit');
         
-        // Check stop loss amount
-        if (stopLossAmount > 0 && winLossStats.sessionProfit <= -stopLossAmount) {
-            log(`🛑 STOP: Stop loss ($${stopLossAmount}) reached. Session P/L: $${winLossStats.sessionProfit.toFixed(2)}`);
-            playStopSound();
-            disableAllTrading();
-            
-            GM_notification({
-                title: '🛑 Trading Stopped',
-                text: `Stop loss $${stopLossAmount} reached`,
-                timeout: 10000
-            });
-            
-            return true;
-        }
+        if (winsEl) winsEl.textContent = winLossStats.totalWins;
+        if (lossesEl) lossesEl.textContent = winLossStats.totalLosses;
         
-        return false;
-    }
-    
-    // Disable all trading modes
-    function disableAllTrading() {
-        autoEnabled = false;
-        scanEnabled = false;
-        autoInvertEnabled = false;
-        GM_setValue('autoEnabled', false);
-        GM_setValue('scanEnabled', false);
-        GM_setValue('autoInvertEnabled', false);
-        manageIntervals();
-        updateAllUI();
-    }
-    
-    // Trigger an auto-place trade (after loss in auto-place mode)
-    function triggerAutoPlaceTrade() {
-        if (isTrading || globalTradeLock) {
-            log('Cannot auto-place: already trading');
-            return;
-        }
-        
-        // Use current SCAN or force a fetch
-        if (scanEnabled) {
-            doScan(true);
-        } else if (autoEnabled) {
-            checkAppSignals(true);
-        }
-    }
-    
-    // Update invert button UI
-    function updateInvertButton() {
-        const btn = document.getElementById('gpt-invert');
-        if (btn) {
-            btn.textContent = invertEnabled ? 'INVERT ON' : 'INVERT OFF';
-            btn.classList.toggle('on', invertEnabled);
-            
-            // Add indicator if auto-invert is active
-            if (autoInvertActive && autoInvertEnabled) {
-                btn.textContent = 'INVERT ON (AUTO)';
+        if (streakEl) {
+            if (winLossStats.consecutiveWins > 0) {
+                streakEl.textContent = `🔥 ${winLossStats.consecutiveWins}W`;
+                streakEl.style.color = '#22c55e';
+            } else if (winLossStats.consecutiveLosses > 0) {
+                streakEl.textContent = `❄️ ${winLossStats.consecutiveLosses}L`;
+                streakEl.style.color = '#ef4444';
+            } else {
+                streakEl.textContent = '-';
+                streakEl.style.color = '#9ca3af';
             }
+        }
+        
+        if (profitEl) {
+            const profit = winLossStats.sessionProfit;
+            profitEl.textContent = `${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`;
+            profitEl.style.color = profit >= 0 ? '#22c55e' : '#ef4444';
+        }
+        
+        // Update invert indicator
+        const invertIndicator = document.getElementById('gpt-invert-status');
+        if (invertIndicator) {
+            invertIndicator.textContent = manualInvertActive ? '🔄 INVERTED' : '';
+            invertIndicator.style.color = '#f59e0b';
         }
     }
     
@@ -799,21 +410,18 @@
                 consecutive_losses: winLossStats.consecutiveLosses,
                 session_profit: winLossStats.sessionProfit,
                 last_result: winLossStats.lastTradeResult,
-                auto_invert_active: autoInvertActive,
-                trade_history: winLossStats.tradeHistory.slice(-10) // Last 10 trades
+                manual_invert_active: manualInvertActive,
+                martingale_step: martingaleStep,
+                current_trade_amount: currentTradeAmount
             }),
             timeout: 5000,
-            onload: function(res) {
-                // Stats synced
-            },
-            onerror: function() {
-                // Ignore sync errors
-            }
+            onload: function(res) {},
+            onerror: function() {}
         });
     }
     
-    // Reset stats
-    function resetWinLossStats() {
+    // Reset all stats
+    function resetAllStats() {
         winLossStats = {
             totalWins: 0,
             totalLosses: 0,
@@ -821,14 +429,12 @@
             consecutiveLosses: 0,
             sessionProfit: 0,
             lastTradeResult: null,
-            lastTradeAmount: 0,
-            lastBalance: getCurrentBalance(),
             tradeHistory: []
         };
-        autoInvertActive = false;
+        resetMartingale();
         updateWinLossDisplay();
         syncStatsToBackend();
-        log('📊 Stats reset');
+        log('📊 All stats reset');
     }
 
     // ===========================================
@@ -1362,7 +968,7 @@
             <div class="header" id="gpt-drag">
                 <div class="header-left">
                     <span class="status-dot" id="gpt-dot"></span>
-                    <span class="title">GPT Bot v6.6.3</span>
+                    <span class="title">GPT Bot v6.7.0</span>
                     <span id="gpt-connection-status" style="margin-left:6px;font-size:12px;" title="App Connection">🔴</span>
                 </div>
                 <div class="header-right">
@@ -1396,26 +1002,54 @@
                         <span style="font-size:10px;color:#9ca3af;">P/L:</span>
                         <span class="stat-profit" id="gpt-profit">$0.00</span>
                     </div>
+                    <div class="stats-row">
+                        <span style="font-size:10px;color:#9ca3af;">Invert:</span>
+                        <span style="font-size:10px;color:#f59e0b;" id="gpt-invert-status"></span>
+                    </div>
                 </div>
                 
-                <!-- AUTO-INVERT SECTION - v6.6.0 -->
-                <div class="auto-invert-section" id="gpt-auto-invert-section">
-                    <div style="font-size:10px;color:#fcd34d;margin-bottom:6px;text-align:center;">🔄 Auto-Invert on Loss</div>
+                <!-- MANUAL WIN/LOSS BUTTONS - v6.7.0 -->
+                <div style="background:linear-gradient(135deg,#1e3a5f 0%,#0d1b2a 100%);border:1px solid #3b82f6;border-radius:8px;padding:8px;margin:8px 0;">
+                    <div style="font-size:10px;color:#60a5fa;margin-bottom:6px;text-align:center;">📊 Record Trade Result</div>
                     <div class="btn-row">
-                        <button class="btn-auto-invert" id="gpt-auto-invert" title="Auto-invert signals after loss">AUTO-INV OFF</button>
-                        <button class="btn-auto-place" id="gpt-auto-place" title="Auto-place trade after loss">AUTO-PLACE OFF</button>
+                        <button id="gpt-win-btn" style="background:#22c55e;color:white;font-size:14px;padding:10px;">✅ WIN</button>
+                        <button id="gpt-loss-btn" style="background:#ef4444;color:white;font-size:14px;padding:10px;">❌ LOSS</button>
                     </div>
-                    <div class="btn-row" style="margin-top:4px;">
-                        <button class="btn-sound" id="gpt-sound-toggle" title="Sound notifications">🔊 SOUND ON</button>
-                        <div style="display:flex;align-items:center;gap:4px;justify-content:flex-end;">
-                            <span style="font-size:9px;color:#9ca3af;">Max Loss:</span>
-                            <input type="number" class="settings-input" id="gpt-max-losses" value="3" min="1" max="10" title="Stop after X consecutive losses">
-                        </div>
+                    <div style="font-size:9px;color:#94a3b8;text-align:center;margin-top:4px;">Press when trade closes. LOSS inverts signals.</div>
+                </div>
+                
+                <!-- MARTINGALE SECTION - v6.7.0 -->
+                <div style="background:linear-gradient(135deg,#4c1d95 0%,#2d1b4e 100%);border:1px solid #8b5cf6;border-radius:8px;padding:8px;margin:8px 0;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                        <span style="font-size:10px;color:#a78bfa;">📈 Martingale</span>
+                        <button id="gpt-martingale-toggle" style="font-size:9px;padding:3px 8px;background:#6b7280;border:none;border-radius:3px;color:white;cursor:pointer;">OFF</button>
                     </div>
-                    <div class="stats-row" style="margin-top:6px;">
-                        <span style="font-size:9px;color:#9ca3af;">Stop Loss $:</span>
-                        <input type="number" class="settings-input" id="gpt-stop-loss" value="0" min="0" max="1000" step="10" title="Stop if session loss exceeds this (0=disabled)">
+                    <div class="stats-row">
+                        <span style="font-size:10px;color:#9ca3af;">Step:</span>
+                        <span style="font-size:10px;" id="gpt-martingale-status">Base</span>
                     </div>
+                    <div class="stats-row">
+                        <span style="font-size:10px;color:#9ca3af;">Next Amount:</span>
+                        <span style="font-size:12px;color:#22c55e;font-weight:bold;" id="gpt-martingale-amount">$1.00</span>
+                    </div>
+                    <div class="stats-row" style="margin-top:4px;">
+                        <span style="font-size:9px;color:#9ca3af;">Base $:</span>
+                        <input type="number" class="settings-input" id="gpt-martingale-base" value="1" min="0.1" max="100" step="0.5" style="width:45px;">
+                    </div>
+                    <div class="stats-row">
+                        <span style="font-size:9px;color:#9ca3af;">Multiplier:</span>
+                        <input type="number" class="settings-input" id="gpt-martingale-mult" value="2" min="1.5" max="3" step="0.1" style="width:45px;">
+                    </div>
+                    <div class="stats-row">
+                        <span style="font-size:9px;color:#9ca3af;">Max Steps:</span>
+                        <input type="number" class="settings-input" id="gpt-martingale-max" value="5" min="1" max="10" style="width:45px;">
+                    </div>
+                    <button id="gpt-martingale-reset" style="width:100%;font-size:9px;padding:4px;background:#374151;border:none;border-radius:3px;color:#9ca3af;cursor:pointer;margin-top:4px;">Reset Martingale</button>
+                </div>
+                
+                <!-- SOUND TOGGLE -->
+                <div class="btn-row">
+                    <button id="gpt-sound-toggle" style="background:#8b5cf6;color:white;font-size:10px;">🔊 SOUND ON</button>
                 </div>
                 
                 <div class="btn-row">
@@ -1451,7 +1085,7 @@
                     <span class="value" id="gpt-favorites-count">0</span>
                 </div>
                 
-                <div id="gpt-log">Ready - v6.6.3</div>
+                <div id="gpt-log">Ready - v6.7.0</div>
             </div>
         `;
 
@@ -1466,23 +1100,37 @@
         document.getElementById('gpt-reset').addEventListener('click', resetToDefaults);
         document.getElementById('gpt-minimize').addEventListener('click', toggleMinimize);
         
-        // NEW: Win/Loss and Auto-Invert handlers - v6.6.0
-        document.getElementById('gpt-reset-stats').addEventListener('click', resetWinLossStats);
-        document.getElementById('gpt-auto-invert').addEventListener('click', toggleAutoInvert);
-        document.getElementById('gpt-auto-place').addEventListener('click', toggleAutoPlace);
+        // NEW: Manual Win/Loss handlers - v6.7.0
+        document.getElementById('gpt-win-btn').addEventListener('click', handleManualWin);
+        document.getElementById('gpt-loss-btn').addEventListener('click', handleManualLoss);
+        document.getElementById('gpt-reset-stats').addEventListener('click', resetAllStats);
         document.getElementById('gpt-sound-toggle').addEventListener('click', toggleSoundNotifications);
         
-        // Settings inputs
-        document.getElementById('gpt-max-losses').addEventListener('change', (e) => {
-            maxConsecutiveLosses = parseInt(e.target.value) || 3;
-            GM_setValue('maxConsecutiveLosses', maxConsecutiveLosses);
-            log(`Max consecutive losses set to ${maxConsecutiveLosses}`);
+        // Martingale controls
+        document.getElementById('gpt-martingale-toggle').addEventListener('click', toggleMartingale);
+        document.getElementById('gpt-martingale-reset').addEventListener('click', resetMartingale);
+        
+        document.getElementById('gpt-martingale-base').addEventListener('change', (e) => {
+            martingaleBaseAmount = parseFloat(e.target.value) || 1;
+            currentTradeAmount = calculateMartingaleAmount();
+            GM_setValue('martingaleBaseAmount', martingaleBaseAmount);
+            updateMartingaleDisplay();
+            log(`Martingale base set to $${martingaleBaseAmount}`);
         });
         
-        document.getElementById('gpt-stop-loss').addEventListener('change', (e) => {
-            stopLossAmount = parseFloat(e.target.value) || 0;
-            GM_setValue('stopLossAmount', stopLossAmount);
-            log(`Stop loss set to $${stopLossAmount}`);
+        document.getElementById('gpt-martingale-mult').addEventListener('change', (e) => {
+            martingaleMultiplier = parseFloat(e.target.value) || 2;
+            currentTradeAmount = calculateMartingaleAmount();
+            GM_setValue('martingaleMultiplier', martingaleMultiplier);
+            updateMartingaleDisplay();
+            log(`Martingale multiplier set to ${martingaleMultiplier}x`);
+        });
+        
+        document.getElementById('gpt-martingale-max').addEventListener('change', (e) => {
+            martingaleMaxSteps = parseInt(e.target.value) || 5;
+            GM_setValue('martingaleMaxSteps', martingaleMaxSteps);
+            updateMartingaleDisplay();
+            log(`Martingale max steps set to ${martingaleMaxSteps}`);
         });
 
         // Make draggable with touch support
@@ -1649,7 +1297,7 @@
         lastAppSignalId = '';
         lastAppTradeTime = 0;
         lastScanTradeTime = 0;
-        autoInvertActive = false;
+        manualInvertActive = false;
         
         GM_setValue('autoEnabled', false);
         GM_setValue('scanEnabled', false);
@@ -1664,37 +1312,20 @@
     }
 
     // ===========================================
-    // AUTO-INVERT TOGGLE HANDLERS - v6.6.0
+    // MARTINGALE & SOUND TOGGLE HANDLERS - v6.7.0
     // ===========================================
-    function toggleAutoInvert() {
-        autoInvertEnabled = !autoInvertEnabled;
-        GM_setValue('autoInvertEnabled', autoInvertEnabled);
+    function toggleMartingale() {
+        martingaleEnabled = !martingaleEnabled;
+        GM_setValue('martingaleEnabled', martingaleEnabled);
         
-        const btn = document.getElementById('gpt-auto-invert');
+        const btn = document.getElementById('gpt-martingale-toggle');
         if (btn) {
-            btn.textContent = autoInvertEnabled ? 'AUTO-INV ON' : 'AUTO-INV OFF';
-            btn.className = 'btn-auto-invert' + (autoInvertEnabled ? ' on' : '');
+            btn.textContent = martingaleEnabled ? 'ON' : 'OFF';
+            btn.style.background = martingaleEnabled ? '#22c55e' : '#6b7280';
         }
         
-        const section = document.getElementById('gpt-auto-invert-section');
-        if (section) {
-            section.classList.toggle('active', autoInvertEnabled);
-        }
-        
-        log(`AUTO-INVERT: ${autoInvertEnabled ? 'ON (will invert on loss)' : 'OFF'}`);
-    }
-
-    function toggleAutoPlace() {
-        autoPlaceAfterLoss = !autoPlaceAfterLoss;
-        GM_setValue('autoPlaceAfterLoss', autoPlaceAfterLoss);
-        
-        const btn = document.getElementById('gpt-auto-place');
-        if (btn) {
-            btn.textContent = autoPlaceAfterLoss ? 'AUTO-PLACE ON' : 'AUTO-PLACE OFF';
-            btn.className = 'btn-auto-place' + (autoPlaceAfterLoss ? ' on' : '');
-        }
-        
-        log(`AUTO-PLACE: ${autoPlaceAfterLoss ? 'ON (will auto-trade after loss)' : 'OFF (just invert next signal)'}`);
+        updateMartingaleDisplay();
+        log(`MARTINGALE: ${martingaleEnabled ? 'ON' : 'OFF'}`);
     }
 
     function toggleSoundNotifications() {
@@ -1704,49 +1335,24 @@
         const btn = document.getElementById('gpt-sound-toggle');
         if (btn) {
             btn.textContent = soundNotificationsEnabled ? '🔊 SOUND ON' : '🔇 SOUND OFF';
-            btn.className = 'btn-sound' + (soundNotificationsEnabled ? ' on' : '');
+            btn.style.background = soundNotificationsEnabled ? '#8b5cf6' : '#6b7280';
         }
         
         log(`SOUND: ${soundNotificationsEnabled ? 'ON' : 'OFF'}`);
     }
-
-    // Update win/loss display
-    function updateWinLossDisplay() {
-        const winsEl = document.getElementById('gpt-wins');
-        const lossesEl = document.getElementById('gpt-losses');
-        const streakEl = document.getElementById('gpt-streak');
-        const profitEl = document.getElementById('gpt-profit');
-        
-        if (winsEl) winsEl.textContent = winLossStats.totalWins;
-        if (lossesEl) lossesEl.textContent = winLossStats.totalLosses;
-        
-        if (streakEl) {
-            if (winLossStats.consecutiveWins > 0) {
-                streakEl.textContent = `🔥 ${winLossStats.consecutiveWins}W`;
-                streakEl.style.color = '#22c55e';
-            } else if (winLossStats.consecutiveLosses > 0) {
-                streakEl.textContent = `❄️ ${winLossStats.consecutiveLosses}L`;
-                streakEl.style.color = '#ef4444';
+    
+    // Update invert button UI
+    function updateInvertButton() {
+        const btn = document.getElementById('gpt-invert');
+        if (btn) {
+            if (manualInvertActive) {
+                btn.textContent = 'INVERT ON (LOSS)';
+                btn.classList.add('on');
             } else {
-                streakEl.textContent = '-';
-                streakEl.style.color = '#9ca3af';
+                btn.textContent = invertEnabled ? 'INVERT ON' : 'INVERT OFF';
+                btn.classList.toggle('on', invertEnabled);
             }
         }
-        
-        if (profitEl) {
-            const profit = winLossStats.sessionProfit;
-            profitEl.textContent = `${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`;
-            profitEl.className = 'stat-profit ' + (profit >= 0 ? 'positive' : 'negative');
-        }
-        
-        // Update auto-invert section style
-        const section = document.getElementById('gpt-auto-invert-section');
-        if (section) {
-            section.classList.toggle('active', autoInvertActive && autoInvertEnabled);
-        }
-        
-        // Update invert button if auto-invert is active
-        updateInvertButton();
     }
 
     // ===========================================
@@ -2490,10 +2096,10 @@
     }
 
     // ===========================================
-    // INITIALIZATION - UPDATED v6.6.0
+    // INITIALIZATION - UPDATED v6.7.0
     // ===========================================
     function init() {
-        log('Initializing v6.6.0...');
+        log('Initializing v6.7.0...');
 
         // Load saved settings (all default to false)
         autoEnabled = GM_getValue('autoEnabled', false);
@@ -2501,12 +2107,16 @@
         switchEnabled = GM_getValue('switchEnabled', false);
         invertEnabled = GM_getValue('invertEnabled', false);
         
-        // Load auto-invert settings - v6.6.0
-        autoInvertEnabled = GM_getValue('autoInvertEnabled', false);
-        autoPlaceAfterLoss = GM_getValue('autoPlaceAfterLoss', false);
+        // Load martingale settings - v6.7.0
+        martingaleEnabled = GM_getValue('martingaleEnabled', false);
+        martingaleBaseAmount = GM_getValue('martingaleBaseAmount', 1);
+        martingaleMultiplier = GM_getValue('martingaleMultiplier', 2);
+        martingaleMaxSteps = GM_getValue('martingaleMaxSteps', 5);
+        martingaleStep = GM_getValue('martingaleStep', 0);
+        currentTradeAmount = calculateMartingaleAmount();
+        
+        // Load sound settings
         soundNotificationsEnabled = GM_getValue('soundNotificationsEnabled', true);
-        maxConsecutiveLosses = GM_getValue('maxConsecutiveLosses', 3);
-        stopLossAmount = GM_getValue('stopLossAmount', 0);
         
         // Load stats if any
         const savedStats = GM_getValue('winLossStats', null);
@@ -2524,11 +2134,10 @@
             detectFavoritesBar();
             updateFavoritesDisplay();
             
-            // Initialize auto-invert UI
-            initAutoInvertUI();
-            
-            // Update win/loss display
+            // Initialize UI elements
+            initMartingaleUI();
             updateWinLossDisplay();
+            updateMartingaleDisplay();
             
             manageIntervals();
             
@@ -2538,6 +2147,7 @@
                 updateSettingsDisplay();
                 // Save stats periodically
                 GM_setValue('winLossStats', JSON.stringify(winLossStats));
+                GM_setValue('martingaleStep', martingaleStep);
             }, 10000);
             
             // Initial heartbeat
@@ -2547,36 +2157,24 @@
         }, 2000);
     }
     
-    // Initialize auto-invert UI elements
-    function initAutoInvertUI() {
-        const autoInvBtn = document.getElementById('gpt-auto-invert');
-        const autoPlaceBtn = document.getElementById('gpt-auto-place');
+    // Initialize martingale UI elements - v6.7.0
+    function initMartingaleUI() {
+        const toggleBtn = document.getElementById('gpt-martingale-toggle');
+        const baseInput = document.getElementById('gpt-martingale-base');
+        const multInput = document.getElementById('gpt-martingale-mult');
+        const maxInput = document.getElementById('gpt-martingale-max');
         const soundBtn = document.getElementById('gpt-sound-toggle');
-        const maxLossesInput = document.getElementById('gpt-max-losses');
-        const stopLossInput = document.getElementById('gpt-stop-loss');
         
-        if (autoInvBtn) {
-            autoInvBtn.textContent = autoInvertEnabled ? 'AUTO-INV ON' : 'AUTO-INV OFF';
-            autoInvBtn.className = 'btn-auto-invert' + (autoInvertEnabled ? ' on' : '');
+        if (toggleBtn) {
+            toggleBtn.textContent = martingaleEnabled ? 'ON' : 'OFF';
+            toggleBtn.style.background = martingaleEnabled ? '#22c55e' : '#6b7280';
         }
-        if (autoPlaceBtn) {
-            autoPlaceBtn.textContent = autoPlaceAfterLoss ? 'AUTO-PLACE ON' : 'AUTO-PLACE OFF';
-            autoPlaceBtn.className = 'btn-auto-place' + (autoPlaceAfterLoss ? ' on' : '');
-        }
+        if (baseInput) baseInput.value = martingaleBaseAmount;
+        if (multInput) multInput.value = martingaleMultiplier;
+        if (maxInput) maxInput.value = martingaleMaxSteps;
         if (soundBtn) {
             soundBtn.textContent = soundNotificationsEnabled ? '🔊 SOUND ON' : '🔇 SOUND OFF';
-            soundBtn.className = 'btn-sound' + (soundNotificationsEnabled ? ' on' : '');
-        }
-        if (maxLossesInput) {
-            maxLossesInput.value = maxConsecutiveLosses;
-        }
-        if (stopLossInput) {
-            stopLossInput.value = stopLossAmount;
-        }
-        
-        const section = document.getElementById('gpt-auto-invert-section');
-        if (section) {
-            section.classList.toggle('active', autoInvertEnabled);
+            soundBtn.style.background = soundNotificationsEnabled ? '#8b5cf6' : '#6b7280';
         }
     }
     
