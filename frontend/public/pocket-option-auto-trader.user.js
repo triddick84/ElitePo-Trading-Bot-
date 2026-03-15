@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://signal-bot-preview.preview.emergentagent.com
-// @version      6.6.2
-// @description  Auto-trade OTC forex on Pocket Option. v6.6.2 - Win/Loss detection via Open/Closed trades boxes
+// @version      6.6.3
+// @description  Auto-trade OTC forex on Pocket Option. v6.6.3 - Detects WIN (green $) vs LOSS ($0 white) from closed trades
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -206,7 +206,7 @@
     // ===========================================
     function log(msg) {
         const ts = new Date().toLocaleTimeString();
-        console.log(`[GPT v6.6.2] ${ts}: ${msg}`);
+        console.log(`[GPT v6.6.3] ${ts}: ${msg}`);
         const logEl = document.getElementById('gpt-log');
         if (logEl) logEl.textContent = msg;
     }
@@ -348,11 +348,12 @@
     }
     
     // Parse a trade element to extract win/loss result
+    // Pocket Option specific: Last $ value is GREEN with amount = WIN, "$0" in WHITE = LOSS
     function parseTradeResult(tradeElement) {
         if (!tradeElement) return null;
         
-        const text = (tradeElement.textContent || '').toLowerCase();
-        const html = (tradeElement.innerHTML || '').toLowerCase();
+        const text = (tradeElement.textContent || '');
+        const html = (tradeElement.innerHTML || '');
         
         // Create a unique ID for this trade element
         const tradeId = text.replace(/\s+/g, '').substring(0, 50);
@@ -362,53 +363,121 @@
             return null;
         }
         
-        // Look for profit/win indicators
-        // Green color, "+" sign, "profit", positive amounts
-        const hasGreen = html.includes('green') || 
-                        html.includes('#22c55e') || 
-                        html.includes('#10b981') || 
-                        html.includes('#4ade80') ||
-                        html.includes('rgb(34, 197, 94)') ||
-                        html.includes('rgb(16, 185, 129)') ||
-                        html.includes('color: #0f0') ||
-                        html.includes('success');
+        // POCKET OPTION SPECIFIC DETECTION:
+        // Find all elements with $ values inside the trade element
+        const dollarElements = tradeElement.querySelectorAll('*');
+        let lastDollarElement = null;
+        let lastDollarValue = null;
+        let lastDollarColor = null;
         
-        const hasRed = html.includes('red') || 
-                      html.includes('#ef4444') || 
-                      html.includes('#dc2626') ||
-                      html.includes('#f87171') ||
-                      html.includes('rgb(239, 68, 68)') ||
-                      html.includes('rgb(220, 38, 38)') ||
-                      html.includes('color: #f00') ||
-                      html.includes('danger') ||
-                      html.includes('fail');
-        
-        // Extract amount - look for dollar amounts or numbers with decimals
-        const amountMatches = text.match(/[\+\-]?\$?\s*([\d,]+\.?\d*)/g);
-        let amount = 0;
-        
-        if (amountMatches) {
-            for (const match of amountMatches) {
-                const num = parseFloat(match.replace(/[^\d.]/g, ''));
-                if (!isNaN(num) && num > 0 && num < 100000) {
-                    amount = num;
-                    break;
+        for (const el of dollarElements) {
+            const elText = (el.textContent || '').trim();
+            
+            // Look for $ followed by number
+            if (elText.match(/^\$[\d,.]+$/) || elText.match(/^[\d,.]+$/)) {
+                const value = parseFloat(elText.replace(/[^\d.]/g, ''));
+                if (!isNaN(value)) {
+                    lastDollarElement = el;
+                    lastDollarValue = value;
+                    
+                    // Get computed color
+                    const style = window.getComputedStyle(el);
+                    lastDollarColor = style.color;
                 }
             }
         }
         
-        // Determine result
-        let result = null;
+        // Also check for spans/divs with specific styling
+        const allSpans = tradeElement.querySelectorAll('span, div, p');
+        for (const span of allSpans) {
+            const spanText = (span.textContent || '').trim();
+            
+            // Match $0, $0.00, $1.92, etc.
+            if (spanText.match(/^\$\d+(\.\d{1,2})?$/)) {
+                const value = parseFloat(spanText.replace(/[^\d.]/g, ''));
+                const style = window.getComputedStyle(span);
+                const color = style.color;
+                
+                // This could be the profit/loss indicator
+                lastDollarElement = span;
+                lastDollarValue = value;
+                lastDollarColor = color;
+            }
+        }
         
-        // Check text content for explicit indicators
-        if (text.includes('+') || text.includes('profit') || text.includes('win')) {
-            result = 'win';
-        } else if (text.includes('-') && !text.includes('--') || text.includes('loss') || text.includes('lose')) {
-            result = 'loss';
-        } else if (hasGreen && !hasRed) {
-            result = 'win';
-        } else if (hasRed && !hasGreen) {
-            result = 'loss';
+        // Determine WIN or LOSS based on color and value
+        let result = null;
+        let amount = 0;
+        
+        if (lastDollarElement && lastDollarColor) {
+            // Parse RGB color
+            const rgbMatch = lastDollarColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+            
+            if (rgbMatch) {
+                const r = parseInt(rgbMatch[1]);
+                const g = parseInt(rgbMatch[2]);
+                const b = parseInt(rgbMatch[3]);
+                
+                // GREEN detection (high green, low red) = WIN
+                // Common greens: rgb(34, 197, 94), rgb(16, 185, 129), rgb(74, 222, 128)
+                if (g > 150 && g > r && g > b) {
+                    result = 'win';
+                    amount = lastDollarValue || 0;
+                    log(`🎯 Detected GREEN ($${amount}) = WIN`);
+                }
+                // WHITE detection (all values similar/high) with $0 = LOSS
+                // White is typically rgb(255, 255, 255) or similar high values
+                else if (r > 200 && g > 200 && b > 200 && lastDollarValue === 0) {
+                    result = 'loss';
+                    amount = pendingTradeCheck?.amount || 1;
+                    log(`🎯 Detected WHITE $0 = LOSS`);
+                }
+                // GRAY/WHITE with $0 = LOSS
+                else if (Math.abs(r - g) < 30 && Math.abs(g - b) < 30 && lastDollarValue === 0) {
+                    result = 'loss';
+                    amount = pendingTradeCheck?.amount || 1;
+                    log(`🎯 Detected neutral color $0 = LOSS`);
+                }
+                // RED detection (high red) - might also indicate loss
+                else if (r > 180 && r > g && r > b) {
+                    result = 'loss';
+                    amount = pendingTradeCheck?.amount || 1;
+                    log(`🎯 Detected RED = LOSS`);
+                }
+                // Any non-zero green value = WIN
+                else if (lastDollarValue > 0 && g > 100) {
+                    result = 'win';
+                    amount = lastDollarValue;
+                    log(`🎯 Detected positive value with greenish tint = WIN`);
+                }
+            }
+        }
+        
+        // Fallback: Check HTML for color classes or inline styles
+        if (!result) {
+            const htmlLower = html.toLowerCase();
+            
+            // Look for green styling
+            if (htmlLower.includes('green') || htmlLower.includes('#2') || htmlLower.includes('success') || htmlLower.includes('profit')) {
+                // Extract any dollar amount
+                const amounts = text.match(/\$[\d,.]+/g);
+                if (amounts && amounts.length > 0) {
+                    const lastAmount = amounts[amounts.length - 1];
+                    const value = parseFloat(lastAmount.replace(/[^\d.]/g, ''));
+                    if (value > 0) {
+                        result = 'win';
+                        amount = value;
+                        log(`🎯 Fallback: Green styling with $${value} = WIN`);
+                    }
+                }
+            }
+            
+            // $0 anywhere likely means loss
+            if (!result && text.includes('$0')) {
+                result = 'loss';
+                amount = pendingTradeCheck?.amount || 1;
+                log(`🎯 Fallback: Found $0 = LOSS`);
+            }
         }
         
         if (result) {
@@ -421,6 +490,11 @@
             }
             
             return { result, amount, tradeId };
+        }
+        
+        // Debug: Log what we found
+        if (lastDollarElement) {
+            log(`⚠️ Found $ element but couldn't determine result. Value: $${lastDollarValue}, Color: ${lastDollarColor}`);
         }
         
         return null;
@@ -1288,7 +1362,7 @@
             <div class="header" id="gpt-drag">
                 <div class="header-left">
                     <span class="status-dot" id="gpt-dot"></span>
-                    <span class="title">GPT Bot v6.6.2</span>
+                    <span class="title">GPT Bot v6.6.3</span>
                     <span id="gpt-connection-status" style="margin-left:6px;font-size:12px;" title="App Connection">🔴</span>
                 </div>
                 <div class="header-right">
@@ -1377,7 +1451,7 @@
                     <span class="value" id="gpt-favorites-count">0</span>
                 </div>
                 
-                <div id="gpt-log">Ready - v6.6.2</div>
+                <div id="gpt-log">Ready - v6.6.3</div>
             </div>
         `;
 
