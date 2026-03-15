@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://signal-bot-preview.preview.emergentagent.com
-// @version      6.7.0
-// @description  Auto-trade OTC forex on Pocket Option. v6.7.0 - Manual WIN/LOSS buttons with Martingale system
+// @version      6.7.1
+// @description  Auto-trade OTC forex on Pocket Option. v6.7.1 - Fixed trade execution with manual WIN/LOSS
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -207,7 +207,7 @@
     // ===========================================
     function log(msg) {
         const ts = new Date().toLocaleTimeString();
-        console.log(`[GPT v6.7.0] ${ts}: ${msg}`);
+        console.log(`[GPT v6.7.1] ${ts}: ${msg}`);
         const logEl = document.getElementById('gpt-log');
         if (logEl) logEl.textContent = msg;
     }
@@ -435,6 +435,23 @@
         updateWinLossDisplay();
         syncStatsToBackend();
         log('📊 All stats reset');
+    }
+
+    // ===========================================
+    // TRADE RESULT MONITOR (Manual Mode) - v6.7.0
+    // ===========================================
+    // Since we now use manual WIN/LOSS buttons, this just logs the trade
+    function startTradeResultMonitor(direction, tradeAmount, expirySeconds) {
+        // Log the pending trade for manual result entry
+        log(`📊 Trade placed: ${direction} $${tradeAmount} - Press WIN or LOSS when closed`);
+        
+        // Store pending trade info for reference
+        window.lastPendingTrade = {
+            direction: direction,
+            amount: tradeAmount,
+            expiry: expirySeconds,
+            timestamp: Date.now()
+        };
     }
 
     // ===========================================
@@ -968,7 +985,7 @@
             <div class="header" id="gpt-drag">
                 <div class="header-left">
                     <span class="status-dot" id="gpt-dot"></span>
-                    <span class="title">GPT Bot v6.7.0</span>
+                    <span class="title">GPT Bot v6.7.1</span>
                     <span id="gpt-connection-status" style="margin-left:6px;font-size:12px;" title="App Connection">🔴</span>
                 </div>
                 <div class="header-right">
@@ -1085,7 +1102,7 @@
                     <span class="value" id="gpt-favorites-count">0</span>
                 </div>
                 
-                <div id="gpt-log">Ready - v6.7.0</div>
+                <div id="gpt-log">Ready - v6.7.1</div>
             </div>
         `;
 
