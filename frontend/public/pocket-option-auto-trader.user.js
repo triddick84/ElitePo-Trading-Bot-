@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
-// @namespace    https://signal-executor-7.preview.emergentagent.com
-// @version      6.4.1
-// @description  Auto-trade OTC forex on Pocket Option. v6.4.1 - Improved asset detection with multiple methods
+// @namespace    https://signal-bot-preview.preview.emergentagent.com
+// @version      6.4.2
+// @description  Auto-trade OTC forex on Pocket Option. v6.4.2 - Removed opposite trade block per user request
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -30,7 +30,7 @@
     // CONFIGURATION
     // ===========================================
     const CONFIG = {
-        API_URL: 'https://signal-executor-7.preview.emergentagent.com/api',
+        API_URL: 'https://signal-bot-preview.preview.emergentagent.com/api',
         APP_POLL_INTERVAL: 3000,     // 3 seconds for app signals
         SCAN_INTERVAL: 5000,         // 5 seconds for scanning
         TRADE_COOLDOWN_SCAN: 30000,  // 30 seconds between SCAN trades
@@ -64,7 +64,6 @@
     // CRITICAL: Global trade lock to prevent double trades
     let globalTradeLock = false;
     let lastTradeClickTime = 0;
-    let lastTradeDirection = null;
     const TRADE_LOCK_MS = 5000;  // 5 second absolute lock after any trade
     
     // Intervals
@@ -1022,17 +1021,8 @@
             return false;
         }
         
-        // GUARD 3: Prevent opposite direction within 30 seconds
-        if (lastTradeDirection && lastTradeDirection !== direction && (now - lastTradeClickTime) < 30000) {
-            log(`🛑 BLOCKED: Cannot ${direction} after ${lastTradeDirection} (${Math.round((now - lastTradeClickTime)/1000)}s ago)`);
-            return false;
-        }
-        
-        // GUARD 4: Prevent same direction within 10 seconds
-        if (lastTradeDirection === direction && (now - lastTradeClickTime) < 10000) {
-            log(`🛑 BLOCKED: Duplicate ${direction} within 10s`);
-            return false;
-        }
+        // NOTE: Opposite trade block removed per user request (v6.4.2)
+        // Users can now place opposite trades (BUY after SELL) without restriction
         
         const selector = isCall ? '.btn-call' : '.btn-put';
         const btn = document.querySelector(selector);
@@ -1041,7 +1031,6 @@
             // SET ALL LOCKS BEFORE CLICKING
             globalTradeLock = true;
             lastTradeClickTime = now;
-            lastTradeDirection = direction;
             
             log(`✅ CLICKING: ${direction} button`);
             console.log(`[GPT TRADE] ${new Date().toISOString()} - ${direction}`);

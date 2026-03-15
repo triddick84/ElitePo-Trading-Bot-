@@ -7,7 +7,7 @@ import asyncio
 import aiohttp
 import json
 
-BACKEND_URL = "https://signal-executor-7.preview.emergentagent.com/api"
+BACKEND_URL = "https://signal-bot-preview.preview.emergentagent.com/api"
 
 async def test_bias_detailed():
     """Test to understand the bias issue in detail"""

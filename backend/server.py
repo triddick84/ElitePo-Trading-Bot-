@@ -14296,7 +14296,7 @@ async def get_tampermonkey_status():
                 "settings": "/api/tampermonkey/settings",
                 "force_generate": "/api/tampermonkey/force-generate",
                 "toggle_inversion": "/api/tampermonkey/toggle-inversion",
-                "script_url": "https://signal-executor-7.preview.emergentagent.com/pocket-option-auto-trader.user.js"
+                "script_url": "https://signal-bot-preview.preview.emergentagent.com/pocket-option-auto-trader.user.js"
             }
         }
     except Exception as e:

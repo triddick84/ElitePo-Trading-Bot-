@@ -244,7 +244,14 @@ Create a "GPT Signal Bot" for Pocket Option with a high win rate (80-90%+). The 
 - `/app/test_reports/iteration_6.json` - **Full regression test (17/17 backend, 100% frontend)** - March 5, 2026
 
 ## Last Updated
-March 5, 2026
-- **Fixed critical login bug** - SyntaxError in server.py caused by incomplete function and orphaned code
+March 15, 2026
+
+### v6.4.2 - Tampermonkey Update (March 15, 2026)
+- **Removed opposite trade block** per user request - Users can now place BUY after SELL (or vice versa) without 30s restriction
+- Retained: Global trade lock (5s cooldown between ANY trades) to prevent accidental double-clicks
+- **WARNING**: Previous direction lock was masking a potential race condition bug. Monitor for double-trade issues.
+
+### Previous Updates
+- March 5, 2026: Fixed critical login bug - SyntaxError in server.py
 - All tests passing (100% success rate - 17/17 backend, all frontend)
 - Verified: Login, Dashboard, Navigation, Timeframe selection, High-accuracy strategies, Market scanning

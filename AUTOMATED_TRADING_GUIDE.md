@@ -72,7 +72,7 @@ PO_EMAIL = "your-email@example.com"
 PO_PASSWORD = "your-password"
 
 # Cloud server URL
-CLOUD_SERVER_URL = "https://signal-executor-7.preview.emergentagent.com"
+CLOUD_SERVER_URL = "https://signal-bot-preview.preview.emergentagent.com"
 
 # Account type: "demo" or "live"
 ACCOUNT_TYPE = "live"  # Start with "demo" for testing

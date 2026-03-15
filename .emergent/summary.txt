@@ -1,203 +1,164 @@
 <analysis>**original_problem_statement:**
-The user wants to build a GPT Signal Bot for Pocket Option with a high win rate (80-90%+). The project scope has expanded significantly to include:
-- A full-stack application with user authentication.
-- A sophisticated AI/ML system that can be trained on market data and uses strategies like Trend Following, Mean Reversion, and Pattern Recognition.
-- Integration with the OANDA V20 API for fetching real-time and historical market data.
-- Integration with Pocket Option's own WebSocket for real-time data.
-- A mobile auto-trader using a Tampermonkey userscript to bypass Pocket Option's IP blocks.
-- A UI to select and manage trading strategies.
-- Future integrations with MetaTrader5 and TradingView.
-The user's immediate priorities are to fix any application-breaking bugs, fully implement and test the latest auto-trader script, and then continue with planned integrations.
+The user wants to build a GPT Signal Bot for Pocket Option with a high win rate. The project has evolved into a full-stack application featuring a React frontend, a FastAPI backend, and a sophisticated Tampermonkey userscript for auto-trading. The core of the application is to integrate multiple signal sources (a custom AI, TradingView, MetaTrader 4/5) and execute trades automatically and reliably on the Pocket Option website via the userscript.
 
 **PRODUCT REQUIREMENTS:**
-1.  **Fix Login Functionality (P0):** The user login is currently broken due to a connection error, which prevents any use of the application. This is a critical blocker.
-2.  **Implement and Validate Advanced Auto-Trader (P0):** The new user-provided Tampermonkey script (v4.8.1) must be fully functional. This includes its advanced features like market scanning, asset switching, and per-asset cooldowns.
-3.  **Improve AI/ML Model Accuracy (P1):** Research and implement high-win-rate strategies for short timeframes (5s, 15s, 30s, 1m) to achieve the goal of winning trades on every signal.
-4.  **Build New Integrations (P1):** Integrate with MetaTrader5 and TradingView for automated trading and analysis.
-5.  **Enhance UI/UX (P2):** The userscript control panel should be a movable, floating window. The AI Models page must correctly save user configurations.
+1.  **Stabilize Trade Execution (P0):** The Tampermonkey script suffers from critical, recurring bugs, including placing both a BUY and a SELL for a single signal, failing to switch assets, and trading on the wrong asset. These must be permanently resolved.
+2.  **Fulfill User Logic Change Requests (P0):** The user's latest request is to remove the block on placing opposite trades.
+3.  **Correct Core Feature Logic (P1):** Ensure the  and  functions in the Tampermonkey script work exactly as specified by the user (e.g., scanning only the current asset when  is off).
+4.  **Implement Pending UI/UX Features (P1):** Add requested features like sound notifications for different trade sources and a Reset button to the Tampermonkey panel.
+5.  **Validate New Integrations (P2):** Guide the user to test the newly implemented MT4, MT5, and TradingView integration workflows.
+6.  **Refactor Core Components (P2):** Both the main backend file () and the Tampermonkey script () are extremely large and complex, leading to instability. They need to be refactored.
 
 **User's preferred language**: English
 
 **what currently exists?**
-A full-stack React/FastAPI application with JWT authentication (currently broken). The backend is a large monolith () featuring:
--   **Multi-Source Data Integration:** Services to connect to the OANDA V20 API () and Pocket Option's real-time WebSocket ().
--   **Advanced AI/ML Systems:** An initial AI system () and a newer  built to find high-probability signals on short timeframes.
--   **MetaTrader5 Integration:** A simulated MT5 service () and API endpoints have been created.
--   **Advanced Tampermonkey Script:** The application was updated to use a new, feature-rich userscript (v4.8.1) provided by the user. A new backend endpoint () was added to support its market scanning feature.
+A full-stack React/FastAPI application with a monolithic  backend and a large, complex Tampermonkey userscript (, v6.3.3) for auto-trading on Pocket Option. The app features:
+*   JWT-based user authentication.
+*   A remote control panel in the React UI () that allows configuring the userscript's behavior in real-time via API endpoints.
+*   Backend services for AI signal generation () and integrations with TradingView (webhooks) and MetaTrader (MT5/ZMQ, MT4/file-report).
+*   A new  that provides instructions and downloadable Expert Advisor (EA) files (, ) for MetaTrader setup.
+*   The Tampermonkey script has a UI on the Pocket Option page which is draggable, minimizable, and contains toggles for  (app signals),  (self-generated signals), and  (asset switching).
 
 **Last working item**:
-The user reported a connection error when trying to log in. The agent investigated the backend logs and found the root cause.
+The agent was about to fulfill the user's request to remove the block on placing opposite trades (e.g., a BUY immediately after a SELL) from the Tampermonkey script. This block () was previously added to prevent a critical bug where the script would execute both a BUY and a SELL trade for a single signal.
 
--   **Last item agent was working**: Diagnosing a critical login failure.
+-   **Last item agent was working**: Removing the  logic from the  function in the Tampermonkey script.
 -   **Status**: IN PROGRESS
 -   **Agent Testing Done**: N
--   **Which testing method agent to use?**: backend testing agent. First, the agent must fix the bug in . After the fix, test the login with a  command. Once login is confirmed working, run a full regression test using the testing agent to ensure the fix didn't introduce other issues.
+-   **Which testing method agent to use?**: Manual testing. After editing , the agent must load the script in a browser with Pocket Option open, generate signals, and verify that opposite trades can be executed without any delay or block.
 -   **User Testing Done**: N
 
 **All Pending/In progress Issue list**:
--   **Issue 1**: User login is broken due to a  (P0)
--   **Issue 2**: Full end-to-end testing of the new Tampermonkey script (v4.8.1) is pending (P1)
--   **Issue 3**: MetaTrader5 integration is not yet functional and runs only in simulation mode (P1)
+-   **Issue 1**: Remove the block on placing opposite trades in Tampermonkey. (P0)
+-   **Issue 2**: Critical bug: Tampermonkey places both a BUY and a SELL trade for a single signal. (P0, recurring)
+-   **Issue 3**: Asset  function is unreliable and fails to switch assets correctly. (P0, recurring)
+-   **Issue 4**:  function does not respect the  state (it scans favorites even when  is off). (P1, recurring)
+-   **Issue 5**:  function is fragile and sometimes fails to identify the current asset on the chart. (P1, recurring)
 
 **Issues Detail**:
--   **Issue 1: User login is broken due to a **
-    -   **Attempted fixes**: None. The agent identified the error in : .
+-   **Issue 1: Remove the block on placing opposite trades**
+    -   **Attempted fixes**: None. This is a new user request to undo a previous fix.
     -   **Next debug checklist**:
         1.  Open .
-        2.  Search for the  function call inside the  endpoint.
-        3.  Replace the incorrect function name with the correct one (likely ).
-        4.  Restart the backend service.
-        5.  Verify the fix by sending a  request to the login endpoint with user credentials.
-    -   **Why fix this issue and what will be achieved with the fix?**: This is a critical blocker that prevents the user from accessing the application. Fixing it will restore basic functionality.
+        2.  Navigate to the  function (around line 2000).
+        3.  Remove the entire  block and any logic related to  and .
+        4.  Increment the script version number.
+    -   **Why fix this issue and what will be achieved with the fix?**: This is a direct user request. It will enable strategies that require quick reversals or placing opposite trades without a cooldown.
     -   **Status**: IN PROGRESS
     -   **Is recurring issue?**: N
-    -   **Should Test frontend/backend/both after fix?**: Backend
-    -   **Blocked on other issue**: None
+    -   **Should Test frontend/backend/both after fix?**: Frontend (the userscript)
 
--   **Issue 2: Full end-to-end testing of the new Tampermonkey script (v4.8.1) is pending**
-    -   **Attempted fixes**: The agent replaced the old userscript and added the required  backend endpoint.
+-   **Issue 2: Critical bug: Tampermonkey places both a BUY and a SELL trade for a single signal**
+    -   **Attempted fixes**: Numerous flags (, ), locks (), and the  which is now being removed. The problem persists, indicating a deep architectural flaw.
     -   **Next debug checklist**:
-        1.  After fixing the login, use the browser to install the userscript.
-        2.  Navigate to the Pocket Option website and verify the v4.8.1 panel appears and functions correctly.
-        3.  Test the SCAN mode to ensure it calls the backend and processes the list of top signals.
-        4.  Verify that asset switching, trade execution, signal inversion, and cooldown logic all work as expected.
-    -   **Why fix this issue and what will be achieved with the fix?**: This validates the core auto-trading functionality, which is the user's primary goal.
+        1.  This bug will almost certainly reappear once the  is removed.
+        2.  The root cause is likely a race condition where both the app signal logic () and the Tampermonkey scan logic () are triggering a trade from the same data, or one function is being called twice in quick succession.
+        3.  Thoroughly review the main  loop (the  function) to understand how  and  flags interact.
+        4.  Add verbose  statements to trace every entry into , logging the source (app vs. scan) and the signal details to identify the source of the duplicate call.
+    -   **Why fix this issue and what will be achieved with the fix?**: This is a fund-destroying bug that makes the auto-trader completely unusable and untrustworthy.
+    -   **Status**: NOT STARTED (previous fixes were ineffective patches).
+    -   **Is recurring issue?**: Y
+    -   **Should Test frontend/backend/both after fix?**: Frontend (the userscript)
+    -   **Blocked on other issue**: None.
+
+-   **Issue 3: Asset  function is unreliable**
+    -   **Attempted fixes**: The  function has been rewritten multiple times. It still fails to correctly type in the search box, click the correct asset, or verify that the switch was successful before proceeding.
+    -   **Next debug checklist**:
+        1.  The function must be modified to return  if *any* step of the switching process fails (opening the list, finding the input, typing, clicking the result).
+        2.  Crucially, after attempting to click the new asset, the function MUST call  and compare the result to the target asset to confirm the switch was successful before returning .
+        3.  The logic calling  must be updated to NOT execute a trade if  returns .
+    -   **Why fix this issue and what will be achieved with the fix?**: This is essential for the  mode to trade across multiple favorite assets, a core feature of the bot.
     -   **Status**: NOT STARTED
     -   **Is recurring issue?**: Y
-    -   **Should Test frontend/backend/both after fix?**: both
-    -   **Blocked on other issue**: Issue 1: User login is broken due to a 
-
--   **Issue 3: MetaTrader5 integration is not yet functional and runs only in simulation mode**
-    -   **Attempted fixes**: An  was created, but it cannot connect to the MT5 terminal, which requires a Windows environment.
-    -   **Next debug checklist**:
-        1.  Research solutions for connecting a Python script in a Linux container to a remote MT5 terminal (e.g., using a ZeroMQ bridge).
-        2.  Propose a plan to the user for setting up the connection.
-        3.  Implement the necessary code changes in  to connect to a remote host and port.
-    -   **Why fix this issue and what will be achieved with the fix?**: Fulfills a key P1 requirement from the user for advanced integrations.
-    -   **Status**: BLOCKED
-    -   **Is recurring issue?**: N
-    -   **Should Test frontend/backend/both after fix?**: Backend
-    -   **Blocked on other issue**: Requires external setup/user action.
+    -   **Should Test frontend/backend/both after fix?**: Frontend (the userscript)
 
 **In progress Task List**:
--   **Task 1: Debug and Fix Login Failure (P0)**
-    -   **Where to resume**: The agent has found the  in the logs. The next action is to edit  to correct the invalid function call.
-    -   **What will be achieved with this?**: This will restore user authentication, unblocking all other work.
+-   **Task 1: Fulfill User Request to Unblock Opposite Trades (P0)**
+    -   **Where to resume**: Editing the  function in  to remove the  logic.
+    -   **What will be achieved with this?**: Implements the user's latest explicit instruction.
     -   **Status**: IN PROGRESS
-    -   **Should Test frontend/backend/both after fix?**: Backend
-    -   **Blocked on something**: None
+    -   **Should Test frontend/backend/both after fix?**: Frontend
 
 **Upcoming and Future Tasks**
 -   **Upcoming Tasks**:
-    -   **(P1) Implement TradingView Integration:** Analyze the playbook from  and create a service to handle webhook alerts.
-    -   **(P2) Refactor :** The main server file is over 5,000 lines. It needs to be broken down into a  directory with separate files for each domain (e.g., , , ) to improve maintainability.
+    -   **(P0) Full-Scale Debugging of Tampermonkey:** After removing the trade lock, immediately pivot to finding and fixing the root cause of all recurring critical bugs (Issue #2, #3, #4).
+    -   **(P1) Add Sound Notifications:** Implement two distinct sounds in the userscript: one for trades placed via app signals and another for trades placed via the  function.
+    -   **(P1) Implement Reset Button:** Add a Reset button to the Tampermonkey UI panel that sets all toggles to a disabled state.
+    -   **(P1) Fix Fetch Button Logic:** Ensure the Fetch button correctly forces a signal check based on the current user settings ( on/off).
+    -   **(P2) Validate MT4/MT5/TradingView Integrations:** Create a plan to guide the user through testing the EAs and webhook URL provided on the new Integrations page.
 -   **Future Tasks**:
-    -   Implement advanced Money Management Logic (e.g., Martingale system).
+    -   **(P2) Refactor :** Propose and execute a rewrite of the userscript into a modern, modular, or class-based structure to enhance stability and maintainability.
+    -   **(P2) Refactor :** Break down the monolithic backend file into a proper FastAPI  directory structure.
+    -   **(P3) Code Cleanup:** Perform a repository-wide cleanup to remove unused files and code, as requested by the user.
 
 **Completed work in this session**
--   Changed signal generation interval from 30 to 15 seconds.
--   Investigated and fixed a signal bias issue by disabling an inversion setting.
--   Integrated Pocket Option's real-time WebSocket data via .
--   Researched and implemented a  for high-win-rate strategies on short timeframes.
--   Implemented a simulated MetaTrader5 integration ().
--   Replaced the existing Tampermonkey userscript with an advanced version (v4.8.1) from the user and added the required  endpoint.
--   Enhanced the userscript UI to be a draggable, floating panel.
+-   **Implemented Full Tampermonkey Remote Control:** Created a UI panel in the React app and corresponding backend endpoints to allow real-time control over the userscript's settings (inversion, scan mode, auto-trade, etc.).
+-   **Major Rearchitecture of Userscript Logic (v6.0-v6.3.3):** Rewrote the core operational logic of the , , and  toggles based on complex user specifications. The UI now includes a guide explaining the button combinations.
+-   **Made Userscript Panel Draggable & Minimizable:** Improved the UX of the injected Tampermonkey panel.
+-   **Created Comprehensive Integrations Page:** Built a new page in the React app that provides setup instructions for TradingView, MT4, and MT5, including downloadable EA files (/).
+-   **Attempted Numerous Bug Fixes:** Made multiple (ultimately unsuccessful) attempts to fix recurring critical bugs in the userscript, including the buy and sell issue and the failing asset switch function.
 
 **Earlier issues found/mentioned but not fixed**
--   **Issue 1: End-to-End Test for Custom Strategy Usage**
-    -   **Debug checklist**: This was previously marked as complete, but a regression test is needed after the numerous backend changes to ensure a user can still select a strategy from the UI and have it be used by the signal generator.
-    -   **Why to solve this issue and what will be achieved with this?**: To re-validate a core feature.
-    -   **Should Test frontend/backend/both after fix**: both
-    -   **Is recurring issue?**: Y
--   **Issue 2: Deployment  fix**
-    -   **Debug checklist**: The fix was implemented in a previous session. The user needs to be reminded to try deploying again to confirm it is resolved.
-    -   **Why to solve this issue and what will be achieved with this?**: Unblocks production deployment.
-    -   **Should Test frontend/backend/both after fix**: NA
-    -   **Is recurring issue?**: N
-
-**Known issue recurrence from previous fork**
--   **Issue recurrence in previous fork**: Pocket Option blocks cloud/datacenter IPs.
--   **Recurrence count**: 3+
--   **Status**: BLOCKED (The mobile userscript is the active workaround for this).
+- The recurring critical bugs (Issue #2, #3, #4, #5 in the pending list) have been mentioned by the user repeatedly and have not been permanently fixed. The root cause appears to be the monolithic and fragile architecture of the userscript.
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
--   **Userscript Auto-Trading:** An advanced Tampermonkey script that scans multiple assets, manages cooldowns, and executes trades via UI interaction.
--   **Multi-Source Signal Generation:** The system can generate signals using data from the OANDA API, Pocket Option's WebSocket, or a combination.
--   **High-Frequency Trading Strategies:** AI models designed specifically for 5s, 15s, 30s, and 1m timeframes.
--   **Simulated Integration:** The MetaTrader5 service is currently mocked and does not connect to a real trading terminal.
-
-**key DB schema**
--   **users**: 
--   **generated_signals**: 
--   **strategy_selections**: 
--   **trade_results**: 
+-   **Userscript Auto-Trading:** A complex Tampermonkey script that injects a control panel and automation logic into a live trading website (Pocket Option).
+-   **Remote Control Architecture:** A React frontend calls FastAPI endpoints to store settings in memory, which are then polled by the Tampermonkey script to change its behavior in real-time.
+-   **External Platform Integration:** The system is designed to receive trade signals from external platforms like TradingView (via webhooks), MT5 (via a ZeroMQ bridge), and MT4 (via a file-based trade report).
 
 **All files of reference**
--   : The monolithic server file that contains the critical login bug.
--   : The log file where the  was identified.
--   : The new v4.8.1 script that needs to be tested.
--   : The service implementing the user's request for high-win-rate strategies.
--   : The service for the simulated MT5 integration.
+-   : **The primary file.** This is where the user's current request must be implemented and where all critical bugs reside.
+-   : The backend monolith containing all API endpoints for the frontend and userscript.
+-   : The React component for the userscript's remote control UI.
+-   : The page that renders the control panel.
+-   : The new page with setup instructions and downloadable EA files.
 
 **Areas that need refactoring**:
--    is critically bloated (over 5000 lines) and is becoming a source of bugs. It must be broken down into a proper  directory structure to improve maintainability and prevent errors like the current login bug.
+-   ** (CRITICAL):** This ~2500-line script is the root cause of the project's instability. Its reliance on global flags, complex nested conditionals, and fragile DOM selectors makes it nearly impossible to debug. It must be rewritten into a modular or class-based structure.
+-   ** (HIGH):** This file is over 5000 lines. It needs to be broken down into a standard FastAPI project structure with a  directory to improve maintainability and separate concerns.
 
 **key api endpoints**
--   : **(BROKEN)** The endpoint that is failing due to a .
--   : **(New)** Endpoint to support the market scanning feature of the v4.8.1 userscript.
--   : **(New)** Generates a signal using the new high-win-rate models.
--   : **(New)** Initializes the simulated MT5 connection.
+-   : Polled by the userscript to get its configuration.
+-   : Used by the frontend control panel to update the configuration.
+-   : Used by the userscript in  mode to get signals from the application.
+-   : Used by the userscript in  mode to get signals generated by Tampermonkey's own logic.
+-   : New endpoint for the MT4 EA to post trade results.
 
 **Critical Info for New Agent**
-1.  **FIX THE LOGIN (P0):** The absolute first priority is to fix the  bug in . The user is completely blocked. The error is in the  endpoint.
-2.  **User-Defined Priorities:** The user wants to proceed in this order after the login is fixed: P0 (Fix/Test Tampermonkey) -> P2 (Test Custom Strategies) -> P1 (MT5/TradingView Integrations). Follow this plan.
-3.  **Test the New Userscript (v4.8.1):** Once the login is fixed, perform a full end-to-end test of the new Tampermonkey script. This is the user's core requirement and includes testing the SCAN mode, asset switching, and trade execution.
-4.  **MT5 is Simulated:** The MetaTrader5 integration is not functional. Be prepared to discuss a plan with the user to connect it to a real terminal, as it cannot run in the current Linux environment.
-
-**documents and test reports created in this job**
--    (Updated multiple times)
--   
--   
--   
+1.  **IMMEDIATE TASK:** The user's top priority is to remove the block on opposite trades. You must edit  in  to remove the  logic.
+2.  **EXPECT THE BUY AND SELL BUG TO RETURN:** The lock you are removing was a patch for the critical buy and sell bug. This bug will almost certainly reappear immediately after your fix. Your next priority must be to find the *root cause* of this race condition, likely within the script's main polling loop.
+3.  **THE USERSCRIPT IS HIGHLY UNSTABLE:** Do not trust any part of the Tampermonkey script to work as intended, especially asset switching () and market scanning (). These functions are known to be buggy and unreliable. Test every change meticulously.
+4.  **PRIORITIZE STABILITY:** The project is caught in a cycle of bug-fixing. After the immediate user request, you must focus on stabilizing the core trading logic by fixing the recurring critical bugs (double trading, failed asset switching) before adding any new features like sounds or reset buttons.
+5.  **PLAN FOR REFACTORING:** The only long-term solution to the project's instability is to refactor the Tampermonkey script and the backend . Once the immediate fires are put out, you must propose a refactoring plan to the user to address the massive technical debt.
 
 **Last 10 User Messages and any pending HUMAN messages**
--   **1.**  - The user reporting the current P0 bug. **(PENDING FIX)**
--   **2.**  - The user provided the new v4.8.1 script. **(Implemented, but testing is blocked)**
--   **3.**  - User approval.
--   **4.**  - User provided credentials and confirmed MT5 integration. **(Done)**
--   **5.**  - User requested the high-accuracy strategies. **(Done)**
--   **6.**  - User approval.
--   **7.**  - User requested the Pocket Option WebSocket integration. **(Done)**
--   **8.**  - User reported a signal bias. **(Resolved)**
--   **9.**  - User requested UI enhancements for the userscript. **(Done)**
--   **10.**  - Previous agent's final command.
+-   The user has reported a series of cascading bugs in the Tampermonkey script: it's not switching assets, it's typing in the wrong field, and it's placing a BUY and a SELL for every signal.
+-   The agent added a lock to prevent the BUY/SELL issue.
+-   The user then requested new integrations (MT4/5/TV) and a general code cleanup.
+-   The agent built the integrations page and provided the EA files.
+-   The user's very last request was to **remove the block on opposites trades on tampermonkey**, undoing the agent's previous fix and setting up the next agent to deal with the inevitable return of the critical BUY/SELL bug.
 
 **Project Health Check:**
 -   **Broken**:
-    -   User authentication is non-functional, blocking all access to the application.
+    -   The core auto-trading logic in the Tampermonkey script is fundamentally unstable and suffers from multiple recurring, critical bugs that can cause financial loss.
+    -   The asset  functionality is non-operational.
+    -   The  functionality does not work according to specifications.
 -   **Mocked**:
-    -   The MetaTrader5 integration is in simulation mode only.
-    -   The TradingView integration remains a placeholder.
+    -   The MT4, MT5, and TradingView integrations are implemented on the backend and have a UI, but they are untested and require user-side configuration to be functional.
 
 **3rd Party Integrations**
--   : Used for OANDA V20 API integration. Requires User API Key.
--   , , : Used for the AI/ML trading system.
--   : For MT5 integration (currently simulated). Requires User credentials.
--   : Platform for the mobile auto-trading userscript.
--   : (Planned) Requires User webhooks.
+-   : OANDA V20 API integration.
+-   , , , : For the AI/ML trading system.
+-   : Integrated via a  bridge. An EA file is provided.
+-   : Integrated via a file-based reporting endpoint. An EA file is provided.
+-   : The framework for the client-side userscript.
+-   : Integrated via a backend webhook endpoint.
 
 **Testing status**
--   Testing agent used after significant changes: YES
+-   Testing agent used after significant changes: NO (not in the recent iterations).
 -   Troubleshoot agent used after agent stuck in loop: NO
--   Test files created: None in this session.
--   Known regressions: User login functionality is critically broken.
-
-**Credentials to test flow:**
--   **Application Login:** , 
--   **OANDA (Live):** Stored in .
-
-**What agent forgot to execute**
--   The agent introduced a critical  bug that broke the login functionality. This happened during the final changes of the session, and the agent did not perform a regression test on the login endpoint before finishing.</analysis>
+-   Test files created: None.
+-   Known regressions: The buy and sell double-trade bug is a known, severe regression that is expected to reappear once the current user request is fulfilled. The asset switching failure is also a persistent regression.</analysis>

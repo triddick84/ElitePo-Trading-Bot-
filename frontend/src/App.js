@@ -15,6 +15,7 @@ import PerformancePage from "./components/PerformancePage";
 import SettingsPage from "./components/SettingsPage";
 import PocketOptionPage from "./components/PocketOptionPage";
 import MobileAutoTraderPage from "./components/MobileAutoTraderPage";
+import IntegrationsPage from "./components/IntegrationsPage";
 import { AuthProvider, LoginPage, useAuth } from "./components/AuthComponents";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
@@ -139,6 +140,7 @@ function ProtectedApp() {
     { id: "telegram-bot", label: "Telegram Bot", icon: "📱" },
     { id: "pocket-option", label: "Pocket Option", icon: "🎰" },
     { id: "mobile-trader", label: "Mobile Auto-Trade", icon: "📲" },
+    { id: "integrations", label: "Integrations", icon: "🔗" },
     { id: "strategies", label: "Strategies", icon: "🎯" },
     { id: "ai-models", label: "AI Models", icon: "🧠" },
     { id: "performance", label: "Performance", icon: "📈" },
@@ -163,6 +165,8 @@ function ProtectedApp() {
         return <PocketOptionPage />;
       case "mobile-trader":
         return <MobileAutoTraderPage />;
+      case "integrations":
+        return <IntegrationsPage />;
       case "strategies":
         return <StrategyBuilder />;
       case "ai-models":
