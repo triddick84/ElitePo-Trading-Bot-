@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://signal-bot-preview.preview.emergentagent.com
-// @version      6.6.1
-// @description  Auto-trade OTC forex on Pocket Option. v6.6.1 - Fixed win/loss detection timing
+// @version      6.6.2
+// @description  Auto-trade OTC forex on Pocket Option. v6.6.2 - Win/Loss detection via Open/Closed trades boxes
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -206,7 +206,7 @@
     // ===========================================
     function log(msg) {
         const ts = new Date().toLocaleTimeString();
-        console.log(`[GPT v6.6.1] ${ts}: ${msg}`);
+        console.log(`[GPT v6.6.2] ${ts}: ${msg}`);
         const logEl = document.getElementById('gpt-log');
         if (logEl) logEl.textContent = msg;
     }
@@ -246,224 +246,304 @@
     }
 
     // ===========================================
-    // WIN/LOSS DETECTION SYSTEM - v6.6.0
+    // WIN/LOSS DETECTION SYSTEM - v6.6.2
+    // Uses Pocket Option's Open/Closed trades UI
     // ===========================================
     
-    // Get current balance from Pocket Option UI
-    function getCurrentBalance() {
-        // Try multiple selectors for balance
-        const balanceSelectors = [
-            '.balance__value',
-            '.balance-value',
-            '[class*="balance"] [class*="value"]',
-            '.trading-balance',
-            '[data-testid="balance"]',
-            '.js-balance',
-            '.balance span',
-            '[class*="Balance"]'
+    // Track the number of closed trades to detect new closures
+    let lastClosedTradesCount = 0;
+    let lastClosedTradeIds = new Set();
+    
+    // Get count of currently open trades
+    function getOpenTradesCount() {
+        // Pocket Option open trades selectors
+        const openTradeSelectors = [
+            '.deals-list--open .deal',
+            '.deals--open .deal-item',
+            '[class*="open-deal"]',
+            '[class*="active-deal"]',
+            '.trading-deals__item--open',
+            '.open-trades .trade-item',
+            '[class*="deals"] [class*="open"]',
+            '.deals-wrapper--open .deal'
         ];
         
-        for (const sel of balanceSelectors) {
-            const el = document.querySelector(sel);
-            if (el && el.textContent) {
-                const text = el.textContent.replace(/[^0-9.,]/g, '').replace(',', '');
-                const balance = parseFloat(text);
-                if (!isNaN(balance) && balance > 0) {
-                    return balance;
+        for (const sel of openTradeSelectors) {
+            try {
+                const trades = document.querySelectorAll(sel);
+                if (trades.length > 0) {
+                    return trades.length;
                 }
-            }
+            } catch(e) {}
         }
         
-        // Fallback: search for any element with $ and numbers
-        const allElements = document.querySelectorAll('*');
-        for (const el of allElements) {
-            if (!el || !el.offsetParent) continue;
-            if (el.children.length > 2) continue;
-            
-            const text = el.textContent || '';
-            if (text.includes('$') && /\d+\.\d{2}/.test(text)) {
-                const match = text.match(/[\d,]+\.\d{2}/);
-                if (match) {
-                    const balance = parseFloat(match[0].replace(',', ''));
-                    if (!isNaN(balance) && balance > 0 && balance < 1000000) {
-                        return balance;
+        // Try to find open trades container and count children
+        const openContainerSelectors = [
+            '.deals-list--open',
+            '.deals--open',
+            '[class*="open-deals"]',
+            '.trading-deals--open'
+        ];
+        
+        for (const sel of openContainerSelectors) {
+            try {
+                const container = document.querySelector(sel);
+                if (container) {
+                    const items = container.querySelectorAll('[class*="deal"], [class*="item"], [class*="trade"]');
+                    if (items.length > 0) return items.length;
+                }
+            } catch(e) {}
+        }
+        
+        return 0;
+    }
+    
+    // Get the most recent closed trade result
+    function getLatestClosedTradeResult() {
+        // Pocket Option closed trades selectors
+        const closedTradeSelectors = [
+            '.deals-list--closed .deal',
+            '.deals--closed .deal-item',
+            '[class*="closed-deal"]',
+            '[class*="history-deal"]',
+            '.trading-deals__item--closed',
+            '.closed-trades .trade-item',
+            '.deals-wrapper--closed .deal',
+            '.history-list .deal'
+        ];
+        
+        for (const sel of closedTradeSelectors) {
+            try {
+                const trades = document.querySelectorAll(sel);
+                if (trades.length > 0) {
+                    // Get the first (most recent) closed trade
+                    const latestTrade = trades[0];
+                    return parseTradeResult(latestTrade);
+                }
+            } catch(e) {}
+        }
+        
+        // Try to find closed trades container
+        const closedContainerSelectors = [
+            '.deals-list--closed',
+            '.deals--closed',
+            '[class*="closed-deals"]',
+            '[class*="history-deals"]',
+            '.trading-deals--closed'
+        ];
+        
+        for (const sel of closedContainerSelectors) {
+            try {
+                const container = document.querySelector(sel);
+                if (container) {
+                    const items = container.querySelectorAll('[class*="deal"], [class*="item"], [class*="trade"]');
+                    if (items.length > 0) {
+                        return parseTradeResult(items[0]);
                     }
                 }
-            }
+            } catch(e) {}
         }
         
         return null;
     }
     
-    // Detect trade result from popup notification
-    function checkTradeResultPopup() {
-        // Pocket Option shows result popups/notifications after trade expires
-        // Look for various result indicators
-        const popupSelectors = [
-            '.notification',
-            '.popup',
-            '.alert',
-            '.toast',
-            '[class*="notification"]',
-            '[class*="result"]',
-            '[class*="profit"]',
-            '[class*="loss"]',
-            '.deal-result',
-            '.trade-result',
-            '[class*="payout"]',
-            '[class*="expire"]',
-            '[class*="closed"]',
-            // Pocket Option specific
-            '.trading-widget__result',
-            '.deal__result',
-            '[class*="deal-"]',
-            '.history-item'
-        ];
+    // Parse a trade element to extract win/loss result
+    function parseTradeResult(tradeElement) {
+        if (!tradeElement) return null;
         
-        for (const sel of popupSelectors) {
-            try {
-                const popups = document.querySelectorAll(sel);
-                for (const popup of popups) {
-                    if (!popup || !popup.offsetParent) continue;
-                    
-                    const text = (popup.textContent || '').toLowerCase();
-                    const html = (popup.innerHTML || '').toLowerCase();
-                    
-                    // Skip if text is too long (likely not a result popup)
-                    if (text.length > 200) continue;
-                    
-                    // Check for WIN indicators
-                    // Look for: "profit", "win", "+$", green color indicators, "92%", payout percentages
-                    const isWin = 
-                        text.includes('profit') || 
-                        text.includes('win') || 
-                        text.includes('+$') || 
-                        text.includes('+ $') ||
-                        text.includes('payout') ||
-                        (html.includes('green') && text.match(/\$[\d.]+/)) ||
-                        (html.includes('#22c55e') || html.includes('#10b981') || html.includes('rgb(34, 197, 94)'));
-                    
-                    if (isWin && !text.includes('loss') && !text.includes('-$')) {
-                        const amountMatch = text.match(/[\+]?\$?\s*([\d,]+\.?\d*)/);
-                        const amount = amountMatch ? parseFloat(amountMatch[1].replace(',', '')) : 0;
-                        if (amount > 0) {
-                            return { result: 'win', amount: amount };
-                        }
-                    }
-                    
-                    // Check for LOSS indicators
-                    // Look for: "loss", "lose", "-$", red color indicators, "0%"
-                    const isLoss = 
-                        text.includes('loss') || 
-                        text.includes('lose') || 
-                        text.includes('-$') || 
-                        text.includes('- $') ||
-                        text.includes('expired') ||
-                        (html.includes('red') && text.match(/\$[\d.]+/)) ||
-                        (html.includes('#ef4444') || html.includes('#dc2626') || html.includes('rgb(239, 68, 68)'));
-                    
-                    if (isLoss && !text.includes('profit') && !text.includes('+$')) {
-                        const amountMatch = text.match(/[\-]?\$?\s*([\d,]+\.?\d*)/);
-                        const amount = amountMatch ? parseFloat(amountMatch[1].replace(',', '')) : 0;
-                        if (amount > 0) {
-                            return { result: 'loss', amount: amount };
-                        }
-                    }
+        const text = (tradeElement.textContent || '').toLowerCase();
+        const html = (tradeElement.innerHTML || '').toLowerCase();
+        
+        // Create a unique ID for this trade element
+        const tradeId = text.replace(/\s+/g, '').substring(0, 50);
+        
+        // Check if we've already processed this trade
+        if (lastClosedTradeIds.has(tradeId)) {
+            return null;
+        }
+        
+        // Look for profit/win indicators
+        // Green color, "+" sign, "profit", positive amounts
+        const hasGreen = html.includes('green') || 
+                        html.includes('#22c55e') || 
+                        html.includes('#10b981') || 
+                        html.includes('#4ade80') ||
+                        html.includes('rgb(34, 197, 94)') ||
+                        html.includes('rgb(16, 185, 129)') ||
+                        html.includes('color: #0f0') ||
+                        html.includes('success');
+        
+        const hasRed = html.includes('red') || 
+                      html.includes('#ef4444') || 
+                      html.includes('#dc2626') ||
+                      html.includes('#f87171') ||
+                      html.includes('rgb(239, 68, 68)') ||
+                      html.includes('rgb(220, 38, 38)') ||
+                      html.includes('color: #f00') ||
+                      html.includes('danger') ||
+                      html.includes('fail');
+        
+        // Extract amount - look for dollar amounts or numbers with decimals
+        const amountMatches = text.match(/[\+\-]?\$?\s*([\d,]+\.?\d*)/g);
+        let amount = 0;
+        
+        if (amountMatches) {
+            for (const match of amountMatches) {
+                const num = parseFloat(match.replace(/[^\d.]/g, ''));
+                if (!isNaN(num) && num > 0 && num < 100000) {
+                    amount = num;
+                    break;
                 }
-            } catch (e) {
-                // Skip selector errors
             }
         }
         
+        // Determine result
+        let result = null;
+        
+        // Check text content for explicit indicators
+        if (text.includes('+') || text.includes('profit') || text.includes('win')) {
+            result = 'win';
+        } else if (text.includes('-') && !text.includes('--') || text.includes('loss') || text.includes('lose')) {
+            result = 'loss';
+        } else if (hasGreen && !hasRed) {
+            result = 'win';
+        } else if (hasRed && !hasGreen) {
+            result = 'loss';
+        }
+        
+        if (result) {
+            // Mark this trade as processed
+            lastClosedTradeIds.add(tradeId);
+            // Keep only last 20 trade IDs
+            if (lastClosedTradeIds.size > 20) {
+                const idsArray = Array.from(lastClosedTradeIds);
+                lastClosedTradeIds = new Set(idsArray.slice(-20));
+            }
+            
+            return { result, amount, tradeId };
+        }
+        
         return null;
+    }
+    
+    // Count closed trades
+    function getClosedTradesCount() {
+        const closedTradeSelectors = [
+            '.deals-list--closed .deal',
+            '.deals--closed .deal-item',
+            '[class*="closed-deal"]',
+            '.trading-deals__item--closed',
+            '.closed-trades .trade-item',
+            '.deals-wrapper--closed .deal',
+            '.history-list .deal'
+        ];
+        
+        for (const sel of closedTradeSelectors) {
+            try {
+                const trades = document.querySelectorAll(sel);
+                if (trades.length > 0) {
+                    return trades.length;
+                }
+            } catch(e) {}
+        }
+        
+        // Try container method
+        const closedContainerSelectors = [
+            '.deals-list--closed',
+            '.deals--closed',
+            '[class*="closed-deals"]',
+            '.trading-deals--closed'
+        ];
+        
+        for (const sel of closedContainerSelectors) {
+            try {
+                const container = document.querySelector(sel);
+                if (container) {
+                    const items = container.querySelectorAll('[class*="deal"], [class*="item"], [class*="trade"]');
+                    return items.length;
+                }
+            } catch(e) {}
+        }
+        
+        return 0;
     }
     
     // Start monitoring for trade result after placing a trade
     function startTradeResultMonitor(direction, tradeAmount, expirySeconds) {
-        // IMPORTANT: Get balance AFTER the trade is placed (amount already deducted)
-        // Wait a moment for the balance to update after trade placement
-        setTimeout(() => {
-            const balanceAfterTrade = getCurrentBalance();
-            const estimatedExpiry = expirySeconds || 60; // Default 60 seconds if not provided
+        const estimatedExpiry = expirySeconds || 60;
+        
+        // Record initial state
+        const initialOpenCount = getOpenTradesCount();
+        const initialClosedCount = getClosedTradesCount();
+        
+        pendingTradeCheck = {
+            direction: direction,
+            amount: tradeAmount || 1,
+            timestamp: Date.now(),
+            expiryTime: Date.now() + (estimatedExpiry * 1000),
+            initialOpenCount: initialOpenCount,
+            initialClosedCount: initialClosedCount
+        };
+        
+        log(`📊 Monitoring: ${direction}, Open: ${initialOpenCount}, Closed: ${initialClosedCount}, Expiry: ${estimatedExpiry}s`);
+        
+        // Clear any existing interval
+        if (resultCheckInterval) {
+            clearInterval(resultCheckInterval);
+        }
+        
+        let checkCount = 0;
+        const maxChecks = Math.max(120, estimatedExpiry + 60); // Check for expiry + 60 seconds buffer
+        
+        resultCheckInterval = setInterval(() => {
+            checkCount++;
             
-            pendingTradeCheck = {
-                direction: direction,
-                amount: tradeAmount || 1,
-                balanceAfterTrade: balanceAfterTrade, // Balance AFTER trade placed (amount deducted)
-                timestamp: Date.now(),
-                expiryTime: Date.now() + (estimatedExpiry * 1000) // When trade should expire
-            };
+            // Method: Check if closed trades count increased
+            const currentClosedCount = getClosedTradesCount();
             
-            log(`📊 Monitoring trade: ${direction}, Post-trade balance: $${balanceAfterTrade || 'N/A'}, Expiry: ${estimatedExpiry}s`);
-            
-            // Clear any existing interval
-            if (resultCheckInterval) {
-                clearInterval(resultCheckInterval);
-            }
-            
-            let checkCount = 0;
-            const minWaitSeconds = Math.max(5, estimatedExpiry - 2); // Wait at least until near expiry
-            const maxChecks = Math.max(60, estimatedExpiry + 30); // Check for expiry + 30 seconds buffer
-            
-            resultCheckInterval = setInterval(() => {
-                checkCount++;
+            if (currentClosedCount > pendingTradeCheck.initialClosedCount) {
+                // A trade has closed! Get its result
+                const tradeResult = getLatestClosedTradeResult();
                 
-                // Method 1: Check for popup result (can appear anytime after expiry)
-                const popupResult = checkTradeResultPopup();
-                if (popupResult) {
-                    log(`🎯 Popup detected: ${popupResult.result} $${popupResult.amount}`);
-                    processTradeResult(popupResult.result, popupResult.amount);
+                if (tradeResult) {
+                    log(`🎯 Trade closed: ${tradeResult.result.toUpperCase()} $${tradeResult.amount}`);
+                    processTradeResult(tradeResult.result, tradeResult.amount || pendingTradeCheck.amount);
                     clearInterval(resultCheckInterval);
                     resultCheckInterval = null;
                     pendingTradeCheck = null;
                     return;
                 }
+            }
+            
+            // Also check open trades count decreased (trade moved from open to closed)
+            const currentOpenCount = getOpenTradesCount();
+            if (checkCount > 3 && currentOpenCount < pendingTradeCheck.initialOpenCount) {
+                // Open count decreased, check closed for result
+                const tradeResult = getLatestClosedTradeResult();
                 
-                // Method 2: Check balance change ONLY after trade should have expired
-                // This prevents false triggers from the initial trade amount deduction
-                if (checkCount >= minWaitSeconds && pendingTradeCheck && pendingTradeCheck.balanceAfterTrade) {
-                    const currentBalance = getCurrentBalance();
-                    if (currentBalance !== null) {
-                        const diff = currentBalance - pendingTradeCheck.balanceAfterTrade;
-                        
-                        // WIN: Balance increased (got payout)
-                        // LOSS: Balance stayed same or very small change (no payout, but trade amount already gone)
-                        
-                        // Significant positive change = WIN (payout received)
-                        if (diff > 0.5) {
-                            log(`💰 Balance increased by $${diff.toFixed(2)} = WIN`);
-                            processTradeResult('win', diff);
-                            clearInterval(resultCheckInterval);
-                            resultCheckInterval = null;
-                            pendingTradeCheck = null;
-                            return;
-                        }
-                        
-                        // After expiry time + buffer, if no increase, it's a LOSS
-                        if (checkCount >= estimatedExpiry + 5) {
-                            // No payout received after sufficient wait = LOSS
-                            const lossAmount = pendingTradeCheck.amount || 1;
-                            log(`📉 No payout after expiry = LOSS ($${lossAmount})`);
-                            processTradeResult('loss', lossAmount);
-                            clearInterval(resultCheckInterval);
-                            resultCheckInterval = null;
-                            pendingTradeCheck = null;
-                            return;
-                        }
-                    }
-                }
-                
-                // Timeout after maxChecks
-                if (checkCount >= maxChecks) {
-                    log('⏱️ Trade result check timeout - assuming LOSS');
-                    const lossAmount = pendingTradeCheck?.amount || 1;
-                    processTradeResult('loss', lossAmount);
+                if (tradeResult) {
+                    log(`🎯 Trade moved to closed: ${tradeResult.result.toUpperCase()} $${tradeResult.amount}`);
+                    processTradeResult(tradeResult.result, tradeResult.amount || pendingTradeCheck.amount);
                     clearInterval(resultCheckInterval);
                     resultCheckInterval = null;
                     pendingTradeCheck = null;
+                    return;
                 }
-            }, 1000);
-        }, 1500); // Wait 1.5 seconds for balance to settle after trade placement
+            }
+            
+            // Log progress every 10 seconds
+            if (checkCount % 10 === 0) {
+                log(`⏳ Waiting for result... (${checkCount}s) Open: ${currentOpenCount}, Closed: ${currentClosedCount}`);
+            }
+            
+            // Timeout after maxChecks
+            if (checkCount >= maxChecks) {
+                log('⏱️ Trade result timeout - could not detect outcome');
+                clearInterval(resultCheckInterval);
+                resultCheckInterval = null;
+                pendingTradeCheck = null;
+            }
+        }, 1000);
     }
     
     // Process detected trade result
@@ -1208,7 +1288,7 @@
             <div class="header" id="gpt-drag">
                 <div class="header-left">
                     <span class="status-dot" id="gpt-dot"></span>
-                    <span class="title">GPT Bot v6.6.1</span>
+                    <span class="title">GPT Bot v6.6.2</span>
                     <span id="gpt-connection-status" style="margin-left:6px;font-size:12px;" title="App Connection">🔴</span>
                 </div>
                 <div class="header-right">
@@ -1297,7 +1377,7 @@
                     <span class="value" id="gpt-favorites-count">0</span>
                 </div>
                 
-                <div id="gpt-log">Ready - v6.6.1</div>
+                <div id="gpt-log">Ready - v6.6.2</div>
             </div>
         `;
 
