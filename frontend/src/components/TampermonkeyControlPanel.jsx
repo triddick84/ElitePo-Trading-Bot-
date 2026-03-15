@@ -6,26 +6,53 @@ import { Switch } from '../components/ui/switch';
 import { Slider } from '../components/ui/slider';
 
 const API_BASE = process.env.REACT_APP_BACKEND_URL;
-const API = `${API_BASE}/api`;  // Add /api prefix for all endpoints
+const API = `${API_BASE}/api`;
 
 const TampermonkeyControlPanel = () => {
   const [settings, setSettings] = useState({
     invert_signals: true,
     scan_mode: false,
     auto_trade: true,
+    switch_mode: false,
     preferred_expiry: 60,
     min_payout: 65,
     selected_timeframes: ['5s', '15s', '30s', '1m'],
-    auto_generate_enabled: false
+    auto_generate_enabled: false,
+    selected_strategy: 'auto',
+    signal_source: 'app_ai',
+    favorites_list: []
   });
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [recentSignals, setRecentSignals] = useState([]);
   const [status, setStatus] = useState(null);
   const [lastUpdate, setLastUpdate] = useState(null);
+  const [connectionActive, setConnectionActive] = useState(false);
+  const [strategies, setStrategies] = useState([]);
 
   const timeframes = ['5s', '15s', '30s', '1m', '2m', '3m', '5m'];
   const expiryOptions = [5, 15, 30, 60, 120, 180, 300];
+  
+  const signalSources = [
+    { id: 'app_ai', name: 'App AI', description: 'AI-generated signals from the app', icon: '🤖' },
+    { id: 'tradingview', name: 'TradingView', description: 'Signals from TradingView webhooks', icon: '📊' },
+    { id: 'mt4', name: 'MetaTrader 4', description: 'Signals from MT4 Expert Advisor', icon: '📈' },
+    { id: 'mt5', name: 'MetaTrader 5', description: 'Signals from MT5 Expert Advisor', icon: '📉' },
+    { id: 'tampermonkey_scan', name: 'TM Scan', description: 'Tampermonkey self-generated signals', icon: '🔍' }
+  ];
+
+  // Fetch strategies
+  const fetchStrategies = useCallback(async () => {
+    try {
+      const response = await fetch(`${API}/tampermonkey/strategies`);
+      const data = await response.json();
+      if (data.success && data.strategies) {
+        setStrategies(data.strategies);
+      }
+    } catch (error) {
+      console.error('Failed to fetch strategies:', error);
+    }
+  }, []);
 
   // Fetch current settings
   const fetchSettings = useCallback(async () => {
@@ -41,7 +68,7 @@ const TampermonkeyControlPanel = () => {
     }
   }, []);
 
-  // Fetch status including recent signals
+  // Fetch status including recent signals and connection
   const fetchStatus = useCallback(async () => {
     try {
       const response = await fetch(`${API}/tampermonkey/status`);
@@ -49,6 +76,7 @@ const TampermonkeyControlPanel = () => {
       if (data.success) {
         setStatus(data);
         setRecentSignals(data.recent_signals || []);
+        setConnectionActive(data.connection_active || false);
       }
     } catch (error) {
       console.error('Failed to fetch status:', error);
@@ -58,6 +86,7 @@ const TampermonkeyControlPanel = () => {
   useEffect(() => {
     fetchSettings();
     fetchStatus();
+    fetchStrategies();
     
     // Poll for updates every 5 seconds
     const interval = setInterval(() => {
@@ -66,7 +95,7 @@ const TampermonkeyControlPanel = () => {
     }, 5000);
     
     return () => clearInterval(interval);
-  }, [fetchSettings, fetchStatus]);
+  }, [fetchSettings, fetchStatus, fetchStrategies]);
 
   // Update settings on server
   const updateSettings = async (newSettings) => {
@@ -112,7 +141,7 @@ const TampermonkeyControlPanel = () => {
       });
       const data = await response.json();
       if (data.success) {
-        fetchStatus(); // Refresh signals list
+        fetchStatus();
         alert(`Signal generated: ${data.signal.direction} ${data.signal.symbol} (${data.inverted ? 'INVERTED' : 'NORMAL'})`);
       } else {
         alert('Failed to generate signal: ' + data.message);
@@ -133,11 +162,99 @@ const TampermonkeyControlPanel = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-testid="tampermonkey-control-panel">
+      {/* Connection Status Banner */}
+      <Card className={`border-2 ${connectionActive ? 'bg-green-900/20 border-green-600' : 'bg-red-900/20 border-red-600'}`}>
+        <CardContent className="py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className={`w-4 h-4 rounded-full ${connectionActive ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
+              <div>
+                <h3 className={`font-bold ${connectionActive ? 'text-green-400' : 'text-red-400'}`}>
+                  {connectionActive ? '🟢 Tampermonkey Connected' : '🔴 Tampermonkey Disconnected'}
+                </h3>
+                <p className="text-xs text-slate-400">
+                  {connectionActive 
+                    ? `Last heartbeat: ${settings.last_heartbeat ? new Date(settings.last_heartbeat).toLocaleTimeString() : 'Just now'}`
+                    : 'Install and open Tampermonkey script on Pocket Option'}
+                </p>
+              </div>
+            </div>
+            {settings.favorites_list?.length > 0 && (
+              <Badge className="bg-purple-600">
+                {settings.favorites_list.length} Favorites Detected
+              </Badge>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Signal Source Selection */}
+      <Card className="bg-slate-800/50 border-slate-700">
+        <CardHeader>
+          <CardTitle className="text-white">📡 Signal Source</CardTitle>
+          <CardDescription>Choose where trading signals come from</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+            {signalSources.map(source => (
+              <button
+                key={source.id}
+                onClick={() => updateSettings({ ...settings, signal_source: source.id })}
+                className={`p-3 rounded-lg border-2 transition-all ${
+                  settings.signal_source === source.id
+                    ? 'border-purple-500 bg-purple-900/30'
+                    : 'border-slate-600 bg-slate-800 hover:border-slate-500'
+                }`}
+                data-testid={`signal-source-${source.id}`}
+              >
+                <div className="text-2xl mb-1">{source.icon}</div>
+                <div className="text-sm font-medium text-white">{source.name}</div>
+                <div className="text-xs text-slate-400 mt-1">{source.description}</div>
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Strategy Selection */}
+      <Card className="bg-slate-800/50 border-slate-700">
+        <CardHeader>
+          <CardTitle className="text-white">🎯 Trading Strategy</CardTitle>
+          <CardDescription>Select which strategy Tampermonkey should use</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            {strategies.map(strategy => (
+              <button
+                key={strategy.id}
+                onClick={() => updateSettings({ ...settings, selected_strategy: strategy.id })}
+                className={`p-3 rounded-lg border-2 text-left transition-all ${
+                  settings.selected_strategy === strategy.id
+                    ? 'border-green-500 bg-green-900/30'
+                    : 'border-slate-600 bg-slate-800 hover:border-slate-500'
+                }`}
+                data-testid={`strategy-${strategy.id}`}
+              >
+                <div className="text-sm font-medium text-white">{strategy.name}</div>
+                <div className="text-xs text-slate-400 mt-1">{strategy.description}</div>
+                {strategy.timeframes && (
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {strategy.timeframes.map(tf => (
+                      <span key={tf} className="text-xs bg-slate-700 px-1.5 py-0.5 rounded">{tf}</span>
+                    ))}
+                  </div>
+                )}
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Button Logic Guide */}
       <Card className="bg-slate-800/50 border-slate-700">
         <CardHeader>
-          <CardTitle className="text-white">📖 Button Logic Guide v6.1</CardTitle>
+          <CardTitle className="text-white">📖 Button Logic Guide v6.5.0</CardTitle>
         </CardHeader>
         <CardContent className="text-slate-300 text-sm space-y-3">
           <div className="bg-green-900/30 border border-green-600 rounded p-3">
@@ -149,8 +266,8 @@ const TampermonkeyControlPanel = () => {
             <p className="text-xs mt-1">30 second cooldown between scan trades</p>
           </div>
           <div className="bg-purple-900/30 border border-purple-600 rounded p-3">
-            <strong className="text-purple-400">🔀 SWITCH</strong> - Asset switching during SCAN only
-            <p className="text-xs mt-1">OFF = current asset | ON = all favorites</p>
+            <strong className="text-purple-400">🔀 SWITCH</strong> - Cycles through favorites BAR
+            <p className="text-xs mt-1">v6.5.0: Now uses the visual favorites bar, not search</p>
           </div>
           <div className="bg-orange-900/30 border border-orange-600 rounded p-3">
             <strong className="text-orange-400">🔄 INVERT</strong> - Local toggle (overrides app)
@@ -160,10 +277,9 @@ const TampermonkeyControlPanel = () => {
             <strong className="text-white">Combinations:</strong>
             <ul className="text-xs mt-2 space-y-1">
               <li>• <span className="text-green-400">AUTO only</span>: App signals on current asset</li>
-              <li>• <span className="text-pink-400">SCAN only</span>: Tampermonkey on current asset</li>
-              <li>• <span className="text-pink-400">SCAN + SWITCH</span>: Tampermonkey on all favorites</li>
+              <li>• <span className="text-pink-400">SCAN only</span>: TM scans current asset only</li>
+              <li>• <span className="text-pink-400">SCAN + SWITCH</span>: TM cycles through favorites bar</li>
               <li>• <span className="text-purple-400">AUTO + SCAN</span>: BOTH sources on current asset</li>
-              <li>• <span className="text-yellow-400">AUTO + SCAN + SWITCH</span>: Only Tampermonkey (SWITCH overrides)</li>
             </ul>
           </div>
         </CardContent>
@@ -202,6 +318,7 @@ const TampermonkeyControlPanel = () => {
                   checked={settings.invert_signals}
                   onCheckedChange={toggleInversion}
                   className="data-[state=checked]:bg-orange-600"
+                  data-testid="inversion-toggle"
                 />
               </div>
             </div>
@@ -216,6 +333,7 @@ const TampermonkeyControlPanel = () => {
                   checked={settings.auto_trade}
                   onCheckedChange={(checked) => updateSettings({ ...settings, auto_trade: checked })}
                   className="data-[state=checked]:bg-green-600"
+                  data-testid="auto-trade-toggle"
                 />
               </div>
               <p className="text-xs text-slate-400">For APP SIGNALS: Enable this, disable Scan & Switch</p>
@@ -228,6 +346,7 @@ const TampermonkeyControlPanel = () => {
                   checked={settings.scan_mode}
                   onCheckedChange={(checked) => updateSettings({ ...settings, scan_mode: checked })}
                   className="data-[state=checked]:bg-pink-600"
+                  data-testid="scan-mode-toggle"
                 />
               </div>
               <p className="text-xs text-slate-400">Tampermonkey scans for signals (30s between trades)</p>
@@ -247,6 +366,7 @@ const TampermonkeyControlPanel = () => {
                     ? 'bg-purple-600 hover:bg-purple-700' 
                     : 'border-slate-600 text-slate-400'}
                   onClick={() => toggleTimeframe(tf)}
+                  data-testid={`timeframe-${tf}`}
                 >
                   {tf}
                 </Button>
@@ -267,6 +387,7 @@ const TampermonkeyControlPanel = () => {
                     ? 'bg-blue-600 hover:bg-blue-700' 
                     : 'border-slate-600 text-slate-400'}
                   onClick={() => updateSettings({ ...settings, preferred_expiry: exp })}
+                  data-testid={`expiry-${exp}`}
                 >
                   {exp >= 60 ? `${exp/60}m` : `${exp}s`}
                 </Button>
@@ -284,6 +405,7 @@ const TampermonkeyControlPanel = () => {
               max={90}
               step={5}
               className="w-full"
+              data-testid="min-payout-slider"
             />
             <div className="flex justify-between text-xs text-slate-500 mt-1">
               <span>50%</span>
@@ -310,6 +432,7 @@ const TampermonkeyControlPanel = () => {
                 onClick={() => forceGenerateSignal(tf)}
                 disabled={generating}
                 className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+                data-testid={`force-generate-${tf}`}
               >
                 {generating ? '...' : tf}
               </Button>
@@ -340,6 +463,7 @@ const TampermonkeyControlPanel = () => {
                       ? 'bg-green-900/30 border border-green-700'
                       : 'bg-red-900/30 border border-red-700'
                   }`}
+                  data-testid={`recent-signal-${idx}`}
                 >
                   <div className="flex items-center gap-3">
                     <span className={`font-bold ${
@@ -373,15 +497,31 @@ const TampermonkeyControlPanel = () => {
         <CardContent className="text-slate-300 text-sm space-y-2">
           <div className="flex justify-between">
             <span>Script Version:</span>
-            <span className="text-purple-400 font-mono">v6.2.1</span>
+            <span className="text-purple-400 font-mono">v6.5.0</span>
           </div>
           <div className="flex justify-between">
-            <span>Settings Sync:</span>
+            <span>Connection:</span>
+            <span className={connectionActive ? 'text-green-400' : 'text-red-400'}>
+              {connectionActive ? 'Active' : 'Inactive'}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span>Heartbeat Interval:</span>
             <span className="text-green-400">Every 10 seconds</span>
           </div>
           <div className="flex justify-between">
             <span>Signal Polling:</span>
-            <span className="text-green-400">Every 5 seconds</span>
+            <span className="text-green-400">Every 3 seconds</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Current Strategy:</span>
+            <span className="text-purple-400">{settings.selected_strategy || 'Auto'}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Signal Source:</span>
+            <span className="text-purple-400">
+              {signalSources.find(s => s.id === settings.signal_source)?.name || settings.signal_source}
+            </span>
           </div>
           <div className="mt-4 p-3 bg-slate-900 rounded-lg">
             <p className="text-xs text-slate-400 mb-2">Script URL:</p>

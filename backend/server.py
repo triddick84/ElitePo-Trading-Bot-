@@ -14098,10 +14098,17 @@ tampermonkey_settings = {
     "invert_signals": True,  # DEFAULT: Always invert signals
     "scan_mode": False,
     "auto_trade": True,
+    "switch_mode": False,  # Asset switching
     "preferred_expiry": 60,  # Default 60 seconds
     "min_payout": 65,
     "selected_timeframes": ["5s", "15s", "30s", "1m"],
     "auto_generate_enabled": False,
+    # NEW: Enhanced control settings
+    "selected_strategy": "auto",  # auto, micro_compression, keltner_breakout, etc.
+    "signal_source": "app_ai",  # app_ai, tradingview, mt4, mt5, tampermonkey_scan
+    "connection_active": False,  # Updated by Tampermonkey heartbeat
+    "last_heartbeat": None,  # Last time Tampermonkey checked in
+    "favorites_list": [],  # User's favorite assets from PO
     "last_updated": None
 }
 
@@ -14288,20 +14295,95 @@ async def get_tampermonkey_status():
             {"_id": 0}
         ).sort("timestamp", -1).limit(5).to_list(5)
         
+        # Check connection status (active if heartbeat within 30 seconds)
+        connection_active = False
+        if tampermonkey_settings.get("last_heartbeat"):
+            try:
+                last_hb = datetime.fromisoformat(tampermonkey_settings["last_heartbeat"].replace('Z', '+00:00'))
+                connection_active = (datetime.now(timezone.utc) - last_hb).total_seconds() < 30
+            except:
+                pass
+        
         return {
             "success": True,
             "settings": tampermonkey_settings,
+            "connection_active": connection_active,
             "recent_signals": recent_signals,
             "endpoints": {
                 "settings": "/api/tampermonkey/settings",
                 "force_generate": "/api/tampermonkey/force-generate",
                 "toggle_inversion": "/api/tampermonkey/toggle-inversion",
+                "heartbeat": "/api/tampermonkey/heartbeat",
                 "script_url": "https://signal-bot-preview.preview.emergentagent.com/pocket-option-auto-trader.user.js"
             }
         }
     except Exception as e:
         logger.error(f"Error getting Tampermonkey status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/tampermonkey/heartbeat")
+async def tampermonkey_heartbeat(data: dict = Body(default={})):
+    """
+    Heartbeat endpoint for Tampermonkey to report its status and sync settings.
+    Called every 10 seconds by the userscript.
+    """
+    try:
+        global tampermonkey_settings
+        
+        # Update heartbeat timestamp
+        tampermonkey_settings["last_heartbeat"] = datetime.now(timezone.utc).isoformat()
+        tampermonkey_settings["connection_active"] = True
+        
+        # Update favorites list if provided
+        if "favorites" in data:
+            tampermonkey_settings["favorites_list"] = data["favorites"]
+        
+        # Update current asset if provided
+        if "current_asset" in data:
+            tampermonkey_settings["current_asset"] = data["current_asset"]
+        
+        # Persist to database
+        await db.tampermonkey_settings.update_one(
+            {"_id": "default"},
+            {"$set": tampermonkey_settings},
+            upsert=True
+        )
+        
+        return {
+            "success": True,
+            "settings": tampermonkey_settings,
+            "message": "Heartbeat received"
+        }
+    except Exception as e:
+        logger.error(f"Heartbeat error: {e}")
+        return {"success": False, "message": str(e)}
+
+@api_router.get("/tampermonkey/strategies")
+async def get_tampermonkey_strategies():
+    """
+    Get available strategies for Tampermonkey to use.
+    """
+    try:
+        strategies = [
+            {"id": "auto", "name": "Auto (AI Selection)", "description": "AI automatically selects best strategy"},
+            {"id": "micro_compression", "name": "Micro Compression", "timeframes": ["5s"], "description": "Quick 5s scalping"},
+            {"id": "keltner_breakout", "name": "Keltner Breakout", "timeframes": ["5s", "15s"], "description": "Volatility breakouts"},
+            {"id": "candlestick_patterns", "name": "Candlestick Patterns", "timeframes": ["5s", "15s", "30s"], "description": "Classic patterns"},
+            {"id": "triple_supertrend", "name": "Triple SuperTrend", "timeframes": ["1m", "2m"], "description": "Multi-timeframe trend"},
+            {"id": "ema_pullback", "name": "EMA Pullback", "timeframes": ["1m", "3m"], "description": "Trend pullbacks"},
+            {"id": "zigzag_double_ma", "name": "ZigZag + Double MA", "timeframes": ["1m", "5m"], "description": "Swing reversals"},
+            {"id": "rsi_divergence", "name": "RSI Divergence", "timeframes": ["15s", "30s", "1m"], "description": "Momentum divergence"},
+            {"id": "macd_crossover", "name": "MACD Crossover", "timeframes": ["30s", "1m", "2m"], "description": "Trend momentum"},
+            {"id": "bollinger_squeeze", "name": "Bollinger Squeeze", "timeframes": ["15s", "30s", "1m"], "description": "Volatility expansion"}
+        ]
+        
+        return {
+            "success": True,
+            "strategies": strategies
+        }
+    except Exception as e:
+        logger.error(f"Error getting strategies: {e}")
+        return {"success": False, "strategies": []}
 
 
 # Include the router in the main app

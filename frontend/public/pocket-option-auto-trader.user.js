@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://signal-bot-preview.preview.emergentagent.com
-// @version      6.4.2
-// @description  Auto-trade OTC forex on Pocket Option. v6.4.2 - Removed opposite trade block per user request
+// @version      6.5.0
+// @description  Auto-trade OTC forex on Pocket Option. v6.5.0 - Favorites bar integration + enhanced control system
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -66,9 +66,17 @@
     let lastTradeClickTime = 0;
     const TRADE_LOCK_MS = 5000;  // 5 second absolute lock after any trade
     
+    // NEW: Enhanced control settings from backend
+    let selectedStrategy = 'auto';
+    let selectedTimeframe = '1m';
+    let signalSource = 'app_ai';  // app_ai, tradingview, mt4, mt5, tampermonkey_scan
+    let favoritesFromBar = [];    // Detected from PO favorites bar
+    let currentFavoriteIndex = 0; // For cycling through favorites
+    
     // Intervals
     let appPollingInterval = null;
     let scanInterval = null;
+    let heartbeatInterval = null;
 
     // ===========================================
     // SOUND NOTIFICATIONS - TWO DIFFERENT SOUNDS
@@ -110,7 +118,7 @@
     // ===========================================
     function log(msg) {
         const ts = new Date().toLocaleTimeString();
-        console.log(`[GPT v6.4.1] ${ts}: ${msg}`);
+        console.log(`[GPT v6.5.0] ${ts}: ${msg}`);
         const logEl = document.getElementById('gpt-log');
         if (logEl) logEl.textContent = msg;
     }
@@ -120,6 +128,214 @@
     // ===========================================
     function sleep(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    // ===========================================
+    // FAVORITES BAR DETECTION - NEW v6.5.0
+    // ===========================================
+    function detectFavoritesBar() {
+        // Pocket Option favorites bar is typically at the top, horizontal scroll
+        // Contains clickable asset items like "EUR/USD OTC", "GBP/USD OTC", etc.
+        
+        const favorites = [];
+        
+        // Method 1: Look for horizontal scroll container with asset items
+        const scrollContainers = document.querySelectorAll('[class*="scroll"], [class*="favorites"], [class*="tabs"], [class*="assets-bar"]');
+        
+        for (const container of scrollContainers) {
+            if (!container || !container.offsetParent) continue;
+            
+            const rect = container.getBoundingClientRect();
+            // Favorites bar should be near top and horizontal
+            if (rect.top > 200 || rect.width < 300) continue;
+            
+            // Find clickable items inside
+            const items = container.querySelectorAll('[class*="item"], [class*="tab"], [class*="asset"], button, a, span');
+            
+            for (const item of items) {
+                if (!item || !item.offsetParent) continue;
+                
+                const text = (item.textContent || '').trim().toUpperCase();
+                
+                // Check if it looks like a currency pair
+                if ((text.includes('/') || text.includes('USD') || text.includes('EUR') || text.includes('GBP')) 
+                    && text.length <= 20 && text.length >= 6) {
+                    
+                    // Store the element and its text
+                    favorites.push({
+                        element: item,
+                        symbol: text,
+                        normalized: normalizeAsset(text)
+                    });
+                }
+            }
+        }
+        
+        // Method 2: Direct search for asset-like clickable elements at top
+        if (favorites.length === 0) {
+            const allItems = document.querySelectorAll('*');
+            
+            for (const item of allItems) {
+                if (!item || !item.offsetParent) continue;
+                if (item.children.length > 5) continue;
+                
+                const rect = item.getBoundingClientRect();
+                // Must be in top area and reasonable size
+                if (rect.top > 150 || rect.height > 60 || rect.height < 15) continue;
+                if (rect.width < 50 || rect.width > 200) continue;
+                
+                const text = (item.textContent || '').trim().toUpperCase();
+                
+                // Check for currency pair pattern
+                if ((text.includes('/') && (text.includes('USD') || text.includes('EUR') || text.includes('GBP'))) ||
+                    /^[A-Z]{6,10}(_OTC)?$/.test(text.replace(/[^A-Z_]/g, ''))) {
+                    
+                    const style = window.getComputedStyle(item);
+                    if (style.cursor === 'pointer' || item.onclick || item.tagName === 'BUTTON') {
+                        favorites.push({
+                            element: item,
+                            symbol: text,
+                            normalized: normalizeAsset(text)
+                        });
+                    }
+                }
+            }
+        }
+        
+        // Remove duplicates based on normalized symbol
+        const uniqueFavorites = [];
+        const seen = new Set();
+        
+        for (const fav of favorites) {
+            if (!seen.has(fav.normalized)) {
+                seen.add(fav.normalized);
+                uniqueFavorites.push(fav);
+            }
+        }
+        
+        favoritesFromBar = uniqueFavorites;
+        
+        if (uniqueFavorites.length > 0) {
+            log(`📊 Detected ${uniqueFavorites.length} favorites: ${uniqueFavorites.map(f => f.symbol).join(', ')}`);
+        }
+        
+        return uniqueFavorites;
+    }
+
+    // Click an asset in the favorites bar
+    async function clickFavoriteAsset(favorite) {
+        if (!favorite || !favorite.element) {
+            log('❌ Invalid favorite');
+            return false;
+        }
+        
+        try {
+            const el = favorite.element;
+            
+            // Check if element is still in DOM and visible
+            if (!el.offsetParent) {
+                log('❌ Favorite element no longer visible');
+                return false;
+            }
+            
+            log(`🔄 Clicking favorite: ${favorite.symbol}`);
+            
+            // Click the element
+            el.click();
+            await sleep(500);
+            
+            // Verify the switch worked
+            const newAsset = getCurrentAsset();
+            const targetNorm = favorite.normalized.substring(0, 6);
+            
+            if (newAsset && normalizeAsset(newAsset).includes(targetNorm)) {
+                log(`✅ Switched to ${newAsset} via favorites bar`);
+                return true;
+            } else {
+                log(`⚠️ Click may not have worked. Current: ${newAsset}`);
+                return false;
+            }
+        } catch (e) {
+            log(`❌ Favorites click error: ${e.message}`);
+            return false;
+        }
+    }
+
+    // Get next favorite in rotation
+    function getNextFavorite() {
+        if (favoritesFromBar.length === 0) {
+            detectFavoritesBar();
+        }
+        
+        if (favoritesFromBar.length === 0) {
+            log('No favorites detected');
+            return null;
+        }
+        
+        currentFavoriteIndex = (currentFavoriteIndex + 1) % favoritesFromBar.length;
+        return favoritesFromBar[currentFavoriteIndex];
+    }
+
+    // ===========================================
+    // HEARTBEAT & SETTINGS SYNC - NEW v6.5.0
+    // ===========================================
+    function sendHeartbeat() {
+        const currentAssetNow = getCurrentAsset();
+        
+        GM_xmlhttpRequest({
+            method: 'POST',
+            url: CONFIG.API_URL + '/tampermonkey/heartbeat',
+            headers: { 
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            },
+            data: JSON.stringify({
+                current_asset: currentAssetNow,
+                favorites: favoritesFromBar.map(f => f.symbol),
+                auto_enabled: autoEnabled,
+                scan_enabled: scanEnabled,
+                switch_enabled: switchEnabled,
+                invert_enabled: invertEnabled,
+                trade_count: tradeCount
+            }),
+            timeout: 5000,
+            onload: function(res) {
+                try {
+                    if (res.status !== 200) return;
+                    
+                    const data = JSON.parse(res.responseText);
+                    
+                    if (data.success && data.settings) {
+                        // Sync settings from backend
+                        if (data.settings.selected_strategy) {
+                            selectedStrategy = data.settings.selected_strategy;
+                        }
+                        if (data.settings.signal_source) {
+                            signalSource = data.settings.signal_source;
+                        }
+                        if (data.settings.preferred_expiry) {
+                            selectedTimeframe = data.settings.preferred_expiry + 's';
+                        }
+                        
+                        // Update connection indicator
+                        updateConnectionStatus(true);
+                    }
+                } catch (e) {
+                    console.error('[GPT HEARTBEAT]', e);
+                }
+            },
+            onerror: function() {
+                updateConnectionStatus(false);
+            }
+        });
+    }
+
+    function updateConnectionStatus(connected) {
+        const indicator = document.getElementById('gpt-connection-status');
+        if (indicator) {
+            indicator.textContent = connected ? '🟢' : '🔴';
+            indicator.title = connected ? 'Connected to app' : 'Disconnected';
+        }
     }
 
     function getCurrentAsset() {
@@ -372,12 +588,24 @@
                 #gpt-panel .mode-indicator.scan { background: #7c2d12; color: #fed7aa; }
                 #gpt-panel .mode-indicator.both { background: #4c1d95; color: #ddd6fe; }
                 #gpt-panel .mode-indicator.idle { background: #374151; color: #9ca3af; }
+                
+                #gpt-panel .settings-row {
+                    display: flex;
+                    justify-content: space-between;
+                    font-size: 10px;
+                    color: #94a3b8;
+                    padding: 3px 0;
+                    border-top: 1px solid rgba(124, 58, 237, 0.2);
+                }
+                #gpt-panel .settings-row .label { color: #64748b; }
+                #gpt-panel .settings-row .value { color: #a78bfa; font-weight: bold; }
             </style>
             
             <div class="header" id="gpt-drag">
                 <div class="header-left">
                     <span class="status-dot" id="gpt-dot"></span>
-                    <span class="title">GPT Bot v6.4.1</span>
+                    <span class="title">GPT Bot v6.5.0</span>
+                    <span id="gpt-connection-status" style="margin-left:6px;font-size:12px;" title="App Connection">🔴</span>
                 </div>
                 <div class="header-right">
                     <span style="font-size:10px;color:#64748b;">Trades: <span id="gpt-trades">0</span></span>
@@ -397,7 +625,7 @@
                     <button class="btn-scan" id="gpt-scan" title="Tampermonkey generates trades">SCAN OFF</button>
                 </div>
                 <div class="btn-row">
-                    <button class="btn-switch" id="gpt-switch" title="Switch assets during SCAN">SWITCH OFF</button>
+                    <button class="btn-switch" id="gpt-switch" title="Switch through favorites bar">SWITCH OFF</button>
                     <button class="btn-invert" id="gpt-invert" title="Invert signal direction">INVERT OFF</button>
                 </div>
                 <div class="btn-row">
@@ -407,7 +635,25 @@
                 
                 <div class="mode-indicator idle" id="gpt-mode">IDLE - All buttons OFF</div>
                 
-                <div id="gpt-log">Ready - v6.2.2</div>
+                <!-- NEW: Settings display from app -->
+                <div class="settings-row">
+                    <span class="label">Strategy:</span>
+                    <span class="value" id="gpt-strategy">Auto</span>
+                </div>
+                <div class="settings-row">
+                    <span class="label">Timeframe:</span>
+                    <span class="value" id="gpt-timeframe">1m</span>
+                </div>
+                <div class="settings-row">
+                    <span class="label">Signal Source:</span>
+                    <span class="value" id="gpt-signal-source">App AI</span>
+                </div>
+                <div class="settings-row">
+                    <span class="label">Favorites:</span>
+                    <span class="value" id="gpt-favorites-count">0</span>
+                </div>
+                
+                <div id="gpt-log">Ready - v6.5.0</div>
             </div>
         `;
 
@@ -833,7 +1079,7 @@
     }
 
     // ===========================================
-    // SCAN HANDLING (SCAN button)
+    // SCAN HANDLING (SCAN button) - UPDATED v6.5.0
     // ===========================================
     function doScan(force = false) {
         if (!scanEnabled) return;
@@ -851,9 +1097,24 @@
         let assetsToScan = '';
         
         if (switchEnabled) {
-            // SWITCH ON: Scan all favorite OTC assets
-            assetsToScan = 'EURUSD_OTC,GBPUSD_OTC,USDJPY_OTC,AUDUSD_OTC,EURJPY_OTC,GBPJPY_OTC,EURGBP_OTC,USDCAD_OTC,USDCHF_OTC,NZDUSD_OTC,AUDCAD_OTC';
-            log('🔍 Scanning ALL FAVORITES...');
+            // SWITCH ON: Use favorites from the favorites bar
+            if (favoritesFromBar.length === 0) {
+                detectFavoritesBar();
+            }
+            
+            if (favoritesFromBar.length > 0) {
+                // Build asset list from detected favorites
+                assetsToScan = favoritesFromBar.map(f => {
+                    let norm = f.normalized;
+                    if (!norm.includes('_OTC')) norm += '_OTC';
+                    return norm;
+                }).join(',');
+                log(`🔍 Scanning ${favoritesFromBar.length} FAVORITES from bar...`);
+            } else {
+                // Fallback to hardcoded list if no favorites detected
+                assetsToScan = 'EURUSD_OTC,GBPUSD_OTC,USDJPY_OTC,AUDUSD_OTC,EURJPY_OTC,GBPJPY_OTC';
+                log('🔍 Scanning DEFAULT favorites (bar detection failed)...');
+            }
         } else {
             // SWITCH OFF: Scan ONLY current asset
             const currentAssetRaw = getCurrentAsset();
@@ -940,11 +1201,36 @@
         isTrading = true;
         updateStatusDot('trading');
 
-        // Switch asset if SWITCH enabled
+        // Switch asset if SWITCH enabled - USE FAVORITES BAR (v6.5.0)
         if (switchEnabled && signal.symbol) {
-            const switched = await switchToAsset(signal.symbol);
+            const targetNorm = normalizeAsset(signal.symbol);
+            
+            // First try to find matching favorite in the bar
+            let switched = false;
+            
+            if (favoritesFromBar.length === 0) {
+                detectFavoritesBar();
+            }
+            
+            // Look for matching favorite
+            const matchingFav = favoritesFromBar.find(f => 
+                f.normalized.includes(targetNorm.substring(0, 6)) || 
+                targetNorm.includes(f.normalized.substring(0, 6))
+            );
+            
+            if (matchingFav) {
+                log(`Found ${signal.symbol} in favorites bar`);
+                switched = await clickFavoriteAsset(matchingFav);
+            }
+            
+            // Fallback to search method if favorites bar click failed
             if (!switched) {
-                log('Asset switch failed');
+                log('Favorites bar click failed, trying search method...');
+                switched = await switchToAsset(signal.symbol);
+            }
+            
+            if (!switched) {
+                log('Asset switch failed completely');
                 isTrading = false;
                 updateStatusDot('connected');
                 return;
@@ -1290,10 +1576,10 @@
     }
 
     // ===========================================
-    // INITIALIZATION
+    // INITIALIZATION - UPDATED v6.5.0
     // ===========================================
     function init() {
-        log('Initializing v6.4.1...');
+        log('Initializing v6.5.0...');
 
         // Load saved settings (all default to false)
         autoEnabled = GM_getValue('autoEnabled', false);
@@ -1304,9 +1590,58 @@
         setTimeout(() => {
             createPanel();
             getCurrentAsset();
+            
+            // NEW: Detect favorites bar
+            detectFavoritesBar();
+            updateFavoritesDisplay();
+            
             manageIntervals();
+            
+            // NEW: Start heartbeat to backend (every 10 seconds)
+            heartbeatInterval = setInterval(() => {
+                sendHeartbeat();
+                updateSettingsDisplay();
+            }, 10000);
+            
+            // Initial heartbeat
+            sendHeartbeat();
+            
             log('Ready! All buttons OFF by default');
         }, 2000);
+    }
+    
+    // Update settings display from synced settings
+    function updateSettingsDisplay() {
+        const strategyEl = document.getElementById('gpt-strategy');
+        const timeframeEl = document.getElementById('gpt-timeframe');
+        const sourceEl = document.getElementById('gpt-signal-source');
+        
+        if (strategyEl) {
+            strategyEl.textContent = selectedStrategy === 'auto' ? 'Auto' : selectedStrategy.replace(/_/g, ' ');
+        }
+        if (timeframeEl) {
+            timeframeEl.textContent = selectedTimeframe;
+        }
+        if (sourceEl) {
+            const sourceNames = {
+                'app_ai': 'App AI',
+                'tradingview': 'TradingView',
+                'mt4': 'MetaTrader 4',
+                'mt5': 'MetaTrader 5',
+                'tampermonkey_scan': 'TM Scan'
+            };
+            sourceEl.textContent = sourceNames[signalSource] || signalSource;
+        }
+    }
+    
+    // Update favorites count display
+    function updateFavoritesDisplay() {
+        const el = document.getElementById('gpt-favorites-count');
+        if (el) {
+            el.textContent = favoritesFromBar.length > 0 
+                ? `${favoritesFromBar.length} detected`
+                : 'None detected';
+        }
     }
 
     if (document.readyState === 'loading') {
