@@ -14385,6 +14385,108 @@ async def get_tampermonkey_strategies():
         logger.error(f"Error getting strategies: {e}")
         return {"success": False, "strategies": []}
 
+# Tampermonkey win/loss stats storage
+tampermonkey_stats = {
+    "wins": 0,
+    "losses": 0,
+    "consecutive_wins": 0,
+    "consecutive_losses": 0,
+    "session_profit": 0,
+    "last_result": None,
+    "auto_invert_active": False,
+    "trade_history": [],
+    "last_updated": None
+}
+
+@api_router.post("/tampermonkey/stats")
+async def update_tampermonkey_stats(stats: dict = Body(...)):
+    """
+    Receive and store win/loss stats from Tampermonkey.
+    """
+    try:
+        global tampermonkey_stats
+        
+        # Update stats
+        for key in stats:
+            if key in tampermonkey_stats:
+                tampermonkey_stats[key] = stats[key]
+        
+        tampermonkey_stats["last_updated"] = datetime.now(timezone.utc).isoformat()
+        
+        # Persist to database
+        await db.tampermonkey_stats.update_one(
+            {"_id": "session"},
+            {"$set": tampermonkey_stats},
+            upsert=True
+        )
+        
+        logger.info(f"Tampermonkey stats updated: W:{stats.get('wins', 0)} L:{stats.get('losses', 0)} P/L:${stats.get('session_profit', 0):.2f}")
+        
+        return {
+            "success": True,
+            "stats": tampermonkey_stats,
+            "message": "Stats updated"
+        }
+    except Exception as e:
+        logger.error(f"Stats update error: {e}")
+        return {"success": False, "message": str(e)}
+
+@api_router.get("/tampermonkey/stats")
+async def get_tampermonkey_stats():
+    """
+    Get current win/loss stats from Tampermonkey.
+    """
+    try:
+        # Load from database if available
+        stored_stats = await db.tampermonkey_stats.find_one({"_id": "session"}, {"_id": 0})
+        if stored_stats:
+            for key in tampermonkey_stats:
+                if key in stored_stats:
+                    tampermonkey_stats[key] = stored_stats[key]
+        
+        return {
+            "success": True,
+            "stats": tampermonkey_stats
+        }
+    except Exception as e:
+        logger.error(f"Error getting stats: {e}")
+        return {"success": True, "stats": tampermonkey_stats}
+
+@api_router.post("/tampermonkey/stats/reset")
+async def reset_tampermonkey_stats():
+    """
+    Reset win/loss stats.
+    """
+    try:
+        global tampermonkey_stats
+        
+        tampermonkey_stats = {
+            "wins": 0,
+            "losses": 0,
+            "consecutive_wins": 0,
+            "consecutive_losses": 0,
+            "session_profit": 0,
+            "last_result": None,
+            "auto_invert_active": False,
+            "trade_history": [],
+            "last_updated": datetime.now(timezone.utc).isoformat()
+        }
+        
+        await db.tampermonkey_stats.update_one(
+            {"_id": "session"},
+            {"$set": tampermonkey_stats},
+            upsert=True
+        )
+        
+        return {
+            "success": True,
+            "stats": tampermonkey_stats,
+            "message": "Stats reset"
+        }
+    except Exception as e:
+        logger.error(f"Error resetting stats: {e}")
+        return {"success": False, "message": str(e)}
+
 
 # Include the router in the main app
 app.include_router(api_router)

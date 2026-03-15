@@ -29,6 +29,18 @@ const TampermonkeyControlPanel = () => {
   const [lastUpdate, setLastUpdate] = useState(null);
   const [connectionActive, setConnectionActive] = useState(false);
   const [strategies, setStrategies] = useState([]);
+  
+  // Win/Loss Stats - v6.6.0
+  const [stats, setStats] = useState({
+    wins: 0,
+    losses: 0,
+    consecutive_wins: 0,
+    consecutive_losses: 0,
+    session_profit: 0,
+    last_result: null,
+    auto_invert_active: false,
+    trade_history: []
+  });
 
   const timeframes = ['5s', '15s', '30s', '1m', '2m', '3m', '5m'];
   const expiryOptions = [5, 15, 30, 60, 120, 180, 300];
@@ -68,6 +80,19 @@ const TampermonkeyControlPanel = () => {
     }
   }, []);
 
+  // Fetch win/loss stats - v6.6.0
+  const fetchStats = useCallback(async () => {
+    try {
+      const response = await fetch(`${API}/tampermonkey/stats`);
+      const data = await response.json();
+      if (data.success && data.stats) {
+        setStats(data.stats);
+      }
+    } catch (error) {
+      console.error('Failed to fetch stats:', error);
+    }
+  }, []);
+
   // Fetch status including recent signals and connection
   const fetchStatus = useCallback(async () => {
     try {
@@ -87,15 +112,27 @@ const TampermonkeyControlPanel = () => {
     fetchSettings();
     fetchStatus();
     fetchStrategies();
+    fetchStats();
     
     // Poll for updates every 5 seconds
     const interval = setInterval(() => {
       fetchSettings();
       fetchStatus();
+      fetchStats();
     }, 5000);
     
     return () => clearInterval(interval);
-  }, [fetchSettings, fetchStatus, fetchStrategies]);
+  }, [fetchSettings, fetchStatus, fetchStrategies, fetchStats]);
+
+  // Reset stats
+  const resetStats = async () => {
+    try {
+      await fetch(`${API}/tampermonkey/stats/reset`, { method: 'POST' });
+      fetchStats();
+    } catch (error) {
+      console.error('Failed to reset stats:', error);
+    }
+  };
 
   // Update settings on server
   const updateSettings = async (newSettings) => {
@@ -186,6 +223,115 @@ const TampermonkeyControlPanel = () => {
               </Badge>
             )}
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Win/Loss Stats - v6.6.0 */}
+      <Card className="bg-slate-800/50 border-slate-700">
+        <CardHeader>
+          <CardTitle className="text-white flex items-center justify-between">
+            <span>📊 Session Statistics</span>
+            <Button 
+              size="sm" 
+              variant="outline" 
+              onClick={resetStats}
+              className="text-xs border-slate-600"
+              data-testid="reset-stats-btn"
+            >
+              Reset Stats
+            </Button>
+          </CardTitle>
+          <CardDescription>Win/Loss tracking with auto-invert system</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {/* Wins */}
+            <div className="bg-green-900/30 border border-green-700 rounded-lg p-4 text-center">
+              <div className="text-3xl font-bold text-green-400" data-testid="wins-count">{stats.wins}</div>
+              <div className="text-sm text-green-300">Wins</div>
+            </div>
+            
+            {/* Losses */}
+            <div className="bg-red-900/30 border border-red-700 rounded-lg p-4 text-center">
+              <div className="text-3xl font-bold text-red-400" data-testid="losses-count">{stats.losses}</div>
+              <div className="text-sm text-red-300">Losses</div>
+            </div>
+            
+            {/* Streak */}
+            <div className={`rounded-lg p-4 text-center ${
+              stats.consecutive_wins > 0 
+                ? 'bg-green-900/30 border border-green-700' 
+                : stats.consecutive_losses > 0 
+                  ? 'bg-red-900/30 border border-red-700'
+                  : 'bg-slate-900 border border-slate-700'
+            }`}>
+              <div className={`text-3xl font-bold ${
+                stats.consecutive_wins > 0 ? 'text-green-400' : stats.consecutive_losses > 0 ? 'text-red-400' : 'text-slate-400'
+              }`} data-testid="streak-display">
+                {stats.consecutive_wins > 0 
+                  ? `🔥 ${stats.consecutive_wins}W` 
+                  : stats.consecutive_losses > 0 
+                    ? `❄️ ${stats.consecutive_losses}L`
+                    : '-'}
+              </div>
+              <div className="text-sm text-slate-300">Streak</div>
+            </div>
+            
+            {/* Session P/L */}
+            <div className={`rounded-lg p-4 text-center ${
+              stats.session_profit >= 0 
+                ? 'bg-green-900/30 border border-green-700' 
+                : 'bg-red-900/30 border border-red-700'
+            }`}>
+              <div className={`text-3xl font-bold ${stats.session_profit >= 0 ? 'text-green-400' : 'text-red-400'}`} data-testid="profit-display">
+                {stats.session_profit >= 0 ? '+' : ''}${(stats.session_profit || 0).toFixed(2)}
+              </div>
+              <div className="text-sm text-slate-300">Session P/L</div>
+            </div>
+          </div>
+          
+          {/* Auto-Invert Status */}
+          <div className={`mt-4 p-3 rounded-lg border ${
+            stats.auto_invert_active 
+              ? 'bg-orange-900/30 border-orange-600' 
+              : 'bg-slate-900 border-slate-700'
+          }`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className={`text-lg ${stats.auto_invert_active ? 'text-orange-400' : 'text-slate-400'}`}>
+                  🔄 Auto-Invert
+                </span>
+                <Badge className={stats.auto_invert_active ? 'bg-orange-600' : 'bg-slate-700'}>
+                  {stats.auto_invert_active ? 'ACTIVE' : 'INACTIVE'}
+                </Badge>
+              </div>
+              <div className="text-xs text-slate-400">
+                Last: {stats.last_result ? (stats.last_result === 'win' ? '✅ WIN' : '❌ LOSS') : '-'}
+              </div>
+            </div>
+          </div>
+          
+          {/* Recent Trade History */}
+          {stats.trade_history && stats.trade_history.length > 0 && (
+            <div className="mt-4">
+              <div className="text-xs text-slate-400 mb-2">Recent Trades:</div>
+              <div className="flex gap-1 flex-wrap">
+                {stats.trade_history.slice(-10).map((trade, idx) => (
+                  <span 
+                    key={idx} 
+                    className={`px-2 py-1 rounded text-xs ${
+                      trade.result === 'win' 
+                        ? 'bg-green-900/50 text-green-400' 
+                        : 'bg-red-900/50 text-red-400'
+                    }`}
+                    title={`${trade.direction} - $${trade.amount?.toFixed(2) || '?'}`}
+                  >
+                    {trade.result === 'win' ? 'W' : 'L'}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

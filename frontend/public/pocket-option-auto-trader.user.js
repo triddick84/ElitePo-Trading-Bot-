@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://signal-bot-preview.preview.emergentagent.com
-// @version      6.5.0
-// @description  Auto-trade OTC forex on Pocket Option. v6.5.0 - Favorites bar integration + enhanced control system
+// @version      6.6.0
+// @description  Auto-trade OTC forex on Pocket Option. v6.6.0 - Win/Loss recognition with auto-invert system
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -73,6 +73,33 @@
     let favoritesFromBar = [];    // Detected from PO favorites bar
     let currentFavoriteIndex = 0; // For cycling through favorites
     
+    // ===========================================
+    // WIN/LOSS RECOGNITION SYSTEM - v6.6.0
+    // ===========================================
+    let winLossStats = {
+        totalWins: 0,
+        totalLosses: 0,
+        consecutiveWins: 0,
+        consecutiveLosses: 0,
+        sessionProfit: 0,
+        lastTradeResult: null,  // 'win', 'loss', or null
+        lastTradeAmount: 0,
+        lastBalance: 0,
+        tradeHistory: []  // Array of {time, direction, result, amount, balance}
+    };
+    
+    // Auto-invert settings
+    let autoInvertEnabled = false;      // Master toggle for auto-invert system
+    let autoInvertActive = false;       // Currently in inverted mode due to loss
+    let autoPlaceAfterLoss = false;     // Auto-place next trade after loss (vs just invert next signal)
+    let maxConsecutiveLosses = 3;       // Stop after this many consecutive losses
+    let stopLossAmount = 0;             // Stop if session loss exceeds this (0 = disabled)
+    let soundNotificationsEnabled = true; // Sound on win/loss
+    
+    // Trade result monitoring
+    let pendingTradeCheck = null;       // {direction, amount, startBalance, timestamp}
+    let resultCheckInterval = null;
+    
     // Intervals
     let appPollingInterval = null;
     let scanInterval = null;
@@ -114,13 +141,439 @@
     }
 
     // ===========================================
+    // WIN/LOSS SOUND NOTIFICATIONS - v6.6.0
+    // ===========================================
+    function playWinSound() {
+        if (!soundNotificationsEnabled) return;
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            // Ascending happy sound
+            osc.frequency.value = 523; // C5
+            osc.type = 'sine';
+            gain.gain.value = 0.3;
+            osc.start();
+            setTimeout(() => { osc.frequency.value = 659; }, 100); // E5
+            setTimeout(() => { osc.frequency.value = 784; }, 200); // G5
+            setTimeout(() => { osc.stop(); ctx.close(); }, 400);
+        } catch(e) {}
+    }
+
+    function playLossSound() {
+        if (!soundNotificationsEnabled) return;
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            // Descending sad sound
+            osc.frequency.value = 392; // G4
+            osc.type = 'sawtooth';
+            gain.gain.value = 0.2;
+            osc.start();
+            setTimeout(() => { osc.frequency.value = 330; }, 150); // E4
+            setTimeout(() => { osc.frequency.value = 262; }, 300); // C4
+            setTimeout(() => { osc.stop(); ctx.close(); }, 500);
+        } catch(e) {}
+    }
+
+    function playStopSound() {
+        if (!soundNotificationsEnabled) return;
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            // Alert sound for stop condition
+            osc.frequency.value = 200;
+            osc.type = 'square';
+            gain.gain.value = 0.3;
+            osc.start();
+            setTimeout(() => { osc.frequency.value = 150; }, 200);
+            setTimeout(() => { osc.frequency.value = 200; }, 400);
+            setTimeout(() => { osc.frequency.value = 150; }, 600);
+            setTimeout(() => { osc.stop(); ctx.close(); }, 800);
+        } catch(e) {}
+    }
+
+    // ===========================================
     // LOGGING
     // ===========================================
     function log(msg) {
         const ts = new Date().toLocaleTimeString();
-        console.log(`[GPT v6.5.0] ${ts}: ${msg}`);
+        console.log(`[GPT v6.6.0] ${ts}: ${msg}`);
         const logEl = document.getElementById('gpt-log');
         if (logEl) logEl.textContent = msg;
+    }
+
+    // ===========================================
+    // WIN/LOSS DETECTION SYSTEM - v6.6.0
+    // ===========================================
+    
+    // Get current balance from Pocket Option UI
+    function getCurrentBalance() {
+        // Try multiple selectors for balance
+        const balanceSelectors = [
+            '.balance__value',
+            '.balance-value',
+            '[class*="balance"] [class*="value"]',
+            '.trading-balance',
+            '[data-testid="balance"]',
+            '.js-balance',
+            '.balance span',
+            '[class*="Balance"]'
+        ];
+        
+        for (const sel of balanceSelectors) {
+            const el = document.querySelector(sel);
+            if (el && el.textContent) {
+                const text = el.textContent.replace(/[^0-9.,]/g, '').replace(',', '');
+                const balance = parseFloat(text);
+                if (!isNaN(balance) && balance > 0) {
+                    return balance;
+                }
+            }
+        }
+        
+        // Fallback: search for any element with $ and numbers
+        const allElements = document.querySelectorAll('*');
+        for (const el of allElements) {
+            if (!el || !el.offsetParent) continue;
+            if (el.children.length > 2) continue;
+            
+            const text = el.textContent || '';
+            if (text.includes('$') && /\d+\.\d{2}/.test(text)) {
+                const match = text.match(/[\d,]+\.\d{2}/);
+                if (match) {
+                    const balance = parseFloat(match[0].replace(',', ''));
+                    if (!isNaN(balance) && balance > 0 && balance < 1000000) {
+                        return balance;
+                    }
+                }
+            }
+        }
+        
+        return null;
+    }
+    
+    // Detect trade result from popup notification
+    function checkTradeResultPopup() {
+        // Pocket Option shows result popups like "Profit: +$X" or "Loss: -$X"
+        const popupSelectors = [
+            '.notification',
+            '.popup',
+            '.alert',
+            '.toast',
+            '[class*="notification"]',
+            '[class*="result"]',
+            '[class*="profit"]',
+            '[class*="loss"]',
+            '.deal-result',
+            '.trade-result'
+        ];
+        
+        for (const sel of popupSelectors) {
+            const popups = document.querySelectorAll(sel);
+            for (const popup of popups) {
+                if (!popup || !popup.offsetParent) continue;
+                
+                const text = (popup.textContent || '').toLowerCase();
+                
+                // Check for win indicators
+                if (text.includes('profit') || text.includes('win') || text.includes('+$') || text.includes('+ $')) {
+                    const amountMatch = text.match(/[\+]?\$?\s*([\d,]+\.?\d*)/);
+                    const amount = amountMatch ? parseFloat(amountMatch[1].replace(',', '')) : 0;
+                    return { result: 'win', amount: amount };
+                }
+                
+                // Check for loss indicators
+                if (text.includes('loss') || text.includes('lose') || text.includes('-$') || text.includes('- $')) {
+                    const amountMatch = text.match(/[\-]?\$?\s*([\d,]+\.?\d*)/);
+                    const amount = amountMatch ? parseFloat(amountMatch[1].replace(',', '')) : 0;
+                    return { result: 'loss', amount: amount };
+                }
+            }
+        }
+        
+        return null;
+    }
+    
+    // Start monitoring for trade result after placing a trade
+    function startTradeResultMonitor(direction, tradeAmount) {
+        const startBalance = getCurrentBalance();
+        
+        pendingTradeCheck = {
+            direction: direction,
+            amount: tradeAmount || 1,
+            startBalance: startBalance,
+            timestamp: Date.now()
+        };
+        
+        log(`📊 Monitoring trade: ${direction}, Balance: $${startBalance || 'N/A'}`);
+        
+        // Clear any existing interval
+        if (resultCheckInterval) {
+            clearInterval(resultCheckInterval);
+        }
+        
+        let checkCount = 0;
+        const maxChecks = 30; // Check for up to 30 seconds (covers 5s to 5min expiries)
+        
+        resultCheckInterval = setInterval(() => {
+            checkCount++;
+            
+            // Method 1: Check for popup result
+            const popupResult = checkTradeResultPopup();
+            if (popupResult) {
+                processTradeResult(popupResult.result, popupResult.amount);
+                clearInterval(resultCheckInterval);
+                resultCheckInterval = null;
+                pendingTradeCheck = null;
+                return;
+            }
+            
+            // Method 2: Check balance change (after at least 3 seconds)
+            if (checkCount >= 3 && pendingTradeCheck && pendingTradeCheck.startBalance) {
+                const currentBalance = getCurrentBalance();
+                if (currentBalance !== null) {
+                    const diff = currentBalance - pendingTradeCheck.startBalance;
+                    
+                    // Significant balance change detected (more than $0.50)
+                    if (Math.abs(diff) > 0.5) {
+                        const result = diff > 0 ? 'win' : 'loss';
+                        processTradeResult(result, Math.abs(diff));
+                        clearInterval(resultCheckInterval);
+                        resultCheckInterval = null;
+                        pendingTradeCheck = null;
+                        return;
+                    }
+                }
+            }
+            
+            // Timeout after maxChecks
+            if (checkCount >= maxChecks) {
+                log('⏱️ Trade result check timeout');
+                clearInterval(resultCheckInterval);
+                resultCheckInterval = null;
+                pendingTradeCheck = null;
+            }
+        }, 1000);
+    }
+    
+    // Process detected trade result
+    function processTradeResult(result, amount) {
+        const isWin = result === 'win';
+        
+        log(`${isWin ? '✅ WIN' : '❌ LOSS'}: $${amount.toFixed(2)}`);
+        
+        // Update stats
+        if (isWin) {
+            winLossStats.totalWins++;
+            winLossStats.consecutiveWins++;
+            winLossStats.consecutiveLosses = 0;
+            winLossStats.sessionProfit += amount;
+            playWinSound();
+        } else {
+            winLossStats.totalLosses++;
+            winLossStats.consecutiveLosses++;
+            winLossStats.consecutiveWins = 0;
+            winLossStats.sessionProfit -= amount;
+            playLossSound();
+        }
+        
+        winLossStats.lastTradeResult = result;
+        winLossStats.lastTradeAmount = amount;
+        winLossStats.lastBalance = getCurrentBalance();
+        
+        // Add to history
+        winLossStats.tradeHistory.push({
+            time: new Date().toISOString(),
+            direction: pendingTradeCheck?.direction || 'unknown',
+            result: result,
+            amount: amount,
+            balance: winLossStats.lastBalance
+        });
+        
+        // Keep only last 50 trades in history
+        if (winLossStats.tradeHistory.length > 50) {
+            winLossStats.tradeHistory = winLossStats.tradeHistory.slice(-50);
+        }
+        
+        // Update UI
+        updateWinLossDisplay();
+        
+        // Handle auto-invert logic
+        if (autoInvertEnabled) {
+            handleAutoInvert(isWin, amount);
+        }
+        
+        // Sync stats to backend
+        syncStatsToBackend();
+    }
+    
+    // Auto-invert logic
+    function handleAutoInvert(isWin, amount) {
+        // Check stop conditions first
+        if (checkStopConditions()) {
+            return;
+        }
+        
+        if (!isWin) {
+            // LOSS: Enable/toggle inversion
+            if (!autoInvertActive) {
+                // First loss - enable invert
+                autoInvertActive = true;
+                invertEnabled = true;
+                GM_setValue('invertEnabled', true);
+                log('🔄 AUTO-INVERT: Enabled due to loss');
+                updateInvertButton();
+                
+                // If auto-place mode, place inverted trade
+                if (autoPlaceAfterLoss) {
+                    log('🔄 AUTO-PLACE: Placing inverted trade...');
+                    setTimeout(() => {
+                        triggerAutoPlaceTrade();
+                    }, 2000);
+                }
+            } else {
+                // Loss while already inverted - flip back to normal
+                autoInvertActive = false;
+                invertEnabled = false;
+                GM_setValue('invertEnabled', false);
+                log('🔄 AUTO-INVERT: Disabled (double loss)');
+                updateInvertButton();
+            }
+        }
+        // If WIN: Do nothing, keep current invert state
+    }
+    
+    // Check if we should stop trading
+    function checkStopConditions() {
+        // Check max consecutive losses
+        if (maxConsecutiveLosses > 0 && winLossStats.consecutiveLosses >= maxConsecutiveLosses) {
+            log(`🛑 STOP: Max consecutive losses (${maxConsecutiveLosses}) reached`);
+            playStopSound();
+            disableAllTrading();
+            
+            GM_notification({
+                title: '🛑 Trading Stopped',
+                text: `Max ${maxConsecutiveLosses} consecutive losses reached`,
+                timeout: 10000
+            });
+            
+            return true;
+        }
+        
+        // Check stop loss amount
+        if (stopLossAmount > 0 && winLossStats.sessionProfit <= -stopLossAmount) {
+            log(`🛑 STOP: Stop loss ($${stopLossAmount}) reached. Session P/L: $${winLossStats.sessionProfit.toFixed(2)}`);
+            playStopSound();
+            disableAllTrading();
+            
+            GM_notification({
+                title: '🛑 Trading Stopped',
+                text: `Stop loss $${stopLossAmount} reached`,
+                timeout: 10000
+            });
+            
+            return true;
+        }
+        
+        return false;
+    }
+    
+    // Disable all trading modes
+    function disableAllTrading() {
+        autoEnabled = false;
+        scanEnabled = false;
+        autoInvertEnabled = false;
+        GM_setValue('autoEnabled', false);
+        GM_setValue('scanEnabled', false);
+        GM_setValue('autoInvertEnabled', false);
+        manageIntervals();
+        updateAllUI();
+    }
+    
+    // Trigger an auto-place trade (after loss in auto-place mode)
+    function triggerAutoPlaceTrade() {
+        if (isTrading || globalTradeLock) {
+            log('Cannot auto-place: already trading');
+            return;
+        }
+        
+        // Use current SCAN or force a fetch
+        if (scanEnabled) {
+            doScan(true);
+        } else if (autoEnabled) {
+            checkAppSignals(true);
+        }
+    }
+    
+    // Update invert button UI
+    function updateInvertButton() {
+        const btn = document.getElementById('gpt-invert');
+        if (btn) {
+            btn.textContent = invertEnabled ? 'INVERT ON' : 'INVERT OFF';
+            btn.classList.toggle('on', invertEnabled);
+            
+            // Add indicator if auto-invert is active
+            if (autoInvertActive && autoInvertEnabled) {
+                btn.textContent = 'INVERT ON (AUTO)';
+            }
+        }
+    }
+    
+    // Sync stats to backend
+    function syncStatsToBackend() {
+        GM_xmlhttpRequest({
+            method: 'POST',
+            url: CONFIG.API_URL + '/tampermonkey/stats',
+            headers: { 
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            },
+            data: JSON.stringify({
+                wins: winLossStats.totalWins,
+                losses: winLossStats.totalLosses,
+                consecutive_wins: winLossStats.consecutiveWins,
+                consecutive_losses: winLossStats.consecutiveLosses,
+                session_profit: winLossStats.sessionProfit,
+                last_result: winLossStats.lastTradeResult,
+                auto_invert_active: autoInvertActive,
+                trade_history: winLossStats.tradeHistory.slice(-10) // Last 10 trades
+            }),
+            timeout: 5000,
+            onload: function(res) {
+                // Stats synced
+            },
+            onerror: function() {
+                // Ignore sync errors
+            }
+        });
+    }
+    
+    // Reset stats
+    function resetWinLossStats() {
+        winLossStats = {
+            totalWins: 0,
+            totalLosses: 0,
+            consecutiveWins: 0,
+            consecutiveLosses: 0,
+            sessionProfit: 0,
+            lastTradeResult: null,
+            lastTradeAmount: 0,
+            lastBalance: getCurrentBalance(),
+            tradeHistory: []
+        };
+        autoInvertActive = false;
+        updateWinLossDisplay();
+        syncStatsToBackend();
+        log('📊 Stats reset');
     }
 
     // ===========================================
@@ -599,12 +1052,62 @@
                 }
                 #gpt-panel .settings-row .label { color: #64748b; }
                 #gpt-panel .settings-row .value { color: #a78bfa; font-weight: bold; }
+                
+                /* Win/Loss Stats Styles */
+                #gpt-panel .stats-container {
+                    background: rgba(0,0,0,0.4);
+                    border-radius: 8px;
+                    padding: 8px;
+                    margin: 8px 0;
+                }
+                #gpt-panel .stats-row {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 4px;
+                }
+                #gpt-panel .stats-row:last-child { margin-bottom: 0; }
+                #gpt-panel .stat-win { color: #22c55e; font-weight: bold; }
+                #gpt-panel .stat-loss { color: #ef4444; font-weight: bold; }
+                #gpt-panel .stat-profit { font-weight: bold; }
+                #gpt-panel .stat-profit.positive { color: #22c55e; }
+                #gpt-panel .stat-profit.negative { color: #ef4444; }
+                
+                #gpt-panel .auto-invert-section {
+                    background: linear-gradient(135deg, #7c2d12 0%, #451a03 100%);
+                    border: 1px solid #f59e0b;
+                    border-radius: 8px;
+                    padding: 8px;
+                    margin: 8px 0;
+                }
+                #gpt-panel .auto-invert-section.active {
+                    background: linear-gradient(135deg, #065f46 0%, #022c22 100%);
+                    border-color: #22c55e;
+                }
+                
+                #gpt-panel .btn-auto-invert { background: #6b7280; color: white; }
+                #gpt-panel .btn-auto-invert.on { background: #f59e0b; }
+                #gpt-panel .btn-auto-place { background: #6b7280; color: white; font-size: 9px; }
+                #gpt-panel .btn-auto-place.on { background: #06b6d4; }
+                #gpt-panel .btn-sound { background: #6b7280; color: white; font-size: 9px; }
+                #gpt-panel .btn-sound.on { background: #8b5cf6; }
+                
+                #gpt-panel .settings-input {
+                    background: rgba(0,0,0,0.3);
+                    border: 1px solid #4b5563;
+                    border-radius: 4px;
+                    color: white;
+                    padding: 2px 6px;
+                    width: 50px;
+                    font-size: 10px;
+                    text-align: center;
+                }
             </style>
             
             <div class="header" id="gpt-drag">
                 <div class="header-left">
                     <span class="status-dot" id="gpt-dot"></span>
-                    <span class="title">GPT Bot v6.5.0</span>
+                    <span class="title">GPT Bot v6.6.0</span>
                     <span id="gpt-connection-status" style="margin-left:6px;font-size:12px;" title="App Connection">🔴</span>
                 </div>
                 <div class="header-right">
@@ -618,6 +1121,46 @@
                     <div class="signal-direction wait" id="gpt-signal">READY</div>
                     <div style="font-size:11px;color:#94a3b8;margin-top:4px;" id="gpt-asset">-</div>
                     <div style="font-size:10px;color:#64748b;margin-top:2px;" id="gpt-source">-</div>
+                </div>
+                
+                <!-- WIN/LOSS STATS - v6.6.0 -->
+                <div class="stats-container" id="gpt-stats">
+                    <div class="stats-row">
+                        <span style="font-size:11px;color:#a78bfa;font-weight:bold;">📊 Session Stats</span>
+                        <button id="gpt-reset-stats" style="font-size:9px;padding:2px 6px;background:#374151;border:none;border-radius:3px;color:#9ca3af;cursor:pointer;">Reset</button>
+                    </div>
+                    <div class="stats-row">
+                        <span style="font-size:10px;color:#9ca3af;">W/L:</span>
+                        <span><span class="stat-win" id="gpt-wins">0</span> / <span class="stat-loss" id="gpt-losses">0</span></span>
+                    </div>
+                    <div class="stats-row">
+                        <span style="font-size:10px;color:#9ca3af;">Streak:</span>
+                        <span style="font-size:10px;" id="gpt-streak">-</span>
+                    </div>
+                    <div class="stats-row">
+                        <span style="font-size:10px;color:#9ca3af;">P/L:</span>
+                        <span class="stat-profit" id="gpt-profit">$0.00</span>
+                    </div>
+                </div>
+                
+                <!-- AUTO-INVERT SECTION - v6.6.0 -->
+                <div class="auto-invert-section" id="gpt-auto-invert-section">
+                    <div style="font-size:10px;color:#fcd34d;margin-bottom:6px;text-align:center;">🔄 Auto-Invert on Loss</div>
+                    <div class="btn-row">
+                        <button class="btn-auto-invert" id="gpt-auto-invert" title="Auto-invert signals after loss">AUTO-INV OFF</button>
+                        <button class="btn-auto-place" id="gpt-auto-place" title="Auto-place trade after loss">AUTO-PLACE OFF</button>
+                    </div>
+                    <div class="btn-row" style="margin-top:4px;">
+                        <button class="btn-sound" id="gpt-sound-toggle" title="Sound notifications">🔊 SOUND ON</button>
+                        <div style="display:flex;align-items:center;gap:4px;justify-content:flex-end;">
+                            <span style="font-size:9px;color:#9ca3af;">Max Loss:</span>
+                            <input type="number" class="settings-input" id="gpt-max-losses" value="3" min="1" max="10" title="Stop after X consecutive losses">
+                        </div>
+                    </div>
+                    <div class="stats-row" style="margin-top:6px;">
+                        <span style="font-size:9px;color:#9ca3af;">Stop Loss $:</span>
+                        <input type="number" class="settings-input" id="gpt-stop-loss" value="0" min="0" max="1000" step="10" title="Stop if session loss exceeds this (0=disabled)">
+                    </div>
                 </div>
                 
                 <div class="btn-row">
@@ -635,7 +1178,7 @@
                 
                 <div class="mode-indicator idle" id="gpt-mode">IDLE - All buttons OFF</div>
                 
-                <!-- NEW: Settings display from app -->
+                <!-- Settings display from app -->
                 <div class="settings-row">
                     <span class="label">Strategy:</span>
                     <span class="value" id="gpt-strategy">Auto</span>
@@ -653,7 +1196,7 @@
                     <span class="value" id="gpt-favorites-count">0</span>
                 </div>
                 
-                <div id="gpt-log">Ready - v6.5.0</div>
+                <div id="gpt-log">Ready - v6.6.0</div>
             </div>
         `;
 
@@ -667,6 +1210,25 @@
         document.getElementById('gpt-fetch').addEventListener('click', handleFetch);
         document.getElementById('gpt-reset').addEventListener('click', resetToDefaults);
         document.getElementById('gpt-minimize').addEventListener('click', toggleMinimize);
+        
+        // NEW: Win/Loss and Auto-Invert handlers - v6.6.0
+        document.getElementById('gpt-reset-stats').addEventListener('click', resetWinLossStats);
+        document.getElementById('gpt-auto-invert').addEventListener('click', toggleAutoInvert);
+        document.getElementById('gpt-auto-place').addEventListener('click', toggleAutoPlace);
+        document.getElementById('gpt-sound-toggle').addEventListener('click', toggleSoundNotifications);
+        
+        // Settings inputs
+        document.getElementById('gpt-max-losses').addEventListener('change', (e) => {
+            maxConsecutiveLosses = parseInt(e.target.value) || 3;
+            GM_setValue('maxConsecutiveLosses', maxConsecutiveLosses);
+            log(`Max consecutive losses set to ${maxConsecutiveLosses}`);
+        });
+        
+        document.getElementById('gpt-stop-loss').addEventListener('change', (e) => {
+            stopLossAmount = parseFloat(e.target.value) || 0;
+            GM_setValue('stopLossAmount', stopLossAmount);
+            log(`Stop loss set to $${stopLossAmount}`);
+        });
 
         // Make draggable with touch support
         makeDraggable(panel, document.getElementById('gpt-drag'));
@@ -832,6 +1394,7 @@
         lastAppSignalId = '';
         lastAppTradeTime = 0;
         lastScanTradeTime = 0;
+        autoInvertActive = false;
         
         GM_setValue('autoEnabled', false);
         GM_setValue('scanEnabled', false);
@@ -843,6 +1406,92 @@
         updateSignalDisplay('READY', null, 'wait', '-');
         
         log('RESET: All buttons OFF');
+    }
+
+    // ===========================================
+    // AUTO-INVERT TOGGLE HANDLERS - v6.6.0
+    // ===========================================
+    function toggleAutoInvert() {
+        autoInvertEnabled = !autoInvertEnabled;
+        GM_setValue('autoInvertEnabled', autoInvertEnabled);
+        
+        const btn = document.getElementById('gpt-auto-invert');
+        if (btn) {
+            btn.textContent = autoInvertEnabled ? 'AUTO-INV ON' : 'AUTO-INV OFF';
+            btn.className = 'btn-auto-invert' + (autoInvertEnabled ? ' on' : '');
+        }
+        
+        const section = document.getElementById('gpt-auto-invert-section');
+        if (section) {
+            section.classList.toggle('active', autoInvertEnabled);
+        }
+        
+        log(`AUTO-INVERT: ${autoInvertEnabled ? 'ON (will invert on loss)' : 'OFF'}`);
+    }
+
+    function toggleAutoPlace() {
+        autoPlaceAfterLoss = !autoPlaceAfterLoss;
+        GM_setValue('autoPlaceAfterLoss', autoPlaceAfterLoss);
+        
+        const btn = document.getElementById('gpt-auto-place');
+        if (btn) {
+            btn.textContent = autoPlaceAfterLoss ? 'AUTO-PLACE ON' : 'AUTO-PLACE OFF';
+            btn.className = 'btn-auto-place' + (autoPlaceAfterLoss ? ' on' : '');
+        }
+        
+        log(`AUTO-PLACE: ${autoPlaceAfterLoss ? 'ON (will auto-trade after loss)' : 'OFF (just invert next signal)'}`);
+    }
+
+    function toggleSoundNotifications() {
+        soundNotificationsEnabled = !soundNotificationsEnabled;
+        GM_setValue('soundNotificationsEnabled', soundNotificationsEnabled);
+        
+        const btn = document.getElementById('gpt-sound-toggle');
+        if (btn) {
+            btn.textContent = soundNotificationsEnabled ? '🔊 SOUND ON' : '🔇 SOUND OFF';
+            btn.className = 'btn-sound' + (soundNotificationsEnabled ? ' on' : '');
+        }
+        
+        log(`SOUND: ${soundNotificationsEnabled ? 'ON' : 'OFF'}`);
+    }
+
+    // Update win/loss display
+    function updateWinLossDisplay() {
+        const winsEl = document.getElementById('gpt-wins');
+        const lossesEl = document.getElementById('gpt-losses');
+        const streakEl = document.getElementById('gpt-streak');
+        const profitEl = document.getElementById('gpt-profit');
+        
+        if (winsEl) winsEl.textContent = winLossStats.totalWins;
+        if (lossesEl) lossesEl.textContent = winLossStats.totalLosses;
+        
+        if (streakEl) {
+            if (winLossStats.consecutiveWins > 0) {
+                streakEl.textContent = `🔥 ${winLossStats.consecutiveWins}W`;
+                streakEl.style.color = '#22c55e';
+            } else if (winLossStats.consecutiveLosses > 0) {
+                streakEl.textContent = `❄️ ${winLossStats.consecutiveLosses}L`;
+                streakEl.style.color = '#ef4444';
+            } else {
+                streakEl.textContent = '-';
+                streakEl.style.color = '#9ca3af';
+            }
+        }
+        
+        if (profitEl) {
+            const profit = winLossStats.sessionProfit;
+            profitEl.textContent = `${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`;
+            profitEl.className = 'stat-profit ' + (profit >= 0 ? 'positive' : 'negative');
+        }
+        
+        // Update auto-invert section style
+        const section = document.getElementById('gpt-auto-invert-section');
+        if (section) {
+            section.classList.toggle('active', autoInvertActive && autoInvertEnabled);
+        }
+        
+        // Update invert button if auto-invert is active
+        updateInvertButton();
     }
 
     // ===========================================
@@ -1063,6 +1712,9 @@
             lastAppTradeTime = Date.now();
             log(`✅ APP TRADE: ${finalDirection} on ${signal.symbol}`);
             
+            // Start monitoring for win/loss result - v6.6.0
+            startTradeResultMonitor(finalDirection, signal.amount || 1);
+            
             try {
                 GM_notification({
                     title: `📡 App Signal: ${finalDirection}`,
@@ -1271,6 +1923,9 @@
             incrementTradeCount();
             lastScanTradeTime = Date.now();
             log(`✅ SCAN TRADE: ${finalDirection} on ${signal.symbol}`);
+            
+            // Start monitoring for win/loss result - v6.6.0
+            startTradeResultMonitor(finalDirection, signal.amount || 1);
             
             try {
                 GM_notification({
@@ -1576,31 +2231,54 @@
     }
 
     // ===========================================
-    // INITIALIZATION - UPDATED v6.5.0
+    // INITIALIZATION - UPDATED v6.6.0
     // ===========================================
     function init() {
-        log('Initializing v6.5.0...');
+        log('Initializing v6.6.0...');
 
         // Load saved settings (all default to false)
         autoEnabled = GM_getValue('autoEnabled', false);
         scanEnabled = GM_getValue('scanEnabled', false);
         switchEnabled = GM_getValue('switchEnabled', false);
         invertEnabled = GM_getValue('invertEnabled', false);
+        
+        // Load auto-invert settings - v6.6.0
+        autoInvertEnabled = GM_getValue('autoInvertEnabled', false);
+        autoPlaceAfterLoss = GM_getValue('autoPlaceAfterLoss', false);
+        soundNotificationsEnabled = GM_getValue('soundNotificationsEnabled', true);
+        maxConsecutiveLosses = GM_getValue('maxConsecutiveLosses', 3);
+        stopLossAmount = GM_getValue('stopLossAmount', 0);
+        
+        // Load stats if any
+        const savedStats = GM_getValue('winLossStats', null);
+        if (savedStats) {
+            try {
+                winLossStats = JSON.parse(savedStats);
+            } catch(e) {}
+        }
 
         setTimeout(() => {
             createPanel();
             getCurrentAsset();
             
-            // NEW: Detect favorites bar
+            // Detect favorites bar
             detectFavoritesBar();
             updateFavoritesDisplay();
             
+            // Initialize auto-invert UI
+            initAutoInvertUI();
+            
+            // Update win/loss display
+            updateWinLossDisplay();
+            
             manageIntervals();
             
-            // NEW: Start heartbeat to backend (every 10 seconds)
+            // Start heartbeat to backend (every 10 seconds)
             heartbeatInterval = setInterval(() => {
                 sendHeartbeat();
                 updateSettingsDisplay();
+                // Save stats periodically
+                GM_setValue('winLossStats', JSON.stringify(winLossStats));
             }, 10000);
             
             // Initial heartbeat
@@ -1608,6 +2286,39 @@
             
             log('Ready! All buttons OFF by default');
         }, 2000);
+    }
+    
+    // Initialize auto-invert UI elements
+    function initAutoInvertUI() {
+        const autoInvBtn = document.getElementById('gpt-auto-invert');
+        const autoPlaceBtn = document.getElementById('gpt-auto-place');
+        const soundBtn = document.getElementById('gpt-sound-toggle');
+        const maxLossesInput = document.getElementById('gpt-max-losses');
+        const stopLossInput = document.getElementById('gpt-stop-loss');
+        
+        if (autoInvBtn) {
+            autoInvBtn.textContent = autoInvertEnabled ? 'AUTO-INV ON' : 'AUTO-INV OFF';
+            autoInvBtn.className = 'btn-auto-invert' + (autoInvertEnabled ? ' on' : '');
+        }
+        if (autoPlaceBtn) {
+            autoPlaceBtn.textContent = autoPlaceAfterLoss ? 'AUTO-PLACE ON' : 'AUTO-PLACE OFF';
+            autoPlaceBtn.className = 'btn-auto-place' + (autoPlaceAfterLoss ? ' on' : '');
+        }
+        if (soundBtn) {
+            soundBtn.textContent = soundNotificationsEnabled ? '🔊 SOUND ON' : '🔇 SOUND OFF';
+            soundBtn.className = 'btn-sound' + (soundNotificationsEnabled ? ' on' : '');
+        }
+        if (maxLossesInput) {
+            maxLossesInput.value = maxConsecutiveLosses;
+        }
+        if (stopLossInput) {
+            stopLossInput.value = stopLossAmount;
+        }
+        
+        const section = document.getElementById('gpt-auto-invert-section');
+        if (section) {
+            section.classList.toggle('active', autoInvertEnabled);
+        }
     }
     
     // Update settings display from synced settings
