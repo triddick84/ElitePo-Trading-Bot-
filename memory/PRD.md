@@ -1,12 +1,45 @@
 # GPT Signal Bot - Product Requirements Document
 
-## Last Updated: March 10, 2026
+## Last Updated: March 15, 2026
 
 ## Current Status
-✅ **Tampermonkey v6.0.0** - Complete rewrite with proper button logic
-- Android browser changed from Kiwi to Firefox Nightly
-- All buttons default to OFF
-- Two different sound notifications (app vs scan)
+✅ **Tampermonkey v6.7.0** - Manual WIN/LOSS buttons with Martingale system
+✅ **Ultra High Accuracy 5s Strategy** - Research-based 85%+ confidence signals
+✅ **Enhanced AI ML System** - Ensemble model with historical data training
+
+## Recent Updates (March 15, 2026)
+
+### Tampermonkey v6.7.0 Features
+- **Manual WIN/LOSS Buttons** - User presses to record trade results
+- **Auto-Invert on LOSS** - Toggles signal inversion when LOSS pressed
+- **Martingale System** - Configurable base amount, multiplier, max steps
+- **Sound Notifications** - Win/Loss/Stop sounds with toggle
+- **Session Stats** - Wins, losses, streak, P/L tracking
+
+### Ultra High Accuracy 5s Strategy
+Based on research of highest win rate binary options algorithms:
+- Multi-confirmation entry system (requires ALL conditions)
+- RSI-2 micro-momentum detection
+- Stochastic divergence filter
+- Bollinger Band squeeze/expansion
+- Candlestick pattern recognition (Pin bars, Engulfing)
+- Support/Resistance level proximity
+- Minimum 85% confidence threshold
+
+### Enhanced AI ML System
+- RandomForest + GradientBoosting ensemble
+- 25+ technical indicator features
+- Historical data training from validated signals
+- Synthetic data generation when real data unavailable
+- Model persistence to disk
+- Real-time predictions with confidence scores
+
+### New API Endpoints
+- `POST /api/enhanced-ml/train` - Train ML model
+- `GET /api/enhanced-ml/stats` - Get ML statistics
+- `POST /api/enhanced-ml/predict/{symbol}` - Get ML prediction
+- `POST /api/ultra-accuracy/signal/{symbol}` - Get ultra-accuracy signal
+- `GET /api/ultra-accuracy/scan` - Scan multiple assets
 
 ## Original Problem Statement
 Create a "GPT Signal Bot" for Pocket Option with a high win rate (80-90%+). The system should include:

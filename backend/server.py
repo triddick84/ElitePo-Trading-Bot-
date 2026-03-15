@@ -43,8 +43,24 @@ from multi_timeframe_analyzer import multi_timeframe_analyzer
 try:
     from ai_lstm_predictor import lstm_predictor
 except ImportError as e:
-    logger.warning(f"LSTM predictor not available: {e}")
+    print(f"LSTM predictor not available: {e}")
     lstm_predictor = None
+# Import Ultra High Accuracy 5s Strategy
+try:
+    from ultra_high_accuracy_5s_strategy import ultra_high_accuracy_5s, get_ultra_high_accuracy_signal
+    print("✅ Ultra High Accuracy 5s Strategy loaded")
+except ImportError as e:
+    print(f"Ultra High Accuracy 5s Strategy not available: {e}")
+    ultra_high_accuracy_5s = None
+
+# Import Enhanced AI ML System
+try:
+    from enhanced_ai_ml_system import enhanced_ai_ml
+    print("✅ Enhanced AI ML System loaded")
+except ImportError as e:
+    print(f"Enhanced AI ML System not available: {e}")
+    enhanced_ai_ml = None
+
 from pocket_option_auth import auto_login_and_get_ssid
 from advanced_signal_generator import advanced_signal_generator
 from enhanced_sr_analyzer import enhanced_sr_analyzer
@@ -3412,6 +3428,162 @@ async def retrain_models_now():
         
     except Exception as e:
         logger.error(f"Error retraining models: {e}")
+        return {"success": False, "error": str(e)}
+
+
+# =====================================================
+# ENHANCED ML SYSTEM ENDPOINTS
+# =====================================================
+
+@api_router.post("/enhanced-ml/train")
+async def train_enhanced_ml():
+    """Train the enhanced ML model from historical validated signals."""
+    try:
+        if enhanced_ai_ml is None:
+            return {"success": False, "error": "Enhanced ML system not available"}
+        
+        result = await enhanced_ai_ml.train_from_historical(db, days=30)
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error training enhanced ML: {e}")
+        return {"success": False, "error": str(e)}
+
+@api_router.get("/enhanced-ml/stats")
+async def get_enhanced_ml_stats():
+    """Get enhanced ML system statistics."""
+    try:
+        if enhanced_ai_ml is None:
+            return {"success": False, "error": "Enhanced ML system not available"}
+        
+        return {
+            "success": True,
+            "stats": enhanced_ai_ml.get_stats()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting ML stats: {e}")
+        return {"success": False, "error": str(e)}
+
+@api_router.post("/enhanced-ml/predict/{symbol}")
+async def get_enhanced_ml_prediction(symbol: str):
+    """Get ML prediction for a symbol."""
+    try:
+        if enhanced_ai_ml is None:
+            return {"success": False, "error": "Enhanced ML system not available"}
+        
+        # Get market data
+        candles = await realtime_market_hub.get_historical_candles(symbol, '1m', 100)
+        
+        if not candles or len(candles) < 50:
+            return {"success": False, "error": "Insufficient market data"}
+        
+        df = pd.DataFrame(candles)
+        df = df.rename(columns={'c': 'close', 'o': 'open', 'h': 'high', 'l': 'low', 'v': 'volume'})
+        
+        prediction = enhanced_ai_ml.predict(df)
+        
+        if prediction:
+            return {
+                "success": True,
+                "symbol": symbol,
+                "prediction": prediction
+            }
+        else:
+            return {"success": False, "error": "Could not generate prediction"}
+        
+    except Exception as e:
+        logger.error(f"Error getting ML prediction: {e}")
+        return {"success": False, "error": str(e)}
+
+
+# =====================================================
+# ULTRA HIGH ACCURACY 5S STRATEGY ENDPOINTS
+# =====================================================
+
+@api_router.post("/ultra-accuracy/signal/{symbol}")
+async def get_ultra_accuracy_signal(symbol: str):
+    """Get ultra-high accuracy 5s signal for a symbol."""
+    try:
+        if ultra_high_accuracy_5s is None:
+            return {"success": False, "error": "Ultra High Accuracy strategy not available"}
+        
+        # Get market data
+        candles = await realtime_market_hub.get_historical_candles(symbol, '1m', 150)
+        
+        if not candles or len(candles) < 100:
+            return {"success": False, "error": "Insufficient market data"}
+        
+        df = pd.DataFrame(candles)
+        df = df.rename(columns={'c': 'close', 'o': 'open', 'h': 'high', 'l': 'low', 'v': 'volume'})
+        
+        signal = get_ultra_high_accuracy_signal(df, symbol)
+        
+        if signal:
+            # Store the signal
+            signal['id'] = f"ultra_{symbol}_{int(datetime.now(timezone.utc).timestamp())}"
+            await db.trading_signals.insert_one({**signal, '_id': signal['id']})
+            
+            # Schedule validation
+            await signal_validator.schedule_signal_validation(signal)
+            
+            return {
+                "success": True,
+                "signal": signal
+            }
+        else:
+            return {
+                "success": False,
+                "message": "No high-confidence signal found",
+                "reason": "Conditions not met for minimum 85% confidence"
+            }
+        
+    except Exception as e:
+        logger.error(f"Error getting ultra accuracy signal: {e}")
+        return {"success": False, "error": str(e)}
+
+@api_router.get("/ultra-accuracy/scan")
+async def scan_ultra_accuracy_signals():
+    """Scan multiple assets for ultra-high accuracy signals."""
+    try:
+        if ultra_high_accuracy_5s is None:
+            return {"success": False, "error": "Ultra High Accuracy strategy not available"}
+        
+        symbols = ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'EURJPY', 'GBPJPY']
+        signals = []
+        
+        for symbol in symbols:
+            try:
+                candles = await realtime_market_hub.get_historical_candles(symbol, '1m', 150)
+                
+                if not candles or len(candles) < 100:
+                    continue
+                
+                df = pd.DataFrame(candles)
+                df = df.rename(columns={'c': 'close', 'o': 'open', 'h': 'high', 'l': 'low', 'v': 'volume'})
+                
+                signal = get_ultra_high_accuracy_signal(df, symbol)
+                
+                if signal:
+                    signal['id'] = f"ultra_{symbol}_{int(datetime.now(timezone.utc).timestamp())}"
+                    signals.append(signal)
+                    
+            except Exception as e:
+                logger.warning(f"Error scanning {symbol}: {e}")
+                continue
+        
+        # Sort by confidence
+        signals.sort(key=lambda x: x['confidence'], reverse=True)
+        
+        return {
+            "success": True,
+            "signals_found": len(signals),
+            "signals": signals[:5],  # Top 5 signals
+            "scanned_symbols": symbols
+        }
+        
+    except Exception as e:
+        logger.error(f"Error scanning for ultra accuracy signals: {e}")
         return {"success": False, "error": str(e)}
 
 
