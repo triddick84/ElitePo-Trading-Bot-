@@ -1,18 +1,46 @@
 # GPT Signal Bot - Product Requirements Document
 
-## Last Updated: March 15, 2026
+## Last Updated: March 16, 2026
 
 ## Current Status
-✅ **Tampermonkey v6.7.0** - Manual WIN/LOSS buttons with Martingale system
+✅ **Tampermonkey v6.8.0** - Complete Money Management System with Smart Martingale
 ✅ **Ultra High Accuracy 5s Strategy** - Research-based 85%+ confidence signals
 ✅ **Enhanced AI ML System** - Ensemble model with historical data training
 
-## Recent Updates (March 15, 2026)
+## Recent Updates (March 16, 2026)
 
-### Tampermonkey v6.7.0 Features
+### Tampermonkey v6.8.0 - Money Management System
+**NEW: Complete Money Management with Smart Martingale**
+- **Balance Tracking** - User can input account balance, auto-detect from Pocket Option UI
+- **Risk-Based Trade Sizing** - Calculate trade amounts as % of balance (default 2%)
+- **Payout-Aware Martingale** - Smart recovery that calculates exact amounts needed to recover losses + profit
+- **Trade Amount UI Control** - Automatically sets trade amount on Pocket Option input field
+- **Session Tracking** - Track trades, P/L, balance changes throughout session
+
+**Money Management UI Panel includes:**
+- Balance display and input ($)
+- Current payout % display (auto-detected)
+- Current trade amount display
+- Session P/L tracking  
+- Risk % setting (0.5-10%)
+- Target profit setting for recovery ($)
+- "Detect Balance" button - reads balance from PO UI
+- "Apply to UI" button - sets trade amount on PO input field
+- ON/OFF toggle for Smart Martingale
+
+**How Smart Martingale Works:**
+1. User sets balance (e.g., $100), risk % (e.g., 2%), target profit (e.g., $0.50)
+2. Base trade = $100 × 2% = $2.00
+3. On WIN: Reset to base trade, update balance with profit
+4. On LOSS: Calculate next amount = (Total Loss + Target Profit) / (Payout / 100)
+   - Example: Lost $2 at 92% payout → Next trade = ($2 + $0.50) / 0.92 = $2.72
+5. On subsequent losses, the formula accumulates total losses to recover
+6. On WIN during martingale: Recover all losses + make profit, reset to base
+
+### Previous v6.7.0 Features (Still Active)
 - **Manual WIN/LOSS Buttons** - User presses to record trade results
 - **Auto-Invert on LOSS** - Toggles signal inversion when LOSS pressed
-- **Martingale System** - Configurable base amount, multiplier, max steps
+- **Legacy Martingale System** - Configurable base amount, multiplier, max steps
 - **Sound Notifications** - Win/Loss/Stop sounds with toggle
 - **Session Stats** - Wins, losses, streak, P/L tracking
 
@@ -251,19 +279,21 @@ Create a "GPT Signal Bot" for Pocket Option with a high win rate (80-90%+). The 
 - [x] MT5 Order Execution (BUY/SELL/CALL/PUT)
 - [x] MT5 Position Management (open, close, modify)
 - [x] MT5 Account Monitoring (balance, equity, margin)
+- [x] **Money Management System v6.8.0** (March 16, 2026) - Complete with Smart Martingale, balance tracking, payout-aware recovery
 
 ## P1 - High Priority (Next)
-- [ ] MetaTrader5 integration (playbook received, needs implementation)
-- [ ] TradingView webhook integration (playbook received, needs implementation)
+- [ ] Fix critical double-trade bug (BUY and SELL placed for single signal)
+- [ ] Fix unreliable asset switching via favorites bar
 - [ ] Backend refactoring (split server.py into routes modules)
 
 ## P2 - Medium Priority
+- [ ] Fix AI/ML training - blocked on historical data pipeline
 - [ ] Clean up Pocket Option page - remove unused code
 - [ ] Enhanced Signal Pop-up with Normal/Inverted status indicator
 - [ ] Frontend accuracy statistics dashboard widget
 
 ## P3 - Future
-- [ ] Fix Money Management Logic (Martingale)
+- [x] ~~Fix Money Management Logic (Martingale)~~ - COMPLETED v6.8.0
 - [ ] Residential proxy integration for Pocket Option auto-trade
 
 ## Credentials

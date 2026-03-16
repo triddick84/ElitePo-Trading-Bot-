@@ -1,164 +1,186 @@
 <analysis>**original_problem_statement:**
-The user wants to build a GPT Signal Bot for Pocket Option with a high win rate. The project has evolved into a full-stack application featuring a React frontend, a FastAPI backend, and a sophisticated Tampermonkey userscript for auto-trading. The core of the application is to integrate multiple signal sources (a custom AI, TradingView, MetaTrader 4/5) and execute trades automatically and reliably on the Pocket Option website via the userscript.
+The user wants to build a GPT Signal Bot for Pocket Option with a high win rate. The project has evolved into a full-stack application featuring a React frontend, a FastAPI backend, and a sophisticated Tampermonkey userscript for auto-trading. The core of the application is to integrate multiple signal sources, implement advanced trading strategies (including high-accuracy algorithms and Martingale), and execute trades automatically and reliably on the Pocket Option website via the userscript.
 
 **PRODUCT REQUIREMENTS:**
-1.  **Stabilize Trade Execution (P0):** The Tampermonkey script suffers from critical, recurring bugs, including placing both a BUY and a SELL for a single signal, failing to switch assets, and trading on the wrong asset. These must be permanently resolved.
-2.  **Fulfill User Logic Change Requests (P0):** The user's latest request is to remove the block on placing opposite trades.
-3.  **Correct Core Feature Logic (P1):** Ensure the  and  functions in the Tampermonkey script work exactly as specified by the user (e.g., scanning only the current asset when  is off).
-4.  **Implement Pending UI/UX Features (P1):** Add requested features like sound notifications for different trade sources and a Reset button to the Tampermonkey panel.
-5.  **Validate New Integrations (P2):** Guide the user to test the newly implemented MT4, MT5, and TradingView integration workflows.
-6.  **Refactor Core Components (P2):** Both the main backend file () and the Tampermonkey script () are extremely large and complex, leading to instability. They need to be refactored.
+1.  **Implement Money Management (P0):** Create a comprehensive money management system in the Tampermonkey script that calculates trade amounts based on account balance, payout percentages, and a user-configurable Martingale strategy.
+2.  **Stabilize Trade Execution (P0):** The Tampermonkey script suffers from critical, recurring bugs, including placing both a BUY and a SELL for a single signal and failing to switch assets. These must be permanently resolved.
+3.  **Fix AI/ML System (P1):** The AI model training process is failing because it cannot fetch the necessary historical market data. This blocks the development of high-win-rate strategies.
+4.  **Implement Pending UI/UX Features (P1):** Add requested features like sound notifications for different events (win, loss, signal source) and a Reset button to the Tampermonkey panel.
+5.  **Refactor Core Components (P2):** Both the main backend file () and the Tampermonkey script () are extremely large and complex, leading to instability. They need to be refactored into a modular structure.
 
 **User's preferred language**: English
 
 **what currently exists?**
-A full-stack React/FastAPI application with a monolithic  backend and a large, complex Tampermonkey userscript (, v6.3.3) for auto-trading on Pocket Option. The app features:
-*   JWT-based user authentication.
-*   A remote control panel in the React UI () that allows configuring the userscript's behavior in real-time via API endpoints.
-*   Backend services for AI signal generation () and integrations with TradingView (webhooks) and MetaTrader (MT5/ZMQ, MT4/file-report).
-*   A new  that provides instructions and downloadable Expert Advisor (EA) files (, ) for MetaTrader setup.
-*   The Tampermonkey script has a UI on the Pocket Option page which is draggable, minimizable, and contains toggles for  (app signals),  (self-generated signals), and  (asset switching).
+A full-stack React/FastAPI application with a monolithic  backend and a very large, complex Tampermonkey userscript (, v7.2.1) for auto-trading on Pocket Option.
+
+Recent major enhancements include:
+*   **Enhanced Remote Control Panel:** The React UI now allows selection of signal sources (AI, TV, MT4/5), trading strategies, and timeframes. It also displays a live connection status via a heartbeat from the Tampermonkey script.
+*   **Favorites Bar Integration:** The userscript now switches assets by clicking on the user's favorites bar in the Pocket Option UI, replacing the old search-based method.
+*   **Manual Win/Loss & Martingale System:** After failed attempts at automatic win/loss detection, the system now uses manual I WON / I LOST buttons in the Tampermonkey panel. These buttons control signal inversion and a configurable Martingale money management strategy.
+*   **New AI/ML Backend:** A new  and  have been created to improve signal generation, but the training process is currently non-functional due to a lack of historical data.
+*   **Session Statistics:** The frontend and Tampermonkey script track and display session stats like wins, losses, streak, and P/L.
 
 **Last working item**:
-The agent was about to fulfill the user's request to remove the block on placing opposite trades (e.g., a BUY immediately after a SELL) from the Tampermonkey script. This block () was previously added to prevent a critical bug where the script would execute both a BUY and a SELL trade for a single signal.
+The agent was in the process of implementing a comprehensive money management system within the Tampermonkey script. This system is designed to dynamically calculate trade amounts based on the account balance, asset payout rates, and a smart Martingale strategy to recover from losses.
 
--   **Last item agent was working**: Removing the  logic from the  function in the Tampermonkey script.
+-   **Last item agent was working**: Integrating the new money management logic into the manual I WON / I LOST button handlers in . The core calculation functions (, ) were added, but the event handlers that use them were not fully updated.
 -   **Status**: IN PROGRESS
 -   **Agent Testing Done**: N
--   **Which testing method agent to use?**: Manual testing. After editing , the agent must load the script in a browser with Pocket Option open, generate signals, and verify that opposite trades can be executed without any delay or block.
+-   **Which testing method agent to use?**: Manual testing. Load the updated userscript in a browser with Pocket Option, and test the I WON and I LOST buttons to verify that the trade amount in the Pocket Option UI updates correctly according to the Martingale and balance percentage logic.
 -   **User Testing Done**: N
 
 **All Pending/In progress Issue list**:
--   **Issue 1**: Remove the block on placing opposite trades in Tampermonkey. (P0)
+-   **Issue 1**: Complete the money management system implementation. (P0)
 -   **Issue 2**: Critical bug: Tampermonkey places both a BUY and a SELL trade for a single signal. (P0, recurring)
--   **Issue 3**: Asset  function is unreliable and fails to switch assets correctly. (P0, recurring)
--   **Issue 4**:  function does not respect the  state (it scans favorites even when  is off). (P1, recurring)
--   **Issue 5**:  function is fragile and sometimes fails to identify the current asset on the chart. (P1, recurring)
+-   **Issue 3**: Asset  function using the favorites bar is unreliable. (P0, recurring)
+-   **Issue 4**: AI/ML training system is not working due to a lack of historical market data. (P1)
+-   **Issue 5**: The  function was removed and replaced with a stub, but trade execution calls it. This was patched but might indicate deeper issues in the trade execution flow. (P1)
 
 **Issues Detail**:
--   **Issue 1: Remove the block on placing opposite trades**
-    -   **Attempted fixes**: None. This is a new user request to undo a previous fix.
+-   **Issue 1: Complete the money management system**
+    -   **Attempted fixes**: The agent added the core logic and variables.
     -   **Next debug checklist**:
         1.  Open .
-        2.  Navigate to the  function (around line 2000).
-        3.  Remove the entire  block and any logic related to  and .
-        4.  Increment the script version number.
-    -   **Why fix this issue and what will be achieved with the fix?**: This is a direct user request. It will enable strategies that require quick reversals or placing opposite trades without a cooldown.
+        2.  Navigate to the  and  functions.
+        3.  Ensure these functions correctly call  and .
+        4.  Verify that the result of  is used to update the trade amount input field on the Pocket Option page.
+        5.  Test the entire flow manually.
+    -   **Why fix this issue and what will be achieved with the fix?**: This is the user's current top-priority feature request for advanced trade management.
     -   **Status**: IN PROGRESS
     -   **Is recurring issue?**: N
     -   **Should Test frontend/backend/both after fix?**: Frontend (the userscript)
 
--   **Issue 2: Critical bug: Tampermonkey places both a BUY and a SELL trade for a single signal**
-    -   **Attempted fixes**: Numerous flags (, ), locks (), and the  which is now being removed. The problem persists, indicating a deep architectural flaw.
+-   **Issue 2: Critical bug: Tampermonkey places both BUY and SELL**
+    -   **Attempted fixes**: In previous forks, a  was added and then removed at the user's request. This indicates the root cause was never found.
     -   **Next debug checklist**:
-        1.  This bug will almost certainly reappear once the  is removed.
-        2.  The root cause is likely a race condition where both the app signal logic () and the Tampermonkey scan logic () are triggering a trade from the same data, or one function is being called twice in quick succession.
-        3.  Thoroughly review the main  loop (the  function) to understand how  and  flags interact.
-        4.  Add verbose  statements to trace every entry into , logging the source (app vs. scan) and the signal details to identify the source of the duplicate call.
-    -   **Why fix this issue and what will be achieved with the fix?**: This is a fund-destroying bug that makes the auto-trader completely unusable and untrustworthy.
-    -   **Status**: NOT STARTED (previous fixes were ineffective patches).
-    -   **Is recurring issue?**: Y
-    -   **Should Test frontend/backend/both after fix?**: Frontend (the userscript)
-    -   **Blocked on other issue**: None.
-
--   **Issue 3: Asset  function is unreliable**
-    -   **Attempted fixes**: The  function has been rewritten multiple times. It still fails to correctly type in the search box, click the correct asset, or verify that the switch was successful before proceeding.
-    -   **Next debug checklist**:
-        1.  The function must be modified to return  if *any* step of the switching process fails (opening the list, finding the input, typing, clicking the result).
-        2.  Crucially, after attempting to click the new asset, the function MUST call  and compare the result to the target asset to confirm the switch was successful before returning .
-        3.  The logic calling  must be updated to NOT execute a trade if  returns .
-    -   **Why fix this issue and what will be achieved with the fix?**: This is essential for the  mode to trade across multiple favorite assets, a core feature of the bot.
+        1.  This is likely a race condition in the main  function between the app signal check () and the self-scan check ().
+        2.  Add extensive  statements with timestamps to trace every entry point into  and  to find the source of the duplicate call.
+        3.  Implement a more robust global lock (e.g., a trade in progress flag with a timeout) that is set just before a trade is initiated and cleared only after a confirmed interval.
+    -   **Why fix this issue and what will be achieved with the fix?**: This is a catastrophic bug that can quickly drain an account, making the bot unusable.
     -   **Status**: NOT STARTED
     -   **Is recurring issue?**: Y
     -   **Should Test frontend/backend/both after fix?**: Frontend (the userscript)
 
+-   **Issue 3: AI/ML training fails due to missing data**
+    -   **Attempted fixes**: The agent created the ML system and an endpoint to trigger training (). The attempt failed with an error indicating no candle data was available.
+    -   **Next debug checklist**:
+        1.  Investigate the  in .
+        2.  Determine why it's not providing historical data. The OANDA connection might be misconfigured, or it may not be storing data persistently.
+        3.  Implement a robust data pipeline to fetch and store historical candle data from OANDA (or another source) into MongoDB.
+        4.  Modify the ML training script to pull data from this new persistent collection.
+    -   **Why fix this issue and what will be achieved with the fix?**: The user's core request is for a high-win-rate bot. The ML system is the key to achieving this, and it's currently blocked.
+    -   **Status**: BLOCKED (on data availability)
+    -   **Is recurring issue?**: N
+    -   **Should Test frontend/backend/both after fix?**: Backend
+
 **In progress Task List**:
--   **Task 1: Fulfill User Request to Unblock Opposite Trades (P0)**
-    -   **Where to resume**: Editing the  function in  to remove the  logic.
-    -   **What will be achieved with this?**: Implements the user's latest explicit instruction.
+-   **Task 1: Finish Money Management System (P0)**
+    -   **Where to resume**: Updating the  and  event handlers in  to correctly use the new money management and martingale functions.
+    -   **What will be achieved with this?**: Fulfills the user's latest feature request and provides advanced risk management capabilities.
     -   **Status**: IN PROGRESS
-    -   **Should Test frontend/backend/both after fix?**: Frontend
+    -   **Should Test frontend/backend/both after fix?**: Frontend (the userscript)
 
 **Upcoming and Future Tasks**
 -   **Upcoming Tasks**:
-    -   **(P0) Full-Scale Debugging of Tampermonkey:** After removing the trade lock, immediately pivot to finding and fixing the root cause of all recurring critical bugs (Issue #2, #3, #4).
-    -   **(P1) Add Sound Notifications:** Implement two distinct sounds in the userscript: one for trades placed via app signals and another for trades placed via the  function.
-    -   **(P1) Implement Reset Button:** Add a Reset button to the Tampermonkey UI panel that sets all toggles to a disabled state.
-    -   **(P1) Fix Fetch Button Logic:** Ensure the Fetch button correctly forces a signal check based on the current user settings ( on/off).
-    -   **(P2) Validate MT4/MT5/TradingView Integrations:** Create a plan to guide the user through testing the EAs and webhook URL provided on the new Integrations page.
+    -   **(P0) Full-Scale Debugging of Tampermonkey:** After completing the money management feature, immediately pivot to finding and fixing the root cause of all recurring critical bugs (Issue #2).
+    -   **(P1) Add Sound Notifications:** Implement distinct sounds for WIN and LOSS button clicks.
+    -   **(P1) Implement Reset Button:** Add a Reset button to the Tampermonkey UI panel that resets stats and Martingale state.
+    -   **(P2) Validate MT4/MT5/TradingView Integrations:** Guide the user through testing the EAs and webhook URL.
 -   **Future Tasks**:
-    -   **(P2) Refactor :** Propose and execute a rewrite of the userscript into a modern, modular, or class-based structure to enhance stability and maintainability.
+    -   **(P2) Refactor :** Propose and execute a rewrite of the script into a modern, modular, or class-based structure.
     -   **(P2) Refactor :** Break down the monolithic backend file into a proper FastAPI  directory structure.
-    -   **(P3) Code Cleanup:** Perform a repository-wide cleanup to remove unused files and code, as requested by the user.
 
 **Completed work in this session**
--   **Implemented Full Tampermonkey Remote Control:** Created a UI panel in the React app and corresponding backend endpoints to allow real-time control over the userscript's settings (inversion, scan mode, auto-trade, etc.).
--   **Major Rearchitecture of Userscript Logic (v6.0-v6.3.3):** Rewrote the core operational logic of the , , and  toggles based on complex user specifications. The UI now includes a guide explaining the button combinations.
--   **Made Userscript Panel Draggable & Minimizable:** Improved the UX of the injected Tampermonkey panel.
--   **Created Comprehensive Integrations Page:** Built a new page in the React app that provides setup instructions for TradingView, MT4, and MT5, including downloadable EA files (/).
--   **Attempted Numerous Bug Fixes:** Made multiple (ultimately unsuccessful) attempts to fix recurring critical bugs in the userscript, including the buy and sell issue and the failing asset switch function.
+-   Removed the  from the Tampermonkey script as per user request.
+-   Implemented a major enhancement to the remote control system, adding strategy/source/timeframe selection and a live connection status heartbeat.
+-   Reworked asset switching to use the Pocket Option favorites bar.
+-   Pivoted from a failed automatic win/loss detection system to a user-driven manual system with I WON / I LOST buttons.
+-   Integrated a configurable Martingale system controlled by the manual win/loss buttons.
+-   Created a new backend ultra-high accuracy strategy and a new ML training system.
+-   Fixed a critical bug where the Tampermonkey script stopped placing trades after the win/loss refactor.
 
 **Earlier issues found/mentioned but not fixed**
-- The recurring critical bugs (Issue #2, #3, #4, #5 in the pending list) have been mentioned by the user repeatedly and have not been permanently fixed. The root cause appears to be the monolithic and fragile architecture of the userscript.
+-   The recurring critical bugs (double trading, unreliable asset switching) remain unfixed at their root cause.
+-   The AI learning system is non-functional due to a lack of historical data.
+
+**Known issue recurrence from previous fork**
+-   The buy and sell double-trade bug. This is the most critical and dangerous recurring issue in the project. It was patched in a previous fork, the patch was removed by user request, and the underlying race condition has not been fixed.
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
--   **Userscript Auto-Trading:** A complex Tampermonkey script that injects a control panel and automation logic into a live trading website (Pocket Option).
--   **Remote Control Architecture:** A React frontend calls FastAPI endpoints to store settings in memory, which are then polled by the Tampermonkey script to change its behavior in real-time.
--   **External Platform Integration:** The system is designed to receive trade signals from external platforms like TradingView (via webhooks), MT5 (via a ZeroMQ bridge), and MT4 (via a file-based trade report).
+-   **Userscript Auto-Trading:** A complex Tampermonkey script that injects a control panel and automation logic into the Pocket Option trading website.
+-   **Remote Control Architecture:** A React frontend controls the userscript's behavior in real-time by updating settings via FastAPI endpoints, which are then polled by the script.
+-   **Manual State Management:** The win/loss state, signal inversion, and Martingale progression are now controlled manually by the user via buttons in the script's UI.
+-   **Data-Blocked ML:** The backend contains an advanced ML training pipeline that is currently unusable because it lacks a source for historical market data.
+
+**key DB schema**
+-   : {email, password_hash}
+-   : {user_id, settings_dict}
+-   : {user_id, signal_id, asset, outcome, timestamp}
+-   : {signal_id, outcome, timestamp}
 
 **All files of reference**
--   : **The primary file.** This is where the user's current request must be implemented and where all critical bugs reside.
--   : The backend monolith containing all API endpoints for the frontend and userscript.
+-   : **The primary file.** This is where the money management system is being implemented and where all critical bugs reside.
+-   : The backend monolith. Contains endpoints for settings, signals, and the new (failing) ML training.
+-   : The new machine learning training and prediction code.
 -   : The React component for the userscript's remote control UI.
--   : The page that renders the control panel.
--   : The new page with setup instructions and downloadable EA files.
 
 **Areas that need refactoring**:
--   ** (CRITICAL):** This ~2500-line script is the root cause of the project's instability. Its reliance on global flags, complex nested conditionals, and fragile DOM selectors makes it nearly impossible to debug. It must be rewritten into a modular or class-based structure.
--   ** (HIGH):** This file is over 5000 lines. It needs to be broken down into a standard FastAPI project structure with a  directory to improve maintainability and separate concerns.
+-   ** (CRITICAL):** This script is now approaching 3000 lines and is the source of all major instability. Its reliance on global variables and a massive single  function makes it exceptionally fragile. It must be refactored.
+-   ** (CRITICAL):** This file is now over 6000 lines. It urgently needs to be broken into a standard FastAPI project structure with a  directory to separate concerns and improve maintainability.
 
 **key api endpoints**
 -   : Polled by the userscript to get its configuration.
--   : Used by the frontend control panel to update the configuration.
--   : Used by the userscript in  mode to get signals from the application.
--   : Used by the userscript in  mode to get signals generated by Tampermonkey's own logic.
--   : New endpoint for the MT4 EA to post trade results.
+-   : Used by the frontend control panel to update settings.
+-   : Used by the userscript to signal it's active.
+-   : Used by the userscript to get signals from the application.
+-   : (New) Endpoint for the high-confidence strategy.
+-   : (New) Endpoint to trigger ML model training (currently fails).
+-   : User authentication.
 
 **Critical Info for New Agent**
-1.  **IMMEDIATE TASK:** The user's top priority is to remove the block on opposite trades. You must edit  in  to remove the  logic.
-2.  **EXPECT THE BUY AND SELL BUG TO RETURN:** The lock you are removing was a patch for the critical buy and sell bug. This bug will almost certainly reappear immediately after your fix. Your next priority must be to find the *root cause* of this race condition, likely within the script's main polling loop.
-3.  **THE USERSCRIPT IS HIGHLY UNSTABLE:** Do not trust any part of the Tampermonkey script to work as intended, especially asset switching () and market scanning (). These functions are known to be buggy and unreliable. Test every change meticulously.
-4.  **PRIORITIZE STABILITY:** The project is caught in a cycle of bug-fixing. After the immediate user request, you must focus on stabilizing the core trading logic by fixing the recurring critical bugs (double trading, failed asset switching) before adding any new features like sounds or reset buttons.
-5.  **PLAN FOR REFACTORING:** The only long-term solution to the project's instability is to refactor the Tampermonkey script and the backend . Once the immediate fires are put out, you must propose a refactoring plan to the user to address the massive technical debt.
+1.  **IMMEDIATE TASK:** Your first task is to complete the money management system in . The core functions exist, but you need to wire them into the  and  event handlers.
+2.  **WIN/LOSS IS MANUAL:** The automatic win/loss detection feature was a failure and has been completely removed. The entire system now relies on the user clicking the I WON or I LOST buttons. Do not attempt to re-implement automatic detection.
+3.  **ML SYSTEM IS BLOCKED:** The user wants a high-win-rate AI, and the backend code for it exists (). However, it is **non-functional** because it has no historical data to train on. The  endpoint will fail. Fixing the data pipeline in  is a prerequisite for any further AI work.
+4.  **CORE INSTABILITY:** The Tampermonkey script is extremely fragile. Be aware of the recurring buy and sell bug. Any change to the trading logic could cause it to reappear. Prioritize fixing the root cause of these core bugs after the current feature is complete.
 
 **Last 10 User Messages and any pending HUMAN messages**
--   The user has reported a series of cascading bugs in the Tampermonkey script: it's not switching assets, it's typing in the wrong field, and it's placing a BUY and a SELL for every signal.
--   The agent added a lock to prevent the BUY/SELL issue.
--   The user then requested new integrations (MT4/5/TV) and a general code cleanup.
--   The agent built the integrations page and provided the EA files.
--   The user's very last request was to **remove the block on opposites trades on tampermonkey**, undoing the agent's previous fix and setting up the next agent to deal with the inevitable return of the critical BUY/SELL bug.
+1.  User reported win/loss detection was not working, as it triggered on the initial balance drop.
+2.  Agent attempted to fix it by waiting for trade expiry.
+3.  User reported it was still not working and suggested using the open/closed trades UI elements.
+4.  Agent attempted to fix it by scraping the closed trades box.
+5.  User reported it was still not working, providing specific details about colors and text for win/loss states.
+6.  Agent attempted a third fix based on the specific UI details.
+7.  User reported it was still not working and requested a major pivot: abandon automatic detection and create a manual invert button with a Martingale system.
+8.  Agent implemented the manual WIN/LOSS button system with Martingale.
+9.  User requested research into the highest-win-rate algorithms and reported that the AI learning was not working correctly.
+10. Agent implemented a new ultra-high accuracy strategy and identified that the ML training was failing due to a lack of historical data.
+11. User reported the Tampermonkey script was no longer placing any trades.
+12. Agent fixed the script by adding a stub for a function that was deleted during refactoring.
+13. User requested the full money management system with balance tracking and payout-aware calculations. This is the current task.
 
 **Project Health Check:**
 -   **Broken**:
-    -   The core auto-trading logic in the Tampermonkey script is fundamentally unstable and suffers from multiple recurring, critical bugs that can cause financial loss.
-    -   The asset  functionality is non-operational.
-    -   The  functionality does not work according to specifications.
+    -   The core auto-trading logic in Tampermonkey is fundamentally unstable and prone to critical, recurring bugs.
+    -   The AI/ML training system is non-functional due to a lack of historical data, blocking progress on the user's primary goal of a high-win-rate bot.
 -   **Mocked**:
-    -   The MT4, MT5, and TradingView integrations are implemented on the backend and have a UI, but they are untested and require user-side configuration to be functional.
+    -   The MT4, MT5, and TradingView integrations exist on the backend and have a UI but remain untested by the user.
 
 **3rd Party Integrations**
--   : OANDA V20 API integration.
+-   : OANDA V20 API for market data.
 -   , , , : For the AI/ML trading system.
--   : Integrated via a  bridge. An EA file is provided.
--   : Integrated via a file-based reporting endpoint. An EA file is provided.
+-   : Integrated via a  bridge.
+-   : Integrated via a file-based reporting endpoint.
 -   : The framework for the client-side userscript.
 -   : Integrated via a backend webhook endpoint.
 
 **Testing status**
--   Testing agent used after significant changes: NO (not in the recent iterations).
+-   Testing agent used after significant changes: NO
 -   Troubleshoot agent used after agent stuck in loop: NO
 -   Test files created: None.
--   Known regressions: The buy and sell double-trade bug is a known, severe regression that is expected to reappear once the current user request is fulfilled. The asset switching failure is also a persistent regression.</analysis>
+-   Known regressions: The buy and sell double-trade bug; unreliable asset switching.
+
+**What agent forgot to execute**
+- The agent has not fully completed the implementation of the money management system requested by the user. The core functions were created, but they were not integrated into the button click handlers, leaving the feature in a non-working state.</analysis>

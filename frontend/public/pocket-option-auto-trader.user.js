@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
-// @namespace    https://signal-bot-preview.preview.emergentagent.com
-// @version      6.7.1
-// @description  Auto-trade OTC forex on Pocket Option. v6.7.1 - Fixed trade execution with manual WIN/LOSS
+// @namespace    https://auto-trade-hub-25.preview.emergentagent.com
+// @version      6.8.0
+// @description  Auto-trade OTC forex on Pocket Option. v6.8.0 - Complete Money Management System
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -30,7 +30,7 @@
     // CONFIGURATION
     // ===========================================
     const CONFIG = {
-        API_URL: 'https://signal-bot-preview.preview.emergentagent.com/api',
+        API_URL: 'https://auto-trade-hub-25.preview.emergentagent.com/api',
         APP_POLL_INTERVAL: 3000,     // 3 seconds for app signals
         SCAN_INTERVAL: 5000,         // 5 seconds for scanning
         TRADE_COOLDOWN_SCAN: 30000,  // 30 seconds between SCAN trades
@@ -89,13 +89,52 @@
     // Manual invert on loss
     let manualInvertActive = false;     // User pressed LOSS button - signals inverted
     
-    // Martingale system
-    let martingaleEnabled = false;      // Master toggle for martingale
-    let martingaleStep = 0;             // Current step (0 = base, 1 = first double, etc.)
-    let martingaleBaseAmount = 1;       // Starting trade amount
-    let martingaleMultiplier = 2;       // Multiply by this each loss (2 = double)
-    let martingaleMaxSteps = 5;         // Max steps before stopping
-    let currentTradeAmount = 1;         // Current calculated trade amount
+    // ===========================================
+    // MONEY MANAGEMENT SYSTEM - v6.8.0
+    // ===========================================
+    let moneyManagement = {
+        // Account settings
+        accountBalance: 100,            // User's account balance
+        riskPercentage: 2,              // Risk % per trade (1-10%)
+        
+        // Payout tracking (per asset)
+        currentPayout: 92,              // Current asset payout %
+        payoutByAsset: {},              // Cache of payouts by asset
+        
+        // Session settings
+        sessionTarget: 10,              // Target trades per session
+        sessionTrades: 0,               // Trades completed this session
+        sessionStartBalance: 100,       // Balance at session start
+        profitTarget: 10,               // Target profit % for session
+        stopLossPercent: 20,            // Stop loss % of balance
+        
+        // Calculated values
+        baseTradeAmount: 1,             // Calculated base trade amount
+        currentTradeAmount: 1,          // Current trade amount (with martingale)
+        totalInvested: 0,               // Total amount invested in martingale chain
+        
+        // Session tracking
+        sessionActive: false,
+        sessionStartTime: null
+    };
+    
+    // Smart Martingale (payout-aware)
+    let smartMartingale = {
+        enabled: false,
+        step: 0,
+        maxSteps: 6,
+        totalLoss: 0,                   // Accumulated loss to recover
+        targetProfit: 0.5,              // Target profit after recovery ($)
+        sequence: []                    // Array of trade amounts for recovery
+    };
+    
+    // Legacy martingale (keep for compatibility)
+    let martingaleEnabled = false;
+    let martingaleStep = 0;
+    let martingaleBaseAmount = 1;
+    let martingaleMultiplier = 2;
+    let martingaleMaxSteps = 5;
+    let currentTradeAmount = 1;
     
     // Sound notifications
     let soundNotificationsEnabled = true;
@@ -207,7 +246,7 @@
     // ===========================================
     function log(msg) {
         const ts = new Date().toLocaleTimeString();
-        console.log(`[GPT v6.7.1] ${ts}: ${msg}`);
+        console.log(`[GPT v6.8.0] ${ts}: ${msg}`);
         const logEl = document.getElementById('gpt-log');
         if (logEl) logEl.textContent = msg;
     }
@@ -245,75 +284,318 @@
         
         return mappings[tf] || 60;
     }
+    
+    // ===========================================
+    // SET TRADE AMOUNT ON POCKET OPTION UI - v6.8.0
+    // ===========================================
+    function setTradeAmountOnUI(amount) {
+        // Round to 2 decimal places, minimum $1
+        const finalAmount = Math.max(1, Math.round(amount * 100) / 100);
+        
+        log(`💰 Setting trade amount: $${finalAmount}`);
+        
+        // Find the trade amount input on Pocket Option
+        const amountSelectors = [
+            'input[type="number"][class*="amount"]',
+            'input.amount-input',
+            'input[data-testid="amount"]',
+            '.trade-amount input',
+            'input[type="number"]',
+            '[class*="input-amount"] input',
+            '[class*="trade"] input[type="number"]'
+        ];
+        
+        let inputField = null;
+        
+        // Try specific selectors first
+        for (const sel of amountSelectors) {
+            const inputs = document.querySelectorAll(sel);
+            for (const inp of inputs) {
+                if (inp && inp.offsetParent !== null) {
+                    // Check if it's likely the trade amount input (near buttons, reasonable position)
+                    const rect = inp.getBoundingClientRect();
+                    // Trade amount is usually on the right side or in trading area
+                    if (rect.right > window.innerWidth / 2 || rect.top > 100) {
+                        inputField = inp;
+                        break;
+                    }
+                }
+            }
+            if (inputField) break;
+        }
+        
+        // Fallback: find any number input in trading area
+        if (!inputField) {
+            const allInputs = document.querySelectorAll('input[type="number"]');
+            for (const inp of allInputs) {
+                if (!inp || !inp.offsetParent) continue;
+                
+                const rect = inp.getBoundingClientRect();
+                // Skip if it's too small (likely a quantity spinner) or in header area
+                if (rect.width < 60 || rect.top < 50) continue;
+                
+                // Check if near trade buttons
+                const callBtn = document.querySelector('.btn-call');
+                const putBtn = document.querySelector('.btn-put');
+                
+                if (callBtn || putBtn) {
+                    const btnRect = (callBtn || putBtn).getBoundingClientRect();
+                    // Input should be relatively close to trade buttons (within 300px)
+                    if (Math.abs(rect.top - btnRect.top) < 300) {
+                        inputField = inp;
+                        break;
+                    }
+                }
+            }
+        }
+        
+        if (inputField) {
+            // Save old value for logging
+            const oldValue = inputField.value;
+            
+            // Set the new value
+            inputField.focus();
+            inputField.value = finalAmount;
+            
+            // Dispatch events to trigger any listeners
+            inputField.dispatchEvent(new Event('input', { bubbles: true }));
+            inputField.dispatchEvent(new Event('change', { bubbles: true }));
+            inputField.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+            
+            // Blur to finalize
+            inputField.blur();
+            
+            log(`✅ Trade amount updated: $${oldValue} → $${finalAmount}`);
+            return true;
+        } else {
+            log(`⚠️ Trade amount input not found - please set manually to $${finalAmount}`);
+            return false;
+        }
+    }
+    
+    // Detect current trade amount from UI
+    function getCurrentTradeAmountFromUI() {
+        const amountSelectors = [
+            'input[type="number"][class*="amount"]',
+            'input.amount-input',
+            '.trade-amount input',
+            'input[type="number"]'
+        ];
+        
+        for (const sel of amountSelectors) {
+            const inputs = document.querySelectorAll(sel);
+            for (const inp of inputs) {
+                if (inp && inp.offsetParent !== null && inp.value) {
+                    const value = parseFloat(inp.value);
+                    if (value >= 1 && value <= 10000) {
+                        return value;
+                    }
+                }
+            }
+        }
+        
+        return null;
+    }
+    
+    // Detect current account balance from UI
+    function detectAccountBalance() {
+        // Look for balance display on Pocket Option
+        const balanceSelectors = [
+            '[class*="balance"]',
+            '[class*="account-value"]',
+            '[class*="user-balance"]',
+            '[data-testid="balance"]',
+            '.balance',
+            '.account-balance'
+        ];
+        
+        for (const sel of balanceSelectors) {
+            const elements = document.querySelectorAll(sel);
+            for (const el of elements) {
+                if (!el || !el.offsetParent) continue;
+                
+                const text = el.textContent || '';
+                // Match patterns like "$1,234.56" or "1234.56" or "$ 1,234.56"
+                const match = text.match(/\$?\s?([\d,]+\.?\d*)/);
+                if (match) {
+                    const balance = parseFloat(match[1].replace(/,/g, ''));
+                    if (balance >= 1 && balance <= 1000000) {
+                        log(`📊 Detected balance: $${balance}`);
+                        moneyManagement.accountBalance = balance;
+                        
+                        // Update session start balance if session is starting
+                        if (!moneyManagement.sessionActive) {
+                            moneyManagement.sessionStartBalance = balance;
+                        }
+                        
+                        return balance;
+                    }
+                }
+            }
+        }
+        
+        return moneyManagement.accountBalance; // Return cached value
+    }
 
     // ===========================================
-    // MANUAL WIN/LOSS HANDLERS - v6.7.0
+    // MANUAL WIN/LOSS HANDLERS - v6.8.0 (with Money Management)
     // User presses buttons to record wins/losses
     // ===========================================
     
     // Called when user presses WIN button
     function handleManualWin() {
+        // Get current trade amount (what was actually wagered)
+        const tradeAmount = moneyManagement.currentTradeAmount || currentTradeAmount;
+        
+        // Update stats
         winLossStats.totalWins++;
         winLossStats.consecutiveWins++;
         winLossStats.consecutiveLosses = 0;
         winLossStats.lastTradeResult = 'win';
         
-        // Calculate profit (current trade amount * payout %)
-        const profit = currentTradeAmount * 0.92; // Assume ~92% payout
+        // Detect current payout from UI
+        detectCurrentPayout();
+        
+        // Calculate profit based on actual payout
+        const payout = moneyManagement.currentPayout / 100;
+        const profit = tradeAmount * payout;
         winLossStats.sessionProfit += profit;
         
-        // Reset martingale on win
-        if (martingaleEnabled) {
-            martingaleStep = 0;
-            currentTradeAmount = martingaleBaseAmount;
-            log(`✅ WIN +$${profit.toFixed(2)} - Martingale reset to $${currentTradeAmount}`);
+        // Update balance tracking
+        moneyManagement.accountBalance += profit;
+        moneyManagement.sessionTrades++;
+        
+        // Reset inversion on win (if it was active)
+        if (manualInvertActive) {
+            manualInvertActive = false;
+            invertEnabled = false;
+            GM_setValue('invertEnabled', false);
+            log(`✅ WIN +$${profit.toFixed(2)} - Inversion RESET`);
         } else {
             log(`✅ WIN +$${profit.toFixed(2)}`);
         }
         
+        // Reset martingale/smart martingale on win
+        if (smartMartingale.enabled) {
+            // Reset smart martingale
+            resetSmartMartingale();
+            
+            // Recalculate base amount with new balance
+            calculateBaseTradeAmount();
+            
+            log(`💰 Martingale reset. New base: $${moneyManagement.baseTradeAmount.toFixed(2)}`);
+        } else if (martingaleEnabled) {
+            // Legacy martingale
+            martingaleStep = 0;
+            currentTradeAmount = martingaleBaseAmount;
+        }
+        
+        // Update trade amount on Pocket Option UI
+        const newAmount = smartMartingale.enabled ? 
+            moneyManagement.currentTradeAmount : 
+            (martingaleEnabled ? martingaleBaseAmount : currentTradeAmount);
+        setTradeAmountOnUI(newAmount);
+        
         // Play sound
         if (soundNotificationsEnabled) playWinSound();
         
-        // Update displays
+        // Update all displays
         updateWinLossDisplay();
         updateMartingaleDisplay();
+        updateMoneyManagementDisplay();
+        updateInvertButton();
+        
+        // Check session limits
+        checkSessionLimits();
+        
+        // Sync to backend
         syncStatsToBackend();
     }
     
     // Called when user presses LOSS button
     function handleManualLoss() {
+        // Get current trade amount (what was lost)
+        const tradeAmount = moneyManagement.currentTradeAmount || currentTradeAmount;
+        
+        // Update stats
         winLossStats.totalLosses++;
         winLossStats.consecutiveLosses++;
         winLossStats.consecutiveWins = 0;
         winLossStats.lastTradeResult = 'loss';
-        winLossStats.sessionProfit -= currentTradeAmount;
+        winLossStats.sessionProfit -= tradeAmount;
+        
+        // Update balance tracking
+        moneyManagement.accountBalance -= tradeAmount;
+        moneyManagement.sessionTrades++;
         
         // Toggle inversion on loss
         manualInvertActive = !manualInvertActive;
         invertEnabled = manualInvertActive;
         GM_setValue('invertEnabled', invertEnabled);
         
-        // Advance martingale step
-        if (martingaleEnabled) {
+        // Detect current payout for next trade calculation
+        detectCurrentPayout();
+        
+        let nextAmount = tradeAmount;
+        
+        if (smartMartingale.enabled) {
+            // Smart Martingale: Calculate exact amount to recover losses + profit
+            smartMartingale.totalLoss += tradeAmount;
+            smartMartingale.step++;
+            moneyManagement.totalInvested += tradeAmount;
+            
+            if (smartMartingale.step < smartMartingale.maxSteps) {
+                // Calculate next trade to recover all losses + target profit
+                const payout = moneyManagement.currentPayout;
+                nextAmount = calculateSmartMartingale(
+                    smartMartingale.totalLoss, 
+                    smartMartingale.targetProfit,
+                    payout
+                );
+                
+                moneyManagement.currentTradeAmount = nextAmount;
+                smartMartingale.sequence.push(nextAmount);
+                
+                log(`❌ LOSS -$${tradeAmount.toFixed(2)} | INVERTED: ${manualInvertActive ? 'ON' : 'OFF'}`);
+                log(`📈 Martingale Step ${smartMartingale.step}: $${nextAmount.toFixed(2)} to recover $${smartMartingale.totalLoss.toFixed(2)}`);
+            } else {
+                log(`🛑 MAX MARTINGALE STEPS (${smartMartingale.maxSteps}) - Total loss: $${smartMartingale.totalLoss.toFixed(2)}`);
+                playStopSound();
+                resetSmartMartingale();
+                nextAmount = moneyManagement.baseTradeAmount;
+            }
+        } else if (martingaleEnabled) {
+            // Legacy Martingale: Simple multiplier
             if (martingaleStep < martingaleMaxSteps) {
                 martingaleStep++;
-                currentTradeAmount = martingaleBaseAmount * Math.pow(martingaleMultiplier, martingaleStep);
-                log(`❌ LOSS -$${(currentTradeAmount / martingaleMultiplier).toFixed(2)} - INVERTED: ${manualInvertActive ? 'ON' : 'OFF'} - Martingale Step ${martingaleStep}: $${currentTradeAmount.toFixed(2)}`);
+                nextAmount = martingaleBaseAmount * Math.pow(martingaleMultiplier, martingaleStep);
+                currentTradeAmount = nextAmount;
+                
+                log(`❌ LOSS -$${tradeAmount.toFixed(2)} | INVERTED: ${manualInvertActive ? 'ON' : 'OFF'} | Martingale Step ${martingaleStep}: $${nextAmount.toFixed(2)}`);
             } else {
-                log(`❌ LOSS - MAX MARTINGALE REACHED! Step ${martingaleStep}`);
+                log(`🛑 MAX MARTINGALE REACHED! Step ${martingaleStep}`);
                 playStopSound();
             }
         } else {
-            log(`❌ LOSS - INVERTED: ${manualInvertActive ? 'ON' : 'OFF'}`);
+            log(`❌ LOSS -$${tradeAmount.toFixed(2)} | INVERTED: ${manualInvertActive ? 'ON' : 'OFF'}`);
         }
+        
+        // Update trade amount on Pocket Option UI
+        setTradeAmountOnUI(nextAmount);
         
         // Play sound
         if (soundNotificationsEnabled) playLossSound();
         
-        // Update displays
+        // Update all displays
         updateInvertButton();
         updateWinLossDisplay();
         updateMartingaleDisplay();
+        updateMoneyManagementDisplay();
+        
+        // Check session limits
+        checkSessionLimits();
+        
+        // Sync to backend
         syncStatsToBackend();
     }
     
@@ -432,9 +714,277 @@
             tradeHistory: []
         };
         resetMartingale();
+        resetSmartMartingale();
         updateWinLossDisplay();
+        updateMoneyManagementDisplay();
         syncStatsToBackend();
         log('📊 All stats reset');
+    }
+
+    // ===========================================
+    // MONEY MANAGEMENT FUNCTIONS - v6.8.0
+    // ===========================================
+    
+    // Calculate base trade amount from balance and risk %
+    function calculateBaseTradeAmount() {
+        const balance = moneyManagement.accountBalance;
+        const riskPercent = moneyManagement.riskPercentage;
+        
+        // Base trade = Balance * Risk% / 100
+        moneyManagement.baseTradeAmount = Math.max(1, Math.round((balance * riskPercent / 100) * 100) / 100);
+        moneyManagement.currentTradeAmount = moneyManagement.baseTradeAmount;
+        
+        log(`💰 Base trade: $${moneyManagement.baseTradeAmount} (${riskPercent}% of $${balance})`);
+        
+        return moneyManagement.baseTradeAmount;
+    }
+    
+    // Detect payout percentage from Pocket Option UI
+    function detectCurrentPayout() {
+        // Look for payout percentage on the trading interface
+        const payoutSelectors = [
+            '[class*="payout"]',
+            '[class*="percent"]',
+            '[class*="profit-percent"]',
+            '.trading-payout',
+            '[data-testid="payout"]'
+        ];
+        
+        for (const sel of payoutSelectors) {
+            try {
+                const elements = document.querySelectorAll(sel);
+                for (const el of elements) {
+                    const text = el.textContent || '';
+                    const match = text.match(/(\d{1,3})%/);
+                    if (match) {
+                        const payout = parseInt(match[1]);
+                        if (payout >= 50 && payout <= 100) {
+                            moneyManagement.currentPayout = payout;
+                            
+                            // Cache by asset
+                            const asset = getCurrentAsset();
+                            if (asset) {
+                                moneyManagement.payoutByAsset[asset] = payout;
+                            }
+                            
+                            return payout;
+                        }
+                    }
+                }
+            } catch(e) {}
+        }
+        
+        // Fallback: search for any % value near trading area
+        const allText = document.body.innerText || '';
+        const matches = allText.match(/(\d{2})%\s*(payout|profit)?/gi);
+        if (matches) {
+            for (const m of matches) {
+                const num = parseInt(m);
+                if (num >= 70 && num <= 95) {
+                    moneyManagement.currentPayout = num;
+                    return num;
+                }
+            }
+        }
+        
+        return moneyManagement.currentPayout; // Return cached value
+    }
+    
+    // Calculate smart martingale sequence based on payout
+    function calculateSmartMartingale(totalLoss, targetProfit, payout) {
+        // To recover loss + make profit with given payout:
+        // Required win = (totalLoss + targetProfit) / (payout / 100)
+        
+        const payoutDecimal = payout / 100;
+        const required = (totalLoss + targetProfit) / payoutDecimal;
+        
+        return Math.ceil(required * 100) / 100; // Round up to cents
+    }
+    
+    // Start a new trading session
+    function startSession() {
+        moneyManagement.sessionActive = true;
+        moneyManagement.sessionStartTime = Date.now();
+        moneyManagement.sessionStartBalance = moneyManagement.accountBalance;
+        moneyManagement.sessionTrades = 0;
+        
+        // Reset stats for new session
+        winLossStats.sessionProfit = 0;
+        winLossStats.totalWins = 0;
+        winLossStats.totalLosses = 0;
+        
+        calculateBaseTradeAmount();
+        resetSmartMartingale();
+        
+        log(`🎯 Session started: Target ${moneyManagement.sessionTarget} trades, $${moneyManagement.baseTradeAmount}/trade`);
+        updateMoneyManagementDisplay();
+        updateSessionDisplay();
+    }
+    
+    // End trading session
+    function endSession() {
+        moneyManagement.sessionActive = false;
+        const duration = Date.now() - moneyManagement.sessionStartTime;
+        const durationMins = Math.round(duration / 60000);
+        
+        const profit = winLossStats.sessionProfit;
+        const roi = ((profit / moneyManagement.sessionStartBalance) * 100).toFixed(2);
+        
+        log(`🏁 Session ended: ${moneyManagement.sessionTrades} trades, P/L: $${profit.toFixed(2)} (${roi}% ROI) in ${durationMins}min`);
+        
+        updateSessionDisplay();
+    }
+    
+    // Check session limits (profit target, stop loss)
+    function checkSessionLimits() {
+        const balance = moneyManagement.accountBalance;
+        const startBalance = moneyManagement.sessionStartBalance;
+        const profitTarget = startBalance * (moneyManagement.profitTarget / 100);
+        const stopLoss = startBalance * (moneyManagement.stopLossPercent / 100);
+        
+        // Check profit target
+        if (winLossStats.sessionProfit >= profitTarget) {
+            log(`🎉 PROFIT TARGET REACHED: $${winLossStats.sessionProfit.toFixed(2)}`);
+            playWinSound();
+            endSession();
+            return true;
+        }
+        
+        // Check stop loss
+        if (winLossStats.sessionProfit <= -stopLoss) {
+            log(`🛑 STOP LOSS HIT: $${winLossStats.sessionProfit.toFixed(2)}`);
+            playStopSound();
+            endSession();
+            return true;
+        }
+        
+        // Check trade count
+        if (moneyManagement.sessionTrades >= moneyManagement.sessionTarget) {
+            log(`📊 SESSION TARGET REACHED: ${moneyManagement.sessionTrades} trades`);
+            endSession();
+            return true;
+        }
+        
+        return false;
+    }
+    
+    // Reset smart martingale
+    function resetSmartMartingale() {
+        smartMartingale.step = 0;
+        smartMartingale.totalLoss = 0;
+        smartMartingale.sequence = [];
+        moneyManagement.currentTradeAmount = moneyManagement.baseTradeAmount;
+        moneyManagement.totalInvested = 0;
+    }
+    
+    // Handle WIN with money management
+    function handleMoneyManagementWin(tradeAmount) {
+        const payout = moneyManagement.currentPayout / 100;
+        const profit = tradeAmount * payout;
+        
+        // Update balance
+        moneyManagement.accountBalance += profit;
+        winLossStats.sessionProfit += profit;
+        moneyManagement.sessionTrades++;
+        
+        // Reset smart martingale on win
+        resetSmartMartingale();
+        
+        // Recalculate base amount with new balance
+        calculateBaseTradeAmount();
+        
+        log(`✅ WIN +$${profit.toFixed(2)} | Balance: $${moneyManagement.accountBalance.toFixed(2)}`);
+        
+        updateMoneyManagementDisplay();
+        checkSessionLimits();
+    }
+    
+    // Handle LOSS with money management
+    function handleMoneyManagementLoss(tradeAmount) {
+        // Update balance
+        moneyManagement.accountBalance -= tradeAmount;
+        winLossStats.sessionProfit -= tradeAmount;
+        moneyManagement.sessionTrades++;
+        
+        if (smartMartingale.enabled) {
+            // Add to total loss to recover
+            smartMartingale.totalLoss += tradeAmount;
+            smartMartingale.step++;
+            moneyManagement.totalInvested += tradeAmount;
+            
+            if (smartMartingale.step < smartMartingale.maxSteps) {
+                // Calculate next trade to recover all losses + profit
+                const payout = moneyManagement.currentPayout;
+                const nextAmount = calculateSmartMartingale(
+                    smartMartingale.totalLoss, 
+                    smartMartingale.targetProfit,
+                    payout
+                );
+                
+                moneyManagement.currentTradeAmount = nextAmount;
+                smartMartingale.sequence.push(nextAmount);
+                
+                log(`❌ LOSS -$${tradeAmount.toFixed(2)} | Next: $${nextAmount.toFixed(2)} to recover $${smartMartingale.totalLoss.toFixed(2)} + $${smartMartingale.targetProfit} profit`);
+            } else {
+                log(`🛑 MAX MARTINGALE STEPS (${smartMartingale.maxSteps}) - Total loss: $${smartMartingale.totalLoss.toFixed(2)}`);
+                playStopSound();
+                resetSmartMartingale();
+            }
+        } else {
+            log(`❌ LOSS -$${tradeAmount.toFixed(2)} | Balance: $${moneyManagement.accountBalance.toFixed(2)}`);
+        }
+        
+        updateMoneyManagementDisplay();
+        checkSessionLimits();
+    }
+    
+    // Update money management display
+    function updateMoneyManagementDisplay() {
+        // Balance
+        const balanceEl = document.getElementById('gpt-mm-balance');
+        if (balanceEl) balanceEl.textContent = `$${moneyManagement.accountBalance.toFixed(2)}`;
+        
+        // Current trade amount
+        const tradeAmtEl = document.getElementById('gpt-mm-trade-amount');
+        if (tradeAmtEl) tradeAmtEl.textContent = `$${moneyManagement.currentTradeAmount.toFixed(2)}`;
+        
+        // Payout
+        const payoutEl = document.getElementById('gpt-mm-payout');
+        if (payoutEl) payoutEl.textContent = `${moneyManagement.currentPayout}%`;
+        
+        // Session P/L
+        const plEl = document.getElementById('gpt-mm-session-pl');
+        if (plEl) {
+            const pl = winLossStats.sessionProfit;
+            plEl.textContent = `${pl >= 0 ? '+' : ''}$${pl.toFixed(2)}`;
+            plEl.style.color = pl >= 0 ? '#22c55e' : '#ef4444';
+        }
+        
+        // Smart martingale info
+        const martEl = document.getElementById('gpt-mm-martingale');
+        if (martEl && smartMartingale.enabled) {
+            if (smartMartingale.step > 0) {
+                martEl.textContent = `Step ${smartMartingale.step}/${smartMartingale.maxSteps} | Recover: $${smartMartingale.totalLoss.toFixed(2)}`;
+                martEl.style.color = '#f59e0b';
+            } else {
+                martEl.textContent = 'Ready';
+                martEl.style.color = '#22c55e';
+            }
+        }
+    }
+    
+    // Update session display
+    function updateSessionDisplay() {
+        const sessionEl = document.getElementById('gpt-mm-session');
+        if (sessionEl) {
+            if (moneyManagement.sessionActive) {
+                sessionEl.textContent = `${moneyManagement.sessionTrades}/${moneyManagement.sessionTarget}`;
+                sessionEl.style.color = '#22c55e';
+            } else {
+                sessionEl.textContent = 'Not active';
+                sessionEl.style.color = '#9ca3af';
+            }
+        }
     }
 
     // ===========================================
@@ -1035,6 +1585,52 @@
                     <div style="font-size:9px;color:#94a3b8;text-align:center;margin-top:4px;">Press when trade closes. LOSS inverts signals.</div>
                 </div>
                 
+                <!-- MONEY MANAGEMENT SECTION - v6.8.0 -->
+                <div style="background:linear-gradient(135deg,#065f46 0%,#022c22 100%);border:1px solid #10b981;border-radius:8px;padding:8px;margin:8px 0;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                        <span style="font-size:10px;color:#6ee7b7;font-weight:bold;">💰 Money Management</span>
+                        <button id="gpt-mm-toggle" style="font-size:9px;padding:3px 8px;background:#6b7280;border:none;border-radius:3px;color:white;cursor:pointer;">OFF</button>
+                    </div>
+                    <div class="stats-row">
+                        <span style="font-size:10px;color:#9ca3af;">Balance:</span>
+                        <span style="font-size:11px;color:#22c55e;font-weight:bold;" id="gpt-mm-balance">$100.00</span>
+                    </div>
+                    <div class="stats-row">
+                        <span style="font-size:10px;color:#9ca3af;">Payout:</span>
+                        <span style="font-size:10px;color:#a78bfa;" id="gpt-mm-payout">92%</span>
+                    </div>
+                    <div class="stats-row">
+                        <span style="font-size:10px;color:#9ca3af;">Trade Amt:</span>
+                        <span style="font-size:12px;color:#f59e0b;font-weight:bold;" id="gpt-mm-trade-amount">$1.00</span>
+                    </div>
+                    <div class="stats-row">
+                        <span style="font-size:10px;color:#9ca3af;">Session P/L:</span>
+                        <span style="font-size:11px;font-weight:bold;" id="gpt-mm-session-pl">$0.00</span>
+                    </div>
+                    <div class="stats-row">
+                        <span style="font-size:10px;color:#9ca3af;">Recovery:</span>
+                        <span style="font-size:10px;" id="gpt-mm-martingale">Ready</span>
+                    </div>
+                    <div style="border-top:1px solid rgba(16,185,129,0.3);margin-top:6px;padding-top:6px;">
+                        <div class="stats-row">
+                            <span style="font-size:9px;color:#9ca3af;">Balance $:</span>
+                            <input type="number" class="settings-input" id="gpt-mm-balance-input" value="100" min="1" max="100000" step="10" style="width:55px;">
+                        </div>
+                        <div class="stats-row">
+                            <span style="font-size:9px;color:#9ca3af;">Risk %:</span>
+                            <input type="number" class="settings-input" id="gpt-mm-risk" value="2" min="0.5" max="10" step="0.5" style="width:45px;">
+                        </div>
+                        <div class="stats-row">
+                            <span style="font-size:9px;color:#9ca3af;">Target $:</span>
+                            <input type="number" class="settings-input" id="gpt-mm-target" value="0.5" min="0.1" max="10" step="0.1" style="width:45px;">
+                        </div>
+                    </div>
+                    <div class="btn-row" style="margin-top:6px;">
+                        <button id="gpt-mm-detect" style="font-size:9px;padding:4px;background:#3b82f6;border:none;border-radius:3px;color:white;cursor:pointer;">Detect Balance</button>
+                        <button id="gpt-mm-apply" style="font-size:9px;padding:4px;background:#10b981;border:none;border-radius:3px;color:white;cursor:pointer;">Apply to UI</button>
+                    </div>
+                </div>
+                
                 <!-- MARTINGALE SECTION - v6.7.0 -->
                 <div style="background:linear-gradient(135deg,#4c1d95 0%,#2d1b4e 100%);border:1px solid #8b5cf6;border-radius:8px;padding:8px;margin:8px 0;">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
@@ -1102,7 +1698,7 @@
                     <span class="value" id="gpt-favorites-count">0</span>
                 </div>
                 
-                <div id="gpt-log">Ready - v6.7.1</div>
+                <div id="gpt-log">Ready - v6.8.0</div>
             </div>
         `;
 
@@ -1148,6 +1744,41 @@
             GM_setValue('martingaleMaxSteps', martingaleMaxSteps);
             updateMartingaleDisplay();
             log(`Martingale max steps set to ${martingaleMaxSteps}`);
+        });
+        
+        // Money Management controls - v6.8.0
+        document.getElementById('gpt-mm-toggle').addEventListener('click', toggleSmartMartingale);
+        document.getElementById('gpt-mm-detect').addEventListener('click', () => {
+            detectAccountBalance();
+            detectCurrentPayout();
+            updateMoneyManagementDisplay();
+        });
+        document.getElementById('gpt-mm-apply').addEventListener('click', () => {
+            const amount = moneyManagement.currentTradeAmount;
+            setTradeAmountOnUI(amount);
+        });
+        
+        document.getElementById('gpt-mm-balance-input').addEventListener('change', (e) => {
+            moneyManagement.accountBalance = parseFloat(e.target.value) || 100;
+            moneyManagement.sessionStartBalance = moneyManagement.accountBalance;
+            calculateBaseTradeAmount();
+            GM_setValue('mmAccountBalance', moneyManagement.accountBalance);
+            updateMoneyManagementDisplay();
+            log(`Balance set to $${moneyManagement.accountBalance}`);
+        });
+        
+        document.getElementById('gpt-mm-risk').addEventListener('change', (e) => {
+            moneyManagement.riskPercentage = parseFloat(e.target.value) || 2;
+            calculateBaseTradeAmount();
+            GM_setValue('mmRiskPercentage', moneyManagement.riskPercentage);
+            updateMoneyManagementDisplay();
+            log(`Risk set to ${moneyManagement.riskPercentage}%`);
+        });
+        
+        document.getElementById('gpt-mm-target').addEventListener('change', (e) => {
+            smartMartingale.targetProfit = parseFloat(e.target.value) || 0.5;
+            GM_setValue('mmTargetProfit', smartMartingale.targetProfit);
+            log(`Target profit set to $${smartMartingale.targetProfit}`);
         });
 
         // Make draggable with touch support
@@ -1343,6 +1974,37 @@
         
         updateMartingaleDisplay();
         log(`MARTINGALE: ${martingaleEnabled ? 'ON' : 'OFF'}`);
+    }
+    
+    // Toggle Smart Martingale (money management system) - v6.8.0
+    function toggleSmartMartingale() {
+        smartMartingale.enabled = !smartMartingale.enabled;
+        GM_setValue('smartMartingaleEnabled', smartMartingale.enabled);
+        
+        const btn = document.getElementById('gpt-mm-toggle');
+        if (btn) {
+            btn.textContent = smartMartingale.enabled ? 'ON' : 'OFF';
+            btn.style.background = smartMartingale.enabled ? '#22c55e' : '#6b7280';
+        }
+        
+        if (smartMartingale.enabled) {
+            // Initialize money management
+            calculateBaseTradeAmount();
+            detectCurrentPayout();
+            
+            // Disable legacy martingale when smart is enabled
+            martingaleEnabled = false;
+            GM_setValue('martingaleEnabled', false);
+            const legacyBtn = document.getElementById('gpt-martingale-toggle');
+            if (legacyBtn) {
+                legacyBtn.textContent = 'OFF';
+                legacyBtn.style.background = '#6b7280';
+            }
+        }
+        
+        updateMoneyManagementDisplay();
+        updateMartingaleDisplay();
+        log(`SMART MONEY MANAGEMENT: ${smartMartingale.enabled ? 'ON' : 'OFF'}`);
     }
 
     function toggleSoundNotifications() {
@@ -2113,10 +2775,10 @@
     }
 
     // ===========================================
-    // INITIALIZATION - UPDATED v6.7.0
+    // INITIALIZATION - UPDATED v6.8.0
     // ===========================================
     function init() {
-        log('Initializing v6.7.0...');
+        log('Initializing v6.8.0...');
 
         // Load saved settings (all default to false)
         autoEnabled = GM_getValue('autoEnabled', false);
@@ -2131,6 +2793,17 @@
         martingaleMaxSteps = GM_getValue('martingaleMaxSteps', 5);
         martingaleStep = GM_getValue('martingaleStep', 0);
         currentTradeAmount = calculateMartingaleAmount();
+        
+        // Load Money Management settings - v6.8.0
+        smartMartingale.enabled = GM_getValue('smartMartingaleEnabled', false);
+        smartMartingale.targetProfit = GM_getValue('mmTargetProfit', 0.5);
+        smartMartingale.maxSteps = GM_getValue('mmMaxSteps', 6);
+        moneyManagement.accountBalance = GM_getValue('mmAccountBalance', 100);
+        moneyManagement.riskPercentage = GM_getValue('mmRiskPercentage', 2);
+        moneyManagement.sessionStartBalance = moneyManagement.accountBalance;
+        
+        // Calculate initial base trade amount
+        calculateBaseTradeAmount();
         
         // Load sound settings
         soundNotificationsEnabled = GM_getValue('soundNotificationsEnabled', true);
@@ -2153,8 +2826,10 @@
             
             // Initialize UI elements
             initMartingaleUI();
+            initMoneyManagementUI();
             updateWinLossDisplay();
             updateMartingaleDisplay();
+            updateMoneyManagementDisplay();
             
             manageIntervals();
             
@@ -2193,6 +2868,22 @@
             soundBtn.textContent = soundNotificationsEnabled ? '🔊 SOUND ON' : '🔇 SOUND OFF';
             soundBtn.style.background = soundNotificationsEnabled ? '#8b5cf6' : '#6b7280';
         }
+    }
+    
+    // Initialize Money Management UI elements - v6.8.0
+    function initMoneyManagementUI() {
+        const toggleBtn = document.getElementById('gpt-mm-toggle');
+        const balanceInput = document.getElementById('gpt-mm-balance-input');
+        const riskInput = document.getElementById('gpt-mm-risk');
+        const targetInput = document.getElementById('gpt-mm-target');
+        
+        if (toggleBtn) {
+            toggleBtn.textContent = smartMartingale.enabled ? 'ON' : 'OFF';
+            toggleBtn.style.background = smartMartingale.enabled ? '#22c55e' : '#6b7280';
+        }
+        if (balanceInput) balanceInput.value = moneyManagement.accountBalance;
+        if (riskInput) riskInput.value = moneyManagement.riskPercentage;
+        if (targetInput) targetInput.value = smartMartingale.targetProfit;
     }
     
     // Update settings display from synced settings
