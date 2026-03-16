@@ -9,7 +9,26 @@
 
 ## Recent Updates (March 16, 2026)
 
-### Tampermonkey v6.8.0 - Money Management System
+### NEW: 1m Quad SMA/EMA Crossover Strategy (March 16, 2026)
+Based on user specification for Japanese Candlestick chart:
+- **White: 2 SMA**
+- **Yellow: 5 SMA**
+- **Pink: 10 SMA**
+- **Blue: 20 EMA**
+
+**Crossover Rules:**
+| Rule | Condition | Action |
+|------|-----------|--------|
+| 1st | White(2) crosses Yellow(5) | Go WITH Trend |
+| 2nd | Yellow(5) + White(2) both cross Pink(10) | Go AGAINST Trend |
+| 3rd | White(2) + Yellow(5) both cross Blue(20) | Go WITH Trend |
+| 4th | Pink(10) crosses Blue(20) | Go AGAINST last Trend (reversal signal) |
+| Special | White(2) crosses ALL lines in one candle | Go AGAINST Trend (high priority) |
+
+**Strategy Selection:** Available in UI under 1m strategies as "⭐⭐ Quad SMA/EMA Crossover"
+**Target Win Rate:** 80-85%
+
+### Tampermonkey v6.8.0 - Money Management System (March 16, 2026)
 **NEW: Complete Money Management with Smart Martingale**
 - **Balance Tracking** - User can input account balance, auto-detect from Pocket Option UI
 - **Risk-Based Trade Sizing** - Calculate trade amounts as % of balance (default 2%)

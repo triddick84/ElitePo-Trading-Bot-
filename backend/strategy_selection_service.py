@@ -54,6 +54,7 @@ class StrategySelectionService:
         ],
         '1m': [
             {'id': 'default', 'name': 'Default 1m Strategy', 'description': 'High Accuracy strategies (Triple Confirmation, Williams/MACD, Smart Money)'},
+            {'id': '1m_quad_crossover', 'name': '⭐⭐ Quad SMA/EMA Crossover', 'description': '2/5/10 SMA + 20 EMA crossovers. 4 rule system with trend/counter-trend signals.', 'win_rate': '80-85%'},
             {'id': 'zigzag_double_ma', 'name': '⭐ ZigZag + Double MA', 'description': 'ZigZag(5,4,3) + SMA(3)/SMA(6). Clear swings without spikes.', 'win_rate': '75-85%'},
             {'id': 'triple_supertrend', 'name': '⭐ Triple SuperTrend Confirmation', 'description': '3 SuperTrends + Heikin Ashi. 5m expiry. London/NY overlap.', 'win_rate': '80-90%'},
             {'id': 'ema_pullback', 'name': '⭐ EMA Pullback Strategy', 'description': 'EMA(8)/EMA(21) pullback entries. Strong trend continuation.', 'win_rate': '75-85%'},

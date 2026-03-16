@@ -97,6 +97,14 @@ class StrategyRegistry:
             self.strategies['1m_rsi_divergence'] = strategy_1m_rsi_divergence
             self.strategies['1m_triple_ema'] = strategy_1m_triple_ema
             
+            # NEW: 1m Quad SMA/EMA Crossover Strategy (High Accuracy - 80%+ target)
+            try:
+                from strategies.strategy_1m_quad_crossover import strategy_1m_quad_crossover
+                self.strategies['1m_quad_crossover'] = strategy_1m_quad_crossover
+                logger.info("✅ Loaded 1m Quad SMA/EMA Crossover Strategy (2/5/10 SMA + 20 EMA)")
+            except Exception as e:
+                logger.warning(f"Could not load 1m Quad Crossover: {e}")
+            
             # 2-minute strategies
             from strategies.strategy_2m_support_resistance import strategy_2m_support_resistance
             from strategies.strategy_2m_trend_momentum import strategy_2m_trend_momentum
