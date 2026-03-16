@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://auto-trade-hub-25.preview.emergentagent.com
-// @version      6.8.0
-// @description  Auto-trade OTC forex on Pocket Option. v6.8.0 - Complete Money Management System
+// @version      6.8.1
+// @description  Auto-trade OTC forex on Pocket Option. v6.8.1 - Fixed double-trade bug with enhanced guards
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -65,6 +65,13 @@
     let globalTradeLock = false;
     let lastTradeClickTime = 0;
     const TRADE_LOCK_MS = 5000;  // 5 second absolute lock after any trade
+    
+    // NEW v6.8.1: Trade execution queue to prevent race conditions
+    let tradeQueue = [];
+    let isProcessingQueue = false;
+    let lastTradeDirection = null;  // Track last trade direction
+    let lastTradeTimestamp = 0;     // Track last trade time for duplicate detection
+    const DUPLICATE_TRADE_WINDOW_MS = 3000;  // Reject same-direction trade within 3s
     
     // NEW: Enhanced control settings from backend
     let selectedStrategy = 'auto';
@@ -246,7 +253,7 @@
     // ===========================================
     function log(msg) {
         const ts = new Date().toLocaleTimeString();
-        console.log(`[GPT v6.8.0] ${ts}: ${msg}`);
+        console.log(`[GPT v6.8.1] ${ts}: ${msg}`);
         const logEl = document.getElementById('gpt-log');
         if (logEl) logEl.textContent = msg;
     }
@@ -1698,7 +1705,7 @@
                     <span class="value" id="gpt-favorites-count">0</span>
                 </div>
                 
-                <div id="gpt-log">Ready - v6.8.0</div>
+                <div id="gpt-log">Ready - v6.8.1</div>
             </div>
         `;
 
@@ -2244,8 +2251,8 @@
             }
         }
 
-        // Click button
-        const clicked = clickTradeButton(isCall);
+        // Click button - v6.8.1 pass source for logging
+        const clicked = clickTradeButton(isCall, 'APP');
         
         if (clicked) {
             incrementTradeCount();
@@ -2458,8 +2465,8 @@
             }
         }
 
-        // Click button
-        const clicked = clickTradeButton(isCall);
+        // Click button - v6.8.1 pass source for logging
+        const clicked = clickTradeButton(isCall, 'SCAN');
         
         if (clicked) {
             incrementTradeCount();
@@ -2487,27 +2494,37 @@
     }
 
     // ===========================================
-    // TRADE EXECUTION - WITH ABSOLUTE PROTECTION
+    // TRADE EXECUTION - WITH ABSOLUTE PROTECTION v6.8.1
     // ===========================================
-    function clickTradeButton(isCall) {
+    function clickTradeButton(isCall, source = 'unknown') {
         const now = Date.now();
         const direction = isCall ? 'CALL' : 'PUT';
         
         // GUARD 1: Global trade lock
         if (globalTradeLock) {
-            log(`🛑 BLOCKED: Global trade lock active`);
+            log(`🛑 BLOCKED [${source}]: Global trade lock active`);
             return false;
         }
         
         // GUARD 2: Time-based lock (5 seconds between ANY trades)
         if (now - lastTradeClickTime < TRADE_LOCK_MS) {
             const remaining = Math.round((TRADE_LOCK_MS - (now - lastTradeClickTime)) / 1000);
-            log(`🛑 BLOCKED: Trade cooldown ${remaining}s`);
+            log(`🛑 BLOCKED [${source}]: Trade cooldown ${remaining}s`);
             return false;
         }
         
-        // NOTE: Opposite trade block removed per user request (v6.4.2)
-        // Users can now place opposite trades (BUY after SELL) without restriction
+        // GUARD 3: NEW v6.8.1 - Prevent duplicate direction within short window
+        // This prevents the BUY+SELL bug by blocking rapid same-direction trades
+        if (now - lastTradeTimestamp < DUPLICATE_TRADE_WINDOW_MS) {
+            log(`🛑 BLOCKED [${source}]: Duplicate trade prevention (${now - lastTradeTimestamp}ms since last trade)`);
+            return false;
+        }
+        
+        // GUARD 4: isTrading flag check (belt and suspenders)
+        if (isTrading) {
+            log(`🛑 BLOCKED [${source}]: isTrading flag is true`);
+            return false;
+        }
         
         const selector = isCall ? '.btn-call' : '.btn-put';
         const btn = document.querySelector(selector);
@@ -2516,9 +2533,11 @@
             // SET ALL LOCKS BEFORE CLICKING
             globalTradeLock = true;
             lastTradeClickTime = now;
+            lastTradeDirection = direction;
+            lastTradeTimestamp = now;
             
-            log(`✅ CLICKING: ${direction} button`);
-            console.log(`[GPT TRADE] ${new Date().toISOString()} - ${direction}`);
+            log(`✅ CLICKING [${source}]: ${direction} button`);
+            console.log(`[GPT TRADE] ${new Date().toISOString()} - ${direction} - Source: ${source}`);
             
             // Single click only
             btn.click();

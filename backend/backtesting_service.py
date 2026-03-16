@@ -255,6 +255,52 @@ class HistoricalDataFetcher:
             logger.error(f"Error fetching MongoDB data for {symbol}: {e}")
             return None
     
+    async def fetch_oanda_data(self, symbol: str, days: int = 30, interval: str = "1h") -> Optional[pd.DataFrame]:
+        """Fetch historical data from OANDA API (Most reliable for forex)"""
+        try:
+            from enhanced_oanda_service import enhanced_oanda
+            
+            if not enhanced_oanda or not enhanced_oanda.is_configured:
+                logger.warning("OANDA service not configured")
+                return None
+            
+            # Map symbol to OANDA format
+            symbol_clean = symbol.upper().replace('_', '')
+            if len(symbol_clean) == 6:
+                instrument = f"{symbol_clean[:3]}_{symbol_clean[3:]}"
+            else:
+                instrument = symbol.replace('/', '_')
+            
+            # Map interval to OANDA granularity
+            granularity_map = {
+                '1m': 'M1', '5m': 'M5', '15m': 'M15', '30m': 'M30',
+                '1h': 'H1', '4h': 'H4', '1d': 'D'
+            }
+            granularity = granularity_map.get(interval, 'H1')
+            
+            # Calculate count based on days and interval
+            interval_minutes = {
+                '1m': 1, '5m': 5, '15m': 15, '30m': 30,
+                '1h': 60, '4h': 240, '1d': 1440
+            }
+            minutes_per_interval = interval_minutes.get(interval, 60)
+            count = min(int((days * 24 * 60) / minutes_per_interval), 5000)
+            
+            logger.info(f"🔄 Fetching OANDA data: {instrument} {granularity} (count={count})")
+            
+            df = enhanced_oanda.get_candles(instrument, granularity, count=count)
+            
+            if df is not None and len(df) > 0:
+                logger.info(f"✅ OANDA returned {len(df)} candles for {symbol}")
+                return df
+            else:
+                logger.warning(f"⚠️ OANDA returned no data for {symbol}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error fetching OANDA data for {symbol}: {e}")
+            return None
+    
     async def fetch_finnhub_forex_data(self, symbol: str, days: int = 30, interval: str = "1h") -> Optional[pd.DataFrame]:
         """Fetch historical forex data from Finnhub API (Primary provider)"""
         if not FINNHUB_API_KEY:
@@ -823,16 +869,25 @@ class HistoricalDataFetcher:
             else:
                 # For forex and stocks, use multi-provider fallback
                 
-                # 1. Try Finnhub first (higher rate limit)
-                logger.info(f"🔄 Trying Finnhub for {symbol}...")
-                if is_stock:
-                    df = await self.fetch_finnhub_stock_data(symbol, days, interval)
-                else:
-                    df = await self.fetch_finnhub_forex_data(symbol, days, interval)
+                # 0. Try OANDA first for Forex (most reliable for forex data)
+                if not is_stock:
+                    logger.info(f"🔄 Trying OANDA for {symbol}...")
+                    df = await self.fetch_oanda_data(symbol, days, interval)
+                    if df is not None and len(df) >= 100:
+                        data_source = "oanda"
                 
-                if df is not None and len(df) > 0:
-                    data_source = "finnhub"
-                else:
+                # 1. Try Finnhub if OANDA failed
+                if df is None or len(df) < 100:
+                    logger.info(f"🔄 Trying Finnhub for {symbol}...")
+                    if is_stock:
+                        df = await self.fetch_finnhub_stock_data(symbol, days, interval)
+                    else:
+                        df = await self.fetch_finnhub_forex_data(symbol, days, interval)
+                    
+                    if df is not None and len(df) > 0:
+                        data_source = "finnhub"
+                
+                if df is None or len(df) < 100:
                     # 2. Try Alpha Vantage as fallback
                     logger.info(f"🔄 Finnhub failed, trying Alpha Vantage for {symbol}...")
                     if is_stock:

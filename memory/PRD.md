@@ -299,21 +299,22 @@ Create a "GPT Signal Bot" for Pocket Option with a high win rate (80-90%+). The 
 - [x] MT5 Position Management (open, close, modify)
 - [x] MT5 Account Monitoring (balance, equity, margin)
 - [x] **Money Management System v6.8.0** (March 16, 2026) - Complete with Smart Martingale, balance tracking, payout-aware recovery
+- [x] **Tampermonkey v6.8.1** (March 16, 2026) - Fixed critical double-trade bug with enhanced trade guards
+- [x] **AI/ML Training Pipeline** (March 16, 2026) - Fixed OANDA data integration for ML model training (720+ candles per training)
 
 ## P1 - High Priority (Next)
-- [ ] Fix critical double-trade bug (BUY and SELL placed for single signal)
-- [ ] Fix unreliable asset switching via favorites bar
-- [ ] Backend refactoring (split server.py into routes modules)
+- [ ] Full backend refactoring (split server.py into routes modules) - 14768 lines needs modularization
+- [ ] Clean up more unused strategy files
 
 ## P2 - Medium Priority
-- [ ] Fix AI/ML training - blocked on historical data pipeline
-- [ ] Clean up Pocket Option page - remove unused code
 - [ ] Enhanced Signal Pop-up with Normal/Inverted status indicator
 - [ ] Frontend accuracy statistics dashboard widget
 
 ## P3 - Future
 - [x] ~~Fix Money Management Logic (Martingale)~~ - COMPLETED v6.8.0
-- [ ] Residential proxy integration for Pocket Option auto-trade
+- [x] ~~Fix AI/ML training data pipeline~~ - COMPLETED (OANDA integration working)
+- [x] ~~Fix critical double-trade bug~~ - COMPLETED v6.8.1
+- [ ] Further ML model tuning for higher accuracy
 
 ## Credentials
 - **App Login**: username: `triddick84`, password: `Fallinone#1`

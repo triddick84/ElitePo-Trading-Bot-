@@ -3216,7 +3216,7 @@ async def train_ml_on_price_data(request: dict):
         
         # Fetch price data - pass db for real MongoDB data access
         backtest_service = BacktestingService(db=db)
-        price_df = await backtest_service.data_fetcher.fetch_historical_data(
+        price_df, data_source = await backtest_service.data_fetcher.fetch_historical_data(
             asset, 
             backtest_service._determine_asset_type(asset),
             days,
@@ -3226,7 +3226,7 @@ async def train_ml_on_price_data(request: dict):
         if price_df is None or len(price_df) < 100:
             return {
                 "success": False,
-                "error": f"Insufficient price data for {asset}. Got {len(price_df) if price_df is not None else 0} candles."
+                "error": f"Insufficient price data for {asset}. Got {len(price_df) if price_df is not None else 0} candles from {data_source}."
             }
         
         # Train models
@@ -3237,9 +3237,10 @@ async def train_ml_on_price_data(request: dict):
         
         return {
             "success": True,
-            "message": f"Trained {len(trained_models)} ML models on {len(price_df)} candles",
+            "message": f"Trained {len(trained_models)} ML models on {len(price_df)} candles from {data_source}",
             "asset": asset,
             "timeframe": timeframe,
+            "data_source": data_source,
             "candles_used": len(price_df),
             "models": models_data
         }
@@ -3265,7 +3266,7 @@ async def ml_predict_signal(request: dict):
         
         # Fetch recent price data - pass db for real MongoDB data access
         backtest_service = BacktestingService(db=db)
-        price_df = await backtest_service.data_fetcher.fetch_historical_data(
+        price_df, _ = await backtest_service.data_fetcher.fetch_historical_data(
             asset,
             backtest_service._determine_asset_type(asset),
             7,  # Last 7 days
