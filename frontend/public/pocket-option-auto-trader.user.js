@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://auto-trade-hub-25.preview.emergentagent.com
-// @version      6.8.2
-// @description  Auto-trade OTC forex on Pocket Option. v6.8.2 - Fixed SCAN/AUTO/SWITCH logic
+// @version      6.8.3
+// @description  Auto-trade OTC forex on Pocket Option. v6.8.3 - Compact horizontal UI, fixed isTrading flag
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -66,12 +66,37 @@
     let lastTradeClickTime = 0;
     const TRADE_LOCK_MS = 5000;  // 5 second absolute lock after any trade
     
-    // NEW v6.8.1: Trade execution queue to prevent race conditions
+    // v6.8.2: Trade execution queue to prevent race conditions
     let tradeQueue = [];
     let isProcessingQueue = false;
     let lastTradeDirection = null;  // Track last trade direction
     let lastTradeTimestamp = 0;     // Track last trade time for duplicate detection
     const DUPLICATE_TRADE_WINDOW_MS = 3000;  // Reject same-direction trade within 3s
+    
+    // v6.8.3: Safety timeout to prevent isTrading getting stuck
+    let tradingFlagTimeout = null;
+    const TRADING_FLAG_TIMEOUT_MS = 10000;  // 10 second max for trading flag
+    
+    function setTradingFlag(value) {
+        isTrading = value;
+        
+        // Clear any existing timeout
+        if (tradingFlagTimeout) {
+            clearTimeout(tradingFlagTimeout);
+            tradingFlagTimeout = null;
+        }
+        
+        // If setting to true, add safety timeout to auto-clear
+        if (value) {
+            tradingFlagTimeout = setTimeout(() => {
+                if (isTrading) {
+                    log('⚠️ Trading flag auto-cleared (timeout)');
+                    setTradingFlag(false);
+                    updateStatusDot('connected');
+                }
+            }, TRADING_FLAG_TIMEOUT_MS);
+        }
+    }
     
     // NEW: Enhanced control settings from backend
     let selectedStrategy = 'auto';
@@ -253,7 +278,7 @@
     // ===========================================
     function log(msg) {
         const ts = new Date().toLocaleTimeString();
-        console.log(`[GPT v6.8.2] ${ts}: ${msg}`);
+        console.log(`[GPT v6.8.3] ${ts}: ${msg}`);
         const logEl = document.getElementById('gpt-log');
         if (logEl) logEl.textContent = msg;
     }
@@ -1331,381 +1356,224 @@
             <style>
                 #gpt-panel {
                     position: fixed;
-                    top: 10px;
-                    right: 10px;
+                    bottom: 10px;
+                    left: 10px;
                     background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
                     border: 2px solid #7c3aed;
-                    border-radius: 12px;
-                    padding: 12px 15px;
+                    border-radius: 10px;
+                    padding: 8px 12px;
                     z-index: 999999;
                     font-family: 'Segoe UI', Arial, sans-serif;
                     color: white;
-                    min-width: 320px;
-                    box-shadow: 0 4px 25px rgba(124, 58, 237, 0.4);
-                    transition: all 0.3s ease;
+                    box-shadow: 0 4px 20px rgba(124, 58, 237, 0.4);
                     user-select: none;
+                    max-width: 95vw;
                 }
-                #gpt-panel.minimized {
-                    min-width: auto;
-                    width: auto;
-                    padding: 8px 12px;
-                }
-                #gpt-panel.minimized .panel-content {
-                    display: none;
-                }
+                #gpt-panel.minimized .panel-body { display: none; }
+                #gpt-panel.minimized { padding: 6px 10px; }
+                
                 #gpt-panel .header {
                     display: flex;
-                    justify-content: space-between;
                     align-items: center;
-                    border-bottom: 1px solid rgba(124, 58, 237, 0.3);
-                    padding-bottom: 8px;
-                    margin-bottom: 10px;
+                    gap: 10px;
                     cursor: move;
+                    padding-bottom: 6px;
+                    border-bottom: 1px solid rgba(124, 58, 237, 0.3);
+                    margin-bottom: 6px;
                 }
-                #gpt-panel.minimized .header {
-                    border-bottom: none;
-                    padding-bottom: 0;
-                    margin-bottom: 0;
-                }
-                #gpt-panel .header-left {
-                    display: flex;
-                    align-items: center;
-                }
-                #gpt-panel .header-right {
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                }
-                #gpt-panel .title { font-weight: bold; color: #a78bfa; font-size: 14px; }
+                #gpt-panel.minimized .header { border-bottom: none; padding-bottom: 0; margin-bottom: 0; }
+                
                 #gpt-panel .status-dot { 
-                    width: 10px; height: 10px; border-radius: 50%; 
-                    background: #ef4444; display: inline-block; margin-right: 8px;
+                    width: 8px; height: 8px; border-radius: 50%; 
+                    background: #ef4444; display: inline-block;
                 }
                 #gpt-panel .status-dot.connected { background: #22c55e; }
                 #gpt-panel .status-dot.trading { background: #f59e0b; animation: blink 0.5s infinite; }
                 @keyframes blink { 50% { opacity: 0.3; } }
                 
-                #gpt-panel .minimize-btn {
+                #gpt-panel .title { font-weight: bold; color: #a78bfa; font-size: 12px; }
+                #gpt-panel .conn-status { font-size: 10px; }
+                #gpt-panel .min-btn {
                     background: rgba(124, 58, 237, 0.3);
                     border: 1px solid #7c3aed;
                     color: #a78bfa;
-                    width: 24px;
-                    height: 24px;
+                    width: 20px; height: 20px;
                     border-radius: 4px;
                     cursor: pointer;
+                    font-size: 12px;
+                    margin-left: auto;
+                }
+                
+                #gpt-panel .panel-body { display: flex; flex-direction: column; gap: 6px; }
+                
+                /* Horizontal button rows */
+                #gpt-panel .btn-row {
+                    display: flex;
+                    gap: 4px;
+                    flex-wrap: wrap;
+                }
+                #gpt-panel .btn-row button {
+                    padding: 5px 8px;
+                    border: none;
+                    border-radius: 4px;
+                    font-weight: bold;
+                    font-size: 9px;
+                    cursor: pointer;
+                    text-transform: uppercase;
+                    white-space: nowrap;
+                }
+                #gpt-panel .btn-row button:hover { opacity: 0.85; }
+                
+                .btn-auto { background: #6b7280; color: white; }
+                .btn-auto.on { background: #22c55e; }
+                .btn-scan { background: #6b7280; color: white; }
+                .btn-scan.on { background: #ec4899; }
+                .btn-switch { background: #6b7280; color: white; }
+                .btn-switch.on { background: #8b5cf6; }
+                .btn-switch.disabled { opacity: 0.5; cursor: not-allowed; }
+                .btn-invert { background: #6b7280; color: white; }
+                .btn-invert.on { background: #f59e0b; }
+                .btn-fetch { background: #3b82f6; color: white; }
+                .btn-reset { background: #ef4444; color: white; }
+                
+                /* Signal and stats row */
+                #gpt-panel .info-row {
                     display: flex;
                     align-items: center;
-                    justify-content: center;
-                    font-size: 14px;
-                    font-weight: bold;
-                    transition: all 0.2s;
-                }
-                #gpt-panel .minimize-btn:hover {
-                    background: rgba(124, 58, 237, 0.5);
-                    transform: scale(1.1);
-                }
-                
-                #gpt-panel .signal-display {
-                    background: rgba(0,0,0,0.3);
-                    border-radius: 8px;
-                    padding: 8px 12px;
-                    margin-bottom: 10px;
-                    text-align: center;
-                }
-                #gpt-panel .signal-direction {
-                    font-size: 18px;
-                    font-weight: bold;
-                    padding: 4px 16px;
-                    border-radius: 5px;
-                    display: inline-block;
-                }
-                #gpt-panel .signal-direction.call { background: #22c55e; }
-                #gpt-panel .signal-direction.put { background: #ef4444; }
-                #gpt-panel .signal-direction.wait { background: #64748b; }
-                
-                #gpt-panel .btn-row {
-                    display: grid;
-                    grid-template-columns: 1fr 1fr;
                     gap: 8px;
-                    margin-bottom: 8px;
+                    font-size: 10px;
+                    flex-wrap: wrap;
                 }
-                #gpt-panel button {
-                    padding: 8px 12px;
-                    border: none;
-                    border-radius: 6px;
+                #gpt-panel .signal-badge {
+                    padding: 3px 10px;
+                    border-radius: 4px;
                     font-weight: bold;
                     font-size: 11px;
-                    cursor: pointer;
-                    transition: all 0.2s;
-                    text-transform: uppercase;
                 }
-                #gpt-panel button:hover { transform: scale(1.02); opacity: 0.9; }
+                #gpt-panel .signal-badge.call { background: #22c55e; }
+                #gpt-panel .signal-badge.put { background: #ef4444; }
+                #gpt-panel .signal-badge.wait { background: #64748b; }
                 
-                #gpt-panel .btn-auto { background: #6b7280; color: white; }
-                #gpt-panel .btn-auto.on { background: #22c55e; }
-                #gpt-panel .btn-scan { background: #6b7280; color: white; }
-                #gpt-panel .btn-scan.on { background: #ec4899; }
-                #gpt-panel .btn-switch { background: #6b7280; color: white; }
-                #gpt-panel .btn-switch.on { background: #8b5cf6; }
-                #gpt-panel .btn-invert { background: #6b7280; color: white; }
-                #gpt-panel .btn-invert.on { background: #f59e0b; }
-                #gpt-panel .btn-fetch { background: #3b82f6; color: white; }
-                #gpt-panel .btn-reset { background: #ef4444; color: white; }
+                #gpt-panel .stat { color: #94a3b8; }
+                #gpt-panel .stat-val { font-weight: bold; }
+                #gpt-panel .win { color: #22c55e; }
+                #gpt-panel .loss { color: #ef4444; }
                 
-                #gpt-log {
+                /* Win/Loss buttons - compact */
+                #gpt-panel .wl-btns {
+                    display: flex;
+                    gap: 4px;
+                }
+                #gpt-panel .wl-btn {
+                    padding: 4px 12px;
+                    border: none;
+                    border-radius: 4px;
+                    font-weight: bold;
                     font-size: 10px;
+                    cursor: pointer;
+                }
+                #gpt-panel .wl-win { background: #22c55e; color: white; }
+                #gpt-panel .wl-loss { background: #ef4444; color: white; }
+                
+                /* Mode indicator */
+                #gpt-panel .mode {
+                    font-size: 9px;
+                    padding: 3px 6px;
+                    border-radius: 3px;
+                    background: #374151;
+                    color: #9ca3af;
+                }
+                #gpt-panel .mode.app { background: #065f46; color: #6ee7b7; }
+                #gpt-panel .mode.scan { background: #7c2d12; color: #fed7aa; }
+                #gpt-panel .mode.both { background: #4c1d95; color: #ddd6fe; }
+                
+                /* Log */
+                #gpt-log {
+                    font-size: 9px;
                     color: #22c55e;
                     background: rgba(0,0,0,0.3);
-                    padding: 6px 10px;
-                    border-radius: 4px;
-                    margin-top: 8px;
+                    padding: 4px 8px;
+                    border-radius: 3px;
                     white-space: nowrap;
                     overflow: hidden;
                     text-overflow: ellipsis;
+                    max-width: 350px;
                 }
-                #gpt-panel .mode-indicator {
-                    font-size: 10px;
-                    padding: 4px 8px;
-                    border-radius: 4px;
-                    background: #374151;
-                    margin-top: 8px;
-                    text-align: center;
-                    line-height: 1.4;
-                }
-                #gpt-panel .mode-indicator.app { background: #065f46; color: #6ee7b7; }
-                #gpt-panel .mode-indicator.scan { background: #7c2d12; color: #fed7aa; }
-                #gpt-panel .mode-indicator.both { background: #4c1d95; color: #ddd6fe; }
-                #gpt-panel .mode-indicator.idle { background: #374151; color: #9ca3af; }
                 
-                #gpt-panel .settings-row {
+                /* Money Management compact */
+                #gpt-panel .mm-row {
                     display: flex;
-                    justify-content: space-between;
-                    font-size: 10px;
-                    color: #94a3b8;
-                    padding: 3px 0;
-                    border-top: 1px solid rgba(124, 58, 237, 0.2);
-                }
-                #gpt-panel .settings-row .label { color: #64748b; }
-                #gpt-panel .settings-row .value { color: #a78bfa; font-weight: bold; }
-                
-                /* Win/Loss Stats Styles */
-                #gpt-panel .stats-container {
-                    background: rgba(0,0,0,0.4);
-                    border-radius: 8px;
-                    padding: 8px;
-                    margin: 8px 0;
-                }
-                #gpt-panel .stats-row {
-                    display: flex;
-                    justify-content: space-between;
                     align-items: center;
-                    margin-bottom: 4px;
+                    gap: 6px;
+                    font-size: 9px;
+                    background: rgba(16,185,129,0.1);
+                    padding: 4px 6px;
+                    border-radius: 4px;
+                    border: 1px solid rgba(16,185,129,0.3);
                 }
-                #gpt-panel .stats-row:last-child { margin-bottom: 0; }
-                #gpt-panel .stat-win { color: #22c55e; font-weight: bold; }
-                #gpt-panel .stat-loss { color: #ef4444; font-weight: bold; }
-                #gpt-panel .stat-profit { font-weight: bold; }
-                #gpt-panel .stat-profit.positive { color: #22c55e; }
-                #gpt-panel .stat-profit.negative { color: #ef4444; }
-                
-                #gpt-panel .auto-invert-section {
-                    background: linear-gradient(135deg, #7c2d12 0%, #451a03 100%);
-                    border: 1px solid #f59e0b;
-                    border-radius: 8px;
-                    padding: 8px;
-                    margin: 8px 0;
-                }
-                #gpt-panel .auto-invert-section.active {
-                    background: linear-gradient(135deg, #065f46 0%, #022c22 100%);
-                    border-color: #22c55e;
-                }
-                
-                #gpt-panel .btn-auto-invert { background: #6b7280; color: white; }
-                #gpt-panel .btn-auto-invert.on { background: #f59e0b; }
-                #gpt-panel .btn-auto-place { background: #6b7280; color: white; font-size: 9px; }
-                #gpt-panel .btn-auto-place.on { background: #06b6d4; }
-                #gpt-panel .btn-sound { background: #6b7280; color: white; font-size: 9px; }
-                #gpt-panel .btn-sound.on { background: #8b5cf6; }
-                
-                #gpt-panel .settings-input {
+                #gpt-panel .mm-row input {
                     background: rgba(0,0,0,0.3);
                     border: 1px solid #4b5563;
-                    border-radius: 4px;
+                    border-radius: 3px;
                     color: white;
-                    padding: 2px 6px;
-                    width: 50px;
-                    font-size: 10px;
+                    padding: 2px 4px;
+                    width: 45px;
+                    font-size: 9px;
                     text-align: center;
                 }
+                #gpt-panel .mm-row .mm-label { color: #6ee7b7; }
+                #gpt-panel .mm-row .mm-val { color: #f59e0b; font-weight: bold; }
             </style>
             
             <div class="header" id="gpt-drag">
-                <div class="header-left">
-                    <span class="status-dot" id="gpt-dot"></span>
-                    <span class="title">GPT Bot v6.7.1</span>
-                    <span id="gpt-connection-status" style="margin-left:6px;font-size:12px;" title="App Connection">🔴</span>
-                </div>
-                <div class="header-right">
-                    <span style="font-size:10px;color:#64748b;">Trades: <span id="gpt-trades">0</span></span>
-                    <button class="minimize-btn" id="gpt-minimize" title="Minimize/Expand">−</button>
-                </div>
+                <span class="status-dot" id="gpt-dot"></span>
+                <span class="title">GPT v6.8.3</span>
+                <span class="conn-status" id="gpt-connection-status">🔴</span>
+                <span class="stat">Trades: <span class="stat-val" id="gpt-trades">0</span></span>
+                <button class="min-btn" id="gpt-minimize">−</button>
             </div>
             
-            <div class="panel-content" id="gpt-content">
-                <div class="signal-display">
-                    <div class="signal-direction wait" id="gpt-signal">READY</div>
-                    <div style="font-size:11px;color:#94a3b8;margin-top:4px;" id="gpt-asset">-</div>
-                    <div style="font-size:10px;color:#64748b;margin-top:2px;" id="gpt-source">-</div>
+            <div class="panel-body" id="gpt-content">
+                <!-- Row 1: Signal + Stats -->
+                <div class="info-row">
+                    <span class="signal-badge wait" id="gpt-signal">READY</span>
+                    <span class="stat">W:<span class="stat-val win" id="gpt-wins">0</span></span>
+                    <span class="stat">L:<span class="stat-val loss" id="gpt-losses">0</span></span>
+                    <span class="stat">P/L:<span class="stat-val" id="gpt-profit">$0</span></span>
+                    <span class="stat" id="gpt-invert-status"></span>
                 </div>
                 
-                <!-- WIN/LOSS STATS - v6.6.0 -->
-                <div class="stats-container" id="gpt-stats">
-                    <div class="stats-row">
-                        <span style="font-size:11px;color:#a78bfa;font-weight:bold;">📊 Session Stats</span>
-                        <button id="gpt-reset-stats" style="font-size:9px;padding:2px 6px;background:#374151;border:none;border-radius:3px;color:#9ca3af;cursor:pointer;">Reset</button>
-                    </div>
-                    <div class="stats-row">
-                        <span style="font-size:10px;color:#9ca3af;">W/L:</span>
-                        <span><span class="stat-win" id="gpt-wins">0</span> / <span class="stat-loss" id="gpt-losses">0</span></span>
-                    </div>
-                    <div class="stats-row">
-                        <span style="font-size:10px;color:#9ca3af;">Streak:</span>
-                        <span style="font-size:10px;" id="gpt-streak">-</span>
-                    </div>
-                    <div class="stats-row">
-                        <span style="font-size:10px;color:#9ca3af;">P/L:</span>
-                        <span class="stat-profit" id="gpt-profit">$0.00</span>
-                    </div>
-                    <div class="stats-row">
-                        <span style="font-size:10px;color:#9ca3af;">Invert:</span>
-                        <span style="font-size:10px;color:#f59e0b;" id="gpt-invert-status"></span>
-                    </div>
-                </div>
-                
-                <!-- MANUAL WIN/LOSS BUTTONS - v6.7.0 -->
-                <div style="background:linear-gradient(135deg,#1e3a5f 0%,#0d1b2a 100%);border:1px solid #3b82f6;border-radius:8px;padding:8px;margin:8px 0;">
-                    <div style="font-size:10px;color:#60a5fa;margin-bottom:6px;text-align:center;">📊 Record Trade Result</div>
-                    <div class="btn-row">
-                        <button id="gpt-win-btn" style="background:#22c55e;color:white;font-size:14px;padding:10px;">✅ WIN</button>
-                        <button id="gpt-loss-btn" style="background:#ef4444;color:white;font-size:14px;padding:10px;">❌ LOSS</button>
-                    </div>
-                    <div style="font-size:9px;color:#94a3b8;text-align:center;margin-top:4px;">Press when trade closes. LOSS inverts signals.</div>
-                </div>
-                
-                <!-- MONEY MANAGEMENT SECTION - v6.8.0 -->
-                <div style="background:linear-gradient(135deg,#065f46 0%,#022c22 100%);border:1px solid #10b981;border-radius:8px;padding:8px;margin:8px 0;">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                        <span style="font-size:10px;color:#6ee7b7;font-weight:bold;">💰 Money Management</span>
-                        <button id="gpt-mm-toggle" style="font-size:9px;padding:3px 8px;background:#6b7280;border:none;border-radius:3px;color:white;cursor:pointer;">OFF</button>
-                    </div>
-                    <div class="stats-row">
-                        <span style="font-size:10px;color:#9ca3af;">Balance:</span>
-                        <span style="font-size:11px;color:#22c55e;font-weight:bold;" id="gpt-mm-balance">$100.00</span>
-                    </div>
-                    <div class="stats-row">
-                        <span style="font-size:10px;color:#9ca3af;">Payout:</span>
-                        <span style="font-size:10px;color:#a78bfa;" id="gpt-mm-payout">92%</span>
-                    </div>
-                    <div class="stats-row">
-                        <span style="font-size:10px;color:#9ca3af;">Trade Amt:</span>
-                        <span style="font-size:12px;color:#f59e0b;font-weight:bold;" id="gpt-mm-trade-amount">$1.00</span>
-                    </div>
-                    <div class="stats-row">
-                        <span style="font-size:10px;color:#9ca3af;">Session P/L:</span>
-                        <span style="font-size:11px;font-weight:bold;" id="gpt-mm-session-pl">$0.00</span>
-                    </div>
-                    <div class="stats-row">
-                        <span style="font-size:10px;color:#9ca3af;">Recovery:</span>
-                        <span style="font-size:10px;" id="gpt-mm-martingale">Ready</span>
-                    </div>
-                    <div style="border-top:1px solid rgba(16,185,129,0.3);margin-top:6px;padding-top:6px;">
-                        <div class="stats-row">
-                            <span style="font-size:9px;color:#9ca3af;">Balance $:</span>
-                            <input type="number" class="settings-input" id="gpt-mm-balance-input" value="100" min="1" max="100000" step="10" style="width:55px;">
-                        </div>
-                        <div class="stats-row">
-                            <span style="font-size:9px;color:#9ca3af;">Risk %:</span>
-                            <input type="number" class="settings-input" id="gpt-mm-risk" value="2" min="0.5" max="10" step="0.5" style="width:45px;">
-                        </div>
-                        <div class="stats-row">
-                            <span style="font-size:9px;color:#9ca3af;">Target $:</span>
-                            <input type="number" class="settings-input" id="gpt-mm-target" value="0.5" min="0.1" max="10" step="0.1" style="width:45px;">
-                        </div>
-                    </div>
-                    <div class="btn-row" style="margin-top:6px;">
-                        <button id="gpt-mm-detect" style="font-size:9px;padding:4px;background:#3b82f6;border:none;border-radius:3px;color:white;cursor:pointer;">Detect Balance</button>
-                        <button id="gpt-mm-apply" style="font-size:9px;padding:4px;background:#10b981;border:none;border-radius:3px;color:white;cursor:pointer;">Apply to UI</button>
-                    </div>
-                </div>
-                
-                <!-- MARTINGALE SECTION - v6.7.0 -->
-                <div style="background:linear-gradient(135deg,#4c1d95 0%,#2d1b4e 100%);border:1px solid #8b5cf6;border-radius:8px;padding:8px;margin:8px 0;">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                        <span style="font-size:10px;color:#a78bfa;">📈 Martingale</span>
-                        <button id="gpt-martingale-toggle" style="font-size:9px;padding:3px 8px;background:#6b7280;border:none;border-radius:3px;color:white;cursor:pointer;">OFF</button>
-                    </div>
-                    <div class="stats-row">
-                        <span style="font-size:10px;color:#9ca3af;">Step:</span>
-                        <span style="font-size:10px;" id="gpt-martingale-status">Base</span>
-                    </div>
-                    <div class="stats-row">
-                        <span style="font-size:10px;color:#9ca3af;">Next Amount:</span>
-                        <span style="font-size:12px;color:#22c55e;font-weight:bold;" id="gpt-martingale-amount">$1.00</span>
-                    </div>
-                    <div class="stats-row" style="margin-top:4px;">
-                        <span style="font-size:9px;color:#9ca3af;">Base $:</span>
-                        <input type="number" class="settings-input" id="gpt-martingale-base" value="1" min="0.1" max="100" step="0.5" style="width:45px;">
-                    </div>
-                    <div class="stats-row">
-                        <span style="font-size:9px;color:#9ca3af;">Multiplier:</span>
-                        <input type="number" class="settings-input" id="gpt-martingale-mult" value="2" min="1.5" max="3" step="0.1" style="width:45px;">
-                    </div>
-                    <div class="stats-row">
-                        <span style="font-size:9px;color:#9ca3af;">Max Steps:</span>
-                        <input type="number" class="settings-input" id="gpt-martingale-max" value="5" min="1" max="10" style="width:45px;">
-                    </div>
-                    <button id="gpt-martingale-reset" style="width:100%;font-size:9px;padding:4px;background:#374151;border:none;border-radius:3px;color:#9ca3af;cursor:pointer;margin-top:4px;">Reset Martingale</button>
-                </div>
-                
-                <!-- SOUND TOGGLE -->
+                <!-- Row 2: Main Controls -->
                 <div class="btn-row">
-                    <button id="gpt-sound-toggle" style="background:#8b5cf6;color:white;font-size:10px;">🔊 SOUND ON</button>
-                </div>
-                
-                <div class="btn-row">
-                    <button class="btn-auto" id="gpt-auto" title="Receive APP signals only">AUTO OFF</button>
-                    <button class="btn-scan" id="gpt-scan" title="Tampermonkey generates trades">SCAN OFF</button>
-                </div>
-                <div class="btn-row">
-                    <button class="btn-switch" id="gpt-switch" title="Switch through favorites bar">SWITCH OFF</button>
-                    <button class="btn-invert" id="gpt-invert" title="Invert signal direction">INVERT OFF</button>
-                </div>
-                <div class="btn-row">
+                    <button class="btn-auto" id="gpt-auto">AUTO</button>
+                    <button class="btn-scan" id="gpt-scan">SCAN</button>
+                    <button class="btn-switch" id="gpt-switch">SWITCH</button>
+                    <button class="btn-invert" id="gpt-invert">INVERT</button>
                     <button class="btn-fetch" id="gpt-fetch">FETCH</button>
-                    <button class="btn-reset" id="gpt-reset">RESET</button>
+                    <button class="btn-reset" id="gpt-reset">RST</button>
                 </div>
                 
-                <div class="mode-indicator idle" id="gpt-mode">IDLE - All buttons OFF</div>
-                
-                <!-- Settings display from app -->
-                <div class="settings-row">
-                    <span class="label">Strategy:</span>
-                    <span class="value" id="gpt-strategy">Auto</span>
-                </div>
-                <div class="settings-row">
-                    <span class="label">Timeframe:</span>
-                    <span class="value" id="gpt-timeframe">1m</span>
-                </div>
-                <div class="settings-row">
-                    <span class="label">Signal Source:</span>
-                    <span class="value" id="gpt-signal-source">App AI</span>
-                </div>
-                <div class="settings-row">
-                    <span class="label">Favorites:</span>
-                    <span class="value" id="gpt-favorites-count">0</span>
+                <!-- Row 3: Win/Loss + Mode -->
+                <div class="info-row">
+                    <div class="wl-btns">
+                        <button class="wl-btn wl-win" id="gpt-win-btn">WIN</button>
+                        <button class="wl-btn wl-loss" id="gpt-loss-btn">LOSS</button>
+                    </div>
+                    <span class="mode idle" id="gpt-mode">IDLE</span>
+                    <span class="stat">Amt:<span class="stat-val mm-val" id="gpt-mm-trade-amount">$1</span></span>
                 </div>
                 
-                <div id="gpt-log">Ready - v6.8.2</div>
+                <!-- Row 4: Money Management (collapsible) -->
+                <div class="mm-row" id="gpt-mm-section">
+                    <span class="mm-label">Bal:</span>
+                    <input type="number" id="gpt-mm-balance-input" value="100" min="1" step="10">
+                    <span class="mm-label">Risk%:</span>
+                    <input type="number" id="gpt-mm-risk" value="2" min="0.5" max="10" step="0.5">
+                    <button id="gpt-mm-toggle" style="padding:2px 6px;font-size:8px;background:#10b981;border:none;border-radius:2px;color:white;cursor:pointer;">MM</button>
+                </div>
+                
+                <!-- Log -->
+                <div id="gpt-log">Ready - v6.8.3</div>
             </div>
         `;
 
@@ -1720,72 +1588,26 @@
         document.getElementById('gpt-reset').addEventListener('click', resetToDefaults);
         document.getElementById('gpt-minimize').addEventListener('click', toggleMinimize);
         
-        // NEW: Manual Win/Loss handlers - v6.7.0
+        // Win/Loss handlers
         document.getElementById('gpt-win-btn').addEventListener('click', handleManualWin);
         document.getElementById('gpt-loss-btn').addEventListener('click', handleManualLoss);
-        document.getElementById('gpt-reset-stats').addEventListener('click', resetAllStats);
-        document.getElementById('gpt-sound-toggle').addEventListener('click', toggleSoundNotifications);
         
-        // Martingale controls
-        document.getElementById('gpt-martingale-toggle').addEventListener('click', toggleMartingale);
-        document.getElementById('gpt-martingale-reset').addEventListener('click', resetMartingale);
-        
-        document.getElementById('gpt-martingale-base').addEventListener('change', (e) => {
-            martingaleBaseAmount = parseFloat(e.target.value) || 1;
-            currentTradeAmount = calculateMartingaleAmount();
-            GM_setValue('martingaleBaseAmount', martingaleBaseAmount);
-            updateMartingaleDisplay();
-            log(`Martingale base set to $${martingaleBaseAmount}`);
-        });
-        
-        document.getElementById('gpt-martingale-mult').addEventListener('change', (e) => {
-            martingaleMultiplier = parseFloat(e.target.value) || 2;
-            currentTradeAmount = calculateMartingaleAmount();
-            GM_setValue('martingaleMultiplier', martingaleMultiplier);
-            updateMartingaleDisplay();
-            log(`Martingale multiplier set to ${martingaleMultiplier}x`);
-        });
-        
-        document.getElementById('gpt-martingale-max').addEventListener('change', (e) => {
-            martingaleMaxSteps = parseInt(e.target.value) || 5;
-            GM_setValue('martingaleMaxSteps', martingaleMaxSteps);
-            updateMartingaleDisplay();
-            log(`Martingale max steps set to ${martingaleMaxSteps}`);
-        });
-        
-        // Money Management controls - v6.8.0
+        // Money Management
         document.getElementById('gpt-mm-toggle').addEventListener('click', toggleSmartMartingale);
-        document.getElementById('gpt-mm-detect').addEventListener('click', () => {
-            detectAccountBalance();
-            detectCurrentPayout();
-            updateMoneyManagementDisplay();
-        });
-        document.getElementById('gpt-mm-apply').addEventListener('click', () => {
-            const amount = moneyManagement.currentTradeAmount;
-            setTradeAmountOnUI(amount);
-        });
-        
         document.getElementById('gpt-mm-balance-input').addEventListener('change', (e) => {
             moneyManagement.accountBalance = parseFloat(e.target.value) || 100;
             moneyManagement.sessionStartBalance = moneyManagement.accountBalance;
             calculateBaseTradeAmount();
             GM_setValue('mmAccountBalance', moneyManagement.accountBalance);
             updateMoneyManagementDisplay();
-            log(`Balance set to $${moneyManagement.accountBalance}`);
+            log(`Balance: $${moneyManagement.accountBalance}`);
         });
-        
         document.getElementById('gpt-mm-risk').addEventListener('change', (e) => {
             moneyManagement.riskPercentage = parseFloat(e.target.value) || 2;
             calculateBaseTradeAmount();
             GM_setValue('mmRiskPercentage', moneyManagement.riskPercentage);
             updateMoneyManagementDisplay();
-            log(`Risk set to ${moneyManagement.riskPercentage}%`);
-        });
-        
-        document.getElementById('gpt-mm-target').addEventListener('change', (e) => {
-            smartMartingale.targetProfit = parseFloat(e.target.value) || 0.5;
-            GM_setValue('mmTargetProfit', smartMartingale.targetProfit);
-            log(`Target profit set to $${smartMartingale.targetProfit}`);
+            log(`Risk: ${moneyManagement.riskPercentage}%`);
         });
 
         // Make draggable with touch support
@@ -1988,7 +1810,7 @@
         scanEnabled = false;
         switchEnabled = false;
         invertEnabled = false;
-        isTrading = false;
+        setTradingFlag(false);
         lastAppSignalId = '';
         lastAppTradeTime = 0;
         lastScanTradeTime = 0;
@@ -2096,29 +1918,25 @@
         const invertBtn = document.getElementById('gpt-invert');
 
         if (autoBtn) {
-            autoBtn.textContent = autoEnabled ? 'AUTO ON' : 'AUTO OFF';
+            autoBtn.textContent = autoEnabled ? 'AUTO ON' : 'AUTO';
             autoBtn.className = 'btn-auto' + (autoEnabled ? ' on' : '');
         }
         if (scanBtn) {
-            scanBtn.textContent = scanEnabled ? 'SCAN ON' : 'SCAN OFF';
+            scanBtn.textContent = scanEnabled ? 'SCAN ON' : 'SCAN';
             scanBtn.className = 'btn-scan' + (scanEnabled ? ' on' : '');
         }
         if (switchBtn) {
             // SWITCH is disabled when AUTO is ON
             if (autoEnabled) {
-                switchBtn.textContent = 'SWITCH (AUTO)';
+                switchBtn.textContent = 'SWITCH';
                 switchBtn.className = 'btn-switch disabled';
-                switchBtn.style.opacity = '0.5';
-                switchBtn.style.cursor = 'not-allowed';
             } else {
-                switchBtn.textContent = switchEnabled ? 'SWITCH ON' : 'SWITCH OFF';
+                switchBtn.textContent = switchEnabled ? 'SWITCH ON' : 'SWITCH';
                 switchBtn.className = 'btn-switch' + (switchEnabled ? ' on' : '');
-                switchBtn.style.opacity = '1';
-                switchBtn.style.cursor = 'pointer';
             }
         }
         if (invertBtn) {
-            invertBtn.textContent = invertEnabled ? 'INVERT ON' : 'INVERT OFF';
+            invertBtn.textContent = invertEnabled ? 'INV ON' : 'INVERT';
             invertBtn.className = 'btn-invert' + (invertEnabled ? ' on' : '');
         }
     }
@@ -2129,24 +1947,20 @@
 
         // Determine current mode based on button states
         if (autoEnabled && scanEnabled) {
-            // AUTO + SCAN - both active on single asset
-            modeEl.textContent = '📡+🔍 AUTO+SCAN: App signals + Single asset scan';
-            modeEl.className = 'mode-indicator both';
+            modeEl.textContent = 'AUTO+SCAN';
+            modeEl.className = 'mode both';
         } else if (autoEnabled) {
-            // AUTO only - waiting for app signals
-            modeEl.textContent = '📡 AUTO: Waiting for app signals';
-            modeEl.className = 'mode-indicator app';
+            modeEl.textContent = 'AUTO';
+            modeEl.className = 'mode app';
         } else if (scanEnabled && switchEnabled) {
-            // SCAN + SWITCH - scanning all favorites, can switch assets
-            modeEl.textContent = '🔍🔄 SCAN+SWITCH: Scanning all favorites';
-            modeEl.className = 'mode-indicator scan';
+            modeEl.textContent = 'SCAN+SW';
+            modeEl.className = 'mode scan';
         } else if (scanEnabled) {
-            // SCAN only - current asset
-            modeEl.textContent = '🔍 SCAN: Current asset only';
-            modeEl.className = 'mode-indicator scan';
+            modeEl.textContent = 'SCAN';
+            modeEl.className = 'mode scan';
         } else {
-            modeEl.textContent = 'IDLE - Enable AUTO or SCAN to start';
-            modeEl.className = 'mode-indicator idle';
+            modeEl.textContent = 'IDLE';
+            modeEl.className = 'mode';
         }
     }
 
@@ -2270,7 +2084,7 @@
             return;
         }
 
-        isTrading = true;
+        setTradingFlag(true);
         updateStatusDot('trading');
         
         // Determine direction with local invert
@@ -2293,7 +2107,7 @@
             await sleep(1000);
             if (!findTradeButtons()) {
                 log('Buttons not found');
-                isTrading = false;
+                setTradingFlag(false);
                 updateStatusDot('connected');
                 return;
             }
@@ -2322,7 +2136,7 @@
         }
 
         setTimeout(() => {
-            isTrading = false;
+            setTradingFlag(false);
             updateStatusDot('connected');
         }, 2000);
     }
@@ -2455,7 +2269,7 @@
             return;
         }
 
-        isTrading = true;
+        setTradingFlag(true);
         updateStatusDot('trading');
 
         // Switch asset if SWITCH enabled - USE FAVORITES BAR (v6.5.0)
@@ -2488,7 +2302,7 @@
             
             if (!switched) {
                 log('Asset switch failed completely');
-                isTrading = false;
+                setTradingFlag(false);
                 updateStatusDot('connected');
                 return;
             }
@@ -2515,7 +2329,7 @@
             await sleep(1000);
             if (!findTradeButtons()) {
                 log('Buttons not found');
-                isTrading = false;
+                setTradingFlag(false);
                 updateStatusDot('connected');
                 return;
             }
@@ -2544,7 +2358,7 @@
         }
 
         setTimeout(() => {
-            isTrading = false;
+            setTradingFlag(false);
             updateStatusDot('connected');
         }, 2000);
     }
@@ -2926,73 +2740,33 @@
     
     // Initialize martingale UI elements - v6.7.0
     function initMartingaleUI() {
-        const toggleBtn = document.getElementById('gpt-martingale-toggle');
-        const baseInput = document.getElementById('gpt-martingale-base');
-        const multInput = document.getElementById('gpt-martingale-mult');
-        const maxInput = document.getElementById('gpt-martingale-max');
-        const soundBtn = document.getElementById('gpt-sound-toggle');
-        
-        if (toggleBtn) {
-            toggleBtn.textContent = martingaleEnabled ? 'ON' : 'OFF';
-            toggleBtn.style.background = martingaleEnabled ? '#22c55e' : '#6b7280';
-        }
-        if (baseInput) baseInput.value = martingaleBaseAmount;
-        if (multInput) multInput.value = martingaleMultiplier;
-        if (maxInput) maxInput.value = martingaleMaxSteps;
-        if (soundBtn) {
-            soundBtn.textContent = soundNotificationsEnabled ? '🔊 SOUND ON' : '🔇 SOUND OFF';
-            soundBtn.style.background = soundNotificationsEnabled ? '#8b5cf6' : '#6b7280';
-        }
+        // Legacy martingale UI removed in compact redesign
+        // Values are still tracked internally
     }
     
-    // Initialize Money Management UI elements - v6.8.0
+    // Initialize Money Management UI elements - v6.8.3
     function initMoneyManagementUI() {
         const toggleBtn = document.getElementById('gpt-mm-toggle');
         const balanceInput = document.getElementById('gpt-mm-balance-input');
         const riskInput = document.getElementById('gpt-mm-risk');
-        const targetInput = document.getElementById('gpt-mm-target');
         
         if (toggleBtn) {
-            toggleBtn.textContent = smartMartingale.enabled ? 'ON' : 'OFF';
-            toggleBtn.style.background = smartMartingale.enabled ? '#22c55e' : '#6b7280';
+            toggleBtn.textContent = smartMartingale.enabled ? 'MM ON' : 'MM';
+            toggleBtn.style.background = smartMartingale.enabled ? '#22c55e' : '#10b981';
         }
         if (balanceInput) balanceInput.value = moneyManagement.accountBalance;
         if (riskInput) riskInput.value = moneyManagement.riskPercentage;
-        if (targetInput) targetInput.value = smartMartingale.targetProfit;
     }
     
-    // Update settings display from synced settings
+    // Update settings display from synced settings - v6.8.3 (compact UI)
     function updateSettingsDisplay() {
-        const strategyEl = document.getElementById('gpt-strategy');
-        const timeframeEl = document.getElementById('gpt-timeframe');
-        const sourceEl = document.getElementById('gpt-signal-source');
-        
-        if (strategyEl) {
-            strategyEl.textContent = selectedStrategy === 'auto' ? 'Auto' : selectedStrategy.replace(/_/g, ' ');
-        }
-        if (timeframeEl) {
-            timeframeEl.textContent = selectedTimeframe;
-        }
-        if (sourceEl) {
-            const sourceNames = {
-                'app_ai': 'App AI',
-                'tradingview': 'TradingView',
-                'mt4': 'MetaTrader 4',
-                'mt5': 'MetaTrader 5',
-                'tampermonkey_scan': 'TM Scan'
-            };
-            sourceEl.textContent = sourceNames[signalSource] || signalSource;
-        }
+        // Settings display removed in compact UI
+        // Settings are still tracked internally for signal generation
     }
     
     // Update favorites count display
     function updateFavoritesDisplay() {
-        const el = document.getElementById('gpt-favorites-count');
-        if (el) {
-            el.textContent = favoritesFromBar.length > 0 
-                ? `${favoritesFromBar.length} detected`
-                : 'None detected';
-        }
+        // Favorites count display removed in compact UI
     }
 
     if (document.readyState === 'loading') {
