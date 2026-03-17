@@ -1334,8 +1334,10 @@
             <style>
                 #gpt-panel {
                     position: fixed;
-                    bottom: 5px;
-                    left: 5px;
+                    top: auto;
+                    bottom: 10px;
+                    left: 10px;
+                    right: auto;
                     background: rgba(20, 20, 35, 0.95);
                     border: 1px solid #7c3aed;
                     border-radius: 6px;
@@ -1348,8 +1350,9 @@
                     align-items: center;
                     gap: 6px;
                     flex-wrap: wrap;
-                    max-width: 500px;
+                    max-width: 520px;
                     box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+                    cursor: default;
                 }
                 #gpt-panel.minimized { max-width: 120px; }
                 #gpt-panel.minimized .expandable { display: none; }
@@ -1365,7 +1368,16 @@
                 }
                 #gpt-panel button:hover { opacity: 0.8; }
                 
-                #gpt-panel .title { color: #a78bfa; font-weight: bold; font-size: 9px; cursor: move; }
+                #gpt-panel .title { 
+                    color: #a78bfa; 
+                    font-weight: bold; 
+                    font-size: 10px; 
+                    cursor: move;
+                    padding: 2px 4px;
+                    user-select: none;
+                }
+                #gpt-panel .title:hover { background: rgba(124,58,237,0.3); border-radius: 3px; }
+                
                 #gpt-panel .dot { width: 6px; height: 6px; border-radius: 50%; background: #ef4444; }
                 #gpt-panel .dot.on { background: #22c55e; }
                 #gpt-panel .dot.trading { background: #f59e0b; animation: pulse 0.5s infinite; }
@@ -1415,7 +1427,7 @@
             </style>
             
             <span class="dot" id="gpt-dot"></span>
-            <span class="title" id="gpt-drag">GPT</span>
+            <span class="title" id="gpt-drag">⣿ GPT</span>
             <span class="sig wait" id="gpt-signal">-</span>
             
             <span class="expandable">
@@ -1482,21 +1494,16 @@
             log(`Risk: ${moneyManagement.riskPercentage}%`);
         });
 
-        // Make draggable with touch support
+        // Make draggable
         makeDraggable(panel, document.getElementById('gpt-drag'));
         
-        // Apply saved position
+        // Apply saved position (convert bottom to top if needed)
         const savedPos = GM_getValue('panelPosition', null);
-        if (savedPos) {
+        if (savedPos && savedPos.top && savedPos.left) {
             panel.style.top = savedPos.top;
             panel.style.left = savedPos.left;
+            panel.style.bottom = 'auto';
             panel.style.right = 'auto';
-        }
-        
-        // Apply minimized state
-        if (isMinimized) {
-            panel.classList.add('minimized');
-            document.getElementById('gpt-minimize').textContent = '+';
         }
         
         updateAllUI();
@@ -1533,26 +1540,46 @@
         document.addEventListener('touchend', endDrag);
 
         function startDrag(e) {
-            // Don't drag if clicking minimize button
-            if (e.target.id === 'gpt-minimize') return;
+            // Don't drag if clicking minimize button or other buttons
+            if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
             
             isDragging = true;
             startX = e.clientX;
             startY = e.clientY;
-            startLeft = panel.offsetLeft;
-            startTop = panel.offsetTop;
+            
+            // Get computed position (handles bottom positioning)
+            const rect = panel.getBoundingClientRect();
+            startLeft = rect.left;
+            startTop = rect.top;
+            
+            // Convert to top/left positioning
+            panel.style.bottom = 'auto';
+            panel.style.right = 'auto';
+            panel.style.top = startTop + 'px';
+            panel.style.left = startLeft + 'px';
+            
             e.preventDefault();
         }
 
         function startDragTouch(e) {
-            if (e.target.id === 'gpt-minimize') return;
+            if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
             
             isDragging = true;
             const touch = e.touches[0];
             startX = touch.clientX;
             startY = touch.clientY;
-            startLeft = panel.offsetLeft;
-            startTop = panel.offsetTop;
+            
+            // Get computed position
+            const rect = panel.getBoundingClientRect();
+            startLeft = rect.left;
+            startTop = rect.top;
+            
+            // Convert to top/left positioning
+            panel.style.bottom = 'auto';
+            panel.style.right = 'auto';
+            panel.style.top = startTop + 'px';
+            panel.style.left = startLeft + 'px';
+            
             e.preventDefault();
         }
 
@@ -1565,6 +1592,7 @@
             panel.style.left = (startLeft + dx) + 'px';
             panel.style.top = (startTop + dy) + 'px';
             panel.style.right = 'auto';
+            panel.style.bottom = 'auto';
         }
 
         function dragTouch(e) {
@@ -1577,6 +1605,7 @@
             panel.style.left = (startLeft + dx) + 'px';
             panel.style.top = (startTop + dy) + 'px';
             panel.style.right = 'auto';
+            panel.style.bottom = 'auto';
             e.preventDefault();
         }
 
