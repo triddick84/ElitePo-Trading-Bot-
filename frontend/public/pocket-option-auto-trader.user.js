@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://auto-trade-hub-25.preview.emergentagent.com
-// @version      6.8.3
-// @description  Auto-trade OTC forex on Pocket Option. v6.8.3 - Compact horizontal UI, fixed isTrading flag
+// @version      6.8.4
+// @description  Auto-trade OTC forex on Pocket Option. v6.8.4 - Super compact UI, removed isTrading flag
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -53,8 +53,7 @@
     let switchEnabled = false;  // Switch assets during SCAN
     let invertEnabled = false;  // Local invert toggle
     
-    // Trading state
-    let isTrading = false;
+    // Trading state - v6.8.4 uses globalTradeLock exclusively
     let lastAppTradeTime = 0;
     let lastScanTradeTime = 0;
     let lastAppSignalId = '';
@@ -74,29 +73,9 @@
     const DUPLICATE_TRADE_WINDOW_MS = 3000;  // Reject same-direction trade within 3s
     
     // v6.8.3: Safety timeout to prevent isTrading getting stuck
+    // v6.8.4: Removed isTrading flag entirely - using only globalTradeLock
     let tradingFlagTimeout = null;
-    const TRADING_FLAG_TIMEOUT_MS = 10000;  // 10 second max for trading flag
-    
-    function setTradingFlag(value) {
-        isTrading = value;
-        
-        // Clear any existing timeout
-        if (tradingFlagTimeout) {
-            clearTimeout(tradingFlagTimeout);
-            tradingFlagTimeout = null;
-        }
-        
-        // If setting to true, add safety timeout to auto-clear
-        if (value) {
-            tradingFlagTimeout = setTimeout(() => {
-                if (isTrading) {
-                    log('⚠️ Trading flag auto-cleared (timeout)');
-                    setTradingFlag(false);
-                    updateStatusDot('connected');
-                }
-            }, TRADING_FLAG_TIMEOUT_MS);
-        }
-    }
+    const TRADING_FLAG_TIMEOUT_MS = 10000;  // Legacy - kept for reference
     
     // NEW: Enhanced control settings from backend
     let selectedStrategy = 'auto';
@@ -278,7 +257,7 @@
     // ===========================================
     function log(msg) {
         const ts = new Date().toLocaleTimeString();
-        console.log(`[GPT v6.8.3] ${ts}: ${msg}`);
+        console.log(`[GPT v6.8.4] ${ts}: ${msg}`);
         const logEl = document.getElementById('gpt-log');
         if (logEl) logEl.textContent = msg;
     }
@@ -1347,7 +1326,6 @@
         const existing = document.getElementById('gpt-panel');
         if (existing) existing.remove();
 
-        // Load minimized state
         isMinimized = GM_getValue('isMinimized', false);
 
         const panel = document.createElement('div');
@@ -1356,228 +1334,124 @@
             <style>
                 #gpt-panel {
                     position: fixed;
-                    bottom: 10px;
-                    left: 10px;
-                    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-                    border: 2px solid #7c3aed;
-                    border-radius: 10px;
-                    padding: 8px 12px;
-                    z-index: 999999;
-                    font-family: 'Segoe UI', Arial, sans-serif;
-                    color: white;
-                    box-shadow: 0 4px 20px rgba(124, 58, 237, 0.4);
-                    user-select: none;
-                    max-width: 95vw;
-                }
-                #gpt-panel.minimized .panel-body { display: none; }
-                #gpt-panel.minimized { padding: 6px 10px; }
-                
-                #gpt-panel .header {
-                    display: flex;
-                    align-items: center;
-                    gap: 10px;
-                    cursor: move;
-                    padding-bottom: 6px;
-                    border-bottom: 1px solid rgba(124, 58, 237, 0.3);
-                    margin-bottom: 6px;
-                }
-                #gpt-panel.minimized .header { border-bottom: none; padding-bottom: 0; margin-bottom: 0; }
-                
-                #gpt-panel .status-dot { 
-                    width: 8px; height: 8px; border-radius: 50%; 
-                    background: #ef4444; display: inline-block;
-                }
-                #gpt-panel .status-dot.connected { background: #22c55e; }
-                #gpt-panel .status-dot.trading { background: #f59e0b; animation: blink 0.5s infinite; }
-                @keyframes blink { 50% { opacity: 0.3; } }
-                
-                #gpt-panel .title { font-weight: bold; color: #a78bfa; font-size: 12px; }
-                #gpt-panel .conn-status { font-size: 10px; }
-                #gpt-panel .min-btn {
-                    background: rgba(124, 58, 237, 0.3);
+                    bottom: 5px;
+                    left: 5px;
+                    background: rgba(20, 20, 35, 0.95);
                     border: 1px solid #7c3aed;
-                    color: #a78bfa;
-                    width: 20px; height: 20px;
-                    border-radius: 4px;
-                    cursor: pointer;
-                    font-size: 12px;
-                    margin-left: auto;
-                }
-                
-                #gpt-panel .panel-body { display: flex; flex-direction: column; gap: 6px; }
-                
-                /* Horizontal button rows */
-                #gpt-panel .btn-row {
-                    display: flex;
-                    gap: 4px;
-                    flex-wrap: wrap;
-                }
-                #gpt-panel .btn-row button {
-                    padding: 5px 8px;
-                    border: none;
-                    border-radius: 4px;
-                    font-weight: bold;
-                    font-size: 9px;
-                    cursor: pointer;
-                    text-transform: uppercase;
-                    white-space: nowrap;
-                }
-                #gpt-panel .btn-row button:hover { opacity: 0.85; }
-                
-                .btn-auto { background: #6b7280; color: white; }
-                .btn-auto.on { background: #22c55e; }
-                .btn-scan { background: #6b7280; color: white; }
-                .btn-scan.on { background: #ec4899; }
-                .btn-switch { background: #6b7280; color: white; }
-                .btn-switch.on { background: #8b5cf6; }
-                .btn-switch.disabled { opacity: 0.5; cursor: not-allowed; }
-                .btn-invert { background: #6b7280; color: white; }
-                .btn-invert.on { background: #f59e0b; }
-                .btn-fetch { background: #3b82f6; color: white; }
-                .btn-reset { background: #ef4444; color: white; }
-                
-                /* Signal and stats row */
-                #gpt-panel .info-row {
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                    font-size: 10px;
-                    flex-wrap: wrap;
-                }
-                #gpt-panel .signal-badge {
-                    padding: 3px 10px;
-                    border-radius: 4px;
-                    font-weight: bold;
-                    font-size: 11px;
-                }
-                #gpt-panel .signal-badge.call { background: #22c55e; }
-                #gpt-panel .signal-badge.put { background: #ef4444; }
-                #gpt-panel .signal-badge.wait { background: #64748b; }
-                
-                #gpt-panel .stat { color: #94a3b8; }
-                #gpt-panel .stat-val { font-weight: bold; }
-                #gpt-panel .win { color: #22c55e; }
-                #gpt-panel .loss { color: #ef4444; }
-                
-                /* Win/Loss buttons - compact */
-                #gpt-panel .wl-btns {
-                    display: flex;
-                    gap: 4px;
-                }
-                #gpt-panel .wl-btn {
-                    padding: 4px 12px;
-                    border: none;
-                    border-radius: 4px;
-                    font-weight: bold;
-                    font-size: 10px;
-                    cursor: pointer;
-                }
-                #gpt-panel .wl-win { background: #22c55e; color: white; }
-                #gpt-panel .wl-loss { background: #ef4444; color: white; }
-                
-                /* Mode indicator */
-                #gpt-panel .mode {
-                    font-size: 9px;
-                    padding: 3px 6px;
-                    border-radius: 3px;
-                    background: #374151;
-                    color: #9ca3af;
-                }
-                #gpt-panel .mode.app { background: #065f46; color: #6ee7b7; }
-                #gpt-panel .mode.scan { background: #7c2d12; color: #fed7aa; }
-                #gpt-panel .mode.both { background: #4c1d95; color: #ddd6fe; }
-                
-                /* Log */
-                #gpt-log {
-                    font-size: 9px;
-                    color: #22c55e;
-                    background: rgba(0,0,0,0.3);
+                    border-radius: 6px;
                     padding: 4px 8px;
-                    border-radius: 3px;
-                    white-space: nowrap;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
-                    max-width: 350px;
-                }
-                
-                /* Money Management compact */
-                #gpt-panel .mm-row {
+                    z-index: 999999;
+                    font-family: Arial, sans-serif;
+                    font-size: 10px;
+                    color: white;
                     display: flex;
                     align-items: center;
                     gap: 6px;
-                    font-size: 9px;
-                    background: rgba(16,185,129,0.1);
-                    padding: 4px 6px;
-                    border-radius: 4px;
-                    border: 1px solid rgba(16,185,129,0.3);
+                    flex-wrap: wrap;
+                    max-width: 500px;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.5);
                 }
-                #gpt-panel .mm-row input {
-                    background: rgba(0,0,0,0.3);
-                    border: 1px solid #4b5563;
+                #gpt-panel.minimized { max-width: 120px; }
+                #gpt-panel.minimized .expandable { display: none; }
+                
+                #gpt-panel button {
+                    padding: 3px 6px;
+                    border: none;
                     border-radius: 3px;
-                    color: white;
-                    padding: 2px 4px;
-                    width: 45px;
                     font-size: 9px;
+                    font-weight: bold;
+                    cursor: pointer;
+                    text-transform: uppercase;
+                }
+                #gpt-panel button:hover { opacity: 0.8; }
+                
+                #gpt-panel .title { color: #a78bfa; font-weight: bold; font-size: 9px; cursor: move; }
+                #gpt-panel .dot { width: 6px; height: 6px; border-radius: 50%; background: #ef4444; }
+                #gpt-panel .dot.on { background: #22c55e; }
+                #gpt-panel .dot.trading { background: #f59e0b; animation: pulse 0.5s infinite; }
+                @keyframes pulse { 50% { opacity: 0.4; } }
+                
+                #gpt-panel .sig { padding: 2px 8px; border-radius: 3px; font-weight: bold; }
+                #gpt-panel .sig.call { background: #22c55e; }
+                #gpt-panel .sig.put { background: #ef4444; }
+                #gpt-panel .sig.wait { background: #4b5563; }
+                
+                #gpt-panel .on { background: #22c55e !important; }
+                #gpt-panel .off { background: #4b5563; }
+                #gpt-panel .auto-btn { background: #4b5563; color: white; }
+                #gpt-panel .scan-btn { background: #4b5563; color: white; }
+                #gpt-panel .switch-btn { background: #4b5563; color: white; }
+                #gpt-panel .switch-btn.disabled { opacity: 0.4; }
+                #gpt-panel .inv-btn { background: #4b5563; color: white; }
+                #gpt-panel .fetch-btn { background: #3b82f6; color: white; }
+                #gpt-panel .win-btn { background: #22c55e; color: white; }
+                #gpt-panel .loss-btn { background: #ef4444; color: white; }
+                #gpt-panel .min-btn { background: #6b7280; color: white; width: 18px; }
+                
+                #gpt-panel .stat { color: #9ca3af; }
+                #gpt-panel .val { font-weight: bold; }
+                #gpt-panel .win { color: #22c55e; }
+                #gpt-panel .loss { color: #ef4444; }
+                
+                #gpt-panel input {
+                    background: rgba(0,0,0,0.4);
+                    border: 1px solid #4b5563;
+                    border-radius: 2px;
+                    color: white;
+                    width: 35px;
+                    font-size: 9px;
+                    padding: 2px;
                     text-align: center;
                 }
-                #gpt-panel .mm-row .mm-label { color: #6ee7b7; }
-                #gpt-panel .mm-row .mm-val { color: #f59e0b; font-weight: bold; }
+                
+                #gpt-panel .log {
+                    color: #22c55e;
+                    font-size: 8px;
+                    max-width: 150px;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
             </style>
             
-            <div class="header" id="gpt-drag">
-                <span class="status-dot" id="gpt-dot"></span>
-                <span class="title">GPT v6.8.3</span>
-                <span class="conn-status" id="gpt-connection-status">🔴</span>
-                <span class="stat">Trades: <span class="stat-val" id="gpt-trades">0</span></span>
-                <button class="min-btn" id="gpt-minimize">−</button>
-            </div>
+            <span class="dot" id="gpt-dot"></span>
+            <span class="title" id="gpt-drag">GPT</span>
+            <span class="sig wait" id="gpt-signal">-</span>
             
-            <div class="panel-body" id="gpt-content">
-                <!-- Row 1: Signal + Stats -->
-                <div class="info-row">
-                    <span class="signal-badge wait" id="gpt-signal">READY</span>
-                    <span class="stat">W:<span class="stat-val win" id="gpt-wins">0</span></span>
-                    <span class="stat">L:<span class="stat-val loss" id="gpt-losses">0</span></span>
-                    <span class="stat">P/L:<span class="stat-val" id="gpt-profit">$0</span></span>
-                    <span class="stat" id="gpt-invert-status"></span>
-                </div>
-                
-                <!-- Row 2: Main Controls -->
-                <div class="btn-row">
-                    <button class="btn-auto" id="gpt-auto">AUTO</button>
-                    <button class="btn-scan" id="gpt-scan">SCAN</button>
-                    <button class="btn-switch" id="gpt-switch">SWITCH</button>
-                    <button class="btn-invert" id="gpt-invert">INVERT</button>
-                    <button class="btn-fetch" id="gpt-fetch">FETCH</button>
-                    <button class="btn-reset" id="gpt-reset">RST</button>
-                </div>
-                
-                <!-- Row 3: Win/Loss + Mode -->
-                <div class="info-row">
-                    <div class="wl-btns">
-                        <button class="wl-btn wl-win" id="gpt-win-btn">WIN</button>
-                        <button class="wl-btn wl-loss" id="gpt-loss-btn">LOSS</button>
-                    </div>
-                    <span class="mode idle" id="gpt-mode">IDLE</span>
-                    <span class="stat">Amt:<span class="stat-val mm-val" id="gpt-mm-trade-amount">$1</span></span>
-                </div>
-                
-                <!-- Row 4: Money Management (collapsible) -->
-                <div class="mm-row" id="gpt-mm-section">
-                    <span class="mm-label">Bal:</span>
-                    <input type="number" id="gpt-mm-balance-input" value="100" min="1" step="10">
-                    <span class="mm-label">Risk%:</span>
-                    <input type="number" id="gpt-mm-risk" value="2" min="0.5" max="10" step="0.5">
-                    <button id="gpt-mm-toggle" style="padding:2px 6px;font-size:8px;background:#10b981;border:none;border-radius:2px;color:white;cursor:pointer;">MM</button>
-                </div>
-                
-                <!-- Log -->
-                <div id="gpt-log">Ready - v6.8.3</div>
-            </div>
+            <span class="expandable">
+                <button class="auto-btn" id="gpt-auto">AUTO</button>
+                <button class="scan-btn" id="gpt-scan">SCAN</button>
+                <button class="switch-btn" id="gpt-switch">SW</button>
+                <button class="inv-btn" id="gpt-invert">INV</button>
+                <button class="fetch-btn" id="gpt-fetch">GO</button>
+            </span>
+            
+            <span class="expandable">
+                <button class="win-btn" id="gpt-win-btn">W</button>
+                <button class="loss-btn" id="gpt-loss-btn">L</button>
+            </span>
+            
+            <span class="expandable stat">
+                <span class="val win" id="gpt-wins">0</span>/<span class="val loss" id="gpt-losses">0</span>
+                <span class="val" id="gpt-profit">$0</span>
+            </span>
+            
+            <span class="expandable">
+                $<input type="number" id="gpt-mm-balance-input" value="100">
+                <input type="number" id="gpt-mm-risk" value="2" style="width:25px;">%
+            </span>
+            
+            <span class="log expandable" id="gpt-log">Ready</span>
+            <button class="min-btn" id="gpt-minimize">−</button>
         `;
 
         document.body.appendChild(panel);
+
+        // Apply minimized state
+        if (isMinimized) {
+            panel.classList.add('minimized');
+            document.getElementById('gpt-minimize').textContent = '+';
+        }
 
         // Button handlers
         document.getElementById('gpt-auto').addEventListener('click', toggleAuto);
@@ -1585,7 +1459,6 @@
         document.getElementById('gpt-switch').addEventListener('click', toggleSwitch);
         document.getElementById('gpt-invert').addEventListener('click', toggleInvert);
         document.getElementById('gpt-fetch').addEventListener('click', handleFetch);
-        document.getElementById('gpt-reset').addEventListener('click', resetToDefaults);
         document.getElementById('gpt-minimize').addEventListener('click', toggleMinimize);
         
         // Win/Loss handlers
@@ -1593,14 +1466,13 @@
         document.getElementById('gpt-loss-btn').addEventListener('click', handleManualLoss);
         
         // Money Management
-        document.getElementById('gpt-mm-toggle').addEventListener('click', toggleSmartMartingale);
         document.getElementById('gpt-mm-balance-input').addEventListener('change', (e) => {
             moneyManagement.accountBalance = parseFloat(e.target.value) || 100;
             moneyManagement.sessionStartBalance = moneyManagement.accountBalance;
             calculateBaseTradeAmount();
             GM_setValue('mmAccountBalance', moneyManagement.accountBalance);
             updateMoneyManagementDisplay();
-            log(`Balance: $${moneyManagement.accountBalance}`);
+            log(`Bal: $${moneyManagement.accountBalance}`);
         });
         document.getElementById('gpt-mm-risk').addEventListener('change', (e) => {
             moneyManagement.riskPercentage = parseFloat(e.target.value) || 2;
@@ -1810,7 +1682,7 @@
         scanEnabled = false;
         switchEnabled = false;
         invertEnabled = false;
-        setTradingFlag(false);
+        // Flag removed - using globalTradeLock
         lastAppSignalId = '';
         lastAppTradeTime = 0;
         lastScanTradeTime = 0;
@@ -1918,78 +1790,52 @@
         const invertBtn = document.getElementById('gpt-invert');
 
         if (autoBtn) {
-            autoBtn.textContent = autoEnabled ? 'AUTO ON' : 'AUTO';
-            autoBtn.className = 'btn-auto' + (autoEnabled ? ' on' : '');
+            autoBtn.textContent = autoEnabled ? 'AUTO✓' : 'AUTO';
+            autoBtn.className = 'auto-btn' + (autoEnabled ? ' on' : '');
         }
         if (scanBtn) {
-            scanBtn.textContent = scanEnabled ? 'SCAN ON' : 'SCAN';
-            scanBtn.className = 'btn-scan' + (scanEnabled ? ' on' : '');
+            scanBtn.textContent = scanEnabled ? 'SCAN✓' : 'SCAN';
+            scanBtn.className = 'scan-btn' + (scanEnabled ? ' on' : '');
         }
         if (switchBtn) {
-            // SWITCH is disabled when AUTO is ON
             if (autoEnabled) {
-                switchBtn.textContent = 'SWITCH';
-                switchBtn.className = 'btn-switch disabled';
+                switchBtn.className = 'switch-btn disabled';
             } else {
-                switchBtn.textContent = switchEnabled ? 'SWITCH ON' : 'SWITCH';
-                switchBtn.className = 'btn-switch' + (switchEnabled ? ' on' : '');
+                switchBtn.textContent = switchEnabled ? 'SW✓' : 'SW';
+                switchBtn.className = 'switch-btn' + (switchEnabled ? ' on' : '');
             }
         }
         if (invertBtn) {
-            invertBtn.textContent = invertEnabled ? 'INV ON' : 'INVERT';
-            invertBtn.className = 'btn-invert' + (invertEnabled ? ' on' : '');
+            invertBtn.textContent = invertEnabled ? 'INV✓' : 'INV';
+            invertBtn.className = 'inv-btn' + (invertEnabled ? ' on' : '');
         }
     }
 
     function updateModeIndicator() {
-        const modeEl = document.getElementById('gpt-mode');
-        if (!modeEl) return;
-
-        // Determine current mode based on button states
-        if (autoEnabled && scanEnabled) {
-            modeEl.textContent = 'AUTO+SCAN';
-            modeEl.className = 'mode both';
-        } else if (autoEnabled) {
-            modeEl.textContent = 'AUTO';
-            modeEl.className = 'mode app';
-        } else if (scanEnabled && switchEnabled) {
-            modeEl.textContent = 'SCAN+SW';
-            modeEl.className = 'mode scan';
-        } else if (scanEnabled) {
-            modeEl.textContent = 'SCAN';
-            modeEl.className = 'mode scan';
-        } else {
-            modeEl.textContent = 'IDLE';
-            modeEl.className = 'mode';
-        }
+        // Mode indicator removed in compact UI - status shown via button states
     }
 
     function updateSignalDisplay(direction, asset, type, source) {
         const sigEl = document.getElementById('gpt-signal');
-        const assetEl = document.getElementById('gpt-asset');
-        const sourceEl = document.getElementById('gpt-source');
         
         if (sigEl) {
-            sigEl.textContent = direction;
-            sigEl.className = 'signal-direction ' + type;
-        }
-        if (assetEl) {
-            assetEl.textContent = asset || getCurrentAsset() || '-';
-        }
-        if (sourceEl) {
-            sourceEl.textContent = source || '-';
+            sigEl.textContent = direction || '-';
+            sigEl.className = 'sig ' + (type || 'wait');
         }
     }
 
     function updateStatusDot(status) {
         const dot = document.getElementById('gpt-dot');
-        if (dot) dot.className = 'status-dot ' + status;
+        if (dot) {
+            dot.className = 'dot';
+            if (status === 'connected') dot.classList.add('on');
+            if (status === 'trading') dot.classList.add('trading');
+        }
     }
 
     function incrementTradeCount() {
         tradeCount++;
-        const el = document.getElementById('gpt-trades');
-        if (el) el.textContent = tradeCount;
+        // No trades counter in compact UI
     }
 
     // ===========================================
@@ -2035,7 +1881,9 @@
     function checkAppSignals(force = false) {
         // Only check if AUTO is enabled
         if (!autoEnabled) return;
-        if (isTrading && !force) return;
+        
+        // Use globalTradeLock instead of isTrading
+        if (globalTradeLock && !force) return;
 
         // Check cooldown
         const now = Date.now();
@@ -2063,7 +1911,7 @@
                             return;
                         }
 
-                        log(`📡 APP SIGNAL: ${signal.direction} ${signal.symbol}`);
+                        log(`📡 APP: ${signal.direction} ${signal.symbol}`);
                         lastAppSignalId = signalId;
 
                         executeAppTrade(signal);
@@ -2079,12 +1927,12 @@
     }
 
     async function executeAppTrade(signal) {
-        if (isTrading) {
-            log('Already trading');
+        // Use globalTradeLock - no separate isTrading flag needed
+        if (globalTradeLock) {
+            log('⏳ Trade in progress');
             return;
         }
 
-        setTradingFlag(true);
         updateStatusDot('trading');
         
         // Determine direction with local invert
@@ -2107,7 +1955,7 @@
             await sleep(1000);
             if (!findTradeButtons()) {
                 log('Buttons not found');
-                setTradingFlag(false);
+                // Flag removed - using globalTradeLock
                 updateStatusDot('connected');
                 return;
             }
@@ -2135,25 +1983,25 @@
             } catch(e) {}
         }
 
+        // Just update status after trade attempt
         setTimeout(() => {
-            setTradingFlag(false);
             updateStatusDot('connected');
         }, 2000);
     }
 
     // ===========================================
-    // SCAN HANDLING (SCAN button) - UPDATED v6.5.0
+    // SCAN HANDLING (SCAN button) - v6.8.4
     // ===========================================
     function doScan(force = false) {
         // Allow scan even if scanEnabled is false when force=true (FETCH button)
         if (!scanEnabled && !force) return;
-        if (isTrading && !force) return;
+        
+        // Use globalTradeLock instead of isTrading
+        if (globalTradeLock && !force) return;
 
         // Check 30-second cooldown for scan
         const now = Date.now();
         if (!force && (now - lastScanTradeTime) < CONFIG.TRADE_COOLDOWN_SCAN) {
-            const remaining = Math.round((CONFIG.TRADE_COOLDOWN_SCAN - (now - lastScanTradeTime)) / 1000);
-            if (remaining % 10 === 0) log(`Scan cooldown: ${remaining}s`);
             return;
         }
 
@@ -2264,12 +2112,12 @@
     }
 
     async function executeScanTrade(signal) {
-        if (isTrading) {
-            log('Already trading');
+        // Use globalTradeLock instead of isTrading
+        if (globalTradeLock) {
+            log('⏳ Trade in progress');
             return;
         }
 
-        setTradingFlag(true);
         updateStatusDot('trading');
 
         // Switch asset if SWITCH enabled - USE FAVORITES BAR (v6.5.0)
@@ -2302,7 +2150,7 @@
             
             if (!switched) {
                 log('Asset switch failed completely');
-                setTradingFlag(false);
+                // Flag removed - using globalTradeLock
                 updateStatusDot('connected');
                 return;
             }
@@ -2329,7 +2177,7 @@
             await sleep(1000);
             if (!findTradeButtons()) {
                 log('Buttons not found');
-                setTradingFlag(false);
+                // Flag removed - using globalTradeLock
                 updateStatusDot('connected');
                 return;
             }
@@ -2357,42 +2205,35 @@
             } catch(e) {}
         }
 
+        // Just update status after trade attempt
         setTimeout(() => {
-            setTradingFlag(false);
             updateStatusDot('connected');
         }, 2000);
     }
 
     // ===========================================
-    // TRADE EXECUTION - WITH ABSOLUTE PROTECTION v6.8.1
+    // TRADE EXECUTION - WITH ABSOLUTE PROTECTION v6.8.4
     // ===========================================
     function clickTradeButton(isCall, source = 'unknown') {
         const now = Date.now();
         const direction = isCall ? 'CALL' : 'PUT';
         
-        // GUARD 1: Global trade lock
+        // GUARD 1: Global trade lock (primary protection)
         if (globalTradeLock) {
-            log(`🛑 BLOCKED [${source}]: Global trade lock active`);
+            log(`🛑 BLOCKED [${source}]: Trade lock active`);
             return false;
         }
         
         // GUARD 2: Time-based lock (5 seconds between ANY trades)
         if (now - lastTradeClickTime < TRADE_LOCK_MS) {
             const remaining = Math.round((TRADE_LOCK_MS - (now - lastTradeClickTime)) / 1000);
-            log(`🛑 BLOCKED [${source}]: Trade cooldown ${remaining}s`);
+            log(`🛑 BLOCKED [${source}]: Cooldown ${remaining}s`);
             return false;
         }
         
-        // GUARD 3: NEW v6.8.1 - Prevent duplicate direction within short window
-        // This prevents the BUY+SELL bug by blocking rapid same-direction trades
+        // GUARD 3: Prevent rapid duplicate trades
         if (now - lastTradeTimestamp < DUPLICATE_TRADE_WINDOW_MS) {
-            log(`🛑 BLOCKED [${source}]: Duplicate trade prevention (${now - lastTradeTimestamp}ms since last trade)`);
-            return false;
-        }
-        
-        // GUARD 4: isTrading flag check (belt and suspenders)
-        if (isTrading) {
-            log(`🛑 BLOCKED [${source}]: isTrading flag is true`);
+            log(`🛑 BLOCKED [${source}]: Too fast (${now - lastTradeTimestamp}ms)`);
             return false;
         }
         
@@ -2406,22 +2247,21 @@
             lastTradeDirection = direction;
             lastTradeTimestamp = now;
             
-            log(`✅ CLICKING [${source}]: ${direction} button`);
+            log(`✅ ${direction} [${source}]`);
             console.log(`[GPT TRADE] ${new Date().toISOString()} - ${direction} - Source: ${source}`);
             
             // Single click only
             btn.click();
             
-            // Release global lock after 5 seconds
+            // Release global lock after delay
             setTimeout(() => {
                 globalTradeLock = false;
-                log(`🔓 Trade lock released`);
             }, TRADE_LOCK_MS);
             
             return true;
         }
         
-        log(`❌ Button ${selector} not found`);
+        log(`❌ Button not found: ${selector}`);
         return false;
     }
 
