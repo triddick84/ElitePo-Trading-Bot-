@@ -17,7 +17,7 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_log
-// @connect      signal-executor-7.preview.emergentagent.com
+// @connect      auto-trade-hub-25.preview.emergentagent.com
 // @connect      *
 // @run-at       document-idle
 // @noframes
@@ -2507,93 +2507,89 @@
     // INITIALIZATION - UPDATED v6.8.0
     // ===========================================
     function init() {
-        log('Initializing v6.8.0...');
+        console.log('[GPT Bot] Starting initialization v6.8.4...');
+        
+        try {
+            // Load saved settings (all default to false)
+            autoEnabled = GM_getValue('autoEnabled', false);
+            scanEnabled = GM_getValue('scanEnabled', false);
+            switchEnabled = GM_getValue('switchEnabled', false);
+            invertEnabled = GM_getValue('invertEnabled', false);
+            
+            // Load martingale settings
+            martingaleEnabled = GM_getValue('martingaleEnabled', false);
+            martingaleBaseAmount = GM_getValue('martingaleBaseAmount', 1);
+            martingaleMultiplier = GM_getValue('martingaleMultiplier', 2);
+            martingaleMaxSteps = GM_getValue('martingaleMaxSteps', 5);
+            martingaleStep = GM_getValue('martingaleStep', 0);
+            currentTradeAmount = calculateMartingaleAmount();
+            
+            // Load Money Management settings
+            smartMartingale.enabled = GM_getValue('smartMartingaleEnabled', false);
+            smartMartingale.targetProfit = GM_getValue('mmTargetProfit', 0.5);
+            smartMartingale.maxSteps = GM_getValue('mmMaxSteps', 6);
+            moneyManagement.accountBalance = GM_getValue('mmAccountBalance', 100);
+            moneyManagement.riskPercentage = GM_getValue('mmRiskPercentage', 2);
+            moneyManagement.sessionStartBalance = moneyManagement.accountBalance;
+            
+            // Calculate initial base trade amount
+            calculateBaseTradeAmount();
+            
+            // Load sound settings
+            soundNotificationsEnabled = GM_getValue('soundNotificationsEnabled', true);
+            
+            // Load stats if any
+            const savedStats = GM_getValue('winLossStats', null);
+            if (savedStats) {
+                try {
+                    winLossStats = JSON.parse(savedStats);
+                } catch(e) {
+                    console.log('[GPT Bot] Failed to parse saved stats');
+                }
+            }
 
-        // Load saved settings (all default to false)
-        autoEnabled = GM_getValue('autoEnabled', false);
-        scanEnabled = GM_getValue('scanEnabled', false);
-        switchEnabled = GM_getValue('switchEnabled', false);
-        invertEnabled = GM_getValue('invertEnabled', false);
-        
-        // Load martingale settings - v6.7.0
-        martingaleEnabled = GM_getValue('martingaleEnabled', false);
-        martingaleBaseAmount = GM_getValue('martingaleBaseAmount', 1);
-        martingaleMultiplier = GM_getValue('martingaleMultiplier', 2);
-        martingaleMaxSteps = GM_getValue('martingaleMaxSteps', 5);
-        martingaleStep = GM_getValue('martingaleStep', 0);
-        currentTradeAmount = calculateMartingaleAmount();
-        
-        // Load Money Management settings - v6.8.0
-        smartMartingale.enabled = GM_getValue('smartMartingaleEnabled', false);
-        smartMartingale.targetProfit = GM_getValue('mmTargetProfit', 0.5);
-        smartMartingale.maxSteps = GM_getValue('mmMaxSteps', 6);
-        moneyManagement.accountBalance = GM_getValue('mmAccountBalance', 100);
-        moneyManagement.riskPercentage = GM_getValue('mmRiskPercentage', 2);
-        moneyManagement.sessionStartBalance = moneyManagement.accountBalance;
-        
-        // Calculate initial base trade amount
-        calculateBaseTradeAmount();
-        
-        // Load sound settings
-        soundNotificationsEnabled = GM_getValue('soundNotificationsEnabled', true);
-        
-        // Load stats if any
-        const savedStats = GM_getValue('winLossStats', null);
-        if (savedStats) {
-            try {
-                winLossStats = JSON.parse(savedStats);
-            } catch(e) {}
-        }
-
-        setTimeout(() => {
+            console.log('[GPT Bot] Creating panel...');
+            
+            // Create panel immediately, don't wait
             createPanel();
+            console.log('[GPT Bot] Panel created');
+            
             getCurrentAsset();
-            
-            // Detect favorites bar
             detectFavoritesBar();
-            updateFavoritesDisplay();
             
-            // Initialize UI elements
+            // Initialize UI
             initMartingaleUI();
             initMoneyManagementUI();
             updateWinLossDisplay();
-            updateMartingaleDisplay();
-            updateMoneyManagementDisplay();
+            updateAllUI();
             
             manageIntervals();
             
-            // Start heartbeat to backend (every 10 seconds)
+            // Start heartbeat
             heartbeatInterval = setInterval(() => {
                 sendHeartbeat();
-                updateSettingsDisplay();
-                // Save stats periodically
                 GM_setValue('winLossStats', JSON.stringify(winLossStats));
                 GM_setValue('martingaleStep', martingaleStep);
             }, 10000);
             
-            // Initial heartbeat
             sendHeartbeat();
+            console.log('[GPT Bot] Initialization complete');
             
-            log('Ready! All buttons OFF by default');
-        }, 2000);
+        } catch(e) {
+            console.error('[GPT Bot] Initialization error:', e);
+        }
     }
     
-    // Initialize martingale UI elements - v6.7.0
+    // Initialize martingale UI elements
     function initMartingaleUI() {
         // Legacy martingale UI removed in compact redesign
-        // Values are still tracked internally
     }
     
-    // Initialize Money Management UI elements - v6.8.3
+    // Initialize Money Management UI elements
     function initMoneyManagementUI() {
-        const toggleBtn = document.getElementById('gpt-mm-toggle');
         const balanceInput = document.getElementById('gpt-mm-balance-input');
         const riskInput = document.getElementById('gpt-mm-risk');
         
-        if (toggleBtn) {
-            toggleBtn.textContent = smartMartingale.enabled ? 'MM ON' : 'MM';
-            toggleBtn.style.background = smartMartingale.enabled ? '#22c55e' : '#10b981';
-        }
         if (balanceInput) balanceInput.value = moneyManagement.accountBalance;
         if (riskInput) riskInput.value = moneyManagement.riskPercentage;
     }
