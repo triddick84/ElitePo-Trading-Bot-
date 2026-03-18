@@ -975,6 +975,51 @@ async def api_health_check():
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
+@api_router.get("/data-sources/verify")
+async def verify_data_sources():
+    """Verify real-time data sources for OTC and Regular markets"""
+    try:
+        from enhanced_oanda_service import enhanced_oanda
+        
+        pairs = ['EUR_USD', 'GBP_USD', 'USD_JPY', 'AUD_USD', 'EUR_JPY']
+        results = {
+            "oanda_connected": enhanced_oanda.is_configured if enhanced_oanda else False,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "prices": {},
+            "data_quality": {}
+        }
+        
+        for pair in pairs:
+            try:
+                df = enhanced_oanda.get_candles(pair, "M1", 5)
+                if df is not None and len(df) > 0:
+                    latest = df.iloc[-1]
+                    results["prices"][pair] = {
+                        "bid": float(latest['close']),
+                        "timestamp": str(latest.name) if hasattr(latest, 'name') else str(df.index[-1]),
+                        "candles_fetched": len(df),
+                        "source": "OANDA_LIVE"
+                    }
+                    # Also show OTC mapping
+                    otc_symbol = pair.replace('_', '') + '_OTC'
+                    results["prices"][otc_symbol] = {
+                        "bid": float(latest['close']),
+                        "note": "OTC uses same price data from OANDA",
+                        "source": "OANDA_LIVE"
+                    }
+                    results["data_quality"][pair] = "REAL_TIME"
+                else:
+                    results["prices"][pair] = {"error": "No data", "source": "UNAVAILABLE"}
+                    results["data_quality"][pair] = "NO_DATA"
+            except Exception as e:
+                results["prices"][pair] = {"error": str(e), "source": "ERROR"}
+                results["data_quality"][pair] = "ERROR"
+        
+        return results
+    except Exception as e:
+        logger.error(f"Data source verification failed: {e}")
+        return {"error": str(e), "oanda_connected": False}
+
 # Platform Integration Endpoints
 @api_router.get("/integrations/status")
 async def get_integration_status():
