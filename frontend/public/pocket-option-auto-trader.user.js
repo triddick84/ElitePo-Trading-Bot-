@@ -2149,41 +2149,57 @@
 
         updateStatusDot('trading');
 
-        // Switch asset if SWITCH enabled - USE FAVORITES BAR (v6.5.0)
-        if (switchEnabled && signal.symbol) {
+        // Switch asset if SWITCH enabled AND AUTO is OFF
+        const canSwitch = switchEnabled && !autoEnabled;
+        
+        if (canSwitch && signal.symbol) {
             const targetNorm = normalizeAsset(signal.symbol);
+            const currentNorm = normalizeAsset(getCurrentAsset());
             
-            // First try to find matching favorite in the bar
-            let switched = false;
+            log(`🔄 SWITCH: Target=${targetNorm}, Current=${currentNorm}`);
             
-            if (favoritesFromBar.length === 0) {
+            // Only switch if different asset
+            if (!currentNorm.includes(targetNorm.substring(0, 6)) && !targetNorm.includes(currentNorm.substring(0, 6))) {
+                let switched = false;
+                
+                // Refresh favorites bar detection
                 detectFavoritesBar();
+                log(`📊 Favorites detected: ${favoritesFromBar.length}`);
+                
+                // Look for matching favorite
+                const matchingFav = favoritesFromBar.find(f => 
+                    f.normalized.includes(targetNorm.substring(0, 6)) || 
+                    targetNorm.includes(f.normalized.substring(0, 6))
+                );
+                
+                if (matchingFav) {
+                    log(`✅ Found ${signal.symbol} in favorites: ${matchingFav.name}`);
+                    switched = await clickFavoriteAsset(matchingFav);
+                    
+                    if (switched) {
+                        log(`✅ Switched to ${matchingFav.name}`);
+                        await sleep(1000); // Wait for UI to update
+                    }
+                } else {
+                    log(`❌ ${signal.symbol} NOT in favorites bar`);
+                }
+                
+                // Fallback to search method if favorites bar click failed
+                if (!switched) {
+                    log('Trying search method...');
+                    switched = await switchToAsset(signal.symbol);
+                }
+                
+                if (!switched) {
+                    log(`❌ Asset switch to ${signal.symbol} failed`);
+                    updateStatusDot('connected');
+                    return;
+                }
+                
+                await sleep(500);
+            } else {
+                log(`ℹ️ Already on correct asset`);
             }
-            
-            // Look for matching favorite
-            const matchingFav = favoritesFromBar.find(f => 
-                f.normalized.includes(targetNorm.substring(0, 6)) || 
-                targetNorm.includes(f.normalized.substring(0, 6))
-            );
-            
-            if (matchingFav) {
-                log(`Found ${signal.symbol} in favorites bar`);
-                switched = await clickFavoriteAsset(matchingFav);
-            }
-            
-            // Fallback to search method if favorites bar click failed
-            if (!switched) {
-                log('Favorites bar click failed, trying search method...');
-                switched = await switchToAsset(signal.symbol);
-            }
-            
-            if (!switched) {
-                log('Asset switch failed completely');
-                // Flag removed - using globalTradeLock
-                updateStatusDot('connected');
-                return;
-            }
-            await sleep(500);
         }
 
         // Determine direction with local invert

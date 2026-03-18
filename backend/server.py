@@ -1553,11 +1553,30 @@ async def force_generate_signals(wait_for_candle: bool = Query(False)):
             
             logger.info(f"🚀 FORCE GENERATING SIGNAL for {asset} (base: {base_symbol}, market: {market_type})")
             
-            # Create market data object for this asset
+            # CRITICAL: Fetch REAL market data from OANDA before generating signal
             from trading_models import MarketData, AssetType
+            from enhanced_oanda_service import enhanced_oanda
+            
+            # Normalize symbol for OANDA (EURUSD -> EUR_USD)
+            oanda_symbol = base_symbol
+            if len(base_symbol) == 6 and '_' not in base_symbol:
+                oanda_symbol = f"{base_symbol[:3]}_{base_symbol[3:]}"
+            
+            # Fetch real-time price and candles from OANDA
+            current_price = 1.0500  # Default fallback
+            try:
+                oanda_df = enhanced_oanda.get_candles(oanda_symbol, "M1", 5)
+                if oanda_df is not None and len(oanda_df) > 0:
+                    current_price = float(oanda_df['close'].iloc[-1])
+                    logger.info(f"📊 OANDA real-time price for {base_symbol}: {current_price:.5f}")
+                else:
+                    logger.warning(f"⚠️ No OANDA data for {oanda_symbol}, using fallback price")
+            except Exception as e:
+                logger.warning(f"⚠️ OANDA fetch failed for {oanda_symbol}: {e}")
+            
             target_asset = MarketData(
                 symbol=base_symbol,
-                price=1.0500,  # Default price - will be fetched by strategy
+                price=current_price,  # Use REAL price from OANDA
                 timestamp=datetime.now(timezone.utc),
                 asset_type=AssetType.FOREX,  # Will be determined by symbol
                 volume=0
