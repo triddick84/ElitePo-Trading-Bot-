@@ -82,10 +82,13 @@ const AIMLModelsPage = () => {
   // Adaptive Strategy State
   const [adaptiveConfig, setAdaptiveConfig] = useState({
     enabled: true,
-    auto_switch_strategy: true,
-    strategy_evaluation_window: 20,
-    min_trades_for_evaluation: 10,
-    switch_threshold: 0.1 // 10% improvement required
+    adx_trending_threshold: 25,
+    adx_ranging_threshold: 20,
+    trending_indicators: ['ema', 'macd', 'adx'],
+    ranging_indicators: ['rsi', 'stochastic', 'bollinger'],
+    trending_execution_delay: 1.0,
+    ranging_execution_delay: 0.5,
+    ranging_signal_threshold: 80
   });
   
   // Model Performance
@@ -179,16 +182,21 @@ const AIMLModelsPage = () => {
   const handleSaveSettings = async () => {
     setIsSaving(true);
     try {
-      await Promise.all([
-        axios.post(`${API}/ai-learning/config`, {
-          model_config: modelConfig,
-          learning_config: learningConfig
-        }),
-        axios.post(`${API}/adaptive-strategy/config`, adaptiveConfig)
-      ]);
+      // Save AI learning config
+      await axios.post(`${API}/ai-learning/config`, {
+        model_config: modelConfig,
+        learning_config: learningConfig
+      });
+      
+      // Save adaptive strategy config (uses PUT method)
+      if (adaptiveConfig && Object.keys(adaptiveConfig).length > 0) {
+        await axios.put(`${API}/adaptive-strategy/config`, adaptiveConfig);
+      }
+      
       toast.success('✅ AI/ML settings saved!');
     } catch (error) {
-      toast.error('Failed to save settings');
+      console.error('Save error:', error);
+      toast.error('Failed to save settings: ' + (error.response?.data?.detail || error.message));
     } finally {
       setIsSaving(false);
     }
@@ -1007,7 +1015,7 @@ const AIMLModelsPage = () => {
               <div className="flex items-center justify-between p-4 bg-slate-800/30 rounded-lg">
                 <div>
                   <Label className="text-lg">Enable Adaptive Strategy</Label>
-                  <p className="text-sm text-slate-400">Auto-switch to better performing strategies</p>
+                  <p className="text-sm text-slate-400">Auto-adapt to trending vs ranging markets</p>
                 </div>
                 <Switch
                   checked={adaptiveConfig.enabled}
@@ -1017,46 +1025,50 @@ const AIMLModelsPage = () => {
               
               {adaptiveConfig.enabled && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label>Auto-Switch Strategy</Label>
-                      <p className="text-xs text-slate-500">Automatically change strategies</p>
-                    </div>
-                    <Switch
-                      checked={adaptiveConfig.auto_switch_strategy}
-                      onCheckedChange={(v) => setAdaptiveConfig(prev => ({ ...prev, auto_switch_strategy: v }))}
-                    />
-                  </div>
-                  
                   <div>
-                    <Label>Evaluation Window: {adaptiveConfig.strategy_evaluation_window} trades</Label>
+                    <Label>ADX Trending Threshold: {adaptiveConfig.adx_trending_threshold}</Label>
+                    <p className="text-xs text-slate-500 mb-2">Higher = stronger trend required</p>
                     <Slider
-                      value={[adaptiveConfig.strategy_evaluation_window]}
-                      onValueChange={([v]) => setAdaptiveConfig(prev => ({ ...prev, strategy_evaluation_window: v }))}
-                      min={5}
+                      value={[adaptiveConfig.adx_trending_threshold]}
+                      onValueChange={([v]) => setAdaptiveConfig(prev => ({ ...prev, adx_trending_threshold: v }))}
+                      min={15}
                       max={50}
                       className="mt-2"
                     />
                   </div>
                   
                   <div>
-                    <Label>Min Trades for Evaluation: {adaptiveConfig.min_trades_for_evaluation}</Label>
+                    <Label>ADX Ranging Threshold: {adaptiveConfig.adx_ranging_threshold}</Label>
+                    <p className="text-xs text-slate-500 mb-2">Lower = confirms range-bound market</p>
                     <Slider
-                      value={[adaptiveConfig.min_trades_for_evaluation]}
-                      onValueChange={([v]) => setAdaptiveConfig(prev => ({ ...prev, min_trades_for_evaluation: v }))}
-                      min={5}
+                      value={[adaptiveConfig.adx_ranging_threshold]}
+                      onValueChange={([v]) => setAdaptiveConfig(prev => ({ ...prev, adx_ranging_threshold: v }))}
+                      min={10}
                       max={30}
                       className="mt-2"
                     />
                   </div>
                   
                   <div>
-                    <Label>Switch Threshold: {(adaptiveConfig.switch_threshold * 100).toFixed(0)}% improvement</Label>
+                    <Label>Trending Execution Delay: {adaptiveConfig.trending_execution_delay}s</Label>
+                    <p className="text-xs text-slate-500 mb-2">Wait time before trending trades</p>
                     <Slider
-                      value={[adaptiveConfig.switch_threshold * 100]}
-                      onValueChange={([v]) => setAdaptiveConfig(prev => ({ ...prev, switch_threshold: v / 100 }))}
+                      value={[adaptiveConfig.trending_execution_delay * 10]}
+                      onValueChange={([v]) => setAdaptiveConfig(prev => ({ ...prev, trending_execution_delay: v / 10 }))}
                       min={5}
-                      max={30}
+                      max={100}
+                      className="mt-2"
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label>Ranging Signal Threshold: {adaptiveConfig.ranging_signal_threshold}%</Label>
+                    <p className="text-xs text-slate-500 mb-2">Min confidence for range trades</p>
+                    <Slider
+                      value={[adaptiveConfig.ranging_signal_threshold]}
+                      onValueChange={([v]) => setAdaptiveConfig(prev => ({ ...prev, ranging_signal_threshold: v }))}
+                      min={70}
+                      max={95}
                       className="mt-2"
                     />
                   </div>

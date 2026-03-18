@@ -2847,6 +2847,7 @@ async def get_adaptive_strategy_config():
 
 
 @api_router.put("/adaptive-strategy/config")
+@api_router.post("/adaptive-strategy/config")
 async def update_adaptive_strategy_config(request: AdaptiveStrategyUpdateRequest):
     """
     Update adaptive strategy configuration
