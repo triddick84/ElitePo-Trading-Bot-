@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://oanda-auto-trade.preview.emergentagent.com
-// @version      6.9.2
-// @description  Auto-trade OTC forex on Pocket Option. v6.9.2 - Fixed FETCH and SCAN with detailed logging
+// @version      6.9.3
+// @description  Auto-trade OTC forex on Pocket Option. v6.9.3 - GO=current asset, SCAN=all favorites
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -259,7 +259,7 @@
     // ===========================================
     function log(msg) {
         const ts = new Date().toLocaleTimeString();
-        console.log(`[GPT v6.9.2] ${ts}: ${msg}`);
+        console.log(`[GPT v6.9.3] ${ts}: ${msg}`);
         const logEl = document.getElementById('gpt-log');
         if (logEl) logEl.textContent = msg;
     }
@@ -1799,9 +1799,9 @@
     }
 
     function handleFetch() {
-        // FETCH forces SCAN to generate signals immediately
-        log('🔄 FETCH: Force generating signal...');
-        doScan(true);
+        // GO button forces signal generation for CURRENT ASSET only
+        log('🔄 GO: Force scan current asset...');
+        doScan(true, true);  // force=true, currentAssetOnly=true
     }
 
     function resetToDefaults() {
@@ -2103,36 +2103,57 @@
     }
 
     // ===========================================
-    // SCAN HANDLING (SCAN button) - v6.9.1
+    // SCAN HANDLING - v6.9.3
     // ===========================================
-    function doScan(force = false) {
-        log(`doScan called: force=${force}, scanEnabled=${scanEnabled}, globalTradeLock=${globalTradeLock}`);
+    function doScan(force = false, currentAssetOnly = false) {
+        log(`doScan: force=${force}, currentAssetOnly=${currentAssetOnly}, scanEnabled=${scanEnabled}`);
         
-        // Allow scan even if scanEnabled is false when force=true (FETCH button)
+        // Allow scan if forced (GO button) or if SCAN is enabled
         if (!scanEnabled && !force) {
-            log('doScan: Skipped (SCAN not enabled and not forced)');
+            log('doScan: Skipped (SCAN not enabled)');
             return;
         }
         
-        // Use globalTradeLock instead of isTrading
+        // Check trade lock (skip if forced)
         if (globalTradeLock && !force) {
-            log('doScan: Skipped (trade lock active)');
+            log('doScan: Skipped (trade lock)');
             return;
         }
 
-        // Check 30-second cooldown for scan (skip if forced)
+        // Check cooldown (skip if forced)
         const now = Date.now();
         if (!force && (now - lastScanTradeTime) < CONFIG.TRADE_COOLDOWN_SCAN) {
-            log('doScan: Skipped (cooldown active)');
+            log('doScan: Skipped (cooldown)');
             return;
         }
 
         // Determine which assets to scan
         let assetsToScan = '';
-        let willSwitchAssets = !autoEnabled;  // Switch is automatic when AUTO is OFF
+        let willSwitchAssets = false;
         
-        if (willSwitchAssets) {
-            // AUTO OFF: Scan ALL favorites from the bar
+        // GO button OR AUTO ON = scan current asset only
+        // SCAN ON + AUTO OFF = scan all favorites and switch
+        if (currentAssetOnly || autoEnabled) {
+            // Scan CURRENT asset only (GO button or AUTO mode)
+            const currentAssetRaw = getCurrentAsset();
+            if (!currentAssetRaw) {
+                assetsToScan = 'EURUSD_OTC';
+                log('🔍 GO: Scanning EURUSD_OTC (detection failed)');
+            } else {
+                assetsToScan = currentAssetRaw
+                    .replace(/\s+/g, '')
+                    .replace('/', '')
+                    .replace('OTC', '_OTC')
+                    .toUpperCase();
+                
+                if (!assetsToScan.includes('_OTC')) {
+                    assetsToScan += '_OTC';
+                }
+                log(`🔍 GO: Scanning ${assetsToScan}`);
+            }
+            willSwitchAssets = false;
+        } else {
+            // SCAN mode (AUTO OFF) = scan ALL favorites, will switch to best
             detectFavoritesBar();
             
             if (favoritesFromBar.length > 0) {
@@ -2146,35 +2167,16 @@
                     return norm;
                 });
                 assetsToScan = assetList.join(',');
-                log(`🔍 SCANNING ${favoritesFromBar.length} FAVORITES`);
+                log(`🔍 SCAN: ${favoritesFromBar.length} favorites`);
             } else {
-                // Fallback to defaults if no favorites
                 assetsToScan = 'EURUSD_OTC,GBPUSD_OTC,USDJPY_OTC,AUDUSD_OTC';
-                log('🔍 SCANNING DEFAULTS (no favorites)');
+                log('🔍 SCAN: Using defaults');
             }
-        } else {
-            // AUTO ON: Scan ONLY current asset
-            const currentAssetRaw = getCurrentAsset();
-            if (!currentAssetRaw) {
-                // Fallback to default if can't detect
-                assetsToScan = 'EURUSD_OTC';
-                log('🔍 SCANNING EURUSD_OTC (asset detection failed)');
-            } else {
-                assetsToScan = currentAssetRaw
-                    .replace(/\s+/g, '')
-                    .replace('/', '')
-                    .replace('OTC', '_OTC')
-                    .toUpperCase();
-                
-                if (!assetsToScan.includes('_OTC')) {
-                    assetsToScan += '_OTC';
-                }
-                log(`🔍 SCANNING CURRENT: ${assetsToScan}`);
-            }
+            willSwitchAssets = true;
         }
 
         const apiUrl = CONFIG.API_URL + `/signals/scan-markets?assets=${assetsToScan}&min_confidence=${CONFIG.MIN_CONFIDENCE}`;
-        log(`📡 API Call: ${apiUrl}`);
+        log(`📡 ${apiUrl}`);
         updateStatusDot('trading');
         
         GM_xmlhttpRequest({
@@ -2183,10 +2185,10 @@
             headers: { 'Accept': 'application/json' },
             timeout: 15000,
             onload: function(res) {
-                log(`📡 API Response: ${res.status}`);
+                log(`📡 Response: ${res.status}`);
                 try {
                     if (res.status !== 200) {
-                        log(`❌ Scan API error: ${res.status}`);
+                        log(`❌ API error: ${res.status}`);
                         updateStatusDot('connected');
                         return;
                     }
@@ -2194,30 +2196,30 @@
                     const data = JSON.parse(res.responseText);
                     const signals = data.top_signals || data.signals || [];
                     
-                    log(`📊 Signals received: ${signals.length}`);
+                    log(`📊 ${signals.length} signal(s) found`);
                     
                     if (data.success && signals.length > 0) {
                         const bestSignal = signals[0];
-                        log(`✅ BEST SIGNAL: ${bestSignal.direction} ${bestSignal.symbol} (${Math.round(bestSignal.confidence)}%)`);
+                        // Add flag to signal for switching decision
+                        bestSignal._willSwitch = willSwitchAssets;
                         
-                        // Execute trade
+                        log(`✅ ${bestSignal.direction} ${bestSignal.symbol} (${Math.round(bestSignal.confidence)}%)`);
+                        
                         executeScanTrade(bestSignal).catch(err => {
                             log(`❌ Trade error: ${err.message}`);
                             updateStatusDot('connected');
                         });
                     } else {
-                        log('⚠️ No signals found');
+                        log('⚠️ No signals');
                         updateStatusDot('connected');
                     }
                 } catch (e) {
                     log(`❌ Parse error: ${e.message}`);
-                    console.error('[GPT SCAN ERROR]', e);
                     updateStatusDot('connected');
                 }
             },
             onerror: function(e) {
                 log('❌ Connection error');
-                console.error('[GPT SCAN]', e);
                 updateStatusDot('connected');
             },
             ontimeout: function() {
@@ -2233,137 +2235,107 @@
     }
 
     async function executeScanTrade(signal) {
-        log(`📥 executeScanTrade called: ${signal.direction} ${signal.symbol}`);
+        log(`📥 Trade: ${signal.direction} ${signal.symbol}`);
         
-        // Use globalTradeLock instead of isTrading
         if (globalTradeLock) {
-            log('⏳ Trade BLOCKED: globalTradeLock active');
+            log('⏳ BLOCKED: Trade lock active');
             return;
         }
 
         updateStatusDot('trading');
 
-        // v6.9.0: Auto-switch to signal's asset when AUTO is OFF
-        // When AUTO is ON, we only scan current asset so no switch needed
-        const shouldSwitchAsset = !autoEnabled;
+        // Only switch if signal has _willSwitch flag (set by doScan when scanning multiple assets)
+        const shouldSwitch = signal._willSwitch === true;
         
-        if (shouldSwitchAsset && signal.symbol) {
+        if (shouldSwitch && signal.symbol) {
             const targetNorm = normalizeAsset(signal.symbol);
             const currentAssetNow = getCurrentAsset();
             const currentNorm = normalizeAsset(currentAssetNow);
             
-            // Compare first 6 chars: EURUSD, GBPUSD, etc.
             const targetBase = targetNorm.substring(0, 6);
             const currentBase = currentNorm.substring(0, 6);
             
-            log(`🔄 Asset check: Signal=${signal.symbol}, Current=${currentAssetNow}`);
-            
             if (targetBase !== currentBase) {
-                log(`🔄 SWITCHING to ${signal.symbol}...`);
+                log(`🔄 Switching to ${signal.symbol}...`);
                 let switched = false;
                 
-                // Refresh favorites bar detection
                 detectFavoritesBar();
-                log(`📊 Favorites: ${favoritesFromBar.length} found`);
                 
-                // Look for matching favorite in the detected bar
                 const matchingFav = favoritesFromBar.find(f => {
                     const favBase = f.normalized.substring(0, 6);
                     return favBase === targetBase;
                 });
                 
                 if (matchingFav) {
-                    log(`✅ Found in favorites: ${matchingFav.symbol}`);
                     switched = await clickFavoriteAsset(matchingFav);
-                    
                     if (switched) {
                         log(`✅ Switched to ${matchingFav.symbol}`);
-                        await sleep(1000); // Wait for UI to update
-                    } else {
-                        log(`⚠️ Favorites click failed`);
+                        await sleep(1000);
                     }
-                } else {
-                    log(`⚠️ ${signal.symbol} not in favorites bar`);
                 }
                 
-                // Fallback to search method if favorites bar click failed
                 if (!switched) {
-                    log('🔍 Trying search method...');
                     switched = await switchToAsset(signal.symbol);
                 }
                 
                 if (!switched) {
-                    log(`❌ FAILED to switch to ${signal.symbol} - skipping trade`);
+                    log(`❌ Switch failed - skipping trade`);
                     updateStatusDot('connected');
                     return;
                 }
                 
-                // Extra wait after successful switch
                 await sleep(500);
-            } else {
-                log(`✓ Already on correct asset`);
             }
-        } else {
-            log(`📍 No switch needed (AUTO=${autoEnabled ? 'ON' : 'OFF'})`);
         }
 
-        // Determine direction with local invert
+        // Determine direction
         let direction = (signal.direction || '').toUpperCase();
         let isCall = direction === 'CALL' || direction === 'BUY' || direction === 'UP';
         
         if (invertEnabled) {
             isCall = !isCall;
-            log(`🔄 INVERTED: ${direction} → ${isCall ? 'CALL' : 'PUT'}`);
+            log(`🔄 Inverted → ${isCall ? 'CALL' : 'PUT'}`);
         }
 
         const finalDirection = isCall ? 'CALL' : 'PUT';
-        log(`📊 Placing ${finalDirection} trade...`);
-        updateSignalDisplay(finalDirection, signal.symbol, isCall ? 'call' : 'put', '🔍 SCAN');
+        log(`📊 Placing ${finalDirection}...`);
+        updateSignalDisplay(finalDirection, signal.symbol, isCall ? 'call' : 'put', '🔍');
 
-        // Play SCAN sound (different from APP)
         playScanSignalSound();
 
-        // Wait for buttons
-        log('🔍 Looking for trade buttons...');
+        // Find buttons
         if (!findTradeButtons()) {
-            log('⏳ Buttons not found, waiting 1s...');
             await sleep(1000);
             if (!findTradeButtons()) {
-                log('❌ Trade buttons NOT FOUND - cannot place trade');
+                log('❌ Buttons not found');
                 updateStatusDot('connected');
                 return;
             }
         }
-        log('✓ Trade buttons found');
 
-        // Click button
-        log(`🖱️ Clicking ${finalDirection} button...`);
+        // Click trade button
         const clicked = clickTradeButton(isCall, 'SCAN');
         
         if (clicked) {
             incrementTradeCount();
             lastScanTradeTime = Date.now();
-            log(`✅ TRADE PLACED: ${finalDirection} on ${signal.symbol}`);
+            log(`✅ TRADE: ${finalDirection} ${signal.symbol}`);
             
-            // Start monitoring for win/loss result
             const expirySeconds = signal.expiration_seconds || signal.expiry || signal.expiry_seconds || 60;
             startTradeResultMonitor(finalDirection, signal.amount || 1, expirySeconds);
             
             try {
                 GM_notification({
-                    title: `🔍 Scan Trade: ${finalDirection}`,
-                    text: `${signal.symbol}`,
+                    title: `Trade: ${finalDirection}`,
+                    text: signal.symbol,
                     timeout: 3000
                 });
             } catch(e) {}
         } else {
-            log(`❌ Trade click FAILED`);
+            log(`❌ Click failed`);
         }
 
-        // Update status after trade attempt
-        setTimeout(() => {
-            updateStatusDot('connected');
-        }, 2000);
+        setTimeout(() => updateStatusDot('connected'), 2000);
     }
 
     // ===========================================
@@ -2735,7 +2707,7 @@
             }
 
             console.log('[GPT Bot] Creating panel...');
-            console.log('[GPT Bot] v6.9.2 - Fixed FETCH and SCAN');
+            console.log('[GPT Bot] v6.9.3 - GO=current asset, SCAN=all favorites');
             
             // Create panel immediately, don't wait
             createPanel();
