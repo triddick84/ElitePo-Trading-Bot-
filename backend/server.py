@@ -14552,7 +14552,7 @@ async def get_tampermonkey_status():
                 "force_generate": "/api/tampermonkey/force-generate",
                 "toggle_inversion": "/api/tampermonkey/toggle-inversion",
                 "heartbeat": "/api/tampermonkey/heartbeat",
-                "script_url": "https://auto-trade-hub-25.preview.emergentagent.com/pocket-option-auto-trader.user.js"
+                "script_url": "https://oanda-auto-trade.preview.emergentagent.com/pocket-option-auto-trader.user.js"
             }
         }
     except Exception as e:

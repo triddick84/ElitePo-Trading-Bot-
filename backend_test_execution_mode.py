@@ -13,7 +13,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List
 
 # Test configuration
-BACKEND_URL = "https://auto-trade-hub-25.preview.emergentagent.com/api"
+BACKEND_URL = "https://oanda-auto-trade.preview.emergentagent.com/api"
 
 class ExecutionModeTester:
     def __init__(self):

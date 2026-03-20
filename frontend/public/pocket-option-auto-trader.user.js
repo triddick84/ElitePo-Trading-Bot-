@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
-// @namespace    https://auto-trade-hub-25.preview.emergentagent.com
-// @version      6.8.4
-// @description  Auto-trade OTC forex on Pocket Option. v6.8.4 - Super compact UI, removed isTrading flag
+// @namespace    https://oanda-auto-trade.preview.emergentagent.com
+// @version      6.8.5
+// @description  Auto-trade OTC forex on Pocket Option. v6.8.5 - Fixed multi-asset SCAN with SWITCH enabled
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -30,7 +30,7 @@
     // CONFIGURATION
     // ===========================================
     const CONFIG = {
-        API_URL: 'https://auto-trade-hub-25.preview.emergentagent.com/api',
+        API_URL: 'https://oanda-auto-trade.preview.emergentagent.com/api',
         APP_POLL_INTERVAL: 3000,     // 3 seconds for app signals
         SCAN_INTERVAL: 5000,         // 5 seconds for scanning
         TRADE_COOLDOWN_SCAN: 30000,  // 30 seconds between SCAN trades
@@ -1026,81 +1026,106 @@
     // FAVORITES BAR DETECTION - NEW v6.5.0
     // ===========================================
     function detectFavoritesBar() {
-        // Pocket Option favorites bar is typically at the top, horizontal scroll
-        // Contains clickable asset items like "EUR/USD OTC", "GBP/USD OTC", etc.
+        // Pocket Option favorites bar detection - v6.8.5
+        // The favorites bar contains asset buttons like "EUR/USD OTC"
         
         const favorites = [];
         
-        // Method 1: Look for horizontal scroll container with asset items
-        const scrollContainers = document.querySelectorAll('[class*="scroll"], [class*="favorites"], [class*="tabs"], [class*="assets-bar"]');
+        console.log('[GPT] Detecting favorites bar...');
         
-        for (const container of scrollContainers) {
-            if (!container || !container.offsetParent) continue;
-            
-            const rect = container.getBoundingClientRect();
-            // Favorites bar should be near top and horizontal
-            if (rect.top > 200 || rect.width < 300) continue;
-            
-            // Find clickable items inside
-            const items = container.querySelectorAll('[class*="item"], [class*="tab"], [class*="asset"], button, a, span');
-            
-            for (const item of items) {
-                if (!item || !item.offsetParent) continue;
-                
-                const text = (item.textContent || '').trim().toUpperCase();
-                
-                // Check if it looks like a currency pair
-                if ((text.includes('/') || text.includes('USD') || text.includes('EUR') || text.includes('GBP')) 
-                    && text.length <= 20 && text.length >= 6) {
+        // Method 1: Look for the assets container/tabs at the top
+        // Pocket Option typically uses classes like 'assets-list', 'pair-row', 'asset', etc.
+        const selectors = [
+            '.assets-list .asset',
+            '.pair-row',
+            '.assets-tab',
+            '.favorites-bar .item',
+            '[class*="asset-item"]',
+            '[class*="pair-item"]',
+            '[class*="currency-pair"]',
+            '.trading-pair',
+            '[data-testid*="asset"]',
+            '.assets-bar button',
+            '.assets-bar span',
+            // Generic fallback selectors
+            'header button',
+            'nav button',
+            '.top-bar span',
+            '.top-bar button'
+        ];
+        
+        for (const selector of selectors) {
+            try {
+                const elements = document.querySelectorAll(selector);
+                for (const el of elements) {
+                    if (!el || !el.offsetParent) continue;
                     
-                    // Store the element and its text
-                    favorites.push({
-                        element: item,
-                        symbol: text,
-                        normalized: normalizeAsset(text)
-                    });
+                    const text = (el.textContent || el.innerText || '').trim().toUpperCase();
+                    
+                    // Check if it looks like a currency pair
+                    if (text.match(/[A-Z]{3}[\/\s]?[A-Z]{3}/)) {
+                        favorites.push({
+                            element: el,
+                            symbol: text,
+                            normalized: normalizeAsset(text),
+                            selector: selector
+                        });
+                    }
                 }
+            } catch (e) {
+                console.log(`[GPT] Selector ${selector} failed:`, e);
             }
         }
         
-        // Method 2: Direct search for asset-like clickable elements at top
+        // Method 2: Find ANY clickable elements with currency text in the top 200px
         if (favorites.length === 0) {
-            const allItems = document.querySelectorAll('*');
+            console.log('[GPT] Method 1 failed, trying broad search...');
             
-            for (const item of allItems) {
-                if (!item || !item.offsetParent) continue;
-                if (item.children.length > 5) continue;
+            const allElements = document.querySelectorAll('*');
+            for (const el of allElements) {
+                if (!el || !el.offsetParent) continue;
                 
-                const rect = item.getBoundingClientRect();
-                // Must be in top area and reasonable size
-                if (rect.top > 150 || rect.height > 60 || rect.height < 15) continue;
-                if (rect.width < 50 || rect.width > 200) continue;
+                const rect = el.getBoundingClientRect();
+                // Must be in top portion of screen
+                if (rect.top > 200 || rect.bottom < 0) continue;
+                // Must be reasonable size for a button
+                if (rect.width < 40 || rect.width > 250) continue;
+                if (rect.height < 15 || rect.height > 80) continue;
                 
-                const text = (item.textContent || '').trim().toUpperCase();
+                const text = (el.textContent || '').trim().toUpperCase();
                 
-                // Check for currency pair pattern
-                if ((text.includes('/') && (text.includes('USD') || text.includes('EUR') || text.includes('GBP'))) ||
-                    /^[A-Z]{6,10}(_OTC)?$/.test(text.replace(/[^A-Z_]/g, ''))) {
+                // Match currency pair patterns
+                if (text.match(/^[A-Z]{3}[\/\s\-]?[A-Z]{3}[\s]*(OTC)?$/i) ||
+                    text.match(/EUR|USD|GBP|JPY|AUD|CAD|CHF/) && text.length >= 6 && text.length <= 15) {
                     
-                    const style = window.getComputedStyle(item);
-                    if (style.cursor === 'pointer' || item.onclick || item.tagName === 'BUTTON') {
+                    // Check if clickable
+                    const style = window.getComputedStyle(el);
+                    const isClickable = style.cursor === 'pointer' || 
+                                       el.onclick !== null || 
+                                       el.tagName === 'BUTTON' ||
+                                       el.tagName === 'A' ||
+                                       el.getAttribute('role') === 'button';
+                    
+                    if (isClickable || el.closest('button') || el.closest('a')) {
                         favorites.push({
-                            element: item,
+                            element: el.closest('button') || el.closest('a') || el,
                             symbol: text,
-                            normalized: normalizeAsset(text)
+                            normalized: normalizeAsset(text),
+                            selector: 'broad-search'
                         });
                     }
                 }
             }
         }
         
-        // Remove duplicates based on normalized symbol
+        // Remove duplicates
         const uniqueFavorites = [];
         const seen = new Set();
         
         for (const fav of favorites) {
-            if (!seen.has(fav.normalized)) {
-                seen.add(fav.normalized);
+            const key = fav.normalized.substring(0, 6);
+            if (!seen.has(key)) {
+                seen.add(key);
                 uniqueFavorites.push(fav);
             }
         }
@@ -1108,47 +1133,99 @@
         favoritesFromBar = uniqueFavorites;
         
         if (uniqueFavorites.length > 0) {
-            log(`📊 Detected ${uniqueFavorites.length} favorites: ${uniqueFavorites.map(f => f.symbol).join(', ')}`);
+            log(`📊 Found ${uniqueFavorites.length} favorites: ${uniqueFavorites.map(f => f.symbol).slice(0, 5).join(', ')}`);
+            console.log('[GPT] Favorites:', uniqueFavorites.map(f => ({ symbol: f.symbol, selector: f.selector })));
+        } else {
+            log('⚠️ No favorites detected in bar');
+            console.log('[GPT] No favorites found - check if you have assets in favorites bar');
         }
         
         return uniqueFavorites;
     }
 
-    // Click an asset in the favorites bar
+    // Click an asset in the favorites bar - v6.8.5
     async function clickFavoriteAsset(favorite) {
         if (!favorite || !favorite.element) {
-            log('❌ Invalid favorite');
+            log('❌ Invalid favorite object');
             return false;
         }
         
         try {
             const el = favorite.element;
             
-            // Check if element is still in DOM and visible
-            if (!el.offsetParent) {
-                log('❌ Favorite element no longer visible');
+            // Re-find the element if it's stale
+            if (!document.body.contains(el)) {
+                log('⚠️ Element stale, re-detecting favorites...');
+                detectFavoritesBar();
+                
+                const newFav = favoritesFromBar.find(f => f.normalized === favorite.normalized);
+                if (!newFav) {
+                    log('❌ Could not re-find favorite');
+                    return false;
+                }
+                return await clickFavoriteAsset(newFav);
+            }
+            
+            // Check if element is visible
+            if (!el.offsetParent && el.offsetWidth === 0) {
+                log('❌ Favorite element not visible');
                 return false;
             }
             
-            log(`🔄 Clicking favorite: ${favorite.symbol}`);
+            log(`🔄 Clicking: ${favorite.symbol}`);
+            console.log('[GPT] Clicking element:', el, favorite.selector);
             
-            // Click the element
+            // Scroll element into view if needed
+            el.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'center' });
+            await sleep(100);
+            
+            // Try multiple click methods
+            // Method 1: Direct click
             el.click();
-            await sleep(500);
+            await sleep(300);
             
-            // Verify the switch worked
-            const newAsset = getCurrentAsset();
-            const targetNorm = favorite.normalized.substring(0, 6);
+            // Check if it worked
+            let newAsset = getCurrentAsset();
+            const targetBase = favorite.normalized.substring(0, 6);
             
-            if (newAsset && normalizeAsset(newAsset).includes(targetNorm)) {
-                log(`✅ Switched to ${newAsset} via favorites bar`);
+            if (newAsset && normalizeAsset(newAsset).includes(targetBase)) {
+                log(`✅ Switched to ${newAsset}`);
                 return true;
-            } else {
-                log(`⚠️ Click may not have worked. Current: ${newAsset}`);
-                return false;
             }
+            
+            // Method 2: MouseEvent
+            const clickEvent = new MouseEvent('click', {
+                bubbles: true,
+                cancelable: true,
+                view: window
+            });
+            el.dispatchEvent(clickEvent);
+            await sleep(300);
+            
+            newAsset = getCurrentAsset();
+            if (newAsset && normalizeAsset(newAsset).includes(targetBase)) {
+                log(`✅ Switched to ${newAsset} (MouseEvent)`);
+                return true;
+            }
+            
+            // Method 3: Click parent if available
+            if (el.parentElement && el.parentElement.tagName !== 'BODY') {
+                el.parentElement.click();
+                await sleep(300);
+                
+                newAsset = getCurrentAsset();
+                if (newAsset && normalizeAsset(newAsset).includes(targetBase)) {
+                    log(`✅ Switched to ${newAsset} (parent click)`);
+                    return true;
+                }
+            }
+            
+            log(`⚠️ Click attempted but asset didn't change. Current: ${newAsset}`);
+            return false;
+            
         } catch (e) {
-            log(`❌ Favorites click error: ${e.message}`);
+            log(`❌ Click error: ${e.message}`);
+            console.error('[GPT] Click error:', e);
             return false;
         }
     }
@@ -2036,31 +2113,40 @@
 
         // Determine which assets to scan based on mode:
         // - AUTO ON: Always single asset (SWITCH is disabled)
-        // - AUTO OFF + SWITCH ON: Scan all favorites
+        // - AUTO OFF + SWITCH ON: Scan ALL favorites (multi-asset mode)
         // - AUTO OFF + SWITCH OFF: Scan current asset only
         let assetsToScan = '';
         
-        // When AUTO is ON, SWITCH is disabled - always single asset mode
+        // v6.8.5: When AUTO is ON, SWITCH is disabled - always single asset mode
         const canSwitchAssets = switchEnabled && !autoEnabled;
         
         if (canSwitchAssets) {
-            // SWITCH ON (and AUTO OFF): Use favorites from the favorites bar
-            if (favoritesFromBar.length === 0) {
-                detectFavoritesBar();
-            }
+            // v6.8.5: SWITCH ON (and AUTO OFF): Scan ALL favorites from the bar
+            // Always re-detect favorites to ensure fresh list
+            detectFavoritesBar();
             
             if (favoritesFromBar.length > 0) {
-                // Build asset list from detected favorites
-                assetsToScan = favoritesFromBar.map(f => {
+                // Build comma-separated asset list from ALL detected favorites
+                const assetList = favoritesFromBar.map(f => {
                     let norm = f.normalized;
-                    if (!norm.includes('_OTC')) norm += '_OTC';
+                    // Ensure _OTC suffix for all assets
+                    if (!norm.includes('_OTC') && !norm.includes('OTC')) {
+                        norm += '_OTC';
+                    } else if (norm.includes('OTC') && !norm.includes('_OTC')) {
+                        norm = norm.replace('OTC', '_OTC');
+                    }
                     return norm;
-                }).join(',');
-                log(`🔍🔄 Scanning ${favoritesFromBar.length} FAVORITES (SWITCH mode)...`);
+                });
+                
+                // Join ALL assets with comma for the API
+                assetsToScan = assetList.join(',');
+                
+                log(`🔍🔄 MULTI-ASSET SCAN: ${favoritesFromBar.length} favorites`);
+                console.log('[GPT SCAN] Assets to scan:', assetsToScan);
             } else {
                 // Fallback to hardcoded list if no favorites detected
                 assetsToScan = 'EURUSD_OTC,GBPUSD_OTC,USDJPY_OTC,AUDUSD_OTC,EURJPY_OTC,GBPJPY_OTC';
-                log('🔍🔄 Scanning DEFAULT favorites (bar detection failed)...');
+                log('🔍🔄 MULTI-ASSET SCAN: Using defaults (no favorites detected)');
             }
         } else {
             // Single asset mode: SWITCH OFF or AUTO ON
@@ -2149,56 +2235,63 @@
 
         updateStatusDot('trading');
 
-        // Switch asset if SWITCH enabled AND AUTO is OFF
+        // v6.8.5: Switch asset if SWITCH enabled AND AUTO is OFF
         const canSwitch = switchEnabled && !autoEnabled;
         
         if (canSwitch && signal.symbol) {
             const targetNorm = normalizeAsset(signal.symbol);
-            const currentNorm = normalizeAsset(getCurrentAsset());
+            const currentAssetNow = getCurrentAsset();
+            const currentNorm = normalizeAsset(currentAssetNow);
             
-            log(`🔄 SWITCH: Target=${targetNorm}, Current=${currentNorm}`);
+            log(`🔄 SWITCH CHECK: Target=${signal.symbol} (${targetNorm}), Current=${currentAssetNow} (${currentNorm})`);
             
-            // Only switch if different asset
-            if (!currentNorm.includes(targetNorm.substring(0, 6)) && !targetNorm.includes(currentNorm.substring(0, 6))) {
+            // Only switch if different asset (compare first 6 chars: EURUSD, GBPUSD, etc.)
+            const targetBase = targetNorm.substring(0, 6);
+            const currentBase = currentNorm.substring(0, 6);
+            
+            if (targetBase !== currentBase) {
                 let switched = false;
                 
                 // Refresh favorites bar detection
                 detectFavoritesBar();
-                log(`📊 Favorites detected: ${favoritesFromBar.length}`);
+                log(`📊 Favorites available: ${favoritesFromBar.length} - [${favoritesFromBar.map(f => f.symbol).join(', ')}]`);
                 
-                // Look for matching favorite
-                const matchingFav = favoritesFromBar.find(f => 
-                    f.normalized.includes(targetNorm.substring(0, 6)) || 
-                    targetNorm.includes(f.normalized.substring(0, 6))
-                );
+                // Look for matching favorite in the detected bar
+                const matchingFav = favoritesFromBar.find(f => {
+                    const favBase = f.normalized.substring(0, 6);
+                    return favBase === targetBase;
+                });
                 
                 if (matchingFav) {
-                    log(`✅ Found ${signal.symbol} in favorites: ${matchingFav.name}`);
+                    log(`✅ Found ${signal.symbol} in favorites: ${matchingFav.symbol}`);
                     switched = await clickFavoriteAsset(matchingFav);
                     
                     if (switched) {
-                        log(`✅ Switched to ${matchingFav.name}`);
+                        log(`✅ Successfully switched to ${matchingFav.symbol}`);
                         await sleep(1000); // Wait for UI to update
+                    } else {
+                        log(`⚠️ Click on ${matchingFav.symbol} didn't work`);
                     }
                 } else {
-                    log(`❌ ${signal.symbol} NOT in favorites bar`);
+                    log(`⚠️ ${signal.symbol} NOT found in favorites bar - will try search`);
                 }
                 
                 // Fallback to search method if favorites bar click failed
                 if (!switched) {
-                    log('Trying search method...');
+                    log('🔍 Trying search method to switch asset...');
                     switched = await switchToAsset(signal.symbol);
                 }
                 
                 if (!switched) {
-                    log(`❌ Asset switch to ${signal.symbol} failed`);
+                    log(`❌ Asset switch to ${signal.symbol} FAILED - skipping trade`);
                     updateStatusDot('connected');
                     return;
                 }
                 
+                // Extra wait after successful switch
                 await sleep(500);
             } else {
-                log(`ℹ️ Already on correct asset`);
+                log(`ℹ️ Already on correct asset: ${currentAssetNow}`);
             }
         }
 
@@ -2594,6 +2687,7 @@
             }
 
             console.log('[GPT Bot] Creating panel...');
+            console.log('[GPT Bot] Version 6.8.5 - Multi-asset SCAN with SWITCH enabled');
             
             // Create panel immediately, don't wait
             createPanel();

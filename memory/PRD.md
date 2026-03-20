@@ -1,11 +1,31 @@
 # GPT Signal Bot - Product Requirements Document
 
-## Last Updated: March 16, 2026
+## Last Updated: March 20, 2026
 
 ## Current Status
+✅ **Tampermonkey v6.8.5** - Fixed multi-asset SCAN with SWITCH enabled
 ✅ **Tampermonkey v6.8.0** - Complete Money Management System with Smart Martingale
 ✅ **Ultra High Accuracy 5s Strategy** - Research-based 85%+ confidence signals
 ✅ **Enhanced AI ML System** - Ensemble model with historical data training
+
+## Recent Updates (March 20, 2026)
+
+### Tampermonkey v6.8.5 - Multi-Asset SCAN Fix (March 20, 2026)
+**Fixed: SCAN + SWITCH Logic for Multiple Assets**
+- When SWITCH is ON and AUTO is OFF, the script now correctly scans ALL favorited assets
+- Fixed `doScan()` function to always re-detect favorites bar before scanning
+- Fixed asset list building with proper `_OTC` suffix handling
+- Improved `executeScanTrade()` to correctly match and click favorites
+- Fixed `matchingFav.name` → `matchingFav.symbol` bug
+- Added comprehensive logging for debugging asset switching
+- Backend `/signals/scan-markets` endpoint verified working with comma-separated assets
+
+**Button Logic (Unchanged):**
+| Mode | AUTO | SWITCH | SCAN | Behavior |
+|------|------|--------|------|----------|
+| App Signals Only | ON | OFF | OFF | Only places trades from app signals |
+| Single Asset Scan | OFF | OFF | ON | Scans current asset only |
+| Multi-Asset Scan | OFF | ON | ON | Scans ALL favorites, switches to best signal |
 
 ## Recent Updates (March 16, 2026)
 
@@ -301,6 +321,7 @@ Create a "GPT Signal Bot" for Pocket Option with a high win rate (80-90%+). The 
 - [x] **Money Management System v6.8.0** (March 16, 2026) - Complete with Smart Martingale, balance tracking, payout-aware recovery
 - [x] **Tampermonkey v6.8.1** (March 16, 2026) - Fixed critical double-trade bug with enhanced trade guards
 - [x] **AI/ML Training Pipeline** (March 16, 2026) - Fixed OANDA data integration for ML model training (720+ candles per training)
+- [x] **Multi-Asset SCAN v6.8.5** (March 20, 2026) - Fixed SCAN+SWITCH to scan ALL favorites, not just current asset
 
 ## P1 - High Priority (Next)
 - [ ] Full backend refactoring (split server.py into routes modules) - 14768 lines needs modularization

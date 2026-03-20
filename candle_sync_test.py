@@ -16,7 +16,7 @@ from typing import Dict, Any, List
 sys.path.append('/app/backend')
 
 # Test configuration
-BACKEND_URL = "https://auto-trade-hub-25.preview.emergentagent.com/api"
+BACKEND_URL = "https://oanda-auto-trade.preview.emergentagent.com/api"
 
 class CandleSyncTester:
     def __init__(self):

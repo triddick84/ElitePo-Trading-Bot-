@@ -17,7 +17,7 @@ import time
 # Use the public URL from environment
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 if not BASE_URL:
-    BASE_URL = "https://auto-trade-hub-25.preview.emergentagent.com"
+    BASE_URL = "https://oanda-auto-trade.preview.emergentagent.com"
 
 
 class TestHealthEndpoint:

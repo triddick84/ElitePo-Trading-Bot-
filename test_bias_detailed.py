@@ -7,7 +7,7 @@ import asyncio
 import aiohttp
 import json
 
-BACKEND_URL = "https://auto-trade-hub-25.preview.emergentagent.com/api"
+BACKEND_URL = "https://oanda-auto-trade.preview.emergentagent.com/api"
 
 async def test_bias_detailed():
     """Test to understand the bias issue in detail"""

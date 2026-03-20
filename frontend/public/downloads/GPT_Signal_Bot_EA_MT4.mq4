@@ -1,16 +1,16 @@
 //+------------------------------------------------------------------+
 //|                                        GPT_Signal_Bot_EA_MT4.mq4 |
 //|                         GPT Signal Bot - MetaTrader 4 Integration |
-//|                 https://auto-trade-hub-25.preview.emergentagent.com |
+//|                 https://oanda-auto-trade.preview.emergentagent.com |
 //+------------------------------------------------------------------+
 #property copyright "GPT Signal Bot"
-#property link      "https://auto-trade-hub-25.preview.emergentagent.com"
+#property link      "https://oanda-auto-trade.preview.emergentagent.com"
 #property version   "1.00"
 #property strict
 #property description "Receives trading signals from GPT Signal Bot and executes trades"
 
 //--- Input parameters
-input string   API_URL = "https://auto-trade-hub-25.preview.emergentagent.com/api";  // API URL
+input string   API_URL = "https://oanda-auto-trade.preview.emergentagent.com/api";  // API URL
 input string   API_KEY = "";                    // API Key (optional)
 input int      PollIntervalSeconds = 5;         // Signal poll interval (seconds)
 input double   LotSize = 0.01;                  // Trade lot size
