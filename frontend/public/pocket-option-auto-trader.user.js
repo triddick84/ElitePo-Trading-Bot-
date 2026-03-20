@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://oanda-auto-trade.preview.emergentagent.com
-// @version      6.8.5
-// @description  Auto-trade OTC forex on Pocket Option. v6.8.5 - Fixed multi-asset SCAN with SWITCH enabled
+// @version      6.9.0
+// @description  Auto-trade OTC forex on Pocket Option. v6.9.0 - Simplified SCAN: AUTO ON=single asset, AUTO OFF=all favorites with auto-switch
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -43,14 +43,16 @@
     // ===========================================
     // STATE - ALL BUTTONS DEFAULT TO OFF
     // ===========================================
-    // AUTO = Only for incoming APP signals (does NOT generate trades)
-    // SCAN = Tampermonkey generates and places trades
-    // SWITCH = Asset switching during SCAN
+    // v6.9.0 - Simplified Logic:
+    // AUTO = Receives APP signals and places trades
+    // SCAN = Scans for signals and places trades
+    //   - If AUTO ON: SCAN only checks currently selected asset (no switching)
+    //   - If AUTO OFF: SCAN checks ALL favorites, auto-switches to best signal asset
     // INVERT = Local toggle for direction inversion
+    // SWITCH toggle REMOVED - switching is automatic based on AUTO state
     
     let autoEnabled = false;    // Receive APP signals only
     let scanEnabled = false;    // Tampermonkey generates trades
-    let switchEnabled = false;  // Switch assets during SCAN
     let invertEnabled = false;  // Local invert toggle
     
     // Trading state - v6.8.4 uses globalTradeLock exclusively
@@ -1246,7 +1248,7 @@
     }
 
     // ===========================================
-    // HEARTBEAT & SETTINGS SYNC - NEW v6.5.0
+    // HEARTBEAT & SETTINGS SYNC - v6.9.0
     // ===========================================
     function sendHeartbeat() {
         const currentAssetNow = getCurrentAsset();
@@ -1263,9 +1265,9 @@
                 favorites: favoritesFromBar.map(f => f.symbol),
                 auto_enabled: autoEnabled,
                 scan_enabled: scanEnabled,
-                switch_enabled: switchEnabled,
                 invert_enabled: invertEnabled,
-                trade_count: tradeCount
+                trade_count: tradeCount,
+                version: '6.9.0'
             }),
             timeout: 5000,
             onload: function(res) {
@@ -1510,7 +1512,6 @@
             <span class="expandable">
                 <button class="auto-btn" id="gpt-auto">AUTO</button>
                 <button class="scan-btn" id="gpt-scan">SCAN</button>
-                <button class="switch-btn" id="gpt-switch">SW</button>
                 <button class="inv-btn" id="gpt-invert">INV</button>
                 <button class="fetch-btn" id="gpt-fetch">GO</button>
             </span>
@@ -1545,7 +1546,6 @@
         // Button handlers
         document.getElementById('gpt-auto').addEventListener('click', toggleAuto);
         document.getElementById('gpt-scan').addEventListener('click', toggleScan);
-        document.getElementById('gpt-switch').addEventListener('click', toggleSwitch);
         document.getElementById('gpt-invert').addEventListener('click', toggleInvert);
         document.getElementById('gpt-fetch').addEventListener('click', handleFetch);
         document.getElementById('gpt-minimize').addEventListener('click', toggleMinimize);
@@ -1699,32 +1699,32 @@
     }
 
     // ===========================================
-    // BUTTON HANDLERS - CORRECTED LOGIC v6.8.2
+    // BUTTON HANDLERS - v6.9.0 SIMPLIFIED
     // ===========================================
     
     /*
-    BUTTON LOGIC:
-    - AUTO ON: Receives APP signals + SCAN runs on SINGLE asset only. SWITCH is DISABLED.
-    - AUTO OFF, SWITCH OFF: SCAN runs on current asset only
-    - AUTO OFF, SWITCH ON: SCAN runs on ALL favorites and switches assets for signals
-    - SCAN can run alongside AUTO (both active simultaneously)
-    - FETCH: Force generate signals for SCAN
+    v6.9.0 BUTTON LOGIC:
+    - AUTO: Receives APP signals and places trades
+    - SCAN: Scans for signals and places trades
+      * If AUTO ON: SCAN only checks current asset (no switching)
+      * If AUTO OFF: SCAN checks ALL favorites and auto-switches to best signal
+    - INVERT: Local toggle for direction inversion
+    - FETCH: Force scan generation
+    - SWITCH REMOVED: Switching is now automatic when AUTO is OFF
     */
     
     function toggleAuto() {
         autoEnabled = !autoEnabled;
         GM_setValue('autoEnabled', autoEnabled);
         
-        // When AUTO is ON, disable SWITCH (single asset mode only)
-        if (autoEnabled && switchEnabled) {
-            switchEnabled = false;
-            GM_setValue('switchEnabled', false);
-            log('⚠️ AUTO ON: SWITCH disabled (single asset mode)');
-        }
-        
         updateAllUI();
         manageIntervals();
-        log(`AUTO: ${autoEnabled ? 'ON (app signals + single asset scan)' : 'OFF'}`);
+        
+        if (autoEnabled) {
+            log(`AUTO: ON - App signals + SCAN on current asset only`);
+        } else {
+            log(`AUTO: OFF - SCAN will check ALL favorites and auto-switch`);
+        }
     }
 
     function toggleScan() {
@@ -1735,32 +1735,12 @@
         
         if (scanEnabled) {
             if (autoEnabled) {
-                log(`SCAN: ON (single asset - AUTO mode)`);
-            } else if (switchEnabled) {
-                log(`SCAN: ON (all favorites - SWITCH mode)`);
+                log(`SCAN: ON - Scanning CURRENT asset only (AUTO mode)`);
             } else {
-                log(`SCAN: ON (current asset only)`);
+                log(`SCAN: ON - Scanning ALL favorites (will auto-switch)`);
             }
         } else {
             log(`SCAN: OFF`);
-        }
-    }
-
-    function toggleSwitch() {
-        // SWITCH is disabled when AUTO is ON
-        if (autoEnabled) {
-            log('⚠️ SWITCH disabled while AUTO is ON (single asset mode)');
-            return;
-        }
-        
-        switchEnabled = !switchEnabled;
-        GM_setValue('switchEnabled', switchEnabled);
-        updateAllUI();
-        
-        if (switchEnabled) {
-            log(`SWITCH: ON (SCAN will check all favorites and switch assets)`);
-        } else {
-            log(`SWITCH: OFF (SCAN stays on current asset)`);
         }
     }
 
@@ -1773,22 +1753,14 @@
 
     function handleFetch() {
         // FETCH forces SCAN to generate signals
-        if (scanEnabled) {
-            log('FETCH: Forcing scan signal generation...');
-            doScan(true);
-        } else {
-            log('FETCH: Enable SCAN first to force signal generation');
-            // Optionally start scan temporarily
-            doScan(true);
-        }
+        log('FETCH: Forcing scan...');
+        doScan(true);
     }
 
     function resetToDefaults() {
         autoEnabled = false;
         scanEnabled = false;
-        switchEnabled = false;
         invertEnabled = false;
-        // Flag removed - using globalTradeLock
         lastAppSignalId = '';
         lastAppTradeTime = 0;
         lastScanTradeTime = 0;
@@ -1796,7 +1768,6 @@
         
         GM_setValue('autoEnabled', false);
         GM_setValue('scanEnabled', false);
-        GM_setValue('switchEnabled', false);
         GM_setValue('invertEnabled', false);
         
         updateAllUI();
@@ -1892,7 +1863,6 @@
     function updateButtonStates() {
         const autoBtn = document.getElementById('gpt-auto');
         const scanBtn = document.getElementById('gpt-scan');
-        const switchBtn = document.getElementById('gpt-switch');
         const invertBtn = document.getElementById('gpt-invert');
 
         if (autoBtn) {
@@ -1902,14 +1872,6 @@
         if (scanBtn) {
             scanBtn.textContent = scanEnabled ? 'SCAN✓' : 'SCAN';
             scanBtn.className = 'scan-btn' + (scanEnabled ? ' on' : '');
-        }
-        if (switchBtn) {
-            if (autoEnabled) {
-                switchBtn.className = 'switch-btn disabled';
-            } else {
-                switchBtn.textContent = switchEnabled ? 'SW✓' : 'SW';
-                switchBtn.className = 'switch-btn' + (switchEnabled ? ' on' : '');
-            }
         }
         if (invertBtn) {
             invertBtn.textContent = invertEnabled ? 'INV✓' : 'INV';
@@ -1945,7 +1907,7 @@
     }
 
     // ===========================================
-    // INTERVAL MANAGEMENT - CORRECTED v6.8.2
+    // INTERVAL MANAGEMENT - v6.9.0
     // ===========================================
     function manageIntervals() {
         // Clear existing intervals
@@ -1958,21 +1920,19 @@
             scanInterval = null;
         }
 
-        // AUTO ON: Poll for APP signals (always single asset)
+        // AUTO ON: Poll for APP signals
         if (autoEnabled) {
             log('📡 Starting app signal polling...');
             appPollingInterval = setInterval(() => checkAppSignals(false), CONFIG.APP_POLL_INTERVAL);
             checkAppSignals(false);
         }
 
-        // SCAN: Can run alongside AUTO or independently
-        // - If AUTO ON: Scan single asset only (SWITCH is disabled)
-        // - If AUTO OFF + SWITCH ON: Scan all favorites
-        // - If AUTO OFF + SWITCH OFF: Scan single asset only
+        // v6.9.0 SCAN logic:
+        // - AUTO ON: Scan current asset only (no switching)
+        // - AUTO OFF: Scan ALL favorites and auto-switch to best signal
         if (scanEnabled) {
-            const scanMode = autoEnabled ? 'single asset (AUTO mode)' : 
-                            (switchEnabled ? 'all favorites (SWITCH mode)' : 'current asset');
-            log(`🔍 Starting scan (${scanMode})...`);
+            const scanMode = autoEnabled ? 'current asset only' : 'ALL favorites (auto-switch)';
+            log(`🔍 Starting scan: ${scanMode}`);
             scanInterval = setInterval(() => doScan(false), CONFIG.SCAN_INTERVAL);
             doScan(false);
         }
@@ -2111,17 +2071,14 @@
             return;
         }
 
-        // Determine which assets to scan based on mode:
-        // - AUTO ON: Always single asset (SWITCH is disabled)
-        // - AUTO OFF + SWITCH ON: Scan ALL favorites (multi-asset mode)
-        // - AUTO OFF + SWITCH OFF: Scan current asset only
+        // v6.9.0 SIMPLIFIED LOGIC:
+        // - AUTO ON: Scan ONLY current asset (no switching)
+        // - AUTO OFF: Scan ALL favorites, auto-switch to best signal's asset
         let assetsToScan = '';
+        let willSwitchAssets = !autoEnabled;  // Switch is automatic when AUTO is OFF
         
-        // v6.8.5: When AUTO is ON, SWITCH is disabled - always single asset mode
-        const canSwitchAssets = switchEnabled && !autoEnabled;
-        
-        if (canSwitchAssets) {
-            // v6.8.5: SWITCH ON (and AUTO OFF): Scan ALL favorites from the bar
+        if (willSwitchAssets) {
+            // AUTO OFF: Scan ALL favorites from the bar
             // Always re-detect favorites to ensure fresh list
             detectFavoritesBar();
             
@@ -2141,18 +2098,18 @@
                 // Join ALL assets with comma for the API
                 assetsToScan = assetList.join(',');
                 
-                log(`🔍🔄 MULTI-ASSET SCAN: ${favoritesFromBar.length} favorites`);
+                log(`🔍 SCANNING ${favoritesFromBar.length} FAVORITES (will auto-switch)`);
                 console.log('[GPT SCAN] Assets to scan:', assetsToScan);
             } else {
                 // Fallback to hardcoded list if no favorites detected
                 assetsToScan = 'EURUSD_OTC,GBPUSD_OTC,USDJPY_OTC,AUDUSD_OTC,EURJPY_OTC,GBPJPY_OTC';
-                log('🔍🔄 MULTI-ASSET SCAN: Using defaults (no favorites detected)');
+                log('🔍 SCANNING DEFAULT ASSETS (no favorites detected)');
             }
         } else {
-            // Single asset mode: SWITCH OFF or AUTO ON
+            // AUTO ON: Scan ONLY current asset (no switching)
             const currentAssetRaw = getCurrentAsset();
             if (!currentAssetRaw) {
-                log('Cannot determine current asset');
+                log('❌ Cannot determine current asset');
                 return;
             }
             
@@ -2167,8 +2124,7 @@
                 assetsToScan += '_OTC';
             }
             
-            const modeLabel = autoEnabled ? '(AUTO mode)' : '(single asset)';
-            log(`🔍 Scanning CURRENT ASSET ${modeLabel}: ${assetsToScan}`);
+            log(`🔍 SCANNING CURRENT ASSET (AUTO mode): ${assetsToScan}`);
         }
 
         updateStatusDot('trading');
@@ -2235,26 +2191,28 @@
 
         updateStatusDot('trading');
 
-        // v6.8.5: Switch asset if SWITCH enabled AND AUTO is OFF
-        const canSwitch = switchEnabled && !autoEnabled;
+        // v6.9.0: Auto-switch to signal's asset when AUTO is OFF
+        // When AUTO is ON, we only scan current asset so no switch needed
+        const shouldSwitchAsset = !autoEnabled;
         
-        if (canSwitch && signal.symbol) {
+        if (shouldSwitchAsset && signal.symbol) {
             const targetNorm = normalizeAsset(signal.symbol);
             const currentAssetNow = getCurrentAsset();
             const currentNorm = normalizeAsset(currentAssetNow);
             
-            log(`🔄 SWITCH CHECK: Target=${signal.symbol} (${targetNorm}), Current=${currentAssetNow} (${currentNorm})`);
-            
-            // Only switch if different asset (compare first 6 chars: EURUSD, GBPUSD, etc.)
+            // Compare first 6 chars: EURUSD, GBPUSD, etc.
             const targetBase = targetNorm.substring(0, 6);
             const currentBase = currentNorm.substring(0, 6);
             
+            log(`🔄 Asset check: Signal=${signal.symbol}, Current=${currentAssetNow}`);
+            
             if (targetBase !== currentBase) {
+                log(`🔄 SWITCHING to ${signal.symbol}...`);
                 let switched = false;
                 
                 // Refresh favorites bar detection
                 detectFavoritesBar();
-                log(`📊 Favorites available: ${favoritesFromBar.length} - [${favoritesFromBar.map(f => f.symbol).join(', ')}]`);
+                log(`📊 Favorites: ${favoritesFromBar.length} found`);
                 
                 // Look for matching favorite in the detected bar
                 const matchingFav = favoritesFromBar.find(f => {
@@ -2263,27 +2221,27 @@
                 });
                 
                 if (matchingFav) {
-                    log(`✅ Found ${signal.symbol} in favorites: ${matchingFav.symbol}`);
+                    log(`✅ Found in favorites: ${matchingFav.symbol}`);
                     switched = await clickFavoriteAsset(matchingFav);
                     
                     if (switched) {
-                        log(`✅ Successfully switched to ${matchingFav.symbol}`);
+                        log(`✅ Switched to ${matchingFav.symbol}`);
                         await sleep(1000); // Wait for UI to update
                     } else {
-                        log(`⚠️ Click on ${matchingFav.symbol} didn't work`);
+                        log(`⚠️ Favorites click failed`);
                     }
                 } else {
-                    log(`⚠️ ${signal.symbol} NOT found in favorites bar - will try search`);
+                    log(`⚠️ ${signal.symbol} not in favorites bar`);
                 }
                 
                 // Fallback to search method if favorites bar click failed
                 if (!switched) {
-                    log('🔍 Trying search method to switch asset...');
+                    log('🔍 Trying search method...');
                     switched = await switchToAsset(signal.symbol);
                 }
                 
                 if (!switched) {
-                    log(`❌ Asset switch to ${signal.symbol} FAILED - skipping trade`);
+                    log(`❌ FAILED to switch to ${signal.symbol} - skipping trade`);
                     updateStatusDot('connected');
                     return;
                 }
@@ -2291,7 +2249,7 @@
                 // Extra wait after successful switch
                 await sleep(500);
             } else {
-                log(`ℹ️ Already on correct asset: ${currentAssetNow}`);
+                log(`✓ Already on correct asset`);
             }
         }
 
@@ -2642,16 +2600,15 @@
     }
 
     // ===========================================
-    // INITIALIZATION - UPDATED v6.8.0
+    // INITIALIZATION - v6.9.0
     // ===========================================
     function init() {
-        console.log('[GPT Bot] Starting initialization v6.8.4...');
+        console.log('[GPT Bot] Starting initialization v6.9.0...');
         
         try {
             // Load saved settings (all default to false)
             autoEnabled = GM_getValue('autoEnabled', false);
             scanEnabled = GM_getValue('scanEnabled', false);
-            switchEnabled = GM_getValue('switchEnabled', false);
             invertEnabled = GM_getValue('invertEnabled', false);
             
             // Load martingale settings
@@ -2687,7 +2644,7 @@
             }
 
             console.log('[GPT Bot] Creating panel...');
-            console.log('[GPT Bot] Version 6.8.5 - Multi-asset SCAN with SWITCH enabled');
+            console.log('[GPT Bot] v6.9.0 - AUTO ON=single asset, AUTO OFF=all favorites with auto-switch');
             
             // Create panel immediately, don't wait
             createPanel();

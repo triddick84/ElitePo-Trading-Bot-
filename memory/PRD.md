@@ -3,12 +3,31 @@
 ## Last Updated: March 20, 2026
 
 ## Current Status
-✅ **Tampermonkey v6.8.5** - Fixed multi-asset SCAN with SWITCH enabled
+✅ **Tampermonkey v6.9.0** - Simplified SCAN logic: AUTO ON=single asset, AUTO OFF=all favorites with auto-switch
+✅ **1m Momentum Exhaustion Strategy** - RSI-2 + Stochastic + BB + Candlesticks (70-75% target)
 ✅ **Tampermonkey v6.8.0** - Complete Money Management System with Smart Martingale
 ✅ **Ultra High Accuracy 5s Strategy** - Research-based 85%+ confidence signals
 ✅ **Enhanced AI ML System** - Ensemble model with historical data training
 
 ## Recent Updates (March 20, 2026)
+
+### Tampermonkey v6.9.0 - Simplified SCAN Logic (March 20, 2026)
+**SWITCH button REMOVED - Switching is now automatic based on AUTO state**
+
+| Button | Function |
+|--------|----------|
+| **AUTO** | Receives APP signals and places trades |
+| **SCAN** | Scans for signals and places trades |
+| **INV** | Inverts signal direction |
+| **GO** | Force scan |
+
+**SCAN Behavior:**
+| AUTO State | SCAN Behavior |
+|------------|---------------|
+| AUTO ON | Scans ONLY currently selected asset (no switching) |
+| AUTO OFF | Scans ALL favorites, auto-switches to best signal asset, places trade |
+
+**Removed:** SWITCH toggle (SW button) - no longer needed
 
 ### Tampermonkey v6.8.5 - Multi-Asset SCAN Fix (March 20, 2026)
 **Fixed: SCAN + SWITCH Logic for Multiple Assets**
@@ -344,6 +363,7 @@ Create a "GPT Signal Bot" for Pocket Option with a high win rate (80-90%+). The 
 - [x] **AI/ML Training Pipeline** (March 16, 2026) - Fixed OANDA data integration for ML model training (720+ candles per training)
 - [x] **Multi-Asset SCAN v6.8.5** (March 20, 2026) - Fixed SCAN+SWITCH to scan ALL favorites, not just current asset
 - [x] **1m Momentum Exhaustion Strategy** (March 20, 2026) - RSI-2 + Stochastic + BB + Candlesticks reversal strategy (70-75% target)
+- [x] **Tampermonkey v6.9.0** (March 20, 2026) - Simplified SCAN: AUTO ON=single asset, AUTO OFF=all favorites with auto-switch. SWITCH button removed.
 
 ## P1 - High Priority (Next)
 - [ ] Full backend refactoring (split server.py into routes modules) - 14768 lines needs modularization
