@@ -3,13 +3,30 @@
 ## Last Updated: March 20, 2026
 
 ## Current Status
-✅ **Tampermonkey v6.9.0** - Simplified SCAN logic: AUTO ON=single asset, AUTO OFF=all favorites with auto-switch
+✅ **Tampermonkey v6.9.1** - Fixed SCAN trade execution with improved button detection
 ✅ **1m Momentum Exhaustion Strategy** - RSI-2 + Stochastic + BB + Candlesticks (70-75% target)
 ✅ **Tampermonkey v6.8.0** - Complete Money Management System with Smart Martingale
 ✅ **Ultra High Accuracy 5s Strategy** - Research-based 85%+ confidence signals
 ✅ **Enhanced AI ML System** - Ensemble model with historical data training
 
 ## Recent Updates (March 20, 2026)
+
+### Tampermonkey v6.9.1 - Fixed SCAN Trade Execution (March 20, 2026)
+**Fixed: SCAN was finding signals but not placing trades**
+- Added comprehensive logging throughout trade execution flow
+- Improved button detection with multiple CSS selectors
+- Added fallback button detection by color/text content
+- Proper async error handling for `executeScanTrade()`
+- Added detailed logging: `📥 executeScanTrade called`, `🖱️ Clicking button`, etc.
+
+**Button Detection Now Tries:**
+1. `.btn-call` / `.btn-put` (original)
+2. `.call-btn` / `.put-btn`
+3. `[class*="call"]` / `[class*="put"]`
+4. `button.call` / `button.put`
+5. `.up-btn` / `.down-btn`
+6. `.buy-btn` / `.sell-btn`
+7. Fallback: Any button with call/put/up/down text or green/red class
 
 ### Tampermonkey v6.9.0 - Simplified SCAN Logic (March 20, 2026)
 **SWITCH button REMOVED - Switching is now automatic based on AUTO state**

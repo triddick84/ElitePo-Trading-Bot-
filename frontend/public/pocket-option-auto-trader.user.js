@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://oanda-auto-trade.preview.emergentagent.com
-// @version      6.9.0
-// @description  Auto-trade OTC forex on Pocket Option. v6.9.0 - Simplified SCAN: AUTO ON=single asset, AUTO OFF=all favorites with auto-switch
+// @version      6.9.1
+// @description  Auto-trade OTC forex on Pocket Option. v6.9.1 - Fixed SCAN trade execution with improved button detection
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -1391,9 +1391,56 @@
     }
 
     function findTradeButtons() {
-        const callBtn = document.querySelector('.btn-call');
-        const putBtn = document.querySelector('.btn-put');
-        return callBtn && putBtn && callBtn.offsetParent !== null;
+        // Try multiple selectors for Pocket Option trade buttons
+        const callSelectors = ['.btn-call', '.call-btn', '[class*="call"]', 'button.call', '.up-btn', '.buy-btn'];
+        const putSelectors = ['.btn-put', '.put-btn', '[class*="put"]', 'button.put', '.down-btn', '.sell-btn'];
+        
+        let callBtn = null;
+        let putBtn = null;
+        
+        for (const sel of callSelectors) {
+            const btn = document.querySelector(sel);
+            if (btn && btn.offsetParent !== null) {
+                callBtn = btn;
+                break;
+            }
+        }
+        
+        for (const sel of putSelectors) {
+            const btn = document.querySelector(sel);
+            if (btn && btn.offsetParent !== null) {
+                putBtn = btn;
+                break;
+            }
+        }
+        
+        if (callBtn && putBtn) {
+            return true;
+        }
+        
+        // Fallback: Look for green/red buttons by color
+        const allButtons = document.querySelectorAll('button');
+        for (const btn of allButtons) {
+            if (!btn.offsetParent) continue;
+            const style = window.getComputedStyle(btn);
+            const bgColor = style.backgroundColor;
+            const text = btn.textContent?.toLowerCase() || '';
+            
+            // Green/Call buttons
+            if (!callBtn && (bgColor.includes('0, 128') || bgColor.includes('0, 255') || 
+                text.includes('call') || text.includes('up') || text.includes('buy') ||
+                btn.className.toLowerCase().includes('green'))) {
+                callBtn = btn;
+            }
+            // Red/Put buttons  
+            if (!putBtn && (bgColor.includes('255, 0') || bgColor.includes('128, 0') ||
+                text.includes('put') || text.includes('down') || text.includes('sell') ||
+                btn.className.toLowerCase().includes('red'))) {
+                putBtn = btn;
+            }
+        }
+        
+        return callBtn && putBtn;
     }
 
     // ===========================================
@@ -2154,7 +2201,13 @@
                         const bestSignal = signals[0];
                         
                         log(`🔍 SCAN SIGNAL: ${bestSignal.direction} ${bestSignal.symbol} (${Math.round(bestSignal.confidence)}%)`);
-                        executeScanTrade(bestSignal);
+                        
+                        // Execute trade (async function - handle errors)
+                        executeScanTrade(bestSignal).catch(err => {
+                            log(`❌ Trade execution error: ${err.message}`);
+                            console.error('[GPT SCAN TRADE ERROR]', err);
+                            updateStatusDot('connected');
+                        });
                     } else {
                         log('No signals found');
                         updateStatusDot('connected');
@@ -2183,9 +2236,11 @@
     }
 
     async function executeScanTrade(signal) {
+        log(`📥 executeScanTrade called: ${signal.direction} ${signal.symbol}`);
+        
         // Use globalTradeLock instead of isTrading
         if (globalTradeLock) {
-            log('⏳ Trade in progress');
+            log('⏳ Trade BLOCKED: globalTradeLock active');
             return;
         }
 
@@ -2251,6 +2306,8 @@
             } else {
                 log(`✓ Already on correct asset`);
             }
+        } else {
+            log(`📍 No switch needed (AUTO=${autoEnabled ? 'ON' : 'OFF'})`);
         }
 
         // Determine direction with local invert
@@ -2263,52 +2320,57 @@
         }
 
         const finalDirection = isCall ? 'CALL' : 'PUT';
+        log(`📊 Placing ${finalDirection} trade...`);
         updateSignalDisplay(finalDirection, signal.symbol, isCall ? 'call' : 'put', '🔍 SCAN');
 
         // Play SCAN sound (different from APP)
         playScanSignalSound();
 
         // Wait for buttons
+        log('🔍 Looking for trade buttons...');
         if (!findTradeButtons()) {
+            log('⏳ Buttons not found, waiting 1s...');
             await sleep(1000);
             if (!findTradeButtons()) {
-                log('Buttons not found');
-                // Flag removed - using globalTradeLock
+                log('❌ Trade buttons NOT FOUND - cannot place trade');
                 updateStatusDot('connected');
                 return;
             }
         }
+        log('✓ Trade buttons found');
 
-        // Click button - v6.8.1 pass source for logging
+        // Click button
+        log(`🖱️ Clicking ${finalDirection} button...`);
         const clicked = clickTradeButton(isCall, 'SCAN');
         
         if (clicked) {
             incrementTradeCount();
             lastScanTradeTime = Date.now();
-            log(`✅ SCAN TRADE: ${finalDirection} on ${signal.symbol}`);
+            log(`✅ TRADE PLACED: ${finalDirection} on ${signal.symbol}`);
             
-            // Start monitoring for win/loss result - v6.6.0
-            // Pass expiry time from signal or use default
-            const expirySeconds = signal.expiration_seconds || signal.expiry || getExpiryFromTimeframe(signal.timeframe) || 60;
+            // Start monitoring for win/loss result
+            const expirySeconds = signal.expiration_seconds || signal.expiry || signal.expiry_seconds || 60;
             startTradeResultMonitor(finalDirection, signal.amount || 1, expirySeconds);
             
             try {
                 GM_notification({
-                    title: `🔍 Scan Signal: ${finalDirection}`,
+                    title: `🔍 Scan Trade: ${finalDirection}`,
                     text: `${signal.symbol}`,
                     timeout: 3000
                 });
             } catch(e) {}
+        } else {
+            log(`❌ Trade click FAILED`);
         }
 
-        // Just update status after trade attempt
+        // Update status after trade attempt
         setTimeout(() => {
             updateStatusDot('connected');
         }, 2000);
     }
 
     // ===========================================
-    // TRADE EXECUTION - WITH ABSOLUTE PROTECTION v6.8.4
+    // TRADE EXECUTION - v6.9.0
     // ===========================================
     function clickTradeButton(isCall, source = 'unknown') {
         const now = Date.now();
@@ -2333,17 +2395,48 @@
             return false;
         }
         
-        const selector = isCall ? '.btn-call' : '.btn-put';
-        const btn = document.querySelector(selector);
+        // Find the appropriate button with multiple selectors
+        const callSelectors = ['.btn-call', '.call-btn', '[class*="call"]', 'button.call', '.up-btn', '.buy-btn'];
+        const putSelectors = ['.btn-put', '.put-btn', '[class*="put"]', 'button.put', '.down-btn', '.sell-btn'];
+        const selectors = isCall ? callSelectors : putSelectors;
         
-        if (btn && btn.offsetParent !== null) {
+        let btn = null;
+        for (const selector of selectors) {
+            const found = document.querySelector(selector);
+            if (found && found.offsetParent !== null) {
+                btn = found;
+                log(`🎯 Found button: ${selector}`);
+                break;
+            }
+        }
+        
+        // Fallback: find by color/text
+        if (!btn) {
+            const allButtons = document.querySelectorAll('button');
+            for (const b of allButtons) {
+                if (!b.offsetParent) continue;
+                const text = b.textContent?.toLowerCase() || '';
+                const className = b.className?.toLowerCase() || '';
+                
+                if (isCall && (text.includes('call') || text.includes('up') || text.includes('buy') || className.includes('green') || className.includes('call'))) {
+                    btn = b;
+                    break;
+                }
+                if (!isCall && (text.includes('put') || text.includes('down') || text.includes('sell') || className.includes('red') || className.includes('put'))) {
+                    btn = b;
+                    break;
+                }
+            }
+        }
+        
+        if (btn) {
             // SET ALL LOCKS BEFORE CLICKING
             globalTradeLock = true;
             lastTradeClickTime = now;
             lastTradeDirection = direction;
             lastTradeTimestamp = now;
             
-            log(`✅ ${direction} [${source}]`);
+            log(`✅ CLICKING ${direction} [${source}]`);
             console.log(`[GPT TRADE] ${new Date().toISOString()} - ${direction} - Source: ${source}`);
             
             // Single click only
@@ -2352,12 +2445,13 @@
             // Release global lock after delay
             setTimeout(() => {
                 globalTradeLock = false;
+                log('🔓 Trade lock released');
             }, TRADE_LOCK_MS);
             
             return true;
         }
         
-        log(`❌ Button not found: ${selector}`);
+        log(`❌ ${direction} button NOT FOUND`);
         return false;
     }
 
@@ -2644,7 +2738,7 @@
             }
 
             console.log('[GPT Bot] Creating panel...');
-            console.log('[GPT Bot] v6.9.0 - AUTO ON=single asset, AUTO OFF=all favorites with auto-switch');
+            console.log('[GPT Bot] v6.9.1 - Improved SCAN trade execution');
             
             // Create panel immediately, don't wait
             createPanel();
