@@ -105,6 +105,14 @@ class StrategyRegistry:
             except Exception as e:
                 logger.warning(f"Could not load 1m Quad Crossover: {e}")
             
+            # NEW: 1m Momentum Exhaustion Reversal Strategy (70-75% target)
+            try:
+                from strategies.strategy_1m_momentum_exhaustion import momentum_exhaustion_strategy
+                self.strategies['1m_momentum_exhaustion'] = momentum_exhaustion_strategy
+                logger.info("✅ Loaded 1m Momentum Exhaustion Strategy (RSI-2, Stochastic, BB, Candles)")
+            except Exception as e:
+                logger.warning(f"Could not load 1m Momentum Exhaustion: {e}")
+            
             # 2-minute strategies
             from strategies.strategy_2m_support_resistance import strategy_2m_support_resistance
             from strategies.strategy_2m_trend_momentum import strategy_2m_trend_momentum

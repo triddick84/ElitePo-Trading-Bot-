@@ -20,6 +20,27 @@
 - Added comprehensive logging for debugging asset switching
 - Backend `/signals/scan-markets` endpoint verified working with comma-separated assets
 
+### NEW: 1m Momentum Exhaustion Reversal Strategy (March 20, 2026)
+**High-probability reversal strategy for OTC forex pairs**
+
+| Indicator | Parameters | Purpose |
+|-----------|------------|---------|
+| RSI-2 | Period 2, OB/OS: 90/10 | Extreme momentum detection |
+| Stochastic | (5,3,3), OB/OS: 80/20 | Crossover confirmation |
+| Bollinger Bands | (20,2) | Price extremes at bands |
+| MACD | (8,17,9) | Momentum exhaustion |
+| Candlestick Patterns | Hammer, Engulfing, Doji, Star | Visual confirmation |
+
+**Entry Rules:**
+- **CALL**: RSI-2 < 10 + Stoch bullish cross from <20 + Price at lower BB + Bullish candle + MACD bearish exhaustion
+- **PUT**: RSI-2 > 90 + Stoch bearish cross from >80 + Price at upper BB + Bearish candle + MACD bullish exhaustion
+- Requires minimum 3 of 5 confirmations
+- ATR filter skips choppy/volatile markets
+
+**Target Win Rate:** 70-75%
+**Strategy ID:** `1m_momentum_exhaustion`
+**Available in UI:** Strategies → 1m Timeframe Strategy → ⭐⭐⭐ Momentum Exhaustion Reversal
+
 **Button Logic (Unchanged):**
 | Mode | AUTO | SWITCH | SCAN | Behavior |
 |------|------|--------|------|----------|
@@ -322,6 +343,7 @@ Create a "GPT Signal Bot" for Pocket Option with a high win rate (80-90%+). The 
 - [x] **Tampermonkey v6.8.1** (March 16, 2026) - Fixed critical double-trade bug with enhanced trade guards
 - [x] **AI/ML Training Pipeline** (March 16, 2026) - Fixed OANDA data integration for ML model training (720+ candles per training)
 - [x] **Multi-Asset SCAN v6.8.5** (March 20, 2026) - Fixed SCAN+SWITCH to scan ALL favorites, not just current asset
+- [x] **1m Momentum Exhaustion Strategy** (March 20, 2026) - RSI-2 + Stochastic + BB + Candlesticks reversal strategy (70-75% target)
 
 ## P1 - High Priority (Next)
 - [ ] Full backend refactoring (split server.py into routes modules) - 14768 lines needs modularization
