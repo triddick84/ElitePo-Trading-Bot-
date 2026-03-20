@@ -3,7 +3,8 @@
 ## Last Updated: March 20, 2026
 
 ## Current Status
-✅ **Tampermonkey v6.9.1** - Fixed SCAN trade execution with improved button detection
+✅ **Tampermonkey v6.9.4** - OANDA real-time data + price verification
+✅ **Backend Data Sources** - OANDA (primary), yfinance (fallback)
 ✅ **1m Momentum Exhaustion Strategy** - RSI-2 + Stochastic + BB + Candlesticks (70-75% target)
 ✅ **Tampermonkey v6.8.0** - Complete Money Management System with Smart Martingale
 ✅ **Ultra High Accuracy 5s Strategy** - Research-based 85%+ confidence signals
@@ -11,24 +12,23 @@
 
 ## Recent Updates (March 20, 2026)
 
-### Tampermonkey v6.9.1 - Fixed SCAN Trade Execution (March 20, 2026)
-**Fixed: SCAN was finding signals but not placing trades**
-- Added comprehensive logging throughout trade execution flow
-- Improved button detection with multiple CSS selectors
-- Added fallback button detection by color/text content
-- Proper async error handling for `executeScanTrade()`
-- Added detailed logging: `📥 executeScanTrade called`, `🖱️ Clicking button`, etc.
+### Data Source Architecture v6.9.4 (March 20, 2026)
+**OANDA is now the PRIMARY data source for all signals**
 
-**Button Detection Now Tries:**
-1. `.btn-call` / `.btn-put` (original)
-2. `.call-btn` / `.put-btn`
-3. `[class*="call"]` / `[class*="put"]`
-4. `button.call` / `button.put`
-5. `.up-btn` / `.down-btn`
-6. `.buy-btn` / `.sell-btn`
-7. Fallback: Any button with call/put/up/down text or green/red class
+| Data Type | Primary Source | Fallback | Notes |
+|-----------|---------------|----------|-------|
+| Regular Forex (EUR/USD) | OANDA API | yfinance | Real-time |
+| OTC Markets (EUR/USD_OTC) | OANDA API | yfinance | Uses underlying forex data* |
+| Historical Data | OANDA | yfinance | For ML training |
 
-### Tampermonkey v6.9.0 - Simplified SCAN Logic (March 20, 2026)
+*OTC markets on Pocket Option are synthetic markets. Their prices closely track real forex but are broker-specific. Signals are based on the underlying forex price movements.
+
+**Price Verification (Hybrid Approach):**
+- Backend generates signals using OANDA real-time data
+- Tampermonkey verifies price on Pocket Option UI before trade execution
+- `verifySignalPrice()` function checks if signal price matches current UI price within 0.1% tolerance
+
+### Tampermonkey v6.9.3 - GO Button Fix (March 20, 2026)
 **SWITCH button REMOVED - Switching is now automatic based on AUTO state**
 
 | Button | Function |

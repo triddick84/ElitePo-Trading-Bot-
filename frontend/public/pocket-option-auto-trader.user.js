@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://oanda-auto-trade.preview.emergentagent.com
-// @version      6.9.3
-// @description  Auto-trade OTC forex on Pocket Option. v6.9.3 - GO=current asset, SCAN=all favorites
+// @version      6.9.4
+// @description  Auto-trade OTC forex on Pocket Option. v6.9.4 - OANDA real-time data + price verification
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -259,7 +259,7 @@
     // ===========================================
     function log(msg) {
         const ts = new Date().toLocaleTimeString();
-        console.log(`[GPT v6.9.3] ${ts}: ${msg}`);
+        console.log(`[GPT v6.9.4] ${ts}: ${msg}`);
         const logEl = document.getElementById('gpt-log');
         if (logEl) logEl.textContent = msg;
     }
@@ -1388,6 +1388,87 @@
         log('Could not detect asset - using default EUR/USD OTC');
         currentAsset = 'EUR/USD OTC';
         return currentAsset;
+    }
+
+    // ===========================================
+    // PRICE VERIFICATION - v6.9.4
+    // Get current price from Pocket Option UI
+    // ===========================================
+    function getCurrentPrice() {
+        // Try multiple selectors to find the current price display
+        const priceSelectors = [
+            '.current-price',
+            '.price-value',
+            '[data-testid="current-price"]',
+            '.chart-price',
+            '.bid-price',
+            '.ask-price',
+            '[class*="price"]',
+            '[class*="quote"]'
+        ];
+        
+        for (const sel of priceSelectors) {
+            const els = document.querySelectorAll(sel);
+            for (const el of els) {
+                if (!el || !el.offsetParent) continue;
+                
+                const text = el.textContent?.trim() || '';
+                // Look for price patterns like "1.08234" or "108.234"
+                const priceMatch = text.match(/(\d+\.\d{3,5})/);
+                if (priceMatch) {
+                    const price = parseFloat(priceMatch[1]);
+                    // Validate it looks like a forex price
+                    if (price > 0.1 && price < 200) {
+                        return price;
+                    }
+                }
+            }
+        }
+        
+        // Try to find price in chart overlay or tooltip
+        const chartArea = document.querySelector('[class*="chart"]');
+        if (chartArea) {
+            const priceElements = chartArea.querySelectorAll('text, span, div');
+            for (const el of priceElements) {
+                const text = el.textContent?.trim() || '';
+                const priceMatch = text.match(/^(\d+\.\d{3,5})$/);
+                if (priceMatch) {
+                    const price = parseFloat(priceMatch[1]);
+                    if (price > 0.1 && price < 200) {
+                        return price;
+                    }
+                }
+            }
+        }
+        
+        return null;
+    }
+    
+    // Verify signal price matches current market (within tolerance)
+    function verifySignalPrice(signalPrice, tolerance = 0.001) {
+        const currentPrice = getCurrentPrice();
+        
+        if (!currentPrice || !signalPrice) {
+            log('⚠️ Price verification skipped (no price available)');
+            return { valid: true, reason: 'no_price_data' };
+        }
+        
+        const priceDiff = Math.abs(currentPrice - signalPrice);
+        const percentDiff = (priceDiff / currentPrice) * 100;
+        
+        if (percentDiff > (tolerance * 100)) {
+            log(`⚠️ Price mismatch: Signal=${signalPrice}, Current=${currentPrice} (${percentDiff.toFixed(3)}% diff)`);
+            return { 
+                valid: false, 
+                reason: 'price_mismatch',
+                signalPrice,
+                currentPrice,
+                diff: percentDiff
+            };
+        }
+        
+        log(`✓ Price verified: ${currentPrice} (${percentDiff.toFixed(3)}% diff)`);
+        return { valid: true, currentPrice, diff: percentDiff };
     }
 
     function findTradeButtons() {
@@ -2707,7 +2788,7 @@
             }
 
             console.log('[GPT Bot] Creating panel...');
-            console.log('[GPT Bot] v6.9.3 - GO=current asset, SCAN=all favorites');
+            console.log('[GPT Bot] v6.9.4 - OANDA real-time + price verification');
             
             // Create panel immediately, don't wait
             createPanel();

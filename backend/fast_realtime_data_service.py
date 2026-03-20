@@ -1,6 +1,14 @@
 """
 Fast Real-Time Data Service
 Optimized for speed and reliability in fetching market data for signal generation
+
+PRIORITY ORDER:
+1. OANDA API (real-time forex data) - PRIMARY
+2. yfinance (delayed fallback)
+3. Synthetic data (emergency fallback)
+
+NOTE: OTC markets use the same underlying forex data since
+Pocket Option OTC prices are based on real forex with broker adjustments.
 """
 
 import asyncio
@@ -10,19 +18,34 @@ import numpy as np
 from typing import Optional, Dict, List, Any
 from datetime import datetime, timezone, timedelta
 import logging
+import os
 from concurrent.futures import ThreadPoolExecutor
 
 logger = logging.getLogger(__name__)
+
+# Try to import OANDA service
+try:
+    from enhanced_oanda_service import EnhancedOandaService
+    OANDA_AVAILABLE = True
+except ImportError:
+    OANDA_AVAILABLE = False
+    logger.warning("⚠️ EnhancedOandaService not available")
 
 
 class FastRealtimeDataService:
     """
     High-performance real-time data fetching service
     Features:
+    - OANDA as PRIMARY data source (real-time forex)
     - Parallel data fetching
     - Intelligent caching
     - Multiple data sources with fallback
     - Sub-second response times
+    
+    Data Source Priority:
+    1. OANDA API - Real-time, accurate forex data
+    2. yfinance - Delayed data (15-20 min for forex)
+    3. Synthetic - Emergency fallback only
     """
     
     def __init__(self):
@@ -30,7 +53,22 @@ class FastRealtimeDataService:
         self.cache_ttl = 5  # seconds
         self.executor = ThreadPoolExecutor(max_workers=10)
         self.session = None
+        
+        # Initialize OANDA service
+        self.oanda_service = None
+        if OANDA_AVAILABLE:
+            try:
+                self.oanda_service = EnhancedOandaService()
+                if self.oanda_service.is_configured:
+                    logger.info("✅ OANDA service initialized - REAL-TIME DATA ENABLED")
+                else:
+                    logger.warning("⚠️ OANDA not configured - will use fallback sources")
+            except Exception as e:
+                logger.error(f"❌ Failed to initialize OANDA: {e}")
+        
         logger.info("⚡ Fast Realtime Data Service initialized")
+        logger.info(f"   Primary: OANDA {'✅' if self.oanda_service and self.oanda_service.is_configured else '❌'}")
+        logger.info("   Fallback: yfinance (delayed)")
     
     async def get_fast_market_data(
         self,
@@ -42,8 +80,13 @@ class FastRealtimeDataService:
         """
         Fetch market data with sub-second response time
         
+        Priority:
+        1. OANDA (real-time) - if configured
+        2. yfinance (delayed) - fallback
+        3. Synthetic - emergency only
+        
         Args:
-            symbol: Trading symbol
+            symbol: Trading symbol (e.g., EURUSD_OTC, EUR_USD)
             timeframe: Data timeframe
             periods: Number of data points
             use_cache: Whether to use cached data
@@ -56,31 +99,131 @@ class FastRealtimeDataService:
             if use_cache:
                 cached_data = self._get_cached_data(symbol, timeframe)
                 if cached_data is not None:
-                    logger.debug(f"📦 Using cached data for {symbol} {timeframe}")
+                    logger.debug(f"📦 Cache hit: {symbol} {timeframe}")
                     return cached_data
             
-            # Fetch data in parallel from multiple sources
             start_time = datetime.now()
+            data = None
+            source = "unknown"
             
-            # Try primary source (yfinance)
-            data = await self._fetch_from_yfinance(symbol, timeframe, periods)
+            # PRIORITY 1: Try OANDA (real-time)
+            if self.oanda_service and self.oanda_service.is_configured:
+                data = await self._fetch_from_oanda(symbol, timeframe, periods)
+                if data is not None and len(data) >= 20:
+                    source = "OANDA (real-time)"
             
-            if data is not None and len(data) >= 20:
-                fetch_time = (datetime.now() - start_time).total_seconds()
-                logger.info(f"⚡ Fetched {len(data)} bars for {symbol} in {fetch_time:.2f}s")
-                
-                # Cache the data
+            # PRIORITY 2: Fallback to yfinance (delayed)
+            if data is None or len(data) < 20:
+                logger.warning(f"⚠️ OANDA unavailable for {symbol}, trying yfinance...")
+                data = await self._fetch_from_yfinance(symbol, timeframe, periods)
+                if data is not None and len(data) >= 20:
+                    source = "yfinance (delayed ~15min)"
+            
+            # PRIORITY 3: Emergency synthetic data
+            if data is None or len(data) < 20:
+                logger.warning(f"⚠️ All sources failed for {symbol}, using synthetic")
+                data = self._generate_synthetic_data(periods)
+                source = "SYNTHETIC (emergency)"
+            
+            fetch_time = (datetime.now() - start_time).total_seconds()
+            logger.info(f"⚡ {symbol}: {len(data)} bars from {source} in {fetch_time:.2f}s")
+            
+            # Cache the data
+            if data is not None:
                 self._cache_data(symbol, timeframe, data)
-                
-                return data
-            else:
-                # Fallback to synthetic data
-                logger.warning(f"⚠️ Primary source failed, using synthetic data for {symbol}")
-                return self._generate_synthetic_data(periods)
+            
+            return data
                 
         except Exception as e:
             logger.error(f"❌ Error fetching market data: {e}")
             return self._generate_synthetic_data(periods)
+    
+    async def _fetch_from_oanda(
+        self,
+        symbol: str,
+        timeframe: str,
+        periods: int
+    ) -> Optional[pd.DataFrame]:
+        """Fetch real-time data from OANDA API"""
+        try:
+            # Convert symbol to OANDA format
+            oanda_instrument = self._convert_to_oanda_instrument(symbol)
+            
+            # Map timeframe to OANDA granularity
+            granularity_map = {
+                '1m': 'M1',
+                '5m': 'M5',
+                '15m': 'M15',
+                '30m': 'M30',
+                '1h': 'H1',
+                '4h': 'H4',
+                '1d': 'D'
+            }
+            granularity = granularity_map.get(timeframe, 'M1')
+            
+            # Fetch candles using OANDA service
+            loop = asyncio.get_event_loop()
+            data = await loop.run_in_executor(
+                self.executor,
+                lambda: self.oanda_service.get_candles(
+                    instrument=oanda_instrument,
+                    granularity=granularity,
+                    count=periods
+                )
+            )
+            
+            if data is not None and len(data) > 0:
+                # Ensure standard column names
+                if 'timestamp' not in data.columns and data.index.name == 'timestamp':
+                    data = data.reset_index()
+                
+                required_cols = ['open', 'high', 'low', 'close']
+                if all(col in data.columns for col in required_cols):
+                    return data[required_cols + (['volume'] if 'volume' in data.columns else [])]
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"OANDA fetch error for {symbol}: {e}")
+            return None
+    
+    def _convert_to_oanda_instrument(self, symbol: str) -> str:
+        """Convert Pocket Option symbol to OANDA instrument format"""
+        # Remove _OTC suffix and any other market type indicators
+        base_symbol = symbol.upper().replace('_OTC', '').replace('_REGULAR', '').replace('/', '')
+        
+        # Common forex pairs
+        forex_pairs = {
+            'EURUSD': 'EUR_USD',
+            'GBPUSD': 'GBP_USD',
+            'USDJPY': 'USD_JPY',
+            'USDCHF': 'USD_CHF',
+            'AUDUSD': 'AUD_USD',
+            'USDCAD': 'USD_CAD',
+            'NZDUSD': 'NZD_USD',
+            'EURGBP': 'EUR_GBP',
+            'EURJPY': 'EUR_JPY',
+            'GBPJPY': 'GBP_JPY',
+            'EURCHF': 'EUR_CHF',
+            'AUDJPY': 'AUD_JPY',
+            'EURAUD': 'EUR_AUD',
+            'GBPAUD': 'GBP_AUD',
+            'GBPCAD': 'GBP_CAD',
+            'CADJPY': 'CAD_JPY',
+            'CHFJPY': 'CHF_JPY',
+            'AUDCAD': 'AUD_CAD',
+            'AUDNZD': 'AUD_NZD',
+            'NZDJPY': 'NZD_JPY',
+        }
+        
+        if base_symbol in forex_pairs:
+            return forex_pairs[base_symbol]
+        
+        # If not found, try to construct it
+        if len(base_symbol) == 6:
+            return f"{base_symbol[:3]}_{base_symbol[3:]}"
+        
+        return base_symbol
     
     async def _fetch_from_yfinance(
         self,
