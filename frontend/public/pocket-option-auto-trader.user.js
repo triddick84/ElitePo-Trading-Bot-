@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://pocket-option-trader-1.preview.emergentagent.com
-// @version      7.1.0
-// @description  Auto-trade OTC forex on Pocket Option. v7.1.0 - LOCAL signal generation using actual OTC prices
+// @version      7.2.0
+// @description  Auto-trade OTC forex on Pocket Option. v7.2.0 - Enhanced price scraper with auto-detection
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -242,62 +242,219 @@
     };
 
     // ===========================================
-    // v7.1.0 POCKET OPTION PRICE SCRAPER
+    // v7.2.0 POCKET OPTION PRICE SCRAPER - ENHANCED
     // ===========================================
     const PriceScraperV2 = {
         priceHistory: [],
         candleHistory: [],
         maxCandles: 100,
         lastScrapedPrice: null,
+        debugMode: true,
+        lastDebugTime: 0,
+        foundSelector: null,  // Remember which selector worked
         
         // Scrape current price from Pocket Option UI
         scrapeCurrentPrice() {
-            // Try multiple selectors for price display
-            const selectors = [
-                '.chart-area .price',
-                '.current-price',
-                '[class*="current-price"]',
-                '[class*="chart"] [class*="price"]',
-                '.trading-chart .value',
-                '[data-testid="current-price"]',
-                '.chart-header .price',
-                '.price-display',
-                '.live-price'
+            const now = Date.now();
+            const shouldDebug = this.debugMode && (now - this.lastDebugTime > 5000);
+            
+            // If we found a working selector before, try it first
+            if (this.foundSelector) {
+                const price = this._trySelector(this.foundSelector, false);
+                if (price) return price;
+                // Selector stopped working, reset
+                this.foundSelector = null;
+            }
+            
+            // STRATEGY 1: Look near the trade buttons (most reliable)
+            const tradePanel = document.querySelector('.deals-list, .trading-panel, [class*="trading"], [class*="deal"]');
+            if (tradePanel) {
+                const price = this._findPriceInElement(tradePanel, shouldDebug, 'trade-panel');
+                if (price) return price;
+            }
+            
+            // STRATEGY 2: Specific Pocket Option selectors (based on common patterns)
+            const poSelectors = [
+                // Pocket Option specific (try variations)
+                '.value__val',
+                '.value__value', 
+                '.chart-value',
+                '.quotes-value',
+                '.pair-value',
+                '.rate__value',
+                '.current-quote',
+                '.asset-price',
+                '.market-price',
+                // Near call/put buttons
+                '.call-btn + *',
+                '.put-btn + *',
+                '.btn-call ~ *',
+                '.btn-put ~ *',
+                // Generic price containers
+                '[class*="current"][class*="price"]',
+                '[class*="chart"][class*="price"]',
+                '[class*="rate"]',
+                '[class*="quote"]',
+                '[class*="value"]'
             ];
             
-            for (const sel of selectors) {
-                const els = document.querySelectorAll(sel);
-                for (const el of els) {
-                    if (!el || !el.offsetParent) continue;
-                    
-                    const text = (el.textContent || el.innerText || '').trim();
-                    // Match forex prices like 1.08234 or 108.234
-                    const match = text.match(/(\d{1,3}\.\d{3,5})/);
-                    if (match) {
-                        const price = parseFloat(match[1]);
-                        if (price > 0.1 && price < 300) {
-                            this.lastScrapedPrice = price;
-                            return price;
-                        }
-                    }
+            for (const sel of poSelectors) {
+                const price = this._trySelector(sel, shouldDebug);
+                if (price) {
+                    this.foundSelector = sel;
+                    if (shouldDebug) log(`✅ PRICE FOUND via: ${sel}`);
+                    return price;
                 }
             }
             
-            // Try finding price in SVG chart text elements
-            const svgTexts = document.querySelectorAll('svg text, svg tspan');
-            for (const el of svgTexts) {
-                const text = el.textContent?.trim() || '';
-                const match = text.match(/^(\d{1,3}\.\d{3,5})$/);
-                if (match) {
-                    const price = parseFloat(match[1]);
-                    if (price > 0.1 && price < 300) {
+            // STRATEGY 3: Find ALL visible elements with price-like numbers
+            const price = this._bruteForceSearch(shouldDebug);
+            if (price) return price;
+            
+            // STRATEGY 4: SVG/Canvas text elements
+            const svgPrice = this._searchSvgElements(shouldDebug);
+            if (svgPrice) return svgPrice;
+            
+            if (shouldDebug) {
+                this.lastDebugTime = now;
+                log('⚠️ PRICE SCRAPER: No price found! Enable LOG to see debug info.');
+                this._logAllPotentialPrices();
+            }
+            
+            return null;
+        },
+        
+        _trySelector(selector, debug) {
+            try {
+                const els = document.querySelectorAll(selector);
+                for (const el of els) {
+                    if (!el || !el.offsetParent) continue;
+                    const price = this._extractPrice(el);
+                    if (price) return price;
+                }
+            } catch (e) { /* ignore invalid selectors */ }
+            return null;
+        },
+        
+        _findPriceInElement(container, debug, source) {
+            // Look for all text nodes with price-like numbers
+            const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+            let node;
+            while (node = walker.nextNode()) {
+                const text = node.textContent.trim();
+                const price = this._parsePrice(text);
+                if (price) {
+                    if (debug) log(`💰 Price from ${source}: ${price}`);
+                    this.lastScrapedPrice = price;
+                    return price;
+                }
+            }
+            
+            // Also check element content
+            const elements = container.querySelectorAll('span, div, p, td, th, label');
+            for (const el of elements) {
+                if (!el.offsetParent) continue;
+                const price = this._extractPrice(el);
+                if (price) {
+                    if (debug) log(`💰 Price from ${source} element: ${price}`);
+                    return price;
+                }
+            }
+            return null;
+        },
+        
+        _extractPrice(el) {
+            const text = (el.textContent || el.innerText || '').trim();
+            return this._parsePrice(text);
+        },
+        
+        _parsePrice(text) {
+            // Match forex prices: 1.08234, 108.234, 1.0823, etc.
+            // Must have at least 4 digits after decimal for forex
+            const matches = text.match(/\b(\d{1,3}\.\d{4,6})\b/g);
+            if (matches) {
+                for (const m of matches) {
+                    const price = parseFloat(m);
+                    // Valid forex price ranges
+                    if ((price > 0.5 && price < 2.5) ||     // EUR/USD, GBP/USD range
+                        (price > 100 && price < 160) ||     // USD/JPY range  
+                        (price > 0.6 && price < 1.1)) {     // AUD/USD, NZD/USD range
                         this.lastScrapedPrice = price;
                         return price;
                     }
                 }
             }
-            
             return null;
+        },
+        
+        _bruteForceSearch(debug) {
+            // Get ALL visible elements and check for price patterns
+            const allElements = document.querySelectorAll('span, div, td, p, label, [class*="price"], [class*="value"], [class*="rate"], [class*="quote"]');
+            const candidates = [];
+            
+            for (const el of allElements) {
+                if (!el.offsetParent) continue;
+                const rect = el.getBoundingClientRect();
+                // Skip elements outside viewport or too small
+                if (rect.width < 30 || rect.height < 10) continue;
+                if (rect.top < 0 || rect.top > window.innerHeight) continue;
+                
+                const text = el.textContent?.trim() || '';
+                // Direct price match (element contains ONLY a price)
+                if (/^\d{1,3}\.\d{4,6}$/.test(text)) {
+                    const price = parseFloat(text);
+                    if (this._isValidForexPrice(price)) {
+                        candidates.push({ price, el, text, confidence: 'high' });
+                    }
+                }
+            }
+            
+            if (candidates.length > 0) {
+                // Sort by confidence and position (prefer elements higher on page near center)
+                candidates.sort((a, b) => {
+                    if (a.confidence !== b.confidence) return a.confidence === 'high' ? -1 : 1;
+                    const aRect = a.el.getBoundingClientRect();
+                    const bRect = b.el.getBoundingClientRect();
+                    return aRect.top - bRect.top;
+                });
+                
+                const best = candidates[0];
+                if (debug) log(`🎯 Brute force found: ${best.price} (${candidates.length} candidates)`);
+                this.lastScrapedPrice = best.price;
+                return best.price;
+            }
+            return null;
+        },
+        
+        _searchSvgElements(debug) {
+            const svgTexts = document.querySelectorAll('svg text, svg tspan');
+            for (const el of svgTexts) {
+                const text = el.textContent?.trim() || '';
+                const price = this._parsePrice(text);
+                if (price) {
+                    if (debug) log(`📈 SVG price found: ${price}`);
+                    return price;
+                }
+            }
+            return null;
+        },
+        
+        _isValidForexPrice(price) {
+            return (price > 0.5 && price < 2.5) ||    // Major pairs
+                   (price > 100 && price < 160) ||    // JPY pairs
+                   (price > 0.6 && price < 1.1);      // Minor pairs
+        },
+        
+        _logAllPotentialPrices() {
+            log('🔍 DEBUG: Scanning for ALL price-like numbers on page...');
+            const allText = document.body.innerText;
+            const priceMatches = allText.match(/\d{1,3}\.\d{4,6}/g) || [];
+            const uniquePrices = [...new Set(priceMatches)].slice(0, 10);
+            if (uniquePrices.length > 0) {
+                log(`Found potential prices: ${uniquePrices.join(', ')}`);
+            } else {
+                log('No price-like numbers found on page!');
+            }
         },
         
         // Build candle from price updates
@@ -2659,24 +2816,31 @@
         }
     }
     
-    // v7.1.0: Local signal generation using actual OTC prices
+    // v7.2.0: Local signal generation using actual OTC prices
     function doLocalScan(force, currentAssetOnly, willSwitchAssets) {
         updateStatusDot('trading');
         
         const currentAsset = getCurrentAsset() || 'Unknown';
         log(`🔍 LOCAL SCAN: ${currentAsset} (OTC prices)`);
         
-        // Scrape current price
+        // Scrape current price with enhanced detection
         const currentPrice = PriceScraperV2.scrapeCurrentPrice();
         if (!currentPrice) {
-            log('⚠️ Cannot scrape price - trying backup method');
-            // Try getting price from any visible element
-            const priceEl = document.querySelector('[class*="price"], [class*="value"], [class*="quote"]');
-            if (priceEl) {
-                log(`Found price element: ${priceEl.textContent}`);
-            }
-        } else {
-            log(`💰 Current price: ${currentPrice}`);
+            log('⚠️ PRICE SCRAPER FAILED - Debugging...');
+            // Log what we can see on the page
+            const bodyText = document.body.innerText.substring(0, 500);
+            log(`Page preview: ${bodyText.substring(0, 200)}...`);
+            
+            // Try to find ANY numbers that look like prices
+            PriceScraperV2._logAllPotentialPrices();
+            
+            updateStatusDot('error');
+            return;
+        }
+        
+        log(`💰 Current price: ${currentPrice}`);
+        if (PriceScraperV2.foundSelector) {
+            log(`📍 Using selector: ${PriceScraperV2.foundSelector}`);
         }
         
         // Build candle from current price
