@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://oanda-auto-trade.preview.emergentagent.com
-// @version      6.9.5
-// @description  Auto-trade OTC forex on Pocket Option. v6.9.5 - FIXED double-click bug
+// @version      6.9.6
+// @description  Auto-trade OTC forex on Pocket Option. v6.9.6 - Enhanced GO button logging
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -259,7 +259,7 @@
     // ===========================================
     function log(msg) {
         const ts = new Date().toLocaleTimeString();
-        console.log(`[GPT v6.9.5] ${ts}: ${msg}`);
+        console.log(`[GPT v6.9.6] ${ts}: ${msg}`);
         const logEl = document.getElementById('gpt-log');
         if (logEl) logEl.textContent = msg;
     }
@@ -2248,12 +2248,20 @@
                         
                         log(`✅ ${bestSignal.direction} ${bestSignal.symbol} (${Math.round(bestSignal.confidence)}%)`);
                         
+                        // Log if signal is marked as not tradeable but proceed anyway for GO button
+                        if (bestSignal.is_tradeable === false) {
+                            log(`⚠️ Signal marked not tradeable: ${bestSignal.avoid_reasons?.join(', ') || 'unknown reason'}`);
+                            // For GO button, we execute anyway - user explicitly requested
+                        }
+                        
+                        // ALWAYS execute trade when signal found (user pressed GO)
                         executeScanTrade(bestSignal).catch(err => {
                             log(`❌ Trade error: ${err.message}`);
+                            console.error('[GPT Trade Error]', err);
                             updateStatusDot('connected');
                         });
                     } else {
-                        log('⚠️ No signals');
+                        log('⚠️ No signals found');
                         updateStatusDot('connected');
                     }
                 } catch (e) {
@@ -2278,7 +2286,8 @@
     }
 
     async function executeScanTrade(signal) {
-        log(`📥 Trade: ${signal.direction} ${signal.symbol}`);
+        log(`📥 executeScanTrade: ${signal.direction} ${signal.symbol} (${signal.confidence}%)`);
+        console.log('[GPT executeScanTrade] Signal:', JSON.stringify(signal, null, 2));
         
         if (globalTradeLock) {
             log('⏳ BLOCKED: Trade lock active');
@@ -2289,6 +2298,7 @@
 
         // Only switch if signal has _willSwitch flag (set by doScan when scanning multiple assets)
         const shouldSwitch = signal._willSwitch === true;
+        log(`📍 shouldSwitch=${shouldSwitch}, _willSwitch=${signal._willSwitch}`);
         
         if (shouldSwitch && signal.symbol) {
             const targetNorm = normalizeAsset(signal.symbol);
@@ -2769,7 +2779,7 @@
             }
 
             console.log('[GPT Bot] Creating panel...');
-            console.log('[GPT Bot] v6.9.5 - FIXED double-click bug');
+            console.log('[GPT Bot] v6.9.6 - Enhanced GO button logging');
             
             // Create panel immediately, don't wait
             createPanel();
