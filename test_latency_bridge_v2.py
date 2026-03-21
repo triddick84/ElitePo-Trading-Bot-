@@ -10,7 +10,7 @@ import sys
 from datetime import datetime, timezone
 
 # Test configuration
-BACKEND_URL = "https://oanda-auto-trade.preview.emergentagent.com/api"
+BACKEND_URL = "https://pocket-option-trader-1.preview.emergentagent.com/api"
 
 class LatencyBridgeV2Tester:
     def __init__(self):

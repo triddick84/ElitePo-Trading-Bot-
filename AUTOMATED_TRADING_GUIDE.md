@@ -72,7 +72,7 @@ PO_EMAIL = "your-email@example.com"
 PO_PASSWORD = "your-password"
 
 # Cloud server URL
-CLOUD_SERVER_URL = "https://oanda-auto-trade.preview.emergentagent.com"
+CLOUD_SERVER_URL = "https://pocket-option-trader-1.preview.emergentagent.com"
 
 # Account type: "demo" or "live"
 ACCOUNT_TYPE = "live"  # Start with "demo" for testing

@@ -1,148 +1,138 @@
-<analysis>**original_problem_statement:**
+<analysis>**original_problem_statement:** 
 The user is building a GPT Signal Bot for Pocket Option. The goal is to integrate multiple signal sources, implement advanced trading strategies (AI/ML based), and execute trades automatically via a Tampermonkey userscript. 
 
 **PRODUCT REQUIREMENTS:**
-1. **Fix Scan/Switch Logic (P0):** Ensure that when SWITCH is enabled, the SCAN function checks *all* favorited assets, not just the currently selected one.
-2. **Data Source Accuracy (P0):** Ensure signal generation uses real-time market data (OANDA), not delayed sources or mock data.
-3. **UI/UX Refinement (P1):** Create a compact, horizontal, draggable Tampermonkey UI.
-4. **Fix AI/ML Integration (P1):** Fix the historical data pipeline so models can train, and fix the frontend saving mechanism for AI settings.
-5. **Code Cleanup & Refactoring (P2):** Remove unused files and break down the monolithic  file.
+1. **Accurate OTC Data Integration (P0):** Ensure signals for Pocket Option OTC markets are generated using actual live platform prices, as OTC markets are proprietary and cannot be sourced from standard APIs like OANDA.
+2. **Fix Tampermonkey Trade Execution (P0):** Prevent double-clicking, ensure force-scanning works on demand, and automate asset switching based on the active mode (AUTO vs. SCAN).
+3. **UI Enhancements (P1):** Provide a real-time activity console within the Tampermonkey overlay.
+4. **Strategy Optimization (P1):** Create high-accuracy 1-minute and 5-second strategies specifically tailored for Binary Options momentum exhaustion and precision.
 
 **User's preferred language**: English
-*(Instructing next agent: Please respond in English)*
+*(INSTRUCTING NEXT AGENT: Please respond in English only)*
 
 **what currently exists?** 
-A full-stack React/FastAPI application with a Tampermonkey userscript ( currently v6.8.4). The backend analyzes market data to generate trading signals, which the userscript polls and executes on Pocket Option. Recent updates include a compact horizontal userscript UI, a new 1-minute Quad SMA/EMA strategy, successful AI model training using OANDA historical data, and a critical fix ensuring the backend uses live OANDA prices instead of delayed Yahoo Finance data.
+A full-stack React/FastAPI application with a sophisticated Tampermonkey userscript (). The backend contains highly tuned trading strategies (Momentum Exhaustion, Turbo Precision). The userscript features a compact UI, a newly integrated real-time on-screen console log, and strict CSS selectors to prevent double-trade bugs. Due to OANDA API limitations regarding proprietary OTC markets, the Tampermonkey script has recently been modified to scrape live prices directly from the Pocket Option DOM to generate OTC signals locally within the browser.
 
 **Last working item**:
-- **Last item agent was working**: Fixing the  and  logic within the Tampermonkey script (). Specifically, the agent was modifying the  function so that when  is true, the script gathers all favorited assets from the Pocket Option UI and sends them as a comma-separated list to the backend's  endpoint, rather than just scanning the current single asset.
-- **Status**: IN PROGRESS
-- **Agent Testing Done**: N
-- **Which testing method agent to use?**: Manual testing by screenshot/browser console. Install the script, toggle SWITCH ON, and verify the network request to  includes multiple assets in the  query parameter.
+- **Last item agent was working**: Transitioning OTC signal generation from the Python backend to the Tampermonkey script. The agent injected a  class to scrape live prices from the Pocket Option UI and replaced the  API call with a local signal generation function (calculating basic RSI/EMA inside JS) to ensure OTC signals use real proprietary broker data.
+- **Status**: IN PROGRESS 
+- **Agent Testing Done**: N (Code was injected via  but browser execution was not verified before context ended).
+- **Which testing method agent to use?**: Manual testing by screenshot/browser console. Install/update the script in the browser, navigate to Pocket Option, and verify that  successfully captures prices and  generates signals without throwing JS errors.
 - **User Testing Done**: N
 
 **All Pending/In progress Issue list**:
-- **Issue 1: Tampermonkey multi-asset SCAN logic is incomplete** (P0)
-   - **Attempted fixes**: The agent was mid-edit updating the  function in the userscript to use  in the API call.
-   - **Next debug checklist**: Check  line ~2160. Ensure  correctly captures the favorites array, formats it, appends it to the  URL, and properly handles the backend response to trigger  before placing the trade.
-   - **Why fix this issue and what will be achieved with the fix?**: Fulfills the user's latest explicit request to make the bot truly automated across multiple pairs.
-   - **Status**: IN PROGRESS
-   - **Is recurring issue?**: Y (State/logic management in the userscript has been repeatedly problematic).
-   - **Should Test frontend/backend/both after fix?**: Frontend (Userscript)
-   - **Blocked on other issue**: None.
+  - **Issue 1: Local Signal Generation & Price Scraping Validation** (P0)
+     - **Attempted fixes**: Replaced the  API call to the backend in  with a local calculation utilizing a newly added  class.
+     - **Next debug checklist**: Check  line ~2600. Verify  successfully finds price elements on Pocket Option (e.g., ). Ensure  is correctly pushing data to . Check if local RSI calculations trigger trades correctly.
+     - **Why fix this issue and what will be achieved with the fix?**: External APIs (OANDA/YFinance) do not possess Pocket Option's proprietary OTC data. Local scraping is the *only* way to guarantee signal accuracy for these specific assets.
+     - **Status**: TESTING PENDING
+     - **Is recurring issue?**: N (New architecture approach).
+     - **Should Test frontend/backend/both after fix?**: Frontend (Userscript).
+     - **Blocked on other issue**: None.
 
-- **Issue 2: Pocket Option Asset Clicking (SWITCH execution) is unreliable** (P1)
-   - **Attempted fixes**: Added more robust CSS selectors for the favorites bar (, ). 
-   - **Next debug checklist**: Verify  and  functions in the userscript actually trigger a UI change on Pocket Option.
-   - **Why fix this issue and what will be achieved with the fix?**: If the bot can't physically click the UI to change assets, the multi-asset SCAN feature is useless.
-   - **Status**: TESTING PENDING
-   - **Is recurring issue?**: Y
-   - **Should Test frontend/backend/both after fix?**: Frontend (Userscript)
+  - **Issue 2: Pocket Option Asset Switching via Favorites** (P1)
+     - **Attempted fixes**: Updated CSS selectors and added an in-page Console UI to track exactly where asset switching fails. Logic was simplified: AUTO OFF + SCAN ON = Auto-switch to best signal.
+     - **Next debug checklist**: Use the new Tampermonkey Console UI to monitor the  output. Verify the  and  selectors work in the live DOM.
+     - **Why fix this issue and what will be achieved with the fix?**: Enables true multi-asset automation.
+     - **Status**: USER VERIFICATION PENDING
+     - **Is recurring issue?**: Y
+     - **Should Test frontend/backend/both after fix?**: Frontend.
 
 **In progress Task List**:
-- **Task 1: Backend Refactoring ()** (P1)
-   - **Where to resume**: Create a  directory and begin migrating endpoints (e.g., , , ) out of the massive 14,000+ line  file.
-   - **What will be achieved with this?**: Drastically improve maintainability and prevent routing/variable scope bugs.
-   - **Status**: NOT STARTED (Deferred for higher priority bugs).
-   - **Should Test frontend/backend/both after fix?**: Backend (via Testing Agent).
-   - **Blocked on something**: None.
+  - **Task 1: Backend Refactoring ()** (P1)
+     - **Where to resume**: Create a  directory and begin migrating endpoints out of the monolithic 14,000+ line  file.
+     - **What will be achieved with this?**: Scalability and maintainability. 
+     - **Status**: NOT STARTED (Deferred for higher priority frontend bugs).
+     - **Should Test frontend/backend/both after fix?**: Backend (Testing Agent).
+     - **Blocked on something**: None.
 
 **Upcoming and Future Tasks**
 Upcoming Tasks:
-- (P1) **Verify AI/ML Model Accuracy:** Current trained models sit at ~53% accuracy. Implement parameter tuning to increase this.
-- (P2) **Test TradingView Webhook / MT4 Integrations:** Mocked but never verified by the user.
+- (P1) **Verify AI/ML Model Accuracy:** Current trained models sit at ~53% accuracy. Tune parameters.
+- (P2) **Test TradingView Webhook / MT4 Integrations:** Mocked but never verified.
 
 Future Tasks:
-- (P2) Refactor  into a modular webpack/vite build process rather than a single massive script file.
+- (P2) **Modularize Tampermonkey Script:** Refactor the massive ~3,500 line  into a Webpack/Vite build process.
 
 **Completed work in this session**
-- Money Management UI & Logic implementation in Tampermonkey (DONE)
-- Created  (White 2 SMA, Yellow 5 SMA, Pink 10 SMA, Blue 20 EMA) (DONE)
-- Cleaned up ~6600 lines of unused legacy Python files (DONE)
-- Fixed AI/ML training pipeline to use OANDA historical data instead of failing on empty data (DONE)
-- Redesigned Tampermonkey UI to a compact, single-row horizontal layout (v6.8.4) (DONE)
-- Replaced buggy  flag with reliable  in Tampermonkey (DONE)
-- **CRITICAL FIX:** Updated  to fetch REAL live OANDA data instead of delayed YFinance/mock data for signal generation (DONE)
-- Fixed AI Settings save bug (Changed POST to PUT and aligned Pydantic schemas) (DONE)
+- Created  (Binary Options logic) (DONE)
+- Created  for 5s/1m timeframes (DONE)
+- Fixed Tampermonkey Double-Trade Bug (Replaced broad  selectors with strict  / ) (DONE)
+- Simplified SCAN logic (Removed UI 'SWITCH' toggle; switching is now automatic when AUTO is OFF) (DONE)
+- Fixed GO/FETCH button to bypass backend  restrictions (DONE)
+- Implemented real-time Tampermonkey UI Console Window (v7.0.0) (DONE)
+- Updated Backend Data Service to prioritize OANDA over delayed YFinance for regular forex (DONE)
 
 **Earlier issues found/mentioned but not fixed**
-- None that haven't been logged in the pending issues list.
+- None unaddressed.
 
 **Known issue recurrence from previous fork**
-- **Issue recurrence in previous fork:** Tampermonkey state management (Trade blocking/Double trading).
-- **Recurrence count:** 4+
-- **Status:** RESOLVED (Replaced boolean  checks with a strict  with a 5-second timeout).
-*Note for next agent: DO NOT re-introduce  or complex setTimeouts for trade locking. Stick to .*
+  - **Issue recurrence in previous fork**: Tampermonkey double-trading and false button clicks.
+  - **Recurrence count**: 5+
+  - **Status**: RESOLVED (Using  and strictly defined CSS selectors).
+  *Note: Do NOT revert to fuzzy CSS matching for Pocket Option trade buttons.*
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
-- **Frontend:** React, TailwindCSS, Tampermonkey (DOM injection/scraping).
-- **Backend:** FastAPI, Python, Pandas.
-- **Market Data:** OANDA API (Live pricing and historical candles).
-- **AI/ML:** Scikit-learn (Random Forest, Gradient Boosting) for signal prediction based on historical candle data.
+- **Frontend:** React, Tampermonkey (DOM injection/scraping, Local Signal Math).
+- **Backend:** FastAPI, Python.
+- **Market Data:** OANDA API (for Regular Forex). Local DOM Scraping (for Pocket Option OTC).
 
 **key DB schema**
 - : {user_id, settings_dict}
-- : {user_id, signal_id, asset, outcome, timestamp}
 
 **changes in tech stack**
-- Transitioned strictly away from  (delayed data) to  for all real-time signal generation.
+- **CRITICAL SHIFT**: Shifted OTC signal generation from Backend (Python) to Frontend (JS). Because OANDA cannot provide proprietary Pocket Option OTC prices, the Tampermonkey script now scrapes live prices directly from the browser DOM to calculate signals locally. 
 
 **All files of reference**
--  (Currently being edited for SCAN logic)
--  (Contains the  endpoint)
--  (Updated to use real OANDA data)
--  (Updated API calls)
+-  (Heavily modified for local scraping and UI console)
+-  (New strategy logic)
+-  (Updated source hierarchy)
 
 **Areas that need refactoring**:
--  is critically overgrown (~14.8k lines) and urgently needs splitting into a  folder.
+-  (~14.8k lines) needs modularization.
+-  (~3.5k lines) is becoming too complex for a single file.
 
 **key api endpoints**
--  (Polled by userscript)
--  (Saves AI settings)
--  (Triggers model training)
+-  (Note: Script now bypasses this for OTC markets in favor of local scraping).
 
 **Critical Info for New Agent**
-- **Tampermonkey UI changed:** The UI is now a highly compact, horizontal layout (v6.8.4). Removed old verbose buttons. Do not try to reference old DOM IDs like .
-- **Trade Locking:** The userscript now exclusively relies on  to prevent double trades. Do not use .
-- **Data Source:** OTC Markets (e.g., ) map to standard OANDA pairs (). The backend handles this mapping. Always rely on  for data.
+- **Data Source Reality**: OANDA *does not* support OTC. The previous agent just injected a  into the Tampermonkey script to solve this. **Your first priority should be ensuring this JS scraping/calculation logic actually runs without crashing the browser.**
+- **UI Changes**: The SWITCH toggle was removed. A LOG toggle was added to view a custom on-screen console.
+- **Trade Execution**: Trade clicking is strictly bound to  and .
 
 **documents and test reports created in this job**
--  (Updated with completed tasks)
+-  (Updated)
 
-**Last 10 User Messages and any pending HUMAN messages**
-1. *User*: Complete money management then move to fixing bugs. (Done)
-2. *User*: Implement a 1m Quad SMA/EMA crossover strategy. (Done)
-3. *User*: Fix tampermonkey bugs, fix AI data pipeline, cleanup unused files. (Done)
-4. *User*: Clarified exact logic for SCAN, SWITCH, and AUTO buttons. (Done)
-5. *User*: isTrading flag is stuck; requests compact horizontal redesign for Tampermonkey. (Done)
-6. *User*: Tampermonkey won't show up after reinstall (syntax error). (Fixed)
-7. *User*: Tampermonkey needs to be draggable again. (Fixed)
-8. *User*: Switch feature doesn't work. Suspects real-time data isn't being used. (Critical backend data fix applied).
-9. *User*: Double check OTC markets get real-time data. (Verified).
-10. *User*: AI/ML learning save button fails. (Fixed PUT/POST mismatch).
-11. *User*: **(PENDING)** When switch is enabled, SCAN needs to scan ALL favorites for signals, not just the currently selected one.
+**Last 10 User Messages and any pending HUMAN messages** 
+1. *User*: Asked for a 1-minute strategy based on actual Binary Options logic. (Completed).
+2. *User*: Complained SCAN wasn't placing trades and logic was confusing. (Completed - simplified logic).
+3. *User*: Reported SCAN finds signals but doesn't trade. (Completed - fixed async flow).
+4. *User*: Reported FETCH/GO button not working. (Completed).
+5. *User*: Asked if OANDA provides OTC data, requested ensuring real-time data for OTC. (Acknowledged limitation).
+6. *User*: Reported double-clicking bug (one buy and one sell simultaneously). (Completed - fixed selectors).
+7. *User*: Reported GO button not generating on demand due to tradeable flags. (Completed).
+8. *User*: Asset switching still fails; requested an on-screen UI console for Tampermonkey. (Completed - Console added).
+9. *User*: Pointed out OANDA is still being used for OTC. Selected options to scrape prices and generate signals locally in Tampermonkey. (In Progress - Code injected).
 
 **Project Health Check:**
-- **Broken**: Multi-asset scanning logic in the Tampermonkey script is currently incomplete/mid-edit.
-- **Mocked**: MT4/MT5 integrations exist in code but are simulated/untested by the user.
+- **Broken/Untested**: The newly injected local  and OTC signal generation logic in the Tampermonkey script.
+- **Mocked**: MT4/MT5 integrations exist but are simulated.
 
 **3rd Party Integrations**
-- OANDA API (Market Data) — requires User API Key (Environment configured)
+- OANDA API (Market Data) — requires User API Key (Configured)
 - Telegram Bot (Notifications) — requires User API Key
-- TradingView Webhooks — integration endpoints present
 
 **Testing status**
-- Testing agent used after significant changes: NO (Manual curl/python scripts used to verify data).
+- Testing agent used after significant changes: NO
 - Troubleshoot agent used after agent stuck in loop: NO
 - Test files created: None
-- Known regressions: None currently known, but UI scraping is fragile.
+- Known regressions: Asset switching reliability remains a recurring pain point due to Pocket Option DOM changes.
 
 **Credentials to test flow:**
-- Test user created in DB:  /  (JWT logic bypassed for internal curl checks).
+-  /  
 
 **What agent forgot to execute**
-- The agent was interrupted while implementing the very last user request (making  check multiple assets when  is enabled). The string joining logic  needs to be finalized in .
-- The backend refactoring () requested earlier was acknowledged but deferred due to time constraints and higher-priority bugs.</analysis>
+- The agent injected the local signal generation code ( and replaced ) at the very end of the session but did not perform a final lint or execute a browser check to ensure the new Javascript runs without syntax/reference errors.</analysis>

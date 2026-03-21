@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
-// @namespace    https://oanda-auto-trade.preview.emergentagent.com
-// @version      7.0.0
-// @description  Auto-trade OTC forex on Pocket Option. v7.0.0 - Added console window + improved asset switching
+// @namespace    https://pocket-option-trader-1.preview.emergentagent.com
+// @version      7.1.0
+// @description  Auto-trade OTC forex on Pocket Option. v7.1.0 - LOCAL signal generation using actual OTC prices
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -30,26 +30,334 @@
     // CONFIGURATION
     // ===========================================
     const CONFIG = {
-        API_URL: 'https://oanda-auto-trade.preview.emergentagent.com/api',
+        API_URL: 'https://pocket-option-trader-1.preview.emergentagent.com/api',
         APP_POLL_INTERVAL: 3000,     // 3 seconds for app signals
         SCAN_INTERVAL: 5000,         // 5 seconds for scanning
         TRADE_COOLDOWN_SCAN: 30000,  // 30 seconds between SCAN trades
         TRADE_COOLDOWN_APP: 5000,    // 5 seconds between APP trades
         MIN_CONFIDENCE: 70,
         MIN_PAYOUT: 65,
-        DEBUG: true
+        DEBUG: true,
+        USE_LOCAL_SIGNALS: true,  // v7.1.0: Generate signals locally using actual OTC prices
+        LOCAL_CANDLE_COUNT: 50,   // Number of candles to analyze
+    };
+
+    // ===========================================
+    // v7.1.0 LOCAL SIGNAL GENERATION ENGINE
+    // Uses actual Pocket Option OTC prices
+    // ===========================================
+    const LocalSignalEngine = {
+        candles: [],           // Scraped candle data
+        lastPrice: null,       // Last known price
+        lastUpdate: 0,         // Timestamp of last price update
+        
+        // RSI calculation
+        calculateRSI(prices, period = 2) {
+            if (prices.length < period + 1) return 50;
+            
+            let gains = 0, losses = 0;
+            for (let i = prices.length - period; i < prices.length; i++) {
+                const change = prices[i] - prices[i - 1];
+                if (change > 0) gains += change;
+                else losses -= change;
+            }
+            
+            if (losses === 0) return 100;
+            const rs = gains / losses;
+            return 100 - (100 / (1 + rs));
+        },
+        
+        // EMA calculation
+        calculateEMA(prices, period) {
+            if (prices.length < period) return prices[prices.length - 1];
+            
+            const k = 2 / (period + 1);
+            let ema = prices.slice(0, period).reduce((a, b) => a + b, 0) / period;
+            
+            for (let i = period; i < prices.length; i++) {
+                ema = prices[i] * k + ema * (1 - k);
+            }
+            return ema;
+        },
+        
+        // Stochastic calculation
+        calculateStochastic(highs, lows, closes, period = 5) {
+            if (closes.length < period) return { k: 50, d: 50 };
+            
+            const recentHighs = highs.slice(-period);
+            const recentLows = lows.slice(-period);
+            const highestHigh = Math.max(...recentHighs);
+            const lowestLow = Math.min(...recentLows);
+            const currentClose = closes[closes.length - 1];
+            
+            const k = ((currentClose - lowestLow) / (highestHigh - lowestLow + 0.00001)) * 100;
+            return { k, d: k }; // Simplified - d is smoothed k
+        },
+        
+        // Bollinger Bands
+        calculateBollingerBands(prices, period = 20, stdDev = 2) {
+            if (prices.length < period) {
+                const last = prices[prices.length - 1];
+                return { upper: last, middle: last, lower: last };
+            }
+            
+            const slice = prices.slice(-period);
+            const sma = slice.reduce((a, b) => a + b, 0) / period;
+            const variance = slice.reduce((sum, p) => sum + Math.pow(p - sma, 2), 0) / period;
+            const std = Math.sqrt(variance);
+            
+            return {
+                upper: sma + stdDev * std,
+                middle: sma,
+                lower: sma - stdDev * std
+            };
+        },
+        
+        // Detect candlestick patterns
+        detectPattern(candles) {
+            if (candles.length < 3) return { bullish: false, bearish: false, name: null };
+            
+            const curr = candles[candles.length - 1];
+            const prev = candles[candles.length - 2];
+            
+            const body = Math.abs(curr.close - curr.open);
+            const upperWick = curr.high - Math.max(curr.open, curr.close);
+            const lowerWick = Math.min(curr.open, curr.close) - curr.low;
+            const range = curr.high - curr.low || 0.00001;
+            
+            // Hammer (bullish)
+            if (lowerWick > body * 2 && upperWick < body * 0.5 && body < range * 0.4) {
+                return { bullish: true, bearish: false, name: 'HAMMER' };
+            }
+            
+            // Shooting Star (bearish)
+            if (upperWick > body * 2 && lowerWick < body * 0.5 && body < range * 0.4) {
+                return { bullish: false, bearish: true, name: 'SHOOTING_STAR' };
+            }
+            
+            // Bullish Engulfing
+            if (curr.close > curr.open && prev.close < prev.open && 
+                curr.close > prev.open && curr.open < prev.close) {
+                return { bullish: true, bearish: false, name: 'BULLISH_ENGULFING' };
+            }
+            
+            // Bearish Engulfing
+            if (curr.close < curr.open && prev.close > prev.open && 
+                curr.close < prev.open && curr.open > prev.close) {
+                return { bullish: false, bearish: true, name: 'BEARISH_ENGULFING' };
+            }
+            
+            // Doji
+            if (body < range * 0.1) {
+                return { bullish: false, bearish: false, name: 'DOJI' };
+            }
+            
+            return { bullish: false, bearish: false, name: null };
+        },
+        
+        // MAIN: Generate signal from candle data
+        generateSignal(candles) {
+            if (!candles || candles.length < 20) {
+                return null;
+            }
+            
+            const closes = candles.map(c => c.close);
+            const highs = candles.map(c => c.high);
+            const lows = candles.map(c => c.low);
+            const currentPrice = closes[closes.length - 1];
+            
+            // Calculate indicators
+            const rsi2 = this.calculateRSI(closes, 2);
+            const rsi14 = this.calculateRSI(closes, 14);
+            const ema5 = this.calculateEMA(closes, 5);
+            const ema10 = this.calculateEMA(closes, 10);
+            const ema20 = this.calculateEMA(closes, 20);
+            const stoch = this.calculateStochastic(highs, lows, closes, 5);
+            const bb = this.calculateBollingerBands(closes, 20, 2);
+            const pattern = this.detectPattern(candles);
+            
+            // Count confirmations
+            let callConfs = [];
+            let putConfs = [];
+            
+            // RSI extremes
+            if (rsi2 < 10) callConfs.push('RSI2_EXTREME');
+            else if (rsi2 < 20) callConfs.push('RSI2_OVERSOLD');
+            
+            if (rsi2 > 90) putConfs.push('RSI2_EXTREME');
+            else if (rsi2 > 80) putConfs.push('RSI2_OVERBOUGHT');
+            
+            // Stochastic
+            if (stoch.k < 20) callConfs.push('STOCH_OVERSOLD');
+            if (stoch.k > 80) putConfs.push('STOCH_OVERBOUGHT');
+            
+            // Bollinger Bands
+            if (currentPrice <= bb.lower) callConfs.push('BB_LOWER');
+            if (currentPrice >= bb.upper) putConfs.push('BB_UPPER');
+            
+            // EMA trend
+            if (ema5 > ema10 && ema10 > ema20) putConfs.push('TREND_UP_REVERSAL');
+            if (ema5 < ema10 && ema10 < ema20) callConfs.push('TREND_DOWN_REVERSAL');
+            
+            // Candlestick patterns
+            if (pattern.bullish) callConfs.push(pattern.name);
+            if (pattern.bearish) putConfs.push(pattern.name);
+            
+            // Momentum
+            if (closes.length > 5) {
+                const momentum = closes[closes.length - 1] - closes[closes.length - 5];
+                if (momentum < 0 && rsi2 < 30) callConfs.push('MOMENTUM_REVERSAL');
+                if (momentum > 0 && rsi2 > 70) putConfs.push('MOMENTUM_REVERSAL');
+            }
+            
+            // Determine signal (need 3+ confirmations)
+            const minConfs = 3;
+            
+            if (callConfs.length >= minConfs && callConfs.length > putConfs.length) {
+                const confidence = Math.min(95, 60 + callConfs.length * 8);
+                return {
+                    direction: 'CALL',
+                    confidence,
+                    confirmations: callConfs,
+                    count: callConfs.length,
+                    price: currentPrice,
+                    indicators: { rsi2, rsi14, stoch: stoch.k, bb_pos: 'lower' }
+                };
+            }
+            
+            if (putConfs.length >= minConfs && putConfs.length > callConfs.length) {
+                const confidence = Math.min(95, 60 + putConfs.length * 8);
+                return {
+                    direction: 'PUT',
+                    confidence,
+                    confirmations: putConfs,
+                    count: putConfs.length,
+                    price: currentPrice,
+                    indicators: { rsi2, rsi14, stoch: stoch.k, bb_pos: 'upper' }
+                };
+            }
+            
+            return null;
+        }
+    };
+
+    // ===========================================
+    // v7.1.0 POCKET OPTION PRICE SCRAPER
+    // ===========================================
+    const PriceScraperV2 = {
+        priceHistory: [],
+        candleHistory: [],
+        maxCandles: 100,
+        lastScrapedPrice: null,
+        
+        // Scrape current price from Pocket Option UI
+        scrapeCurrentPrice() {
+            // Try multiple selectors for price display
+            const selectors = [
+                '.chart-area .price',
+                '.current-price',
+                '[class*="current-price"]',
+                '[class*="chart"] [class*="price"]',
+                '.trading-chart .value',
+                '[data-testid="current-price"]',
+                '.chart-header .price',
+                '.price-display',
+                '.live-price'
+            ];
+            
+            for (const sel of selectors) {
+                const els = document.querySelectorAll(sel);
+                for (const el of els) {
+                    if (!el || !el.offsetParent) continue;
+                    
+                    const text = (el.textContent || el.innerText || '').trim();
+                    // Match forex prices like 1.08234 or 108.234
+                    const match = text.match(/(\d{1,3}\.\d{3,5})/);
+                    if (match) {
+                        const price = parseFloat(match[1]);
+                        if (price > 0.1 && price < 300) {
+                            this.lastScrapedPrice = price;
+                            return price;
+                        }
+                    }
+                }
+            }
+            
+            // Try finding price in SVG chart text elements
+            const svgTexts = document.querySelectorAll('svg text, svg tspan');
+            for (const el of svgTexts) {
+                const text = el.textContent?.trim() || '';
+                const match = text.match(/^(\d{1,3}\.\d{3,5})$/);
+                if (match) {
+                    const price = parseFloat(match[1]);
+                    if (price > 0.1 && price < 300) {
+                        this.lastScrapedPrice = price;
+                        return price;
+                    }
+                }
+            }
+            
+            return null;
+        },
+        
+        // Build candle from price updates
+        buildCandle(price, intervalMs = 1000) {
+            const now = Date.now();
+            
+            // Add to price history
+            this.priceHistory.push({ price, time: now });
+            
+            // Keep only recent prices (last 2 minutes)
+            const cutoff = now - 120000;
+            this.priceHistory = this.priceHistory.filter(p => p.time > cutoff);
+            
+            // Build candle every second (or specified interval)
+            if (this.priceHistory.length < 2) return null;
+            
+            const recentPrices = this.priceHistory.filter(p => p.time > now - intervalMs);
+            if (recentPrices.length === 0) return null;
+            
+            const open = recentPrices[0].price;
+            const close = recentPrices[recentPrices.length - 1].price;
+            const high = Math.max(...recentPrices.map(p => p.price));
+            const low = Math.min(...recentPrices.map(p => p.price));
+            
+            return { open, high, low, close, time: now };
+        },
+        
+        // Add a new candle to history
+        addCandle(candle) {
+            if (!candle) return;
+            
+            this.candleHistory.push(candle);
+            
+            // Keep only recent candles
+            if (this.candleHistory.length > this.maxCandles) {
+                this.candleHistory.shift();
+            }
+        },
+        
+        // Get candle history for analysis
+        getCandles() {
+            return this.candleHistory;
+        },
+        
+        // Clear history
+        reset() {
+            this.priceHistory = [];
+            this.candleHistory = [];
+        }
     };
 
     // ===========================================
     // STATE - ALL BUTTONS DEFAULT TO OFF
     // ===========================================
-    // v6.9.0 - Simplified Logic:
+    // v7.1.0 - Local signal generation using actual OTC prices
     // AUTO = Receives APP signals and places trades
-    // SCAN = Scans for signals and places trades
+    // SCAN = Generates LOCAL signals using scraped OTC prices
     //   - If AUTO ON: SCAN only checks currently selected asset (no switching)
     //   - If AUTO OFF: SCAN checks ALL favorites, auto-switches to best signal asset
     // INVERT = Local toggle for direction inversion
-    // SWITCH toggle REMOVED - switching is automatic based on AUTO state
     
     let autoEnabled = false;    // Receive APP signals only
     let scanEnabled = false;    // Tampermonkey generates trades
@@ -2133,7 +2441,7 @@
     }
 
     // ===========================================
-    // INTERVAL MANAGEMENT - v6.9.0
+    // INTERVAL MANAGEMENT - v7.1.0
     // ===========================================
     function manageIntervals() {
         // Clear existing intervals
@@ -2153,12 +2461,18 @@
             checkAppSignals(false);
         }
 
-        // v6.9.0 SCAN logic:
-        // - AUTO ON: Scan current asset only (no switching)
-        // - AUTO OFF: Scan ALL favorites and auto-switch to best signal
+        // v7.1.0: Start price scraping for local signal generation
+        if (scanEnabled && CONFIG.USE_LOCAL_SIGNALS) {
+            startPriceScraping();
+            log('🔍 LOCAL SCAN: Using actual OTC prices');
+        } else {
+            stopPriceScraping();
+        }
+
+        // SCAN: Generate signals locally or via backend
         if (scanEnabled) {
-            const scanMode = autoEnabled ? 'current asset only' : 'ALL favorites (auto-switch)';
-            log(`🔍 Starting scan: ${scanMode}`);
+            const scanMode = CONFIG.USE_LOCAL_SIGNALS ? 'LOCAL OTC' : 'BACKEND OANDA';
+            log(`🔍 Starting scan (${scanMode})`);
             scanInterval = setInterval(() => doScan(false), CONFIG.SCAN_INTERVAL);
             doScan(false);
         }
@@ -2282,10 +2596,37 @@
     }
 
     // ===========================================
-    // SCAN HANDLING - v6.9.7 FIXED ASSET SWITCHING
+    // SCAN HANDLING - v7.1.0 LOCAL SIGNAL GENERATION
+    // Uses actual Pocket Option OTC prices
     // ===========================================
+    let priceScrapingInterval = null;
+    
+    function startPriceScraping() {
+        if (priceScrapingInterval) return;
+        
+        log('📊 Starting OTC price scraping...');
+        
+        // Scrape price every 500ms to build candle data
+        priceScrapingInterval = setInterval(() => {
+            const price = PriceScraperV2.scrapeCurrentPrice();
+            if (price) {
+                const candle = PriceScraperV2.buildCandle(price, 1000);
+                if (candle) {
+                    PriceScraperV2.addCandle(candle);
+                }
+            }
+        }, 500);
+    }
+    
+    function stopPriceScraping() {
+        if (priceScrapingInterval) {
+            clearInterval(priceScrapingInterval);
+            priceScrapingInterval = null;
+        }
+    }
+    
     function doScan(force = false, currentAssetOnly = false) {
-        log(`doScan: force=${force}, currentOnly=${currentAssetOnly}, scan=${scanEnabled}, auto=${autoEnabled}`);
+        log(`doScan: force=${force}, currentOnly=${currentAssetOnly}, local=${CONFIG.USE_LOCAL_SIGNALS}`);
         
         // Allow scan if forced (GO button) or if SCAN is enabled
         if (!scanEnabled && !force) {
@@ -2306,78 +2647,129 @@
             return;
         }
 
-        // Determine which assets to scan and whether to switch
-        let assetsToScan = '';
-        let willSwitchAssets = false;
+        // Determine switching behavior
+        let willSwitchAssets = !autoEnabled && !currentAssetOnly;
         
-        // LOGIC:
-        // - GO button (force + currentAssetOnly): Scan current asset, NO switch
-        // - AUTO ON + SCAN: Scan current asset, NO switch  
-        // - AUTO OFF + SCAN: Scan ALL favorites, YES switch to best signal
-        
-        if (currentAssetOnly) {
-            // GO button pressed - current asset only, no switching
-            const currentAssetRaw = getCurrentAsset();
-            if (!currentAssetRaw) {
-                assetsToScan = 'EURUSD_OTC';
-                log('🔍 GO: Scanning EURUSD_OTC (detection failed)');
-            } else {
-                assetsToScan = currentAssetRaw
-                    .replace(/\s+/g, '')
-                    .replace('/', '')
-                    .replace('OTC', '_OTC')
-                    .toUpperCase();
-                
-                if (!assetsToScan.includes('_OTC')) {
-                    assetsToScan += '_OTC';
-                }
-                log(`🔍 GO: Scanning ${assetsToScan}`);
-            }
-            willSwitchAssets = false;
-        } else if (autoEnabled) {
-            // AUTO ON - scan current asset only, no switching
-            const currentAssetRaw = getCurrentAsset();
-            if (!currentAssetRaw) {
-                assetsToScan = 'EURUSD_OTC';
-            } else {
-                assetsToScan = currentAssetRaw
-                    .replace(/\s+/g, '')
-                    .replace('/', '')
-                    .replace('OTC', '_OTC')
-                    .toUpperCase();
-                if (!assetsToScan.includes('_OTC')) {
-                    assetsToScan += '_OTC';
-                }
-            }
-            log(`🔍 AUTO+SCAN: ${assetsToScan} (no switch)`);
-            willSwitchAssets = false;
+        if (CONFIG.USE_LOCAL_SIGNALS) {
+            // v7.1.0: Use LOCAL signal generation with scraped OTC prices
+            doLocalScan(force, currentAssetOnly, willSwitchAssets);
         } else {
-            // AUTO OFF + SCAN ON = scan ALL favorites and SWITCH to best
-            detectFavoritesBar();
+            // Fallback: Use backend API (OANDA data)
+            doBackendScan(force, currentAssetOnly, willSwitchAssets);
+        }
+    }
+    
+    // v7.1.0: Local signal generation using actual OTC prices
+    function doLocalScan(force, currentAssetOnly, willSwitchAssets) {
+        updateStatusDot('trading');
+        
+        const currentAsset = getCurrentAsset() || 'Unknown';
+        log(`🔍 LOCAL SCAN: ${currentAsset} (OTC prices)`);
+        
+        // Scrape current price
+        const currentPrice = PriceScraperV2.scrapeCurrentPrice();
+        if (!currentPrice) {
+            log('⚠️ Cannot scrape price - trying backup method');
+            // Try getting price from any visible element
+            const priceEl = document.querySelector('[class*="price"], [class*="value"], [class*="quote"]');
+            if (priceEl) {
+                log(`Found price element: ${priceEl.textContent}`);
+            }
+        } else {
+            log(`💰 Current price: ${currentPrice}`);
+        }
+        
+        // Build candle from current price
+        if (currentPrice) {
+            const candle = PriceScraperV2.buildCandle(currentPrice, 1000);
+            if (candle) {
+                PriceScraperV2.addCandle(candle);
+            }
+        }
+        
+        // Get candle history
+        const candles = PriceScraperV2.getCandles();
+        log(`📊 Candles available: ${candles.length}`);
+        
+        if (candles.length < 10) {
+            log(`⏳ Need more data (${candles.length}/10 candles). Waiting...`);
+            updateStatusDot('connected');
+            return;
+        }
+        
+        // Generate signal using local engine
+        const signal = LocalSignalEngine.generateSignal(candles);
+        
+        if (signal) {
+            log(`✅ LOCAL SIGNAL: ${signal.direction} (${signal.confidence}%)`);
+            log(`📊 Confirmations: ${signal.confirmations.join(', ')}`);
+            log(`📈 RSI2=${signal.indicators.rsi2.toFixed(1)}, Stoch=${signal.indicators.stoch.toFixed(1)}`);
             
+            // Check minimum confidence
+            if (signal.confidence < CONFIG.MIN_CONFIDENCE) {
+                log(`⚠️ Confidence too low: ${signal.confidence}% < ${CONFIG.MIN_CONFIDENCE}%`);
+                updateStatusDot('connected');
+                return;
+            }
+            
+            // Build signal object for execution
+            const tradeSignal = {
+                direction: signal.direction,
+                symbol: currentAsset.replace(/\s+/g, '').replace('/', '').toUpperCase(),
+                confidence: signal.confidence,
+                confirmations: signal.confirmations,
+                price: signal.price,
+                source: 'LOCAL_OTC',
+                _willSwitch: willSwitchAssets
+            };
+            
+            // Execute trade
+            executeScanTrade(tradeSignal).catch(err => {
+                log(`❌ Trade error: ${err.message}`);
+                updateStatusDot('connected');
+            });
+        } else {
+            log('⚠️ No signal (conditions not met)');
+            updateStatusDot('connected');
+        }
+    }
+    
+    // Fallback: Backend API scan (uses OANDA data)
+    function doBackendScan(force, currentAssetOnly, willSwitchAssets) {
+        let assetsToScan = '';
+        
+        if (currentAssetOnly || autoEnabled) {
+            const currentAssetRaw = getCurrentAsset();
+            if (!currentAssetRaw) {
+                assetsToScan = 'EURUSD_OTC';
+            } else {
+                assetsToScan = currentAssetRaw
+                    .replace(/\s+/g, '')
+                    .replace('/', '')
+                    .replace('OTC', '_OTC')
+                    .toUpperCase();
+                if (!assetsToScan.includes('_OTC')) {
+                    assetsToScan += '_OTC';
+                }
+            }
+            log(`🔍 BACKEND SCAN: ${assetsToScan}`);
+        } else {
+            detectFavoritesBar();
             if (favoritesFromBar.length > 0) {
                 const assetList = favoritesFromBar.map(f => {
                     let norm = f.normalized;
-                    if (!norm.includes('_OTC') && !norm.includes('OTC')) {
-                        norm += '_OTC';
-                    } else if (norm.includes('OTC') && !norm.includes('_OTC')) {
-                        norm = norm.replace('OTC', '_OTC');
-                    }
+                    if (!norm.includes('_OTC')) norm += '_OTC';
                     return norm;
                 });
                 assetsToScan = assetList.join(',');
-                log(`🔍 SCAN: ${favoritesFromBar.length} favorites (WILL SWITCH)`);
+                log(`🔍 BACKEND SCAN: ${favoritesFromBar.length} favorites`);
             } else {
                 assetsToScan = 'EURUSD_OTC,GBPUSD_OTC,USDJPY_OTC,AUDUSD_OTC';
-                log('🔍 SCAN: Using defaults (WILL SWITCH)');
             }
-            willSwitchAssets = true;  // KEY: Enable switching when scanning multiple assets
         }
-        
-        log(`📍 willSwitchAssets = ${willSwitchAssets}`);
 
         const apiUrl = CONFIG.API_URL + `/signals/scan-markets?assets=${assetsToScan}&min_confidence=${CONFIG.MIN_CONFIDENCE}`;
-        log(`📡 ${apiUrl}`);
+        log(`📡 API: ${apiUrl}`);
         updateStatusDot('trading');
         
         GM_xmlhttpRequest({
@@ -2397,28 +2789,21 @@
                     const data = JSON.parse(res.responseText);
                     const signals = data.top_signals || data.signals || [];
                     
-                    log(`📊 ${signals.length} signal(s) found`);
+                    log(`📊 ${signals.length} signal(s)`);
                     
                     if (data.success && signals.length > 0) {
                         const bestSignal = signals[0];
-                        // CRITICAL: Set the switch flag based on our scan mode
                         bestSignal._willSwitch = willSwitchAssets;
+                        bestSignal.source = 'BACKEND_OANDA';
                         
-                        log(`✅ ${bestSignal.direction} ${bestSignal.symbol} (${Math.round(bestSignal.confidence)}%) [switch=${willSwitchAssets}]`);
+                        log(`✅ ${bestSignal.direction} ${bestSignal.symbol} (${Math.round(bestSignal.confidence)}%)`);
                         
-                        // Log if signal is marked as not tradeable but proceed anyway
-                        if (bestSignal.is_tradeable === false) {
-                            log(`⚠️ Signal marked not tradeable: ${bestSignal.avoid_reasons?.join(', ') || 'unknown'}`);
-                        }
-                        
-                        // Execute trade
                         executeScanTrade(bestSignal).catch(err => {
                             log(`❌ Trade error: ${err.message}`);
-                            console.error('[GPT Trade Error]', err);
                             updateStatusDot('connected');
                         });
                     } else {
-                        log('⚠️ No signals found');
+                        log('⚠️ No signals');
                         updateStatusDot('connected');
                     }
                 } catch (e) {

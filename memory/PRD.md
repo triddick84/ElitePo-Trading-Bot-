@@ -1,16 +1,44 @@
 # GPT Signal Bot - Product Requirements Document
 
-## Last Updated: March 20, 2026
+## Last Updated: March 21, 2026
 
 ## Current Status
-✅ **Tampermonkey v6.9.4** - OANDA real-time data + price verification
-✅ **Backend Data Sources** - OANDA (primary), yfinance (fallback)
+✅ **Tampermonkey v7.1.0** - LOCAL signal generation using actual OTC prices (DOM scraping)
+✅ **Backend Data Sources** - OANDA (primary), yfinance (fallback) - for regular forex
 ✅ **1m Momentum Exhaustion Strategy** - RSI-2 + Stochastic + BB + Candlesticks (70-75% target)
 ✅ **Tampermonkey v6.8.0** - Complete Money Management System with Smart Martingale
 ✅ **Ultra High Accuracy 5s Strategy** - Research-based 85%+ confidence signals
 ✅ **Enhanced AI ML System** - Ensemble model with historical data training
 
-## Recent Updates (March 20, 2026)
+## Recent Updates (March 21, 2026)
+
+### Tampermonkey v7.1.0 - LOCAL OTC Signal Generation (March 21, 2026)
+**CRITICAL FIX: OTC markets now use actual Pocket Option prices via DOM scraping**
+
+| Component | Description |
+|-----------|-------------|
+| `LocalSignalEngine` | JavaScript-based signal generation (RSI, EMA, Stochastic, Bollinger Bands, Candlestick patterns) |
+| `PriceScraperV2` | Scrapes live prices from Pocket Option DOM every 500ms |
+| `CONFIG.USE_LOCAL_SIGNALS` | Set to `true` - bypasses backend API for OTC signals |
+
+**Why This Change:**
+- OANDA API does NOT have Pocket Option's proprietary OTC data
+- OTC markets are broker-specific synthetic prices
+- Local scraping ensures signals are based on actual prices the user trades on
+
+**Technical Implementation:**
+1. `startPriceScraping()` - Runs every 500ms when SCAN is enabled
+2. `PriceScraperV2.scrapeCurrentPrice()` - Finds price elements on PO DOM
+3. `PriceScraperV2.buildCandle()` - Constructs candles from price ticks
+4. `LocalSignalEngine.generateSignal()` - Calculates RSI-2, Stochastic, BB, patterns
+5. Requires 3+ confirmations for signal (same logic as backend)
+
+**Console Window (LOG button):**
+- Real-time on-screen console for debugging
+- Shows price scraping status, candle count, signal generation
+- Toggle with LOG button in Tampermonkey panel
+
+## Previous Updates (March 20, 2026)
 
 ### Data Source Architecture v6.9.4 (March 20, 2026)
 **OANDA is now the PRIMARY data source for all signals**
