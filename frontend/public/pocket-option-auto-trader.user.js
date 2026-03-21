@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://oanda-auto-trade.preview.emergentagent.com
-// @version      6.9.7
-// @description  Auto-trade OTC forex on Pocket Option. v6.9.7 - FIXED SCAN asset switching
+// @version      7.0.0
+// @description  Auto-trade OTC forex on Pocket Option. v7.0.0 - Added console window + improved asset switching
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -257,11 +257,57 @@
     // ===========================================
     // LOGGING
     // ===========================================
+    // ===========================================
+    // CONSOLE LOG SYSTEM - v7.0.0
+    // ===========================================
+    const consoleLog = [];
+    const MAX_LOG_LINES = 50;
+    
     function log(msg) {
         const ts = new Date().toLocaleTimeString();
-        console.log(`[GPT v6.9.7] ${ts}: ${msg}`);
+        const logEntry = `${ts}: ${msg}`;
+        
+        // Add to console log array
+        consoleLog.push(logEntry);
+        if (consoleLog.length > MAX_LOG_LINES) {
+            consoleLog.shift();
+        }
+        
+        // Update console window if visible
+        updateConsoleWindow();
+        
+        // Also log to browser console
+        console.log(`[GPT v7.0.0] ${logEntry}`);
+        
+        // Update status bar
         const logEl = document.getElementById('gpt-log');
         if (logEl) logEl.textContent = msg;
+    }
+    
+    function updateConsoleWindow() {
+        const consoleEl = document.getElementById('gpt-console-content');
+        if (consoleEl) {
+            consoleEl.innerHTML = consoleLog.map(line => {
+                let color = '#9ca3af';
+                if (line.includes('✅') || line.includes('TRADE:')) color = '#22c55e';
+                else if (line.includes('❌') || line.includes('BLOCKED') || line.includes('error')) color = '#ef4444';
+                else if (line.includes('⚠️') || line.includes('WARNING')) color = '#f59e0b';
+                else if (line.includes('🔍') || line.includes('SCAN')) color = '#3b82f6';
+                else if (line.includes('🔄') || line.includes('SWITCH')) color = '#a78bfa';
+                else if (line.includes('📡') || line.includes('API')) color = '#60a5fa';
+                return `<div style="color:${color};margin:1px 0;word-break:break-all;">${line}</div>`;
+            }).join('');
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+        }
+    }
+    
+    function toggleConsoleWindow() {
+        const consoleWin = document.getElementById('gpt-console-window');
+        if (consoleWin) {
+            const isVisible = consoleWin.style.display !== 'none';
+            consoleWin.style.display = isVisible ? 'none' : 'block';
+            log(isVisible ? 'Console hidden' : 'Console shown');
+        }
     }
 
     // ===========================================
@@ -1145,7 +1191,7 @@
         return uniqueFavorites;
     }
 
-    // Click an asset in the favorites bar - v6.8.5
+    // Click an asset in the favorites bar - v7.0.0
     async function clickFavoriteAsset(favorite) {
         if (!favorite || !favorite.element) {
             log('❌ Invalid favorite object');
@@ -1153,76 +1199,106 @@
         }
         
         try {
-            const el = favorite.element;
+            let el = favorite.element;
+            const targetBase = favorite.normalized.substring(0, 6);
+            const initialAsset = getCurrentAsset();
+            
+            log(`🔄 SWITCH: ${favorite.symbol} (from ${initialAsset})`);
             
             // Re-find the element if it's stale
             if (!document.body.contains(el)) {
-                log('⚠️ Element stale, re-detecting favorites...');
+                log('⚠️ Element stale, re-detecting...');
                 detectFavoritesBar();
                 
-                const newFav = favoritesFromBar.find(f => f.normalized === favorite.normalized);
+                const newFav = favoritesFromBar.find(f => f.normalized.substring(0, 6) === targetBase);
                 if (!newFav) {
                     log('❌ Could not re-find favorite');
                     return false;
                 }
-                return await clickFavoriteAsset(newFav);
+                el = newFav.element;
             }
             
-            // Check if element is visible
-            if (!el.offsetParent && el.offsetWidth === 0) {
-                log('❌ Favorite element not visible');
-                return false;
+            // Method 1: Direct click
+            log('🔄 Method 1: Direct click');
+            el.click();
+            await sleep(600);
+            
+            let newAsset = getCurrentAsset();
+            if (newAsset && normalizeAsset(newAsset).substring(0, 6) === targetBase) {
+                log(`✅ SWITCHED to ${newAsset}`);
+                return true;
             }
             
-            log(`🔄 Clicking: ${favorite.symbol}`);
-            console.log('[GPT] Clicking element:', el, favorite.selector);
+            // Method 2: Full mouse event simulation
+            log('🔄 Method 2: Mouse simulation');
+            const rect = el.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
             
-            // Scroll element into view if needed
-            el.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'center' });
+            // Hover first
+            el.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+            el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
             await sleep(100);
             
-            // Try multiple click methods
-            // Method 1: Direct click
-            el.click();
-            await sleep(300);
-            
-            // Check if it worked
-            let newAsset = getCurrentAsset();
-            const targetBase = favorite.normalized.substring(0, 6);
-            
-            if (newAsset && normalizeAsset(newAsset).includes(targetBase)) {
-                log(`✅ Switched to ${newAsset}`);
-                return true;
+            // Full click sequence
+            for (const eventType of ['mousedown', 'mouseup', 'click']) {
+                el.dispatchEvent(new MouseEvent(eventType, {
+                    bubbles: true,
+                    cancelable: true,
+                    view: window,
+                    clientX: centerX,
+                    clientY: centerY
+                }));
             }
-            
-            // Method 2: MouseEvent
-            const clickEvent = new MouseEvent('click', {
-                bubbles: true,
-                cancelable: true,
-                view: window
-            });
-            el.dispatchEvent(clickEvent);
-            await sleep(300);
+            await sleep(600);
             
             newAsset = getCurrentAsset();
-            if (newAsset && normalizeAsset(newAsset).includes(targetBase)) {
-                log(`✅ Switched to ${newAsset} (MouseEvent)`);
+            if (newAsset && normalizeAsset(newAsset).substring(0, 6) === targetBase) {
+                log(`✅ SWITCHED to ${newAsset}`);
                 return true;
             }
             
-            // Method 3: Click parent if available
-            if (el.parentElement && el.parentElement.tagName !== 'BODY') {
-                el.parentElement.click();
-                await sleep(300);
-                
+            // Method 3: Click parents (up to 3 levels)
+            log('🔄 Method 3: Parent clicks');
+            let parent = el.parentElement;
+            for (let i = 0; i < 3 && parent && parent.tagName !== 'BODY'; i++) {
+                parent.click();
+                await sleep(400);
                 newAsset = getCurrentAsset();
-                if (newAsset && normalizeAsset(newAsset).includes(targetBase)) {
-                    log(`✅ Switched to ${newAsset} (parent click)`);
+                if (newAsset && normalizeAsset(newAsset).substring(0, 6) === targetBase) {
+                    log(`✅ SWITCHED to ${newAsset} (parent ${i})`);
+                    return true;
+                }
+                parent = parent.parentElement;
+            }
+            
+            // Method 4: Find element at coordinates and click
+            log('🔄 Method 4: Coordinate click');
+            const clickTarget = document.elementFromPoint(centerX, centerY);
+            if (clickTarget) {
+                clickTarget.click();
+                await sleep(400);
+                newAsset = getCurrentAsset();
+                if (newAsset && normalizeAsset(newAsset).substring(0, 6) === targetBase) {
+                    log(`✅ SWITCHED to ${newAsset} (coordinate)`);
                     return true;
                 }
             }
             
-            log(`⚠️ Click attempted but asset didn't change. Current: ${newAsset}`);
+            // Method 5: Focus and enter key
+            log('🔄 Method 5: Focus + Enter');
+            el.focus();
+            el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+            el.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', bubbles: true }));
+            await sleep(400);
+            
+            newAsset = getCurrentAsset();
+            if (newAsset && normalizeAsset(newAsset).substring(0, 6) === targetBase) {
+                log(`✅ SWITCHED to ${newAsset} (Enter key)`);
+                return true;
+            }
+            
+            log(`❌ ALL METHODS FAILED. Current: ${newAsset}, Target: ${favorite.symbol}`);
             return false;
             
         } catch (e) {
@@ -1593,10 +1669,55 @@
                     text-overflow: ellipsis;
                     white-space: nowrap;
                 }
+                
+                #gpt-panel .console-btn { background: #6366f1; color: white; }
+                
+                /* Console Window */
+                #gpt-console-window {
+                    position: fixed;
+                    bottom: 50px;
+                    left: 10px;
+                    width: 400px;
+                    height: 250px;
+                    background: rgba(15, 15, 25, 0.98);
+                    border: 1px solid #7c3aed;
+                    border-radius: 8px;
+                    z-index: 999998;
+                    display: none;
+                    font-family: 'Consolas', 'Monaco', monospace;
+                    box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+                }
+                #gpt-console-header {
+                    background: linear-gradient(90deg, #7c3aed, #6366f1);
+                    padding: 6px 10px;
+                    border-radius: 7px 7px 0 0;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    cursor: move;
+                }
+                #gpt-console-header span { font-weight: bold; color: white; font-size: 11px; }
+                #gpt-console-header button { 
+                    background: rgba(255,255,255,0.2); 
+                    border: none; 
+                    color: white; 
+                    padding: 2px 8px; 
+                    border-radius: 3px;
+                    cursor: pointer;
+                }
+                #gpt-console-content {
+                    padding: 8px;
+                    height: calc(100% - 40px);
+                    overflow-y: auto;
+                    font-size: 10px;
+                    line-height: 1.4;
+                }
+                #gpt-console-content::-webkit-scrollbar { width: 6px; }
+                #gpt-console-content::-webkit-scrollbar-thumb { background: #7c3aed; border-radius: 3px; }
             </style>
             
             <span class="dot" id="gpt-dot"></span>
-            <span class="title" id="gpt-drag">⣿ GPT</span>
+            <span class="title" id="gpt-drag">GPT</span>
             <span class="sig wait" id="gpt-signal">-</span>
             
             <span class="expandable">
@@ -1604,6 +1725,7 @@
                 <button class="scan-btn" id="gpt-scan">SCAN</button>
                 <button class="inv-btn" id="gpt-invert">INV</button>
                 <button class="fetch-btn" id="gpt-fetch">GO</button>
+                <button class="console-btn" id="gpt-console-toggle">LOG</button>
             </span>
             
             <span class="expandable">
@@ -1626,6 +1748,18 @@
         `;
 
         document.body.appendChild(panel);
+        
+        // Create Console Window
+        const consoleWindow = document.createElement('div');
+        consoleWindow.id = 'gpt-console-window';
+        consoleWindow.innerHTML = `
+            <div id="gpt-console-header">
+                <span>GPT Signal Bot Console v7.0</span>
+                <button id="gpt-console-close">✕</button>
+            </div>
+            <div id="gpt-console-content"></div>
+        `;
+        document.body.appendChild(consoleWindow);
 
         // Apply minimized state
         if (isMinimized) {
@@ -1639,6 +1773,8 @@
         document.getElementById('gpt-invert').addEventListener('click', toggleInvert);
         document.getElementById('gpt-fetch').addEventListener('click', handleFetch);
         document.getElementById('gpt-minimize').addEventListener('click', toggleMinimize);
+        document.getElementById('gpt-console-toggle').addEventListener('click', toggleConsoleWindow);
+        document.getElementById('gpt-console-close').addEventListener('click', toggleConsoleWindow);
         
         // Win/Loss handlers
         document.getElementById('gpt-win-btn').addEventListener('click', handleManualWin);
@@ -2800,7 +2936,7 @@
             }
 
             console.log('[GPT Bot] Creating panel...');
-            console.log('[GPT Bot] v6.9.7 - Fixed SCAN asset switching');
+            console.log('[GPT Bot] v7.0.0 - Console window + improved asset switching');
             
             // Create panel immediately, don't wait
             createPanel();
