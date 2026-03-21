@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://oanda-auto-trade.preview.emergentagent.com
-// @version      6.9.6
-// @description  Auto-trade OTC forex on Pocket Option. v6.9.6 - Enhanced GO button logging
+// @version      6.9.7
+// @description  Auto-trade OTC forex on Pocket Option. v6.9.7 - FIXED SCAN asset switching
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -259,7 +259,7 @@
     // ===========================================
     function log(msg) {
         const ts = new Date().toLocaleTimeString();
-        console.log(`[GPT v6.9.6] ${ts}: ${msg}`);
+        console.log(`[GPT v6.9.7] ${ts}: ${msg}`);
         const logEl = document.getElementById('gpt-log');
         if (logEl) logEl.textContent = msg;
     }
@@ -2146,10 +2146,10 @@
     }
 
     // ===========================================
-    // SCAN HANDLING - v6.9.3
+    // SCAN HANDLING - v6.9.7 FIXED ASSET SWITCHING
     // ===========================================
     function doScan(force = false, currentAssetOnly = false) {
-        log(`doScan: force=${force}, currentAssetOnly=${currentAssetOnly}, scanEnabled=${scanEnabled}`);
+        log(`doScan: force=${force}, currentOnly=${currentAssetOnly}, scan=${scanEnabled}, auto=${autoEnabled}`);
         
         // Allow scan if forced (GO button) or if SCAN is enabled
         if (!scanEnabled && !force) {
@@ -2170,14 +2170,17 @@
             return;
         }
 
-        // Determine which assets to scan
+        // Determine which assets to scan and whether to switch
         let assetsToScan = '';
         let willSwitchAssets = false;
         
-        // GO button OR AUTO ON = scan current asset only
-        // SCAN ON + AUTO OFF = scan all favorites and switch
-        if (currentAssetOnly || autoEnabled) {
-            // Scan CURRENT asset only (GO button or AUTO mode)
+        // LOGIC:
+        // - GO button (force + currentAssetOnly): Scan current asset, NO switch
+        // - AUTO ON + SCAN: Scan current asset, NO switch  
+        // - AUTO OFF + SCAN: Scan ALL favorites, YES switch to best signal
+        
+        if (currentAssetOnly) {
+            // GO button pressed - current asset only, no switching
             const currentAssetRaw = getCurrentAsset();
             if (!currentAssetRaw) {
                 assetsToScan = 'EURUSD_OTC';
@@ -2195,8 +2198,25 @@
                 log(`🔍 GO: Scanning ${assetsToScan}`);
             }
             willSwitchAssets = false;
+        } else if (autoEnabled) {
+            // AUTO ON - scan current asset only, no switching
+            const currentAssetRaw = getCurrentAsset();
+            if (!currentAssetRaw) {
+                assetsToScan = 'EURUSD_OTC';
+            } else {
+                assetsToScan = currentAssetRaw
+                    .replace(/\s+/g, '')
+                    .replace('/', '')
+                    .replace('OTC', '_OTC')
+                    .toUpperCase();
+                if (!assetsToScan.includes('_OTC')) {
+                    assetsToScan += '_OTC';
+                }
+            }
+            log(`🔍 AUTO+SCAN: ${assetsToScan} (no switch)`);
+            willSwitchAssets = false;
         } else {
-            // SCAN mode (AUTO OFF) = scan ALL favorites, will switch to best
+            // AUTO OFF + SCAN ON = scan ALL favorites and SWITCH to best
             detectFavoritesBar();
             
             if (favoritesFromBar.length > 0) {
@@ -2210,13 +2230,15 @@
                     return norm;
                 });
                 assetsToScan = assetList.join(',');
-                log(`🔍 SCAN: ${favoritesFromBar.length} favorites`);
+                log(`🔍 SCAN: ${favoritesFromBar.length} favorites (WILL SWITCH)`);
             } else {
                 assetsToScan = 'EURUSD_OTC,GBPUSD_OTC,USDJPY_OTC,AUDUSD_OTC';
-                log('🔍 SCAN: Using defaults');
+                log('🔍 SCAN: Using defaults (WILL SWITCH)');
             }
-            willSwitchAssets = true;
+            willSwitchAssets = true;  // KEY: Enable switching when scanning multiple assets
         }
+        
+        log(`📍 willSwitchAssets = ${willSwitchAssets}`);
 
         const apiUrl = CONFIG.API_URL + `/signals/scan-markets?assets=${assetsToScan}&min_confidence=${CONFIG.MIN_CONFIDENCE}`;
         log(`📡 ${apiUrl}`);
@@ -2243,18 +2265,17 @@
                     
                     if (data.success && signals.length > 0) {
                         const bestSignal = signals[0];
-                        // Add flag to signal for switching decision
+                        // CRITICAL: Set the switch flag based on our scan mode
                         bestSignal._willSwitch = willSwitchAssets;
                         
-                        log(`✅ ${bestSignal.direction} ${bestSignal.symbol} (${Math.round(bestSignal.confidence)}%)`);
+                        log(`✅ ${bestSignal.direction} ${bestSignal.symbol} (${Math.round(bestSignal.confidence)}%) [switch=${willSwitchAssets}]`);
                         
-                        // Log if signal is marked as not tradeable but proceed anyway for GO button
+                        // Log if signal is marked as not tradeable but proceed anyway
                         if (bestSignal.is_tradeable === false) {
-                            log(`⚠️ Signal marked not tradeable: ${bestSignal.avoid_reasons?.join(', ') || 'unknown reason'}`);
-                            // For GO button, we execute anyway - user explicitly requested
+                            log(`⚠️ Signal marked not tradeable: ${bestSignal.avoid_reasons?.join(', ') || 'unknown'}`);
                         }
                         
-                        // ALWAYS execute trade when signal found (user pressed GO)
+                        // Execute trade
                         executeScanTrade(bestSignal).catch(err => {
                             log(`❌ Trade error: ${err.message}`);
                             console.error('[GPT Trade Error]', err);
@@ -2779,7 +2800,7 @@
             }
 
             console.log('[GPT Bot] Creating panel...');
-            console.log('[GPT Bot] v6.9.6 - Enhanced GO button logging');
+            console.log('[GPT Bot] v6.9.7 - Fixed SCAN asset switching');
             
             // Create panel immediately, don't wait
             createPanel();

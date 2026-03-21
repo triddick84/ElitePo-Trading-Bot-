@@ -113,6 +113,15 @@ class StrategyRegistry:
             except Exception as e:
                 logger.warning(f"Could not load 1m Momentum Exhaustion: {e}")
             
+            # NEW: Turbo Precision Strategy (75-85% target) - Works for both 5s and 1m
+            try:
+                from strategies.strategy_turbo_precision import turbo_precision_5s, turbo_precision_1m
+                self.strategies['turbo_precision_5s'] = turbo_precision_5s
+                self.strategies['turbo_precision_1m'] = turbo_precision_1m
+                logger.info("✅ Loaded Turbo Precision Strategy (5s + 1m, 4+ confirmations)")
+            except Exception as e:
+                logger.warning(f"Could not load Turbo Precision: {e}")
+            
             # 2-minute strategies
             from strategies.strategy_2m_support_resistance import strategy_2m_support_resistance
             from strategies.strategy_2m_trend_momentum import strategy_2m_trend_momentum

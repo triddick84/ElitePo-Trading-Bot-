@@ -18,15 +18,11 @@ class StrategySelectionService:
     AVAILABLE_STRATEGIES = {
         '5s': [
             {'id': 'default', 'name': 'Default 5s Strategy', 'description': 'Ultra Precision V2 with Bollinger Bands'},
-            {'id': 'micro_compression_burst', 'name': '⭐ Micro Compression Burst', 'description': 'BB breakout after 4-6 tight candles. 30s expiry. Best for calm/OTC markets.', 'win_rate': '75-85%'},
+            {'id': 'turbo_precision_5s', 'name': '⭐⭐⭐ Turbo Precision 5s', 'description': 'RSI + Stochastic RSI + EMA Ribbon. 4+ confirmations. Highest accuracy.', 'win_rate': '75-85%'},
+            {'id': 'micro_compression_burst', 'name': '⭐⭐ Micro Compression Burst', 'description': 'BB breakout after 4-6 tight candles. 30s expiry. Best for calm/OTC markets.', 'win_rate': '75-85%'},
             {'id': 'keltner_breakout', 'name': '⭐ Keltner Channel Breakout', 'description': 'EMA(20) + ATR(10) bands. Enter on breakout with volume.', 'win_rate': '70-80%'},
             {'id': 'candlestick_patterns', 'name': '⭐ Candlestick Patterns', 'description': 'Engulfing, Hammer, Doji, Morning/Evening Star patterns', 'win_rate': '65-75%'},
-            {'id': 'keltner_fractal', 'name': 'Keltner Channel + Fractal', 'description': 'EMA(10) + ATR(10) Keltner with Fractal reversals'},
-            {'id': '3ema_crossover', 'name': '3 EMA Crossover', 'description': 'EMA 3/8/20 crossover signals'},
-            {'id': 'ema20_rsi14', 'name': 'EMA 20 + RSI 14', 'description': 'Momentum confirmation with EMA and RSI'},
             {'id': 'rsi_bb_scalp', 'name': '⭐ RSI + Bollinger Scalp', 'description': 'RSI oversold/overbought with BB for quick scalps', 'win_rate': '70-80%'},
-            {'id': 'stochastic_divergence', 'name': 'Stochastic Divergence', 'description': 'Stochastic(14,3,14) with divergence confirmation'},
-            {'id': 'proven_bollinger', 'name': 'ProvenSignals Bollinger Bands', 'description': 'Period 50, Dev 1.5 - Scalping oversold/overbought reversals'},
             {'id': 'proven_supertrend', 'name': 'ProvenSignals SuperTrend', 'description': 'ATR 10, Multiplier 5 - Trend following'},
         ],
         '15s': [
@@ -54,18 +50,14 @@ class StrategySelectionService:
         ],
         '1m': [
             {'id': 'default', 'name': 'Default 1m Strategy', 'description': 'High Accuracy strategies (Triple Confirmation, Williams/MACD, Smart Money)'},
+            {'id': 'turbo_precision_1m', 'name': '⭐⭐⭐ Turbo Precision 1m', 'description': 'RSI + Stochastic RSI + EMA Ribbon. 4+ confirmations. Highest accuracy.', 'win_rate': '75-85%'},
             {'id': '1m_momentum_exhaustion', 'name': '⭐⭐⭐ Momentum Exhaustion Reversal', 'description': 'RSI-2 + Stochastic + BB + Candlestick patterns. Catches reversals at momentum extremes.', 'win_rate': '70-75%'},
             {'id': '1m_quad_crossover', 'name': '⭐⭐ Quad SMA/EMA Crossover', 'description': '2/5/10 SMA + 20 EMA crossovers. 4 rule system with trend/counter-trend signals.', 'win_rate': '80-85%'},
             {'id': 'zigzag_double_ma', 'name': '⭐ ZigZag + Double MA', 'description': 'ZigZag(5,4,3) + SMA(3)/SMA(6). Clear swings without spikes.', 'win_rate': '75-85%'},
             {'id': 'triple_supertrend', 'name': '⭐ Triple SuperTrend Confirmation', 'description': '3 SuperTrends + Heikin Ashi. 5m expiry. London/NY overlap.', 'win_rate': '80-90%'},
             {'id': 'ema_pullback', 'name': '⭐ EMA Pullback Strategy', 'description': 'EMA(8)/EMA(21) pullback entries. Strong trend continuation.', 'win_rate': '75-85%'},
             {'id': 'rsi_sr_reversal', 'name': '⭐ RSI + Support/Resistance Reversal', 'description': 'RSI(14) at 30/70 + S/R zones with doji confirmation', 'win_rate': '75-85%'},
-            {'id': 'zigzag_donchian_rsi', 'name': '⭐ ZigZag + Donchian + RSI', 'description': 'ZigZag(5,5,3) + Donchian(20) + RSI(14). 1m expiry.', 'win_rate': '75-85%'},
-            {'id': 'ema_macd_trend', 'name': '⭐ EMA + MACD Trend', 'description': 'EMA(9)/EMA(21) crossover with MACD confirmation', 'win_rate': '75-85%'},
-            {'id': 'macd_histogram', 'name': '⭐ MACD Histogram Reversal', 'description': 'MACD(12,26,9) histogram color change + divergence', 'win_rate': '70-80%'},
-            {'id': 'rsi_bb_scalp', 'name': '⭐ RSI + Bollinger Scalp', 'description': 'RSI oversold/overbought with BB for quick scalps', 'win_rate': '70-80%'},
             {'id': 'triple_confirmation', 'name': 'Triple Confirmation', 'description': '90%+ accuracy with 5 indicator confirmation'},
-            {'id': 'williams_macd', 'name': 'Williams %R + MACD', 'description': 'Turbo scalping for stable markets'},
             {'id': 'smart_money', 'name': 'Smart Money ICT', 'description': 'Order blocks, FVGs, liquidity sweeps'},
         ],
         '2m': [
