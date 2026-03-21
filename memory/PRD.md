@@ -9,8 +9,43 @@
 ✅ **Tampermonkey v6.8.0** - Complete Money Management System with Smart Martingale
 ✅ **Ultra High Accuracy 5s Strategy** - Research-based 85%+ confidence signals
 ✅ **Enhanced AI ML System** - Ensemble model with historical data training
+✅ **Improved AI ML System v2.0** - 62 features, 56%+ accuracy, optimized ensemble (RF+GB+AdaBoost)
 
 ## Recent Updates (March 21, 2026)
+
+### Improved AI/ML System v2.0 (March 21, 2026)
+**NEW: Enhanced machine learning for better signal accuracy**
+
+| Component | Description |
+|-----------|-------------|
+| `improved_ai_ml_system.py` | Optimized ML ensemble with 62 features |
+| `POST /api/improved-ml/train` | Train model with OANDA data (2000 candles) |
+| `POST /api/improved-ml/train-extended` | Extended training (5000 candles, 10 symbols) |
+| `POST /api/improved-ml/predict/{symbol}` | Get ML prediction for a symbol |
+| `GET /api/improved-ml/stats` | Get ML system statistics |
+
+**Model Architecture:**
+- Random Forest (300 trees, depth 15) - 45% weight
+- Gradient Boosting (200 trees, LR 0.03) - 40% weight  
+- AdaBoost (150 estimators) - 15% weight
+- Soft voting ensemble with probability outputs
+
+**62 Features Include:**
+- Price Action (10): Price changes, candle body/wicks, bullish streak
+- Technical Indicators (20): RSI-2/5/14, Stochastic, MACD, Bollinger Bands, CCI, Williams %R
+- EMA Features (5): Price vs EMA5/EMA20, EMA crossovers, alignment
+- Momentum (5): 3/5/10 bar momentum, ROC
+- Volatility (5): 5/20 period volatility, ATR, range percent
+- Pattern Recognition (7): Hammer, Engulfing, Doji, Morning/Evening Star, 3 White Soldiers/Black Crows
+- Trend Strength (5): ADX, +DI/-DI, trend strength vs SMA50
+- Mean Reversion (3): Z-score, TP deviation, acceleration
+- Time Features (3): Hour (sin/cos), day of week
+
+**Current Performance:**
+- Cross-validation accuracy: 56.19%
+- Training samples: 6,609
+- Balanced class distribution (CALL/PUT)
+- Top features: ATR%, MACD signal, Volatility
 
 ### Tampermonkey v7.1.0 - LOCAL OTC Signal Generation (March 21, 2026)
 **CRITICAL FIX: OTC markets now use actual Pocket Option prices via DOM scraping**

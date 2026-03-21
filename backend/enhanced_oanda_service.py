@@ -25,6 +25,10 @@ from enum import Enum
 import numpy as np
 import pandas as pd
 
+# Load environment variables
+from dotenv import load_dotenv
+load_dotenv()
+
 # oandapyV20 imports
 try:
     from oandapyV20 import API

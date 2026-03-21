@@ -7,6 +7,10 @@ except ImportError:
 from fastapi import FastAPI, APIRouter, HTTPException, BackgroundTasks, Query, Request, Body
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
+
+# Load environment variables BEFORE any other imports that might need them
+load_dotenv()
+
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
@@ -60,6 +64,14 @@ try:
 except ImportError as e:
     print(f"Enhanced AI ML System not available: {e}")
     enhanced_ai_ml = None
+
+# Import Improved AI ML System v2.0
+try:
+    from improved_ai_ml_system import improved_ai_ml
+    print("✅ Improved AI ML System v2.0 loaded")
+except ImportError as e:
+    print(f"Improved AI ML System not available: {e}")
+    improved_ai_ml = None
 
 from pocket_option_auth import auto_login_and_get_ssid
 from advanced_signal_generator import advanced_signal_generator
@@ -3560,6 +3572,124 @@ async def get_enhanced_ml_prediction(symbol: str):
         
     except Exception as e:
         logger.error(f"Error getting ML prediction: {e}")
+        return {"success": False, "error": str(e)}
+
+
+# =====================================================
+# IMPROVED ML SYSTEM v2.0 ENDPOINTS
+# =====================================================
+
+@api_router.post("/improved-ml/train")
+async def train_improved_ml():
+    """Train the improved ML model v2.0 using OANDA historical data."""
+    try:
+        if improved_ai_ml is None:
+            return {"success": False, "error": "Improved ML system not available"}
+        
+        # Debug: Check OANDA status first
+        logger.info(f"🔍 OANDA configured: {enhanced_oanda.is_configured}")
+        logger.info(f"🔍 OANDA API: {enhanced_oanda.api}")
+        
+        # Test getting candles directly
+        test_df = enhanced_oanda.get_candles('EUR_USD', 'M1', 10)
+        logger.info(f"🔍 Test candle fetch: {test_df.shape if test_df is not None and not test_df.empty else 'EMPTY'}")
+        
+        # Use enhanced OANDA service for training data
+        result = await improved_ai_ml.train_from_oanda(
+            enhanced_oanda, 
+            symbols=['EUR_USD', 'GBP_USD', 'USD_JPY', 'AUD_USD', 'EUR_JPY'],
+            candle_count=2000
+        )
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error training improved ML: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "error": str(e)}
+
+
+@api_router.post("/improved-ml/train-extended")
+async def train_improved_ml_extended():
+    """Train with extended data (5000 candles per symbol) for better accuracy."""
+    try:
+        if improved_ai_ml is None:
+            return {"success": False, "error": "Improved ML system not available"}
+        
+        # Train with more data and more symbols
+        result = await improved_ai_ml.train_from_oanda(
+            enhanced_oanda, 
+            symbols=['EUR_USD', 'GBP_USD', 'USD_JPY', 'AUD_USD', 'EUR_JPY', 
+                    'USD_CHF', 'NZD_USD', 'EUR_GBP', 'EUR_AUD', 'GBP_JPY'],
+            candle_count=5000
+        )
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error training extended ML: {e}")
+        return {"success": False, "error": str(e)}
+
+@api_router.get("/improved-ml/stats")
+async def get_improved_ml_stats():
+    """Get improved ML system v2.0 statistics."""
+    try:
+        if improved_ai_ml is None:
+            return {"success": False, "error": "Improved ML system not available"}
+        
+        return {
+            "success": True,
+            "stats": improved_ai_ml.get_stats()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting improved ML stats: {e}")
+        return {"success": False, "error": str(e)}
+
+@api_router.post("/improved-ml/predict/{symbol}")
+async def get_improved_ml_prediction(symbol: str):
+    """Get improved ML v2.0 prediction for a symbol."""
+    try:
+        if improved_ai_ml is None:
+            return {"success": False, "error": "Improved ML system not available"}
+        
+        # Convert symbol format (EUR_USD -> EURUSD for market hub)
+        market_symbol = symbol.replace('_', '')
+        
+        # Get market data from OANDA (synchronous call)
+        df = enhanced_oanda.get_candles(symbol, granularity='M1', count=100)
+        
+        if df is None or df.empty:
+            # Fallback to market hub
+            candles = await realtime_market_hub.get_historical_candles(market_symbol, '1m', 100)
+            if candles and len(candles) >= 50:
+                df = pd.DataFrame(candles)
+                if 'c' in df.columns:
+                    df = df.rename(columns={'c': 'close', 'o': 'open', 'h': 'high', 'l': 'low', 'v': 'volume'})
+        
+        if df is None or df.empty or len(df) < 50:
+            return {"success": False, "error": "Insufficient market data"}
+        
+        # Ensure numeric
+        for col in ['open', 'high', 'low', 'close']:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+        
+        if 'volume' not in df.columns:
+            df['volume'] = 1.0
+        
+        prediction = improved_ai_ml.predict(df)
+        
+        if prediction:
+            return {
+                "success": True,
+                "symbol": symbol,
+                "prediction": prediction
+            }
+        else:
+            return {"success": False, "error": "Could not generate prediction - model may need training"}
+        
+    except Exception as e:
+        logger.error(f"Error getting improved ML prediction: {e}")
         return {"success": False, "error": str(e)}
 
 
