@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://oanda-auto-trade.preview.emergentagent.com
-// @version      6.9.4
-// @description  Auto-trade OTC forex on Pocket Option. v6.9.4 - OANDA real-time data + price verification
+// @version      6.9.5
+// @description  Auto-trade OTC forex on Pocket Option. v6.9.5 - FIXED double-click bug
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -259,7 +259,7 @@
     // ===========================================
     function log(msg) {
         const ts = new Date().toLocaleTimeString();
-        console.log(`[GPT v6.9.4] ${ts}: ${msg}`);
+        console.log(`[GPT v6.9.5] ${ts}: ${msg}`);
         const logEl = document.getElementById('gpt-log');
         if (logEl) logEl.textContent = msg;
     }
@@ -1472,56 +1472,18 @@
     }
 
     function findTradeButtons() {
-        // Try multiple selectors for Pocket Option trade buttons
-        const callSelectors = ['.btn-call', '.call-btn', '[class*="call"]', 'button.call', '.up-btn', '.buy-btn'];
-        const putSelectors = ['.btn-put', '.put-btn', '[class*="put"]', 'button.put', '.down-btn', '.sell-btn'];
+        // Use STRICT selectors only - avoid wildcards that match both buttons
+        const callBtn = document.querySelector('.btn-call') || 
+                       document.querySelector('button.call') ||
+                       document.querySelector('[data-testid="call-button"]');
+        const putBtn = document.querySelector('.btn-put') || 
+                      document.querySelector('button.put') ||
+                      document.querySelector('[data-testid="put-button"]');
         
-        let callBtn = null;
-        let putBtn = null;
-        
-        for (const sel of callSelectors) {
-            const btn = document.querySelector(sel);
-            if (btn && btn.offsetParent !== null) {
-                callBtn = btn;
-                break;
-            }
-        }
-        
-        for (const sel of putSelectors) {
-            const btn = document.querySelector(sel);
-            if (btn && btn.offsetParent !== null) {
-                putBtn = btn;
-                break;
-            }
-        }
-        
-        if (callBtn && putBtn) {
-            return true;
-        }
-        
-        // Fallback: Look for green/red buttons by color
-        const allButtons = document.querySelectorAll('button');
-        for (const btn of allButtons) {
-            if (!btn.offsetParent) continue;
-            const style = window.getComputedStyle(btn);
-            const bgColor = style.backgroundColor;
-            const text = btn.textContent?.toLowerCase() || '';
-            
-            // Green/Call buttons
-            if (!callBtn && (bgColor.includes('0, 128') || bgColor.includes('0, 255') || 
-                text.includes('call') || text.includes('up') || text.includes('buy') ||
-                btn.className.toLowerCase().includes('green'))) {
-                callBtn = btn;
-            }
-            // Red/Put buttons  
-            if (!putBtn && (bgColor.includes('255, 0') || bgColor.includes('128, 0') ||
-                text.includes('put') || text.includes('down') || text.includes('sell') ||
-                btn.className.toLowerCase().includes('red'))) {
-                putBtn = btn;
-            }
-        }
-        
-        return callBtn && putBtn;
+        // Both buttons must exist and be visible
+        return callBtn && putBtn && 
+               callBtn.offsetParent !== null && 
+               putBtn.offsetParent !== null;
     }
 
     // ===========================================
@@ -2420,7 +2382,7 @@
     }
 
     // ===========================================
-    // TRADE EXECUTION - v6.9.0
+    // TRADE EXECUTION - v6.9.5 FIXED DOUBLE-CLICK
     // ===========================================
     function clickTradeButton(isCall, source = 'unknown') {
         const now = Date.now();
@@ -2445,62 +2407,81 @@
             return false;
         }
         
-        // Find the appropriate button with multiple selectors
-        const callSelectors = ['.btn-call', '.call-btn', '[class*="call"]', 'button.call', '.up-btn', '.buy-btn'];
-        const putSelectors = ['.btn-put', '.put-btn', '[class*="put"]', 'button.put', '.down-btn', '.sell-btn'];
-        const selectors = isCall ? callSelectors : putSelectors;
+        // SET LOCK IMMEDIATELY to prevent any race conditions
+        globalTradeLock = true;
         
+        // Find the EXACT button - be very specific to avoid double clicks
         let btn = null;
-        for (const selector of selectors) {
-            const found = document.querySelector(selector);
-            if (found && found.offsetParent !== null) {
-                btn = found;
-                log(`🎯 Found button: ${selector}`);
-                break;
-            }
+        
+        // STRICT selectors - only exact matches
+        if (isCall) {
+            // Try CALL/UP/BUY buttons in order of specificity
+            btn = document.querySelector('.btn-call') ||
+                  document.querySelector('button.call') ||
+                  document.querySelector('[data-testid="call-button"]') ||
+                  document.querySelector('[data-testid="buy-button"]');
+        } else {
+            // Try PUT/DOWN/SELL buttons in order of specificity
+            btn = document.querySelector('.btn-put') ||
+                  document.querySelector('button.put') ||
+                  document.querySelector('[data-testid="put-button"]') ||
+                  document.querySelector('[data-testid="sell-button"]');
         }
         
-        // Fallback: find by color/text
+        // If strict selectors didn't work, try finding by exact class name
         if (!btn) {
             const allButtons = document.querySelectorAll('button');
             for (const b of allButtons) {
-                if (!b.offsetParent) continue;
-                const text = b.textContent?.toLowerCase() || '';
-                const className = b.className?.toLowerCase() || '';
+                if (!b || !b.offsetParent) continue;
                 
-                if (isCall && (text.includes('call') || text.includes('up') || text.includes('buy') || className.includes('green') || className.includes('call'))) {
-                    btn = b;
-                    break;
-                }
-                if (!isCall && (text.includes('put') || text.includes('down') || text.includes('sell') || className.includes('red') || className.includes('put'))) {
-                    btn = b;
-                    break;
+                const classes = (b.className || '').toLowerCase().split(/\s+/);
+                const text = (b.textContent || '').toLowerCase().trim();
+                
+                if (isCall) {
+                    // Only match if class is EXACTLY 'call', 'btn-call', 'up', 'buy'
+                    // OR text is exactly 'call', 'up', 'buy'
+                    const isCallButton = classes.some(c => c === 'call' || c === 'btn-call' || c === 'up' || c === 'buy' || c === 'call-btn' || c === 'up-btn') ||
+                                        (text === 'call' || text === 'up' || text === 'buy' || text === 'higher');
+                    if (isCallButton) {
+                        btn = b;
+                        break;
+                    }
+                } else {
+                    // Only match if class is EXACTLY 'put', 'btn-put', 'down', 'sell'
+                    // OR text is exactly 'put', 'down', 'sell'
+                    const isPutButton = classes.some(c => c === 'put' || c === 'btn-put' || c === 'down' || c === 'sell' || c === 'put-btn' || c === 'down-btn') ||
+                                       (text === 'put' || text === 'down' || text === 'sell' || text === 'lower');
+                    if (isPutButton) {
+                        btn = b;
+                        break;
+                    }
                 }
             }
         }
         
-        if (btn) {
-            // SET ALL LOCKS BEFORE CLICKING
-            globalTradeLock = true;
+        if (btn && btn.offsetParent !== null) {
+            // Final validation - make sure we're not clicking both buttons
             lastTradeClickTime = now;
             lastTradeDirection = direction;
             lastTradeTimestamp = now;
             
             log(`✅ CLICKING ${direction} [${source}]`);
-            console.log(`[GPT TRADE] ${new Date().toISOString()} - ${direction} - Source: ${source}`);
+            console.log(`[GPT TRADE] ${new Date().toISOString()} - ${direction} - Source: ${source} - Button: ${btn.className}`);
             
-            // Single click only
+            // SINGLE CLICK ONLY
             btn.click();
             
             // Release global lock after delay
             setTimeout(() => {
                 globalTradeLock = false;
-                log('🔓 Trade lock released');
+                log('🔓 Lock released');
             }, TRADE_LOCK_MS);
             
             return true;
         }
         
+        // Button not found - release lock
+        globalTradeLock = false;
         log(`❌ ${direction} button NOT FOUND`);
         return false;
     }
@@ -2788,7 +2769,7 @@
             }
 
             console.log('[GPT Bot] Creating panel...');
-            console.log('[GPT Bot] v6.9.4 - OANDA real-time + price verification');
+            console.log('[GPT Bot] v6.9.5 - FIXED double-click bug');
             
             // Create panel immediately, don't wait
             createPanel();
