@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://pocket-option-trader-1.preview.emergentagent.com
-// @version      7.2.0
-// @description  Auto-trade OTC forex on Pocket Option. v7.2.0 - Enhanced price scraper with auto-detection
+// @version      7.3.0
+// @description  Auto-trade OTC forex on Pocket Option. v7.3.0 - Redesigned UI + Enhanced price detection
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -153,6 +153,118 @@
             }
             
             return { bullish: false, bearish: false, name: null };
+        },
+        
+        // MOMENTUM BUSTER 15s STRATEGY
+        // Momentum indicator period 3 - green bars = buy, red bars = sell
+        calculateMomentum(prices, period = 3) {
+            if (prices.length < period + 1) return [];
+            const momentum = [];
+            for (let i = period; i < prices.length; i++) {
+                momentum.push(prices[i] - prices[i - period]);
+            }
+            return momentum;
+        },
+        
+        getMomentumBusterSignal(candles) {
+            if (!candles || candles.length < 10) return null;
+            
+            const closes = candles.map(c => c.close);
+            const momentum = this.calculateMomentum(closes, 3);
+            
+            if (momentum.length < 3) return null;
+            
+            const currentMom = momentum[momentum.length - 1];
+            const prevMom = momentum[momentum.length - 2];
+            const prevPrevMom = momentum[momentum.length - 3];
+            
+            // Detect bar colors
+            const currentColor = currentMom > 0 ? 'green' : (currentMom < 0 ? 'red' : 'neutral');
+            const prevColor = prevMom > 0 ? 'green' : (prevMom < 0 ? 'red' : 'neutral');
+            const prevPrevColor = prevPrevMom > 0 ? 'green' : (prevPrevMom < 0 ? 'red' : 'neutral');
+            
+            // Count consecutive bars
+            let consecutiveGreen = 0, consecutiveRed = 0;
+            for (let i = momentum.length - 1; i >= 0; i--) {
+                if (momentum[i] > 0) {
+                    if (consecutiveRed > 0) break;
+                    consecutiveGreen++;
+                } else if (momentum[i] < 0) {
+                    if (consecutiveGreen > 0) break;
+                    consecutiveRed++;
+                } else {
+                    break;
+                }
+            }
+            
+            // Calculate strength
+            const strength = Math.min(100, Math.abs(currentMom) * 10000);
+            
+            // Detect reversals
+            let reversal = null;
+            if (prevPrevColor === 'red' && prevColor === 'red' && currentColor === 'green') {
+                reversal = 'bullish_reversal';
+            } else if (prevPrevColor === 'green' && prevColor === 'green' && currentColor === 'red') {
+                reversal = 'bearish_reversal';
+            }
+            
+            let direction = null;
+            let confidence = 60;
+            const confirmations = [];
+            
+            // BUY: Green bars (positive momentum)
+            if (currentColor === 'green') {
+                direction = 'CALL';
+                confirmations.push('momentum_positive');
+                
+                if (consecutiveGreen >= 2) {
+                    confidence += 10;
+                    confirmations.push(`consecutive_green_${consecutiveGreen}`);
+                }
+                if (reversal === 'bullish_reversal') {
+                    confidence += 15;
+                    confirmations.push('bullish_reversal');
+                }
+                if (strength > 30) {
+                    confidence += 5;
+                    confirmations.push('strong_momentum');
+                }
+            }
+            // SELL: Red bars (negative momentum)
+            else if (currentColor === 'red') {
+                direction = 'PUT';
+                confirmations.push('momentum_negative');
+                
+                if (consecutiveRed >= 2) {
+                    confidence += 10;
+                    confirmations.push(`consecutive_red_${consecutiveRed}`);
+                }
+                if (reversal === 'bearish_reversal') {
+                    confidence += 15;
+                    confirmations.push('bearish_reversal');
+                }
+                if (strength > 30) {
+                    confidence += 5;
+                    confirmations.push('strong_momentum');
+                }
+            }
+            
+            if (!direction || confidence < 65) return null;
+            
+            return {
+                direction,
+                confidence: Math.min(95, confidence),
+                strategy: 'Momentum Buster 15s',
+                expiration: 15,
+                confirmations,
+                indicators: {
+                    momentum: currentMom,
+                    momentumColor: currentColor,
+                    strength,
+                    consecutiveBars: currentColor === 'green' ? consecutiveGreen : consecutiveRed,
+                    reversal
+                }
+            };
         },
         
         // MAIN: Generate signal from candle data
@@ -2028,7 +2140,8 @@
     }
 
     // ===========================================
-    // UI PANEL
+    // UI PANEL - v7.3.0 REDESIGNED
+    // Clean, modern, organized layout
     // ===========================================
     let isMinimized = false;
     
@@ -2042,174 +2155,361 @@
         panel.id = 'gpt-panel';
         panel.innerHTML = `
             <style>
+                /* ============================================
+                   GPT SIGNAL BOT v7.3.0 - MODERN UI
+                   ============================================ */
                 #gpt-panel {
                     position: fixed;
-                    top: auto;
-                    bottom: 10px;
-                    left: 10px;
-                    right: auto;
-                    background: rgba(20, 20, 35, 0.95);
-                    border: 1px solid #7c3aed;
-                    border-radius: 6px;
-                    padding: 4px 8px;
+                    bottom: 15px;
+                    left: 15px;
+                    background: linear-gradient(145deg, rgba(15,15,30,0.98), rgba(25,25,45,0.98));
+                    border: 1px solid rgba(124,58,237,0.6);
+                    border-radius: 12px;
+                    padding: 0;
                     z-index: 999999;
-                    font-family: Arial, sans-serif;
-                    font-size: 10px;
-                    color: white;
+                    font-family: 'Segoe UI', system-ui, sans-serif;
+                    font-size: 11px;
+                    color: #e2e8f0;
+                    width: 280px;
+                    box-shadow: 0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
+                    overflow: hidden;
+                    transition: all 0.3s ease;
+                }
+                #gpt-panel.minimized { 
+                    width: 80px; 
+                    padding: 0;
+                }
+                #gpt-panel.minimized .gpt-body { display: none; }
+                #gpt-panel.minimized .gpt-header { border-radius: 12px; }
+                
+                /* Header */
+                .gpt-header {
+                    background: linear-gradient(90deg, #7c3aed, #6366f1);
+                    padding: 8px 12px;
                     display: flex;
                     align-items: center;
-                    gap: 6px;
-                    flex-wrap: wrap;
-                    max-width: 520px;
-                    box-shadow: 0 2px 10px rgba(0,0,0,0.5);
-                    cursor: default;
-                }
-                #gpt-panel.minimized { max-width: 120px; }
-                #gpt-panel.minimized .expandable { display: none; }
-                
-                #gpt-panel button {
-                    padding: 3px 6px;
-                    border: none;
-                    border-radius: 3px;
-                    font-size: 9px;
-                    font-weight: bold;
-                    cursor: pointer;
-                    text-transform: uppercase;
-                }
-                #gpt-panel button:hover { opacity: 0.8; }
-                
-                #gpt-panel .title { 
-                    color: #a78bfa; 
-                    font-weight: bold; 
-                    font-size: 10px; 
+                    justify-content: space-between;
                     cursor: move;
-                    padding: 2px 4px;
                     user-select: none;
                 }
-                #gpt-panel .title:hover { background: rgba(124,58,237,0.3); border-radius: 3px; }
-                
-                #gpt-panel .dot { width: 6px; height: 6px; border-radius: 50%; background: #ef4444; }
-                #gpt-panel .dot.on { background: #22c55e; }
-                #gpt-panel .dot.trading { background: #f59e0b; animation: pulse 0.5s infinite; }
-                @keyframes pulse { 50% { opacity: 0.4; } }
-                
-                #gpt-panel .sig { padding: 2px 8px; border-radius: 3px; font-weight: bold; }
-                #gpt-panel .sig.call { background: #22c55e; }
-                #gpt-panel .sig.put { background: #ef4444; }
-                #gpt-panel .sig.wait { background: #4b5563; }
-                
-                #gpt-panel .on { background: #22c55e !important; }
-                #gpt-panel .off { background: #4b5563; }
-                #gpt-panel .auto-btn { background: #4b5563; color: white; }
-                #gpt-panel .scan-btn { background: #4b5563; color: white; }
-                #gpt-panel .switch-btn { background: #4b5563; color: white; }
-                #gpt-panel .switch-btn.disabled { opacity: 0.4; }
-                #gpt-panel .inv-btn { background: #4b5563; color: white; }
-                #gpt-panel .fetch-btn { background: #3b82f6; color: white; }
-                #gpt-panel .win-btn { background: #22c55e; color: white; }
-                #gpt-panel .loss-btn { background: #ef4444; color: white; }
-                #gpt-panel .min-btn { background: #6b7280; color: white; width: 18px; }
-                
-                #gpt-panel .stat { color: #9ca3af; }
-                #gpt-panel .val { font-weight: bold; }
-                #gpt-panel .win { color: #22c55e; }
-                #gpt-panel .loss { color: #ef4444; }
-                
-                #gpt-panel input {
-                    background: rgba(0,0,0,0.4);
-                    border: 1px solid #4b5563;
-                    border-radius: 2px;
+                .gpt-header-left {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+                .gpt-logo {
+                    font-weight: 700;
+                    font-size: 13px;
                     color: white;
-                    width: 35px;
+                    letter-spacing: 0.5px;
+                }
+                .gpt-version {
                     font-size: 9px;
-                    padding: 2px;
+                    color: rgba(255,255,255,0.7);
+                    background: rgba(0,0,0,0.2);
+                    padding: 2px 5px;
+                    border-radius: 4px;
+                }
+                .gpt-status-dot {
+                    width: 8px;
+                    height: 8px;
+                    border-radius: 50%;
+                    background: #ef4444;
+                    box-shadow: 0 0 6px #ef4444;
+                    transition: all 0.3s;
+                }
+                .gpt-status-dot.connected { background: #22c55e; box-shadow: 0 0 6px #22c55e; }
+                .gpt-status-dot.trading { background: #f59e0b; box-shadow: 0 0 8px #f59e0b; animation: gptPulse 0.5s infinite; }
+                .gpt-status-dot.error { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
+                @keyframes gptPulse { 50% { opacity: 0.4; transform: scale(1.2); } }
+                
+                .gpt-minimize-btn {
+                    background: rgba(255,255,255,0.15);
+                    border: none;
+                    color: white;
+                    width: 22px;
+                    height: 22px;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-size: 14px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    transition: background 0.2s;
+                }
+                .gpt-minimize-btn:hover { background: rgba(255,255,255,0.25); }
+                
+                /* Body */
+                .gpt-body { padding: 10px; }
+                
+                /* Signal Display */
+                .gpt-signal-box {
+                    background: rgba(0,0,0,0.3);
+                    border-radius: 8px;
+                    padding: 10px;
+                    margin-bottom: 10px;
                     text-align: center;
                 }
+                .gpt-signal-label { font-size: 9px; color: #94a3b8; margin-bottom: 4px; text-transform: uppercase; }
+                .gpt-signal-value {
+                    font-size: 18px;
+                    font-weight: 700;
+                    padding: 4px 16px;
+                    border-radius: 6px;
+                    display: inline-block;
+                }
+                .gpt-signal-value.call { background: linear-gradient(135deg, #22c55e, #16a34a); color: white; }
+                .gpt-signal-value.put { background: linear-gradient(135deg, #ef4444, #dc2626); color: white; }
+                .gpt-signal-value.wait { background: rgba(71,85,105,0.5); color: #94a3b8; }
                 
-                #gpt-panel .log {
+                /* Button Groups */
+                .gpt-btn-row {
+                    display: flex;
+                    gap: 6px;
+                    margin-bottom: 8px;
+                }
+                .gpt-btn {
+                    flex: 1;
+                    padding: 8px 4px;
+                    border: none;
+                    border-radius: 6px;
+                    font-size: 10px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    text-transform: uppercase;
+                    transition: all 0.2s;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    gap: 2px;
+                }
+                .gpt-btn:hover { transform: translateY(-1px); filter: brightness(1.1); }
+                .gpt-btn:active { transform: translateY(0); }
+                
+                .gpt-btn-icon { font-size: 14px; }
+                
+                .gpt-btn-auto { background: #475569; color: white; }
+                .gpt-btn-auto.active { background: linear-gradient(135deg, #22c55e, #16a34a); }
+                .gpt-btn-scan { background: #475569; color: white; }
+                .gpt-btn-scan.active { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+                .gpt-btn-go { background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; }
+                .gpt-btn-inv { background: #475569; color: white; }
+                .gpt-btn-inv.active { background: linear-gradient(135deg, #f59e0b, #d97706); }
+                .gpt-btn-log { background: #475569; color: white; }
+                .gpt-btn-log.active { background: linear-gradient(135deg, #6366f1, #4f46e5); }
+                
+                /* Stats Row */
+                .gpt-stats-row {
+                    display: flex;
+                    gap: 8px;
+                    margin-bottom: 8px;
+                }
+                .gpt-stat-box {
+                    flex: 1;
+                    background: rgba(0,0,0,0.2);
+                    border-radius: 6px;
+                    padding: 6px 8px;
+                    text-align: center;
+                }
+                .gpt-stat-label { font-size: 8px; color: #64748b; text-transform: uppercase; }
+                .gpt-stat-value { font-size: 14px; font-weight: 700; }
+                .gpt-stat-value.win { color: #22c55e; }
+                .gpt-stat-value.loss { color: #ef4444; }
+                .gpt-stat-value.profit { color: #a78bfa; }
+                
+                /* Settings Row */
+                .gpt-settings-row {
+                    display: flex;
+                    gap: 8px;
+                    align-items: center;
+                    background: rgba(0,0,0,0.2);
+                    border-radius: 6px;
+                    padding: 8px;
+                    margin-bottom: 8px;
+                }
+                .gpt-input-group {
+                    display: flex;
+                    align-items: center;
+                    gap: 4px;
+                }
+                .gpt-input-label { font-size: 9px; color: #94a3b8; }
+                .gpt-input {
+                    background: rgba(0,0,0,0.4);
+                    border: 1px solid rgba(124,58,237,0.3);
+                    border-radius: 4px;
+                    color: white;
+                    width: 50px;
+                    font-size: 11px;
+                    padding: 4px 6px;
+                    text-align: center;
+                }
+                .gpt-input:focus { outline: none; border-color: #7c3aed; }
+                
+                /* Win/Loss Buttons */
+                .gpt-result-btns {
+                    display: flex;
+                    gap: 6px;
+                }
+                .gpt-result-btn {
+                    flex: 1;
+                    padding: 6px;
+                    border: none;
+                    border-radius: 4px;
+                    font-size: 10px;
+                    font-weight: 600;
+                    cursor: pointer;
+                }
+                .gpt-result-btn.win { background: rgba(34,197,94,0.2); color: #22c55e; border: 1px solid rgba(34,197,94,0.3); }
+                .gpt-result-btn.loss { background: rgba(239,68,68,0.2); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
+                .gpt-result-btn:hover { filter: brightness(1.2); }
+                
+                /* Status Log */
+                .gpt-log-bar {
+                    background: rgba(0,0,0,0.3);
+                    border-radius: 4px;
+                    padding: 6px 8px;
+                    font-size: 9px;
                     color: #22c55e;
-                    font-size: 8px;
-                    max-width: 150px;
+                    font-family: 'Consolas', monospace;
+                    white-space: nowrap;
                     overflow: hidden;
                     text-overflow: ellipsis;
-                    white-space: nowrap;
                 }
-                
-                #gpt-panel .console-btn { background: #6366f1; color: white; }
                 
                 /* Console Window */
                 #gpt-console-window {
                     position: fixed;
-                    bottom: 50px;
-                    left: 10px;
-                    width: 400px;
-                    height: 250px;
-                    background: rgba(15, 15, 25, 0.98);
-                    border: 1px solid #7c3aed;
-                    border-radius: 8px;
+                    bottom: 60px;
+                    left: 15px;
+                    width: 420px;
+                    height: 280px;
+                    background: rgba(10,10,20,0.98);
+                    border: 1px solid rgba(124,58,237,0.5);
+                    border-radius: 12px;
                     z-index: 999998;
                     display: none;
                     font-family: 'Consolas', 'Monaco', monospace;
-                    box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+                    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+                    overflow: hidden;
                 }
                 #gpt-console-header {
                     background: linear-gradient(90deg, #7c3aed, #6366f1);
-                    padding: 6px 10px;
-                    border-radius: 7px 7px 0 0;
+                    padding: 8px 12px;
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
                     cursor: move;
                 }
-                #gpt-console-header span { font-weight: bold; color: white; font-size: 11px; }
-                #gpt-console-header button { 
-                    background: rgba(255,255,255,0.2); 
+                #gpt-console-header span { font-weight: 600; color: white; font-size: 11px; }
+                #gpt-console-close { 
+                    background: rgba(255,255,255,0.15); 
                     border: none; 
                     color: white; 
-                    padding: 2px 8px; 
-                    border-radius: 3px;
+                    width: 22px;
+                    height: 22px;
+                    border-radius: 6px;
                     cursor: pointer;
+                    font-size: 12px;
                 }
+                #gpt-console-close:hover { background: rgba(255,255,255,0.25); }
                 #gpt-console-content {
-                    padding: 8px;
+                    padding: 10px;
                     height: calc(100% - 40px);
                     overflow-y: auto;
                     font-size: 10px;
-                    line-height: 1.4;
+                    line-height: 1.5;
+                    color: #94a3b8;
                 }
                 #gpt-console-content::-webkit-scrollbar { width: 6px; }
                 #gpt-console-content::-webkit-scrollbar-thumb { background: #7c3aed; border-radius: 3px; }
+                #gpt-console-content .log-line { margin-bottom: 2px; }
+                #gpt-console-content .log-line.success { color: #22c55e; }
+                #gpt-console-content .log-line.error { color: #ef4444; }
+                #gpt-console-content .log-line.warning { color: #f59e0b; }
+                #gpt-console-content .log-line.info { color: #3b82f6; }
             </style>
             
-            <span class="dot" id="gpt-dot"></span>
-            <span class="title" id="gpt-drag">GPT</span>
-            <span class="sig wait" id="gpt-signal">-</span>
+            <!-- Header -->
+            <div class="gpt-header" id="gpt-drag">
+                <div class="gpt-header-left">
+                    <div class="gpt-status-dot" id="gpt-dot"></div>
+                    <span class="gpt-logo">GPT Bot</span>
+                    <span class="gpt-version">v7.3</span>
+                </div>
+                <button class="gpt-minimize-btn" id="gpt-minimize">−</button>
+            </div>
             
-            <span class="expandable">
-                <button class="auto-btn" id="gpt-auto">AUTO</button>
-                <button class="scan-btn" id="gpt-scan">SCAN</button>
-                <button class="inv-btn" id="gpt-invert">INV</button>
-                <button class="fetch-btn" id="gpt-fetch">GO</button>
-                <button class="console-btn" id="gpt-console-toggle">LOG</button>
-            </span>
-            
-            <span class="expandable">
-                <button class="win-btn" id="gpt-win-btn">W</button>
-                <button class="loss-btn" id="gpt-loss-btn">L</button>
-            </span>
-            
-            <span class="expandable stat">
-                <span class="val win" id="gpt-wins">0</span>/<span class="val loss" id="gpt-losses">0</span>
-                <span class="val" id="gpt-profit">$0</span>
-            </span>
-            
-            <span class="expandable">
-                $<input type="number" id="gpt-mm-balance-input" value="100">
-                <input type="number" id="gpt-mm-risk" value="2" style="width:25px;">%
-            </span>
-            
-            <span class="log expandable" id="gpt-log">Ready</span>
-            <button class="min-btn" id="gpt-minimize">−</button>
+            <!-- Body -->
+            <div class="gpt-body">
+                <!-- Signal Display -->
+                <div class="gpt-signal-box">
+                    <div class="gpt-signal-label">Current Signal</div>
+                    <div class="gpt-signal-value wait" id="gpt-signal">WAITING</div>
+                </div>
+                
+                <!-- Main Control Buttons -->
+                <div class="gpt-btn-row">
+                    <button class="gpt-btn gpt-btn-auto" id="gpt-auto">
+                        <span class="gpt-btn-icon">📡</span>
+                        <span>AUTO</span>
+                    </button>
+                    <button class="gpt-btn gpt-btn-scan" id="gpt-scan">
+                        <span class="gpt-btn-icon">🔍</span>
+                        <span>SCAN</span>
+                    </button>
+                    <button class="gpt-btn gpt-btn-go" id="gpt-fetch">
+                        <span class="gpt-btn-icon">⚡</span>
+                        <span>GO</span>
+                    </button>
+                </div>
+                
+                <!-- Secondary Buttons -->
+                <div class="gpt-btn-row">
+                    <button class="gpt-btn gpt-btn-inv" id="gpt-invert">
+                        <span class="gpt-btn-icon">🔄</span>
+                        <span>INVERT</span>
+                    </button>
+                    <button class="gpt-btn gpt-btn-log" id="gpt-console-toggle">
+                        <span class="gpt-btn-icon">📋</span>
+                        <span>LOG</span>
+                    </button>
+                </div>
+                
+                <!-- Stats -->
+                <div class="gpt-stats-row">
+                    <div class="gpt-stat-box">
+                        <div class="gpt-stat-label">Wins</div>
+                        <div class="gpt-stat-value win" id="gpt-wins">0</div>
+                    </div>
+                    <div class="gpt-stat-box">
+                        <div class="gpt-stat-label">Losses</div>
+                        <div class="gpt-stat-value loss" id="gpt-losses">0</div>
+                    </div>
+                    <div class="gpt-stat-box">
+                        <div class="gpt-stat-label">Profit</div>
+                        <div class="gpt-stat-value profit" id="gpt-profit">$0</div>
+                    </div>
+                </div>
+                
+                <!-- Settings -->
+                <div class="gpt-settings-row">
+                    <div class="gpt-input-group">
+                        <span class="gpt-input-label">Balance $</span>
+                        <input type="number" class="gpt-input" id="gpt-mm-balance-input" value="100">
+                    </div>
+                    <div class="gpt-input-group">
+                        <span class="gpt-input-label">Risk %</span>
+                        <input type="number" class="gpt-input" id="gpt-mm-risk" value="2" style="width:40px;">
+                    </div>
+                    <div class="gpt-result-btns">
+                        <button class="gpt-result-btn win" id="gpt-win-btn">+W</button>
+                        <button class="gpt-result-btn loss" id="gpt-loss-btn">-L</button>
+                    </div>
+                </div>
+                
+                <!-- Status Log -->
+                <div class="gpt-log-bar" id="gpt-log">Ready - Click SCAN to start</div>
+            </div>
         `;
 
         document.body.appendChild(panel);
@@ -2219,7 +2519,7 @@
         consoleWindow.id = 'gpt-console-window';
         consoleWindow.innerHTML = `
             <div id="gpt-console-header">
-                <span>GPT Signal Bot Console v7.0</span>
+                <span>📊 GPT Signal Bot Console</span>
                 <button id="gpt-console-close">✕</button>
             </div>
             <div id="gpt-console-content"></div>
@@ -2252,20 +2552,23 @@
             calculateBaseTradeAmount();
             GM_setValue('mmAccountBalance', moneyManagement.accountBalance);
             updateMoneyManagementDisplay();
-            log(`Bal: $${moneyManagement.accountBalance}`);
+            log(`Balance updated: $${moneyManagement.accountBalance}`);
         });
         document.getElementById('gpt-mm-risk').addEventListener('change', (e) => {
             moneyManagement.riskPercentage = parseFloat(e.target.value) || 2;
             calculateBaseTradeAmount();
             GM_setValue('mmRiskPercentage', moneyManagement.riskPercentage);
             updateMoneyManagementDisplay();
-            log(`Risk: ${moneyManagement.riskPercentage}%`);
+            log(`Risk updated: ${moneyManagement.riskPercentage}%`);
         });
 
         // Make draggable
         makeDraggable(panel, document.getElementById('gpt-drag'));
         
-        // Apply saved position (convert bottom to top if needed)
+        // Make console window draggable
+        makeDraggable(consoleWindow, document.getElementById('gpt-console-header'));
+        
+        // Apply saved position
         const savedPos = GM_getValue('panelPosition', null);
         if (savedPos && savedPos.top && savedPos.left) {
             panel.style.top = savedPos.top;
@@ -2555,18 +2858,21 @@
         const autoBtn = document.getElementById('gpt-auto');
         const scanBtn = document.getElementById('gpt-scan');
         const invertBtn = document.getElementById('gpt-invert');
+        const logBtn = document.getElementById('gpt-console-toggle');
 
         if (autoBtn) {
-            autoBtn.textContent = autoEnabled ? 'AUTO✓' : 'AUTO';
-            autoBtn.className = 'auto-btn' + (autoEnabled ? ' on' : '');
+            autoBtn.className = 'gpt-btn gpt-btn-auto' + (autoEnabled ? ' active' : '');
         }
         if (scanBtn) {
-            scanBtn.textContent = scanEnabled ? 'SCAN✓' : 'SCAN';
-            scanBtn.className = 'scan-btn' + (scanEnabled ? ' on' : '');
+            scanBtn.className = 'gpt-btn gpt-btn-scan' + (scanEnabled ? ' active' : '');
         }
         if (invertBtn) {
-            invertBtn.textContent = invertEnabled ? 'INV✓' : 'INV';
-            invertBtn.className = 'inv-btn' + (invertEnabled ? ' on' : '');
+            invertBtn.className = 'gpt-btn gpt-btn-inv' + (invertEnabled ? ' active' : '');
+        }
+        if (logBtn) {
+            const consoleWindow = document.getElementById('gpt-console-window');
+            const isConsoleVisible = consoleWindow && consoleWindow.style.display === 'block';
+            logBtn.className = 'gpt-btn gpt-btn-log' + (isConsoleVisible ? ' active' : '');
         }
     }
 
@@ -2578,17 +2884,18 @@
         const sigEl = document.getElementById('gpt-signal');
         
         if (sigEl) {
-            sigEl.textContent = direction || '-';
-            sigEl.className = 'sig ' + (type || 'wait');
+            sigEl.textContent = direction || 'WAITING';
+            sigEl.className = 'gpt-signal-value ' + (type || 'wait');
         }
     }
 
     function updateStatusDot(status) {
         const dot = document.getElementById('gpt-dot');
         if (dot) {
-            dot.className = 'dot';
-            if (status === 'connected') dot.classList.add('on');
+            dot.className = 'gpt-status-dot';
+            if (status === 'connected') dot.classList.add('connected');
             if (status === 'trading') dot.classList.add('trading');
+            if (status === 'error') dot.classList.add('error');
         }
     }
 

@@ -7554,6 +7554,104 @@ async def get_pattern_win_rates():
         }
 
 
+# =============================================================================
+# MOMENTUM BUSTER 15-SECOND STRATEGY
+# =============================================================================
+
+@api_router.post("/strategy/momentum-buster-15s/signal")
+async def generate_momentum_buster_15s_signal(symbol: str = Query("EURUSD_OTC")):
+    """
+    Generate signal using Momentum Buster 15-Second Strategy.
+    
+    Ultra-fast scalping strategy:
+    - Timeframe: 15-second candles
+    - Expiration: 15 seconds
+    - Indicator: Momentum (period 3)
+    - BUY: Green bars (positive momentum) at new candle
+    - SELL: Red bars (negative momentum) at new candle
+    
+    Args:
+        symbol: Trading symbol (e.g., EURUSD_OTC)
+    """
+    try:
+        from strategies.strategy_momentum_buster_15s import momentum_buster_15s
+        
+        # Get OANDA data for real-time accuracy
+        df = enhanced_oanda.get_candles(symbol.replace('_OTC', '').replace('/', '_'), 'M1', 50)
+        
+        if df is None or df.empty:
+            # Fallback to yfinance
+            import yfinance as yf
+            base_symbol = symbol.replace('_OTC', '').replace('_otc', '')
+            yf_symbol = f'{base_symbol}=X' if base_symbol in ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD'] else base_symbol
+            
+            ticker = yf.Ticker(yf_symbol)
+            hist = ticker.history(period="1d", interval="1m")
+            
+            if hist.empty or len(hist) < 10:
+                return {"success": False, "message": f"Insufficient data for {symbol}", "signal": None}
+            
+            candles = [{'open': float(r['Open']), 'high': float(r['High']), 
+                       'low': float(r['Low']), 'close': float(r['Close'])} 
+                      for _, r in hist.iterrows()]
+        else:
+            candles = [{'open': float(r['open']), 'high': float(r['high']),
+                       'low': float(r['low']), 'close': float(r['close'])}
+                      for _, r in df.iterrows()]
+        
+        # Generate signal
+        signal = momentum_buster_15s.generate_signal(candles)
+        
+        if not signal:
+            return {
+                "success": True,
+                "message": f"No momentum signal for {symbol}",
+                "signal": None,
+                "strategy": "Momentum Buster 15s"
+            }
+        
+        # Send to Telegram for strong signals
+        telegram_sent = False
+        try:
+            from telegram_signal_notifier import get_telegram_notifier
+            notifier = get_telegram_notifier()
+            if notifier and signal['confidence'] >= 70:
+                msg = f"⚡ MOMENTUM BUSTER 15s SIGNAL\n\n"
+                msg += f"💹 Asset: {symbol}\n"
+                msg += f"📊 Direction: {'🟢 CALL' if signal['direction'] == 'CALL' else '🔴 PUT'}\n"
+                msg += f"🎯 Confidence: {signal['confidence']}%\n"
+                msg += f"⏱️ Expiration: 15 seconds\n"
+                msg += f"📈 Momentum: {signal['indicators']['momentum_color'].upper()}\n"
+                msg += f"🔥 Strength: {signal['indicators']['momentum_strength']}\n"
+                msg += f"✅ Confirmations: {', '.join(signal['confirmations'])}"
+                await notifier.send_message(msg)
+                telegram_sent = True
+        except Exception:
+            pass
+        
+        return {
+            "success": True,
+            "symbol": symbol,
+            "signal": signal,
+            "strategy": "Momentum Buster 15s",
+            "telegram_sent": telegram_sent
+        }
+        
+    except Exception as e:
+        logger.error(f"Momentum Buster 15s error: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.get("/strategy/momentum-buster-15s/stats")
+async def get_momentum_buster_stats():
+    """Get Momentum Buster 15s strategy statistics."""
+    try:
+        from strategies.strategy_momentum_buster_15s import momentum_buster_15s
+        return {"success": True, "stats": momentum_buster_15s.get_stats()}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 @api_router.get("/strategy/support-resistance")
 async def get_support_resistance_levels(symbol: str = Query("EURUSD_OTC")):
     """

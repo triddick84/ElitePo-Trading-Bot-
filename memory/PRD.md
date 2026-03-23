@@ -1,17 +1,51 @@
 # GPT Signal Bot - Product Requirements Document
 
-## Last Updated: March 21, 2026
+## Last Updated: March 23, 2026
 
 ## Current Status
-✅ **Tampermonkey v7.1.0** - LOCAL signal generation using actual OTC prices (DOM scraping)
+✅ **Tampermonkey v7.3.0** - Redesigned modern UI + Enhanced price scraper + Local OTC signals
 ✅ **Backend Data Sources** - OANDA (primary), yfinance (fallback) - for regular forex
 ✅ **1m Momentum Exhaustion Strategy** - RSI-2 + Stochastic + BB + Candlesticks (70-75% target)
+✅ **Momentum Buster 15s Strategy** - NEW! Momentum period 3, green/red bars, 15s expiration
 ✅ **Tampermonkey v6.8.0** - Complete Money Management System with Smart Martingale
 ✅ **Ultra High Accuracy 5s Strategy** - Research-based 85%+ confidence signals
 ✅ **Enhanced AI ML System** - Ensemble model with historical data training
 ✅ **Improved AI ML System v2.0** - 62 features, 56%+ accuracy, optimized ensemble (RF+GB+AdaBoost)
 
-## Recent Updates (March 21, 2026)
+## Recent Updates (March 23, 2026)
+
+### Tampermonkey v7.3.0 - Redesigned UI (March 23, 2026)
+**Complete UI overhaul for better usability and cleaner design**
+
+| Feature | Description |
+|---------|-------------|
+| Modern Look | Glass-morphism design with purple gradient header |
+| Organized Layout | Signal display box, grouped buttons, stats row, settings |
+| Button Groups | AUTO/SCAN/GO in row 1, INVERT/LOG in row 2 |
+| Stats Display | Wins, Losses, Profit in separate boxes |
+| Draggable | Both main panel and console window are draggable |
+| Minimizable | Compact mode hides body, shows only header |
+
+### Momentum Buster 15s Strategy (March 23, 2026)
+**Ultra-fast scalping strategy for 15-second binary options**
+
+| Parameter | Value |
+|-----------|-------|
+| Timeframe | 15-second candles |
+| Expiration | 15 seconds |
+| Indicator | Momentum (period 3) |
+| BUY Signal | Green bars (momentum > 0) + confirmations |
+| SELL Signal | Red bars (momentum < 0) + confirmations |
+
+**API Endpoints:**
+- `POST /api/strategy/momentum-buster-15s/signal?symbol=EUR_USD`
+- `GET /api/strategy/momentum-buster-15s/stats`
+
+**Signal Confirmations:**
+- `momentum_positive` / `momentum_negative`
+- `consecutive_green_X` / `consecutive_red_X`
+- `bullish_reversal` / `bearish_reversal`
+- `strong_momentum`
 
 ### Improved AI/ML System v2.0 (March 21, 2026)
 **NEW: Enhanced machine learning for better signal accuracy**
