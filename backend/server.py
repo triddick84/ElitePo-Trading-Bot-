@@ -73,6 +73,14 @@ except ImportError as e:
     print(f"Improved AI ML System not available: {e}")
     improved_ai_ml = None
 
+# Import Maximized AI ML System v3.0
+try:
+    from maximized_ai_ml_system import maximized_ai_ml
+    print("✅ Maximized AI ML System v3.0 loaded")
+except ImportError as e:
+    print(f"Maximized AI ML System not available: {e}")
+    maximized_ai_ml = None
+
 from pocket_option_auth import auto_login_and_get_ssid
 from advanced_signal_generator import advanced_signal_generator
 from enhanced_sr_analyzer import enhanced_sr_analyzer
@@ -3690,6 +3698,89 @@ async def get_improved_ml_prediction(symbol: str):
         
     except Exception as e:
         logger.error(f"Error getting improved ML prediction: {e}")
+        return {"success": False, "error": str(e)}
+
+
+# =====================================================
+# MAXIMIZED AI/ML SYSTEM v3.0 ENDPOINTS
+# =====================================================
+
+@api_router.post("/maximized-ml/train")
+async def train_maximized_ml():
+    """Train the maximized ML model v3.0 with XGBoost + LightGBM stacking ensemble."""
+    try:
+        if maximized_ai_ml is None:
+            return {"success": False, "error": "Maximized ML system not available"}
+        
+        result = await maximized_ai_ml.train_from_oanda(
+            enhanced_oanda,
+            symbols=['EUR_USD', 'GBP_USD', 'USD_JPY', 'AUD_USD', 'EUR_JPY',
+                    'USD_CHF', 'NZD_USD', 'EUR_GBP', 'GBP_JPY', 'AUD_JPY'],
+            candle_count=3000
+        )
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error training maximized ML: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.get("/maximized-ml/stats")
+async def get_maximized_ml_stats():
+    """Get maximized ML system v3.0 statistics."""
+    try:
+        if maximized_ai_ml is None:
+            return {"success": False, "error": "Maximized ML system not available"}
+        
+        return {"success": True, "stats": maximized_ai_ml.get_stats()}
+        
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@api_router.post("/maximized-ml/predict/{symbol}")
+async def get_maximized_ml_prediction(symbol: str):
+    """Get maximized ML v3.0 prediction with regime detection."""
+    try:
+        if maximized_ai_ml is None:
+            return {"success": False, "error": "Maximized ML system not available"}
+        
+        # Convert symbol format to OANDA format (EUR_USD)
+        oanda_symbol = symbol.replace('/', '_')
+        if '_' not in oanda_symbol:
+            # Convert EURUSD to EUR_USD
+            oanda_symbol = oanda_symbol[:3] + '_' + oanda_symbol[3:] if len(oanda_symbol) == 6 else oanda_symbol
+        
+        df = enhanced_oanda.get_candles(oanda_symbol, granularity='M1', count=100)
+        
+        if df is None or df.empty:
+            # Fallback to market hub with original symbol format
+            market_symbol = symbol.replace('_', '').replace('/', '')
+            candles = await realtime_market_hub.get_historical_candles(market_symbol, '1m', 100)
+            if candles and len(candles) >= 60:
+                df = pd.DataFrame(candles)
+                if 'c' in df.columns:
+                    df = df.rename(columns={'c': 'close', 'o': 'open', 'h': 'high', 'l': 'low', 'v': 'volume'})
+        
+        if df is None or df.empty or len(df) < 60:
+            return {"success": False, "error": "Insufficient market data (need 60+ candles)"}
+        
+        for col in ['open', 'high', 'low', 'close']:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+        
+        if 'volume' not in df.columns:
+            df['volume'] = 1.0
+        
+        prediction = maximized_ai_ml.predict(df)
+        
+        if prediction:
+            return {"success": True, "symbol": symbol, "prediction": prediction}
+        else:
+            return {"success": False, "error": "Could not generate prediction - model may need training"}
+        
+    except Exception as e:
+        logger.error(f"Error getting maximized ML prediction: {e}")
         return {"success": False, "error": str(e)}
 
 

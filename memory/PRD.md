@@ -1,18 +1,57 @@
 # GPT Signal Bot - Product Requirements Document
 
-## Last Updated: March 23, 2026
+## Last Updated: March 24, 2026
 
 ## Current Status
 ✅ **Tampermonkey v7.3.0** - Redesigned modern UI + Enhanced price scraper + Local OTC signals
-✅ **Backend Data Sources** - OANDA (primary), yfinance (fallback) - for regular forex
+✅ **Maximized AI/ML v3.0** - 97 features, XGBoost+LightGBM stacking, HMM regime detection
+✅ **Improved AI/ML v2.0** - 62 features, 56% accuracy, RF+GB+AdaBoost ensemble
+✅ **Momentum Buster 15s Strategy** - Momentum period 3, green/red bars, 15s expiration
 ✅ **1m Momentum Exhaustion Strategy** - RSI-2 + Stochastic + BB + Candlesticks (70-75% target)
-✅ **Momentum Buster 15s Strategy** - NEW! Momentum period 3, green/red bars, 15s expiration
-✅ **Tampermonkey v6.8.0** - Complete Money Management System with Smart Martingale
-✅ **Ultra High Accuracy 5s Strategy** - Research-based 85%+ confidence signals
-✅ **Enhanced AI ML System** - Ensemble model with historical data training
-✅ **Improved AI ML System v2.0** - 62 features, 56%+ accuracy, optimized ensemble (RF+GB+AdaBoost)
+✅ **Backend Data Sources** - OANDA (primary), yfinance (fallback) - for regular forex
 
-## Recent Updates (March 23, 2026)
+## Recent Updates (March 24, 2026)
+
+### Maximized AI/ML System v3.0 (March 24, 2026)
+**State-of-the-art ML system with advanced features and regime detection**
+
+| Component | Description |
+|-----------|-------------|
+| **Model Architecture** | Stacking Ensemble: XGBoost + LightGBM + RandomForest + GradientBoosting |
+| **Features** | 97 total (up from 62 in v2.0) |
+| **Regime Detection** | Hidden Markov Model (3 states: low/normal/high volatility) |
+| **Cross-Validation** | Walk-Forward with 5 splits |
+| **Training Samples** | 20,872 samples from 10 currency pairs |
+
+**New Features Added:**
+- Parkinson & Garman-Klass volatility
+- ADX trend strength indicators
+- Candlestick pattern detection (9 patterns)
+- Support/Resistance proximity features
+- Session overlap detection (London/NY)
+- Multi-period RSI (2, 5, 9, 14, 21)
+
+**API Endpoints:**
+- `POST /api/maximized-ml/train` - Train with 3000 candles/symbol
+- `GET /api/maximized-ml/stats` - System statistics
+- `POST /api/maximized-ml/predict/{symbol}` - Regime-aware predictions
+
+### AI/ML Research Findings (March 24, 2026)
+Research document created: `/app/memory/AI_ML_MAXIMIZATION_PLAN.md`
+
+**Key Findings:**
+1. LSTM+GRU with Dual Attention (DALG) outperforms pure models
+2. XGBoost achieves ~98% accuracy in classification tasks
+3. HMM with volatility filtering improves profit factor from 1.48 to 1.73
+4. Walk-Forward optimization covers ~70% OOS data vs 30% in simple backtests
+5. PPO (Proximal Policy Optimization) achieves 63% win rate with lowest drawdown
+
+**Implementation Roadmap:**
+- Phase 1 (Done): XGBoost/LightGBM + Walk-Forward + New Features
+- Phase 2 (Next): LSTM/GRU hybrid model
+- Phase 3 (Future): PPO Reinforcement Learning
+
+### Previous Updates
 
 ### Tampermonkey v7.3.0 - Redesigned UI (March 23, 2026)
 **Complete UI overhaul for better usability and cleaner design**
