@@ -3,6 +3,7 @@
 ## Last Updated: March 24, 2026
 
 ## Current Status
+✅ **Risk Management System** - Sharpe ratio, drawdown protection, Kelly criterion position sizing
 ✅ **Tampermonkey v7.3.0** - Redesigned modern UI + Enhanced price scraper + Local OTC signals
 ✅ **Maximized AI/ML v3.0** - 97 features, XGBoost+LightGBM stacking, HMM regime detection
 ✅ **Improved AI/ML v2.0** - 62 features, 56% accuracy, RF+GB+AdaBoost ensemble
@@ -11,6 +12,37 @@
 ✅ **Backend Data Sources** - OANDA (primary), yfinance (fallback) - for regular forex
 
 ## Recent Updates (March 24, 2026)
+
+### Risk Management & Drawdown Protection System (March 24, 2026)
+**Focus on risk-adjusted returns (Sharpe ratio) and drawdown management**
+
+| Feature | Description |
+|---------|-------------|
+| **Sharpe Ratio** | Real-time annualized calculation with risk-free rate |
+| **Sortino Ratio** | Downside deviation only (penalizes losses, not volatility) |
+| **Kelly Criterion** | Optimal position sizing based on win rate & win/loss ratio |
+| **Max Drawdown** | Automatic trading pause at 15% drawdown |
+| **Daily Loss Limit** | 5% daily loss limit with auto-pause |
+| **Consecutive Loss Limit** | Pause after 5 consecutive losses |
+| **Risk Levels** | Normal → Elevated → High → Critical → Paused |
+
+**API Endpoints:**
+- `GET /api/risk-management/status` - Full risk status
+- `GET /api/risk-management/metrics` - Sharpe, Sortino, profit factor
+- `POST /api/risk-management/record-trade` - Log trade results
+- `GET /api/risk-management/can-trade` - Check if trading allowed
+- `GET /api/risk-management/position-size` - Kelly-based position sizing
+- `POST /api/risk-management/configure` - Set risk parameters
+
+**Position Sizing Formula:**
+```
+Position = Balance × Kelly × RiskMultiplier × ConfidenceMultiplier × DrawdownMultiplier
+Where:
+- Kelly = WinRate - (1-WinRate)/WinLossRatio (half-Kelly for safety)
+- RiskMultiplier = 1.0 (normal) to 0.25 (critical)
+- ConfidenceMultiplier = 0.5 + (confidence × 0.5)
+- DrawdownMultiplier = 1.0 - (drawdown × 2)
+```
 
 ### Maximized AI/ML System v3.0 (March 24, 2026)
 **State-of-the-art ML system with advanced features and regime detection**

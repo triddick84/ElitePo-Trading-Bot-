@@ -3785,6 +3785,221 @@ async def get_maximized_ml_prediction(symbol: str):
 
 
 # =====================================================
+# RISK MANAGEMENT & DRAWDOWN PROTECTION ENDPOINTS
+# =====================================================
+
+@api_router.get("/risk-management/status")
+async def get_risk_management_status():
+    """Get current risk management status including Sharpe ratio and drawdown."""
+    try:
+        from risk_management_system import get_risk_manager
+        rm = get_risk_manager()
+        return {"success": True, "risk_management": rm.to_dict()}
+    except Exception as e:
+        logger.error(f"Error getting risk status: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.post("/risk-management/configure")
+async def configure_risk_management(
+    initial_balance: float = Query(1000.0),
+    max_risk_per_trade: float = Query(0.02),
+    max_drawdown_limit: float = Query(0.15),
+    daily_loss_limit: float = Query(0.05),
+    max_trades_per_day: int = Query(50),
+    max_consecutive_losses: int = Query(5)
+):
+    """Configure risk management parameters."""
+    try:
+        from risk_management_system import RiskManager, risk_manager
+        
+        # Update risk manager settings
+        risk_manager.initial_balance = initial_balance
+        risk_manager.current_balance = initial_balance
+        risk_manager.peak_balance = initial_balance
+        risk_manager.max_risk_per_trade = max_risk_per_trade
+        risk_manager.max_drawdown_limit = max_drawdown_limit
+        risk_manager.daily_loss_limit = daily_loss_limit
+        risk_manager.max_trades_per_day = max_trades_per_day
+        risk_manager.max_consecutive_losses = max_consecutive_losses
+        
+        logger.info(f"🛡️ Risk management configured: Balance ${initial_balance}, "
+                   f"Max DD {max_drawdown_limit*100}%, Daily limit {daily_loss_limit*100}%")
+        
+        return {
+            "success": True,
+            "message": "Risk management configured",
+            "config": {
+                "initial_balance": initial_balance,
+                "max_risk_per_trade_pct": max_risk_per_trade * 100,
+                "max_drawdown_limit_pct": max_drawdown_limit * 100,
+                "daily_loss_limit_pct": daily_loss_limit * 100,
+                "max_trades_per_day": max_trades_per_day,
+                "max_consecutive_losses": max_consecutive_losses
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error configuring risk management: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.post("/risk-management/record-trade")
+async def record_trade_result(
+    direction: str = Query(..., description="CALL or PUT"),
+    amount: float = Query(..., description="Trade amount in dollars"),
+    pnl: float = Query(..., description="Profit/Loss in dollars"),
+    win: bool = Query(..., description="Was the trade a win?"),
+    asset: str = Query("UNKNOWN", description="Asset symbol"),
+    confidence: float = Query(0.0, description="Signal confidence (0-100)")
+):
+    """Record a trade result for risk tracking."""
+    try:
+        from risk_management_system import get_risk_manager, TradeResult
+        from datetime import datetime, timezone
+        
+        rm = get_risk_manager()
+        
+        trade = TradeResult(
+            timestamp=datetime.now(timezone.utc),
+            direction=direction.upper(),
+            amount=amount,
+            pnl=pnl,
+            win=win,
+            asset=asset,
+            confidence=confidence / 100 if confidence > 1 else confidence
+        )
+        
+        rm.record_trade(trade)
+        
+        return {
+            "success": True,
+            "trade_recorded": {
+                "direction": trade.direction,
+                "amount": trade.amount,
+                "pnl": trade.pnl,
+                "win": trade.win,
+                "asset": trade.asset
+            },
+            "current_status": {
+                "balance": rm.current_balance,
+                "drawdown_pct": round(rm.get_current_drawdown() * 100, 2),
+                "risk_level": rm.risk_level.value,
+                "consecutive_losses": rm.consecutive_losses,
+                "can_trade": rm.can_trade()[0]
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error recording trade: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.get("/risk-management/can-trade")
+async def check_can_trade(confidence: float = Query(0.5, description="Signal confidence (0-1)")):
+    """Check if trading is allowed based on current risk conditions."""
+    try:
+        from risk_management_system import get_risk_manager
+        rm = get_risk_manager()
+        
+        can_trade, reason = rm.can_trade(confidence)
+        
+        return {
+            "success": True,
+            "can_trade": can_trade,
+            "reason": reason,
+            "risk_level": rm.risk_level.value,
+            "recommended_position_size": rm.get_recommended_position_size(confidence),
+            "current_drawdown_pct": round(rm.get_current_drawdown() * 100, 2)
+        }
+    except Exception as e:
+        logger.error(f"Error checking trade status: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.get("/risk-management/position-size")
+async def get_position_size(confidence: float = Query(0.7, description="Signal confidence (0-1)")):
+    """Get recommended position size based on Kelly criterion and risk conditions."""
+    try:
+        from risk_management_system import get_risk_manager
+        rm = get_risk_manager()
+        
+        position_size = rm.get_recommended_position_size(confidence)
+        kelly = rm.calculate_kelly_fraction()
+        
+        return {
+            "success": True,
+            "recommended_amount": round(position_size, 2),
+            "kelly_fraction_pct": round(kelly * 100, 2),
+            "current_balance": round(rm.current_balance, 2),
+            "risk_level": rm.risk_level.value,
+            "risk_adjustment_applied": rm.risk_level != "normal"
+        }
+    except Exception as e:
+        logger.error(f"Error calculating position size: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.get("/risk-management/metrics")
+async def get_risk_metrics():
+    """Get comprehensive risk metrics including Sharpe ratio, Sortino ratio, etc."""
+    try:
+        from risk_management_system import get_risk_manager
+        rm = get_risk_manager()
+        metrics = rm.get_metrics()
+        
+        return {
+            "success": True,
+            "metrics": {
+                "sharpe_ratio": metrics.sharpe_ratio,
+                "sortino_ratio": metrics.sortino_ratio,
+                "max_drawdown_pct": metrics.max_drawdown,
+                "current_drawdown_pct": metrics.current_drawdown,
+                "win_rate_pct": metrics.win_rate,
+                "profit_factor": metrics.profit_factor,
+                "avg_win": metrics.avg_win,
+                "avg_loss": metrics.avg_loss,
+                "kelly_fraction_pct": metrics.kelly_fraction,
+                "recommended_risk_pct": metrics.recommended_risk_pct,
+                "trades_today": metrics.trades_today,
+                "daily_pnl": metrics.daily_pnl,
+                "weekly_pnl": metrics.weekly_pnl,
+                "risk_level": metrics.risk_level.value
+            },
+            "interpretation": {
+                "sharpe_quality": "Excellent" if metrics.sharpe_ratio > 2 else ("Good" if metrics.sharpe_ratio > 1 else ("Fair" if metrics.sharpe_ratio > 0 else "Poor")),
+                "drawdown_status": "Safe" if metrics.current_drawdown < 5 else ("Warning" if metrics.current_drawdown < 10 else "Critical"),
+                "profit_factor_quality": "Excellent" if metrics.profit_factor > 2 else ("Good" if metrics.profit_factor > 1.5 else ("Fair" if metrics.profit_factor > 1 else "Losing"))
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error getting risk metrics: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.post("/risk-management/reset-daily")
+async def reset_daily_counters():
+    """Reset daily trading counters."""
+    try:
+        from risk_management_system import get_risk_manager
+        rm = get_risk_manager()
+        rm.reset_daily()
+        return {"success": True, "message": "Daily counters reset", "daily_start_balance": rm.daily_start_balance}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@api_router.post("/risk-management/force-resume")
+async def force_resume_trading():
+    """Force resume trading after a pause (use with caution)."""
+    try:
+        from risk_management_system import get_risk_manager
+        rm = get_risk_manager()
+        rm.force_resume()
+        return {"success": True, "message": "Trading force resumed - use caution!", "risk_level": rm.risk_level.value}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+# =====================================================
 # ULTRA HIGH ACCURACY 5S STRATEGY ENDPOINTS
 # =====================================================
 
