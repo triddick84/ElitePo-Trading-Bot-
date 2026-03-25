@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://pocket-option-trader-1.preview.emergentagent.com
-// @version      7.3.0
-// @description  Auto-trade OTC forex on Pocket Option. v7.3.0 - Redesigned UI + Enhanced price detection
+// @version      7.3.1
+// @description  Auto-trade OTC forex on Pocket Option. v7.3.1 - Fixed minimize/maximize toggle
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -2176,11 +2176,16 @@
                     transition: all 0.3s ease;
                 }
                 #gpt-panel.minimized { 
-                    width: 80px; 
+                    width: 110px; 
                     padding: 0;
                 }
                 #gpt-panel.minimized .gpt-body { display: none; }
-                #gpt-panel.minimized .gpt-header { border-radius: 12px; }
+                #gpt-panel.minimized .gpt-header { border-radius: 12px; cursor: pointer; }
+                #gpt-panel.minimized .gpt-version { display: none; }
+                #gpt-panel.minimized .gpt-minimize-btn { 
+                    background: rgba(34,197,94,0.8); 
+                    font-weight: bold;
+                }
                 
                 /* Header */
                 .gpt-header {
@@ -2530,6 +2535,9 @@
         if (isMinimized) {
             panel.classList.add('minimized');
             document.getElementById('gpt-minimize').textContent = '+';
+        } else {
+            panel.classList.remove('minimized');
+            document.getElementById('gpt-minimize').textContent = '−';
         }
 
         // Button handlers
@@ -2540,6 +2548,13 @@
         document.getElementById('gpt-minimize').addEventListener('click', toggleMinimize);
         document.getElementById('gpt-console-toggle').addEventListener('click', toggleConsoleWindow);
         document.getElementById('gpt-console-close').addEventListener('click', toggleConsoleWindow);
+        
+        // Double-click header to expand (for stuck minimized state)
+        document.getElementById('gpt-drag').addEventListener('dblclick', (e) => {
+            if (isMinimized) {
+                toggleMinimize();
+            }
+        });
         
         // Win/Loss handlers
         document.getElementById('gpt-win-btn').addEventListener('click', handleManualWin);
@@ -2584,17 +2599,46 @@
         const panel = document.getElementById('gpt-panel');
         const btn = document.getElementById('gpt-minimize');
         
+        if (!panel || !btn) {
+            console.error('[GPT] Panel or button not found');
+            return;
+        }
+        
         isMinimized = !isMinimized;
         GM_setValue('isMinimized', isMinimized);
         
         if (isMinimized) {
             panel.classList.add('minimized');
             btn.textContent = '+';
+            btn.title = 'Expand panel';
         } else {
             panel.classList.remove('minimized');
             btn.textContent = '−';
+            btn.title = 'Minimize panel';
+        }
+        
+        log(`Panel ${isMinimized ? 'minimized' : 'expanded'}`);
+    }
+    
+    // Force expand function (for stuck states)
+    function forceExpand() {
+        const panel = document.getElementById('gpt-panel');
+        const btn = document.getElementById('gpt-minimize');
+        
+        if (panel) {
+            panel.classList.remove('minimized');
+            isMinimized = false;
+            GM_setValue('isMinimized', false);
+            if (btn) {
+                btn.textContent = '−';
+                btn.title = 'Minimize panel';
+            }
+            log('Panel force expanded');
         }
     }
+    
+    // Expose forceExpand globally for debugging
+    window.gptForceExpand = forceExpand;
 
     function makeDraggable(panel, handle) {
         let isDragging = false;
