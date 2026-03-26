@@ -1,17 +1,46 @@
 # GPT Signal Bot - Product Requirements Document
 
-## Last Updated: March 24, 2026
+## Last Updated: March 26, 2026
 
 ## Current Status
+✅ **Golden One Moment 30s Strategy** - RSI(2) + Stochastic(4,3,3) mean reversion, 30s expiration
 ✅ **Risk Management System** - Sharpe ratio, drawdown protection, Kelly criterion position sizing
-✅ **Tampermonkey v7.3.0** - Redesigned modern UI + Enhanced price scraper + Local OTC signals
+✅ **Tampermonkey v7.3.2** - Redesigned modern UI + Enhanced price scraper + Local OTC signals + Multi-strategy cascade
 ✅ **Maximized AI/ML v3.0** - 97 features, XGBoost+LightGBM stacking, HMM regime detection
 ✅ **Improved AI/ML v2.0** - 62 features, 56% accuracy, RF+GB+AdaBoost ensemble
 ✅ **Momentum Buster 15s Strategy** - Momentum period 3, green/red bars, 15s expiration
 ✅ **1m Momentum Exhaustion Strategy** - RSI-2 + Stochastic + BB + Candlesticks (70-75% target)
 ✅ **Backend Data Sources** - OANDA (primary), yfinance (fallback) - for regular forex
 
-## Recent Updates (March 24, 2026)
+## Recent Updates (March 26, 2026)
+
+### Golden One Moment 30s Strategy (March 26, 2026)
+**Mean reversion strategy using RSI(2) + Stochastic(4,3,3) crossover**
+
+| Parameter | Value |
+|-----------|-------|
+| Timeframe | 30-second candles |
+| Expiration | 30 seconds |
+| RSI Period | 2 |
+| Stochastic | (4, 3, 3) |
+| Overbought | 80 |
+| Oversold | 20 |
+
+**Entry Rules:**
+- **CALL**: Previous RSI & Stoch both < 20 (oversold), current RSI crosses above 20
+- **PUT**: Previous RSI & Stoch both > 80 (overbought), current RSI crosses below 80
+
+**API Endpoints:**
+- `POST /api/strategy/golden-one-moment/signal?symbol=EUR_USD`
+- `GET /api/strategy/golden-one-moment/stats`
+
+**Tampermonkey Integration:**
+- `LocalSignalEngine.getGoldenOneMomentSignal()` — mirrors backend logic in JavaScript
+- Multi-strategy cascade: General → Golden One Moment → Momentum Buster (tries all if no signal)
+
+**Strategy Registry:** Available in UI under 30s strategies as "⭐⭐⭐ Golden One Moment"
+
+## Previous Updates (March 24, 2026)
 
 ### Risk Management & Drawdown Protection System (March 24, 2026)
 **Focus on risk-adjusted returns (Sharpe ratio) and drawdown management**
