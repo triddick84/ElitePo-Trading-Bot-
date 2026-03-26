@@ -3361,6 +3361,13 @@
             // Try to find ANY numbers that look like prices
             PriceScraperV2._logAllPotentialPrices();
             
+            // FALLBACK: If forced (GO button), use backend API instead of giving up
+            if (force) {
+                log('🔄 GO: Falling back to backend API signal...');
+                doBackendScan(force, currentAssetOnly, willSwitchAssets);
+                return;
+            }
+            
             updateStatusDot('error');
             return;
         }
@@ -3384,6 +3391,12 @@
         
         if (candles.length < 10) {
             log(`⏳ Need more data (${candles.length}/10 candles). Waiting...`);
+            // FALLBACK: If forced (GO button), use backend API instead of waiting
+            if (force) {
+                log('🔄 GO: Not enough local candles, falling back to backend API...');
+                doBackendScan(force, currentAssetOnly, willSwitchAssets);
+                return;
+            }
             updateStatusDot('connected');
             return;
         }
@@ -3432,6 +3445,12 @@
             });
         } else {
             log('⚠️ No signal (conditions not met)');
+            // FALLBACK: If forced (GO button), try backend API as last resort
+            if (force) {
+                log('🔄 GO: No local signal found, trying backend API...');
+                doBackendScan(force, currentAssetOnly, willSwitchAssets);
+                return;
+            }
             updateStatusDot('connected');
         }
     }
