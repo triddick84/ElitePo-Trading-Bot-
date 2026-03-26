@@ -525,7 +525,7 @@ def generate_bridge_script(app_url: str) -> str:
     - Trade execution support
     
     Args:
-        app_url: The URL of our trading app (e.g., https://pocket-option-trader-1.preview.emergentagent.com)
+        app_url: The URL of our trading app (e.g., https://signal-bot-staging.preview.emergentagent.com)
     
     Returns:
         JavaScript code to paste in browser console
@@ -1326,5 +1326,5 @@ def get_bridge_script(app_url: str = None) -> str:
     """Get the browser bridge script"""
     if app_url is None:
         # Default to placeholder - will be replaced with actual URL
-        app_url = "https://pocket-option-trader-1.preview.emergentagent.com"
+        app_url = "https://signal-bot-staging.preview.emergentagent.com"
     return generate_bridge_script(app_url)

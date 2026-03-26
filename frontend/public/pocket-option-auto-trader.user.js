@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
-// @namespace    https://pocket-option-trader-1.preview.emergentagent.com
+// @namespace    https://signal-bot-staging.preview.emergentagent.com
 // @version      7.3.2
 // @description  Auto-trade OTC forex on Pocket Option. v7.3.2 - Super aggressive price scraper
 // @author       GPT Signal Bot
@@ -30,7 +30,7 @@
     // CONFIGURATION
     // ===========================================
     const CONFIG = {
-        API_URL: 'https://pocket-option-trader-1.preview.emergentagent.com/api',
+        API_URL: 'https://signal-bot-staging.preview.emergentagent.com/api',
         APP_POLL_INTERVAL: 3000,     // 3 seconds for app signals
         SCAN_INTERVAL: 5000,         // 5 seconds for scanning
         TRADE_COOLDOWN_SCAN: 30000,  // 30 seconds between SCAN trades
@@ -263,6 +263,117 @@
                     strength,
                     consecutiveBars: currentColor === 'green' ? consecutiveGreen : consecutiveRed,
                     reversal
+                }
+            };
+        },
+        
+        // GOLDEN ONE MOMENT 30s STRATEGY
+        // RSI(2) + Stochastic(4,3,3) mean reversion crossover
+        calculateStochasticFull(highs, lows, closes, kPeriod = 4, kSlow = 3, dPeriod = 3) {
+            const n = closes.length;
+            if (n < kPeriod) return { k: 50, d: 50, kPrev: 50 };
+            
+            // Calculate raw %K
+            const rawK = new Array(n).fill(0);
+            for (let i = kPeriod - 1; i < n; i++) {
+                let hh = -Infinity, ll = Infinity;
+                for (let j = i - kPeriod + 1; j <= i; j++) {
+                    if (highs[j] > hh) hh = highs[j];
+                    if (lows[j] < ll) ll = lows[j];
+                }
+                rawK[i] = (hh !== ll) ? ((closes[i] - ll) / (hh - ll)) * 100 : 50;
+            }
+            
+            // Slow %K (SMA of raw K)
+            const slowK = new Array(n).fill(0);
+            for (let i = kPeriod + kSlow - 2; i < n; i++) {
+                let sum = 0;
+                for (let j = i - kSlow + 1; j <= i; j++) sum += rawK[j];
+                slowK[i] = sum / kSlow;
+            }
+            
+            // %D (SMA of slow K)
+            const d = new Array(n).fill(0);
+            for (let i = kPeriod + kSlow + dPeriod - 3; i < n; i++) {
+                let sum = 0;
+                for (let j = i - dPeriod + 1; j <= i; j++) sum += slowK[j];
+                d[i] = sum / dPeriod;
+            }
+            
+            return {
+                k: slowK[n - 1] || 50,
+                d: d[n - 1] || 50,
+                kPrev: (n > 1 ? slowK[n - 2] : 50) || 50
+            };
+        },
+        
+        getGoldenOneMomentSignal(candles) {
+            if (!candles || candles.length < 15) return null;
+            
+            const closes = candles.map(c => c.close);
+            const highs = candles.map(c => c.high);
+            const lows = candles.map(c => c.low);
+            
+            // RSI(2)
+            const rsiCurr = this.calculateRSI(closes, 2);
+            // Calculate RSI for previous bar
+            const rsiPrev = this.calculateRSI(closes.slice(0, -1), 2);
+            
+            // Stochastic(4,3,3)
+            const stoch = this.calculateStochasticFull(highs, lows, closes, 4, 3, 3);
+            const stochPrev = this.calculateStochasticFull(
+                highs.slice(0, -1), lows.slice(0, -1), closes.slice(0, -1), 4, 3, 3
+            );
+            
+            const OB = 80, OS = 20;
+            let direction = null;
+            let confidence = 70;
+            const confirmations = [];
+            
+            // CALL: prev RSI & Stoch below oversold, current RSI crosses above
+            const prevOversold = (rsiPrev < OS && stochPrev.k < OS);
+            const rsiCrossUp = (rsiPrev < OS && rsiCurr >= OS);
+            
+            if (prevOversold && rsiCrossUp) {
+                direction = 'CALL';
+                confirmations.push('rsi_oversold_crossover', 'stoch_oversold');
+                if (stoch.k > stoch.d) {
+                    confidence += 10;
+                    confirmations.push('stoch_bullish_cross');
+                }
+                if (rsiCurr > 25 && rsiCurr < 40) confidence += 5;
+                if (stoch.k >= OS) confidence += 5;
+            }
+            
+            // PUT: prev RSI & Stoch above overbought, current RSI crosses below
+            const prevOverbought = (rsiPrev > OB && stochPrev.k > OB);
+            const rsiCrossDown = (rsiPrev > OB && rsiCurr <= OB);
+            
+            if (!direction && prevOverbought && rsiCrossDown) {
+                direction = 'PUT';
+                confirmations.push('rsi_overbought_crossover', 'stoch_overbought');
+                if (stoch.k < stoch.d) {
+                    confidence += 10;
+                    confirmations.push('stoch_bearish_cross');
+                }
+                if (rsiCurr < 75 && rsiCurr > 60) confidence += 5;
+                if (stoch.k <= OB) confidence += 5;
+            }
+            
+            if (!direction) return null;
+            
+            return {
+                direction,
+                confidence: Math.min(95, confidence),
+                strategy: 'Golden One Moment',
+                expiration: 30,
+                confirmations,
+                indicators: {
+                    rsi2: rsiCurr,
+                    rsiPrev: rsiPrev,
+                    stoch: stoch.k,
+                    stochD: stoch.d,
+                    stochPrev: stochPrev.k
                 }
             };
         },
@@ -3277,13 +3388,24 @@
             return;
         }
         
-        // Generate signal using local engine
-        const signal = LocalSignalEngine.generateSignal(candles);
+        // Generate signal using local engine - try multiple strategies
+        let signal = LocalSignalEngine.generateSignal(candles);
+        
+        // Try Golden One Moment (30s) if general strategy found nothing
+        if (!signal) {
+            signal = LocalSignalEngine.getGoldenOneMomentSignal(candles);
+            if (signal) log(`✨ Golden One Moment triggered`);
+        }
+        
+        // Try Momentum Buster (15s) if still no signal
+        if (!signal) {
+            signal = LocalSignalEngine.getMomentumBusterSignal(candles);
+            if (signal) log(`🚀 Momentum Buster 15s triggered`);
+        }
         
         if (signal) {
-            log(`✅ LOCAL SIGNAL: ${signal.direction} (${signal.confidence}%)`);
+            log(`✅ LOCAL SIGNAL: ${signal.direction} (${signal.confidence}%) [${signal.strategy || 'Local'}]`);
             log(`📊 Confirmations: ${signal.confirmations.join(', ')}`);
-            log(`📈 RSI2=${signal.indicators.rsi2.toFixed(1)}, Stoch=${signal.indicators.stoch.toFixed(1)}`);
             
             // Check minimum confidence
             if (signal.confidence < CONFIG.MIN_CONFIDENCE) {

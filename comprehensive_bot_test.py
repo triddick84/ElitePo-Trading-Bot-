@@ -16,7 +16,7 @@ import time
 from datetime import datetime, timezone
 
 # Test configuration
-BACKEND_URL = "https://pocket-option-trader-1.preview.emergentagent.com/api"
+BACKEND_URL = "https://signal-bot-staging.preview.emergentagent.com/api"
 
 class ComprehensiveBotTester:
     def __init__(self):

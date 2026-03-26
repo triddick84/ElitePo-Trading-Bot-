@@ -27,6 +27,7 @@ class StrategySelectionService:
         ],
         '15s': [
             {'id': 'default', 'name': 'Default 15s Strategy', 'description': 'Fractal-based reversal strategy'},
+            {'id': 'momentum_buster_15s', 'name': '⭐⭐⭐ Momentum Buster 15s', 'description': 'Momentum(3) green/red bars with reversal detection. Ultra-fast scalping.', 'win_rate': '70-80%'},
             {'id': 'starc_cci_reversal', 'name': '⭐ STARC Bands + CCI Reversal', 'description': 'STARC(15,5,1.3) + CCI(10). 1m expiry. Smooth rhythmic markets.', 'win_rate': '70-80%'},
             {'id': 'macd_histogram', 'name': '⭐ MACD Histogram Reversal', 'description': 'MACD(12,26,9) histogram color change + divergence', 'win_rate': '70-80%'},
             {'id': 'candlestick_patterns', 'name': '⭐ Candlestick Patterns', 'description': 'Engulfing, Hammer, Doji, Morning/Evening Star patterns', 'win_rate': '65-75%'},
@@ -39,6 +40,7 @@ class StrategySelectionService:
         ],
         '30s': [
             {'id': 'default', 'name': 'Default 30s Strategy', 'description': 'SuperTrend + MA Crossover'},
+            {'id': 'golden_one_moment', 'name': '⭐⭐⭐ Golden One Moment', 'description': 'RSI(2) + Stochastic(4,3,3) mean reversion crossover. Precise 30s entries.', 'win_rate': '75-85%'},
             {'id': 'dynamic_ema_rsi', 'name': '⭐ Dynamic EMA + RSI Zone', 'description': 'EMA(13)/EMA(50) with RSI(14) 45-55 zone. 1m expiry.', 'win_rate': '75-85%'},
             {'id': 'otc_reverse', 'name': '⭐ OTC Market Reverse', 'description': 'RSI(7) + EMA(21) for OTC markets. Inverse signals on 3 losses.', 'win_rate': '70-80%'},
             {'id': 'keltner_breakout', 'name': '⭐ Keltner Channel Breakout', 'description': 'EMA(20) + ATR(10) bands. Enter on breakout.', 'win_rate': '70-80%'},

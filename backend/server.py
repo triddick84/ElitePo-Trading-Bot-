@@ -7958,6 +7958,114 @@ async def get_momentum_buster_stats():
         return {"success": False, "error": str(e)}
 
 
+# =============================================================================
+# GOLDEN ONE MOMENT 30-SECOND STRATEGY
+# =============================================================================
+
+@api_router.post("/strategy/golden-one-moment/signal")
+async def generate_golden_one_moment_signal(symbol: str = Query("EURUSD_OTC")):
+    """
+    Generate signal using Golden One Moment 30-Second Strategy.
+    
+    Mean reversion strategy:
+    - Timeframe: 30-second candles
+    - Expiration: 30 seconds
+    - Indicators: RSI(2) + Stochastic(4,3,3)
+    - CALL: RSI & Stoch oversold crossover
+    - PUT: RSI & Stoch overbought crossover
+    
+    Args:
+        symbol: Trading symbol (e.g., EURUSD_OTC)
+    """
+    try:
+        from strategies.strategy_golden_one_moment import golden_one_moment
+        
+        # Get OANDA data for real-time accuracy
+        df = enhanced_oanda.get_candles(symbol.replace('_OTC', '').replace('/', '_'), 'M1', 50)
+        
+        if df is None or df.empty:
+            # Fallback to yfinance
+            import yfinance as yf
+            base_symbol = symbol.replace('_OTC', '').replace('_otc', '')
+            yf_symbol = f'{base_symbol}=X' if base_symbol in ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD'] else base_symbol
+            
+            ticker = yf.Ticker(yf_symbol)
+            hist = ticker.history(period="1d", interval="1m")
+            
+            if hist.empty or len(hist) < 10:
+                return {"success": False, "message": f"Insufficient data for {symbol}", "signal": None}
+            
+            candles = [{'open': float(r['Open']), 'high': float(r['High']), 
+                       'low': float(r['Low']), 'close': float(r['Close'])} 
+                      for _, r in hist.iterrows()]
+        else:
+            candles = [{'open': float(r['open']), 'high': float(r['high']),
+                       'low': float(r['low']), 'close': float(r['close'])}
+                      for _, r in df.iterrows()]
+        
+        # Generate signal
+        signal = golden_one_moment.generate_signal(candles)
+        
+        if not signal:
+            return {
+                "success": True,
+                "message": f"No golden moment signal for {symbol}",
+                "signal": None,
+                "strategy": "Golden One Moment"
+            }
+        
+        # Ensure all numeric values are Python native types (not numpy)
+        if signal:
+            for key in ['confidence', 'expiration']:
+                if key in signal:
+                    signal[key] = int(signal[key])
+            if 'indicators' in signal:
+                for k, v in signal['indicators'].items():
+                    if hasattr(v, 'item'):
+                        signal['indicators'][k] = float(v)
+        
+        # Send to Telegram for strong signals
+        telegram_sent = False
+        try:
+            from telegram_signal_notifier import get_telegram_notifier
+            notifier = get_telegram_notifier()
+            if notifier and signal['confidence'] >= 70:
+                msg = f"✨ GOLDEN ONE MOMENT SIGNAL\n\n"
+                msg += f"💹 Asset: {symbol}\n"
+                msg += f"📊 Direction: {'🟢 CALL' if signal['direction'] == 'CALL' else '🔴 PUT'}\n"
+                msg += f"🎯 Confidence: {signal['confidence']}%\n"
+                msg += f"⏱️ Expiration: 30 seconds\n"
+                msg += f"📉 RSI(2): {signal['indicators']['rsi_current']}\n"
+                msg += f"📈 Stoch K: {signal['indicators']['stoch_k']}\n"
+                msg += f"✅ Confirmations: {', '.join(signal['confirmations'])}"
+                await notifier.send_message(msg)
+                telegram_sent = True
+        except Exception:
+            pass
+        
+        return {
+            "success": True,
+            "symbol": symbol,
+            "signal": signal,
+            "strategy": "Golden One Moment",
+            "telegram_sent": telegram_sent
+        }
+        
+    except Exception as e:
+        logger.error(f"Golden One Moment error: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.get("/strategy/golden-one-moment/stats")
+async def get_golden_one_moment_stats():
+    """Get Golden One Moment strategy statistics."""
+    try:
+        from strategies.strategy_golden_one_moment import golden_one_moment
+        return {"success": True, "stats": golden_one_moment.get_stats()}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 @api_router.get("/strategy/support-resistance")
 async def get_support_resistance_levels(symbol: str = Query("EURUSD_OTC")):
     """
@@ -15086,7 +15194,7 @@ async def get_tampermonkey_status():
                 "force_generate": "/api/tampermonkey/force-generate",
                 "toggle_inversion": "/api/tampermonkey/toggle-inversion",
                 "heartbeat": "/api/tampermonkey/heartbeat",
-                "script_url": "https://pocket-option-trader-1.preview.emergentagent.com/pocket-option-auto-trader.user.js"
+                "script_url": "https://signal-bot-staging.preview.emergentagent.com/pocket-option-auto-trader.user.js"
             }
         }
     except Exception as e:
