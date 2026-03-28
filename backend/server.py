@@ -5608,6 +5608,25 @@ async def scan_markets_for_signals(
                             signals_found.append(signal)
                             continue
                     
+                    # Fallback: Try Holly Crossover strategy
+                    try:
+                        from strategies.strategy_holly_crossover import holly_crossover_5s
+                        candle_dicts = [{'open': float(c.get('open', c.get('Open', 0))),
+                                        'high': float(c.get('high', c.get('High', 0))),
+                                        'low': float(c.get('low', c.get('Low', 0))),
+                                        'close': float(c.get('close', c.get('Close', 0)))}
+                                       for c in candles]
+                        hc_signal = holly_crossover_5s.generate_signal(candle_dicts)
+                        if hc_signal and hc_signal.get("confidence", 0) >= min_confidence:
+                            hc_signal["symbol"] = asset
+                            hc_signal["oanda_symbol"] = oanda_symbol
+                            hc_signal["expiry_seconds"] = 5
+                            hc_signal["analysis_type"] = "holly_crossover"
+                            signals_found.append(hc_signal)
+                            continue
+                    except Exception:
+                        pass
+
                     # Fallback: Try Golden One Moment (30s) strategy
                     try:
                         from strategies.strategy_golden_one_moment import golden_one_moment
@@ -8105,6 +8124,99 @@ async def get_golden_one_moment_stats():
     try:
         from strategies.strategy_golden_one_moment import golden_one_moment
         return {"success": True, "stats": golden_one_moment.get_stats()}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+# =============================================================================
+# HOLLY CROSSOVER STRATEGY (5s, 15s, 30s)
+# =============================================================================
+
+@api_router.post("/strategy/holly-crossover/signal")
+async def generate_holly_crossover_signal(
+    symbol: str = Query("EURUSD_OTC"),
+    timeframe: str = Query("5s", regex="^(5s|15s|30s)$")
+):
+    """
+    Generate signal using Holly Crossover Strategy.
+
+    Reversal crossover using EMA(12) x WMA(23) with S/R confirmation.
+    - CALL: EMA crosses above WMA during downtrend (bullish reversal)
+    - PUT: EMA crosses below WMA during uptrend (bearish reversal)
+
+    Args:
+        symbol: Trading symbol
+        timeframe: 5s, 15s, or 30s
+    """
+    try:
+        from strategies.strategy_holly_crossover import get_holly_crossover_signal, holly_crossover_5s, holly_crossover_15s, holly_crossover_30s
+
+        instances = {"5s": holly_crossover_5s, "15s": holly_crossover_15s, "30s": holly_crossover_30s}
+        instance = instances.get(timeframe, holly_crossover_5s)
+
+        df = enhanced_oanda.get_candles(symbol.replace('_OTC', '').replace('/', '_'), 'M1', 100)
+
+        if df is None or df.empty:
+            import yfinance as yf
+            base_symbol = symbol.replace('_OTC', '').replace('_otc', '')
+            yf_symbol = f'{base_symbol}=X' if base_symbol in ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD'] else base_symbol
+            ticker = yf.Ticker(yf_symbol)
+            hist = ticker.history(period="1d", interval="1m")
+            if hist.empty or len(hist) < 30:
+                return {"success": False, "message": f"Insufficient data for {symbol}", "signal": None}
+            candles = [{'open': float(r['Open']), 'high': float(r['High']),
+                        'low': float(r['Low']), 'close': float(r['Close'])}
+                       for _, r in hist.iterrows()]
+        else:
+            candles = [{'open': float(r['open']), 'high': float(r['high']),
+                        'low': float(r['low']), 'close': float(r['close'])}
+                       for _, r in df.iterrows()]
+
+        signal = instance.generate_signal(candles)
+
+        if not signal:
+            return {"success": True, "message": f"No Holly Crossover signal for {symbol} [{timeframe}]",
+                    "signal": None, "strategy": f"Holly Crossover {timeframe}"}
+
+        # Cast numpy types
+        if signal.get("indicators"):
+            for k, v in signal["indicators"].items():
+                if hasattr(v, 'item'):
+                    signal["indicators"][k] = float(v)
+
+        # Telegram notification
+        telegram_sent = False
+        try:
+            from telegram_signal_notifier import get_telegram_notifier
+            notifier = get_telegram_notifier()
+            if notifier and signal['confidence'] >= 70:
+                msg = (f"Holly Crossover [{timeframe}]\n\n"
+                       f"Asset: {symbol}\n"
+                       f"Direction: {'CALL' if signal['direction'] == 'CALL' else 'PUT'}\n"
+                       f"Confidence: {signal['confidence']}%\n"
+                       f"Expiration: {signal['expiration']}s\n"
+                       f"Trend: {signal['indicators']['trend']}\n"
+                       f"Confirmations: {', '.join(signal['confirmations'])}")
+                await notifier.send_message(msg)
+                telegram_sent = True
+        except Exception:
+            pass
+
+        return {"success": True, "symbol": symbol, "signal": signal,
+                "strategy": f"Holly Crossover {timeframe}", "telegram_sent": telegram_sent}
+
+    except Exception as e:
+        logger.error(f"Holly Crossover error: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@api_router.get("/strategy/holly-crossover/stats")
+async def get_holly_crossover_stats(timeframe: str = Query("5s", regex="^(5s|15s|30s)$")):
+    """Get Holly Crossover strategy statistics for a given timeframe."""
+    try:
+        from strategies.strategy_holly_crossover import holly_crossover_5s, holly_crossover_15s, holly_crossover_30s
+        instances = {"5s": holly_crossover_5s, "15s": holly_crossover_15s, "30s": holly_crossover_30s}
+        return {"success": True, "stats": instances.get(timeframe, holly_crossover_5s).get_stats()}
     except Exception as e:
         return {"success": False, "error": str(e)}
 

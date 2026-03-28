@@ -1,0 +1,80 @@
+{
+  "summary": "Backend testing completed for Holly Crossover strategy (EMA(12) x WMA(23) reversal crossover). All 14 tests passed (100%). The new strategy is properly implemented and registered for 5s, 15s, and 30s timeframes.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/strategy/holly-crossover/signal?symbol=EURUSD_OTC", "issue": "Returns 'Insufficient data' for OTC assets during off-hours - expected behavior, not a bug"}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_holly_crossover.py",
+    "/app/test_reports/pytest/pytest_holly_crossover_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Holly Crossover strategy correctly implements EMA(12) x WMA(23) reversal crossover with S/R confirmation",
+    "Strategy properly registered in strategy_selection_service.py under 5s, 15s, and 30s timeframes",
+    "Signal endpoint returns proper JSON with all required fields (direction, confidence, indicators, timeframe)",
+    "Stats endpoint returns correct strategy metadata (name='Holly Crossover', EMA(12), WMA(23))",
+    "Strategy is a REVERSAL strategy - only triggers when crossover occurs during opposite trend (expected null signals)"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_holly_crossover.py"
+  ],
+  "success_rate": {
+    "backend": "100% (14/14 tests passed)",
+    "frontend": "N/A - backend only testing requested"
+  },
+  "test_credentials": "None required - public API endpoints",
+  "seed_data_creation": "None - strategy generates signals from live OANDA market data",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Holly Crossover strategy fully functional for all 3 timeframes (5s, 15s, 30s). All endpoints tested: signal generation, stats, strategy registration. Regression tests for Golden One Moment and Momentum Buster also passed. Signal may be null when no crossover reversal is active - this is expected behavior.",
+  "features_tested": {
+    "holly_crossover_signal_endpoints": [
+      "POST /api/strategy/holly-crossover/signal?symbol=EUR_USD&timeframe=5s - Returns success=true (signal may be null if no reversal) ✅",
+      "POST /api/strategy/holly-crossover/signal?symbol=EUR_USD&timeframe=15s - Returns success=true ✅",
+      "POST /api/strategy/holly-crossover/signal?symbol=EUR_USD&timeframe=30s - Returns success=true ✅",
+      "POST /api/strategy/holly-crossover/signal?symbol=EURUSD_OTC&timeframe=5s - Returns 200 (may have insufficient data for OTC) ✅"
+    ],
+    "holly_crossover_stats_endpoints": [
+      "GET /api/strategy/holly-crossover/stats?timeframe=5s - Returns name='Holly Crossover', EMA(12), WMA(23), expiration=5 ✅",
+      "GET /api/strategy/holly-crossover/stats?timeframe=15s - Returns correct stats for 15s ✅",
+      "GET /api/strategy/holly-crossover/stats?timeframe=30s - Returns correct stats for 30s ✅"
+    ],
+    "strategy_registration": [
+      "GET /api/strategies/available/5s - Contains 'holly_crossover_5s' with correct description ✅",
+      "GET /api/strategies/available/15s - Contains 'holly_crossover_15s' ✅",
+      "GET /api/strategies/available/30s - Contains 'holly_crossover_30s' ✅"
+    ],
+    "scan_markets_integration": [
+      "GET /api/signals/scan-markets?assets=EURUSD_OTC,GBPUSD_OTC&min_confidence=60 - Endpoint works, holly_crossover available in fallback chain ✅"
+    ],
+    "regression_tests": [
+      "POST /api/strategy/golden-one-moment/signal?symbol=EUR_USD - Still working ✅",
+      "POST /api/strategy/momentum-buster-15s/signal?symbol=EUR_USD - Still working ✅",
+      "GET /api/health - API healthy ✅"
+    ]
+  },
+  "holly_crossover_details": {
+    "strategy_name": "Holly Crossover",
+    "timeframes": ["5s", "15s", "30s"],
+    "indicators": {
+      "fast_ma": "EMA(12)",
+      "slow_ma": "WMA(23)"
+    },
+    "entry_rules": {
+      "call": "EMA(12) crosses above WMA(23) during downtrend (bullish reversal) + S/R confirmation",
+      "put": "EMA(12) crosses below WMA(23) during uptrend (bearish reversal) + S/R confirmation"
+    },
+    "note": "This is a REVERSAL strategy - signals only generated when crossover occurs during opposite trend. Null signals are expected behavior."
+  },
+  "mocked_apis": {
+    "note": "MT4/TradingView webhooks are MOCKED. OANDA provides real market data for signal generation."
+  }
+}

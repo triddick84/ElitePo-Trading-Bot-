@@ -267,6 +267,156 @@
             };
         },
         
+        // HOLLY CROSSOVER STRATEGY (5s/15s/30s)
+        // EMA(12) x WMA(23) reversal crossover with S/R confirmation
+        calculateWMA(prices, period) {
+            if (prices.length < period) return null;
+            const slice = prices.slice(-period);
+            let weightSum = 0, valueSum = 0;
+            for (let i = 0; i < period; i++) {
+                const w = i + 1;
+                valueSum += slice[i] * w;
+                weightSum += w;
+            }
+            return valueSum / weightSum;
+        },
+
+        calculateEMAFull(prices, period) {
+            // Returns array of EMA values (NaN where insufficient data)
+            if (prices.length < period) return [null, null];
+            const k = 2 / (period + 1);
+            let ema = prices.slice(0, period).reduce((a, b) => a + b, 0) / period;
+            const result = new Array(period - 1).fill(null);
+            result.push(ema);
+            for (let i = period; i < prices.length; i++) {
+                ema = prices[i] * k + ema * (1 - k);
+                result.push(ema);
+            }
+            return result;
+        },
+
+        calculateWMAFull(prices, period) {
+            if (prices.length < period) return [null, null];
+            const weights = [];
+            let wSum = 0;
+            for (let i = 1; i <= period; i++) { weights.push(i); wSum += i; }
+            const result = new Array(period - 1).fill(null);
+            for (let i = period - 1; i < prices.length; i++) {
+                let val = 0;
+                for (let j = 0; j < period; j++) val += prices[i - period + 1 + j] * weights[j];
+                result.push(val / wSum);
+            }
+            return result;
+        },
+
+        detectTrendSimple(closes, lookback = 10) {
+            if (closes.length < lookback) return 'neutral';
+            const recent = closes.slice(-lookback);
+            const n = recent.length;
+            let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+            for (let i = 0; i < n; i++) {
+                sumX += i; sumY += recent[i]; sumXY += i * recent[i]; sumXX += i * i;
+            }
+            const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+            const std = Math.sqrt(recent.reduce((s, v) => s + (v - sumY / n) ** 2, 0) / n);
+            const threshold = std * 0.01;
+            if (slope > threshold) return 'uptrend';
+            if (slope < -threshold) return 'downtrend';
+            return 'neutral';
+        },
+
+        findSRLevels(highs, lows, closes) {
+            const n = closes.length;
+            const lookback = Math.min(50, n);
+            const rH = highs.slice(-lookback);
+            const rL = lows.slice(-lookback);
+            const current = closes[closes.length - 1];
+            const supports = [], resistances = [];
+            for (let i = 2; i < lookback - 2; i++) {
+                if (rH[i] > rH[i-1] && rH[i] > rH[i-2] && rH[i] > rH[i+1] && rH[i] > rH[i+2])
+                    resistances.push(rH[i]);
+                if (rL[i] < rL[i-1] && rL[i] < rL[i-2] && rL[i] < rL[i+1] && rL[i] < rL[i+2])
+                    supports.push(rL[i]);
+            }
+            const nearSup = supports.filter(s => s < current).sort((a, b) => b - a)[0] || null;
+            const nearRes = resistances.filter(r => r > current).sort((a, b) => a - b)[0] || null;
+            const tol = 0.05; // percent
+            return {
+                support: nearSup,
+                resistance: nearRes,
+                atSupport: nearSup !== null && Math.abs(current - nearSup) / current * 100 < tol,
+                atResistance: nearRes !== null && Math.abs(nearRes - current) / current * 100 < tol,
+            };
+        },
+
+        getHollyCrossoverSignal(candles) {
+            if (!candles || candles.length < 28) return null;
+
+            const closes = candles.map(c => c.close);
+            const highs = candles.map(c => c.high);
+            const lows = candles.map(c => c.low);
+
+            const emaArr = this.calculateEMAFull(closes, 12);
+            const wmaArr = this.calculateWMAFull(closes, 23);
+
+            const emaCurr = emaArr[emaArr.length - 1];
+            const emaPrev = emaArr[emaArr.length - 2];
+            const wmaCurr = wmaArr[wmaArr.length - 1];
+            const wmaPrev = wmaArr[wmaArr.length - 2];
+
+            if (emaCurr == null || emaPrev == null || wmaCurr == null || wmaPrev == null) return null;
+
+            const bullishCross = emaPrev <= wmaPrev && emaCurr > wmaCurr;
+            const bearishCross = emaPrev >= wmaPrev && emaCurr < wmaCurr;
+            if (!bullishCross && !bearishCross) return null;
+
+            const trend = this.detectTrendSimple(closes);
+            const sr = this.findSRLevels(highs, lows, closes);
+
+            let direction = null;
+            let confidence = 70;
+            const confirmations = [];
+
+            // CALL: bullish cross during downtrend
+            if (bullishCross && trend === 'downtrend') {
+                direction = 'CALL';
+                confirmations.push('ema12_crosses_above_wma23', 'downtrend_reversal');
+                if (sr.atSupport) { confidence += 10; confirmations.push('at_support'); }
+                if (sr.support !== null) { confidence += 5; confirmations.push('support_nearby'); }
+            }
+            // PUT: bearish cross during uptrend
+            else if (bearishCross && trend === 'uptrend') {
+                direction = 'PUT';
+                confirmations.push('ema12_crosses_below_wma23', 'uptrend_reversal');
+                if (sr.atResistance) { confidence += 10; confirmations.push('at_resistance'); }
+                if (sr.resistance !== null) { confidence += 5; confirmations.push('resistance_nearby'); }
+            }
+
+            if (!direction) return null;
+
+            // Crossover strength bonus
+            const gap = Math.abs(emaCurr - wmaCurr);
+            if (gap / closes[closes.length - 1] * 100 > 0.01) {
+                confidence += 5;
+                confirmations.push('strong_crossover');
+            }
+
+            return {
+                direction,
+                confidence: Math.min(95, confidence),
+                strategy: 'Holly Crossover',
+                expiration: 5,
+                confirmations,
+                indicators: {
+                    ema12: emaCurr,
+                    wma23: wmaCurr,
+                    trend,
+                    support: sr.support,
+                    resistance: sr.resistance
+                }
+            };
+        },
+
         // GOLDEN ONE MOMENT 30s STRATEGY
         // RSI(2) + Stochastic(4,3,3) mean reversion crossover
         calculateStochasticFull(highs, lows, closes, kPeriod = 4, kSlow = 3, dPeriod = 3) {
@@ -3418,16 +3568,22 @@
         // Generate signal using local engine - try multiple strategies
         let signal = LocalSignalEngine.generateSignal(candles);
         
-        // Try Golden One Moment (30s) if general strategy found nothing
+        // Try Holly Crossover (reversal) if general strategy found nothing
+        if (!signal) {
+            signal = LocalSignalEngine.getHollyCrossoverSignal(candles);
+            if (signal) log(`Holly Crossover triggered`);
+        }
+        
+        // Try Golden One Moment (30s) if still no signal
         if (!signal) {
             signal = LocalSignalEngine.getGoldenOneMomentSignal(candles);
-            if (signal) log(`✨ Golden One Moment triggered`);
+            if (signal) log(`Golden One Moment triggered`);
         }
         
         // Try Momentum Buster (15s) if still no signal
         if (!signal) {
             signal = LocalSignalEngine.getMomentumBusterSignal(candles);
-            if (signal) log(`🚀 Momentum Buster 15s triggered`);
+            if (signal) log(`Momentum Buster 15s triggered`);
         }
         
         if (signal) {

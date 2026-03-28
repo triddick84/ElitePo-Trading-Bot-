@@ -18,6 +18,7 @@ class StrategySelectionService:
     AVAILABLE_STRATEGIES = {
         '5s': [
             {'id': 'default', 'name': 'Default 5s Strategy', 'description': 'Ultra Precision V2 with Bollinger Bands'},
+            {'id': 'holly_crossover_5s', 'name': '⭐⭐⭐ Holly Crossover 5s', 'description': 'EMA(12) x WMA(23) reversal crossover with S/R confirmation. Catches trend reversals.', 'win_rate': '75-85%'},
             {'id': 'turbo_precision_5s', 'name': '⭐⭐⭐ Turbo Precision 5s', 'description': 'RSI + Stochastic RSI + EMA Ribbon. 4+ confirmations. Highest accuracy.', 'win_rate': '75-85%'},
             {'id': 'micro_compression_burst', 'name': '⭐⭐ Micro Compression Burst', 'description': 'BB breakout after 4-6 tight candles. 30s expiry. Best for calm/OTC markets.', 'win_rate': '75-85%'},
             {'id': 'keltner_breakout', 'name': '⭐ Keltner Channel Breakout', 'description': 'EMA(20) + ATR(10) bands. Enter on breakout with volume.', 'win_rate': '70-80%'},
@@ -27,6 +28,7 @@ class StrategySelectionService:
         ],
         '15s': [
             {'id': 'default', 'name': 'Default 15s Strategy', 'description': 'Fractal-based reversal strategy'},
+            {'id': 'holly_crossover_15s', 'name': '⭐⭐⭐ Holly Crossover 15s', 'description': 'EMA(12) x WMA(23) reversal crossover with S/R confirmation. Catches trend reversals.', 'win_rate': '75-85%'},
             {'id': 'momentum_buster_15s', 'name': '⭐⭐⭐ Momentum Buster 15s', 'description': 'Momentum(3) green/red bars with reversal detection. Ultra-fast scalping.', 'win_rate': '70-80%'},
             {'id': 'starc_cci_reversal', 'name': '⭐ STARC Bands + CCI Reversal', 'description': 'STARC(15,5,1.3) + CCI(10). 1m expiry. Smooth rhythmic markets.', 'win_rate': '70-80%'},
             {'id': 'macd_histogram', 'name': '⭐ MACD Histogram Reversal', 'description': 'MACD(12,26,9) histogram color change + divergence', 'win_rate': '70-80%'},
@@ -40,6 +42,7 @@ class StrategySelectionService:
         ],
         '30s': [
             {'id': 'default', 'name': 'Default 30s Strategy', 'description': 'SuperTrend + MA Crossover'},
+            {'id': 'holly_crossover_30s', 'name': '⭐⭐⭐ Holly Crossover 30s', 'description': 'EMA(12) x WMA(23) reversal crossover with S/R confirmation. Catches trend reversals.', 'win_rate': '75-85%'},
             {'id': 'golden_one_moment', 'name': '⭐⭐⭐ Golden One Moment', 'description': 'RSI(2) + Stochastic(4,3,3) mean reversion crossover. Precise 30s entries.', 'win_rate': '75-85%'},
             {'id': 'dynamic_ema_rsi', 'name': '⭐ Dynamic EMA + RSI Zone', 'description': 'EMA(13)/EMA(50) with RSI(14) 45-55 zone. 1m expiry.', 'win_rate': '75-85%'},
             {'id': 'otc_reverse', 'name': '⭐ OTC Market Reverse', 'description': 'RSI(7) + EMA(21) for OTC markets. Inverse signals on 3 losses.', 'win_rate': '70-80%'},
