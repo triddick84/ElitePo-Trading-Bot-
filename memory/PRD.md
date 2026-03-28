@@ -3,6 +3,7 @@
 ## Last Updated: March 26, 2026
 
 ## Current Status
+✅ **Holly Crossover Strategy (5s/15s/30s)** - EMA(12) x WMA(23) reversal crossover with S/R confirmation
 ✅ **Golden One Moment 30s Strategy** - RSI(2) + Stochastic(4,3,3) mean reversion, 30s expiration
 ✅ **Risk Management System** - Sharpe ratio, drawdown protection, Kelly criterion position sizing
 ✅ **Tampermonkey v7.3.2** - Redesigned modern UI + Enhanced price scraper + Local OTC signals + Multi-strategy cascade
@@ -11,6 +12,30 @@
 ✅ **Momentum Buster 15s Strategy** - Momentum period 3, green/red bars, 15s expiration
 ✅ **1m Momentum Exhaustion Strategy** - RSI-2 + Stochastic + BB + Candlesticks (70-75% target)
 ✅ **Backend Data Sources** - OANDA (primary), yfinance (fallback) - for regular forex
+
+## Recent Updates (March 28, 2026)
+
+### Holly Crossover Strategy (March 28, 2026)
+**Reversal crossover using EMA(12) x WMA(23) with Support/Resistance confirmation**
+
+| Parameter | Value |
+|-----------|-------|
+| Timeframes | 5s, 15s, 30s |
+| Fast MA | EMA(12) — Exponential Moving Average |
+| Slow MA | WMA(23) — Weighted Moving Average |
+| Type | Reversal crossover — catches trend reversals |
+
+**Entry Rules:**
+- **CALL**: EMA(12) crosses ABOVE WMA(23) during a downtrend + near support level
+- **PUT**: EMA(12) crosses BELOW WMA(23) during an uptrend + near resistance level
+
+**API Endpoints:**
+- `POST /api/strategy/holly-crossover/signal?symbol=EUR_USD&timeframe=5s|15s|30s`
+- `GET /api/strategy/holly-crossover/stats?timeframe=5s|15s|30s`
+
+**Strategy Registry:** Available as "⭐⭐⭐ Holly Crossover" under 5s, 15s, and 30s timeframes
+**Tampermonkey:** `LocalSignalEngine.getHollyCrossoverSignal()` mirrors backend logic
+**Scan-Markets:** Added to fallback chain: Deep Analysis → Holly Crossover → Golden One Moment → Momentum Buster
 
 ## Recent Updates (March 26, 2026)
 
