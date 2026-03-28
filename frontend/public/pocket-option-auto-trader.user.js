@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://signal-bot-staging.preview.emergentagent.com
-// @version      7.3.2
-// @description  Auto-trade OTC forex on Pocket Option. v7.3.2 - Super aggressive price scraper
+// @version      7.4.0
+// @description  Auto-trade OTC forex on Pocket Option. v7.4.0 - Holly Crossover + Multi-asset scan
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -17,7 +17,7 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_log
-// @connect      auto-trade-hub-25.preview.emergentagent.com
+// @connect      signal-bot-staging.preview.emergentagent.com
 // @connect      *
 // @run-at       document-idle
 // @noframes
