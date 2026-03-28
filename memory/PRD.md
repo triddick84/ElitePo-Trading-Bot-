@@ -37,8 +37,22 @@
 **Tampermonkey Integration:**
 - `LocalSignalEngine.getGoldenOneMomentSignal()` — mirrors backend logic in JavaScript
 - Multi-strategy cascade: General → Golden One Moment → Momentum Buster (tries all if no signal)
+- Multi-asset SCAN fix: SCAN ON + AUTO OFF now uses backend API to scan ALL favorites at once
 
 **Strategy Registry:** Available in UI under 30s strategies as "⭐⭐⭐ Golden One Moment"
+
+### SCAN Multi-Asset Fix (March 28, 2026)
+**Fixed: SCAN ON + AUTO OFF was not scanning all favorites**
+
+| Mode | Behavior |
+|------|----------|
+| **SCAN ON + AUTO OFF** | Scans ALL favorites via backend API, switches to best signal asset, places trade |
+| **SCAN ON + AUTO ON** | Scans current asset only (local OTC prices), places trade on current asset |
+| **GO button** | Force scan current asset, falls back to backend API if local fails |
+
+**Backend Enhancement:**
+- `scan-markets` endpoint now has strategy fallback chain: Deep Analysis → Golden One Moment → Momentum Buster
+- More signals generated per scan cycle (fills gaps where deep analysis alone found nothing)
 
 ## Previous Updates (March 24, 2026)
 
