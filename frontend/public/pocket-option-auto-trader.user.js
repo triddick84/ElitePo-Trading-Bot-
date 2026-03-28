@@ -3145,18 +3145,26 @@
             checkAppSignals(false);
         }
 
-        // v7.1.0: Start price scraping for local signal generation
-        if (scanEnabled && CONFIG.USE_LOCAL_SIGNALS) {
+        // v7.1.0: Start price scraping for local signal generation (only needed for single-asset mode)
+        if (scanEnabled && CONFIG.USE_LOCAL_SIGNALS && autoEnabled) {
             startPriceScraping();
-            log('🔍 LOCAL SCAN: Using actual OTC prices');
+            log('🔍 LOCAL SCAN: Using actual OTC prices (current asset only)');
+        } else if (scanEnabled && !autoEnabled) {
+            // Multi-asset mode uses backend API, but start scraping anyway for fallback
+            startPriceScraping();
+            log('🔍 MULTI-ASSET SCAN: Backend API scans ALL favorites, switches to best signal');
         } else {
             stopPriceScraping();
         }
 
         // SCAN: Generate signals locally or via backend
         if (scanEnabled) {
-            const scanMode = CONFIG.USE_LOCAL_SIGNALS ? 'LOCAL OTC' : 'BACKEND OANDA';
-            log(`🔍 Starting scan (${scanMode})`);
+            const isMultiAsset = !autoEnabled;
+            const scanMode = isMultiAsset ? 'MULTI-ASSET (Backend API)' : (CONFIG.USE_LOCAL_SIGNALS ? 'LOCAL OTC' : 'BACKEND OANDA');
+            log(`🔍 Starting scan: ${scanMode}`);
+            if (isMultiAsset) {
+                log('📊 Will scan ALL favorites and switch to best signal asset');
+            }
             scanInterval = setInterval(() => doScan(false), CONFIG.SCAN_INTERVAL);
             doScan(false);
         }
@@ -3332,13 +3340,19 @@
         }
 
         // Determine switching behavior
+        // AUTO OFF + not currentAssetOnly = scan ALL favorites and switch to best
         let willSwitchAssets = !autoEnabled && !currentAssetOnly;
         
-        if (CONFIG.USE_LOCAL_SIGNALS) {
-            // v7.1.0: Use LOCAL signal generation with scraped OTC prices
+        // MULTI-ASSET MODE: Always use backend scan when scanning all favorites
+        // Local scan can only see the current asset's price on the page
+        if (willSwitchAssets) {
+            log('🔍 Multi-asset scan → using backend API (scans all favorites at once)');
+            doBackendScan(force, currentAssetOnly, willSwitchAssets);
+        } else if (CONFIG.USE_LOCAL_SIGNALS) {
+            // SINGLE-ASSET MODE: Use local scan for current asset only
             doLocalScan(force, currentAssetOnly, willSwitchAssets);
         } else {
-            // Fallback: Use backend API (OANDA data)
+            // Backend scan for single asset
             doBackendScan(force, currentAssetOnly, willSwitchAssets);
         }
     }

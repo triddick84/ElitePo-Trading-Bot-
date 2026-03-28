@@ -5606,6 +5606,49 @@ async def scan_markets_for_signals(
                             signal["expiry_seconds"] = expiry_to_use
                             signal["analysis_type"] = "deep_confluence"
                             signals_found.append(signal)
+                            continue
+                    
+                    # Fallback: Try Golden One Moment (30s) strategy
+                    try:
+                        from strategies.strategy_golden_one_moment import golden_one_moment
+                        candle_dicts = [{'open': float(c.get('open', c.get('Open', 0))), 
+                                        'high': float(c.get('high', c.get('High', 0))),
+                                        'low': float(c.get('low', c.get('Low', 0))), 
+                                        'close': float(c.get('close', c.get('Close', 0)))} 
+                                       for c in candles]
+                        gom_signal = golden_one_moment.generate_signal(candle_dicts)
+                        if gom_signal and gom_signal.get("confidence", 0) >= min_confidence:
+                            gom_signal["symbol"] = asset
+                            gom_signal["oanda_symbol"] = oanda_symbol
+                            gom_signal["expiry_seconds"] = 30
+                            gom_signal["analysis_type"] = "golden_one_moment"
+                            # Cast numpy types
+                            for k, v in gom_signal.get("indicators", {}).items():
+                                if hasattr(v, 'item'):
+                                    gom_signal["indicators"][k] = float(v)
+                            signals_found.append(gom_signal)
+                            continue
+                    except Exception:
+                        pass
+                    
+                    # Fallback: Try Momentum Buster (15s) strategy
+                    try:
+                        from strategies.strategy_momentum_buster_15s import momentum_buster_15s
+                        candle_dicts = [{'open': float(c.get('open', c.get('Open', 0))), 
+                                        'high': float(c.get('high', c.get('High', 0))),
+                                        'low': float(c.get('low', c.get('Low', 0))), 
+                                        'close': float(c.get('close', c.get('Close', 0)))} 
+                                       for c in candles]
+                        mb_signal = momentum_buster_15s.generate_signal(candle_dicts)
+                        if mb_signal and mb_signal.get("confidence", 0) >= min_confidence:
+                            mb_signal["symbol"] = asset
+                            mb_signal["oanda_symbol"] = oanda_symbol
+                            mb_signal["expiry_seconds"] = 15
+                            mb_signal["analysis_type"] = "momentum_buster_15s"
+                            signals_found.append(mb_signal)
+                            continue
+                    except Exception:
+                        pass
                 else:
                     # Fallback to old high-accuracy signal
                     signal = get_high_accuracy_signal(candles, current_price, expiry=expiry_to_use)
