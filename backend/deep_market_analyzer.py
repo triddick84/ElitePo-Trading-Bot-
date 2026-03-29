@@ -154,7 +154,7 @@ class DeepMarketAnalyzer:
     """
     
     def __init__(self):
-        self.min_confirmations = 4  # Strict requirement
+        self.min_confirmations = 5  # Raised for higher accuracy
         self.min_volume_ratio = 1.2  # 20% above average
         self.divergence_lookback = 14
         self.sr_lookback = 50
@@ -811,19 +811,24 @@ class DeepMarketAnalyzer:
         else:
             return None  # No clear direction
         
-        # Calculate confidence
-        base_confidence = 60
-        conf_bonus = conf_count * 5  # 5% per confirmation
-        divergence_bonus = 10 if any(d.divergence_type.startswith("bullish" if direction == "CALL" else "bearish") for d in divergences) else 0
-        pattern_bonus = 8 if any(p.direction == ("bullish" if direction == "CALL" else "bearish") and p.reliability >= 75 for p in patterns) else 0
-        volume_bonus = 5 if volume_confirmed else -5
+        # Calculate confidence (stricter base, higher per-confirmation bonus)
+        base_confidence = 55
+        conf_bonus = conf_count * 6  # 6% per confirmation (was 5%)
+        divergence_bonus = 12 if any(d.divergence_type.startswith("bullish" if direction == "CALL" else "bearish") for d in divergences) else 0
+        pattern_bonus = 10 if any(p.direction == ("bullish" if direction == "CALL" else "bearish") and p.reliability >= 75 for p in patterns) else 0
+        volume_bonus = 5 if volume_confirmed else -8
         
         confidence = min(95, base_confidence + conf_bonus + divergence_bonus + pattern_bonus + volume_bonus)
+        
+        # Penalize conflicting signals: if opposite direction also has 3+ confirmations
+        opposite_score = put_score if direction == "CALL" else call_score
+        if opposite_score >= 3:
+            confidence -= (opposite_score - 2) * 5  # Penalty for conflicting signals
         
         # Reduce confidence for avoid reasons
         confidence -= len(avoid_reasons) * 10
         
-        if confidence < 65:
+        if confidence < 70:
             return None
         
         # Determine quality

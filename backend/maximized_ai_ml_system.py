@@ -187,48 +187,47 @@ class MaximizedAIMLSystem:
             if XGBOOST_AVAILABLE:
                 xgb_model = xgb.XGBClassifier(
                     n_estimators=300,
-                    max_depth=8,
-                    learning_rate=0.03,
-                    subsample=0.8,
-                    colsample_bytree=0.8,
-                    min_child_weight=5,
-                    gamma=0.1,
-                    reg_alpha=0.1,
-                    reg_lambda=1.0,
+                    max_depth=5,
+                    learning_rate=0.015,
+                    subsample=0.7,
+                    colsample_bytree=0.6,
+                    min_child_weight=10,
+                    gamma=0.3,
+                    reg_alpha=0.5,
+                    reg_lambda=2.0,
                     scale_pos_weight=1,
                     random_state=42,
                     n_jobs=-1,
-                    use_label_encoder=False,
                     eval_metric='logloss'
                 )
                 base_learners.append(('xgb', xgb_model))
-                logger.info("✅ XGBoost added to ensemble")
+                logger.info("✅ XGBoost added to ensemble (optimized)")
             
             # LightGBM - fastest, good accuracy
             if LIGHTGBM_AVAILABLE:
                 lgb_model = lgb.LGBMClassifier(
                     n_estimators=300,
-                    max_depth=8,
-                    learning_rate=0.03,
-                    num_leaves=63,
-                    subsample=0.8,
-                    colsample_bytree=0.8,
-                    min_child_samples=20,
-                    reg_alpha=0.1,
-                    reg_lambda=1.0,
+                    max_depth=5,
+                    learning_rate=0.015,
+                    num_leaves=31,
+                    subsample=0.7,
+                    colsample_bytree=0.6,
+                    min_child_samples=30,
+                    reg_alpha=0.5,
+                    reg_lambda=2.0,
                     random_state=42,
                     n_jobs=-1,
                     verbose=-1
                 )
                 base_learners.append(('lgb', lgb_model))
-                logger.info("✅ LightGBM added to ensemble")
+                logger.info("✅ LightGBM added to ensemble (optimized)")
             
             # Random Forest - robust baseline
             rf_model = RandomForestClassifier(
                 n_estimators=200,
-                max_depth=12,
-                min_samples_split=10,
-                min_samples_leaf=5,
+                max_depth=8,
+                min_samples_split=15,
+                min_samples_leaf=8,
                 max_features='sqrt',
                 class_weight='balanced',
                 random_state=42,
@@ -239,10 +238,11 @@ class MaximizedAIMLSystem:
             # Gradient Boosting - additional diversity
             gb_model = GradientBoostingClassifier(
                 n_estimators=150,
-                max_depth=6,
-                learning_rate=0.05,
-                subsample=0.8,
-                min_samples_split=10,
+                max_depth=4,
+                learning_rate=0.02,
+                subsample=0.7,
+                min_samples_split=15,
+                min_samples_leaf=8,
                 random_state=42
             )
             base_learners.append(('gb', gb_model))
@@ -253,15 +253,14 @@ class MaximizedAIMLSystem:
                 max_depth=4,
                 learning_rate=0.1,
                 random_state=42,
-                use_label_encoder=False,
                 eval_metric='logloss'
             ) if XGBOOST_AVAILABLE else RandomForestClassifier(n_estimators=100, random_state=42)
             
-            # Stacking ensemble
+            # Stacking ensemble (3-fold CV for faster training)
             self.model = StackingClassifier(
                 estimators=base_learners,
                 final_estimator=meta_learner,
-                cv=5,
+                cv=3,
                 stack_method='predict_proba',
                 n_jobs=-1
             )
@@ -431,9 +430,9 @@ class MaximizedAIMLSystem:
             features['range_percent'] = candle_range / close[-1] * 100 if close[-1] > 0 else 0
             features['range_vs_atr'] = candle_range / features['atr'] if features['atr'] > 0 else 1
             
-            # Volatility regime (simple classification)
-            features['high_vol_regime'] = 1 if features['volatility_20'] > features['volatility_20'] * 1.5 else 0
-            features['low_vol_regime'] = 1 if features['volatility_20'] < features['volatility_20'] * 0.5 else 0
+            # Volatility regime (compare short-term to long-term volatility)
+            features['high_vol_regime'] = 1 if features['volatility_5'] > features['volatility_20'] * 1.5 else 0
+            features['low_vol_regime'] = 1 if features['volatility_5'] < features['volatility_20'] * 0.5 else 0
             
             # ========== MOMENTUM FEATURES (10) ==========
             for period in [3, 5, 10, 20]:
@@ -620,13 +619,14 @@ class MaximizedAIMLSystem:
                             current_price = df['close'].iloc[i]
                             future_price = df['close'].iloc[i + self.prediction_horizon]
                             
-                            threshold = current_price * 0.0001
+                            # Wider threshold = cleaner labels (reduces noisy 50/50 samples)
+                            threshold = current_price * 0.0003
                             if future_price > current_price + threshold:
                                 label = 1  # CALL
                             elif future_price < current_price - threshold:
                                 label = 0  # PUT
                             else:
-                                continue
+                                continue  # Skip ambiguous samples
                             
                             all_features.append(features.flatten())
                             all_labels.append(label)
@@ -729,7 +729,7 @@ class MaximizedAIMLSystem:
             return {"success": False, "error": str(e)}
     
     def predict(self, df: pd.DataFrame) -> Optional[Dict]:
-        """Make prediction with regime-aware confidence adjustment."""
+        """Make prediction with regime-aware confidence adjustment and strict filtering."""
         if not self.is_trained or self.model is None:
             return None
         
@@ -744,10 +744,18 @@ class MaximizedAIMLSystem:
             probabilities = self.model.predict_proba(features_scaled)[0]
             
             direction = "CALL" if prediction == 1 else "PUT"
-            confidence = float(max(probabilities)) * 100
+            raw_probability = float(max(probabilities))
+            confidence = raw_probability * 100
             
-            # Detect current regime and adjust confidence
+            # === STRICT PROBABILITY FILTER ===
+            # Reject signals where model probability is too close to 50/50
+            if raw_probability < 0.58:
+                logger.debug(f"ML signal rejected: probability {raw_probability:.3f} < 0.58 threshold")
+                return None
+            
+            # === REGIME-AWARE CONFIDENCE ADJUSTMENT ===
             regime_name = "normal"
+            regime_penalty = 1.0
             if self.regime_detector.is_fitted:
                 close = df['close'].values
                 returns = np.diff(close[-30:]) / close[-30:-1]
@@ -756,22 +764,91 @@ class MaximizedAIMLSystem:
                 self.current_regime = self.regime_detector.predict_regime(returns, volatility)
                 regime_name = self.regime_detector.get_regime_name(self.current_regime)
                 
-                # Adjust confidence based on regime
                 if regime_name == "high_volatility":
-                    confidence *= 0.85  # Reduce confidence in high vol
+                    regime_penalty = 0.75  # Strong penalty in high vol
+                    confidence *= regime_penalty
                 elif regime_name == "low_volatility":
-                    confidence *= 1.05  # Increase confidence in low vol
+                    regime_penalty = 1.08  # Slight boost in calm markets
+                    confidence *= regime_penalty
+            
+            # === FEATURE AGREEMENT FILTER ===
+            # Check if key indicators agree with the prediction direction
+            if features is not None and len(self.feature_names) > 0:
+                feature_dict = dict(zip(self.feature_names, features.flatten()))
+                agreements = 0
+                total_checks = 0
+                
+                # RSI agreement
+                rsi_val = feature_dict.get('rsi_2', 50)
+                if direction == "CALL" and rsi_val < 40:
+                    agreements += 1
+                elif direction == "PUT" and rsi_val > 60:
+                    agreements += 1
+                total_checks += 1
+                
+                # Stochastic agreement
+                stoch_k = feature_dict.get('stoch_k', 50)
+                if direction == "CALL" and stoch_k < 35:
+                    agreements += 1
+                elif direction == "PUT" and stoch_k > 65:
+                    agreements += 1
+                total_checks += 1
+                
+                # MACD agreement
+                macd_hist = feature_dict.get('macd_hist', 0)
+                if direction == "CALL" and macd_hist > 0:
+                    agreements += 1
+                elif direction == "PUT" and macd_hist < 0:
+                    agreements += 1
+                total_checks += 1
+                
+                # EMA alignment agreement
+                ema_align = feature_dict.get('ema_alignment', 0)
+                if direction == "CALL" and ema_align == 1:
+                    agreements += 1
+                elif direction == "PUT" and ema_align == -1:
+                    agreements += 1
+                total_checks += 1
+                
+                # BB position agreement
+                bb_pos = feature_dict.get('bb_position', 0.5)
+                if direction == "CALL" and bb_pos < 0.25:
+                    agreements += 1
+                elif direction == "PUT" and bb_pos > 0.75:
+                    agreements += 1
+                total_checks += 1
+                
+                agreement_ratio = agreements / total_checks if total_checks > 0 else 0
+                
+                # Require at least 2 out of 5 indicator agreements
+                if agreements < 2:
+                    confidence *= 0.85  # Penalty for low indicator agreement
+                elif agreements >= 4:
+                    confidence *= 1.10  # Bonus for strong agreement
+                elif agreements >= 3:
+                    confidence *= 1.05  # Small bonus
+            
+            # === FINAL CONFIDENCE THRESHOLD ===
+            confidence = min(confidence, 95)
+            
+            # Reject if final confidence below 70%
+            if confidence < 70:
+                logger.debug(f"ML signal rejected: confidence {confidence:.1f}% < 70% after adjustments")
+                return None
             
             self.predictions_made += 1
             
             return {
                 'direction': str(direction),
-                'confidence': round(min(float(confidence), 95), 2),
+                'confidence': round(float(confidence), 2),
                 'call_probability': round(float(probabilities[1]) * 100, 2),
                 'put_probability': round(float(probabilities[0]) * 100, 2),
                 'model_accuracy': round(float(self.model_accuracy) * 100, 2),
                 'regime': str(regime_name),
-                'source': 'maximized_ml_v3'
+                'regime_penalty': round(float(regime_penalty), 2),
+                'indicator_agreements': int(agreements) if 'agreements' in dir() else 0,
+                'raw_probability': round(float(raw_probability) * 100, 2),
+                'source': 'maximized_ml_v3.1'
             }
             
         except Exception as e:

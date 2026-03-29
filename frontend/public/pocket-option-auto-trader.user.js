@@ -35,7 +35,7 @@
         SCAN_INTERVAL: 5000,         // 5 seconds for scanning
         TRADE_COOLDOWN_SCAN: 30000,  // 30 seconds between SCAN trades
         TRADE_COOLDOWN_APP: 5000,    // 5 seconds between APP trades
-        MIN_CONFIDENCE: 70,
+        MIN_CONFIDENCE: 72,
         MIN_PAYOUT: 65,
         DEBUG: true,
         USE_LOCAL_SIGNALS: true,  // v7.1.0: Generate signals locally using actual OTC prices
@@ -528,7 +528,7 @@
             };
         },
         
-        // MAIN: Generate signal from candle data
+        // MAIN: Generate signal from candle data (OPTIMIZED v7.4)
         generateSignal(candles) {
             if (!candles || candles.length < 20) {
                 return null;
@@ -538,6 +538,20 @@
             const highs = candles.map(c => c.high);
             const lows = candles.map(c => c.low);
             const currentPrice = closes[closes.length - 1];
+            
+            // === VOLATILITY FILTER ===
+            // Skip signals during extreme volatility (noisy markets)
+            const returns = [];
+            for (let i = 1; i < Math.min(closes.length, 21); i++) {
+                returns.push((closes[i] - closes[i-1]) / closes[i-1]);
+            }
+            const avgVol = returns.length > 0 ? Math.sqrt(returns.reduce((s, r) => s + r*r, 0) / returns.length) : 0;
+            const recentVol = returns.length >= 5 ? Math.sqrt(returns.slice(-5).reduce((s, r) => s + r*r, 0) / 5) : 0;
+            
+            // Block signals if short-term vol is 2x+ long-term (choppy/news spike)
+            if (avgVol > 0 && recentVol > avgVol * 2.0) {
+                return null; // Too volatile, skip
+            }
             
             // Calculate indicators
             const rsi2 = this.calculateRSI(closes, 2);
@@ -549,64 +563,88 @@
             const bb = this.calculateBollingerBands(closes, 20, 2);
             const pattern = this.detectPattern(candles);
             
-            // Count confirmations
+            // Count confirmations (tighter thresholds for higher accuracy)
             let callConfs = [];
             let putConfs = [];
             
-            // RSI extremes
-            if (rsi2 < 10) callConfs.push('RSI2_EXTREME');
-            else if (rsi2 < 20) callConfs.push('RSI2_OVERSOLD');
+            // RSI extremes (tightened: 15/85 instead of 20/80)
+            if (rsi2 < 8) { callConfs.push('RSI2_EXTREME'); callConfs.push('RSI2_DEEP_OVERSOLD'); }
+            else if (rsi2 < 15) callConfs.push('RSI2_OVERSOLD');
             
-            if (rsi2 > 90) putConfs.push('RSI2_EXTREME');
-            else if (rsi2 > 80) putConfs.push('RSI2_OVERBOUGHT');
+            if (rsi2 > 92) { putConfs.push('RSI2_EXTREME'); putConfs.push('RSI2_DEEP_OVERBOUGHT'); }
+            else if (rsi2 > 85) putConfs.push('RSI2_OVERBOUGHT');
             
-            // Stochastic
-            if (stoch.k < 20) callConfs.push('STOCH_OVERSOLD');
-            if (stoch.k > 80) putConfs.push('STOCH_OVERBOUGHT');
+            // Stochastic (tightened)
+            if (stoch.k < 15 && stoch.d < 20) callConfs.push('STOCH_OVERSOLD');
+            if (stoch.k > 85 && stoch.d > 80) putConfs.push('STOCH_OVERBOUGHT');
+            
+            // Stochastic cross (stronger signal)
+            if (stoch.k < 25 && stoch.k > stoch.d) callConfs.push('STOCH_BULLISH_CROSS');
+            if (stoch.k > 75 && stoch.k < stoch.d) putConfs.push('STOCH_BEARISH_CROSS');
             
             // Bollinger Bands
             if (currentPrice <= bb.lower) callConfs.push('BB_LOWER');
             if (currentPrice >= bb.upper) putConfs.push('BB_UPPER');
             
-            // EMA trend
+            // EMA trend (reversal context)
             if (ema5 > ema10 && ema10 > ema20) putConfs.push('TREND_UP_REVERSAL');
             if (ema5 < ema10 && ema10 < ema20) callConfs.push('TREND_DOWN_REVERSAL');
+            
+            // EMA crossover (fresh cross is stronger signal)
+            const prevEma5 = this.calculateEMA(closes.slice(0, -1), 5);
+            const prevEma10 = this.calculateEMA(closes.slice(0, -1), 10);
+            if (prevEma5 <= prevEma10 && ema5 > ema10) callConfs.push('EMA_BULLISH_CROSS');
+            if (prevEma5 >= prevEma10 && ema5 < ema10) putConfs.push('EMA_BEARISH_CROSS');
             
             // Candlestick patterns
             if (pattern.bullish) callConfs.push(pattern.name);
             if (pattern.bearish) putConfs.push(pattern.name);
             
-            // Momentum
+            // Momentum reversal
             if (closes.length > 5) {
                 const momentum = closes[closes.length - 1] - closes[closes.length - 5];
-                if (momentum < 0 && rsi2 < 30) callConfs.push('MOMENTUM_REVERSAL');
-                if (momentum > 0 && rsi2 > 70) putConfs.push('MOMENTUM_REVERSAL');
+                if (momentum < 0 && rsi2 < 25) callConfs.push('MOMENTUM_REVERSAL');
+                if (momentum > 0 && rsi2 > 75) putConfs.push('MOMENTUM_REVERSAL');
             }
             
-            // Determine signal (need 3+ confirmations)
-            const minConfs = 3;
+            // RSI14 confluence
+            if (rsi14 < 35) callConfs.push('RSI14_OVERSOLD');
+            if (rsi14 > 65) putConfs.push('RSI14_OVERBOUGHT');
             
-            if (callConfs.length >= minConfs && callConfs.length > putConfs.length) {
-                const confidence = Math.min(95, 60 + callConfs.length * 8);
+            // === STRICTER MINIMUM CONFIRMATIONS ===
+            const minConfs = 4; // Raised from 3 to 4
+            
+            // === CONFLICT PENALTY ===
+            // If both sides have 3+ confirmations, market is conflicted — skip
+            if (callConfs.length >= 3 && putConfs.length >= 3) {
+                return null; // Conflicting signals
+            }
+            
+            if (callConfs.length >= minConfs && callConfs.length > putConfs.length + 1) {
+                const confidence = Math.min(95, 58 + callConfs.length * 7);
+                if (confidence < CONFIG.MIN_CONFIDENCE) return null;
                 return {
                     direction: 'CALL',
                     confidence,
+                    strategy: 'Local Engine v7.4',
                     confirmations: callConfs,
                     count: callConfs.length,
                     price: currentPrice,
-                    indicators: { rsi2, rsi14, stoch: stoch.k, bb_pos: 'lower' }
+                    indicators: { rsi2, rsi14, stoch: stoch.k, bb_pos: 'lower', volatility: recentVol }
                 };
             }
             
-            if (putConfs.length >= minConfs && putConfs.length > callConfs.length) {
-                const confidence = Math.min(95, 60 + putConfs.length * 8);
+            if (putConfs.length >= minConfs && putConfs.length > callConfs.length + 1) {
+                const confidence = Math.min(95, 58 + putConfs.length * 7);
+                if (confidence < CONFIG.MIN_CONFIDENCE) return null;
                 return {
                     direction: 'PUT',
                     confidence,
+                    strategy: 'Local Engine v7.4',
                     confirmations: putConfs,
                     count: putConfs.length,
                     price: currentPrice,
-                    indicators: { rsi2, rsi14, stoch: stoch.k, bb_pos: 'upper' }
+                    indicators: { rsi2, rsi14, stoch: stoch.k, bb_pos: 'upper', volatility: recentVol }
                 };
             }
             

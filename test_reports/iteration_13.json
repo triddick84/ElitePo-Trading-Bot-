@@ -1,0 +1,77 @@
+{
+  "summary": "Backend testing completed for AI/ML optimization changes. All 18 tests passed (100%). The optimized ML system, scan-markets with 70%+ confidence, and all strategy endpoints are working correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_ai_ml_optimization.py",
+    "/app/test_reports/pytest/pytest_ai_ml_optimization_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Maximized AI/ML System v3.0 is trained with 54.5% raw CV accuracy - this is expected as noted in the request (filtering pipeline improves accuracy at prediction time)",
+    "scan-markets endpoint correctly returns signals at 70%+ confidence threshold",
+    "All signals include required 'symbol' and 'analysis_type' fields for Tampermonkey script",
+    "Adaptive strategy config accepts proper-case indicators (MACD, EMA, Parabolic_SAR) without errors",
+    "Holly Crossover strategy registered for 5s, 15s, 30s timeframes",
+    "Golden One Moment strategy registered for 30s timeframe",
+    "All regression tests for existing strategies passed"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_ai_ml_optimization.py"
+  ],
+  "success_rate": {
+    "backend": "100% (18/18 tests passed)",
+    "frontend": "N/A - backend only testing requested"
+  },
+  "test_credentials": "None required - public API endpoints",
+  "seed_data_creation": "None - ML model already trained, strategies generate signals from live OANDA market data",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "AI/ML optimization testing complete. Key findings: 1) ML raw accuracy is ~54% which is expected - the accuracy improvement is in the filtering pipeline (probability filter, regime penalty, indicator agreement) at prediction time. 2) scan-markets correctly filters signals >= 70% confidence. 3) All strategy endpoints working. 4) Adaptive config accepts proper-case indicator names.",
+  "features_tested": {
+    "maximized_ml_stats": [
+      "GET /api/maximized-ml/stats - Returns trained=true, models=[XGBoost, LightGBM, RandomForest, GradientBoosting], accuracy=54.5% ✅"
+    ],
+    "scan_markets": [
+      "GET /api/signals/scan-markets?assets=EURUSD_OTC,GBPUSD_OTC&min_confidence=70 - Returns signals at 70%+ confidence ✅",
+      "All signals include 'symbol' field for asset switching ✅",
+      "All signals include 'analysis_type' field ✅"
+    ],
+    "strategy_regression_tests": [
+      "POST /api/strategy/golden-one-moment/signal?symbol=EUR_USD - Returns success=true ✅",
+      "POST /api/strategy/holly-crossover/signal?symbol=EUR_USD&timeframe=5s - Returns success=true ✅",
+      "POST /api/strategy/momentum-buster-15s/signal?symbol=EUR_USD - Returns success=true ✅",
+      "GET /api/strategy/holly-crossover/stats?timeframe=5s - Returns name='Holly Crossover', EMA(12), WMA(23) ✅",
+      "GET /api/strategy/golden-one-moment/stats - Returns name='Golden One Moment' ✅"
+    ],
+    "strategy_registration": [
+      "GET /api/strategies/available/5s - Includes holly_crossover_5s ✅",
+      "GET /api/strategies/available/30s - Includes golden_one_moment and holly_crossover_30s ✅"
+    ],
+    "adaptive_strategy_config": [
+      "GET /api/adaptive-strategy/config - Returns valid config with proper indicator names ✅",
+      "PUT /api/adaptive-strategy/config with trending_indicators=[MACD,EMA,Parabolic_SAR] - Succeeds (no invalid indicator error) ✅"
+    ],
+    "health_check": [
+      "GET /api/health - API healthy ✅"
+    ]
+  },
+  "ml_optimization_details": {
+    "raw_cv_accuracy": "54.5%",
+    "note": "Raw CV accuracy is expected to be ~54% - the accuracy improvement is in the filtering pipeline (probability filter >= 0.58, regime penalty, indicator agreement filter) which kicks in at prediction time, not training time",
+    "models_in_ensemble": ["XGBoost", "LightGBM", "RandomForest", "GradientBoosting"],
+    "feature_count": 97,
+    "regime_detector": "fitted",
+    "top_features": ["above_upper_bb", "price_vs_ema50", "momentum_20", "strong_trend", "rsi_14"]
+  },
+  "mocked_apis": {
+    "note": "MT4/TradingView webhooks are MOCKED. OANDA provides real market data for signal generation."
+  }
+}
