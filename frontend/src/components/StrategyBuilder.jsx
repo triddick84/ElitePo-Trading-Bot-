@@ -13,7 +13,7 @@ import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { toast } from 'sonner';
 import { 
   Plus, Trash2, Copy, Save, Play, Settings, TrendingUp, Activity,
-  BarChart3, Layers, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, Zap, ArrowUp, ArrowDown
+  BarChart3, Layers, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, Circle, Zap, ArrowUp, ArrowDown
 } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL || '';
@@ -537,7 +537,7 @@ const StrategyBuilder = () => {
     min_confidence: 75,
     max_signals_per_hour: 10,
     cooldown_seconds: 60,
-    is_active: true
+    is_active: false
   });
 
   useEffect(() => {
@@ -674,7 +674,7 @@ const StrategyBuilder = () => {
       min_confidence: 75,
       max_signals_per_hour: 10,
       cooldown_seconds: 60,
-      is_active: true
+      is_active: false
     });
   };
 
@@ -1155,7 +1155,34 @@ const StrategyBuilder = () => {
         <TabsContent value="strategies">
           <Card className="glass-dark border-slate-700/50">
             <CardHeader>
-              <CardTitle className="text-white">My Strategies</CardTitle>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-white">My Strategies</CardTitle>
+                  <CardDescription>Toggle individual strategies on/off. Only active strategies will generate signals.</CardDescription>
+                </div>
+                <Button
+                  data-testid="deactivate-all-strategies"
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    try {
+                      // Deactivate all strategies
+                      await Promise.all(
+                        strategies
+                          .filter(s => s.is_active)
+                          .map(s => axios.post(`${API_URL}/api/custom-strategies/${s.id}/toggle?is_active=false`))
+                      );
+                      fetchStrategies();
+                      toast.success('All strategies deactivated');
+                    } catch (error) {
+                      toast.error('Failed to deactivate');
+                    }
+                  }}
+                  className="border-orange-500/50 text-orange-400 hover:bg-orange-500/20"
+                >
+                  Deactivate All
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {isLoading ? (
@@ -1164,27 +1191,104 @@ const StrategyBuilder = () => {
                 <div className="text-center py-8 text-slate-400">No strategies yet</div>
               ) : (
                 <div className="space-y-3">
-                  {strategies.map(strategy => (
-                    <div
-                      key={strategy.id}
-                      className="p-4 bg-slate-800/50 rounded-lg border border-slate-600/50 flex items-center justify-between"
-                    >
-                      <div>
-                        <div className="font-medium text-white">{strategy.name}</div>
-                        <div className="text-sm text-slate-400">{strategy.description}</div>
-                        <div className="flex gap-2 mt-2">
-                          {strategy.timeframes?.slice(0, 3).map(tf => (
-                            <Badge key={tf} variant="outline" className="text-xs">{tf}</Badge>
-                          ))}
+                  {strategies.map(strategy => {
+                    const isActive = strategy.is_active === true;
+                    return (
+                      <div
+                        key={strategy.id}
+                        data-testid={`saved-strategy-${strategy.id}`}
+                        className={`p-4 rounded-lg border transition-all ${
+                          isActive
+                            ? 'bg-emerald-900/20 border-emerald-500/50'
+                            : 'bg-slate-800/50 border-slate-600/50'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-white truncate">{strategy.name}</span>
+                              {isActive && (
+                                <Badge data-testid={`strategy-active-badge-${strategy.id}`} className="bg-emerald-600 text-xs shrink-0">Active</Badge>
+                              )}
+                            </div>
+                            <div className="text-sm text-slate-400 mt-1">{strategy.description}</div>
+                            <div className="flex gap-2 mt-2 flex-wrap">
+                              {strategy.timeframes?.map(tf => (
+                                <Badge key={tf} variant="outline" className="text-xs">{tf}</Badge>
+                              ))}
+                              {strategy.assets?.slice(0, 3).map(a => (
+                                <Badge key={a} variant="outline" className="text-xs border-blue-500/50 text-blue-400">{a}</Badge>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 ml-4 shrink-0">
+                            <Button
+                              data-testid={`strategy-toggle-${strategy.id}`}
+                              variant="outline"
+                              size="sm"
+                              onClick={async () => {
+                                try {
+                                  const newState = !isActive;
+                                  await axios.post(`${API_URL}/api/custom-strategies/${strategy.id}/toggle?is_active=${newState}`);
+                                  // Refresh strategies list
+                                  fetchStrategies();
+                                  toast.success(newState ? `"${strategy.name}" activated` : `"${strategy.name}" deactivated`);
+                                } catch (error) {
+                                  toast.error('Failed to toggle strategy');
+                                }
+                              }}
+                              className={isActive
+                                ? 'border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/20'
+                                : 'border-slate-500/50 text-slate-400 hover:bg-slate-500/20'
+                              }
+                            >
+                              {isActive ? <CheckCircle className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
+                              <span className="ml-1">{isActive ? 'On' : 'Off'}</span>
+                            </Button>
+                            <Button
+                              data-testid={`strategy-edit-${strategy.id}`}
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedStrategy(strategy);
+                                setStrategyForm({
+                                  name: strategy.name || 'New Strategy',
+                                  description: strategy.description || '',
+                                  conditions: (strategy.call_conditions || []).map(c => ({
+                                    id: c.conditions?.[0]?.id || `c${Date.now()}`,
+                                    indicator: c.conditions?.[0]?.indicator || 'RSI',
+                                    conditionType: c.conditions?.[0]?.conditionType || 'crosses_above_oversold',
+                                    parameters: c.conditions?.[0]?.parameters || {},
+                                    reversal: c.conditions?.[0]?.reversal || false
+                                  })),
+                                  timeframes: strategy.timeframes || ['1m'],
+                                  assets: strategy.assets || ['EURUSD'],
+                                  min_confidence: strategy.min_confidence || 75,
+                                  max_signals_per_hour: strategy.max_signals_per_hour || 10,
+                                  cooldown_seconds: strategy.cooldown_seconds || 60,
+                                  is_active: strategy.is_active || false
+                                });
+                                setActiveTab('builder');
+                                toast.info(`Editing "${strategy.name}"`);
+                              }}
+                              className="border-blue-500/50 text-blue-400"
+                            >
+                              <Settings className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              data-testid={`strategy-delete-${strategy.id}`}
+                              variant="outline"
+                              size="sm"
+                              onClick={() => deleteStrategy(strategy.id)}
+                              className="border-red-500/50 text-red-400"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
                         </div>
                       </div>
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm" onClick={() => deleteStrategy(strategy.id)} className="border-red-500/50 text-red-400">
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>

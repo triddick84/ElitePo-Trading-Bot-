@@ -15,6 +15,13 @@
 
 ## Recent Updates (March 28, 2026)
 
+### Strategy Builder Saved Tab Fix (March 29, 2026)
+- Fixed: All saved strategies were `is_active: true` by default — selecting one selected all
+- Added On/Off toggle per strategy with visual feedback (green border + Active badge)
+- Added "Deactivate All" button to reset selections
+- Added Edit button to load strategy back into Builder tab
+- Default `is_active` changed to `false` for new strategies
+
 ### Holly Crossover Strategy (March 28, 2026)
 **Reversal crossover using EMA(12) x WMA(23) with Support/Resistance confirmation**
 
