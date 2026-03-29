@@ -3,6 +3,7 @@
 ## Last Updated: March 26, 2026
 
 ## Current Status
+✅ **AI/ML v3.1 Optimized** - Stricter filtering pipeline, regime-aware confidence, feature agreement scoring
 ✅ **Holly Crossover Strategy (5s/15s/30s)** - EMA(12) x WMA(23) reversal crossover with S/R confirmation
 ✅ **Golden One Moment 30s Strategy** - RSI(2) + Stochastic(4,3,3) mean reversion, 30s expiration
 ✅ **Risk Management System** - Sharpe ratio, drawdown protection, Kelly criterion position sizing
@@ -14,6 +15,25 @@
 ✅ **Backend Data Sources** - OANDA (primary), yfinance (fallback) - for regular forex
 
 ## Recent Updates (March 28, 2026)
+
+### AI/ML Accuracy Optimization v3.1 (March 29, 2026)
+**Comprehensive optimization for signal trade accuracy (was 50-60%, target 70%+)**
+
+| Optimization | Before | After |
+|---|---|---|
+| Model probability filter | None | Min 58% required |
+| Regime penalty (high vol) | 0.85x | 0.75x |
+| Volatility regime feature | **BUGGED** (always 0) | Fixed |
+| Deep analysis confirmations | 4 min | 5 min |
+| Local engine confirmations | 3 min | 4 min |
+| Conflict detection | None | Rejects conflicting signals |
+| Indicator agreement check | None | 5-indicator scoring |
+| Confidence floor | 65% | 70% |
+| Training label noise | 0.01% | 0.03% threshold |
+| XGBoost depth | 8 | 5 (less overfitting) |
+| Regularization (alpha/lambda) | 0.1/1.0 | 0.5/2.0 |
+| Tampermonkey volatility filter | None | Blocks 2x+ vol spikes |
+| Tampermonkey RSI thresholds | 20/80 | 15/85 (tighter) |
 
 ### Strategy Builder Saved Tab Fix (March 29, 2026)
 - Fixed: All saved strategies were `is_active: true` by default — selecting one selected all
