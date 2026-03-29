@@ -84,8 +84,8 @@ const AIMLModelsPage = () => {
     enabled: true,
     adx_trending_threshold: 25,
     adx_ranging_threshold: 20,
-    trending_indicators: ['ema', 'macd', 'adx'],
-    ranging_indicators: ['rsi', 'stochastic', 'bollinger'],
+    trending_indicators: ['MACD', 'Parabolic_SAR', 'EMA'],
+    ranging_indicators: ['RSI', 'Stochastic', 'Bollinger_Bands'],
     trending_execution_delay: 1.0,
     ranging_execution_delay: 0.5,
     ranging_signal_threshold: 80
