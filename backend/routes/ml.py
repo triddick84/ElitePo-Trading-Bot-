@@ -1,0 +1,1444 @@
+"""Auto-extracted route module from server.py refactoring."""
+from fastapi import APIRouter, HTTPException, Query, Request, Body, BackgroundTasks
+from fastapi.responses import JSONResponse
+from typing import List, Dict, Any, Optional
+from datetime import datetime, timezone
+from pydantic import BaseModel, Field
+import logging
+import json
+import uuid
+import os
+import asyncio
+import pandas as pd
+
+from routes import db, convert_numpy_types, logger
+
+# Re-use the main api_router — routes are registered via include in server.py
+# This module uses a local router that gets included by server.py
+router = APIRouter()
+from enhanced_oanda_service import enhanced_oanda
+from maximized_ai_ml_system import maximized_ai_ml
+from ai_learning_system import ai_learning_system
+from routes import get_realtime_market_hub
+from pocket_option_client import get_pocket_option_client
+try:
+    from enhanced_ai_ml_system import enhanced_ai_ml
+except ImportError:
+    enhanced_ai_ml = None
+try:
+    from improved_ai_ml_system import improved_ai_ml
+except ImportError:
+    improved_ai_ml = None
+try:
+    from ai_lstm_predictor import lstm_predictor
+except ImportError:
+    lstm_predictor = None
+try:
+    from ai_ml_trading_system import ai_ml_trading_system, TENSORFLOW_AVAILABLE, SKLEARN_AVAILABLE
+except ImportError:
+    ai_ml_trading_system = None
+    TENSORFLOW_AVAILABLE = False
+    SKLEARN_AVAILABLE = False
+
+from routes.models import AISignalRequest, AITrainingRequest, GenerateSignalRequest, TradeResultRequest, TrainModelRequest
+
+
+
+# =====================================================
+# AI LEARNING SYSTEM ENDPOINTS
+# =====================================================
+
+@router.get("/ai-learning/config")
+async def get_ai_learning_config():
+    """Get AI learning system configuration"""
+    try:
+        config = await db.ai_config.find_one({"type": "learning_config"}, {"_id": 0})
+        return config or {
+            "model_config": {
+                "primary_model": "enhanced_rsi_bb_volume",
+                "secondary_model": "support_resistance",
+                "use_ensemble": True,
+                "ensemble_method": "weighted_average",
+                "min_model_agreement": 2,
+                "confidence_threshold": 75
+            },
+            "learning_config": {
+                "enabled": True,
+                "learning_rate": 0.01,
+                "adaptation_speed": "medium",
+                "use_market_regime": True,
+                "use_volatility_filter": True,
+                "lookback_periods": 100,
+                "min_samples_for_update": 50
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error getting AI learning config: {e}")
+        return {"model_config": {}, "learning_config": {}}
+
+
+
+@router.post("/ai-learning/config")
+async def update_ai_learning_config(config: dict):
+    """Update AI learning system configuration"""
+    try:
+        await db.ai_config.update_one(
+            {"type": "learning_config"},
+            {"$set": {**config, "type": "learning_config", "updated_at": datetime.now(timezone.utc).isoformat()}},
+            upsert=True
+        )
+        return {"success": True, "message": "AI learning config updated"}
+    except Exception as e:
+        logger.error(f"Error updating AI learning config: {e}")
+        return {"success": False, "error": str(e)}
+
+
+
+@router.get("/ai-learning/performance")
+async def get_ai_learning_performance():
+    """Get model performance metrics"""
+    try:
+        # Get performance data from database
+        perf_data = await db.model_performance.find({}, {"_id": 0}).to_list(100)
+        
+        # Calculate average accuracy
+        total_acc = 0
+        count = 0
+        result = {}
+        
+        for p in perf_data:
+            model_id = p.get("model_id")
+            if model_id:
+                result[model_id] = {
+                    "accuracy": p.get("accuracy", 70),
+                    "trades": p.get("trades", 0)
+                }
+                total_acc += p.get("accuracy", 70)
+                count += 1
+        
+        result["average_accuracy"] = total_acc / count if count > 0 else 75
+        return result
+    except Exception as e:
+        logger.error(f"Error getting AI performance: {e}")
+        return {"average_accuracy": 75}
+
+
+
+@router.get("/ai-learning/stats")
+async def get_ai_learning_stats():
+    """Get AI learning statistics"""
+    try:
+        stats = await db.ai_config.find_one({"type": "learning_stats"}, {"_id": 0})
+        return stats or {
+            "total_cycles": 0,
+            "last_retrain": "Never",
+            "samples_collected": 0,
+            "accuracy_improvement": 0
+        }
+    except Exception as e:
+        logger.error(f"Error getting AI learning stats: {e}")
+        return {"total_cycles": 0, "last_retrain": "Never"}
+
+
+
+@router.post("/ai-learning/retrain")
+async def retrain_ai_models(request: dict):
+    """Trigger model retraining"""
+    try:
+        models = request.get("models", [])
+        use_recent_data = request.get("use_recent_data", True)
+        epochs = request.get("epochs", 100)
+        
+        # Update stats
+        await db.ai_config.update_one(
+            {"type": "learning_stats"},
+            {
+                "$set": {
+                    "type": "learning_stats",
+                    "last_retrain": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M"),
+                    "retrain_models": models,
+                    "epochs": epochs
+                },
+                "$inc": {"total_cycles": 1}
+            },
+            upsert=True
+        )
+        
+        return {
+            "success": True,
+            "message": f"Retraining {len(models)} models with {epochs} epochs",
+            "models": models
+        }
+    except Exception as e:
+        logger.error(f"Error retraining models: {e}")
+        return {"success": False, "error": str(e)}
+
+
+
+@router.post("/ai-learning/reset")
+async def reset_ai_learning():
+    """Reset all learning parameters"""
+    try:
+        await db.ai_config.update_one(
+            {"type": "learning_stats"},
+            {
+                "$set": {
+                    "type": "learning_stats",
+                    "total_cycles": 0,
+                    "last_retrain": "Never",
+                    "samples_collected": 0,
+                    "accuracy_improvement": 0,
+                    "reset_at": datetime.now(timezone.utc).isoformat()
+                }
+            },
+            upsert=True
+        )
+        return {"success": True, "message": "Learning parameters reset"}
+    except Exception as e:
+        logger.error(f"Error resetting AI learning: {e}")
+        return {"success": False, "error": str(e)}
+
+
+
+
+# =====================================================
+# ML MODEL TRAINING ENDPOINTS
+# =====================================================
+
+@router.post("/ml-training/train-from-backtests")
+async def train_ml_from_backtests(request: dict = {}):
+    """
+    Train ML models using recent backtest results.
+    This implements the continuous learning loop.
+    """
+    try:
+        from ml_training_service import get_ml_training_service
+        from dataclasses import asdict
+        
+        service = await get_ml_training_service(db)
+        
+        # Get recent backtest results
+        limit = request.get("limit", 100)
+        results = await db.backtest_results.find({}, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+        
+        if len(results) < 10:
+            return {
+                "success": False,
+                "error": "Insufficient backtest results. Run more backtests first.",
+                "results_count": len(results)
+            }
+        
+        # Train models
+        asset = request.get("asset", "all")
+        timeframe = request.get("timeframe", "1h")
+        
+        trained_models = await service.train_from_backtest_results(results, asset, timeframe)
+        
+        # Convert to serializable format
+        models_data = {k: asdict(v) for k, v in trained_models.items()}
+        
+        return {
+            "success": True,
+            "message": f"Trained {len(trained_models)} ML models from {len(results)} backtest results",
+            "models": models_data
+        }
+        
+    except Exception as e:
+        logger.error(f"Error training ML models: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "error": str(e)}
+
+
+
+
+@router.post("/ml-training/train-on-price-data")
+async def train_ml_on_price_data(request: dict):
+    """
+    Train ML models on historical price data for a specific asset/timeframe.
+    """
+    try:
+        from ml_training_service import get_ml_training_service
+        from backtesting_service import BacktestingService
+        from dataclasses import asdict
+        
+        asset = request.get("asset", "EURUSD")
+        timeframe = request.get("timeframe", "1h")
+        days = min(request.get("days", 30), 90)
+        
+        # Fetch price data - pass db for real MongoDB data access
+        backtest_service = BacktestingService(db=db)
+        price_df, data_source = await backtest_service.data_fetcher.fetch_historical_data(
+            asset, 
+            backtest_service._determine_asset_type(asset),
+            days,
+            timeframe
+        )
+        
+        if price_df is None or len(price_df) < 100:
+            return {
+                "success": False,
+                "error": f"Insufficient price data for {asset}. Got {len(price_df) if price_df is not None else 0} candles from {data_source}."
+            }
+        
+        # Train models
+        ml_service = await get_ml_training_service(db)
+        trained_models = await ml_service.train_on_price_data(price_df, asset, timeframe)
+        
+        models_data = {k: asdict(v) for k, v in trained_models.items()}
+        
+        return {
+            "success": True,
+            "message": f"Trained {len(trained_models)} ML models on {len(price_df)} candles from {data_source}",
+            "asset": asset,
+            "timeframe": timeframe,
+            "data_source": data_source,
+            "candles_used": len(price_df),
+            "models": models_data
+        }
+        
+    except Exception as e:
+        logger.error(f"Error training on price data: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "error": str(e)}
+
+
+
+
+@router.post("/ml-training/predict")
+async def ml_predict_signal(request: dict):
+    """
+    Use trained ML models to predict signal direction.
+    """
+    try:
+        from ml_training_service import get_ml_training_service
+        from backtesting_service import BacktestingService
+        
+        asset = request.get("asset", "EURUSD")
+        timeframe = request.get("timeframe", "1h")
+        
+        # Fetch recent price data - pass db for real MongoDB data access
+        backtest_service = BacktestingService(db=db)
+        price_df, _ = await backtest_service.data_fetcher.fetch_historical_data(
+            asset,
+            backtest_service._determine_asset_type(asset),
+            7,  # Last 7 days
+            timeframe
+        )
+        
+        if price_df is None or len(price_df) < 50:
+            return {
+                "success": False,
+                "error": "Insufficient price data for prediction"
+            }
+        
+        # Get prediction
+        ml_service = await get_ml_training_service(db)
+        prediction = await ml_service.predict_signal(price_df, asset, timeframe)
+        
+        if "error" in prediction:
+            return {"success": False, **prediction}
+        
+        return {
+            "success": True,
+            "prediction": prediction
+        }
+        
+    except Exception as e:
+        logger.error(f"Error making ML prediction: {e}")
+        return {"success": False, "error": str(e)}
+
+
+
+
+@router.get("/ml-training/models")
+async def get_ml_models():
+    """Get all trained ML models and their performance metrics."""
+    try:
+        from ml_training_service import get_ml_training_service
+        
+        ml_service = await get_ml_training_service(db)
+        models = await ml_service.get_model_performance()
+        
+        return {
+            "success": True,
+            "models": models,
+            "count": len(models)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting ML models: {e}")
+        return {"success": False, "error": str(e), "models": []}
+
+
+
+
+@router.post("/ml-training/run-optimization")
+async def run_strategy_optimization(request: dict = None):
+    """
+    Run ML-based strategy optimization.
+    Analyzes backtest results to find optimal strategy parameters.
+    """
+    try:
+        # Get all backtest results
+        results = await db.backtest_results.find({}, {"_id": 0}).to_list(500)
+        
+        if len(results) < 5:
+            return {
+                "success": False,
+                "error": "Need at least 5 backtest results for optimization"
+            }
+        
+        # Analyze results by strategy
+        strategy_stats = {}
+        for result in results:
+            strategy = result.get('strategy', 'unknown')
+            if strategy not in strategy_stats:
+                strategy_stats[strategy] = {
+                    'total_trades': 0,
+                    'winning_trades': 0,
+                    'total_profit': 0,
+                    'win_rates': [],
+                    'rois': []
+                }
+            
+            stats = strategy_stats[strategy]
+            stats['total_trades'] += result.get('total_trades', 0)
+            stats['winning_trades'] += result.get('winning_trades', 0)
+            stats['total_profit'] += result.get('total_profit', 0)
+            stats['win_rates'].append(result.get('win_rate', 0))
+            stats['rois'].append(result.get('roi', 0))
+        
+        # Calculate optimization recommendations
+        recommendations = []
+        for strategy, stats in strategy_stats.items():
+            if stats['total_trades'] > 0:
+                avg_win_rate = sum(stats['win_rates']) / len(stats['win_rates'])
+                avg_roi = sum(stats['rois']) / len(stats['rois'])
+                
+                recommendations.append({
+                    'strategy': strategy,
+                    'total_trades': stats['total_trades'],
+                    'avg_win_rate': round(avg_win_rate, 2),
+                    'avg_roi': round(avg_roi, 2),
+                    'total_profit': round(stats['total_profit'], 2),
+                    'recommendation': 'HIGH' if avg_win_rate > 55 else 'MEDIUM' if avg_win_rate > 45 else 'LOW'
+                })
+        
+        # Sort by win rate
+        recommendations.sort(key=lambda x: x['avg_win_rate'], reverse=True)
+        
+        # Get best performing strategy
+        best_strategy = recommendations[0] if recommendations else None
+        
+        return {
+            "success": True,
+            "total_results_analyzed": len(results),
+            "strategies_analyzed": len(strategy_stats),
+            "best_strategy": best_strategy,
+            "all_recommendations": recommendations,
+            "optimization_tips": [
+                f"Best performing strategy: {best_strategy['strategy']} ({best_strategy['avg_win_rate']}% win rate)" if best_strategy else "Run more backtests",
+                "Strategies with >55% win rate are recommended for live trading",
+                "Consider combining high-performing strategies in ensemble mode"
+            ]
+        }
+        
+    except Exception as e:
+        logger.error(f"Error running optimization: {e}")
+        return {"success": False, "error": str(e)}
+
+
+
+
+@router.post("/ml-training/schedule-daily-retrain")
+async def schedule_daily_retrain():
+    """Enable daily automatic model retraining."""
+    try:
+        from ml_training_service import get_ml_training_service
+        
+        ml_service = await get_ml_training_service(db)
+        
+        # Start background task for daily retraining
+        asyncio.create_task(ml_service.schedule_daily_retrain())
+        
+        return {
+            "success": True,
+            "message": "Daily ML retraining scheduled. Models will retrain at midnight UTC."
+        }
+        
+    except Exception as e:
+        logger.error(f"Error scheduling retraining: {e}")
+        return {"success": False, "error": str(e)}
+
+
+
+
+@router.post("/ml-training/retrain-now")
+async def retrain_models_now():
+    """Manually trigger immediate model retraining."""
+    try:
+        from ml_training_service import get_ml_training_service
+        
+        ml_service = await get_ml_training_service(db)
+        await ml_service.run_daily_retrain()
+        
+        return {
+            "success": True,
+            "message": "ML models retrained successfully"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error retraining models: {e}")
+        return {"success": False, "error": str(e)}
+
+
+
+
+# =====================================================
+# ENHANCED ML SYSTEM ENDPOINTS
+# =====================================================
+
+@router.post("/enhanced-ml/train")
+async def train_enhanced_ml():
+    """Train the enhanced ML model from historical validated signals."""
+    try:
+        if enhanced_ai_ml is None:
+            return {"success": False, "error": "Enhanced ML system not available"}
+        
+        result = await enhanced_ai_ml.train_from_historical(db, days=30)
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error training enhanced ML: {e}")
+        return {"success": False, "error": str(e)}
+
+
+
+@router.get("/enhanced-ml/stats")
+async def get_enhanced_ml_stats():
+    """Get enhanced ML system statistics."""
+    try:
+        if enhanced_ai_ml is None:
+            return {"success": False, "error": "Enhanced ML system not available"}
+        
+        return {
+            "success": True,
+            "stats": enhanced_ai_ml.get_stats()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting ML stats: {e}")
+        return {"success": False, "error": str(e)}
+
+
+
+@router.post("/enhanced-ml/predict/{symbol}")
+async def get_enhanced_ml_prediction(symbol: str):
+    """Get ML prediction for a symbol."""
+    try:
+        if enhanced_ai_ml is None:
+            return {"success": False, "error": "Enhanced ML system not available"}
+        
+        # Get market data
+        candles = await get_realtime_market_hub().get_historical_candles(symbol, '1m', 100)
+        
+        if not candles or len(candles) < 50:
+            return {"success": False, "error": "Insufficient market data"}
+        
+        df = pd.DataFrame(candles)
+        df = df.rename(columns={'c': 'close', 'o': 'open', 'h': 'high', 'l': 'low', 'v': 'volume'})
+        
+        prediction = enhanced_ai_ml.predict(df)
+        
+        if prediction:
+            return {
+                "success": True,
+                "symbol": symbol,
+                "prediction": prediction
+            }
+        else:
+            return {"success": False, "error": "Could not generate prediction"}
+        
+    except Exception as e:
+        logger.error(f"Error getting ML prediction: {e}")
+        return {"success": False, "error": str(e)}
+
+
+
+
+# =====================================================
+# IMPROVED ML SYSTEM v2.0 ENDPOINTS
+# =====================================================
+
+@router.post("/improved-ml/train")
+async def train_improved_ml():
+    """Train the improved ML model v2.0 using OANDA historical data."""
+    try:
+        if improved_ai_ml is None:
+            return {"success": False, "error": "Improved ML system not available"}
+        
+        # Debug: Check OANDA status first
+        logger.info(f"🔍 OANDA configured: {enhanced_oanda.is_configured}")
+        logger.info(f"🔍 OANDA API: {enhanced_oanda.api}")
+        
+        # Test getting candles directly
+        test_df = enhanced_oanda.get_candles('EUR_USD', 'M1', 10)
+        logger.info(f"🔍 Test candle fetch: {test_df.shape if test_df is not None and not test_df.empty else 'EMPTY'}")
+        
+        # Use enhanced OANDA service for training data
+        result = await improved_ai_ml.train_from_oanda(
+            enhanced_oanda, 
+            symbols=['EUR_USD', 'GBP_USD', 'USD_JPY', 'AUD_USD', 'EUR_JPY'],
+            candle_count=2000
+        )
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error training improved ML: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "error": str(e)}
+
+
+
+
+@router.post("/improved-ml/train-extended")
+async def train_improved_ml_extended():
+    """Train with extended data (5000 candles per symbol) for better accuracy."""
+    try:
+        if improved_ai_ml is None:
+            return {"success": False, "error": "Improved ML system not available"}
+        
+        # Train with more data and more symbols
+        result = await improved_ai_ml.train_from_oanda(
+            enhanced_oanda, 
+            symbols=['EUR_USD', 'GBP_USD', 'USD_JPY', 'AUD_USD', 'EUR_JPY', 
+                    'USD_CHF', 'NZD_USD', 'EUR_GBP', 'EUR_AUD', 'GBP_JPY'],
+            candle_count=5000
+        )
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error training extended ML: {e}")
+        return {"success": False, "error": str(e)}
+
+
+
+@router.get("/improved-ml/stats")
+async def get_improved_ml_stats():
+    """Get improved ML system v2.0 statistics."""
+    try:
+        if improved_ai_ml is None:
+            return {"success": False, "error": "Improved ML system not available"}
+        
+        return {
+            "success": True,
+            "stats": improved_ai_ml.get_stats()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting improved ML stats: {e}")
+        return {"success": False, "error": str(e)}
+
+
+
+@router.post("/improved-ml/predict/{symbol}")
+async def get_improved_ml_prediction(symbol: str):
+    """Get improved ML v2.0 prediction for a symbol."""
+    try:
+        if improved_ai_ml is None:
+            return {"success": False, "error": "Improved ML system not available"}
+        
+        # Convert symbol format (EUR_USD -> EURUSD for market hub)
+        market_symbol = symbol.replace('_', '')
+        
+        # Get market data from OANDA (synchronous call)
+        df = enhanced_oanda.get_candles(symbol, granularity='M1', count=100)
+        
+        if df is None or df.empty:
+            # Fallback to market hub
+            candles = await get_realtime_market_hub().get_historical_candles(market_symbol, '1m', 100)
+            if candles and len(candles) >= 50:
+                df = pd.DataFrame(candles)
+                if 'c' in df.columns:
+                    df = df.rename(columns={'c': 'close', 'o': 'open', 'h': 'high', 'l': 'low', 'v': 'volume'})
+        
+        if df is None or df.empty or len(df) < 50:
+            return {"success": False, "error": "Insufficient market data"}
+        
+        # Ensure numeric
+        for col in ['open', 'high', 'low', 'close']:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+        
+        if 'volume' not in df.columns:
+            df['volume'] = 1.0
+        
+        prediction = improved_ai_ml.predict(df)
+        
+        if prediction:
+            return {
+                "success": True,
+                "symbol": symbol,
+                "prediction": prediction
+            }
+        else:
+            return {"success": False, "error": "Could not generate prediction - model may need training"}
+        
+    except Exception as e:
+        logger.error(f"Error getting improved ML prediction: {e}")
+        return {"success": False, "error": str(e)}
+
+
+
+
+# =====================================================
+# MAXIMIZED AI/ML SYSTEM v3.0 ENDPOINTS
+# =====================================================
+
+@router.post("/maximized-ml/train")
+async def train_maximized_ml():
+    """Train the maximized ML model v3.0 with XGBoost + LightGBM stacking ensemble."""
+    try:
+        if maximized_ai_ml is None:
+            return {"success": False, "error": "Maximized ML system not available"}
+        
+        result = await maximized_ai_ml.train_from_oanda(
+            enhanced_oanda,
+            symbols=['EUR_USD', 'GBP_USD', 'USD_JPY', 'AUD_USD', 'EUR_JPY',
+                    'USD_CHF', 'NZD_USD', 'EUR_GBP', 'GBP_JPY', 'AUD_JPY'],
+            candle_count=3000
+        )
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error training maximized ML: {e}")
+        return {"success": False, "error": str(e)}
+
+
+
+
+@router.get("/maximized-ml/stats")
+async def get_maximized_ml_stats():
+    """Get maximized ML system v3.0 statistics."""
+    try:
+        if maximized_ai_ml is None:
+            return {"success": False, "error": "Maximized ML system not available"}
+        
+        return {"success": True, "stats": maximized_ai_ml.get_stats()}
+        
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+
+
+@router.post("/maximized-ml/predict/{symbol}")
+async def get_maximized_ml_prediction(symbol: str):
+    """Get maximized ML v3.0 prediction with regime detection."""
+    try:
+        if maximized_ai_ml is None:
+            return {"success": False, "error": "Maximized ML system not available"}
+        
+        # Convert symbol format to OANDA format (EUR_USD)
+        oanda_symbol = symbol.replace('/', '_')
+        if '_' not in oanda_symbol:
+            # Convert EURUSD to EUR_USD
+            oanda_symbol = oanda_symbol[:3] + '_' + oanda_symbol[3:] if len(oanda_symbol) == 6 else oanda_symbol
+        
+        df = enhanced_oanda.get_candles(oanda_symbol, granularity='M1', count=100)
+        
+        if df is None or df.empty:
+            # Fallback to market hub with original symbol format
+            market_symbol = symbol.replace('_', '').replace('/', '')
+            candles = await get_realtime_market_hub().get_historical_candles(market_symbol, '1m', 100)
+            if candles and len(candles) >= 60:
+                df = pd.DataFrame(candles)
+                if 'c' in df.columns:
+                    df = df.rename(columns={'c': 'close', 'o': 'open', 'h': 'high', 'l': 'low', 'v': 'volume'})
+        
+        if df is None or df.empty or len(df) < 60:
+            return {"success": False, "error": "Insufficient market data (need 60+ candles)"}
+        
+        for col in ['open', 'high', 'low', 'close']:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+        
+        if 'volume' not in df.columns:
+            df['volume'] = 1.0
+        
+        prediction = maximized_ai_ml.predict(df)
+        
+        if prediction:
+            return {"success": True, "symbol": symbol, "prediction": prediction}
+        else:
+            return {"success": False, "error": "Could not generate prediction - model may need training"}
+        
+    except Exception as e:
+        logger.error(f"Error getting maximized ML prediction: {e}")
+        return {"success": False, "error": str(e)}
+
+
+
+
+# =====================================================
+# AI LEARNING SYSTEM ENDPOINTS
+# =====================================================
+
+@router.post("/ai/learn")
+async def trigger_ai_learning():
+    """
+    Manually trigger AI learning cycle
+    Analyzes recent validations and adjusts strategies
+    """
+    try:
+        await ai_learning_system.analyze_and_learn()
+        return {
+            "success": True,
+            "message": "AI learning cycle completed",
+            "adjustments": ai_learning_system.get_current_adjustments()
+        }
+    except Exception as e:
+        logger.error(f"Error in AI learning: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+@router.get("/ai/report")
+async def get_learning_report():
+    """
+    Get AI learning report with recommendations
+    """
+    try:
+        report = await ai_learning_system.generate_learning_report()
+        return {
+            "success": True,
+            "report": report
+        }
+    except Exception as e:
+        logger.error(f"Error generating AI report: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+@router.get("/ai/adjustments")
+async def get_current_adjustments():
+    """
+    Get current AI strategy adjustments
+    """
+    try:
+        adjustments = ai_learning_system.get_current_adjustments()
+        return {
+            "success": True,
+            "adjustments": adjustments
+        }
+    except Exception as e:
+        logger.error(f"Error getting adjustments: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+
+# ==================== LSTM AI PREDICTOR ENDPOINTS ====================
+
+@router.post("/ai/lstm/predict")
+async def lstm_predict(asset: str, timeframe: int = 60):
+    """
+    Get LSTM AI prediction for price direction
+    
+    Args:
+        asset: Asset symbol
+        timeframe: Timeframe in seconds
+    """
+    try:
+        client = await get_pocket_option_client(is_demo=True)
+        if not client or not client.is_connected():
+            raise HTTPException(status_code=503, detail="Pocket Option not connected")
+        
+        # Get candles
+        candles = await client.get_candles(asset, timeframe, 100)
+        
+        if not candles:
+            raise HTTPException(status_code=404, detail="No candle data available")
+        
+        # Get LSTM prediction
+        prediction = lstm_predictor.predict(candles)
+        
+        return {
+            "success": True,
+            "asset": asset,
+            "timeframe": timeframe,
+            **prediction
+        }
+    except Exception as e:
+        logger.error(f"Error in LSTM prediction: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+
+@router.get("/ai/lstm/status")
+async def get_lstm_status():
+    """Get LSTM model training status"""
+    return {
+        "success": True,
+        "is_trained": lstm_predictor.is_trained,
+        "model_path": lstm_predictor.model_path,
+        "sequence_length": lstm_predictor.sequence_length
+    }
+
+
+
+@router.post("/ai-ml/predict")
+async def get_ai_ml_prediction(symbol: str = Query("EURUSD_OTC")):
+    """
+    Get AI/ML ensemble prediction for 15-second trading.
+    
+    Combines LSTM, Random Forest, and Emergent LLM predictions.
+    
+    Args:
+        symbol: Trading symbol (e.g., EURUSD_OTC, BTCUSD)
+        
+    Returns:
+        Ensemble prediction with confidence, direction, and risk assessment
+    """
+    try:
+        import yfinance as yf
+        
+        # Parse symbol
+        base_symbol = symbol.replace('_OTC', '').replace('_otc', '').replace('_regular', '')
+        
+        # Convert to yfinance format
+        yf_symbol = base_symbol
+        if base_symbol in ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCHF', 'USDCAD', 'NZDUSD']:
+            yf_symbol = f'{base_symbol}=X'
+        elif base_symbol == 'BTCUSD':
+            yf_symbol = 'BTC-USD'
+        elif base_symbol == 'ETHUSD':
+            yf_symbol = 'ETH-USD'
+        
+        # Fetch candle data
+        ticker = yf.Ticker(yf_symbol)
+        hist = ticker.history(period="5d", interval="1m")
+        
+        if hist.empty or len(hist) < 60:
+            return {
+                "success": False,
+                "message": f"Insufficient data for {symbol}",
+                "prediction": None
+            }
+        
+        # Convert to candle format
+        candles = []
+        for idx, row in hist.iterrows():
+            candles.append({
+                'open': float(row['Open']),
+                'high': float(row['High']),
+                'low': float(row['Low']),
+                'close': float(row['Close']),
+                'volume': float(row['Volume'])
+            })
+        
+        # Get AI prediction
+        prediction = await get_ai_prediction(candles, symbol)
+        
+        # Send to Telegram if high confidence
+        if prediction and prediction.get('final_confidence', 0) >= 75:
+            try:
+                if telegram_notifier:
+                    msg = "🤖 AI/ML PREDICTION\n\n"
+                    msg += f"💹 Asset: {symbol}\n"
+                    msg += f"📈 Direction: {'🟢 BUY/CALL' if prediction['final_direction'] == 'BUY' else '🔴 SELL/PUT' if prediction['final_direction'] == 'SELL' else '⏸️ HOLD'}\n"
+                    msg += f"🎯 Confidence: {prediction['final_confidence']:.1f}%\n"
+                    msg += f"📊 Consensus: {prediction['consensus_score']:.0%}\n"
+                    msg += f"⚠️ Risk Level: {prediction['risk_level']}\n"
+                    msg += f"💰 Recommended Stake: {prediction['recommended_stake_percent']:.2f}%"
+                    
+                    await telegram_notifier.send_notification(msg)
+            except Exception as e:
+                logger.warning(f"Telegram notification failed: {e}")
+        
+        return {
+            "success": True,
+            "symbol": symbol,
+            "prediction": prediction,
+            "models_used": len(prediction.get('individual_predictions', [])),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"AI ML prediction error: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "prediction": None
+        }
+
+
+
+
+@router.get("/ai-ml/status")
+async def get_ai_ml_status():
+    """
+    Get AI ML Trading System status.
+    
+    Returns availability of each model (LSTM, RandomForest, LLM).
+    """
+    try:
+        from ai_ml_trading_system import TENSORFLOW_AVAILABLE, SKLEARN_AVAILABLE, EMERGENT_LLM_AVAILABLE
+        
+        return {
+            "success": True,
+            "system_name": "AI ML Trading System",
+            "models": {
+                "lstm": {
+                    "available": TENSORFLOW_AVAILABLE,
+                    "trained": ai_ml_trading_system.lstm_predictor.is_trained if TENSORFLOW_AVAILABLE else False,
+                    "description": "LSTM Neural Network for time series prediction"
+                },
+                "random_forest": {
+                    "available": SKLEARN_AVAILABLE,
+                    "trained": ai_ml_trading_system.rf_predictor.is_trained if SKLEARN_AVAILABLE else False,
+                    "description": "Random Forest classifier for fast inference"
+                },
+                "emergent_llm": {
+                    "available": ai_ml_trading_system.llm_predictor.is_available,
+                    "model": "GPT-4o",
+                    "description": "Emergent LLM for market analysis and pattern recognition"
+                }
+            },
+            "model_weights": ai_ml_trading_system.model_weights,
+            "prediction_history_size": len(ai_ml_trading_system.prediction_history)
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+
+
+@router.post("/ai-ml/train")
+async def train_ai_models(background_tasks: BackgroundTasks, 
+                           epochs: int = Query(default=50, ge=10, le=200)):
+    """
+    Train AI models on historical data (background task).
+    
+    Args:
+        epochs: Number of training epochs for LSTM
+    """
+    try:
+        import yfinance as yf
+        
+        # Fetch training data
+        symbols = ['EURUSD=X', 'GBPUSD=X', 'BTC-USD']
+        all_candles = []
+        
+        for yf_symbol in symbols:
+            ticker = yf.Ticker(yf_symbol)
+            hist = ticker.history(period="1mo", interval="1m")
+            
+            for idx, row in hist.iterrows():
+                all_candles.append({
+                    'open': float(row['Open']),
+                    'high': float(row['High']),
+                    'low': float(row['Low']),
+                    'close': float(row['Close']),
+                    'volume': float(row['Volume'])
+                })
+        
+        if len(all_candles) < 1000:
+            return {
+                "success": False,
+                "message": "Insufficient training data"
+            }
+        
+        # Train in background
+        async def train_task():
+            try:
+                ai_ml_trading_system.lstm_predictor.train(all_candles, epochs=epochs)
+                logger.info("✅ AI models training completed")
+            except Exception as e:
+                logger.error(f"Training error: {e}")
+        
+        background_tasks.add_task(asyncio.create_task, train_task())
+        
+        return {
+            "success": True,
+            "message": f"Training started with {len(all_candles)} candles, {epochs} epochs",
+            "data_points": len(all_candles)
+        }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+
+
+@router.post("/ml-trainer/train")
+async def train_ml_model(request: TrainModelRequest, background_tasks: BackgroundTasks):
+    """
+    Train a high-accuracy ML model using collected real data.
+    
+    Args:
+        asset: Asset symbol (e.g., 'EURUSD_otc')
+        timeframe: Timeframe ('5s', '1m', '5m')
+        confidence_threshold: Minimum confidence for signals (0.5-0.95)
+        min_samples: Minimum samples required for training
+    """
+    try:
+        trainer = get_ml_trainer()
+        
+        result = await trainer.train_model(
+            asset=request.asset,
+            timeframe=request.timeframe,
+            confidence_threshold=request.confidence_threshold,
+            min_samples=request.min_samples
+        )
+        
+        return result
+    except Exception as e:
+        logger.error(f"Error training model: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "error": str(e)}
+
+
+
+
+@router.post("/ml-trainer/signal")
+async def generate_ml_signal(request: GenerateSignalRequest):
+    """
+    Generate a trading signal using trained model.
+    
+    Requires model to be trained first via /ml-trainer/train
+    """
+    try:
+        trainer = get_ml_trainer()
+        
+        signal = await trainer.generate_signal(
+            asset=request.asset,
+            timeframe=request.timeframe,
+            current_data=request.candles
+        )
+        
+        if signal:
+            return {
+                "success": True,
+                "has_signal": True,
+                "signal": signal
+            }
+        else:
+            return {
+                "success": True,
+                "has_signal": False,
+                "message": "No signal - confidence below threshold or model not trained"
+            }
+    except Exception as e:
+        logger.error(f"Error generating signal: {e}")
+        return {"success": False, "error": str(e)}
+
+
+
+
+@router.get("/ml-trainer/models")
+async def get_ml_models_status():
+    """Get status of all trained models"""
+    try:
+        trainer = get_ml_trainer()
+        status = trainer.get_model_status()
+        history = trainer.get_training_history()
+        
+        return {
+            "success": True,
+            "models": status,
+            "training_history": history[-10:]  # Last 10 trainings
+        }
+    except Exception as e:
+        logger.error(f"Error getting model status: {e}")
+        return {"success": False, "error": str(e)}
+
+
+
+
+@router.get("/ml-trainer/performance/{asset}/{timeframe}")
+async def get_model_performance(asset: str, timeframe: str):
+    """Get detailed performance metrics for a trained model"""
+    try:
+        trainer = get_ml_trainer()
+        model_key = f"{asset}_{timeframe}"
+        
+        # Try to load model if not in memory
+        if model_key not in trainer.models:
+            from real_data_trainer import HighAccuracyEnsemble
+            model = HighAccuracyEnsemble()
+            if model.load(asset, timeframe):
+                trainer.models[model_key] = model
+            else:
+                return {
+                    "success": False,
+                    "error": f"No trained model found for {asset} {timeframe}"
+                }
+        
+        model = trainer.models[model_key]
+        
+        return {
+            "success": True,
+            "asset": asset,
+            "timeframe": timeframe,
+            "performance": model.performance.to_dict(),
+            "feature_importance": model.get_feature_importance(),
+            "confidence_threshold": model.confidence_threshold
+        }
+    except Exception as e:
+        logger.error(f"Error getting performance: {e}")
+        return {"success": False, "error": str(e)}
+
+
+
+
+# =====================================================
+# MARKET REGIME DETECTOR ENDPOINTS
+# =====================================================
+
+@router.get("/regime/status")
+async def get_regime_status():
+    """Get current market regime and streak status"""
+    detector = get_regime_detector()
+    
+    if detector:
+        return {
+            "success": True,
+            **detector.get_status()
+        }
+    
+    return {
+        "success": False,
+        "error": "Regime detector not initialized"
+    }
+
+
+
+
+@router.post("/regime/record-trade")
+async def record_trade_result(trade_data: dict):
+    """
+    Record a trade result for regime tracking
+    
+    Body: {
+        "direction": "CALL" or "PUT",
+        "symbol": "EURUSD_otc",
+        "is_win": true/false
+    }
+    """
+    detector = get_regime_detector()
+    
+    if not detector:
+        return {
+            "success": False,
+            "error": "Regime detector not initialized"
+        }
+    
+    direction = trade_data.get("direction", "CALL")
+    symbol = trade_data.get("symbol", "UNKNOWN")
+    is_win = trade_data.get("is_win", False)
+    
+    detector.record_trade_result(direction, symbol, is_win)
+    
+    return {
+        "success": True,
+        "message": f"Trade recorded: {'WIN' if is_win else 'LOSS'}",
+        **detector.get_status()
+    }
+
+
+
+
+@router.post("/regime/reset-streak")
+async def reset_streak():
+    """Reset the streak counter and disable inversion"""
+    detector = get_regime_detector()
+    
+    if not detector:
+        return {
+            "success": False,
+            "error": "Regime detector not initialized"
+        }
+    
+    detector.current_streak = 0
+    detector.streak_inversion_active = False
+    detector.win_loss_history.clear()
+    
+    return {
+        "success": True,
+        "message": "Streak reset successfully",
+        **detector.get_status()
+    }
+
+
+
+
+@router.post("/regime/toggle-inversion")
+async def toggle_streak_inversion(data: dict):
+    """Manually toggle streak inversion"""
+    detector = get_regime_detector()
+    
+    if not detector:
+        return {
+            "success": False,
+            "error": "Regime detector not initialized"
+        }
+    
+    enabled = data.get("enabled", not detector.streak_inversion_active)
+    detector.streak_inversion_active = enabled
+    
+    return {
+        "success": True,
+        "message": f"Streak inversion {'enabled' if enabled else 'disabled'}",
+        "streak_inversion_active": detector.streak_inversion_active
+    }
+
+
+
+
+# ========================================
+# ENHANCED AI/ML TRADING SYSTEM ENDPOINTS
+# ========================================
+
+@router.get("/ai-system/status")
+async def get_ai_system_status():
+    """Get Enhanced AI Trading System status"""
+    try:
+        status = enhanced_ai_system.get_system_status()
+        return {"success": True, **_convert_numpy_types(status)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+@router.post("/ai-system/train")
+async def train_ai_models(request: AITrainingRequest):
+    """
+    Train AI models with historical data.
+    Uses OANDA data if configured, otherwise uses cached/simulated data.
+    """
+    try:
+        # Fetch data from OANDA if configured
+        if oanda_service.is_configured:
+            candles = await oanda_service.get_candles(
+                instrument=request.instrument,
+                granularity=request.timeframe,
+                count=request.candle_count
+            )
+            
+            if candles:
+                import numpy as np
+                ohlcv_data = {
+                    "open": np.array([c.open for c in candles]),
+                    "high": np.array([c.high for c in candles]),
+                    "low": np.array([c.low for c in candles]),
+                    "close": np.array([c.close for c in candles]),
+                    "volume": np.array([c.volume for c in candles])
+                }
+                
+                result = await enhanced_ai_system.train_models(ohlcv_data)
+                return {
+                    "success": result.get("success", False),
+                    "data_source": "OANDA",
+                    **_convert_numpy_types(result)
+                }
+        
+        # Fallback: Use simulated/cached data for training
+        return {
+            "success": False,
+            "error": "OANDA not configured. Please configure OANDA API to train with real market data.",
+            "data_source": "none"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+@router.post("/ai-system/generate-signal")
+async def generate_ai_signal(request: AISignalRequest):
+    """
+    Generate AI-powered trading signal.
+    Combines trend following, mean reversion, and pattern recognition.
+    """
+    try:
+        ohlcv_data = None
+        
+        # Get market data
+        if oanda_service.is_configured:
+            candles = await oanda_service.get_candles(
+                instrument=request.instrument,
+                granularity=request.timeframe,
+                count=100
+            )
+            
+            if candles:
+                import numpy as np
+                ohlcv_data = {
+                    "open": np.array([c.open for c in candles]),
+                    "high": np.array([c.high for c in candles]),
+                    "low": np.array([c.low for c in candles]),
+                    "close": np.array([c.close for c in candles]),
+                    "volume": np.array([c.volume for c in candles])
+                }
+        
+        if ohlcv_data is None:
+            return {
+                "success": False,
+                "error": "No market data available. Configure OANDA API for real market data."
+            }
+        
+        # Load custom strategy if specified
+        custom_strategy = None
+        if request.custom_strategy_id:
+            strategy_doc = await db.custom_strategies.find_one({"id": request.custom_strategy_id})
+            if strategy_doc:
+                custom_strategy = {
+                    "name": strategy_doc.get("name"),
+                    "conditions": strategy_doc.get("conditions", [])
+                }
+        
+        # Generate signal
+        signal = await enhanced_ai_system.generate_signal(ohlcv_data, custom_strategy)
+        
+        if signal:
+            return {
+                "success": True,
+                "signal": _convert_numpy_types(signal.to_dict()),
+                "custom_strategy_used": request.custom_strategy_id is not None
+            }
+        
+        return {
+            "success": False,
+            "error": "Could not generate signal. Models may need training."
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+@router.post("/ai-system/record-result")
+async def record_ai_trade_result(request: TradeResultRequest):
+    """Record trade result for continuous learning"""
+    try:
+        result = await enhanced_ai_system.record_trade_result(
+            signal_id=request.signal_id,
+            outcome=request.outcome
+        )
+        return _convert_numpy_types(result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+

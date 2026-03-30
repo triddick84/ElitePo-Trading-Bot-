@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
-// @namespace    https://signal-bot-staging.preview.emergentagent.com
+// @namespace    https://pocket-option-auto-2.preview.emergentagent.com
 // @version      7.4.0
 // @description  Auto-trade OTC forex on Pocket Option. v7.4.0 - Holly Crossover + Multi-asset scan
 // @author       GPT Signal Bot
@@ -30,7 +30,7 @@
     // CONFIGURATION
     // ===========================================
     const CONFIG = {
-        API_URL: 'https://signal-bot-staging.preview.emergentagent.com/api',
+        API_URL: 'https://pocket-option-auto-2.preview.emergentagent.com/api',
         APP_POLL_INTERVAL: 3000,     // 3 seconds for app signals
         SCAN_INTERVAL: 5000,         // 5 seconds for scanning
         TRADE_COOLDOWN_SCAN: 30000,  // 30 seconds between SCAN trades

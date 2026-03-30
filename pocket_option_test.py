@@ -7,7 +7,7 @@ import asyncio
 import aiohttp
 import json
 
-BACKEND_URL = "https://signal-bot-staging.preview.emergentagent.com/api"
+BACKEND_URL = "https://pocket-option-auto-2.preview.emergentagent.com/api"
 
 async def test_pocket_option_integration():
     """Test Pocket Option integration specifically"""

@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 sys.path.append('/app/backend')
 
 # Test configuration
-BACKEND_URL = "https://signal-bot-staging.preview.emergentagent.com/api"
+BACKEND_URL = "https://pocket-option-auto-2.preview.emergentagent.com/api"
 
 class SSIDTelegramTester:
     def __init__(self):
