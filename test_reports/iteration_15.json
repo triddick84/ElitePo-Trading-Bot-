@@ -1,0 +1,76 @@
+{
+  "summary": "Bug fix verification complete for iteration 15. Both reported bugs are FIXED: 1) GO button (force-generate/asset endpoint) now works correctly using OANDA as primary data source, 2) Strategy toggle endpoint works correctly after adding missing get_strategy_service function import. All 9 backend tests passed (100%). Frontend strategy toggle UI verified working.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_bug_fixes_iteration15.py",
+    "/app/test_reports/pytest/pytest_bug_fixes_iteration15.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Bug 1 FIXED: force-generate/asset endpoint now uses OANDA as primary data source and strips _OTC suffix correctly",
+    "Bug 2 FIXED: get_strategy_service function was added to routes/strategies.py (lines 38-43)",
+    "Both endpoints return success:true with proper data"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_bug_fixes_iteration15.py"
+  ],
+  "success_rate": {
+    "backend": "100% (9/9 tests passed)",
+    "frontend": "100% (login, navigation, strategy toggle all working)"
+  },
+  "test_credentials": "Username: testuser, Password: test123",
+  "seed_data_creation": "None - using existing strategies",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Both bugs reported by user are now fixed and verified. The GO button backend endpoint (POST /api/signals/force-generate/asset/{symbol}) returns success:true with signals. The strategy toggle endpoint (POST /api/custom-strategies/{id}/toggle) correctly activates/deactivates strategies. Frontend UI shows toggle buttons working with visual feedback (Active badge, On/Off state, toast notifications).",
+  "mocked_apis": {
+    "note": "MT4/TradingView webhooks are MOCKED as per previous iteration."
+  },
+  "bugs_verified_fixed": {
+    "bug_1_go_button": {
+      "description": "GO button in tampermonkey not working - should force generate signals",
+      "endpoint": "POST /api/signals/force-generate/asset/{symbol}?wait_for_candle=false",
+      "status": "FIXED",
+      "test_results": [
+        "EURUSD_OTC: success=true, signal generated with 95% confidence",
+        "GBPUSD_OTC: success=true, signal generated with 95% confidence",
+        "EURUSD (regular): success=true, signal generated"
+      ]
+    },
+    "bug_2_strategy_toggle": {
+      "description": "Strategy selection for saved strategies not letting users select and unselect",
+      "endpoint": "POST /api/custom-strategies/{id}/toggle?is_active={true|false}",
+      "status": "FIXED",
+      "test_results": [
+        "Toggle to active: success=true, is_active=true",
+        "Toggle to inactive: success=true, is_active=false",
+        "Roundtrip toggle: success=true, state changes correctly",
+        "Frontend UI: Toggle buttons work, Active badge appears, toast notifications show"
+      ]
+    }
+  },
+  "endpoints_tested": {
+    "force_generate": [
+      "POST /api/signals/force-generate/asset/EURUSD_OTC?wait_for_candle=false ✅",
+      "POST /api/signals/force-generate/asset/GBPUSD_OTC?wait_for_candle=false ✅",
+      "POST /api/signals/force-generate/asset/EURUSD?wait_for_candle=false ✅"
+    ],
+    "strategy_toggle": [
+      "GET /api/custom-strategies ✅",
+      "POST /api/custom-strategies/{id}/toggle?is_active=true ✅",
+      "POST /api/custom-strategies/{id}/toggle?is_active=false ✅"
+    ],
+    "health": [
+      "GET /api/health ✅",
+      "GET /api/signals/history ✅"
+    ]
+  }
+}

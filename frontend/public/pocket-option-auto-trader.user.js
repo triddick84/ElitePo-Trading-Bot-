@@ -3154,9 +3154,74 @@
     }
 
     function handleFetch() {
-        // GO button forces signal generation for CURRENT ASSET only
-        log('🔄 GO: Force scan current asset...');
-        doScan(true, true);  // force=true, currentAssetOnly=true
+        // GO button forces signal generation for CURRENT ASSET using backend API
+        const currentAssetRaw = getCurrentAsset() || 'EURUSD';
+        let assetSymbol = currentAssetRaw
+            .replace(/\s+/g, '')
+            .replace('/', '')
+            .toUpperCase();
+        // Normalize to OTC format
+        if (!assetSymbol.includes('_OTC') && !assetSymbol.includes('_REGULAR')) {
+            assetSymbol += '_OTC';
+        }
+        
+        log(`🔄 GO: Force generating signal for ${assetSymbol}...`);
+        updateStatusDot('trading');
+        
+        // Call force-generate endpoint for this specific asset
+        GM_xmlhttpRequest({
+            method: 'POST',
+            url: CONFIG.API_URL + `/signals/force-generate/asset/${encodeURIComponent(assetSymbol)}?wait_for_candle=false`,
+            headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+            timeout: 15000,
+            onload: function(res) {
+                try {
+                    const data = JSON.parse(res.responseText);
+                    log(`📡 Force-generate response: ${res.status}`);
+                    
+                    if (data.success && data.signals && data.signals.length > 0) {
+                        const signal = data.signals[0];
+                        log(`✅ FORCE SIGNAL: ${signal.direction} ${signal.symbol} (${Math.round(signal.confidence || signal.probability || 85)}%)`);
+                        
+                        // Build trade signal
+                        const tradeSignal = {
+                            direction: signal.direction,
+                            symbol: signal.symbol || assetSymbol,
+                            confidence: signal.confidence || signal.probability || 85,
+                            source: 'FORCE_GENERATE',
+                            expiration_seconds: signal.expiry_seconds || signal.expiration_minutes * 60 || 60,
+                            _willSwitch: false
+                        };
+                        
+                        // Execute the trade
+                        executeScanTrade(tradeSignal).catch(err => {
+                            log(`❌ Trade execution error: ${err.message}`);
+                            updateStatusDot('connected');
+                        });
+                    } else if (data.success === false) {
+                        log(`⚠️ Force generate failed: ${data.error || data.message || 'Unknown error'}`);
+                        // Fallback to scan-markets
+                        log('🔄 Falling back to scan-markets...');
+                        doScan(true, true);
+                    } else {
+                        log('⚠️ No signals from force-generate, trying scan...');
+                        doScan(true, true);
+                    }
+                } catch (e) {
+                    log(`❌ Parse error: ${e.message}`);
+                    // Fallback to scan
+                    doScan(true, true);
+                }
+            },
+            onerror: function(e) {
+                log('❌ Force-generate connection error, falling back to scan...');
+                doScan(true, true);
+            },
+            ontimeout: function() {
+                log('❌ Force-generate timeout, falling back to scan...');
+                doScan(true, true);
+            }
+        });
     }
 
     function resetToDefaults() {

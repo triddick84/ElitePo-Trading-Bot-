@@ -892,7 +892,8 @@ async def force_generate_signal_for_asset(asset_symbol: str, wait_for_candle: bo
     """
     try:
         # Get market data for the specific asset
-        market_data_service = RealMarketDataService()
+        # Strip _OTC/_regular suffix for data lookup
+        base_symbol = asset_symbol.replace('_OTC', '').replace('_otc', '').replace('_regular', '').replace('_REGULAR', '')
         
         # Determine asset type from symbol
         asset_type = AssetType.FOREX  # Default
@@ -905,64 +906,79 @@ async def force_generate_signal_for_asset(asset_symbol: str, wait_for_candle: bo
         elif any(index in asset_symbol.upper() for index in ['SPX', 'NAS', 'DJ', 'FTSE', 'DAX']):
             asset_type = AssetType.INDICES
         
-        # Try to get real-time data for the asset
+        # PRIMARY: Try OANDA data (most reliable for forex)
         target_data = None
         try:
-            data_dict = market_data_service.get_real_time_data(asset_symbol, asset_type.value)
-            if data_dict:
-                # Convert dictionary to MarketData object
+            oanda_symbol = base_symbol
+            if len(base_symbol) == 6 and '_' not in base_symbol:
+                oanda_symbol = f"{base_symbol[:3]}_{base_symbol[3:]}"
+            
+            oanda_df = enhanced_oanda.get_candles(oanda_symbol, "M1", 5)
+            if oanda_df is not None and len(oanda_df) > 0:
+                current_price = float(oanda_df['close'].iloc[-1])
+                logger.info(f"📊 OANDA price for {base_symbol}: {current_price:.5f}")
                 from trading_models import MarketData
                 target_data = MarketData(
-                    symbol=asset_symbol,
-                    price=data_dict.get('price', 0.0),
-                    timestamp=datetime.now(timezone.utc),
-                    asset_type=asset_type,
-                    volume=data_dict.get('volume', 0)
-                )
-        except Exception as e:
-            logger.warning(f"Could not get real-time data for {asset_symbol}: {e}")
-            target_data = None
-        
-        if not target_data:
-            # Create fallback market data using yfinance
-            import yfinance as yf
-            
-            # Convert symbol to yfinance format
-            yf_symbol = asset_symbol
-            if asset_symbol == 'BTCUSD':
-                yf_symbol = 'BTC-USD'
-            elif asset_symbol == 'ETHUSD':
-                yf_symbol = 'ETH-USD'
-            elif asset_symbol == 'EURUSD':
-                yf_symbol = 'EURUSD=X'
-            elif asset_symbol == 'GBPUSD':
-                yf_symbol = 'GBPUSD=X'
-            elif '/' in asset_symbol:
-                # Handle format like EUR/USD
-                yf_symbol = asset_symbol.replace('/', '') + '=X'
-            
-            ticker = yf.Ticker(yf_symbol)
-            hist = ticker.history(period="1d", interval="1m")
-            
-            if not hist.empty:
-                from trading_models import MarketData
-                current_price = float(hist['Close'].iloc[-1])
-                
-                target_data = MarketData(
-                    symbol=asset_symbol,
+                    symbol=base_symbol,
                     price=current_price,
                     timestamp=datetime.now(timezone.utc),
                     asset_type=asset_type,
-                    volume=float(hist['Volume'].iloc[-1]) if 'Volume' in hist else 0
+                    volume=0
                 )
+        except Exception as e:
+            logger.warning(f"OANDA fetch failed for {base_symbol}: {e}")
         
+        # FALLBACK: Try RealMarketDataService
         if not target_data:
-            # Create emergency market data for force generation - NEVER fail
-            logger.warning(f"No market data available for {asset_symbol} - creating emergency market data for force generation")
+            try:
+                market_data_service = RealMarketDataService()
+                data_dict = market_data_service.get_real_time_data(base_symbol, asset_type.value)
+                if data_dict:
+                    from trading_models import MarketData
+                    target_data = MarketData(
+                        symbol=base_symbol,
+                        price=data_dict.get('price', 0.0),
+                        timestamp=datetime.now(timezone.utc),
+                        asset_type=asset_type,
+                        volume=data_dict.get('volume', 0)
+                    )
+            except Exception as e:
+                logger.warning(f"RealMarketDataService failed for {base_symbol}: {e}")
+        
+        # FALLBACK 2: yfinance (wrapped in try/except)
+        if not target_data:
+            try:
+                import yfinance as yf
+                yf_symbol = base_symbol
+                if base_symbol == 'BTCUSD':
+                    yf_symbol = 'BTC-USD'
+                elif base_symbol == 'ETHUSD':
+                    yf_symbol = 'ETH-USD'
+                elif len(base_symbol) == 6:
+                    yf_symbol = base_symbol + '=X'
+                
+                ticker = yf.Ticker(yf_symbol)
+                hist = ticker.history(period="1d", interval="1m")
+                
+                if not hist.empty:
+                    from trading_models import MarketData
+                    target_data = MarketData(
+                        symbol=base_symbol,
+                        price=float(hist['Close'].iloc[-1]),
+                        timestamp=datetime.now(timezone.utc),
+                        asset_type=asset_type,
+                        volume=float(hist['Volume'].iloc[-1]) if 'Volume' in hist else 0
+                    )
+            except Exception as e:
+                logger.warning(f"yfinance failed for {base_symbol}: {e}")
+        
+        # EMERGENCY: Create default market data - NEVER fail
+        if not target_data:
+            logger.warning(f"No market data for {base_symbol} - using emergency defaults")
             from trading_models import MarketData
             target_data = MarketData(
-                symbol=asset_symbol,
-                price=1.0000 if asset_type == AssetType.FOREX else 100.0,  # Default price based on asset type
+                symbol=base_symbol,
+                price=1.0000 if asset_type == AssetType.FOREX else 100.0,
                 timestamp=datetime.now(timezone.utc),
                 asset_type=asset_type,
                 volume=0

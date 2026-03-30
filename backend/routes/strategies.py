@@ -30,8 +30,17 @@ except ImportError:
     ultra_high_accuracy_5s = None
     get_ultra_high_accuracy_signal = None
 from routes import db as _db
+from custom_strategy_service import get_custom_strategy_service
 
 adaptive_strategy_service_instance = AdaptiveStrategyService(_db)
+
+# Lazy service accessor for custom strategy service
+_custom_strategy_service = None
+async def get_strategy_service():
+    global _custom_strategy_service
+    if _custom_strategy_service is None:
+        _custom_strategy_service = get_custom_strategy_service(db)
+    return _custom_strategy_service
 
 from routes.models import StrategySelectionRequest
 from pathlib import Path
