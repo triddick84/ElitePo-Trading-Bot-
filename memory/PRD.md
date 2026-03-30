@@ -25,6 +25,10 @@
 - All 22 API endpoints verified working (100% pass rate)
 - Route modules: auth.py, signals.py, strategies.py, trading.py, ml.py, integrations.py, pocket_option.py, backtest.py
 
+### Bug Fixes (March 30, 2026)
+- **GO Button Fix**: Tampermonkey GO button now calls `/api/signals/force-generate/asset/{symbol}` directly using OANDA data as primary source. Stripped _OTC suffix for proper symbol lookup. yfinance fallback wrapped in error handling.
+- **Strategy Toggle Fix**: Added missing `get_strategy_service()` function to `routes/strategies.py` that was lost during refactoring. Users can now activate/deactivate saved strategies.
+
 ### AI/ML Accuracy Optimization v3.1 (March 29, 2026)
 **Comprehensive optimization for signal trade accuracy (was 50-60%, target 70%+)**
 
