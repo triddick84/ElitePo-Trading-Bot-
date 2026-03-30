@@ -497,6 +497,8 @@ async def get_bot_status():
     except Exception as e:
         logging.error(f"Error getting bot status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/market/data")
 async def get_market_data():
     """Get current market data for all tracked assets"""
     try:
@@ -586,6 +588,8 @@ async def get_performance_history(days: int = 30):
     except Exception as e:
         logging.error(f"Error getting performance history: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/config")
 async def get_config():
     """Get current bot configuration with proper defaults"""
     try:

@@ -1,8 +1,9 @@
 # GPT Signal Bot - Product Requirements Document
 
-## Last Updated: March 26, 2026
+## Last Updated: March 30, 2026
 
 ## Current Status
+✅ **Backend Refactoring Complete** - server.py reduced from 15,631 to ~3,780 lines. 8 route modules in /app/backend/routes/
 ✅ **AI/ML v3.1 Optimized** - Stricter filtering pipeline, regime-aware confidence, feature agreement scoring
 ✅ **Holly Crossover Strategy (5s/15s/30s)** - EMA(12) x WMA(23) reversal crossover with S/R confirmation
 ✅ **Golden One Moment 30s Strategy** - RSI(2) + Stochastic(4,3,3) mean reversion, 30s expiration
@@ -15,6 +16,14 @@
 ✅ **Backend Data Sources** - OANDA (primary), yfinance (fallback) - for regular forex
 
 ## Recent Updates (March 28, 2026)
+
+### Backend Refactoring Complete (March 30, 2026)
+**Massive restructuring of server.py monolith into modular route files**
+- Extracted ~12,000 lines from server.py into 8 route modules under `/app/backend/routes/`
+- Fixed all missing imports (lazy imports for circular dependencies, direct imports for safe modules)
+- Restored missing route decorators (GET /api/config, GET /api/market/data)
+- All 22 API endpoints verified working (100% pass rate)
+- Route modules: auth.py, signals.py, strategies.py, trading.py, ml.py, integrations.py, pocket_option.py, backtest.py
 
 ### AI/ML Accuracy Optimization v3.1 (March 29, 2026)
 **Comprehensive optimization for signal trade accuracy (was 50-60%, target 70%+)**
