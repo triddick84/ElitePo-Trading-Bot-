@@ -3195,16 +3195,44 @@ class ForceSignalGenerator:
         """
         Fetch REAL market data from multi-source hub
         NO SIMULATED DATA - Returns empty list if real data unavailable
-        OPTIMIZED: Use asyncio.run() for faster execution
+        OPTIMIZED: Uses OANDA as primary, realtime hub as secondary, yfinance as fallback
         """
         try:
-            # PRIORITY 1: Try real-time hub if available
+            # Normalize symbol for OANDA (EURUSD → EUR_USD)
+            oanda_symbol = symbol.replace('_OTC', '').replace('OTC', '').replace('_regular', '').replace(' ', '')
+            if '_' not in oanda_symbol and len(oanda_symbol) == 6 and oanda_symbol.isalpha():
+                oanda_symbol = f"{oanda_symbol[:3]}_{oanda_symbol[3:]}"
+            
+            # Map interval to OANDA granularity
+            granularity_map = {'1m': 'M1', '5m': 'M5', '15m': 'M15', '1h': 'H1', '4h': 'H4', '1d': 'D'}
+            oanda_gran = granularity_map.get(interval, 'M1')
+            
+            # PRIORITY 1: Use OANDA (most reliable for forex)
+            try:
+                from enhanced_oanda_service import enhanced_oanda
+                if enhanced_oanda and enhanced_oanda.is_configured:
+                    df = enhanced_oanda.get_candles(oanda_symbol, oanda_gran, 100)
+                    if df is not None and len(df) >= 10:
+                        data = []
+                        for timestamp, row in df.iterrows():
+                            data.append({
+                                'timestamp': timestamp,
+                                'open': float(row['open']),
+                                'high': float(row['high']),
+                                'low': float(row['low']),
+                                'close': float(row['close']),
+                                'volume': float(row.get('volume', 0))
+                            })
+                        logger.info(f"✅ OANDA: {len(data)} real candles for {oanda_symbol} ({oanda_gran})")
+                        return data
+            except Exception as e:
+                logger.warning(f"⚠️ OANDA error for {oanda_symbol}: {e}")
+            
+            # PRIORITY 2: Try real-time hub if available
             if self.realtime_hub:
                 logger.info(f"📡 Fetching REAL-TIME data for {symbol} ({interval})")
                 
                 try:
-                    # OPTIMIZED: Use asyncio.run() instead of creating new event loop
-                    # Fetch 100 candles (reduced from 200 for speed)
                     candles = asyncio.run(
                         self.realtime_hub.get_historical_candles(symbol, interval, 100)
                     )
@@ -3212,16 +3240,13 @@ class ForceSignalGenerator:
                     if candles and len(candles) > 0:
                         logger.info(f"✅ REAL DATA: {len(candles)} candles from {candles[0].get('source', 'multi-source')} for {symbol}")
                         return candles
-                    else:
-                        logger.warning(f"⚠️ No real data available from real-time hub for {symbol}")
                 except Exception as e:
                     logger.warning(f"⚠️ Real-time hub error for {symbol}: {e}")
             
-            # FALLBACK: Try yfinance as last resort (still real data)
+            # FALLBACK: Try yfinance as last resort
             logger.info(f"📊 Falling back to yfinance for {symbol} ({interval})")
             symbol_variants = [symbol]
             
-            # Add common yfinance symbol formats
             if '=' not in symbol:
                 if any(pair in symbol.upper() for pair in ['EUR', 'GBP', 'USD', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD']):
                     symbol_variants.append(f"{symbol}=X")
@@ -3231,21 +3256,14 @@ class ForceSignalGenerator:
             for variant in symbol_variants:
                 try:
                     ticker = yf.Ticker(variant)
-                    
-                    # Get appropriate period based on interval
                     period_map = {
-                        '1m': '1d',     # 1 day of 1-minute data
-                        '5m': '5d',     # 5 days of 5-minute data
-                        '15m': '1mo',   # 1 month of 15-minute data
-                        '1h': '3mo',    # 3 months of hourly data
-                        '4h': '1y',     # 1 year of 4-hour data
-                        '1d': '2y'      # 2 years of daily data
+                        '1m': '1d', '5m': '5d', '15m': '1mo',
+                        '1h': '3mo', '4h': '1y', '1d': '2y'
                     }
-                    
                     period = period_map.get(interval, '1mo')
                     hist = ticker.history(period=period, interval=interval)
                     
-                    if not hist.empty and len(hist) >= 10:  # Minimum 10 candles for valid analysis
+                    if not hist.empty and len(hist) >= 10:
                         data = []
                         for timestamp, row in hist.iterrows():
                             data.append({
@@ -3256,7 +3274,6 @@ class ForceSignalGenerator:
                                 'close': float(row['Close']),
                                 'volume': float(row['Volume']) if 'Volume' in row else 0
                             })
-                        
                         logger.info(f"✅ YFINANCE: {len(data)} real candles for {variant} ({interval})")
                         return data
                         
@@ -3264,7 +3281,6 @@ class ForceSignalGenerator:
                     logger.debug(f"yfinance failed for {variant}: {e}")
                     continue
             
-            # CRITICAL: NO SIMULATED DATA - Return empty if no real data available
             logger.error(f"❌ INSUFFICIENT REAL DATA for {symbol} ({interval}) - Cannot generate reliable signal")
             return []
             

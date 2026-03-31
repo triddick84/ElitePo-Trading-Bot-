@@ -3160,7 +3160,11 @@
             .replace(/\s+/g, '')
             .replace('/', '')
             .toUpperCase();
-        // Normalize to OTC format
+        
+        // Remove trailing OTC or REGULAR (without underscore) then add proper suffix
+        assetSymbol = assetSymbol.replace(/OTC$/i, '').replace(/REGULAR$/i, '');
+        
+        // Ensure proper _OTC suffix
         if (!assetSymbol.includes('_OTC') && !assetSymbol.includes('_REGULAR')) {
             assetSymbol += '_OTC';
         }
