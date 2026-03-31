@@ -29,6 +29,14 @@
 - **GO Button Fix**: Tampermonkey GO button now calls `/api/signals/force-generate/asset/{symbol}` directly using OANDA data as primary source. Stripped _OTC suffix for proper symbol lookup. yfinance fallback wrapped in error handling.
 - **Strategy Toggle Fix**: Added missing `get_strategy_service()` function to `routes/strategies.py` that was lost during refactoring. Users can now activate/deactivate saved strategies.
 
+### Multi-Asset Scan & Signal Optimization (March 31, 2026)
+- **Tampermonkey Multi-Asset Scan**: Fixed doBackendScan to properly scan all favorites when AUTO is off. Added fallback: when asset switching fails, tries to find a signal for the current asset instead of skipping the trade entirely. Extended default pairs from 4 to 6.
+- **Deep Confluence Analyzer v2**: Implemented weighted confirmation scoring (Tier1=3pts for RSI extremes/crossovers, Tier2=2pts for supporting signals, 1pt for others). Added 6 new confirmation types (RECENT_BULLISH/BEARISH_CANDLES, MACD_POSITIVE/NEGATIVE_ZONE, ABOVE/BELOW_RISING/FALLING_EMA21). Reduced min_confirmations from 5→4 for better signal frequency while maintaining accuracy.
+- **ML Cross-Validation**: scan-markets now validates signals against the Stacking Ensemble ML system. When both deep analyzer and ML agree, confidence gets a +5% boost.
+- **ML Probability Threshold**: Raised from 0.58 to 0.60 for stricter filtering.
+- **OANDA Symbol Normalization**: Fixed get_candles to auto-normalize symbols (AUDUSD→AUD_USD).
+- **MongoDB _id Fix**: Fixed duplicate key error caused by explicit `_id: None` in signal inserts.
+
 ### AI/ML Accuracy Optimization v3.1 (March 29, 2026)
 **Comprehensive optimization for signal trade accuracy (was 50-60%, target 70%+)**
 
