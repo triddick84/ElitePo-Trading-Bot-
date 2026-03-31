@@ -154,7 +154,7 @@ class DeepMarketAnalyzer:
     """
     
     def __init__(self):
-        self.min_confirmations = 5  # Raised for higher accuracy
+        self.min_confirmations = 4  # Balanced for accuracy + signal frequency
         self.min_volume_ratio = 1.2  # 20% above average
         self.divergence_lookback = 14
         self.sr_lookback = 50
@@ -723,6 +723,18 @@ class DeepMarketAnalyzer:
         if lows.iloc[-1] > lows.iloc[-2] > lows.iloc[-3]:
             call_confirmations.append("HIGHER_LOWS")
         
+        # 11. Recent bullish momentum (last 3 candles trending up)
+        if closes.iloc[-1] > closes.iloc[-3] and closes.iloc[-1] > opens.iloc[-1]:
+            call_confirmations.append("RECENT_BULLISH_CANDLES")
+        
+        # 12. MACD above zero (bullish bias)
+        if macd_line[-1] > 0 and macd_signal[-1] > 0:
+            call_confirmations.append("MACD_POSITIVE_ZONE")
+        
+        # 13. Price above EMA21 (medium-term bullish)
+        if current_price > ema_21[-1] and ema_21[-1] > ema_21[-3]:
+            call_confirmations.append("ABOVE_RISING_EMA21")
+        
         # ==========================================
         # PUT (SELL) CONFIRMATIONS
         # ==========================================
@@ -779,9 +791,53 @@ class DeepMarketAnalyzer:
         if highs.iloc[-1] < highs.iloc[-2] < highs.iloc[-3]:
             put_confirmations.append("LOWER_HIGHS")
         
+        # 11. Recent bearish momentum (last 3 candles trending down)
+        if closes.iloc[-1] < closes.iloc[-3] and closes.iloc[-1] < opens.iloc[-1]:
+            put_confirmations.append("RECENT_BEARISH_CANDLES")
+        
+        # 12. MACD below zero (bearish bias)
+        if macd_line[-1] < 0 and macd_signal[-1] < 0:
+            put_confirmations.append("MACD_NEGATIVE_ZONE")
+        
+        # 13. Price below EMA21 (medium-term bearish)
+        if current_price < ema_21[-1] and ema_21[-1] < ema_21[-3]:
+            put_confirmations.append("BELOW_FALLING_EMA21")
+        
         # ==========================================
         # DETERMINE SIGNAL DIRECTION
         # ==========================================
+        
+        # WEIGHTED CONFIRMATION SCORING
+        # Tier 1 (High-weight: 3 points) - Strong reversal signals
+        tier1_call = ['RSI_OVERSOLD', 'RSI_EXTREME_OVERSOLD', 'STOCHASTIC_BULLISH_CROSS', 'EMA_BULLISH_CROSSOVER', 'PRICE_AT_BB_LOWER', 'MACD_BULLISH_CROSSOVER']
+        tier1_put = ['RSI_OVERBOUGHT', 'RSI_EXTREME_OVERBOUGHT', 'STOCHASTIC_BEARISH_CROSS', 'EMA_BEARISH_CROSSOVER', 'PRICE_AT_BB_UPPER', 'MACD_BEARISH_CROSSOVER']
+        
+        # Tier 2 (Medium-weight: 2 points) - Supporting confirmations
+        tier2_call = ['STOCHASTIC_OVERSOLD', 'AT_SUPPORT_LEVEL', 'RSI_BULLISH_MOMENTUM', 'PRICE_NEAR_BB_LOWER', 'PRICE_ABOVE_EMA9', 'ABOVE_RISING_EMA21', 'MACD_POSITIVE_ZONE', 'RECENT_BULLISH_CANDLES']
+        tier2_put = ['STOCHASTIC_OVERBOUGHT', 'AT_RESISTANCE_LEVEL', 'RSI_BEARISH_MOMENTUM', 'PRICE_NEAR_BB_UPPER', 'PRICE_BELOW_EMA9', 'BELOW_FALLING_EMA21', 'MACD_NEGATIVE_ZONE', 'RECENT_BEARISH_CANDLES']
+        
+        # Score confirmations with weights
+        call_weighted_score = 0
+        for c in call_confirmations:
+            if c in tier1_call:
+                call_weighted_score += 3
+            elif c in tier2_call:
+                call_weighted_score += 2
+            elif c.startswith('BULLISH_DIVERGENCE') or c.startswith('PATTERN_'):
+                call_weighted_score += 3  # Divergences and patterns are high-value
+            else:
+                call_weighted_score += 1  # Default weight for others (HIGHER_LOWS, MACD_MOMENTUM)
+        
+        put_weighted_score = 0
+        for c in put_confirmations:
+            if c in tier1_put:
+                put_weighted_score += 3
+            elif c in tier2_put:
+                put_weighted_score += 2
+            elif c.startswith('BEARISH_DIVERGENCE') or c.startswith('PATTERN_'):
+                put_weighted_score += 3
+            else:
+                put_weighted_score += 1
         
         call_score = len(call_confirmations)
         put_score = len(put_confirmations)
@@ -795,48 +851,94 @@ class DeepMarketAnalyzer:
         if not volume_confirmed and volume_ratio < 0.8:
             avoid_reasons.append("LOW_VOLUME")
         
-        # Minimum confirmation requirement
+        # Minimum confirmation requirement (count-based)
         if call_score < self.min_confirmations and put_score < self.min_confirmations:
             return None  # Not enough confirmations
         
-        # Choose direction
-        if call_score > put_score and call_score >= self.min_confirmations:
+        # Choose direction based on WEIGHTED score (not just count)
+        if call_weighted_score > put_weighted_score and call_score >= self.min_confirmations:
             direction = "CALL"
             confirmations = call_confirmations
             conf_count = call_score
+            weighted_score = call_weighted_score
+            opposite_weighted = put_weighted_score
+        elif put_weighted_score > call_weighted_score and put_score >= self.min_confirmations:
+            direction = "PUT"
+            confirmations = put_confirmations
+            conf_count = put_score
+            weighted_score = put_weighted_score
+            opposite_weighted = call_weighted_score
+        elif call_score > put_score and call_score >= self.min_confirmations:
+            direction = "CALL"
+            confirmations = call_confirmations
+            conf_count = call_score
+            weighted_score = call_weighted_score
+            opposite_weighted = put_weighted_score
         elif put_score > call_score and put_score >= self.min_confirmations:
             direction = "PUT"
             confirmations = put_confirmations
             conf_count = put_score
+            weighted_score = put_weighted_score
+            opposite_weighted = call_weighted_score
         else:
             return None  # No clear direction
         
-        # Calculate confidence (stricter base, higher per-confirmation bonus)
-        base_confidence = 55
-        conf_bonus = conf_count * 6  # 6% per confirmation (was 5%)
-        divergence_bonus = 12 if any(d.divergence_type.startswith("bullish" if direction == "CALL" else "bearish") for d in divergences) else 0
-        pattern_bonus = 10 if any(p.direction == ("bullish" if direction == "CALL" else "bearish") and p.reliability >= 75 for p in patterns) else 0
-        volume_bonus = 5 if volume_confirmed else -8
+        # ==========================================
+        # CONFIDENCE CALCULATION (Optimized v2)
+        # ==========================================
         
-        confidence = min(95, base_confidence + conf_bonus + divergence_bonus + pattern_bonus + volume_bonus)
+        # Base confidence from weighted score (scaled to map weighted points → confidence)
+        # Min weighted score to pass: ~8 points (5 confirmations × avg 1.6 weight)
+        # Max typical weighted score: ~25 points (8 confirmations × avg 3 weight)
+        base_confidence = 52 + (weighted_score * 2.2)  # Scale: 8pts→69%, 12pts→78%, 16pts→87%
         
-        # Penalize conflicting signals: if opposite direction also has 3+ confirmations
+        # Divergence bonus (high predictive value)
+        divergence_bonus = 8 if any(d.divergence_type.startswith("bullish" if direction == "CALL" else "bearish") for d in divergences) else 0
+        
+        # Pattern bonus 
+        pattern_bonus = 6 if any(p.direction == ("bullish" if direction == "CALL" else "bearish") and p.reliability >= 75 for p in patterns) else 0
+        
+        # Volume bonus/penalty
+        volume_bonus = 4 if volume_confirmed else -6
+        
+        confidence = base_confidence + divergence_bonus + pattern_bonus + volume_bonus
+        
+        # TREND ALIGNMENT BONUS/PENALTY
+        if trend in [TrendDirection.STRONG_UP.value, "strong_uptrend"]:
+            if direction == "CALL":
+                confidence += 5  # Bonus for trading with trend
+            else:
+                confidence -= 8  # Penalty for counter-trend
+        elif trend in [TrendDirection.STRONG_DOWN.value, "strong_downtrend"]:
+            if direction == "PUT":
+                confidence += 5
+            else:
+                confidence -= 8
+        
+        # CONFLICT PENALTY (stricter)
         opposite_score = put_score if direction == "CALL" else call_score
         if opposite_score >= 3:
-            confidence -= (opposite_score - 2) * 5  # Penalty for conflicting signals
+            # Strong penalty when opposite has 3+ confirmations
+            confidence -= (opposite_score - 2) * 7
+        if opposite_weighted >= weighted_score * 0.6:
+            # Additional penalty when opposite weighted score is close
+            confidence -= 5
         
         # Reduce confidence for avoid reasons
-        confidence -= len(avoid_reasons) * 10
+        confidence -= len(avoid_reasons) * 8
+        
+        # Cap confidence
+        confidence = min(95, max(0, confidence))
         
         if confidence < 70:
             return None
         
-        # Determine quality
-        if confidence >= 85 and conf_count >= 6:
+        # Determine quality (tighter thresholds)
+        if confidence >= 88 and conf_count >= 7:
             quality = SignalQuality.PREMIUM
-        elif confidence >= 75 and conf_count >= 5:
+        elif confidence >= 78 and conf_count >= 5:
             quality = SignalQuality.HIGH
-        elif confidence >= 65 and conf_count >= 4:
+        elif confidence >= 70 and conf_count >= 4:
             quality = SignalQuality.MEDIUM
         else:
             quality = SignalQuality.LOW

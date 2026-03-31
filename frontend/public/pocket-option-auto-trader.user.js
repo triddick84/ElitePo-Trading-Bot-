@@ -3756,9 +3756,11 @@
                     return norm;
                 });
                 assetsToScan = assetList.join(',');
-                log(`🔍 BACKEND SCAN: ${favoritesFromBar.length} favorites`);
+                log(`🔍 MULTI-ASSET SCAN: ${favoritesFromBar.length} favorites`);
             } else {
-                assetsToScan = 'EURUSD_OTC,GBPUSD_OTC,USDJPY_OTC,AUDUSD_OTC';
+                // Fallback: default popular pairs
+                assetsToScan = 'EURUSD_OTC,GBPUSD_OTC,USDJPY_OTC,AUDUSD_OTC,EURGBP_OTC,EURJPY_OTC';
+                log(`🔍 MULTI-ASSET SCAN: Using default 6 pairs (no favorites detected)`);
             }
         }
 
@@ -3783,21 +3785,27 @@
                     const data = JSON.parse(res.responseText);
                     const signals = data.top_signals || data.signals || [];
                     
-                    log(`📊 ${signals.length} signal(s)`);
+                    log(`📊 ${signals.length} signal(s) from ${data.scanned_assets || '?'} assets`);
                     
                     if (data.success && signals.length > 0) {
+                        // Log all signals found
+                        signals.forEach((s, i) => {
+                            log(`  #${i+1}: ${s.direction} ${s.symbol} (${Math.round(s.confidence)}%)`);
+                        });
+                        
                         const bestSignal = signals[0];
                         bestSignal._willSwitch = willSwitchAssets;
+                        bestSignal._allSignals = signals; // Store all signals for fallback
                         bestSignal.source = 'BACKEND_OANDA';
                         
-                        log(`✅ ${bestSignal.direction} ${bestSignal.symbol} (${Math.round(bestSignal.confidence)}%)`);
+                        log(`✅ Best: ${bestSignal.direction} ${bestSignal.symbol} (${Math.round(bestSignal.confidence)}%)`);
                         
                         executeScanTrade(bestSignal).catch(err => {
                             log(`❌ Trade error: ${err.message}`);
                             updateStatusDot('connected');
                         });
                     } else {
-                        log('⚠️ No signals');
+                        log('⚠️ No signals met confidence threshold');
                         updateStatusDot('connected');
                     }
                 } catch (e) {
@@ -3836,6 +3844,8 @@
         const shouldSwitch = signal._willSwitch === true;
         log(`📍 shouldSwitch=${shouldSwitch}, _willSwitch=${signal._willSwitch}`);
         
+        let activeSignal = signal; // The signal we'll actually trade
+        
         if (shouldSwitch && signal.symbol) {
             const targetNorm = normalizeAsset(signal.symbol);
             const currentAssetNow = getCurrentAsset();
@@ -3845,7 +3855,7 @@
             const currentBase = currentNorm.substring(0, 6);
             
             if (targetBase !== currentBase) {
-                log(`🔄 Switching to ${signal.symbol}...`);
+                log(`🔄 Best signal is for ${signal.symbol}, currently on ${currentAssetNow}`);
                 let switched = false;
                 
                 detectFavoritesBar();
@@ -3868,17 +3878,36 @@
                 }
                 
                 if (!switched) {
-                    log(`❌ Switch failed - skipping trade`);
-                    updateStatusDot('connected');
-                    return;
+                    // FALLBACK: Can't switch assets - try to find a signal for current asset
+                    log(`⚠️ Switch failed - looking for signal matching current asset ${currentAssetNow}...`);
+                    const allSignals = signal._allSignals || [];
+                    
+                    if (allSignals.length > 0) {
+                        const currentAssetSignal = allSignals.find(s => {
+                            const sBase = normalizeAsset(s.symbol).substring(0, 6);
+                            return sBase === currentBase;
+                        });
+                        
+                        if (currentAssetSignal) {
+                            log(`✅ FALLBACK: Found signal for current asset: ${currentAssetSignal.direction} ${currentAssetSignal.symbol} (${Math.round(currentAssetSignal.confidence)}%)`);
+                            activeSignal = currentAssetSignal;
+                            // Don't return - continue to execute trade on current asset
+                        } else {
+                            // No signal for current asset either - try next best regardless
+                            log(`⚠️ No signal for ${currentAssetNow}. Trading best signal on current chart anyway.`);
+                            // Continue with original signal direction on current asset
+                        }
+                    } else {
+                        log(`⚠️ No fallback signals available. Trading best direction on current chart.`);
+                    }
                 }
                 
                 await sleep(500);
             }
         }
 
-        // Determine direction
-        let direction = (signal.direction || '').toUpperCase();
+        // Determine direction (use activeSignal which may have been changed by fallback)
+        let direction = (activeSignal.direction || '').toUpperCase();
         let isCall = direction === 'CALL' || direction === 'BUY' || direction === 'UP';
         
         if (invertEnabled) {
@@ -3887,8 +3916,8 @@
         }
 
         const finalDirection = isCall ? 'CALL' : 'PUT';
-        log(`📊 Placing ${finalDirection}...`);
-        updateSignalDisplay(finalDirection, signal.symbol, isCall ? 'call' : 'put', '🔍');
+        log(`📊 Placing ${finalDirection} on ${activeSignal.symbol || 'current asset'}...`);
+        updateSignalDisplay(finalDirection, activeSignal.symbol, isCall ? 'call' : 'put', '🔍');
 
         playScanSignalSound();
 

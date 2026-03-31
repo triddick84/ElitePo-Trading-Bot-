@@ -1,0 +1,75 @@
+{
+  "summary": "Iteration 16 testing complete. All 13 backend tests passed (100%). Frontend login and dashboard navigation verified working. Key features tested: scan-markets endpoint with deep_confluence analysis, force-generate/asset endpoint for Tampermonkey GO button, strategy toggle functionality, ML system stats, OANDA symbol normalization.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_scan_markets_ml_optimization.py",
+    "/app/test_reports/pytest/pytest_scan_markets_ml_optimization.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Deep market analyzer has weighted confirmations (Tier1=3pts, Tier2=2pts, other=1pt) with min_confirmations=4",
+    "ML probability threshold is 0.60 for strict filtering",
+    "scan-markets endpoint integrates ML cross-validation for confidence boost when both systems agree",
+    "OANDA symbol normalization in get_candles converts EURUSD_OTC -> EUR_USD correctly",
+    "force-generate/asset endpoint returns success:true with signals for Tampermonkey GO button"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_scan_markets_ml_optimization.py"
+  ],
+  "success_rate": {
+    "backend": "100% (13/13 tests passed)",
+    "frontend": "100% (login, dashboard, strategies page all working)"
+  },
+  "test_credentials": "Username: testuser, Password: test123",
+  "seed_data_creation": "None - using existing data",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All features from iteration 16 are working correctly. The scan-markets endpoint returns signals with analysis_type field (deep_confluence, momentum_buster_15s, etc.). Response uses 'top_signals' key instead of 'signals'. ML stats endpoint wraps data in 'stats' key. Strategy toggle works via POST /api/custom-strategies/{id}/toggle?is_active=true/false.",
+  "mocked_apis": {
+    "note": "MT4/TradingView webhooks are MOCKED. ML model is trained with 54.5% accuracy."
+  },
+  "endpoints_tested": {
+    "health": ["GET /api/health ✅"],
+    "auth": ["POST /api/auth/login ✅"],
+    "scan_markets": [
+      "GET /api/signals/scan-markets?assets=EURUSD_OTC,GBPUSD_OTC,USDJPY_OTC,AUDUSD_OTC&min_confidence=70 ✅",
+      "GET /api/signals/scan-markets?assets=AUDUSD_OTC&min_confidence=70 ✅ (OANDA normalization)",
+      "GET /api/signals/scan-markets?use_deep_analysis=true ✅"
+    ],
+    "force_generate": [
+      "POST /api/signals/force-generate/asset/EURUSD_OTC?wait_for_candle=false ✅",
+      "POST /api/signals/force-generate/asset/GBPUSD_OTC?wait_for_candle=false ✅",
+      "POST /api/signals/force-generate/asset/EURUSD?wait_for_candle=false ✅"
+    ],
+    "strategies": [
+      "GET /api/custom-strategies ✅",
+      "POST /api/custom-strategies/{id}/toggle?is_active=true ✅",
+      "POST /api/custom-strategies/{id}/toggle?is_active=false ✅"
+    ],
+    "ml": ["GET /api/maximized-ml/stats ✅"]
+  },
+  "features_verified": {
+    "scan_markets_multi_asset": "Returns signals from multiple assets with analysis_type and confirmations",
+    "oanda_normalization": "AUDUSD_OTC correctly normalized to AUD_USD for OANDA API",
+    "deep_confluence_analysis": "Signals include quality, confirmations, ml_validated fields",
+    "force_generate_asset": "Returns success:true with signal for Tampermonkey GO button",
+    "strategy_toggle": "Activate/deactivate strategies via toggle endpoint",
+    "ml_system_stats": "Returns trained status, accuracy, feature count, regime info"
+  },
+  "ml_system_status": {
+    "is_trained": true,
+    "model_accuracy": "54.5%",
+    "version": "3.0.0",
+    "feature_count": 97,
+    "current_regime": "normal",
+    "models_in_ensemble": ["XGBoost", "LightGBM", "RandomForest", "GradientBoosting"]
+  }
+}

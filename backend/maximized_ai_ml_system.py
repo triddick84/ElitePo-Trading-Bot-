@@ -749,8 +749,9 @@ class MaximizedAIMLSystem:
             
             # === STRICT PROBABILITY FILTER ===
             # Reject signals where model probability is too close to 50/50
-            if raw_probability < 0.58:
-                logger.debug(f"ML signal rejected: probability {raw_probability:.3f} < 0.58 threshold")
+            # 0.60 threshold = model must be at least 60% confident
+            if raw_probability < 0.60:
+                logger.debug(f"ML signal rejected: probability {raw_probability:.3f} < 0.60 threshold")
                 return None
             
             # === REGIME-AWARE CONFIDENCE ADJUSTMENT ===

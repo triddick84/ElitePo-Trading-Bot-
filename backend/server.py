@@ -3403,10 +3403,9 @@ async def tampermonkey_force_generate(
         signal["expiration_minutes"] = expiry_seconds / 60
         
         # Save to database for /signals/latest to pick up
-        await db.trading_signals.insert_one({
-            **signal,
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        })
+        signal_doc = {**signal, "timestamp": datetime.now(timezone.utc).isoformat()}
+        signal_doc.pop('_id', None)
+        await db.trading_signals.insert_one(signal_doc)
         
         logger.info(f"Force generated signal: {signal['direction']} {signal['symbol']} @ {timeframe}")
         

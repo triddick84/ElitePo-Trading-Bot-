@@ -424,6 +424,12 @@ class EnhancedOandaService:
             return pd.DataFrame()
         
         try:
+            # Normalize instrument symbol to OANDA format (e.g. EURUSD → EUR_USD)
+            normalized = instrument.replace('_OTC', '').replace('OTC', '').replace(' ', '')
+            if '_' not in normalized and len(normalized) == 6 and normalized.isalpha():
+                normalized = f"{normalized[:3]}_{normalized[3:]}"
+            instrument = normalized
+            
             params = {
                 "granularity": granularity,
                 "count": min(count, 5000)

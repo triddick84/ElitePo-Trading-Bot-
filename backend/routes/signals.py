@@ -533,7 +533,9 @@ async def get_latest_signal(use_enhanced: bool = Query(True, description="Use en
                     }
                     
                     # Save to database
-                    await db.trading_signals.insert_one({**new_signal, "_id": None})
+                    signal_doc = {**new_signal}
+                    signal_doc.pop('_id', None)
+                    await db.trading_signals.insert_one(signal_doc)
                     
                     # Remove _id before returning
                     if "_id" in new_signal:
@@ -1847,10 +1849,39 @@ async def scan_markets_for_signals(
                 if use_deep_analysis:
                     signal = get_deep_analysis_signal(candles, current_price, expiry_to_use)
                     
+                    # Try ML system for cross-validation
+                    ml_agrees = False
+                    ml_confidence = 0
+                    try:
+                        from maximized_ai_ml_system import maximized_ai_ml
+                        if maximized_ai_ml and maximized_ai_ml.is_trained:
+                            ml_df = pd.DataFrame(candles)
+                            for col in ['open', 'high', 'low', 'close']:
+                                if col in ml_df.columns:
+                                    ml_df[col] = pd.to_numeric(ml_df[col], errors='coerce')
+                            ml_pred = maximized_ai_ml.predict(ml_df)
+                            if ml_pred:
+                                ml_confidence = ml_pred.get('confidence', 0)
+                                ml_direction = ml_pred.get('direction', '')
+                                if signal and ml_direction == signal.get('direction', ''):
+                                    ml_agrees = True
+                    except Exception:
+                        pass
+                    
                     if signal and signal.get("confidence", 0) >= min_confidence:
-                        # Prefer HIGH or PREMIUM quality signals
                         quality = signal.get("quality", "low")
                         if quality in ["high", "premium", "medium"]:
+                            # ML confluence bonus: boost confidence when both systems agree
+                            if ml_agrees and ml_confidence >= 70:
+                                signal["confidence"] = min(95, signal["confidence"] + 5)
+                                signal["ml_validated"] = True
+                                signal["ml_confidence"] = ml_confidence
+                            elif ml_agrees:
+                                signal["ml_validated"] = True
+                                signal["ml_confidence"] = ml_confidence
+                            else:
+                                signal["ml_validated"] = False
+                            
                             signal["symbol"] = asset
                             signal["oanda_symbol"] = oanda_symbol
                             signal["expiry_seconds"] = expiry_to_use
