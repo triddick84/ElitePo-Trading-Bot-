@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://pocket-option-auto-2.preview.emergentagent.com
-// @version      7.4.0
+// @version      7.5.0
 // @description  Auto-trade OTC forex on Pocket Option. v7.4.0 - Holly Crossover + Multi-asset scan
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
@@ -18,6 +18,8 @@
 // @grant        GM_getValue
 // @grant        GM_log
 // @connect      signal-bot-staging.preview.emergentagent.com
+// @connect      pocket-option-auto-2.preview.emergentagent.com
+// @connect      *.preview.emergentagent.com
 // @connect      *
 // @run-at       document-idle
 // @noframes
@@ -3169,61 +3171,121 @@
             assetSymbol += '_OTC';
         }
         
-        log(`🔄 GO: Force generating signal for ${assetSymbol}...`);
+        log(`🔄 GO: Generating signal for ${assetSymbol}...`);
         updateStatusDot('trading');
         
-        // Call force-generate endpoint for this specific asset
+        // PRIMARY: Use scan-markets GET (simpler, more reliable)
+        const scanUrl = CONFIG.API_URL + `/signals/scan-markets?assets=${assetSymbol}&min_confidence=60`;
+        log(`📡 Calling: ${scanUrl}`);
+        
         GM_xmlhttpRequest({
-            method: 'POST',
-            url: CONFIG.API_URL + `/signals/force-generate/asset/${encodeURIComponent(assetSymbol)}?wait_for_candle=false`,
-            headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-            timeout: 15000,
+            method: 'GET',
+            url: scanUrl,
+            headers: { 'Accept': 'application/json' },
+            timeout: 20000,
             onload: function(res) {
                 try {
-                    const data = JSON.parse(res.responseText);
-                    log(`📡 Force-generate response: ${res.status}`);
-                    
-                    if (data.success && data.signals && data.signals.length > 0) {
-                        const signal = data.signals[0];
-                        log(`✅ FORCE SIGNAL: ${signal.direction} ${signal.symbol} (${Math.round(signal.confidence || signal.probability || 85)}%)`);
+                    log(`📡 Scan response: ${res.status}`);
+                    if (res.status === 200) {
+                        const data = JSON.parse(res.responseText);
+                        const signals = data.top_signals || data.signals || [];
                         
-                        // Build trade signal
-                        const tradeSignal = {
-                            direction: signal.direction,
-                            symbol: signal.symbol || assetSymbol,
-                            confidence: signal.confidence || signal.probability || 85,
-                            source: 'FORCE_GENERATE',
-                            expiration_seconds: signal.expiry_seconds || signal.expiration_minutes * 60 || 60,
-                            _willSwitch: false
-                        };
-                        
-                        // Execute the trade
-                        executeScanTrade(tradeSignal).catch(err => {
-                            log(`❌ Trade execution error: ${err.message}`);
-                            updateStatusDot('connected');
-                        });
-                    } else if (data.success === false) {
-                        log(`⚠️ Force generate failed: ${data.error || data.message || 'Unknown error'}`);
-                        // Fallback to scan-markets
-                        log('🔄 Falling back to scan-markets...');
-                        doScan(true, true);
-                    } else {
-                        log('⚠️ No signals from force-generate, trying scan...');
-                        doScan(true, true);
+                        if (data.success && signals.length > 0) {
+                            const signal = signals[0];
+                            log(`✅ GO SIGNAL: ${signal.direction} ${signal.symbol} (${Math.round(signal.confidence)}%) [${signal.analysis_type}]`);
+                            
+                            const tradeSignal = {
+                                direction: signal.direction,
+                                symbol: signal.symbol || assetSymbol,
+                                confidence: signal.confidence || 85,
+                                source: 'GO_SCAN',
+                                expiration_seconds: signal.expiry_seconds || 60,
+                                _willSwitch: false
+                            };
+                            
+                            executeScanTrade(tradeSignal).catch(err => {
+                                log(`❌ Trade execution error: ${err.message}`);
+                                updateStatusDot('connected');
+                            });
+                            return;
+                        }
                     }
+                    
+                    // No signal from scan - try force-generate
+                    log('⚠️ No scan signal, trying force-generate...');
+                    _goForceGenerate(assetSymbol);
+                    
                 } catch (e) {
                     log(`❌ Parse error: ${e.message}`);
-                    // Fallback to scan
-                    doScan(true, true);
+                    _goForceGenerate(assetSymbol);
                 }
             },
             onerror: function(e) {
-                log('❌ Force-generate connection error, falling back to scan...');
-                doScan(true, true);
+                log(`❌ Scan connection error - trying force-generate...`);
+                log(`   Error: ${JSON.stringify(e).substring(0, 200)}`);
+                _goForceGenerate(assetSymbol);
             },
             ontimeout: function() {
-                log('❌ Force-generate timeout, falling back to scan...');
-                doScan(true, true);
+                log('❌ Scan timeout - trying force-generate...');
+                _goForceGenerate(assetSymbol);
+            }
+        });
+    }
+    
+    function _goForceGenerate(assetSymbol) {
+        const forceUrl = CONFIG.API_URL + `/signals/force-generate/asset/${encodeURIComponent(assetSymbol)}?wait_for_candle=false`;
+        log(`📡 Force-generate: ${forceUrl}`);
+        
+        GM_xmlhttpRequest({
+            method: 'POST',
+            url: forceUrl,
+            headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+            timeout: 20000,
+            onload: function(res) {
+                try {
+                    log(`📡 Force response: ${res.status}`);
+                    const data = JSON.parse(res.responseText);
+                    
+                    if (data.success) {
+                        const signals = data.signals || [];
+                        const signal = signals[0] || data.signal;
+                        
+                        if (signal) {
+                            log(`✅ FORCED: ${signal.direction} ${signal.symbol || assetSymbol} (${signal.probability || signal.confidence || 85}%)`);
+                            
+                            const tradeSignal = {
+                                direction: signal.direction,
+                                symbol: signal.symbol || assetSymbol,
+                                confidence: signal.confidence || signal.probability || 85,
+                                source: 'FORCE_GENERATE',
+                                expiration_seconds: signal.expiry_seconds || 60,
+                                _willSwitch: false
+                            };
+                            
+                            executeScanTrade(tradeSignal).catch(err => {
+                                log(`❌ Trade error: ${err.message}`);
+                                updateStatusDot('connected');
+                            });
+                            return;
+                        }
+                    }
+                    
+                    log(`⚠️ Force-generate returned no signal`);
+                    updateStatusDot('connected');
+                } catch (e) {
+                    log(`❌ Force parse error: ${e.message}`);
+                    updateStatusDot('connected');
+                }
+            },
+            onerror: function(e) {
+                log(`❌ BOTH scan & force-generate failed. Check API connection.`);
+                log(`   API URL: ${CONFIG.API_URL}`);
+                log(`   Try opening this in browser: ${CONFIG.API_URL}/health`);
+                updateStatusDot('error');
+            },
+            ontimeout: function() {
+                log(`❌ Force-generate timeout. API may be slow.`);
+                updateStatusDot('error');
             }
         });
     }
@@ -3818,11 +3880,12 @@
                 }
             },
             onerror: function(e) {
-                log('❌ Connection error');
-                updateStatusDot('connected');
+                log(`❌ Scan connection error: ${JSON.stringify(e).substring(0, 200)}`);
+                log(`   API URL: ${apiUrl.substring(0, 100)}`);
+                updateStatusDot('error');
             },
             ontimeout: function() {
-                log('❌ Timeout');
+                log('❌ Scan timeout (15s)');
                 updateStatusDot('connected');
             }
         });
