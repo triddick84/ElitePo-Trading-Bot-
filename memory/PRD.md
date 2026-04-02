@@ -1,10 +1,13 @@
 # GPT Signal Bot - Product Requirements Document
 
-## Last Updated: March 30, 2026
+## Last Updated: April 2, 2026
 
 ## Current Status
 ✅ **Backend Refactoring Complete** - server.py reduced from 15,631 to ~3,780 lines. 8 route modules in /app/backend/routes/
 ✅ **AI/ML v3.1 Optimized** - Stricter filtering pipeline, regime-aware confidence, feature agreement scoring
+✅ **AI/ML Phase 2: LSTM/GRU Time-Series** - BiLSTM(64) + GRU(48) + Attention, 13 features, auto-labeling pipeline
+✅ **AI/ML Phase 3: PPO Reinforcement Learning** - Actor-Critic (128→64→3), trading environment simulation
+✅ **AI Ensemble System** - Combines Stacking (40%) + LSTM/GRU (35%) + PPO (25%) with weighted voting
 ✅ **Holly Crossover Strategy (5s/15s/30s)** - EMA(12) x WMA(23) reversal crossover with S/R confirmation
 ✅ **Golden One Moment 30s Strategy** - RSI(2) + Stochastic(4,3,3) mean reversion, 30s expiration
 ✅ **Risk Management System** - Sharpe ratio, drawdown protection, Kelly criterion position sizing
@@ -14,6 +17,41 @@
 ✅ **Momentum Buster 15s Strategy** - Momentum period 3, green/red bars, 15s expiration
 ✅ **1m Momentum Exhaustion Strategy** - RSI-2 + Stochastic + BB + Candlesticks (70-75% target)
 ✅ **Backend Data Sources** - OANDA (primary), yfinance (fallback) - for regular forex
+
+## Recent Updates (April 2, 2026)
+
+### AI/ML Phase 2 & 3 Complete (April 2, 2026)
+**LSTM/GRU Time-Series System v2.0** (`lstm_gru_system.py`)
+- Architecture: Bidirectional LSTM(64) + GRU(48) + Custom Attention Layer
+- Features: 13 technical indicators (returns, RSI-14, MACD, Bollinger %B, Stochastic, ATR, EMA ratio, momentum, volume ratio, candle body ratio, HH/LL indicator)
+- Training: Auto-labeling from price movement (BUY/SELL/HOLD), class weighting for imbalance
+- API Endpoints:
+  - `GET /api/lstm-gru/stats` - Model status and training history
+  - `POST /api/lstm-gru/predict?symbol=EUR_USD` - Get time-series prediction
+  - `POST /api/lstm-gru/train?symbol=EUR_USD&count=2000&epochs=30` - Train model
+
+**PPO Reinforcement Learning Agent v1.0** (`rl_ppo_agent.py`)
+- Architecture: Actor-Critic with 128→64 hidden layers
+- Environment: Custom trading environment with position tracking, transaction costs
+- Training: Generalized Advantage Estimation (GAE), clipped surrogate objective
+- Model persistence: Auto-loads saved models on startup
+- API Endpoints:
+  - `GET /api/ppo-rl/stats` - Agent status and training stats
+  - `POST /api/ppo-rl/predict?symbol=EUR_USD` - Get RL prediction
+  - `POST /api/ppo-rl/train?symbol=EUR_USD&count=2000&episodes=20` - Train agent
+
+**AI Ensemble Prediction** (`/api/ai-ensemble/predict`)
+- Combines all ML systems with weighted voting:
+  - Stacking Ensemble (XGBoost/LightGBM): 40% weight
+  - LSTM/GRU Time-Series: 35% weight  
+  - PPO Reinforcement Learning: 25% weight
+- Agreement bonus: +8% confidence for 3 agreeing, +4% for 2 agreeing
+- Integrated into scan-markets for multi-model validation
+
+### Bug Fixes (April 2, 2026)
+- **Background Task Fix**: Fixed `asyncio.coroutine` deprecation error in training endpoints (Python 3.11+ compatibility)
+- **PPO Model Loading**: Fixed PPO agent to load saved models on startup (was returning null predictions)
+- **NumPy Import**: Added missing numpy import to routes/ml.py
 
 ## Recent Updates (March 28, 2026)
 

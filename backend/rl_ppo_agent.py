@@ -148,6 +148,9 @@ class PPOAgent:
         self.critic_lr = 1e-3
         self.state_dim = None
         self._load_stats()
+        # Try to load saved models after loading stats
+        if self.is_trained and self.state_dim:
+            self._try_load()
 
     def _build(self, state_dim: int):
         self.state_dim = state_dim

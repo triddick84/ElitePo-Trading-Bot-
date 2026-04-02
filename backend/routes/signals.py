@@ -10,8 +10,25 @@ import uuid
 import os
 import asyncio
 import pandas as pd
+import numpy as np
 
 from routes import db, convert_numpy_types, logger
+
+# Import LSTM/GRU and PPO ML systems for advanced predictions
+try:
+    from lstm_gru_system import lstm_gru_system, FeatureEngine
+    LSTM_GRU_AVAILABLE = lstm_gru_system is not None
+except ImportError:
+    lstm_gru_system = None
+    FeatureEngine = None
+    LSTM_GRU_AVAILABLE = False
+
+try:
+    from rl_ppo_agent import ppo_agent
+    PPO_AVAILABLE = ppo_agent is not None
+except ImportError:
+    ppo_agent = None
+    PPO_AVAILABLE = False
 
 # Re-use the main api_router — routes are registered via include in server.py
 # This module uses a local router that gets included by server.py
@@ -36,6 +53,93 @@ import time
 # Initialize services
 adaptive_strategy_service_instance = AdaptiveStrategyService(db)
 continuous_scanner = ContinuousMarketScanner(force_signal_generator, db)
+
+
+def get_advanced_ml_ensemble_validation(candles: List[Dict], deep_signal: Optional[Dict] = None) -> Dict:
+    """
+    Get validation from advanced ML models (LSTM/GRU + PPO + Stacking).
+    Returns agreement status and confidence from each model.
+    """
+    result = {
+        "models_checked": 0,
+        "models_agreeing": 0,
+        "total_confidence": 0,
+        "ensemble_direction": None,
+        "predictions": {}
+    }
+    
+    if not candles or len(candles) < 30:
+        return result
+    
+    target_direction = deep_signal.get("direction", "").upper() if deep_signal else None
+    
+    # 1. LSTM/GRU Time-Series Prediction
+    try:
+        if LSTM_GRU_AVAILABLE and lstm_gru_system:
+            candle_dicts = [{'open': float(c.get('open', c.get('Open', 0))),
+                            'high': float(c.get('high', c.get('High', 0))),
+                            'low': float(c.get('low', c.get('Low', 0))),
+                            'close': float(c.get('close', c.get('Close', 0))),
+                            'volume': float(c.get('volume', c.get('Volume', 0)))}
+                           for c in candles]
+            lstm_pred = lstm_gru_system.predict(candle_dicts)
+            if lstm_pred:
+                result["models_checked"] += 1
+                result["predictions"]["lstm_gru"] = lstm_pred
+                lstm_dir = lstm_pred.get("direction", "HOLD").upper()
+                lstm_conf = lstm_pred.get("confidence", 0)
+                result["total_confidence"] += lstm_conf
+                
+                if target_direction:
+                    if (target_direction in ("CALL", "BUY") and lstm_dir == "BUY") or \
+                       (target_direction in ("PUT", "SELL") and lstm_dir == "SELL"):
+                        result["models_agreeing"] += 1
+    except Exception as e:
+        logger.debug(f"LSTM/GRU prediction error: {e}")
+    
+    # 2. PPO Reinforcement Learning Prediction
+    try:
+        if PPO_AVAILABLE and ppo_agent and ppo_agent.is_trained and FeatureEngine:
+            candle_dicts = [{'open': float(c.get('open', c.get('Open', 0))),
+                            'high': float(c.get('high', c.get('High', 0))),
+                            'low': float(c.get('low', c.get('Low', 0))),
+                            'close': float(c.get('close', c.get('Close', 0))),
+                            'volume': float(c.get('volume', c.get('Volume', 0)))}
+                           for c in candles]
+            features = FeatureEngine.compute(candle_dicts)
+            if features is not None:
+                ppo_pred = ppo_agent.predict(features)
+                if ppo_pred:
+                    result["models_checked"] += 1
+                    result["predictions"]["ppo_rl"] = ppo_pred
+                    ppo_dir = ppo_pred.get("direction", "HOLD").upper()
+                    ppo_conf = ppo_pred.get("confidence", 0)
+                    result["total_confidence"] += ppo_conf
+                    
+                    if target_direction:
+                        if (target_direction in ("CALL", "BUY") and ppo_dir == "BUY") or \
+                           (target_direction in ("PUT", "SELL") and ppo_dir == "SELL"):
+                            result["models_agreeing"] += 1
+    except Exception as e:
+        logger.debug(f"PPO RL prediction error: {e}")
+    
+    # 3. Determine ensemble direction (majority vote)
+    if result["models_checked"] > 0:
+        votes = {"BUY": 0, "SELL": 0, "HOLD": 0}
+        for pred in result["predictions"].values():
+            d = pred.get("direction", "HOLD").upper()
+            conf = pred.get("confidence", 50)
+            if d == "BUY":
+                votes["BUY"] += conf
+            elif d == "SELL":
+                votes["SELL"] += conf
+            else:
+                votes["HOLD"] += conf
+        
+        result["ensemble_direction"] = max(votes, key=votes.get)
+        result["average_confidence"] = result["total_confidence"] / result["models_checked"]
+    
+    return result
 
 # Helper function to convert numpy types for JSON serialization
 def _convert_numpy_types(obj):
@@ -1849,7 +1953,7 @@ async def scan_markets_for_signals(
                 if use_deep_analysis:
                     signal = get_deep_analysis_signal(candles, current_price, expiry_to_use)
                     
-                    # Try ML system for cross-validation
+                    # Try ML system for cross-validation (Stacking Ensemble)
                     ml_agrees = False
                     ml_confidence = 0
                     try:
@@ -1868,20 +1972,44 @@ async def scan_markets_for_signals(
                     except Exception:
                         pass
                     
+                    # Advanced ML Ensemble Validation (LSTM/GRU + PPO)
+                    advanced_ml = get_advanced_ml_ensemble_validation(candles, signal)
+                    
                     if signal and signal.get("confidence", 0) >= min_confidence:
                         quality = signal.get("quality", "low")
                         if quality in ["high", "premium", "medium"]:
-                            # ML confluence bonus: boost confidence when both systems agree
+                            # ML confluence bonus: boost confidence when systems agree
+                            total_ml_agreements = 0
+                            
+                            # Stacking ensemble agreement
                             if ml_agrees and ml_confidence >= 70:
                                 signal["confidence"] = min(95, signal["confidence"] + 5)
                                 signal["ml_validated"] = True
                                 signal["ml_confidence"] = ml_confidence
+                                total_ml_agreements += 1
                             elif ml_agrees:
                                 signal["ml_validated"] = True
                                 signal["ml_confidence"] = ml_confidence
                             else:
                                 signal["ml_validated"] = False
                             
+                            # Advanced ML (LSTM/GRU + PPO) agreement bonus
+                            if advanced_ml.get("models_agreeing", 0) > 0:
+                                signal["advanced_ml_validation"] = {
+                                    "models_checked": advanced_ml.get("models_checked", 0),
+                                    "models_agreeing": advanced_ml.get("models_agreeing", 0),
+                                    "ensemble_direction": advanced_ml.get("ensemble_direction"),
+                                    "average_confidence": advanced_ml.get("average_confidence", 0)
+                                }
+                                total_ml_agreements += advanced_ml.get("models_agreeing", 0)
+                                
+                                # Extra confidence boost for multi-model agreement
+                                if advanced_ml.get("models_agreeing", 0) >= 2:
+                                    signal["confidence"] = min(95, signal["confidence"] + 3)
+                                elif advanced_ml.get("models_agreeing", 0) >= 1:
+                                    signal["confidence"] = min(95, signal["confidence"] + 1)
+                            
+                            signal["total_ml_agreements"] = total_ml_agreements
                             signal["symbol"] = asset
                             signal["oanda_symbol"] = oanda_symbol
                             signal["expiry_seconds"] = expiry_to_use

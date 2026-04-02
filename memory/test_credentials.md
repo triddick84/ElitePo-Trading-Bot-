@@ -10,3 +10,9 @@
 - Username: triddick84
 - Email: triddick84@admin.local
 - Role: admin
+
+## ML Endpoints (No Auth Required)
+- LSTM/GRU: `/api/lstm-gru/stats`, `/api/lstm-gru/predict`, `/api/lstm-gru/train`
+- PPO RL: `/api/ppo-rl/stats`, `/api/ppo-rl/predict`, `/api/ppo-rl/train`
+- AI Ensemble: `/api/ai-ensemble/predict`
+- Maximized ML: `/api/maximized-ml/stats`, `/api/maximized-ml/predict/{symbol}`, `/api/maximized-ml/train`
