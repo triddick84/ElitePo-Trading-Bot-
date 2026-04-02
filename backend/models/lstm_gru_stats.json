@@ -1,0 +1,1 @@
+{"accuracy": 5.376344174146652, "total_predictions": 11, "correct_predictions": 0, "training_history": {"train_accuracy": 46.77, "val_accuracy": 5.38, "epochs_run": 5, "samples": 465, "label_dist": {"BUY": 8, "SELL": 16, "HOLD": 441}, "trained_at": "2026-04-02T23:33:39.584445+00:00"}, "last_updated": "2026-04-02T23:33:39.584575+00:00"}

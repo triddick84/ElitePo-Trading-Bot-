@@ -10,6 +10,7 @@ import uuid
 import os
 import asyncio
 import pandas as pd
+import numpy as np
 
 from routes import db, convert_numpy_types, logger
 
@@ -21,6 +22,14 @@ from maximized_ai_ml_system import maximized_ai_ml
 from ai_learning_system import ai_learning_system
 from routes import get_realtime_market_hub
 from pocket_option_client import get_pocket_option_client
+try:
+    from lstm_gru_system import lstm_gru_system
+except ImportError:
+    lstm_gru_system = None
+try:
+    from rl_ppo_agent import ppo_agent
+except ImportError:
+    ppo_agent = None
 try:
     from enhanced_ai_ml_system import enhanced_ai_ml
 except ImportError:
@@ -1057,14 +1066,14 @@ async def train_ai_models(background_tasks: BackgroundTasks,
             }
         
         # Train in background
-        async def train_task():
+        def train_task_sync():
             try:
                 ai_ml_trading_system.lstm_predictor.train(all_candles, epochs=epochs)
                 logger.info("✅ AI models training completed")
             except Exception as e:
                 logger.error(f"Training error: {e}")
         
-        background_tasks.add_task(asyncio.create_task, train_task())
+        background_tasks.add_task(train_task_sync)
         
         return {
             "success": True,
@@ -1442,3 +1451,262 @@ async def record_ai_trade_result(request: TradeResultRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
+
+# ============================================================
+# LSTM/GRU Time-Series System Endpoints
+# ============================================================
+
+@router.get("/lstm-gru/stats")
+async def get_lstm_gru_stats():
+    """Get LSTM/GRU system status and statistics."""
+    if lstm_gru_system is None:
+        return {"success": False, "error": "LSTM/GRU system not available"}
+    return {"success": True, **lstm_gru_system.get_stats()}
+
+
+@router.post("/lstm-gru/train")
+async def train_lstm_gru(
+    symbol: str = Query("EUR_USD"),
+    granularity: str = Query("M1"),
+    count: int = Query(2000, ge=200, le=5000),
+    epochs: int = Query(30, ge=5, le=100),
+    background_tasks: BackgroundTasks = None
+):
+    """Train LSTM/GRU model on OANDA historical data."""
+    if lstm_gru_system is None:
+        raise HTTPException(400, "LSTM/GRU system not available")
+
+    def _train_sync():
+        """Synchronous training function for background task."""
+        try:
+            df = enhanced_oanda.get_candles(symbol, granularity, count)
+            if df is None or len(df) < 100:
+                logger.error(f"Insufficient candles for LSTM/GRU training: {len(df) if df is not None else 0}")
+                return
+            candles = [{'open': float(r['open']), 'high': float(r['high']),
+                        'low': float(r['low']), 'close': float(r['close']),
+                        'volume': float(r.get('volume', 0))}
+                       for _, r in df.iterrows()]
+            result = lstm_gru_system.train(candles, epochs=epochs)
+            logger.info(f"LSTM/GRU training result: {result}")
+        except Exception as e:
+            logger.error(f"LSTM/GRU training error: {e}")
+            import traceback
+            traceback.print_exc()
+
+    background_tasks.add_task(_train_sync)
+
+    return {
+        "success": True,
+        "message": f"LSTM/GRU training started: {symbol} {granularity} x{count}, {epochs} epochs",
+        "status": "training_started"
+    }
+
+
+@router.post("/lstm-gru/predict")
+async def predict_lstm_gru(symbol: str = Query("EUR_USD"), granularity: str = Query("M1")):
+    """Get LSTM/GRU prediction for a symbol."""
+    if lstm_gru_system is None:
+        raise HTTPException(400, "LSTM/GRU system not available")
+
+    df = enhanced_oanda.get_candles(symbol, granularity, 100)
+    if df is None or len(df) < 30:
+        raise HTTPException(400, "Insufficient market data")
+
+    candles = [{'open': float(r['open']), 'high': float(r['high']),
+                'low': float(r['low']), 'close': float(r['close']),
+                'volume': float(r.get('volume', 0))}
+               for _, r in df.iterrows()]
+
+    result = lstm_gru_system.predict(candles)
+    return {"success": True, "symbol": symbol, "prediction": result}
+
+
+# ============================================================
+# PPO Reinforcement Learning Endpoints
+# ============================================================
+
+@router.get("/ppo-rl/stats")
+async def get_ppo_stats():
+    """Get PPO RL agent status and statistics."""
+    if ppo_agent is None:
+        return {"success": False, "error": "PPO agent not available"}
+    return {"success": True, **ppo_agent.get_stats()}
+
+
+@router.post("/ppo-rl/train")
+async def train_ppo(
+    symbol: str = Query("EUR_USD"),
+    granularity: str = Query("M1"),
+    count: int = Query(2000, ge=500, le=5000),
+    episodes: int = Query(20, ge=5, le=100),
+    background_tasks: BackgroundTasks = None
+):
+    """Train PPO RL agent on OANDA historical data."""
+    if ppo_agent is None:
+        raise HTTPException(400, "PPO agent not available")
+
+    def _train_ppo_sync():
+        """Synchronous PPO training function for background task."""
+        try:
+            from lstm_gru_system import FeatureEngine
+            df = enhanced_oanda.get_candles(symbol, granularity, count)
+            if df is None or len(df) < 100:
+                logger.error(f"Insufficient candles for PPO training: {len(df) if df is not None else 0}")
+                return
+            candles = [{'open': float(r['open']), 'high': float(r['high']),
+                        'low': float(r['low']), 'close': float(r['close']),
+                        'volume': float(r.get('volume', 0))}
+                       for _, r in df.iterrows()]
+            features = FeatureEngine.compute(candles)
+            if features is None:
+                logger.error("Feature computation failed for PPO")
+                return
+            closes = np.array([float(c['close']) for c in candles])
+            result = ppo_agent.train(features, closes, n_episodes=episodes)
+            logger.info(f"PPO training result: {result}")
+        except Exception as e:
+            logger.error(f"PPO training error: {e}")
+            import traceback
+            traceback.print_exc()
+
+    background_tasks.add_task(_train_ppo_sync)
+
+    return {
+        "success": True,
+        "message": f"PPO training started: {symbol} {granularity} x{count}, {episodes} episodes",
+        "status": "training_started"
+    }
+
+
+@router.post("/ppo-rl/predict")
+async def predict_ppo(symbol: str = Query("EUR_USD"), granularity: str = Query("M1")):
+    """Get PPO RL prediction for a symbol."""
+    if ppo_agent is None:
+        raise HTTPException(400, "PPO agent not available")
+
+    from lstm_gru_system import FeatureEngine
+    df = enhanced_oanda.get_candles(symbol, granularity, 100)
+    if df is None or len(df) < 30:
+        raise HTTPException(400, "Insufficient market data")
+
+    candles = [{'open': float(r['open']), 'high': float(r['high']),
+                'low': float(r['low']), 'close': float(r['close']),
+                'volume': float(r.get('volume', 0))}
+               for _, r in df.iterrows()]
+
+    features = FeatureEngine.compute(candles)
+    if features is None:
+        raise HTTPException(400, "Feature computation failed")
+
+    result = ppo_agent.predict(features)
+    return {"success": True, "symbol": symbol, "prediction": result}
+
+
+# ============================================================
+# Combined AI/ML Ensemble Prediction
+# ============================================================
+
+@router.post("/ai-ensemble/predict")
+async def ensemble_predict(symbol: str = Query("EUR_USD"), granularity: str = Query("M1")):
+    """
+    Get combined prediction from all ML systems:
+    1. Stacking Ensemble (XGBoost/LightGBM/RF/GB)
+    2. LSTM/GRU Time-Series
+    3. PPO Reinforcement Learning
+    """
+    from lstm_gru_system import FeatureEngine
+
+    df = enhanced_oanda.get_candles(symbol, granularity, 100)
+    if df is None or len(df) < 30:
+        raise HTTPException(400, "Insufficient market data")
+
+    candles = [{'open': float(r['open']), 'high': float(r['high']),
+                'low': float(r['low']), 'close': float(r['close']),
+                'volume': float(r.get('volume', 0))}
+               for _, r in df.iterrows()]
+
+    predictions = {}
+    votes = {'BUY': 0, 'SELL': 0, 'HOLD': 0}
+    weights = {'stacking': 0.4, 'lstm_gru': 0.35, 'ppo': 0.25}
+
+    # 1. Stacking Ensemble
+    try:
+        if maximized_ai_ml and maximized_ai_ml.is_trained:
+            ml_df = pd.DataFrame(candles)
+            for col in ['open', 'high', 'low', 'close']:
+                ml_df[col] = pd.to_numeric(ml_df[col], errors='coerce')
+            pred = maximized_ai_ml.predict(ml_df)
+            if pred:
+                predictions['stacking_ensemble'] = pred
+                d = pred.get('direction', 'HOLD').upper()
+                if d in ('BUY', 'CALL'):
+                    votes['BUY'] += weights['stacking'] * pred.get('confidence', 50)
+                elif d in ('SELL', 'PUT'):
+                    votes['SELL'] += weights['stacking'] * pred.get('confidence', 50)
+                else:
+                    votes['HOLD'] += weights['stacking'] * 50
+    except Exception as e:
+        predictions['stacking_ensemble'] = {'error': str(e)}
+
+    # 2. LSTM/GRU
+    try:
+        if lstm_gru_system:
+            pred = lstm_gru_system.predict(candles)
+            if pred:
+                predictions['lstm_gru'] = pred
+                d = pred.get('direction', 'HOLD').upper()
+                conf = pred.get('confidence', 50)
+                if d in ('BUY', 'CALL'):
+                    votes['BUY'] += weights['lstm_gru'] * conf
+                elif d in ('SELL', 'PUT'):
+                    votes['SELL'] += weights['lstm_gru'] * conf
+                else:
+                    votes['HOLD'] += weights['lstm_gru'] * 50
+    except Exception as e:
+        predictions['lstm_gru'] = {'error': str(e)}
+
+    # 3. PPO RL
+    try:
+        if ppo_agent:
+            features = FeatureEngine.compute(candles)
+            if features is not None:
+                pred = ppo_agent.predict(features)
+                if pred:
+                    predictions['ppo_rl'] = pred
+                    d = pred.get('direction', 'HOLD').upper()
+                    conf = pred.get('confidence', 50)
+                    if d in ('BUY', 'CALL'):
+                        votes['BUY'] += weights['ppo'] * conf
+                    elif d in ('SELL', 'PUT'):
+                        votes['SELL'] += weights['ppo'] * conf
+                    else:
+                        votes['HOLD'] += weights['ppo'] * 50
+    except Exception as e:
+        predictions['ppo_rl'] = {'error': str(e)}
+
+    # Determine ensemble direction
+    best_dir = max(votes, key=votes.get)
+    total_weight = sum(votes.values()) or 1
+    ensemble_conf = round((votes[best_dir] / total_weight) * 100, 2)
+
+    # Agreement bonus
+    agreeing = sum(1 for p in predictions.values()
+                   if isinstance(p, dict) and p.get('direction', '').upper() in
+                   ({'BUY', 'CALL'} if best_dir == 'BUY' else {'SELL', 'PUT'} if best_dir == 'SELL' else {'HOLD'}))
+
+    if agreeing >= 3:
+        ensemble_conf = min(95, ensemble_conf + 8)
+    elif agreeing >= 2:
+        ensemble_conf = min(95, ensemble_conf + 4)
+
+    return {
+        "success": True,
+        "symbol": symbol,
+        "ensemble_direction": best_dir,
+        "ensemble_confidence": ensemble_conf,
+        "agreement": f"{agreeing}/{len(predictions)}",
+        "individual_predictions": predictions,
+        "votes": {k: round(v, 2) for k, v in votes.items()}
+    }

@@ -35,7 +35,7 @@ PO_EMAIL = "thomas.riddick84@gmail.com"
 PO_PASSWORD = "Tonyistheman#1"
 
 # Your cloud server URL (the trading bot server)
-CLOUD_SERVER_URL = "https://pocket-option-auto-2.preview.emergentagent.com"
+CLOUD_SERVER_URL = "https://ai-broker-dev.preview.emergentagent.com"
 
 # Account type: "demo" or "live"
 ACCOUNT_TYPE = "live"

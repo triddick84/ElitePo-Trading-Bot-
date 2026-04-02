@@ -19,7 +19,7 @@ import time
 # Get BASE_URL from environment
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 if not BASE_URL:
-    BASE_URL = "https://pocket-option-auto-2.preview.emergentagent.com"
+    BASE_URL = "https://ai-broker-dev.preview.emergentagent.com"
 
 
 class TestHealthAndAuth:

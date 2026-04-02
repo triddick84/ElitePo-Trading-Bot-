@@ -18,7 +18,7 @@ import os
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 if not BASE_URL:
     # Fallback for local testing
-    BASE_URL = "https://pocket-option-auto-2.preview.emergentagent.com"
+    BASE_URL = "https://ai-broker-dev.preview.emergentagent.com"
 
 
 class TestScanMarketsEndpoint:
