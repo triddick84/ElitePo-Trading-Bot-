@@ -4068,13 +4068,13 @@
 
         updateStatusDot('trading');
 
-        // Only switch if signal has _willSwitch flag (set by doScan when scanning multiple assets)
-        const shouldSwitch = signal._willSwitch === true;
-        log(`📍 shouldSwitch=${shouldSwitch}, _willSwitch=${signal._willSwitch}`);
+        // Asset switching disabled - always trade current asset for reliability
+        const shouldSwitch = false;
+        log(`Trading on current asset (switch disabled for stability)`);
         
         let activeSignal = signal; // The signal we'll actually trade
         
-        if (shouldSwitch && signal.symbol) {
+        if (false && shouldSwitch && signal.symbol) {
             const targetNorm = normalizeAsset(signal.symbol);
             const currentAssetNow = getCurrentAsset();
             const currentNorm = normalizeAsset(currentAssetNow);
