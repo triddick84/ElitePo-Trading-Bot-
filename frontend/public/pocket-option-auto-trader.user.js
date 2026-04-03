@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         GPT Signal Bot - Pocket Option Auto Trader
+// @name         Elite Pocket Option Trading Bot (Legacy)
 // @namespace    https://pocket-trader-ai-8.preview.emergentagent.com
-// @version      7.7.0
-// @description  Auto-trade OTC forex on Pocket Option. v7.4.0 - Holly Crossover + Multi-asset scan
+// @version      8.0.0
+// @description  Elite AI-powered trading bot for Pocket Option
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -2669,7 +2669,7 @@
         panel.innerHTML = `
             <style>
                 /* ============================================
-                   GPT SIGNAL BOT v7.3.0 - MODERN UI
+                   ELITE POCKET OPTION BOT v8.0
                    ============================================ */
                 #gpt-panel {
                     position: fixed;
@@ -2952,7 +2952,7 @@
                 <div class="gpt-header-left">
                     <div class="gpt-status-dot" id="gpt-dot"></div>
                     <span class="gpt-logo">GPT Bot</span>
-                    <span class="gpt-version">v7.3</span>
+                    <span class="gpt-version">v8.0</span>
                 </div>
                 <button class="gpt-minimize-btn" id="gpt-minimize">−</button>
             </div>
