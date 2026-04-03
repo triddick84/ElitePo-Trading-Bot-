@@ -1,9 +1,10 @@
 /**
  * UI Panel Component - Elite Pocket Option Trading Bot
  * 
+ * Mobile + Desktop compatible.
  * Uses direct DOM injection with !important inline styles.
- * No Shadow DOM (unreliable in Tampermonkey context on some sites).
  * All CSS classes use __epb__ prefix to avoid Pocket Option conflicts.
+ * Touch events for mobile drag. Responsive sizing.
  */
 
 import { CONFIG } from '../core/config.js';
@@ -12,328 +13,345 @@ import { log, setLogContainer } from '../core/logger.js';
 
 let panelEl = null;
 let watchdogInterval = null;
-const PREFIX = '__epb__';
+const P = '__epb__';
+
+function isMobile() {
+  return /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i.test(navigator.userAgent)
+    || window.innerWidth < 500;
+}
 
 /**
- * Inject all panel CSS using GM_addStyle (Tampermonkey API)
+ * Inject CSS
  */
 function injectCSS() {
+  const mobile = isMobile();
+  const W = mobile ? 220 : 300;
+  const FONT = mobile ? 11 : 12;
+  const BTN_PAD = mobile ? '10px 6px' : '7px 4px';
+  const BTN_FONT = mobile ? 12 : 11;
+
   const css = `
-    #${PREFIX}host {
+    #${P}host {
       position: fixed !important;
-      top: 10px !important;
-      right: 10px !important;
+      top: 5px !important;
+      right: 5px !important;
       z-index: 2147483647 !important;
       display: block !important;
       visibility: visible !important;
       opacity: 1 !important;
       pointer-events: auto !important;
-      width: 300px !important;
+      width: ${W}px !important;
+      max-width: 90vw !important;
       transform: none !important;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
-      font-size: 12px !important;
+      font-family: -apple-system, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
+      font-size: ${FONT}px !important;
       line-height: 1.4 !important;
       color: #e6edf3 !important;
       box-sizing: border-box !important;
+      -webkit-tap-highlight-color: transparent !important;
     }
-    #${PREFIX}host * {
+    #${P}host * {
       box-sizing: border-box !important;
       margin: 0 !important;
       padding: 0 !important;
       font-family: inherit !important;
       line-height: inherit !important;
     }
-    #${PREFIX}panel {
-      width: 300px !important;
+    #${P}panel {
+      width: 100% !important;
       background: linear-gradient(135deg, #0d1117 0%, #161b22 50%, #0d1117 100%) !important;
       border: 1px solid #30363d !important;
-      border-radius: 12px !important;
+      border-radius: ${mobile ? 8 : 12}px !important;
       box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 0 1px rgba(88,166,255,0.3) !important;
       user-select: none !important;
       overflow: hidden !important;
+      -webkit-user-select: none !important;
+      touch-action: none !important;
     }
-    .${PREFIX}header {
+    .${P}header {
       display: flex !important;
       justify-content: space-between !important;
       align-items: center !important;
-      padding: 10px 12px !important;
+      padding: ${mobile ? '8px 10px' : '10px 12px'} !important;
       background: linear-gradient(90deg, rgba(56,139,253,0.15) 0%, rgba(0,0,0,0.3) 100%) !important;
       cursor: move !important;
       border-bottom: 1px solid #21262d !important;
+      touch-action: none !important;
     }
-    .${PREFIX}title {
+    .${P}title {
       font-weight: 700 !important;
-      font-size: 12px !important;
+      font-size: ${mobile ? 11 : 12}px !important;
       background: linear-gradient(90deg, #58a6ff, #79c0ff) !important;
       -webkit-background-clip: text !important;
       -webkit-text-fill-color: transparent !important;
       background-clip: text !important;
     }
-    .${PREFIX}hright {
+    .${P}hright {
       display: flex !important;
       align-items: center !important;
       gap: 8px !important;
     }
-    .${PREFIX}minbtn {
+    .${P}minbtn {
       background: none !important;
       border: 1px solid #30363d !important;
       color: #8b949e !important;
-      width: 20px !important;
-      height: 20px !important;
+      width: ${mobile ? 28 : 20}px !important;
+      height: ${mobile ? 28 : 20}px !important;
       border-radius: 4px !important;
       cursor: pointer !important;
-      font-size: 12px !important;
+      font-size: ${mobile ? 14 : 12}px !important;
       display: flex !important;
       align-items: center !important;
       justify-content: center !important;
+      -webkit-tap-highlight-color: transparent !important;
     }
-    .${PREFIX}minbtn:hover {
+    .${P}minbtn:hover, .${P}minbtn:active {
       background: #30363d !important;
       color: #e6edf3 !important;
     }
-    .${PREFIX}dot {
-      width: 10px !important;
-      height: 10px !important;
+    .${P}dot {
+      width: ${mobile ? 12 : 10}px !important;
+      height: ${mobile ? 12 : 10}px !important;
       border-radius: 50% !important;
       background: #484f58 !important;
       display: inline-block !important;
       transition: background 0.3s !important;
     }
-    .${PREFIX}dot.connected { background: #3fb950 !important; box-shadow: 0 0 6px rgba(63,185,80,0.4) !important; }
-    .${PREFIX}dot.scanning { background: #58a6ff !important; animation: ${PREFIX}pulse 1s infinite !important; }
-    .${PREFIX}dot.trading { background: #d29922 !important; }
-    .${PREFIX}dot.error { background: #f85149 !important; }
-    @keyframes ${PREFIX}pulse {
+    .${P}dot.connected { background: #3fb950 !important; box-shadow: 0 0 6px rgba(63,185,80,0.4) !important; }
+    .${P}dot.scanning { background: #58a6ff !important; animation: ${P}pulse 1s infinite !important; }
+    .${P}dot.trading { background: #d29922 !important; }
+    .${P}dot.error { background: #f85149 !important; }
+    @keyframes ${P}pulse {
       0%, 100% { opacity: 1; }
       50% { opacity: 0.4; }
     }
-    .${PREFIX}body {
-      padding: 10px !important;
+    .${P}body {
+      padding: ${mobile ? '8px' : '10px'} !important;
     }
-    .${PREFIX}body.collapsed {
+    .${P}body.collapsed {
       display: none !important;
     }
-    .${PREFIX}row {
+    .${P}row {
       display: flex !important;
-      gap: 6px !important;
-      margin-bottom: 8px !important;
+      gap: ${mobile ? '4px' : '6px'} !important;
+      margin-bottom: ${mobile ? '6px' : '8px'} !important;
       align-items: center !important;
     }
-    .${PREFIX}btn {
+    .${P}btn {
       flex: 1 !important;
-      padding: 7px 4px !important;
+      padding: ${BTN_PAD} !important;
       border: 1px solid #30363d !important;
       border-radius: 6px !important;
       background: #21262d !important;
       color: #e6edf3 !important;
-      font-size: 11px !important;
+      font-size: ${BTN_FONT}px !important;
       font-weight: 600 !important;
       cursor: pointer !important;
-      transition: all 0.2s !important;
+      transition: all 0.15s !important;
       text-align: center !important;
+      -webkit-tap-highlight-color: transparent !important;
+      min-height: ${mobile ? 36 : 28}px !important;
     }
-    .${PREFIX}btn:hover {
+    .${P}btn:hover, .${P}btn:active {
       background: #30363d !important;
       border-color: #58a6ff !important;
     }
-    .${PREFIX}btn.active {
+    .${P}btn.active {
       background: linear-gradient(135deg, #1f6feb 0%, #388bfd 100%) !important;
       border-color: #58a6ff !important;
       box-shadow: 0 0 8px rgba(56,139,253,0.3) !important;
     }
-    .${PREFIX}btn-go {
+    .${P}btn-go {
       background: linear-gradient(135deg, #238636 0%, #2ea043 100%) !important;
       border-color: #3fb950 !important;
     }
-    .${PREFIX}btn-go:hover {
+    .${P}btn-go:hover, .${P}btn-go:active {
       background: linear-gradient(135deg, #2ea043 0%, #3fb950 100%) !important;
     }
-    .${PREFIX}btn-inv {
-      flex: 0 0 80px !important;
+    .${P}btn-inv {
+      flex: 0 0 ${mobile ? 70 : 80}px !important;
     }
-    .${PREFIX}btn-inv.active {
+    .${P}btn-inv.active {
       background: linear-gradient(135deg, #9e6a03 0%, #d29922 100%) !important;
       border-color: #d29922 !important;
       box-shadow: 0 0 8px rgba(210,153,34,0.3) !important;
-      animation: ${PREFIX}pulse 2s infinite !important;
+      animation: ${P}pulse 2s infinite !important;
     }
-    .${PREFIX}invst {
+    .${P}invst {
       flex: 1 !important;
-      font-size: 10px !important;
+      font-size: ${mobile ? 9 : 10}px !important;
       color: #8b949e !important;
       overflow: hidden !important;
       text-overflow: ellipsis !important;
       white-space: nowrap !important;
       padding-left: 4px !important;
     }
-    .${PREFIX}invst.on { color: #d29922 !important; font-weight: 600 !important; }
-    .${PREFIX}stats {
+    .${P}invst.on { color: #d29922 !important; font-weight: 600 !important; }
+    .${P}stats {
       display: flex !important;
       justify-content: space-between !important;
-      padding: 8px !important;
+      padding: ${mobile ? '6px' : '8px'} !important;
       background: rgba(0,0,0,0.3) !important;
       border: 1px solid #21262d !important;
       border-radius: 6px !important;
-      margin-bottom: 8px !important;
+      margin-bottom: ${mobile ? '6px' : '8px'} !important;
     }
-    .${PREFIX}stat {
+    .${P}stat {
       text-align: center !important;
       flex: 1 !important;
     }
-    .${PREFIX}stlbl {
+    .${P}stlbl {
       display: block !important;
-      font-size: 9px !important;
+      font-size: ${mobile ? 8 : 9}px !important;
       color: #8b949e !important;
       text-transform: uppercase !important;
       letter-spacing: 0.5px !important;
     }
-    .${PREFIX}stval {
+    .${P}stval {
       font-weight: 700 !important;
-      font-size: 13px !important;
+      font-size: ${mobile ? 12 : 13}px !important;
       color: #e6edf3 !important;
     }
-    .${PREFIX}btn-win {
+    .${P}btn-win {
       background: linear-gradient(135deg, #238636 0%, #2ea043 100%) !important;
       border-color: #3fb950 !important;
     }
-    .${PREFIX}btn-loss {
+    .${P}btn-loss {
       background: linear-gradient(135deg, #da3633 0%, #f85149 100%) !important;
       border-color: #f85149 !important;
     }
-    .${PREFIX}mmrow {
+    .${P}mmrow {
       display: flex !important;
       align-items: center !important;
-      gap: 6px !important;
-      padding: 6px 8px !important;
+      gap: ${mobile ? '4px' : '6px'} !important;
+      padding: ${mobile ? '5px 6px' : '6px 8px'} !important;
       background: rgba(0,0,0,0.3) !important;
       border: 1px solid #21262d !important;
       border-radius: 6px !important;
-      margin-bottom: 8px !important;
-      font-size: 11px !important;
+      margin-bottom: ${mobile ? '6px' : '8px'} !important;
+      font-size: ${mobile ? 10 : 11}px !important;
     }
-    .${PREFIX}mmlbl { color: #8b949e !important; }
-    .${PREFIX}mminp {
-      width: 55px !important;
-      padding: 3px 4px !important;
+    .${P}mmlbl { color: #8b949e !important; }
+    .${P}mminp {
+      width: ${mobile ? 48 : 55}px !important;
+      padding: ${mobile ? '4px' : '3px 4px'} !important;
       border: 1px solid #30363d !important;
       border-radius: 4px !important;
       background: #0d1117 !important;
       color: #e6edf3 !important;
-      font-size: 11px !important;
+      font-size: ${mobile ? 12 : 11}px !important;
+      -webkit-appearance: none !important;
     }
-    .${PREFIX}loghdr {
+    .${P}loghdr {
       padding: 5px 8px !important;
       background: rgba(0,0,0,0.3) !important;
       border: 1px solid #21262d !important;
       border-radius: 6px 6px 0 0 !important;
       cursor: pointer !important;
-      font-size: 11px !important;
+      font-size: ${mobile ? 10 : 11}px !important;
       color: #8b949e !important;
     }
-    .${PREFIX}logbox {
-      max-height: 120px !important;
+    .${P}logbox {
+      max-height: ${mobile ? 80 : 120}px !important;
       overflow-y: auto !important;
       background: rgba(0,0,0,0.4) !important;
       border: 1px solid #21262d !important;
       border-top: none !important;
       border-radius: 0 0 6px 6px !important;
       font-family: 'Consolas', 'Courier New', monospace !important;
-      font-size: 10px !important;
+      font-size: ${mobile ? 9 : 10}px !important;
       padding: 4px !important;
       color: #8b949e !important;
+      -webkit-overflow-scrolling: touch !important;
     }
-    .${PREFIX}logbox::-webkit-scrollbar { width: 4px !important; }
-    .${PREFIX}logbox::-webkit-scrollbar-thumb { background: #30363d !important; border-radius: 2px !important; }
+    .${P}logbox::-webkit-scrollbar { width: 4px !important; }
+    .${P}logbox::-webkit-scrollbar-thumb { background: #30363d !important; border-radius: 2px !important; }
   `;
 
   if (typeof GM_addStyle === 'function') {
-    try {
-      GM_addStyle(css);
-    } catch (e) {
-      _fallbackInjectCSS(css);
-    }
+    try { GM_addStyle(css); } catch (e) { _fallbackCSS(css); }
   } else {
-    _fallbackInjectCSS(css);
+    _fallbackCSS(css);
   }
 }
 
-function _fallbackInjectCSS(css) {
-  const styleEl = document.createElement('style');
-  styleEl.setAttribute('type', 'text/css');
-  styleEl.setAttribute('id', `${PREFIX}style`);
-  styleEl.textContent = css;
-  (document.head || document.documentElement).appendChild(styleEl);
+function _fallbackCSS(css) {
+  const existing = document.getElementById(`${P}style`);
+  if (existing) existing.remove();
+  const el = document.createElement('style');
+  el.setAttribute('type', 'text/css');
+  el.setAttribute('id', `${P}style`);
+  el.textContent = css;
+  (document.head || document.documentElement).appendChild(el);
 }
 
 /**
- * Create the panel DOM element
+ * Create panel
  */
 export function createPanel() {
-  console.log('[Elite Bot] Creating panel...');
+  console.log('[Elite Bot] Creating panel (mobile=' + isMobile() + ')...');
   injectCSS();
   console.log('[Elite Bot] CSS injected');
 
   panelEl = document.createElement('div');
-  panelEl.id = `${PREFIX}host`;
+  panelEl.id = `${P}host`;
+
+  const titleShort = isMobile() ? 'Elite Bot' : CONFIG.BOT_NAME;
 
   panelEl.innerHTML = `
-    <div id="${PREFIX}panel">
-      <div class="${PREFIX}header" id="${PREFIX}header">
-        <span class="${PREFIX}title">${CONFIG.BOT_NAME}</span>
-        <div class="${PREFIX}hright">
-          <span class="${PREFIX}dot" id="${PREFIX}dot"></span>
-          <button class="${PREFIX}minbtn" id="${PREFIX}minbtn">_</button>
+    <div id="${P}panel">
+      <div class="${P}header" id="${P}header">
+        <span class="${P}title">${titleShort}</span>
+        <div class="${P}hright">
+          <span class="${P}dot" id="${P}dot"></span>
+          <button class="${P}minbtn" id="${P}minbtn">_</button>
         </div>
       </div>
-      <div class="${PREFIX}body" id="${PREFIX}body">
-        <div class="${PREFIX}row">
-          <button id="${PREFIX}scan" class="${PREFIX}btn">SCAN</button>
-          <button id="${PREFIX}auto" class="${PREFIX}btn">AUTO</button>
-          <button id="${PREFIX}go" class="${PREFIX}btn ${PREFIX}btn-go">GO</button>
+      <div class="${P}body" id="${P}body">
+        <div class="${P}row">
+          <button id="${P}scan" class="${P}btn">SCAN</button>
+          <button id="${P}auto" class="${P}btn">AUTO</button>
+          <button id="${P}go" class="${P}btn ${P}btn-go">GO</button>
         </div>
-        <div class="${PREFIX}row">
-          <button id="${PREFIX}inv" class="${PREFIX}btn ${PREFIX}btn-inv">INVERT</button>
-          <span class="${PREFIX}invst" id="${PREFIX}invst">Normal</span>
+        <div class="${P}row">
+          <button id="${P}inv" class="${P}btn ${P}btn-inv">INVERT</button>
+          <span class="${P}invst" id="${P}invst">Normal</span>
         </div>
-        <div class="${PREFIX}stats">
-          <div class="${PREFIX}stat"><span class="${PREFIX}stlbl">W/L</span><span class="${PREFIX}stval" id="${PREFIX}wl">0/0</span></div>
-          <div class="${PREFIX}stat"><span class="${PREFIX}stlbl">Rate</span><span class="${PREFIX}stval" id="${PREFIX}rate">0%</span></div>
-          <div class="${PREFIX}stat"><span class="${PREFIX}stlbl">Streak</span><span class="${PREFIX}stval" id="${PREFIX}streak">0</span></div>
-          <div class="${PREFIX}stat"><span class="${PREFIX}stlbl">Profit</span><span class="${PREFIX}stval" id="${PREFIX}profit">$0</span></div>
+        <div class="${P}stats">
+          <div class="${P}stat"><span class="${P}stlbl">W/L</span><span class="${P}stval" id="${P}wl">0/0</span></div>
+          <div class="${P}stat"><span class="${P}stlbl">Rate</span><span class="${P}stval" id="${P}rate">0%</span></div>
+          <div class="${P}stat"><span class="${P}stlbl">Strk</span><span class="${P}stval" id="${P}streak">0</span></div>
+          <div class="${P}stat"><span class="${P}stlbl">P/L</span><span class="${P}stval" id="${P}profit">$0</span></div>
         </div>
-        <div class="${PREFIX}row">
-          <button id="${PREFIX}win" class="${PREFIX}btn ${PREFIX}btn-win">WIN</button>
-          <button id="${PREFIX}loss" class="${PREFIX}btn ${PREFIX}btn-loss">LOSS</button>
+        <div class="${P}row">
+          <button id="${P}win" class="${P}btn ${P}btn-win">WIN</button>
+          <button id="${P}loss" class="${P}btn ${P}btn-loss">LOSS</button>
         </div>
-        <div class="${PREFIX}mmrow">
-          <span class="${PREFIX}mmlbl">Amount: $</span>
-          <input type="number" id="${PREFIX}amt" class="${PREFIX}mminp" value="1" min="1" max="1000">
-          <span class="${PREFIX}mmlbl">Step:</span>
-          <span id="${PREFIX}step">0</span>
+        <div class="${P}mmrow">
+          <span class="${P}mmlbl">$</span>
+          <input type="number" id="${P}amt" class="${P}mminp" value="1" min="1" max="1000">
+          <span class="${P}mmlbl">Step:</span>
+          <span id="${P}step">0</span>
         </div>
-        <div class="${PREFIX}loghdr" id="${PREFIX}logtog">Log <span id="${PREFIX}arrow">&#9660;</span></div>
-        <div class="${PREFIX}logbox" id="${PREFIX}log"></div>
+        <div class="${P}loghdr" id="${P}logtog">Log <span id="${P}arrow">&#9660;</span></div>
+        <div class="${P}logbox" id="${P}log"></div>
       </div>
     </div>
   `;
 
   startWatchdog();
-  console.log('[Elite Bot] Panel DOM created, returning element');
+  console.log('[Elite Bot] Panel created');
   return panelEl;
 }
 
 function q(id) {
-  return document.getElementById(`${PREFIX}${id}`);
+  return document.getElementById(`${P}${id}`);
 }
 
-/**
- * Watchdog: re-inject panel if PO removes it
- */
 function startWatchdog() {
   if (watchdogInterval) clearInterval(watchdogInterval);
-
   watchdogInterval = setInterval(() => {
-    const host = document.getElementById(`${PREFIX}host`);
+    const host = document.getElementById(`${P}host`);
     if (!host || !document.body.contains(host)) {
       console.log('[Elite Bot] Panel removed, re-injecting...');
       reInject();
@@ -343,12 +361,10 @@ function startWatchdog() {
 
 function reInject() {
   try {
-    const old = document.getElementById(`${PREFIX}host`);
+    const old = document.getElementById(`${P}host`);
     if (old) old.remove();
-
     const newPanel = createPanel();
     document.body.appendChild(newPanel);
-
     if (window._epbCallbacks) {
       initPanelEvents(window._epbCallbacks);
     }
@@ -358,11 +374,10 @@ function reInject() {
 }
 
 /**
- * Initialize panel event handlers
+ * Init events (mouse + touch)
  */
 export function initPanelEvents(callbacks = {}) {
   window._epbCallbacks = callbacks;
-
   setLogContainer(q('log'));
 
   // Minimize
@@ -397,17 +412,11 @@ export function initPanelEvents(callbacks = {}) {
     });
   }
 
-  // Go
   q('go')?.addEventListener('click', () => callbacks.onGo?.());
-
-  // Invert
   q('inv')?.addEventListener('click', () => callbacks.onInvertToggle?.());
-
-  // Win / Loss
   q('win')?.addEventListener('click', () => callbacks.onWin?.());
   q('loss')?.addEventListener('click', () => callbacks.onLoss?.());
 
-  // Amount
   const amtInput = q('amt');
   if (amtInput) {
     amtInput.addEventListener('change', (e) => {
@@ -415,7 +424,6 @@ export function initPanelEvents(callbacks = {}) {
     });
   }
 
-  // Log toggle
   q('logtog')?.addEventListener('click', () => {
     const logEl = q('log');
     const arrow = q('arrow');
@@ -426,13 +434,9 @@ export function initPanelEvents(callbacks = {}) {
     }
   });
 
-  // Draggable
   makeDraggable();
 }
 
-/**
- * Update stats display
- */
 export function updateStatsDisplay() {
   const wlEl = q('wl');
   const rateEl = q('rate');
@@ -464,9 +468,6 @@ export function updateStatsDisplay() {
   if (stepEl) stepEl.textContent = String(state.moneyManagement.currentStep);
 }
 
-/**
- * Update inversion display
- */
 export function updateInvertDisplay(isInverted, reason) {
   const btn = q('inv');
   const st = q('invst');
@@ -474,54 +475,78 @@ export function updateInvertDisplay(isInverted, reason) {
   if (btn) {
     if (isInverted) btn.classList.add('active');
     else btn.classList.remove('active');
-    btn.textContent = isInverted ? 'INVERT ON' : 'INVERT';
+    btn.textContent = isInverted ? 'INV ON' : 'INVERT';
   }
 
   if (st) {
-    st.textContent = isInverted ? (reason || 'Signals inverted') : 'Normal';
+    st.textContent = isInverted ? (reason || 'Inverted') : 'Normal';
     if (isInverted) st.classList.add('on');
     else st.classList.remove('on');
   }
 }
 
-/**
- * Update status dot
- */
 export function updateStatusDot(status) {
   const dot = q('dot');
-  if (dot) dot.className = `${PREFIX}dot ${status}`;
+  if (dot) dot.className = `${P}dot ${status}`;
 }
 
 /**
- * Make panel draggable via header
+ * Make panel draggable — supports BOTH mouse and touch
  */
 function makeDraggable() {
   const header = q('header');
-  const host = document.getElementById(`${PREFIX}host`);
+  const host = document.getElementById(`${P}host`);
   if (!header || !host) return;
 
-  let dragging = false, ox, oy;
+  let dragging = false, startX, startY, origLeft, origTop;
 
-  header.addEventListener('mousedown', (e) => {
+  function getPos(e) {
+    if (e.touches && e.touches.length > 0) {
+      return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }
+    return { x: e.clientX, y: e.clientY };
+  }
+
+  function onStart(e) {
     dragging = true;
-    ox = e.clientX - host.offsetLeft;
-    oy = e.clientY - host.offsetTop;
+    const pos = getPos(e);
+    const rect = host.getBoundingClientRect();
+    startX = pos.x;
+    startY = pos.y;
+    origLeft = rect.left;
+    origTop = rect.top;
     e.preventDefault();
-  });
+    e.stopPropagation();
+  }
 
-  document.addEventListener('mousemove', (e) => {
+  function onMove(e) {
     if (!dragging) return;
-    host.style.setProperty('left', (e.clientX - ox) + 'px', 'important');
-    host.style.setProperty('top', (e.clientY - oy) + 'px', 'important');
+    const pos = getPos(e);
+    const dx = pos.x - startX;
+    const dy = pos.y - startY;
+    const newLeft = Math.max(0, Math.min(window.innerWidth - 50, origLeft + dx));
+    const newTop = Math.max(0, Math.min(window.innerHeight - 50, origTop + dy));
+    host.style.setProperty('left', newLeft + 'px', 'important');
+    host.style.setProperty('top', newTop + 'px', 'important');
     host.style.setProperty('right', 'auto', 'important');
-  });
+    e.preventDefault();
+  }
 
-  document.addEventListener('mouseup', () => { dragging = false; });
+  function onEnd() {
+    dragging = false;
+  }
+
+  // Mouse events
+  header.addEventListener('mousedown', onStart);
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onEnd);
+
+  // Touch events
+  header.addEventListener('touchstart', onStart, { passive: false });
+  document.addEventListener('touchmove', onMove, { passive: false });
+  document.addEventListener('touchend', onEnd);
 }
 
-/**
- * Cleanup watchdog
- */
 export function cleanupPanel() {
   if (watchdogInterval) {
     clearInterval(watchdogInterval);

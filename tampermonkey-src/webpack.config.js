@@ -5,7 +5,7 @@ const TerserPlugin = require('terser-webpack-plugin');
 const userscriptHeader = `// ==UserScript==
 // @name         Elite Pocket Option Trading Bot
 // @namespace    https://pocket-trader-ai-8.preview.emergentagent.com
-// @version      8.0.1
+// @version      8.0.2
 // @description  Elite AI-powered trading bot with smart inversion, multi-strategy analysis, and premium win-rate tracking
 // @author       Elite Trading
 // @match        *://*.pocketoption.com/*
