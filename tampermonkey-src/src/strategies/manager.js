@@ -1,26 +1,51 @@
 /**
  * Strategy Manager
- * Coordinates multiple strategies and selects best signal
+ * Coordinates multiple strategies and selects best signal.
+ * Supports syncing enabled strategies from the app's strategy selection API.
  */
 
-import { log, warn } from '../core/logger.js';
+import { log, warn, info } from '../core/logger.js';
+import { CONFIG } from '../core/config.js';
 import { LocalSignalStrategy } from './localSignal.js';
 import { MomentumBusterStrategy } from './momentumBuster.js';
 import { HollyCrossoverStrategy } from './hollyCrossover.js';
 import { GoldenOneMomentStrategy } from './goldenOneMoment.js';
+import { EMA20PullbackReversalStrategy } from './ema20PullbackReversal.js';
+import { get } from '../utils/api.js';
+
+/**
+ * Mapping of app strategy IDs -> Tampermonkey strategy names
+ * This lets Tampermonkey use the same strategy the user selected in the app UI
+ */
+const APP_TO_LOCAL_MAP = {
+  'default': null,                        // Use all strategies
+  'ema20_pullback_reversal': 'EMA 20 Pullback Reversal',
+  'holly_crossover_5s': 'Holly Crossover',
+  'holly_crossover_15s': 'Holly Crossover',
+  'holly_crossover_30s': 'Holly Crossover',
+  'turbo_precision_5s': 'Local Signal Engine',
+  'micro_compression_burst': 'Local Signal Engine',
+  'keltner_breakout': 'Local Signal Engine',
+  'candlestick_patterns': 'Local Signal Engine',
+  'rsi_bb_scalp': 'Local Signal Engine',
+  'golden_one_moment': 'Golden One Moment',
+  'momentum_buster_15s': 'Momentum Buster',
+};
 
 class StrategyManager {
   constructor() {
     this.strategies = new Map();
+    this.activeAppStrategyId = null;
+    this.forceSingle = false;  // When true, only run the matched strategy
     this.initializeStrategies();
   }
   
   initializeStrategies() {
-    // Register all strategies
     this.registerStrategy(new LocalSignalStrategy());
     this.registerStrategy(new MomentumBusterStrategy());
     this.registerStrategy(new HollyCrossoverStrategy());
     this.registerStrategy(new GoldenOneMomentStrategy());
+    this.registerStrategy(new EMA20PullbackReversalStrategy());
     
     log(`Initialized ${this.strategies.size} trading strategies`);
   }
@@ -42,7 +67,63 @@ class StrategyManager {
   }
   
   /**
-   * Analyze candles with all enabled strategies
+   * Sync strategy selection from the app API.
+   * Enables only the strategy matching the user's app selection.
+   */
+  async syncFromApp() {
+    try {
+      const response = await get('/strategies/selected');
+      
+      if (response.success && response.selections) {
+        // Use the 5s selection for Tampermonkey (primary timeframe)
+        const selected5s = response.selections['5s'] || 'default';
+        this.applyAppSelection(selected5s);
+        info(`Strategy synced from app: ${selected5s}`);
+        return true;
+      }
+    } catch (e) {
+      warn(`Strategy sync failed (using all strategies): ${e.message}`);
+    }
+    return false;
+  }
+  
+  /**
+   * Apply app strategy selection
+   * @param {string} appStrategyId - The strategy ID from the app
+   */
+  applyAppSelection(appStrategyId) {
+    this.activeAppStrategyId = appStrategyId;
+    
+    if (appStrategyId === 'default' || !appStrategyId) {
+      // Enable all strategies
+      this.forceSingle = false;
+      for (const s of this.getAllStrategies()) {
+        s.setEnabled(true);
+      }
+      return;
+    }
+    
+    const localName = APP_TO_LOCAL_MAP[appStrategyId];
+    
+    if (localName) {
+      // Enable only the matching local strategy
+      this.forceSingle = true;
+      for (const s of this.getAllStrategies()) {
+        s.setEnabled(s.getName() === localName);
+      }
+      log(`Strategy locked to: ${localName} (app: ${appStrategyId})`);
+    } else {
+      // Unknown strategy - enable all as fallback
+      this.forceSingle = false;
+      for (const s of this.getAllStrategies()) {
+        s.setEnabled(true);
+      }
+      log(`App strategy "${appStrategyId}" has no local match, using all strategies`);
+    }
+  }
+  
+  /**
+   * Analyze candles with enabled strategies
    * @param {Object[]} candles - OHLC data
    * @returns {Object|null} Best signal or null
    */
@@ -67,10 +148,14 @@ class StrategyManager {
     // Sort by confidence and return best
     signals.sort((a, b) => b.confidence - a.confidence);
     
+    // If we're using a single forced strategy, just return its signal
+    if (this.forceSingle) {
+      return signals[0];
+    }
+    
     // Check for conflicting signals
     const directions = new Set(signals.map(s => s.direction));
     if (directions.size > 1) {
-      // Conflicting signals - only return if top signal has significantly higher confidence
       const topSignal = signals[0];
       const conflictingSignals = signals.filter(s => s.direction !== topSignal.direction);
       
@@ -85,23 +170,17 @@ class StrategyManager {
   
   /**
    * Get signal from specific strategy
-   * @param {string} strategyName - Strategy name
-   * @param {Object[]} candles - OHLC data
-   * @returns {Object|null} Signal or null
    */
   analyzeWithStrategy(strategyName, candles) {
     const strategy = this.getStrategy(strategyName);
     if (!strategy || !strategy.isEnabled()) {
       return null;
     }
-    
     return strategy.analyze(candles);
   }
   
   /**
    * Enable/disable strategy by name
-   * @param {string} name - Strategy name
-   * @param {boolean} enabled - Enable state
    */
   setStrategyEnabled(name, enabled) {
     const strategy = this.getStrategy(name);
@@ -112,7 +191,6 @@ class StrategyManager {
   
   /**
    * Get strategy status
-   * @returns {Object[]} Array of strategy status objects
    */
   getStatus() {
     return this.getAllStrategies().map(s => ({
@@ -121,9 +199,14 @@ class StrategyManager {
       minConfidence: s.getMinConfidence(),
     }));
   }
+  
+  /**
+   * Get active app strategy ID
+   */
+  getActiveAppStrategy() {
+    return this.activeAppStrategyId;
+  }
 }
 
-// Singleton instance
 export const strategyManager = new StrategyManager();
-
 export default strategyManager;

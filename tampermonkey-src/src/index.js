@@ -45,6 +45,9 @@ class EliteTradingBot {
     // Start price scraper
     priceScraper.start(500);
     
+    // Sync strategy selection from app
+    await strategyManager.syncFromApp();
+    
     // Start stats update interval
     this.statsInterval = setInterval(() => {
       updateStatsDisplay();

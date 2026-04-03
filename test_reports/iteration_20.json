@@ -1,0 +1,99 @@
+{
+  "summary": "Iteration 20 testing complete. All 17 backend tests passed (100%). Tested EMA 20 Pullback Reversal strategy availability, strategy selection endpoints, scan-markets with active_strategy resolution, and Tampermonkey script verification.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_strategy_selection_ema20.py",
+    "/app/test_reports/pytest/pytest_strategy_selection_ema20.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "EMA 20 Pullback Reversal strategy correctly registered in strategy_selection_service with id='ema20_pullback_reversal', name='EMA 20 Pullback Reversal', win_rate='80-90%'",
+    "Strategy selection persists to MongoDB and is correctly retrieved via GET /api/strategies/selected",
+    "scan-markets endpoint correctly resolves active_strategy from: 1) explicit strategy_id param, 2) user selection for timeframe, 3) 'default' fallback",
+    "When ema20_pullback_reversal is selected for 5s, scan-markets with preferred_expiry=5 uses it first, falling back to deep_confluence if no signal",
+    "Tampermonkey script source has syncFromApp() that calls /strategies/selected and APP_TO_LOCAL_MAP for strategy mapping",
+    "EMA20PullbackReversalStrategy class in backend uses EMA(20), RSI(2), BB(5,2.5), Stochastic(3,1,1) as documented"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_strategy_selection_ema20.py"
+  ],
+  "success_rate": {
+    "backend": "100% (17/17 tests passed)",
+    "frontend": "N/A - backend only testing requested"
+  },
+  "test_credentials": "No auth required for strategy and signal endpoints",
+  "seed_data_creation": "Strategy selection updated during tests (reset to default after)",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "EMA 20 Pullback Reversal strategy is fully integrated. Strategy selection works via POST /api/strategies/select with {timeframe, strategy_id}. scan-markets now includes 'active_strategy' field showing which strategy is being used. Tampermonkey script has syncFromApp() to sync strategy selection from app.",
+  "mocked_apis": {
+    "note": "No mocked APIs - all endpoints use real OANDA data and MongoDB"
+  },
+  "endpoints_tested": {
+    "strategies_available": [
+      "GET /api/strategies/available ✅ (returns all timeframes with strategies)",
+      "GET /api/strategies/available/5s ✅ (includes ema20_pullback_reversal with name='EMA 20 Pullback Reversal', win_rate='80-90%')"
+    ],
+    "strategies_select": [
+      "POST /api/strategies/select {timeframe:'5s', strategy_id:'ema20_pullback_reversal'} ✅",
+      "POST /api/strategies/select {timeframe:'5s', strategy_id:'default'} ✅ (reset)",
+      "POST /api/strategies/select {timeframe:'5s', strategy_id:'invalid'} ✅ (returns 400)"
+    ],
+    "strategies_selected": [
+      "GET /api/strategies/selected ✅ (returns selections with 5s=ema20_pullback_reversal after selection)"
+    ],
+    "scan_markets": [
+      "GET /api/signals/scan-markets?assets=EUR_USD,GBP_USD,USD_JPY&min_confidence=50&preferred_expiry=5 ✅ (active_strategy=ema20_pullback_reversal)",
+      "GET /api/signals/scan-markets?assets=EUR_USD&min_confidence=50&strategy_id=ema20_pullback_reversal ✅ (explicit override)",
+      "GET /api/signals/scan-markets?assets=EUR_USD,GBP_USD&min_confidence=50&preferred_expiry=5 ✅ (with default strategy, uses deep_confluence)",
+      "GET /api/signals/scan-markets?min_confidence=30 ✅ (returns 422 for min_confidence < 50)"
+    ],
+    "regression_endpoints": [
+      "GET /api/signals/session-info ✅",
+      "GET /api/signals/should-trade ✅",
+      "POST /api/signals/record-premium-result ✅ (with is_win boolean)"
+    ],
+    "tampermonkey_script": [
+      "GET /pocket-option-auto-trader-modular.user.js ✅ (accessible)",
+      "Script contains EMA 20 Pullback strategy ✅",
+      "Script has syncFromApp feature ✅"
+    ]
+  },
+  "strategy_selection_flow": {
+    "description": "User selects strategy in app UI -> POST /api/strategies/select -> MongoDB stores selection -> scan-markets reads selection -> Tampermonkey syncFromApp() syncs selection",
+    "timeframe_mapping": {
+      "5": "5s",
+      "15": "15s",
+      "30": "30s",
+      "60": "1m",
+      "120": "2m",
+      "180": "3m",
+      "300": "5m"
+    },
+    "priority_order": "1) explicit strategy_id param, 2) user selection for timeframe, 3) 'default'"
+  },
+  "ema20_pullback_reversal_strategy": {
+    "id": "ema20_pullback_reversal",
+    "name": "EMA 20 Pullback Reversal",
+    "win_rate": "80-90%",
+    "timeframe": "5s",
+    "indicators": {
+      "ema": "EMA(20) - Primary trend filter",
+      "rsi": "RSI(2) - Ultra-fast momentum",
+      "bollinger": "BB(5, 2.5) - Tight reversal zones",
+      "stochastic": "Stochastic(3, 1, 1) - Crossover confirmation"
+    },
+    "entry_rules": {
+      "CALL": "Uptrend (7+ candles above EMA 20) -> pullback to EMA 20 or lower BB -> bounce up + RSI/Stoch confirm",
+      "PUT": "Downtrend (7+ candles below EMA 20) -> pullback to EMA 20 or upper BB -> reject down + RSI/Stoch confirm"
+    }
+  }
+}

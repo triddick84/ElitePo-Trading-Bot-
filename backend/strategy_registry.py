@@ -43,9 +43,17 @@ class StrategyRegistry:
             try:
                 from strategies.five_second_breakout import get_breakout_strategy
                 self.strategies['5s_enhanced_breakout'] = get_breakout_strategy()
-                logger.info("✅ Loaded Enhanced Breakout Predictor for 5s")
+                logger.info("Loaded Enhanced Breakout Predictor for 5s")
             except Exception as e:
                 logger.warning(f"Could not load Enhanced Breakout Predictor: {e}")
+            
+            # EMA 20 Pullback Reversal - 5s optimized
+            try:
+                from strategies.strategy_5s_ema20_pullback_reversal import strategy_5s_ema20_pullback_reversal
+                self.strategies['5s_ema20_pullback_reversal'] = strategy_5s_ema20_pullback_reversal
+                logger.info("Loaded EMA 20 Pullback Reversal Strategy for 5s")
+            except Exception as e:
+                logger.warning(f"Could not load EMA 20 Pullback Reversal: {e}")
             
             # 15-second strategies
             from strategies.strategy_15s_ema_crossover import strategy_15s_ema_crossover

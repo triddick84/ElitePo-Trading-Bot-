@@ -1918,7 +1918,8 @@ async def scan_markets_for_signals(
     min_confidence: int = Query(70, ge=50, le=95, description="Minimum confidence threshold"),
     max_signals: int = Query(10, ge=1, le=20, description="Maximum number of signals to return"),
     preferred_expiry: int = Query(None, description="Preferred expiry in seconds (5, 15, 30, 60). If not set, best strategy is auto-selected"),
-    use_deep_analysis: bool = Query(True, description="Use deep market analysis for better accuracy (recommended)")
+    use_deep_analysis: bool = Query(True, description="Use deep market analysis for better accuracy (recommended)"),
+    strategy_id: str = Query(None, description="Override: use specific strategy ID (e.g. ema20_pullback_reversal)")
 ):
     """
     Scan multiple markets for high-probability trading signals.
@@ -1943,6 +1944,19 @@ async def scan_markets_for_signals(
         # Get session/time filter info upfront
         time_filter_info = get_time_filter()
         
+        # Resolve active strategy: param > user selection > default
+        active_strategy_id = strategy_id
+        if not active_strategy_id:
+            try:
+                from strategy_selection_service import strategy_selection_service
+                selections = await strategy_selection_service.get_selected_strategies()
+                # Match expiry to timeframe
+                timeframe_map = {5: '5s', 15: '15s', 30: '30s', 60: '1m', 120: '2m', 180: '3m', 300: '5m'}
+                tf_key = timeframe_map.get(expiry_to_use, '5s')
+                active_strategy_id = selections.get(tf_key, 'default')
+            except Exception:
+                active_strategy_id = 'default'
+        
         for asset in asset_list:
             try:
                 # Normalize asset symbol for OANDA
@@ -1966,6 +1980,40 @@ async def scan_markets_for_signals(
                 
                 if not candles or not current_price:
                     continue
+                
+                # PRIORITY: If user selected a specific strategy, try it FIRST
+                if active_strategy_id and active_strategy_id != 'default':
+                    try:
+                        from strategy_registry import strategy_registry
+                        registry_key_map = {
+                            'ema20_pullback_reversal': '5s_ema20_pullback_reversal',
+                            'holly_crossover_5s': None,
+                            'turbo_precision_5s': 'turbo_precision_5s',
+                            'keltner_breakout': None,
+                            'golden_one_moment': None,
+                            'momentum_buster_15s': None,
+                        }
+                        registry_key = registry_key_map.get(active_strategy_id, active_strategy_id)
+                        if registry_key:
+                            strat = strategy_registry.get_strategy(registry_key)
+                            if strat:
+                                oanda_df_for_strat = pd.DataFrame(candles)
+                                for col in ['open', 'high', 'low', 'close']:
+                                    if col in oanda_df_for_strat.columns:
+                                        oanda_df_for_strat[col] = pd.to_numeric(oanda_df_for_strat[col], errors='coerce')
+                                strat_signal = strat.generate_signal(oanda_df_for_strat)
+                                if strat_signal and strat_signal.get("confidence", 0) >= min_confidence and strat_signal.get("direction", "NEUTRAL") != "NEUTRAL":
+                                    strat_signal["symbol"] = asset
+                                    strat_signal["oanda_symbol"] = oanda_symbol
+                                    strat_signal["expiry_seconds"] = expiry_to_use
+                                    strat_signal["analysis_type"] = f"selected_{active_strategy_id}"
+                                    for k, v in strat_signal.get("indicators", {}).items():
+                                        if hasattr(v, 'item'):
+                                            strat_signal["indicators"][k] = float(v)
+                                    signals_found.append(strat_signal)
+                                    continue
+                    except Exception as e:
+                        logger.debug(f"Selected strategy {active_strategy_id} failed for {asset}: {e}")
                 
                 # Use DEEP ANALYSIS for better accuracy (default)
                 if use_deep_analysis:
@@ -2129,6 +2177,7 @@ async def scan_markets_for_signals(
         return {
             "success": True,
             "analysis_type": "deep_confluence" if use_deep_analysis else "high_accuracy",
+            "active_strategy": active_strategy_id,
             "scanned_assets": len(asset_list),
             "signals_found": len(signals_found),
             "top_signals": top_signals,
