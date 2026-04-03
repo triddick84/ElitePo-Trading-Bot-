@@ -3,6 +3,9 @@
 ## Last Updated: April 3, 2026
 
 ## Current Status
+✅ **EMA 20 Pullback Reversal Strategy** - New 5s strategy with EMA 20, RSI 2, BB(5,2.5), Stoch(3,1,1) (April 3, 2026)
+✅ **Strategy Selection -> Scan Integration** - App-selected strategy runs FIRST in scan-markets, with fallback chain (April 3, 2026)
+✅ **Strategy Sync to Tampermonkey** - syncFromApp() syncs user's strategy selection to local scanning (April 3, 2026)
 ✅ **Elite Pocket Option Trading Bot v8.0.0** - Renamed from GPT Signal Bot (April 3, 2026)
 ✅ **Smart Auto-Invert System** - Direction-aware loss detection with automatic signal inversion (April 3, 2026)
 ✅ **Premium Result Tracking in Tampermonkey** - WIN/LOSS buttons now feed backend learning system (April 3, 2026)
