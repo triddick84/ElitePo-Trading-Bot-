@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Elite Pocket Option Trading Bot (Legacy)
-// @namespace    https://pocket-trader-ai-8.preview.emergentagent.com
+// @namespace    https://auto-trade-bot-pro.preview.emergentagent.com
 // @version      8.0.0
 // @description  Elite AI-powered trading bot for Pocket Option
 // @author       GPT Signal Bot
@@ -32,7 +32,7 @@
     // CONFIGURATION
     // ===========================================
     const CONFIG = {
-        API_URL: 'https://pocket-trader-ai-8.preview.emergentagent.com/api',
+        API_URL: 'https://auto-trade-bot-pro.preview.emergentagent.com/api',
         APP_POLL_INTERVAL: 3000,     // 3 seconds for app signals
         SCAN_INTERVAL: 5000,         // 5 seconds for scanning
         TRADE_COOLDOWN_SCAN: 30000,  // 30 seconds between SCAN trades
@@ -1170,11 +1170,31 @@
     const TRADING_FLAG_TIMEOUT_MS = 10000;  // Legacy - kept for reference
     
     // NEW: Enhanced control settings from backend
-    let selectedStrategy = 'auto';
-    let selectedTimeframe = '1m';
+    let selectedStrategy = 'default';
+    let selectedTimeframe = '5s';
     let signalSource = 'app_ai';  // app_ai, tradingview, mt4, mt5, tampermonkey_scan
     let favoritesFromBar = [];    // Detected from PO favorites bar
     let currentFavoriteIndex = 0; // For cycling through favorites
+
+    // ===========================================
+    // SMART AUTO-INVERT SYSTEM - v8.0
+    // Tracks per-asset direction losses locally
+    // ===========================================
+    let smartAutoInvert = {
+        enabled: true,
+        assetDirectionHistory: {},  // { 'EURUSD_OTC': { lastDirection: 'CALL', consecutiveLosses: 0, inverted: false, invertedWins: 0, cooldownUntil: 0 } }
+        consecutiveLossThreshold: 3,  // After N same-direction losses, invert
+        maxInvertedTrades: 5,         // Max trades while inverted before reverting
+        winsToConfirmRevert: 3,       // Consecutive wins to auto-revert from inversion
+        cooldownMs: 10000,            // 10s cooldown between invert state changes
+    };
+
+    // Track last trade info for premium result recording
+    let lastTradeInfo = {
+        symbol: '',
+        direction: '',
+        confidence: 0,
+    };
     
     // ===========================================
     // MANUAL WIN/LOSS + MARTINGALE SYSTEM - v6.7.0
@@ -1659,6 +1679,12 @@
         
         // Sync to backend
         syncStatsToBackend();
+        
+        // Record premium result for backend learning
+        recordPremiumResult(true);
+        
+        // Update smart auto-invert system
+        updateSmartAutoInvertOnResult(true);
     }
     
     // Called when user presses LOSS button
@@ -1746,6 +1772,12 @@
         
         // Sync to backend
         syncStatsToBackend();
+        
+        // Record premium result for backend learning
+        recordPremiumResult(false);
+        
+        // Update smart auto-invert system
+        updateSmartAutoInvertOnResult(false);
     }
     
     // Calculate current martingale amount
@@ -1851,6 +1883,259 @@
         });
     }
     
+    // ===========================================
+    // STRATEGY DROPDOWN LOADER - v8.0
+    // ===========================================
+    function loadStrategiesDropdown() {
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: CONFIG.API_URL + '/strategies/available/5s',
+            headers: { 'Accept': 'application/json' },
+            timeout: 8000,
+            onload: function(res) {
+                try {
+                    if (res.status !== 200) return;
+                    const data = JSON.parse(res.responseText);
+                    if (!data.success || !data.strategies) return;
+                    
+                    const select = document.getElementById('gpt-strategy-select');
+                    if (!select) return;
+                    
+                    // Clear existing options except first
+                    select.innerHTML = '<option value="default">All Strategies (Auto)</option>';
+                    
+                    data.strategies.forEach(s => {
+                        if (s.id === 'default') return; // Already added
+                        const opt = document.createElement('option');
+                        opt.value = s.id;
+                        opt.textContent = s.name + (s.win_rate ? ' (' + s.win_rate + ')' : '');
+                        select.appendChild(opt);
+                    });
+                    
+                    // Now load user's current selection
+                    loadSelectedStrategy(select);
+                    log('Strategies loaded: ' + data.strategies.length + ' available');
+                } catch(e) {
+                    console.error('[GPT] Load strategies error:', e);
+                }
+            },
+            onerror: function() {}
+        });
+    }
+    
+    function loadSelectedStrategy(select) {
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: CONFIG.API_URL + '/strategies/selected',
+            headers: { 'Accept': 'application/json' },
+            timeout: 5000,
+            onload: function(res) {
+                try {
+                    if (res.status !== 200) return;
+                    const data = JSON.parse(res.responseText);
+                    if (!data.success || !data.selections) return;
+                    
+                    // Selections are {timeframe: strategy_id_string}
+                    const sel5s = data.selections['5s'];
+                    if (sel5s && typeof sel5s === 'string') {
+                        selectedStrategy = sel5s;
+                        if (select) select.value = selectedStrategy;
+                        log('Active strategy: ' + selectedStrategy);
+                    } else if (sel5s && sel5s.strategy_id) {
+                        selectedStrategy = sel5s.strategy_id;
+                        if (select) select.value = selectedStrategy;
+                        log('Active strategy: ' + selectedStrategy);
+                    }
+                } catch(e) {}
+            },
+            onerror: function() {}
+        });
+    }
+    
+    function onStrategyChange(strategyId) {
+        selectedStrategy = strategyId;
+        GM_setValue('selectedStrategy', strategyId);
+        log('Strategy changed to: ' + strategyId);
+        
+        // Save to backend
+        GM_xmlhttpRequest({
+            method: 'POST',
+            url: CONFIG.API_URL + '/strategies/select',
+            headers: { 
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            },
+            data: JSON.stringify({
+                timeframe: '5s',
+                strategy_id: strategyId
+            }),
+            timeout: 5000,
+            onload: function(res) {
+                try {
+                    const data = JSON.parse(res.responseText);
+                    if (data.success) {
+                        log('Strategy saved: ' + strategyId);
+                    }
+                } catch(e) {}
+            },
+            onerror: function() {}
+        });
+    }
+
+    // ===========================================
+    // RECORD PREMIUM RESULT - v8.0
+    // Sends WIN/LOSS data to backend learning system
+    // ===========================================
+    function recordPremiumResult(isWin) {
+        const symbol = lastTradeInfo.symbol || getCurrentAsset() || 'UNKNOWN';
+        const direction = lastTradeInfo.direction || 'CALL';
+        const confidence = lastTradeInfo.confidence || 0;
+        
+        const normalizedSymbol = symbol.replace(/\s+/g, '').replace('/', '').toUpperCase();
+        
+        GM_xmlhttpRequest({
+            method: 'POST',
+            url: CONFIG.API_URL + '/signals/record-premium-result',
+            headers: { 
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            },
+            data: JSON.stringify({
+                symbol: normalizedSymbol,
+                direction: direction,
+                is_win: isWin,
+                confidence: confidence
+            }),
+            timeout: 5000,
+            onload: function(res) {
+                try {
+                    const data = JSON.parse(res.responseText);
+                    if (data.success && data.updated_stats) {
+                        const stats = data.updated_stats;
+                        log(`Premium: ${normalizedSymbol} WR=${stats.asset_win_rate}% (${stats.asset_total_trades} trades) | Hour WR=${stats.hour_win_rate}%`);
+                    }
+                } catch(e) {}
+            },
+            onerror: function() {}
+        });
+    }
+
+    // ===========================================
+    // SMART AUTO-INVERT LOGIC - v8.0
+    // Direction-aware loss tracking per asset
+    // ===========================================
+    function processSmartAutoInvert(signal) {
+        if (!smartAutoInvert.enabled) return signal;
+        
+        const symbol = (signal.symbol || '').toUpperCase();
+        if (!symbol) return signal;
+        
+        // Get or create asset tracking entry
+        if (!smartAutoInvert.assetDirectionHistory[symbol]) {
+            smartAutoInvert.assetDirectionHistory[symbol] = {
+                lastDirection: null,
+                consecutiveLosses: 0,
+                inverted: false,
+                invertedWins: 0,
+                invertedTrades: 0,
+                cooldownUntil: 0
+            };
+        }
+        
+        const assetState = smartAutoInvert.assetDirectionHistory[symbol];
+        const now = Date.now();
+        
+        // Check cooldown
+        if (now < assetState.cooldownUntil) {
+            return signal;
+        }
+        
+        // Check backend invert suggestion from premium_filters
+        if (signal.premium_filters && signal.premium_filters.invert_suggestion) {
+            if (!assetState.inverted) {
+                assetState.inverted = true;
+                assetState.invertedTrades = 0;
+                assetState.invertedWins = 0;
+                assetState.cooldownUntil = now + smartAutoInvert.cooldownMs;
+                log(`SMART INVERT: Backend suggests inversion for ${symbol} (loss streak in ${signal.direction})`);
+            }
+        }
+        
+        // If locally inverted, flip the signal direction
+        if (assetState.inverted) {
+            const original = signal.direction;
+            signal.direction = (signal.direction === 'CALL') ? 'PUT' : 'CALL';
+            signal._smartInverted = true;
+            signal._originalDirection = original;
+            log(`SMART INVERT: ${symbol} ${original} -> ${signal.direction} (inverted)`);
+        }
+        
+        return signal;
+    }
+    
+    function updateSmartAutoInvertOnResult(isWin) {
+        const symbol = (lastTradeInfo.symbol || '').toUpperCase();
+        if (!symbol || !smartAutoInvert.enabled) return;
+        
+        const assetState = smartAutoInvert.assetDirectionHistory[symbol];
+        if (!assetState) return;
+        
+        const direction = lastTradeInfo.direction;
+        
+        if (isWin) {
+            assetState.consecutiveLosses = 0;
+            
+            if (assetState.inverted) {
+                assetState.invertedWins++;
+                assetState.invertedTrades++;
+                
+                // If we got N consecutive wins while inverted, revert (trend confirmed)
+                if (assetState.invertedWins >= smartAutoInvert.winsToConfirmRevert) {
+                    assetState.inverted = false;
+                    assetState.invertedWins = 0;
+                    assetState.invertedTrades = 0;
+                    assetState.cooldownUntil = Date.now() + smartAutoInvert.cooldownMs;
+                    log(`SMART INVERT: ${symbol} reverted after ${smartAutoInvert.winsToConfirmRevert} wins (trend confirmed)`);
+                }
+            }
+        } else {
+            // Loss
+            if (assetState.lastDirection === direction) {
+                assetState.consecutiveLosses++;
+            } else {
+                assetState.consecutiveLosses = 1;
+            }
+            
+            if (assetState.inverted) {
+                assetState.invertedWins = 0; // Reset win counter on loss
+                assetState.invertedTrades++;
+                
+                // If still losing after max inverted trades, revert the inversion
+                if (assetState.invertedTrades >= smartAutoInvert.maxInvertedTrades) {
+                    assetState.inverted = false;
+                    assetState.invertedTrades = 0;
+                    assetState.invertedWins = 0;
+                    assetState.cooldownUntil = Date.now() + smartAutoInvert.cooldownMs;
+                    log(`SMART INVERT: ${symbol} reverted after ${smartAutoInvert.maxInvertedTrades} inverted trades (still losing)`);
+                }
+            } else {
+                // Not inverted - check if we should start inverting
+                if (assetState.consecutiveLosses >= smartAutoInvert.consecutiveLossThreshold) {
+                    assetState.inverted = true;
+                    assetState.invertedTrades = 0;
+                    assetState.invertedWins = 0;
+                    assetState.cooldownUntil = Date.now() + smartAutoInvert.cooldownMs;
+                    log(`SMART INVERT: ${symbol} activated after ${assetState.consecutiveLosses} consecutive ${direction} losses`);
+                }
+            }
+        }
+        
+        assetState.lastDirection = direction;
+        
+        // Save state
+        GM_setValue('smartAutoInvertState', JSON.stringify(smartAutoInvert.assetDirectionHistory));
+    }
+
     // Reset all stats
     function resetAllStats() {
         winLossStats = {
@@ -2965,6 +3250,14 @@
                     <div class="gpt-signal-value wait" id="gpt-signal">WAITING</div>
                 </div>
                 
+                <!-- Strategy Selector -->
+                <div class="gpt-settings-row" style="margin-bottom:8px; padding:6px 8px;">
+                    <span class="gpt-input-label" style="white-space:nowrap;">Strategy:</span>
+                    <select id="gpt-strategy-select" class="gpt-input" style="width:100%; text-align:left; font-size:10px; padding:4px;">
+                        <option value="default">All Strategies</option>
+                    </select>
+                </div>
+                
                 <!-- Main Control Buttons -->
                 <div class="gpt-btn-row">
                     <button class="gpt-btn gpt-btn-auto" id="gpt-auto">
@@ -3089,6 +3382,14 @@
             updateMoneyManagementDisplay();
             log(`Risk updated: ${moneyManagement.riskPercentage}%`);
         });
+
+        // Strategy dropdown handler
+        document.getElementById('gpt-strategy-select').addEventListener('change', (e) => {
+            onStrategyChange(e.target.value);
+        });
+        
+        // Load strategies from API
+        loadStrategiesDropdown();
 
         // Make draggable
         makeDraggable(panel, document.getElementById('gpt-drag'));
@@ -3711,6 +4012,11 @@
         const finalDirection = isCall ? 'CALL' : 'PUT';
         updateSignalDisplay(finalDirection, signal.symbol, isCall ? 'call' : 'put', '📡 APP');
 
+        // Track trade info for premium result recording
+        lastTradeInfo.symbol = (signal.symbol || '').replace(/\s+/g, '').replace('/', '').toUpperCase();
+        lastTradeInfo.direction = finalDirection;
+        lastTradeInfo.confidence = signal.confidence || 0;
+
         // Play APP sound
         playAppSignalSound();
 
@@ -3924,8 +4230,20 @@
                 _willSwitch: willSwitchAssets
             };
             
+            // Apply Smart Auto-Invert
+            const processedSignal = processSmartAutoInvert(tradeSignal);
+            
+            // Track trade info for premium result recording
+            lastTradeInfo.symbol = processedSignal.symbol || '';
+            lastTradeInfo.direction = processedSignal.direction || '';
+            lastTradeInfo.confidence = processedSignal.confidence || 0;
+            
+            if (processedSignal._smartInverted) {
+                log(`SMART INVERT applied: ${processedSignal._originalDirection} -> ${processedSignal.direction}`);
+            }
+            
             // Execute trade
-            executeScanTrade(tradeSignal).catch(err => {
+            executeScanTrade(processedSignal).catch(err => {
                 log(`❌ Trade error: ${err.message}`);
                 updateStatusDot('connected');
             });
@@ -3977,7 +4295,8 @@
             }
         }
 
-        const apiUrl = CONFIG.API_URL + `/signals/scan-markets?assets=${assetsToScan}&min_confidence=${CONFIG.MIN_CONFIDENCE}`;
+        const strategyParam = selectedStrategy !== 'default' ? `&strategy=${selectedStrategy}` : '';
+        const apiUrl = CONFIG.API_URL + `/signals/scan-markets?assets=${assetsToScan}&min_confidence=${CONFIG.MIN_CONFIDENCE}${strategyParam}`;
         log(`📡 API: ${apiUrl}`);
         updateStatusDot('trading');
         
@@ -4006,13 +4325,21 @@
                             log(`  #${i+1}: ${s.direction} ${s.symbol} (${Math.round(s.confidence)}%)`);
                         });
                         
-                        const bestSignal = signals[0];
+                        let bestSignal = signals[0];
                         bestSignal._willSwitch = willSwitchAssets;
                         // Store OTHER signals for fallback (excluding best to avoid circular ref)
                         bestSignal._allSignals = signals.slice(1);
                         bestSignal.source = 'BACKEND_OANDA';
                         
-                        log(`✅ Best: ${bestSignal.direction} ${bestSignal.symbol} (${Math.round(bestSignal.confidence)}%)`);
+                        // Apply Smart Auto-Invert
+                        bestSignal = processSmartAutoInvert(bestSignal);
+                        
+                        // Track trade info for premium result recording
+                        lastTradeInfo.symbol = bestSignal.symbol || '';
+                        lastTradeInfo.direction = bestSignal.direction || '';
+                        lastTradeInfo.confidence = bestSignal.confidence || 0;
+                        
+                        log(`✅ Best: ${bestSignal.direction} ${bestSignal.symbol} (${Math.round(bestSignal.confidence)}%)${bestSignal._smartInverted ? ' [INVERTED]' : ''}`);
                         
                         executeScanTrade(bestSignal).catch(err => {
                             log(`❌ Trade error: ${err.message}`);
@@ -4531,7 +4858,7 @@
     // INITIALIZATION - v6.9.0
     // ===========================================
     function init() {
-        console.log('[GPT Bot] Starting initialization v6.9.0...');
+        console.log('[GPT Bot] Starting initialization v8.0.0...');
         
         try {
             // Load saved settings (all default to false)
@@ -4561,6 +4888,17 @@
             // Load sound settings
             soundNotificationsEnabled = GM_getValue('soundNotificationsEnabled', true);
             
+            // Load saved strategy selection
+            selectedStrategy = GM_getValue('selectedStrategy', 'default');
+            
+            // Load smart auto-invert state
+            const savedInvertState = GM_getValue('smartAutoInvertState', null);
+            if (savedInvertState) {
+                try {
+                    smartAutoInvert.assetDirectionHistory = JSON.parse(savedInvertState);
+                } catch(e) {}
+            }
+            
             // Load stats if any
             const savedStats = GM_getValue('winLossStats', null);
             if (savedStats) {
@@ -4572,7 +4910,7 @@
             }
 
             console.log('[GPT Bot] Creating panel...');
-            console.log('[GPT Bot] v7.0.0 - Console window + improved asset switching');
+            console.log('[GPT Bot] v8.0.0 - Strategy selector + Smart Auto-Invert + Premium tracking');
             
             // Create panel immediately, don't wait
             createPanel();

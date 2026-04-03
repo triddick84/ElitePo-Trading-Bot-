@@ -1,17 +1,17 @@
 //+------------------------------------------------------------------+
 //|                                        GPT_Signal_Bot_EA_MT5.mq5 |
 //|                         GPT Signal Bot - MetaTrader 5 Integration |
-//|                 https://pocket-trader-ai-8.preview.emergentagent.com |
+//|                 https://auto-trade-bot-pro.preview.emergentagent.com |
 //+------------------------------------------------------------------+
 #property copyright "GPT Signal Bot"
-#property link      "https://pocket-trader-ai-8.preview.emergentagent.com"
+#property link      "https://auto-trade-bot-pro.preview.emergentagent.com"
 #property version   "1.00"
 #property description "Receives trading signals from GPT Signal Bot and executes trades"
 
 #include <Trade\Trade.mqh>
 
 //--- Input parameters
-input string   API_URL = "https://pocket-trader-ai-8.preview.emergentagent.com/api";  // API URL
+input string   API_URL = "https://auto-trade-bot-pro.preview.emergentagent.com/api";  // API URL
 input string   API_KEY = "";                    // API Key (optional)
 input int      PollIntervalSeconds = 5;         // Signal poll interval (seconds)
 input double   LotSize = 0.01;                  // Trade lot size

@@ -13,7 +13,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List
 
 # Test configuration
-BACKEND_URL = "https://pocket-trader-ai-8.preview.emergentagent.com/api"
+BACKEND_URL = "https://auto-trade-bot-pro.preview.emergentagent.com/api"
 
 class MultiProviderBacktestTester:
     def __init__(self):

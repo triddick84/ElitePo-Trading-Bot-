@@ -11,7 +11,7 @@ import random
 from datetime import datetime, timedelta
 
 # Test configuration
-BACKEND_URL = "https://pocket-trader-ai-8.preview.emergentagent.com/api"
+BACKEND_URL = "https://auto-trade-bot-pro.preview.emergentagent.com/api"
 
 class SupertrendTester:
     def __init__(self):

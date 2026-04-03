@@ -10,7 +10,7 @@ import sys
 from datetime import datetime
 
 # Test configuration
-BACKEND_URL = "https://pocket-trader-ai-8.preview.emergentagent.com/api"
+BACKEND_URL = "https://auto-trade-bot-pro.preview.emergentagent.com/api"
 
 class NewStrategyTester:
     def __init__(self):

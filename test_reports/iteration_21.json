@@ -1,0 +1,93 @@
+{
+  "summary": "Iteration 21 testing complete. All 19 backend tests passed (100%). Tested v8.0 features: Strategy Selector Dropdown API, Smart Auto-Invert system (record-premium-result), scan-markets with strategy param, and Tampermonkey script verification.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_v8_features.py",
+    "/app/test_reports/pytest/pytest_v8_features.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "GET /api/strategies/available/5s returns list of strategies with id and name fields - verified",
+    "GET /api/strategies/selected returns strategy IDs as plain strings per timeframe (e.g., {'5s': 'ema20_pullback_reversal'}) - verified",
+    "POST /api/strategies/select correctly updates and persists strategy selection to MongoDB",
+    "POST /api/signals/record-premium-result returns success + updated_stats with asset_win_rate, asset_total_trades, hour_win_rate, hour_total_trades - verified",
+    "GET /api/signals/scan-markets accepts optional strategy_id param for strategy override - verified",
+    "Tampermonkey script (v8.0.0) accessible at /pocket-option-auto-trader.user.js - verified",
+    "Script contains: gpt-strategy-select dropdown, processSmartAutoInvert, updateSmartAutoInvertOnResult, recordPremiumResult, loadStrategiesDropdown - all verified"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_v8_features.py"
+  ],
+  "success_rate": {
+    "backend": "100% (19/19 tests passed)",
+    "frontend": "N/A - backend only testing requested"
+  },
+  "test_credentials": "No auth required for strategy and signal endpoints",
+  "seed_data_creation": "Strategy selection updated during tests (reset to default after)",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "v8.0 features fully tested. Strategy dropdown fetches from /api/strategies/available/{timeframe}. WIN/LOSS buttons send results to /api/signals/record-premium-result for backend learning. Smart Auto-Invert tracks per-asset direction losses locally in Tampermonkey script. scan-markets accepts optional 'strategy_id' query param.",
+  "mocked_apis": {
+    "note": "MT4/TradingView webhooks are mocked/simulated as per main agent context"
+  },
+  "endpoints_tested": {
+    "strategies_available": [
+      "GET /api/strategies/available/5s ✅ (returns list with id, name fields)",
+      "GET /api/strategies/available ✅ (returns all timeframes)"
+    ],
+    "strategies_select": [
+      "POST /api/strategies/select {timeframe:'5s', strategy_id:'ema20_pullback_reversal'} ✅",
+      "POST /api/strategies/select {timeframe:'5s', strategy_id:'default'} ✅ (reset)"
+    ],
+    "strategies_selected": [
+      "GET /api/strategies/selected ✅ (returns selections as strings, e.g., {'5s': 'ema20_pullback_reversal'})"
+    ],
+    "record_premium_result": [
+      "POST /api/signals/record-premium-result {symbol, direction, is_win:true, confidence} ✅ (returns updated_stats)",
+      "POST /api/signals/record-premium-result {symbol, direction, is_win:false, confidence} ✅"
+    ],
+    "scan_markets": [
+      "GET /api/signals/scan-markets?assets=EURUSD_OTC&min_confidence=50&strategy_id=ema20_pullback_reversal ✅",
+      "GET /api/signals/scan-markets?assets=EURUSD_OTC,GBPUSD_OTC&min_confidence=50 ✅"
+    ],
+    "tampermonkey_script": [
+      "GET /pocket-option-auto-trader.user.js ✅ (200 status, version 8.0.0)",
+      "Script contains gpt-strategy-select dropdown ✅",
+      "Script contains processSmartAutoInvert function ✅",
+      "Script contains updateSmartAutoInvertOnResult function ✅",
+      "Script contains recordPremiumResult function ✅",
+      "Script contains loadStrategiesDropdown function ✅"
+    ],
+    "regression_endpoints": [
+      "GET /api/signals/session-info ✅",
+      "GET /api/signals/should-trade ✅"
+    ]
+  },
+  "v8_features_verified": {
+    "strategy_selector_dropdown": {
+      "api_endpoint": "GET /api/strategies/available/{timeframe}",
+      "response_format": "List of {id, name, ...} objects",
+      "tampermonkey_function": "loadStrategiesDropdown()",
+      "html_element": "gpt-strategy-select"
+    },
+    "smart_auto_invert": {
+      "tampermonkey_functions": ["processSmartAutoInvert(signal)", "updateSmartAutoInvertOnResult(isWin)"],
+      "tracks": "Per-asset direction losses locally",
+      "threshold": "3 consecutive same-direction losses triggers invert"
+    },
+    "premium_result_recording": {
+      "api_endpoint": "POST /api/signals/record-premium-result",
+      "request_body": "{symbol, direction, is_win, confidence}",
+      "response": "{success, recorded, updated_stats: {asset_win_rate, asset_total_trades, hour_win_rate, hour_total_trades}}",
+      "tampermonkey_function": "recordPremiumResult(isWin)"
+    }
+  }
+}

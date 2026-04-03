@@ -9,7 +9,7 @@ export const CONFIG = {
   BOT_VERSION: '8.0.0',
 
   // API Settings
-  API_URL: 'https://pocket-trader-ai-8.preview.emergentagent.com/api',
+  API_URL: 'https://auto-trade-bot-pro.preview.emergentagent.com/api',
   
   // Polling Intervals
   APP_POLL_INTERVAL: 3000,      // 3 seconds for app signals

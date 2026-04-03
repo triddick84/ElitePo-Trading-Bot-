@@ -1,115 +1,117 @@
-<analysis>**original_problem_statement**: The user is building a GPT Signal Bot for Pocket Option. The system utilizes a full-stack React/FastAPI app paired with a Tampermonkey userscript. The core goal is integrating multiple signal sources, maintaining high-accuracy AI/ML-based strategies (stacking ensembles, deep market analysis, LSTM/RL models), robust risk management, collecting historical data for backtesting, and executing trades directly on the Pocket Option broker.
+<analysis>**original_problem_statement**: The user is building a GPT Signal Bot (now renamed to Elite Pocket Option Trading Bot) for the Pocket Option platform. The system utilizes a full-stack React/FastAPI app paired with a Tampermonkey userscript. The core goal is integrating multiple signal sources, maintaining high-accuracy AI/ML-based strategies (stacking ensembles, deep market analysis, LSTM/RL models), robust risk management, collecting historical data for backtesting, and executing trades directly on the Pocket Option broker.
 
 **User's preferred language**: English
 *(INSTRUCTING NEXT AGENT: Please respond in English only)*
 
-**what currently exists?**: A stable full-stack application (React frontend, FastAPI backend, MongoDB). A highly optimized signal generation pipeline combining deep market analysis and AI/ML Ensembles (LSTM/GRU, PPO RL, XGBoost/LightGBM). A hybrid backtesting and historical data collection system utilizing Deriv WebSocket API. A newly modularized Tampermonkey userscript (built via Webpack) handles UI injection, live data collection, and trade execution.
+**what currently exists?**: A full-stack application (React frontend, FastAPI backend, MongoDB). A highly optimized backend signal generation pipeline with Premium Signal Generators that implement session-aware filtering, time-of-day win-rate tracking, and direction-aware loss tracking. A new EMA 20 Pullback Reversal 5-second strategy is available on the backend. **CRITICAL STATE:** There are currently *two* versions of the Tampermonkey script. The agent spent the session updating a modern Webpack-based modular script (), but the user is stubbornly running the older, monolithic 4,600+ line legacy script (). 
 
 **Last working item**:
-- **Last item agent was working**: Improving signal clarification and accuracy to generate high win-rate signals. The agent proposed adding time/session filters and win-rate tracking by hour. The agent just created  and started updating  before context ran out.
+- **Last item agent was working**: Porting the newly built advanced features (Strategy Selector Dropdown, Smart Auto-Invert logic based on consecutive losses, and wiring manual WIN/LOSS buttons to the  API) directly into the **legacy monolithic Tampermonkey script** (). The agent had to pivot to updating this massive file because the user continues to use it instead of the modular Webpack build.
 - **Status**: IN PROGRESS
 - **Agent Testing Done**: N
-- **Which testing method agent to use?**: backend testing agent
+- **Which testing method agent to use?**: manual testing by curl / python -c for API endpoints + screenshot tool / user verification for the Tampermonkey UI.
 - **User Testing Done**: N
 
 **All Pending/In progress Issue list**: 
-None active.
+Issue 1: Port Advanced Features to Legacy Script (P0)
+- **Attempted fixes**: The agent successfully built all features into the modular script () and tried to guide the user to install it. The user either couldn't or wouldn't switch, experiencing errors (switch failed, v7.3, missing dropdowns) because they were still running the old 4,600-line script. The agent just started injecting the HTML for the dropdown into the legacy script via  before context ended.
+- **Next debug checklist**: 
+  - Complete injecting the Strategy Dropdown HTML into the panel in .
+  - Wire the dropdown to fetch  and .
+  - Implement the Smart Auto-Invert logic (tracking consecutive direction-aware losses).
+  - Wire the existing manual  and  buttons ( and ) to send data to .
+- **Why fix this issue and what will be achieved with the fix?**: The user relies heavily on the legacy script. Adding these features bridges the gap between the new backend logic (premium signal tracking, EMA20 strategy) and the user's active UI.
+- **Status**: IN PROGRESS
+- **Is recurring issue?**: Y (Userscript sync/update issues are recurring)
+- **Should Test frontend/backend/both after fix?**: Frontend (User Verification via browser)
+- **Blocked on other issue**: None
 
 **In progress Task List**:
-- **Task 1: Premium Signal Clarification & Accuracy Optimization** (P0)
-   - **Where to resume**: Review  and implement the time/session filters and win-rate tracking logic. Integrate this new service into the signal generation pipeline (likely inside  or ) to filter out low-probability trades.
-   - **What will be achieved with this?**: Higher accuracy signals, reduced false positives during low-volume/erratic sessions, and overall higher win rates for the user.
-   - **Status**: IN PROGRESS
-   - **Should Test frontend/backend/both after fix?**: Backend
-   - **Blocked on something**: None
+Task 1: Legacy Userscript Feature Parity (P0)
+- **Where to resume**:  - Continue adding the strategy dropdown logic, API calls, and smart auto-invert.
+- **What will be achieved with this?**: The user will finally see the strategy selector and working auto-invert system on the screen they are actively looking at.
+- **Status**: IN PROGRESS
+- **Should Test frontend/backend/both after fix?**: Frontend
+- **Blocked on something**: None
 
 **Upcoming and Future Tasks**
 Upcoming Tasks:
-- **(P1) Build Frontend Backtesting Dashboard**: Create a React UI to visualize backtest results, historical data summaries, and ML model performance metrics utilizing the newly created  endpoints.
-
+- (P1) **Build Frontend Backtesting Dashboard**: Create a React UI to visualize backtest results, historical data summaries, and ML model performance metrics utilizing the newly created  endpoints.
 Future Tasks:
-- **(P2) Test TradingView Webhook / MT4 Integrations**: Currently mocked/simulated.
+- (P2) **Test TradingView Webhook / MT4 Integrations**: Currently mocked/simulated.
 
 **Completed work in this session**
-- **AI/ML Phase 2 & 3 Fixes**: Fixed deprecated  and missing  errors preventing LSTM/PPO training. Successfully trained and integrated both LSTM/GRU and PPO models into the main  ensemble endpoint. (DONE)
-- **Signal Generation Flow Fix**: Resolved an issue where Tampermonkey scans found 0 signals. Relaxed the strict  validation, lowered confidence floors (from 70% to 65%), and adjusted volume thresholds in . (DONE)
-- **Tampermonkey Circular Reference Fix**: Fixed Trade error cyclic object value error during execution caused by self-referencing  inside the signal JSON stringifier. (DONE)
-- **Historical Data & Backtesting Engine**: Created a hybrid system using Deriv API for synthetic indices and local MongoDB storage. Added , , and . Added a live data scraper toggle directly into the Tampermonkey script. (DONE)
-- **ML Trainer Bug Fix**: Fixed a name get_ml_trainer is not defined error in the ML routes. (DONE)
-- **Tampermonkey Script Modularization (P1)**: Successfully broke down the massive ~4,600 line monolithic userscript into a Webpack-based project structure located in . Built and minified it to a 66KB output file at . (DONE)
+- Premium Signal Clarification & Accuracy Optimization: Added session-aware filters, win-rate tracking, and direction-aware loss penalization to the backend. (DONE)
+- Smart Auto-Invert API Logic: Backend endpoints updated to suggest inversions when facing consecutive losses in a specific direction. (DONE)
+- EMA 20 Pullback Reversal Strategy: Implemented new 5s strategy based on EMA 20, RSI, and Bollinger Bands on the backend. (DONE)
+- Modular Userscript Fixes: Fixed Shadow DOM CSP issues on Pocket Option, added mobile-responsive touch support to the panel. (DONE)
+- Legacy Userscript Patch: Disabled broken cross-asset switching logic () in the legacy script to stop the Switch failed error loop. (DONE)
 
 **Earlier issues found/mentioned but not fixed**
-- None.
+Issue 1: Codebase divergence (Two Userscripts)
+- **Debug checklist**: The repository currently maintains both a massive legacy script and a modular Webpack setup. 
+- **Why to solve this issue and what will be achieved with this?**: Modifying a 4,600-line monolithic file via  is error-prone. The user needs clear instructions on how to remove the old script from their Tampermonkey dashboard and install the newly compiled one, or the modular repo folder () should be abandoned.
+- **Should Test frontend/backend/both after fix**: N/A
+- **Is recurring issue?**: Y
 
 **Known issue recurrence from previous fork**
-- **Issue recurrence in previous fork**: Tampermonkey scanning/signal generation frequently hits too strict confidence thresholds, resulting in users complaining about no signals.
-- **Recurrence count**: 2
-- **Status**: RESOLVED (Floors were lowered to 65% and  logic was relaxed in this session. Monitor if the user asks for further adjustments).
+- **Issue recurrence in previous fork**: Tampermonkey panel visibility/injection blocking by Pocket Option.
+- **Recurrence count**: 3
+- **Status**: RESOLVED (Agent moved away from Shadow DOM to direct DOM injection with  and  tags).
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
-- **Frontend**: React, Tampermonkey userscript (Now Webpack minified).
+- **Frontend**: React, Tampermonkey userscript.
 - **Backend**: FastAPI, Python, MongoDB.
-- **Machine Learning**: , ,  (PPO RL), TensorFlow/Keras (LSTM).
-- **Data Collection**: Deriv API (websockets) for Synthetic Indices historical data.
+- **Trading Logic**: Price action, EMA, RSI, Bollinger Bands, consecutive loss tracking.
 
 **key DB schema**
 - : 
 
 **changes in tech stack**
-- Added Node.js/Webpack (managed via yarn install v1.22.22
-[1/4] Resolving packages...
-[2/4] Fetching packages...
-[3/4] Linking dependencies...
-[4/4] Building fresh packages...
-success Saved lockfile.
-Done in 0.05s. inside ) to build the Tampermonkey script.
-- Added  to Python backend for Deriv API connections.
+- None.
 
 **All files of reference**
--  (New - WIP)
--  (WIP modification target)
--  (New modular Tampermonkey source files)
--  (Compiled userscript output)
+-  (CRITICAL: Must edit this file to satisfy the user)
+-  (Completed)
+-  (Completed)
+-  (Completed)
 
 **Areas that need refactoring**:
-- None. (The userscript was just successfully refactored).
+-  is a 4,600+ line monolith. Modifying it is tedious, but strictly necessary right now due to the user's environment.
 
 **key api endpoints**
-- 
+-  (Now supports strategy parameters & premium filters)
+-  (Endpoint to record WIN/LOSS)
 - 
 - 
 
 **Critical Info for New Agent**
-- **TAMPERMONKEY SCRIPT HAS BEEN MODULARIZED**: Do NOT manually edit  or the legacy  file anymore. All userscript changes MUST be made inside  and then compiled using yarn run v1.22.22
-$ webpack --mode production
-asset pocket-option-auto-trader.user.js 66.6 KiB [emitted] [minimized] (name: main)
-orphan modules 118 KiB [orphan] 15 modules
-./src/index.js + 15 modules 135 KiB [built] [code generated]
-webpack 5.105.4 compiled successfully in 3807 ms
-Done in 5.22s. (which utilizes Webpack to output to the public folder).
-- The user's goal with  is to introduce advanced session filtering (e.g., avoiding erratic market overlaps, low volume hours) and win-rate analysis per hour/asset to boost overall trading success rates.
+- **DO NOT IGNORE THIS:** The user is *not* using the Webpack modular script (). They are using the legacy script located at . You *must* apply any userscript UI or logic changes to this legacy file!
+- The backend features (EMA 20 strategy, Premium Tracking, Direction-aware inversion) are fully implemented and passed 100% of the  checks. 
 
 **documents and test reports created in this job**
--  (Updated)
--  (Passed - ML endpoints verify)
+- 
+-  (Passed)
+-  (Passed)
+-  (Passed)
 
 **Last 10 User Messages and any pending HUMAN messages** 
-1. *User*: scan in tampermonkey is coming back with error, Trade error cyclic object value (Agent fixed  circular reference).
-2. *User*: for backtesting and data history collection... need to have access to all assets and markets including otc and timeframes (Agent proposed options via ask_human).
-3. *User*: [Selections made 1.b and c, 2.a and b, etc.]
-4. *User*: research some options best for the application setup (Agent researched Deriv API).
-5. *User*: go with your recommendation and go hybrid (Agent built historical data & backtesting system).
-6. *User*: get ml trainer not defined (Agent fixed missing import in ).
-7. *User*: continue with p1 (Agent asked how to structure the modular script).
-8. *User*: option a (Agent modularized Tampermonkey script using Webpack).
-9. *User*: need to improve the signal clarification and analyzing data to generate high accuracy signals that have high Win rates (Agent suggested time/session filters via ask_human).
-10. *User*: e (User agreed. Agent created  but context ended).
+1. *User*: (Requests EMA 20 strategy and Tampermonkey strategy selection integration)
+2. *Agent*: (Builds features in backend and modular script, tests, finishes task)
+3. *User*: tampermonkey is not being displayed in pocket option trading platform website
+4. *Agent*: (Fixes modular script injection)
+5. *User*: still not a panel being displayed
+6. *Agent*: (Adds  to modular script)
+7. *User*: tampermonkey wont show up on mobile but will on pc"
+8. *Agent*: (Adds mobile touch controls to modular script)
+9. *User*: "its now showing the panel, also need to implement the strategies... and thought tampermonkey was going to be on an auto invert system
+10. *Agent*: (Discovers user is on the legacy script showing v7.3, patches legacy script to v8.0, user complains missing features -> Agent starts backporting features to the legacy monolith).
 
 **Project Health Check:**
-- **Broken**: None
+- **Broken**: None on backend.
 - **Mocked**: MT4 / TradingView Webhooks.
 
 **3rd Party Integrations**
@@ -118,13 +120,13 @@ Done in 5.22s. (which utilizes Webpack to output to the public folder).
 - Telegram Bot (Notifications) — requires User API Key
 
 **Testing status**
-- Testing agent used after significant changes: YES (Iteration 17 passed).
+- Testing agent used after significant changes: YES (Iterations 18, 19, 20 passed)
 - Troubleshoot agent used after agent stuck in loop: NO
-- Test files created: 
-- Known regressions: None.
+- Test files created: Iteration JSON reports.
+- Known regressions: Legacy script was failing on asset switching (patched manually to ignore switching).
 
 **Credentials to test flow:**
 -  / 
 
 **What agent forgot to execute**
-- The agent created  to implement the user's request for higher accuracy/win rate signal clarification but the context window ended before any code was written or integrated into the signal generation pipeline.</analysis>
+- The agent started injecting the Strategy Dropdown UI into the legacy script () but ran out of context before adding the JavaScript logic for the dropdown (API calls) and the Smart Auto-Invert logic. Ensure this is completed.</analysis>
