@@ -13,7 +13,7 @@
 ✅ **Holly Crossover Strategy (5s/15s/30s)** - EMA(12) x WMA(23) reversal crossover with S/R confirmation
 ✅ **Golden One Moment 30s Strategy** - RSI(2) + Stochastic(4,3,3) mean reversion, 30s expiration
 ✅ **Risk Management System** - Sharpe ratio, drawdown protection, Kelly criterion position sizing
-✅ **Tampermonkey v7.7.0** - Historical data collector, relaxed confidence thresholds
+✅ **Tampermonkey v7.7.0 Modular** - Webpack build system, 64% smaller bundle (68KB vs 188KB)
 ✅ **Maximized AI/ML v3.0** - 97 features, XGBoost+LightGBM stacking, HMM regime detection
 ✅ **Improved AI/ML v2.0** - 62 features, 56% accuracy, RF+GB+AdaBoost ensemble
 ✅ **Momentum Buster 15s Strategy** - Momentum period 3, green/red bars, 15s expiration
