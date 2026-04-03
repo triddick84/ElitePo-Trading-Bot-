@@ -22,6 +22,13 @@ from maximized_ai_ml_system import maximized_ai_ml
 from ai_learning_system import ai_learning_system
 from routes import get_realtime_market_hub
 from pocket_option_client import get_pocket_option_client
+
+# Lazy import for ML trainer to avoid circular dependency
+def get_ml_trainer():
+    """Get ML trainer from server module"""
+    from server import get_ml_trainer as _get_ml_trainer
+    return _get_ml_trainer()
+
 try:
     from lstm_gru_system import lstm_gru_system
 except ImportError:
