@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://ai-broker-dev.preview.emergentagent.com
-// @version      7.6.1
+// @version      7.7.0
 // @description  Auto-trade OTC forex on Pocket Option. v7.4.0 - Holly Crossover + Multi-asset scan
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
@@ -981,6 +981,153 @@
         reset() {
             this.priceHistory = [];
             this.candleHistory = [];
+        }
+    };
+
+    // ===========================================
+    // v7.6.1 HISTORICAL DATA COLLECTOR
+    // Collects and sends candle data to backend for ML training
+    // ===========================================
+    const HistoricalDataCollector = {
+        enabled: false,
+        collectionInterval: null,
+        candleBuffer: [],
+        maxBufferSize: 100,
+        lastSentTime: 0,
+        sendIntervalMs: 60000, // Send every 60 seconds
+        
+        // Timeframe in seconds for candle aggregation
+        candleTimeframes: {
+            '5s': 5000,
+            '15s': 15000,
+            '30s': 30000,
+            'M1': 60000
+        },
+        
+        currentCandle: null,
+        currentTimeframe: '5s',
+        candleStartTime: 0,
+        
+        start(timeframe = '5s') {
+            if (this.collectionInterval) {
+                clearInterval(this.collectionInterval);
+            }
+            
+            this.enabled = true;
+            this.currentTimeframe = timeframe;
+            const tfMs = this.candleTimeframes[timeframe] || 5000;
+            
+            log(`📊 Data collector started: ${timeframe} candles`);
+            
+            // Collect price data every 500ms
+            this.collectionInterval = setInterval(() => {
+                this.collectPrice();
+            }, 500);
+            
+            // Send buffer to backend periodically
+            setInterval(() => {
+                this.sendToBackend();
+            }, this.sendIntervalMs);
+        },
+        
+        stop() {
+            this.enabled = false;
+            if (this.collectionInterval) {
+                clearInterval(this.collectionInterval);
+                this.collectionInterval = null;
+            }
+            log('📊 Data collector stopped');
+        },
+        
+        collectPrice() {
+            if (!this.enabled) return;
+            
+            const price = PriceScraperV2.scrapeCurrentPrice();
+            if (!price) return;
+            
+            const now = Date.now();
+            const tfMs = this.candleTimeframes[this.currentTimeframe] || 5000;
+            
+            // Start new candle
+            if (!this.currentCandle || (now - this.candleStartTime >= tfMs)) {
+                // Save completed candle
+                if (this.currentCandle) {
+                    this.candleBuffer.push({
+                        timestamp: new Date(this.candleStartTime).toISOString(),
+                        open: this.currentCandle.open,
+                        high: this.currentCandle.high,
+                        low: this.currentCandle.low,
+                        close: this.currentCandle.close,
+                        volume: this.currentCandle.ticks
+                    });
+                    
+                    // Trim buffer if too large
+                    if (this.candleBuffer.length > this.maxBufferSize) {
+                        this.candleBuffer = this.candleBuffer.slice(-this.maxBufferSize);
+                    }
+                }
+                
+                // Start new candle
+                this.currentCandle = {
+                    open: price,
+                    high: price,
+                    low: price,
+                    close: price,
+                    ticks: 1
+                };
+                this.candleStartTime = now;
+            } else {
+                // Update current candle
+                this.currentCandle.high = Math.max(this.currentCandle.high, price);
+                this.currentCandle.low = Math.min(this.currentCandle.low, price);
+                this.currentCandle.close = price;
+                this.currentCandle.ticks++;
+            }
+        },
+        
+        async sendToBackend() {
+            if (!this.enabled || this.candleBuffer.length === 0) return;
+            
+            const currentAssetNow = getCurrentAsset() || 'UNKNOWN_OTC';
+            const candles = [...this.candleBuffer];
+            this.candleBuffer = [];
+            
+            try {
+                GM_xmlhttpRequest({
+                    method: 'POST',
+                    url: `${CONFIG.API_URL}/tampermonkey/candles?symbol=${encodeURIComponent(currentAssetNow)}&timeframe=${this.currentTimeframe}`,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    data: JSON.stringify(candles),
+                    timeout: 10000,
+                    onload: (res) => {
+                        if (res.status === 200) {
+                            const data = JSON.parse(res.responseText);
+                            if (data.success) {
+                                log(`📊 Sent ${candles.length} candles to backend (stored: ${data.stored})`);
+                            }
+                        }
+                    },
+                    onerror: (e) => {
+                        // Silently fail - will retry next interval
+                        this.candleBuffer = candles.concat(this.candleBuffer);
+                    }
+                });
+            } catch (e) {
+                // Re-add candles to buffer for retry
+                this.candleBuffer = candles.concat(this.candleBuffer);
+            }
+        },
+        
+        getStats() {
+            return {
+                enabled: this.enabled,
+                timeframe: this.currentTimeframe,
+                bufferedCandles: this.candleBuffer.length,
+                currentCandle: this.currentCandle
+            };
         }
     };
 

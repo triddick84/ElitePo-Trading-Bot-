@@ -8,18 +8,59 @@
 ✅ **AI/ML Phase 2: LSTM/GRU Time-Series** - BiLSTM(64) + GRU(48) + Attention, 13 features, auto-labeling pipeline
 ✅ **AI/ML Phase 3: PPO Reinforcement Learning** - Actor-Critic (128→64→3), trading environment simulation
 ✅ **AI Ensemble System** - Combines Stacking (40%) + LSTM/GRU (35%) + PPO (25%) with weighted voting
+✅ **Backtesting & Historical Data System** - Multi-source data collection, ML backtesting, comprehensive metrics
 ✅ **Signal Generation Optimized** - Relaxed thresholds for better signal flow (April 3, 2026)
 ✅ **Holly Crossover Strategy (5s/15s/30s)** - EMA(12) x WMA(23) reversal crossover with S/R confirmation
 ✅ **Golden One Moment 30s Strategy** - RSI(2) + Stochastic(4,3,3) mean reversion, 30s expiration
 ✅ **Risk Management System** - Sharpe ratio, drawdown protection, Kelly criterion position sizing
-✅ **Tampermonkey v7.6.0** - Relaxed confidence thresholds, better OTC signal flow
+✅ **Tampermonkey v7.7.0** - Historical data collector, relaxed confidence thresholds
 ✅ **Maximized AI/ML v3.0** - 97 features, XGBoost+LightGBM stacking, HMM regime detection
 ✅ **Improved AI/ML v2.0** - 62 features, 56% accuracy, RF+GB+AdaBoost ensemble
 ✅ **Momentum Buster 15s Strategy** - Momentum period 3, green/red bars, 15s expiration
 ✅ **1m Momentum Exhaustion Strategy** - RSI-2 + Stochastic + BB + Candlesticks (70-75% target)
-✅ **Backend Data Sources** - OANDA (primary), yfinance (fallback) - for regular forex
+✅ **Backend Data Sources** - OANDA (primary), Deriv API (synthetics), Tampermonkey scraper (OTC)
 
 ## Recent Updates (April 3, 2026)
+
+### Backtesting & Historical Data System (April 3, 2026)
+**New Files Created:**
+- `deriv_data_service.py` - Deriv WebSocket API integration for synthetic indices
+- `historical_data_service.py` - MongoDB storage for historical candles, CSV/JSON import
+- `backtesting_engine.py` - Strategy and ML model backtesting with metrics
+- `routes/backtesting.py` - API endpoints integrated into existing backtest.py
+
+**Deriv API Integration:**
+- Free WebSocket API (no key required for market data)
+- 26 synthetic indices: Volatility 10-100, Crash/Boom 300-1000, Step, Jump indices
+- Timeframes: 5s, 15s, 30s, M1, M5, M15, M30, H1, H4
+- Endpoint: `POST /api/deriv/fetch?symbol=V100&timeframe=M1&count=1000`
+
+**Historical Data Storage:**
+- MongoDB collection: `historical_candles`
+- 30-day retention policy
+- Sources: OANDA, Deriv, Tampermonkey, CSV/JSON imports
+- Endpoints:
+  - `GET /api/historical/summary` - Data overview
+  - `GET /api/historical/candles/{symbol}/{timeframe}` - Retrieve candles
+  - `POST /api/historical/import/bulk` - Bulk candle import
+  - `POST /api/tampermonkey/candles` - Receive scraped data
+
+**Backtesting Engine:**
+- Strategy backtesting: Deep Confluence, Momentum Buster
+- ML model backtesting: LSTM/GRU, PPO RL, Ensemble
+- Metrics: Win rate, Profit factor, Max drawdown, Sharpe/Sortino ratios, ROI
+- Endpoint: `POST /api/backtest/ml?symbol=EUR_USD&model=lstm_gru&days=30`
+
+**Tampermonkey Data Collector (v7.7.0):**
+- `HistoricalDataCollector` module scrapes live OTC prices
+- Aggregates into 5s/15s/30s/M1 candles
+- Auto-sends to backend every 60 seconds
+- Builds local OTC historical database over time
+
+### Cyclic Object Fix (April 3, 2026)
+- Fixed "Trade error cyclic object value" in Tampermonkey scan
+- Root cause: `_allSignals` array contained circular reference
+- Fix: Store `signals.slice(1)` to exclude best signal from array
 
 ### Signal Generation Optimization (April 3, 2026)
 **Problem**: Tampermonkey scan was not picking up signals despite scanning many assets.

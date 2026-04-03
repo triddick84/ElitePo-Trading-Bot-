@@ -242,3 +242,340 @@ async def compare_strategies(strategies: str = "", asset: str = "EURUSD", timefr
     except Exception as e:
         logger.error(f"Error comparing strategies: {e}")
         return {"success": False, "error": str(e)}
+
+
+# ==========================================
+# HISTORICAL DATA MANAGEMENT ENDPOINTS
+# ==========================================
+
+# Import historical data service
+try:
+    from historical_data_service import historical_data_service
+    HISTORICAL_SERVICE_AVAILABLE = True
+except ImportError:
+    HISTORICAL_SERVICE_AVAILABLE = False
+    logger.warning("Historical data service not available")
+
+# Import Deriv service
+try:
+    from deriv_data_service import deriv_service, fetch_deriv_historical_data
+    DERIV_AVAILABLE = True
+except ImportError:
+    DERIV_AVAILABLE = False
+    logger.warning("Deriv service not available")
+
+
+@router.get("/historical/summary")
+async def get_data_summary():
+    """Get summary of all stored historical data"""
+    if not HISTORICAL_SERVICE_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Historical data service not available")
+    try:
+        summary = historical_data_service.get_data_summary()
+        return {"success": True, "summary": summary}
+    except Exception as e:
+        logger.error(f"Error getting data summary: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/historical/symbols")
+async def get_available_symbols():
+    """Get list of symbols with historical data"""
+    if not HISTORICAL_SERVICE_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Historical data service not available")
+    try:
+        symbols = historical_data_service.get_available_symbols()
+        return {"success": True, "symbols": symbols}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/historical/timeframes")
+async def get_available_timeframes(symbol: Optional[str] = None):
+    """Get list of available timeframes"""
+    if not HISTORICAL_SERVICE_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Historical data service not available")
+    try:
+        timeframes = historical_data_service.get_available_timeframes(symbol)
+        return {"success": True, "timeframes": timeframes}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/historical/coverage/{symbol}/{timeframe}")
+async def get_symbol_coverage(symbol: str, timeframe: str):
+    """Get data coverage for a specific symbol and timeframe"""
+    if not HISTORICAL_SERVICE_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Historical data service not available")
+    try:
+        coverage = historical_data_service.get_symbol_coverage(symbol, timeframe)
+        return {"success": True, "coverage": coverage}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/historical/candles/{symbol}/{timeframe}")
+async def get_historical_candles(
+    symbol: str,
+    timeframe: str,
+    limit: int = Query(default=1000, ge=1, le=10000),
+    days: Optional[int] = Query(default=None, ge=1, le=90)
+):
+    """Get historical candles for a symbol"""
+    if not HISTORICAL_SERVICE_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Historical data service not available")
+    try:
+        if days:
+            df = historical_data_service.get_candles_for_backtest(symbol, timeframe, days)
+        else:
+            df = historical_data_service.get_candles(symbol, timeframe, limit=limit)
+        
+        if df.empty:
+            return {"success": True, "candles": [], "count": 0}
+        
+        df['timestamp'] = df['timestamp'].dt.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+        candles = df.to_dict('records')
+        
+        return {
+            "success": True,
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "candles": candles,
+            "count": len(candles)
+        }
+    except Exception as e:
+        logger.error(f"Error fetching candles: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/historical/import/bulk")
+async def import_bulk_candles(
+    symbol: str = Query(...),
+    timeframe: str = Query(...),
+    source: str = Query(default="import"),
+    candles: List[Dict] = Body(...)
+):
+    """Import candles from JSON body"""
+    if not HISTORICAL_SERVICE_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Historical data service not available")
+    try:
+        result = historical_data_service.store_candles_bulk(candles, symbol, timeframe, source)
+        
+        return {
+            "success": True,
+            "message": f"Processed {len(candles)} candles",
+            "inserted": result["inserted"],
+            "updated": result["updated"],
+            "errors": result["errors"]
+        }
+    except Exception as e:
+        logger.error(f"Bulk import error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/historical/cleanup")
+async def cleanup_old_data(days: int = Query(default=30, ge=1, le=365)):
+    """Remove data older than specified days"""
+    if not HISTORICAL_SERVICE_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Historical data service not available")
+    try:
+        deleted = historical_data_service.cleanup_old_data(days)
+        return {
+            "success": True,
+            "message": f"Deleted {deleted} old candles",
+            "deleted_count": deleted
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==========================================
+# DERIV DATA ENDPOINTS
+# ==========================================
+
+@router.get("/deriv/symbols")
+async def get_deriv_symbols():
+    """Get available Deriv synthetic indices symbols"""
+    if not DERIV_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Deriv service not available")
+    
+    return {
+        "success": True,
+        "symbols": deriv_service.get_available_symbols(),
+        "timeframes": deriv_service.get_available_timeframes()
+    }
+
+
+@router.post("/deriv/fetch")
+async def fetch_deriv_data(
+    symbol: str = Query(..., description="Deriv symbol (e.g., V100, CRASH_500)"),
+    timeframe: str = Query(default="M1"),
+    count: int = Query(default=1000, ge=100, le=5000),
+    store: bool = Query(default=True, description="Store in historical database")
+):
+    """Fetch historical data from Deriv API"""
+    if not DERIV_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Deriv service not available")
+    
+    try:
+        df = await fetch_deriv_historical_data(symbol, timeframe, count)
+        
+        if df is None or df.empty:
+            return {
+                "success": False,
+                "message": f"No data returned for {symbol} {timeframe}"
+            }
+        
+        result = {
+            "success": True,
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "candles_fetched": len(df)
+        }
+        
+        if store and HISTORICAL_SERVICE_AVAILABLE:
+            store_result = historical_data_service.store_dataframe(
+                df, symbol, timeframe, "deriv"
+            )
+            result["stored"] = store_result
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Deriv fetch error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==========================================
+# TAMPERMONKEY DATA COLLECTION ENDPOINT
+# ==========================================
+
+@router.post("/tampermonkey/candles")
+async def receive_tampermonkey_candles(
+    symbol: str = Query(...),
+    timeframe: str = Query(default="5s"),
+    candles: List[Dict] = Body(default=[])
+):
+    """
+    Receive candle data from Tampermonkey scraper
+    This endpoint allows the userscript to send scraped price data
+    """
+    if not HISTORICAL_SERVICE_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Historical data service not available")
+    try:
+        if not candles:
+            return {"success": False, "error": "No candles provided"}
+        
+        result = historical_data_service.store_candles_bulk(
+            candles, symbol, timeframe, "tampermonkey"
+        )
+        
+        return {
+            "success": True,
+            "stored": result["inserted"] + result["updated"],
+            "errors": result["errors"]
+        }
+        
+    except Exception as e:
+        logger.error(f"Tampermonkey candle storage error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==========================================
+# ADVANCED BACKTESTING WITH ML MODELS
+# ==========================================
+
+@router.post("/backtest/ml")
+async def run_ml_backtest(
+    symbol: str = Query(...),
+    timeframe: str = Query(default="M1"),
+    model: str = Query(default="lstm_gru", description="lstm_gru, ppo_rl, or ensemble"),
+    days: int = Query(default=30, ge=1, le=90),
+    min_confidence: float = Query(default=60.0, ge=0, le=100)
+):
+    """Run backtest for ML models (LSTM/GRU, PPO, or Ensemble)"""
+    try:
+        from backtesting_engine import (
+            BacktestingEngine,
+            create_lstm_model_predictor,
+            create_ppo_model_predictor
+        )
+        
+        # Get historical data
+        if HISTORICAL_SERVICE_AVAILABLE:
+            df = historical_data_service.get_candles_for_backtest(symbol, timeframe, days)
+        else:
+            df = pd.DataFrame()
+        
+        if df.empty:
+            # Fallback to OANDA
+            try:
+                from enhanced_oanda_service import enhanced_oanda
+                oanda_symbol = symbol.replace("_OTC", "").replace("OTC", "")
+                oanda_df = enhanced_oanda.get_candles(oanda_symbol, timeframe, count=days * 1440)
+                if oanda_df is not None and not oanda_df.empty:
+                    df = oanda_df.copy()
+                    df['timestamp'] = pd.to_datetime(df.index, utc=True)
+                    df = df.reset_index(drop=True)
+            except Exception as e:
+                logger.warning(f"OANDA fallback failed: {e}")
+        
+        if df.empty:
+            raise HTTPException(
+                status_code=400,
+                detail=f"No historical data for {symbol} {timeframe}. Import data first."
+            )
+        
+        engine = BacktestingEngine(initial_balance=1000.0, trade_size=10.0)
+        
+        if model == "lstm_gru":
+            predictor = create_lstm_model_predictor()
+            if predictor is None:
+                raise HTTPException(status_code=400, detail="LSTM model not trained")
+            metrics = engine.run_ml_model_backtest(df, predictor, timeframe, 60, min_confidence)
+            
+        elif model == "ppo_rl":
+            predictor = create_ppo_model_predictor()
+            if predictor is None:
+                raise HTTPException(status_code=400, detail="PPO model not trained")
+            metrics = engine.run_ml_model_backtest(df, predictor, timeframe, 60, min_confidence)
+            
+        elif model == "ensemble":
+            # Run both and average
+            lstm_pred = create_lstm_model_predictor()
+            ppo_pred = create_ppo_model_predictor()
+            
+            results = []
+            if lstm_pred:
+                m = engine.run_ml_model_backtest(df.copy(), lstm_pred, timeframe, 60, min_confidence)
+                results.append(("lstm_gru", m))
+            if ppo_pred:
+                engine.reset()
+                m = engine.run_ml_model_backtest(df.copy(), ppo_pred, timeframe, 60, min_confidence)
+                results.append(("ppo_rl", m))
+            
+            return {
+                "success": True,
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "model": model,
+                "results": [{"model": n, "metrics": m.to_dict()} for n, m in results]
+            }
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown model: {model}")
+        
+        return {
+            "success": True,
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "model": model,
+            "data_points": len(df),
+            "metrics": metrics.to_dict()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"ML backtest error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
