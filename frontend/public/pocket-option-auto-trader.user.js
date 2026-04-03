@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://ai-broker-dev.preview.emergentagent.com
-// @version      7.6.0
+// @version      7.6.1
 // @description  Auto-trade OTC forex on Pocket Option. v7.4.0 - Holly Crossover + Multi-asset scan
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
@@ -3222,7 +3222,7 @@
             },
             onerror: function(e) {
                 log(`❌ Scan connection error - trying force-generate...`);
-                log(`   Error: ${JSON.stringify(e).substring(0, 200)}`);
+                log(`   Error: ${e?.message || 'Unknown error'}`);
                 _goForceGenerate(assetSymbol);
             },
             ontimeout: function() {
@@ -3861,7 +3861,8 @@
                         
                         const bestSignal = signals[0];
                         bestSignal._willSwitch = willSwitchAssets;
-                        bestSignal._allSignals = signals; // Store all signals for fallback
+                        // Store OTHER signals for fallback (excluding best to avoid circular ref)
+                        bestSignal._allSignals = signals.slice(1);
                         bestSignal.source = 'BACKEND_OANDA';
                         
                         log(`✅ Best: ${bestSignal.direction} ${bestSignal.symbol} (${Math.round(bestSignal.confidence)}%)`);
@@ -3880,7 +3881,7 @@
                 }
             },
             onerror: function(e) {
-                log(`❌ Scan connection error: ${JSON.stringify(e).substring(0, 200)}`);
+                log(`❌ Scan connection error: ${e?.message || 'Unknown'}`);
                 log(`   API URL: ${apiUrl.substring(0, 100)}`);
                 updateStatusDot('error');
             },
@@ -3898,7 +3899,20 @@
 
     async function executeScanTrade(signal) {
         log(`📥 executeScanTrade: ${signal.direction} ${signal.symbol} (${signal.confidence}%)`);
-        console.log('[GPT executeScanTrade] Signal:', JSON.stringify(signal, null, 2));
+        
+        // Safe stringify to avoid cyclic reference errors
+        const safeStringify = (obj) => {
+            const seen = new WeakSet();
+            return JSON.stringify(obj, (key, value) => {
+                if (key === '_allSignals') return '[signals array]'; // Skip to avoid circular ref
+                if (typeof value === 'object' && value !== null) {
+                    if (seen.has(value)) return '[Circular]';
+                    seen.add(value);
+                }
+                return value;
+            }, 2);
+        };
+        console.log('[GPT executeScanTrade] Signal:', safeStringify(signal));
         
         if (globalTradeLock) {
             log('⏳ BLOCKED: Trade lock active');
