@@ -246,20 +246,32 @@ function injectCSS() {
     .${PREFIX}logbox::-webkit-scrollbar-thumb { background: #30363d !important; border-radius: 2px !important; }
   `;
 
-  if (typeof GM_addStyle !== 'undefined') {
-    GM_addStyle(css);
+  if (typeof GM_addStyle === 'function') {
+    try {
+      GM_addStyle(css);
+    } catch (e) {
+      _fallbackInjectCSS(css);
+    }
   } else {
-    const styleEl = document.createElement('style');
-    styleEl.textContent = css;
-    document.head.appendChild(styleEl);
+    _fallbackInjectCSS(css);
   }
+}
+
+function _fallbackInjectCSS(css) {
+  const styleEl = document.createElement('style');
+  styleEl.setAttribute('type', 'text/css');
+  styleEl.setAttribute('id', `${PREFIX}style`);
+  styleEl.textContent = css;
+  (document.head || document.documentElement).appendChild(styleEl);
 }
 
 /**
  * Create the panel DOM element
  */
 export function createPanel() {
+  console.log('[Elite Bot] Creating panel...');
   injectCSS();
+  console.log('[Elite Bot] CSS injected');
 
   panelEl = document.createElement('div');
   panelEl.id = `${PREFIX}host`;
@@ -306,6 +318,7 @@ export function createPanel() {
   `;
 
   startWatchdog();
+  console.log('[Elite Bot] Panel DOM created, returning element');
   return panelEl;
 }
 

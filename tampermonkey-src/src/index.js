@@ -68,8 +68,10 @@ class EliteTradingBot {
   }
   
   createUI() {
+    console.log('[Elite Bot] createUI called, appending to body...');
     const panelHost = createPanel();
     document.body.appendChild(panelHost);
+    console.log('[Elite Bot] Panel appended to body. Visible:', panelHost.offsetWidth > 0);
     
     initPanelEvents({
       onScanToggle: (enabled) => {
