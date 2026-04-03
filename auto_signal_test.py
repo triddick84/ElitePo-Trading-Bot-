@@ -12,7 +12,7 @@ import sys
 from datetime import datetime, timezone, timedelta
 
 # Test configuration
-BACKEND_URL = "https://ai-broker-dev.preview.emergentagent.com/api"
+BACKEND_URL = "https://pocket-trader-ai-8.preview.emergentagent.com/api"
 
 class AutoSignalTester:
     def __init__(self):

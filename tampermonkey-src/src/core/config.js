@@ -5,7 +5,7 @@
 
 export const CONFIG = {
   // API Settings
-  API_URL: 'https://ai-broker-dev.preview.emergentagent.com/api',
+  API_URL: 'https://pocket-trader-ai-8.preview.emergentagent.com/api',
   
   // Polling Intervals
   APP_POLL_INTERVAL: 3000,      // 3 seconds for app signals

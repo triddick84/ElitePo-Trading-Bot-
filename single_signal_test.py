@@ -16,7 +16,7 @@ from typing import Dict, Any, List
 sys.path.append('/app/backend')
 
 # Test configuration
-BACKEND_URL = "https://ai-broker-dev.preview.emergentagent.com/api"
+BACKEND_URL = "https://pocket-trader-ai-8.preview.emergentagent.com/api"
 
 class SingleSignalTester:
     def __init__(self):
