@@ -1,0 +1,88 @@
+{
+  "summary": "Iteration 18 testing complete. All 18 backend tests passed (100%). Tested Premium Signal Filter endpoints for session-info, best-hours, hourly-stats, record-premium-result, asset-performance, should-trade, and scan-markets premium filter integration.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_premium_signal_filters.py",
+    "/app/test_reports/pytest/pytest_premium_signal_filters.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "SessionAnalyzer correctly identifies trading sessions (Sydney, Tokyo, London, NY, overlaps) with quality scores",
+    "Premium filters apply confidence adjustments based on session quality (-10 to +5 range)",
+    "Asset performance tracking stores win rates per symbol and per hour+symbol combination",
+    "scan-markets and scan-markets-deep endpoints correctly include time_filter and premium_filters in responses",
+    "During off-hours/low-quality sessions, should_trade returns false as expected"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_premium_signal_filters.py"
+  ],
+  "success_rate": {
+    "backend": "100% (18/18 tests passed)",
+    "frontend": "N/A - backend only testing requested"
+  },
+  "test_credentials": "No auth required for signal endpoints",
+  "seed_data_creation": "Test data created with TEST_ prefix for win rate verification",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All Premium Signal Filter endpoints are working. Current session is Sydney (UTC 5) with quality score 40, so should_trade returns false. Best hours list is empty because minimum 10 trades required per hour. Asset performance tracking is working with 4 test assets tracked.",
+  "mocked_apis": {
+    "note": "No mocked APIs - all endpoints use real OANDA data and MongoDB for tracking"
+  },
+  "endpoints_tested": {
+    "session_info": [
+      "GET /api/signals/session-info ✅ (returns session, quality_score, recommended_pairs, avoid_pairs)",
+      "GET /api/signals/session-info?symbol=EUR_USD ✅ (includes symbol compatibility check)"
+    ],
+    "best_hours": [
+      "GET /api/signals/best-hours ✅ (returns best_hours, hours_to_avoid, total_hours_tracked)",
+      "GET /api/signals/best-hours?top_n=5 ✅ (custom top_n parameter)"
+    ],
+    "hourly_stats": [
+      "GET /api/signals/hourly-stats ✅ (returns 24-hour breakdown with session info)"
+    ],
+    "record_premium_result": [
+      "POST /api/signals/record-premium-result ✅ (records WIN with symbol, direction, is_win)",
+      "POST /api/signals/record-premium-result ✅ (records LOSS)",
+      "POST /api/signals/record-premium-result ✅ (with custom hour_utc)",
+      "POST /api/signals/record-premium-result ✅ (multiple records verify win rate calculation)"
+    ],
+    "asset_performance": [
+      "GET /api/signals/asset-performance ✅ (returns all tracked assets)",
+      "GET /api/signals/asset-performance?symbol=TEST_EURUSD_OTC ✅ (specific asset with hourly breakdown)"
+    ],
+    "should_trade": [
+      "GET /api/signals/should-trade ✅ (returns should_trade boolean, reason, time_filter)",
+      "GET /api/signals/should-trade?symbol=EUR_USD ✅ (with symbol parameter)",
+      "GET /api/signals/should-trade?min_quality=50 ✅ (with custom min_quality threshold)"
+    ],
+    "scan_markets_integration": [
+      "GET /api/signals/scan-markets ✅ (includes time_filter in response)",
+      "GET /api/signals/scan-markets ✅ (signals have premium_filters with confidence_adjustment)",
+      "GET /api/signals/scan-markets-deep ✅ (includes time_filter)"
+    ]
+  },
+  "current_session_state": {
+    "session": "sydney",
+    "hour_utc": 5,
+    "quality_score": 40,
+    "is_good_time": false,
+    "should_trade": false,
+    "historical_win_rate": 66.7,
+    "recommendation": "Caution advised. Session: sydney"
+  },
+  "premium_filter_behavior": {
+    "confidence_adjustment_range": "-10 to +5 based on session quality",
+    "low_quality_session_penalty": "-5 for quality < 55, -10 for quality < 40",
+    "high_quality_session_bonus": "+5 for quality >= 85, +2 for quality >= 70",
+    "historical_hour_adjustment": "+3 for win_rate > 60%, -5 for win_rate < 45%",
+    "asset_specific_adjustment": "+3 for asset win_rate > 60%, -5 for win_rate < 40%"
+  }
+}

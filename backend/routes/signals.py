@@ -46,6 +46,11 @@ from real_market_data_service import RealMarketDataService
 from platform_integrations import platform_integration
 from continuous_scanner import ContinuousMarketScanner
 from adaptive_strategy_service import AdaptiveStrategyService
+from premium_signal_generator import (
+    session_analyzer, market_condition_analyzer, asset_tracker,
+    get_time_filter, should_trade_now, get_market_condition,
+    apply_premium_filters
+)
 
 import math
 import time
@@ -1881,12 +1886,22 @@ async def scan_markets_deep_analysis(
         # Limit results
         top_signals = signals_found[:max_signals]
         
+        # Apply premium filters
+        for i, sig in enumerate(top_signals):
+            symbol = sig.get("symbol", "")
+            top_signals[i] = apply_premium_filters(sig, symbol)
+        
+        top_signals.sort(key=lambda x: x.get("confidence", 0), reverse=True)
+        
+        time_filter_info = get_time_filter()
+        
         return {
             "success": True,
             "analysis_type": "deep_confluence",
             "scanned_assets": len(asset_list),
             "signals_found": len(signals_found),
             "top_signals": top_signals,
+            "time_filter": time_filter_info,
             "message": f"Found {len(signals_found)} high-quality signals above {min_confidence}% confidence"
         }
         
@@ -1924,6 +1939,9 @@ async def scan_markets_for_signals(
         
         # Use preferred expiry or default to 60
         expiry_to_use = preferred_expiry if preferred_expiry in [5, 15, 30, 60, 120, 180, 300] else 60
+        
+        # Get session/time filter info upfront
+        time_filter_info = get_time_filter()
         
         for asset in asset_list:
             try:
@@ -2100,6 +2118,14 @@ async def scan_markets_for_signals(
         # Limit results
         top_signals = signals_found[:max_signals]
         
+        # Apply premium filters to top signals
+        for i, sig in enumerate(top_signals):
+            symbol = sig.get("symbol", "")
+            top_signals[i] = apply_premium_filters(sig, symbol)
+        
+        # Re-sort after premium adjustments
+        top_signals.sort(key=lambda x: x.get("confidence", 0), reverse=True)
+        
         return {
             "success": True,
             "analysis_type": "deep_confluence" if use_deep_analysis else "high_accuracy",
@@ -2107,6 +2133,7 @@ async def scan_markets_for_signals(
             "signals_found": len(signals_found),
             "top_signals": top_signals,
             "preferred_expiry": expiry_to_use,
+            "time_filter": time_filter_info,
             "message": f"Found {len(signals_found)} signals above {min_confidence}% confidence"
         }
         
@@ -2599,3 +2626,190 @@ async def generate_enhanced_signal(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
+
+# ==================== PREMIUM SIGNAL FILTER ENDPOINTS ====================
+
+@router.get("/signals/session-info")
+async def get_session_info(symbol: str = Query(None, description="Optional symbol to check session compatibility")):
+    """
+    Get current trading session information including quality score,
+    recommended pairs, and time-based trading recommendation.
+    """
+    try:
+        time_filter = get_time_filter(symbol)
+        session_info = session_analyzer.get_session_info()
+        
+        return {
+            "success": True,
+            "time_filter": time_filter,
+            "session_details": {
+                "session": session_info.session.value,
+                "is_active": session_info.is_active,
+                "quality_score": session_info.quality_score,
+                "recommended_pairs": session_info.recommended_pairs,
+                "avoid_pairs": session_info.avoid_pairs,
+                "notes": session_info.notes
+            }
+        }
+    except Exception as e:
+        logger.error(f"Session info error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/signals/best-hours")
+async def get_best_trading_hours(top_n: int = Query(8, ge=1, le=24)):
+    """Get the best hours to trade based on historical win rate data."""
+    try:
+        best = session_analyzer.get_best_hours(top_n)
+        avoid = session_analyzer.get_hours_to_avoid()
+        
+        return {
+            "success": True,
+            "best_hours": best,
+            "hours_to_avoid": avoid,
+            "total_hours_tracked": len(session_analyzer.hourly_performance),
+            "note": "Hours are in UTC. Best hours require minimum 10 trades recorded."
+        }
+    except Exception as e:
+        logger.error(f"Best hours error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/signals/hourly-stats")
+async def get_hourly_stats():
+    """Get win rate statistics broken down by hour (UTC)."""
+    try:
+        stats = []
+        for hour in range(24):
+            data = session_analyzer.hourly_performance.get(hour, {})
+            total = data.get("total", 0)
+            wins = data.get("wins", 0)
+            session = session_analyzer.get_current_session(hour)
+            quality = session_analyzer.SESSION_QUALITY.get(session, 50)
+            
+            stats.append({
+                "hour_utc": hour,
+                "session": session.value,
+                "session_quality": quality,
+                "total_trades": total,
+                "wins": wins,
+                "win_rate": round(wins / total * 100, 1) if total > 0 else None,
+                "is_best_hour": hour in session_analyzer.BEST_HOURS_UTC,
+                "is_bad_hour": hour in session_analyzer.BAD_HOURS_UTC
+            })
+        
+        return {
+            "success": True,
+            "hourly_stats": stats
+        }
+    except Exception as e:
+        logger.error(f"Hourly stats error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class TradeResultRequest(BaseModel):
+    symbol: str
+    direction: str  # CALL or PUT
+    is_win: bool
+    confidence: float = 0
+    session: str = ""
+    hour_utc: int = -1
+
+
+@router.post("/signals/record-premium-result")
+async def record_premium_trade_result(req: TradeResultRequest):
+    """
+    Record a trade result for premium signal tracking.
+    Updates hourly stats and asset-level performance for future filtering.
+    """
+    try:
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        hour = req.hour_utc if req.hour_utc >= 0 else now.hour
+        
+        current_session = session_analyzer.get_current_session(hour)
+        session_name = req.session if req.session else current_session.value
+        
+        # Record hourly stats
+        session_analyzer.record_trade_result(hour, req.is_win)
+        
+        # Record asset-level stats
+        asset_tracker.record_result(
+            symbol=req.symbol,
+            direction=req.direction,
+            is_win=req.is_win,
+            hour_utc=hour,
+            session=session_name
+        )
+        
+        # Get updated stats
+        asset_wr = asset_tracker.get_asset_win_rate(req.symbol)
+        hour_data = session_analyzer.hourly_performance.get(hour, {})
+        
+        return {
+            "success": True,
+            "recorded": {
+                "symbol": req.symbol,
+                "direction": req.direction,
+                "is_win": req.is_win,
+                "hour_utc": hour,
+                "session": session_name
+            },
+            "updated_stats": {
+                "asset_win_rate": asset_wr.get("win_rate", 50.0),
+                "asset_total_trades": asset_wr.get("total", 0),
+                "hour_win_rate": round(hour_data.get("win_rate", 50.0), 1),
+                "hour_total_trades": hour_data.get("total", 0)
+            }
+        }
+    except Exception as e:
+        logger.error(f"Record premium result error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/signals/asset-performance")
+async def get_asset_performance(symbol: str = Query(None, description="Specific asset, or omit for all")):
+    """Get performance statistics per asset, including hourly breakdown."""
+    try:
+        if symbol:
+            asset_wr = asset_tracker.get_asset_win_rate(symbol)
+            hourly = asset_tracker.get_asset_hour_performance(symbol)
+            return {
+                "success": True,
+                "asset_stats": asset_wr,
+                "hourly_breakdown": hourly
+            }
+        else:
+            all_stats = asset_tracker.get_all_asset_stats()
+            worst = asset_tracker.get_worst_assets()
+            return {
+                "success": True,
+                "all_assets": all_stats,
+                "worst_assets": worst,
+                "total_tracked": len(all_stats)
+            }
+    except Exception as e:
+        logger.error(f"Asset performance error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/signals/should-trade")
+async def should_trade_check(
+    symbol: str = Query(None, description="Symbol to check"),
+    min_quality: float = Query(50.0, description="Minimum session quality to allow trading")
+):
+    """Quick endpoint to check if now is a good time to trade."""
+    try:
+        can_trade, reason = should_trade_now(symbol, min_quality)
+        time_filter = get_time_filter(symbol)
+        
+        return {
+            "success": True,
+            "should_trade": can_trade,
+            "reason": reason,
+            "time_filter": time_filter
+        }
+    except Exception as e:
+        logger.error(f"Should trade check error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

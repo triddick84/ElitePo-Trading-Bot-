@@ -484,9 +484,9 @@ def get_market_condition(candles: List[Dict]) -> Dict:
         MarketCondition.TRENDING_UP: "Trade with trend (CALL signals preferred)",
         MarketCondition.TRENDING_DOWN: "Trade with trend (PUT signals preferred)",
         MarketCondition.RANGING: "Trade reversals at support/resistance",
-        MarketCondition.VOLATILE: "⚠️ High volatility - reduce position size",
-        MarketCondition.QUIET: "⚠️ Low volatility - wait for breakout",
-        MarketCondition.UNCERTAIN: "⚠️ Mixed signals - proceed with caution",
+        MarketCondition.VOLATILE: "High volatility - reduce position size",
+        MarketCondition.QUIET: "Low volatility - wait for breakout",
+        MarketCondition.UNCERTAIN: "Mixed signals - proceed with caution",
     }
     
     return {
@@ -498,3 +498,216 @@ def get_market_condition(candles: List[Dict]) -> Dict:
             MarketCondition.RANGING
         ]
     }
+
+
+class AssetPerformanceTracker:
+    """Tracks win rates per asset and per hour+asset combination"""
+    
+    def __init__(self):
+        self.asset_stats_collection = db['asset_performance']
+        self.asset_hourly_collection = db['asset_hourly_performance']
+    
+    def record_result(self, symbol: str, direction: str, is_win: bool, hour_utc: int, session: str):
+        """Record a trade result for asset-level tracking"""
+        try:
+            # Update asset-level stats
+            self.asset_stats_collection.update_one(
+                {"symbol": symbol},
+                {
+                    "$inc": {"total": 1, "wins": 1 if is_win else 0},
+                    "$set": {"last_updated": datetime.now(timezone.utc).isoformat()}
+                },
+                upsert=True
+            )
+            
+            # Update asset+hour combo stats
+            self.asset_hourly_collection.update_one(
+                {"symbol": symbol, "hour": hour_utc},
+                {
+                    "$inc": {"total": 1, "wins": 1 if is_win else 0},
+                    "$set": {
+                        "session": session,
+                        "last_updated": datetime.now(timezone.utc).isoformat()
+                    }
+                },
+                upsert=True
+            )
+            
+            # Update direction-specific stats
+            dir_key = f"wins_{direction.lower()}" if is_win else f"losses_{direction.lower()}"
+            self.asset_stats_collection.update_one(
+                {"symbol": symbol},
+                {"$inc": {dir_key: 1}},
+                upsert=True
+            )
+            
+        except Exception as e:
+            logger.error(f"Error recording asset result: {e}")
+    
+    def get_asset_win_rate(self, symbol: str) -> Dict:
+        """Get win rate for a specific asset"""
+        try:
+            stats = self.asset_stats_collection.find_one({"symbol": symbol}, {"_id": 0})
+            if not stats or stats.get("total", 0) == 0:
+                return {"symbol": symbol, "win_rate": 50.0, "total": 0, "data": "insufficient"}
+            
+            total = stats.get("total", 0)
+            wins = stats.get("wins", 0)
+            return {
+                "symbol": symbol,
+                "win_rate": round(wins / total * 100, 1) if total > 0 else 50.0,
+                "total": total,
+                "wins": wins,
+                "data": "sufficient" if total >= 10 else "insufficient"
+            }
+        except Exception as e:
+            logger.error(f"Error getting asset win rate: {e}")
+            return {"symbol": symbol, "win_rate": 50.0, "total": 0, "data": "error"}
+    
+    def get_asset_hour_performance(self, symbol: str) -> List[Dict]:
+        """Get performance by hour for a specific asset"""
+        try:
+            results = list(self.asset_hourly_collection.find(
+                {"symbol": symbol},
+                {"_id": 0}
+            ).sort("hour", 1))
+            
+            for r in results:
+                total = r.get("total", 0)
+                wins = r.get("wins", 0)
+                r["win_rate"] = round(wins / total * 100, 1) if total > 0 else 50.0
+            
+            return results
+        except Exception as e:
+            logger.error(f"Error getting asset hour performance: {e}")
+            return []
+    
+    def get_all_asset_stats(self) -> List[Dict]:
+        """Get win rates for all tracked assets"""
+        try:
+            results = list(self.asset_stats_collection.find({}, {"_id": 0}).sort("total", -1))
+            for r in results:
+                total = r.get("total", 0)
+                wins = r.get("wins", 0)
+                r["win_rate"] = round(wins / total * 100, 1) if total > 0 else 50.0
+            return results
+        except Exception as e:
+            logger.error(f"Error getting all asset stats: {e}")
+            return []
+    
+    def get_worst_assets(self, threshold: float = 45.0, min_trades: int = 10) -> List[str]:
+        """Get assets with win rate below threshold"""
+        try:
+            results = list(self.asset_stats_collection.find(
+                {"total": {"$gte": min_trades}},
+                {"_id": 0}
+            ))
+            
+            worst = []
+            for r in results:
+                total = r.get("total", 0)
+                wins = r.get("wins", 0)
+                win_rate = wins / total * 100 if total > 0 else 50.0
+                if win_rate < threshold:
+                    worst.append(r.get("symbol", ""))
+            return worst
+        except Exception as e:
+            logger.error(f"Error getting worst assets: {e}")
+            return []
+
+
+# Global asset tracker instance
+asset_tracker = AssetPerformanceTracker()
+
+
+def apply_premium_filters(signal: Dict, symbol: str, candles: List[Dict] = None) -> Dict:
+    """
+    Apply premium signal filters to an existing signal.
+    Adjusts confidence based on session quality, historical performance, and market conditions.
+    Returns the signal with additional premium filter data.
+    """
+    now = datetime.now(timezone.utc)
+    hour = now.hour
+    
+    # Get session info
+    time_filter = session_analyzer.analyze_time(symbol)
+    session_quality = time_filter.session_quality
+    
+    # Get asset historical performance
+    asset_stats = asset_tracker.get_asset_win_rate(symbol)
+    
+    # Get market condition if candles available
+    mkt_condition = None
+    if candles and len(candles) >= 20:
+        mkt_condition = market_condition_analyzer.analyze(candles)
+    
+    # Calculate confidence adjustment
+    confidence_adj = 0.0
+    filter_notes = []
+    
+    # 1. Session quality adjustment (-10 to +5)
+    if session_quality >= 85:
+        confidence_adj += 5
+        filter_notes.append(f"Premium session quality ({session_quality})")
+    elif session_quality >= 70:
+        confidence_adj += 2
+        filter_notes.append(f"Good session quality ({session_quality})")
+    elif session_quality < 40:
+        confidence_adj -= 10
+        filter_notes.append(f"Poor session quality ({session_quality}) - caution")
+    elif session_quality < 55:
+        confidence_adj -= 5
+        filter_notes.append(f"Below-average session ({session_quality})")
+    
+    # 2. Historical hour win rate adjustment (-5 to +3)
+    hist_wr = time_filter.historical_win_rate
+    if hist_wr > 60 and hour in session_analyzer.hourly_performance and session_analyzer.hourly_performance[hour].get("total", 0) >= 10:
+        confidence_adj += 3
+        filter_notes.append(f"Strong hour win rate ({hist_wr:.1f}%)")
+    elif hist_wr < 45 and hour in session_analyzer.hourly_performance and session_analyzer.hourly_performance[hour].get("total", 0) >= 10:
+        confidence_adj -= 5
+        filter_notes.append(f"Weak hour win rate ({hist_wr:.1f}%) - avoid")
+    
+    # 3. Asset-specific adjustment (-5 to +3)
+    if asset_stats.get("data") == "sufficient":
+        asset_wr = asset_stats.get("win_rate", 50)
+        if asset_wr > 60:
+            confidence_adj += 3
+            filter_notes.append(f"Strong asset ({symbol}: {asset_wr:.1f}%)")
+        elif asset_wr < 40:
+            confidence_adj -= 5
+            filter_notes.append(f"Weak asset ({symbol}: {asset_wr:.1f}%) - avoid")
+    
+    # 4. Market condition adjustment (-5 to +3)
+    if mkt_condition:
+        if mkt_condition in [MarketCondition.TRENDING_UP, MarketCondition.TRENDING_DOWN]:
+            confidence_adj += 3
+            filter_notes.append(f"Trending market ({mkt_condition.value})")
+        elif mkt_condition == MarketCondition.VOLATILE:
+            confidence_adj -= 5
+            filter_notes.append("High volatility - reduced confidence")
+        elif mkt_condition == MarketCondition.QUIET:
+            confidence_adj -= 3
+            filter_notes.append("Quiet market - limited opportunity")
+    
+    # Apply adjustment to signal confidence
+    original_confidence = signal.get("confidence", 0)
+    adjusted_confidence = max(0, min(99, original_confidence + confidence_adj))
+    
+    # Add premium filter data to signal
+    signal["premium_filters"] = {
+        "session": time_filter.current_session.value,
+        "session_quality": session_quality,
+        "is_good_time": time_filter.is_good_time,
+        "historical_hour_win_rate": round(hist_wr, 1),
+        "asset_win_rate": asset_stats.get("win_rate", 50.0),
+        "asset_total_trades": asset_stats.get("total", 0),
+        "market_condition": mkt_condition.value if mkt_condition else "unknown",
+        "confidence_adjustment": round(confidence_adj, 1),
+        "filter_notes": filter_notes,
+        "recommendation": time_filter.recommendation
+    }
+    signal["confidence"] = round(adjusted_confidence, 1)
+    signal["original_confidence"] = round(original_confidence, 1)
+    
+    return signal
