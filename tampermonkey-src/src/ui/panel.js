@@ -1,25 +1,123 @@
 /**
  * UI Panel Component
  * Creates and manages the trading bot control panel
+ * Uses Shadow DOM for CSS isolation from Pocket Option styles
  */
 
 import { CONFIG } from '../core/config.js';
 import { state, setState, saveState } from '../core/state.js';
 import { log, setLogContainer } from '../core/logger.js';
 
+let shadowRoot = null;
+let panelHost = null;
+let watchdogInterval = null;
+
 /**
- * Create the main UI panel
- * @returns {HTMLElement}
+ * Create the main UI panel using Shadow DOM for CSS isolation
+ * @returns {HTMLElement} The host element containing the shadow panel
  */
 export function createPanel() {
+  // Create host element
+  panelHost = document.createElement('div');
+  panelHost.id = 'gpt-bot-host';
+  panelHost.setAttribute('style', [
+    'position: fixed !important',
+    'top: 10px !important',
+    'right: 10px !important',
+    'z-index: 2147483647 !important',
+    'display: block !important',
+    'visibility: visible !important',
+    'opacity: 1 !important',
+    'pointer-events: auto !important',
+    'width: 280px !important',
+    'transform: none !important',
+  ].join('; '));
+
+  // Attach shadow DOM to isolate styles
+  shadowRoot = panelHost.attachShadow({ mode: 'open' });
+
+  // Build panel inside shadow
   const panel = document.createElement('div');
   panel.id = 'gpt-bot-panel';
   panel.innerHTML = getPanelHTML();
-  
-  // Apply styles
-  applyPanelStyles(panel);
-  
-  return panel;
+
+  // Inject styles into shadow
+  const style = document.createElement('style');
+  style.textContent = getPanelCSS();
+  shadowRoot.appendChild(style);
+  shadowRoot.appendChild(panel);
+
+  // Start watchdog to re-inject if removed
+  startWatchdog();
+
+  return panelHost;
+}
+
+/**
+ * Watchdog: re-inject panel if Pocket Option removes it
+ */
+function startWatchdog() {
+  if (watchdogInterval) clearInterval(watchdogInterval);
+
+  watchdogInterval = setInterval(() => {
+    const host = document.getElementById('gpt-bot-host');
+    if (!host || !document.body.contains(host)) {
+      console.log('[GPT Bot] Panel was removed, re-injecting...');
+      reInjectPanel();
+    } else {
+      // Ensure visibility even if PO overrides inline styles
+      host.style.setProperty('display', 'block', 'important');
+      host.style.setProperty('visibility', 'visible', 'important');
+      host.style.setProperty('opacity', '1', 'important');
+      host.style.setProperty('z-index', '2147483647', 'important');
+    }
+  }, 2000);
+}
+
+/**
+ * Re-inject the panel from scratch
+ */
+function reInjectPanel() {
+  try {
+    // Remove old host if present
+    const old = document.getElementById('gpt-bot-host');
+    if (old) old.remove();
+
+    panelHost = document.createElement('div');
+    panelHost.id = 'gpt-bot-host';
+    panelHost.setAttribute('style', [
+      'position: fixed !important',
+      'top: 10px !important',
+      'right: 10px !important',
+      'z-index: 2147483647 !important',
+      'display: block !important',
+      'visibility: visible !important',
+      'opacity: 1 !important',
+      'pointer-events: auto !important',
+      'width: 280px !important',
+      'transform: none !important',
+    ].join('; '));
+
+    shadowRoot = panelHost.attachShadow({ mode: 'open' });
+
+    const panel = document.createElement('div');
+    panel.id = 'gpt-bot-panel';
+    panel.innerHTML = getPanelHTML();
+
+    const style = document.createElement('style');
+    style.textContent = getPanelCSS();
+    shadowRoot.appendChild(style);
+    shadowRoot.appendChild(panel);
+
+    document.body.appendChild(panelHost);
+
+    // Re-bind events
+    if (window._gptBotCallbacks) {
+      initPanelEvents(window._gptBotCallbacks);
+    }
+  } catch (e) {
+    console.error('[GPT Bot] Re-inject failed:', e);
+  }
 }
 
 /**
@@ -28,22 +126,25 @@ export function createPanel() {
  */
 function getPanelHTML() {
   return `
-    <div class="gpt-panel-header">
-      <span class="gpt-panel-title">🤖 GPT Signal Bot v7.7.0</span>
-      <span class="gpt-status-dot" id="gpt-status-dot"></span>
+    <div class="gpt-panel-header" id="gpt-panel-header">
+      <span class="gpt-panel-title">GPT Signal Bot v7.7.0</span>
+      <div class="gpt-header-right">
+        <span class="gpt-status-dot" id="gpt-status-dot"></span>
+        <button class="gpt-minimize-btn" id="gpt-minimize-btn">_</button>
+      </div>
     </div>
     
-    <div class="gpt-panel-body">
+    <div class="gpt-panel-body" id="gpt-panel-body">
       <!-- Control Buttons -->
       <div class="gpt-control-row">
         <button id="gpt-btn-scan" class="gpt-btn" data-active="false">
-          📡 SCAN
+          SCAN
         </button>
         <button id="gpt-btn-auto" class="gpt-btn" data-active="false">
-          🎯 AUTO
+          AUTO
         </button>
         <button id="gpt-btn-go" class="gpt-btn gpt-btn-go">
-          ▶️ GO
+          GO
         </button>
       </div>
       
@@ -65,8 +166,8 @@ function getPanelHTML() {
       
       <!-- Manual Win/Loss Buttons -->
       <div class="gpt-manual-row">
-        <button id="gpt-btn-win" class="gpt-btn gpt-btn-win">✅ WIN</button>
-        <button id="gpt-btn-loss" class="gpt-btn gpt-btn-loss">❌ LOSS</button>
+        <button id="gpt-btn-win" class="gpt-btn gpt-btn-win">WIN</button>
+        <button id="gpt-btn-loss" class="gpt-btn gpt-btn-loss">LOSS</button>
       </div>
       
       <!-- Money Management -->
@@ -79,7 +180,7 @@ function getPanelHTML() {
       
       <!-- Log Container -->
       <div class="gpt-log-header" id="gpt-log-toggle">
-        📋 Log <span id="gpt-log-arrow">▼</span>
+        Log <span id="gpt-log-arrow">&#9660;</span>
       </div>
       <div class="gpt-log" id="gpt-bot-log"></div>
     </div>
@@ -87,26 +188,28 @@ function getPanelHTML() {
 }
 
 /**
- * Apply CSS styles to panel
- * @param {HTMLElement} panel
+ * Get panel CSS (isolated inside shadow DOM)
+ * @returns {string}
  */
-function applyPanelStyles(panel) {
-  const style = document.createElement('style');
-  style.textContent = `
+function getPanelCSS() {
+  return `
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
     #gpt-bot-panel {
-      position: fixed;
-      top: 10px;
-      right: 10px;
       width: 280px;
       background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
       border: 1px solid #0f3460;
       border-radius: 12px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-      font-family: 'Segoe UI', Arial, sans-serif;
-      z-index: 999999;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       color: #e4e4e4;
       font-size: 12px;
       user-select: none;
+      overflow: hidden;
     }
     
     .gpt-panel-header {
@@ -115,13 +218,39 @@ function applyPanelStyles(panel) {
       align-items: center;
       padding: 10px 12px;
       background: rgba(0,0,0,0.3);
-      border-radius: 12px 12px 0 0;
       cursor: move;
     }
     
     .gpt-panel-title {
       font-weight: 600;
       font-size: 13px;
+      color: #a8dadc;
+    }
+
+    .gpt-header-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .gpt-minimize-btn {
+      background: none;
+      border: 1px solid #4a5568;
+      color: #a0aec0;
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .gpt-minimize-btn:hover {
+      background: #4a5568;
+      color: #e4e4e4;
     }
     
     .gpt-status-dot {
@@ -129,21 +258,26 @@ function applyPanelStyles(panel) {
       height: 10px;
       border-radius: 50%;
       background: #666;
+      display: inline-block;
       transition: background 0.3s;
     }
     
     .gpt-status-dot.connected { background: #4caf50; }
-    .gpt-status-dot.scanning { background: #2196f3; animation: pulse 1s infinite; }
+    .gpt-status-dot.scanning { background: #2196f3; animation: gpt-pulse 1s infinite; }
     .gpt-status-dot.trading { background: #ff9800; }
     .gpt-status-dot.error { background: #f44336; }
     
-    @keyframes pulse {
+    @keyframes gpt-pulse {
       0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
+      50% { opacity: 0.4; }
     }
     
     .gpt-panel-body {
       padding: 10px;
+    }
+
+    .gpt-panel-body.collapsed {
+      display: none;
     }
     
     .gpt-control-row {
@@ -163,6 +297,7 @@ function applyPanelStyles(panel) {
       font-weight: 600;
       cursor: pointer;
       transition: all 0.2s;
+      text-align: center;
     }
     
     .gpt-btn:hover {
@@ -255,8 +390,9 @@ function applyPanelStyles(panel) {
       overflow-y: auto;
       background: rgba(0,0,0,0.3);
       border-radius: 0 0 6px 6px;
-      font-family: 'Consolas', monospace;
+      font-family: 'Consolas', 'Courier New', monospace;
       font-size: 10px;
+      padding: 4px;
     }
     
     .gpt-log::-webkit-scrollbar {
@@ -268,8 +404,13 @@ function applyPanelStyles(panel) {
       border-radius: 2px;
     }
   `;
-  
-  document.head.appendChild(style);
+}
+
+/**
+ * Helper: query inside shadow DOM
+ */
+function shadowQuery(selector) {
+  return shadowRoot ? shadowRoot.querySelector(selector) : null;
 }
 
 /**
@@ -277,14 +418,26 @@ function applyPanelStyles(panel) {
  * @param {Object} callbacks - Callback functions
  */
 export function initPanelEvents(callbacks = {}) {
-  const panel = document.getElementById('gpt-bot-panel');
-  if (!panel) return;
-  
-  // Set log container
-  setLogContainer(document.getElementById('gpt-bot-log'));
-  
+  // Store callbacks for re-injection
+  window._gptBotCallbacks = callbacks;
+
+  if (!shadowRoot) return;
+
+  // Set log container (inside shadow)
+  setLogContainer(shadowQuery('#gpt-bot-log'));
+
+  // Minimize button
+  const minimizeBtn = shadowQuery('#gpt-minimize-btn');
+  const body = shadowQuery('#gpt-panel-body');
+  minimizeBtn?.addEventListener('click', () => {
+    if (body) {
+      body.classList.toggle('collapsed');
+      minimizeBtn.textContent = body.classList.contains('collapsed') ? '+' : '_';
+    }
+  });
+
   // Scan button
-  const scanBtn = document.getElementById('gpt-btn-scan');
+  const scanBtn = shadowQuery('#gpt-btn-scan');
   scanBtn?.addEventListener('click', () => {
     const isActive = scanBtn.dataset.active === 'true';
     scanBtn.dataset.active = (!isActive).toString();
@@ -293,7 +446,7 @@ export function initPanelEvents(callbacks = {}) {
   });
   
   // Auto button
-  const autoBtn = document.getElementById('gpt-btn-auto');
+  const autoBtn = shadowQuery('#gpt-btn-auto');
   autoBtn?.addEventListener('click', () => {
     const isActive = autoBtn.dataset.active === 'true';
     autoBtn.dataset.active = (!isActive).toString();
@@ -302,51 +455,53 @@ export function initPanelEvents(callbacks = {}) {
   });
   
   // Go button
-  const goBtn = document.getElementById('gpt-btn-go');
+  const goBtn = shadowQuery('#gpt-btn-go');
   goBtn?.addEventListener('click', () => {
     callbacks.onGo?.();
   });
   
   // Win/Loss buttons
-  document.getElementById('gpt-btn-win')?.addEventListener('click', () => {
+  shadowQuery('#gpt-btn-win')?.addEventListener('click', () => {
     callbacks.onWin?.();
   });
   
-  document.getElementById('gpt-btn-loss')?.addEventListener('click', () => {
+  shadowQuery('#gpt-btn-loss')?.addEventListener('click', () => {
     callbacks.onLoss?.();
   });
   
   // Amount input
-  const amountInput = document.getElementById('gpt-mm-amount');
+  const amountInput = shadowQuery('#gpt-mm-amount');
   amountInput?.addEventListener('change', (e) => {
     const amount = parseFloat(e.target.value) || 1;
     callbacks.onAmountChange?.(amount);
   });
   
   // Log toggle
-  document.getElementById('gpt-log-toggle')?.addEventListener('click', () => {
-    const logEl = document.getElementById('gpt-bot-log');
-    const arrowEl = document.getElementById('gpt-log-arrow');
+  shadowQuery('#gpt-log-toggle')?.addEventListener('click', () => {
+    const logEl = shadowQuery('#gpt-bot-log');
+    const arrowEl = shadowQuery('#gpt-log-arrow');
     if (logEl && arrowEl) {
       const isExpanded = logEl.style.display !== 'none';
       logEl.style.display = isExpanded ? 'none' : 'block';
-      arrowEl.textContent = isExpanded ? '▶' : '▼';
+      arrowEl.innerHTML = isExpanded ? '&#9654;' : '&#9660;';
       setState('ui.logExpanded', !isExpanded);
     }
   });
   
   // Make panel draggable
-  makeDraggable(panel);
+  makeDraggable();
 }
 
 /**
  * Update stats display
  */
 export function updateStatsDisplay() {
-  const wlEl = document.getElementById('gpt-stat-wl');
-  const rateEl = document.getElementById('gpt-stat-rate');
-  const streakEl = document.getElementById('gpt-stat-streak');
-  const stepEl = document.getElementById('gpt-mm-step');
+  if (!shadowRoot) return;
+
+  const wlEl = shadowQuery('#gpt-stat-wl');
+  const rateEl = shadowQuery('#gpt-stat-rate');
+  const streakEl = shadowQuery('#gpt-stat-streak');
+  const stepEl = shadowQuery('#gpt-mm-step');
   
   if (wlEl) {
     wlEl.textContent = `${state.stats.wins}/${state.stats.losses}`;
@@ -374,18 +529,20 @@ export function updateStatsDisplay() {
  * @param {string} status - 'connected', 'scanning', 'trading', 'error'
  */
 export function updateStatusDot(status) {
-  const dot = document.getElementById('gpt-status-dot');
+  if (!shadowRoot) return;
+  const dot = shadowQuery('#gpt-status-dot');
   if (dot) {
     dot.className = `gpt-status-dot ${status}`;
   }
 }
 
 /**
- * Make element draggable
- * @param {HTMLElement} element
+ * Make the host element draggable via the header inside shadow DOM
  */
-function makeDraggable(element) {
-  const header = element.querySelector('.gpt-panel-header');
+function makeDraggable() {
+  if (!shadowRoot || !panelHost) return;
+
+  const header = shadowQuery('#gpt-panel-header');
   if (!header) return;
   
   let isDragging = false;
@@ -393,16 +550,16 @@ function makeDraggable(element) {
   
   header.addEventListener('mousedown', (e) => {
     isDragging = true;
-    offsetX = e.clientX - element.offsetLeft;
-    offsetY = e.clientY - element.offsetTop;
+    offsetX = e.clientX - panelHost.offsetLeft;
+    offsetY = e.clientY - panelHost.offsetTop;
+    e.preventDefault();
   });
   
   document.addEventListener('mousemove', (e) => {
     if (!isDragging) return;
-    
-    element.style.left = (e.clientX - offsetX) + 'px';
-    element.style.top = (e.clientY - offsetY) + 'px';
-    element.style.right = 'auto';
+    panelHost.style.setProperty('left', (e.clientX - offsetX) + 'px', 'important');
+    panelHost.style.setProperty('top', (e.clientY - offsetY) + 'px', 'important');
+    panelHost.style.setProperty('right', 'auto', 'important');
   });
   
   document.addEventListener('mouseup', () => {
@@ -410,9 +567,20 @@ function makeDraggable(element) {
   });
 }
 
+/**
+ * Cleanup watchdog on unload
+ */
+export function cleanupPanel() {
+  if (watchdogInterval) {
+    clearInterval(watchdogInterval);
+    watchdogInterval = null;
+  }
+}
+
 export default {
   createPanel,
   initPanelEvents,
   updateStatsDisplay,
   updateStatusDot,
+  cleanupPanel,
 };

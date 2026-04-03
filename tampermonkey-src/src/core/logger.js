@@ -99,10 +99,8 @@ export function log(message, level = LogLevel.INFO) {
  * @param {Object} entry - Log entry
  */
 function updateLogUI(entry) {
-  if (!logContainer) {
-    logContainer = document.getElementById('gpt-bot-log');
-  }
-  
+  // logContainer is set via setLogContainer() from the shadow DOM
+  // Do NOT fall back to document.getElementById since the log element lives in a shadow root
   if (logContainer && state.ui.logExpanded) {
     const logLine = document.createElement('div');
     logLine.style.cssText = `

@@ -11,7 +11,7 @@ import { state, loadState, saveState, setState } from './core/state.js';
 import { log, success, error, warn, info } from './core/logger.js';
 
 // UI imports
-import { createPanel, initPanelEvents, updateStatsDisplay, updateStatusDot } from './ui/panel.js';
+import { createPanel, initPanelEvents, updateStatsDisplay, updateStatusDot, cleanupPanel } from './ui/panel.js';
 
 // Strategy imports
 import { strategyManager } from './strategies/manager.js';
@@ -39,10 +39,13 @@ class GPTSignalBot {
    * Initialize the bot
    */
   async init() {
-    log('🚀 Initializing GPT Signal Bot v7.7.0...');
+    log('Initializing GPT Signal Bot v7.7.0...');
     
-    // Wait for page to load
-    await waitForElement('.trading-panel, .chart-container, body', 15000);
+    // Wait for page to be interactive
+    await waitForElement('body', 15000);
+    
+    // Small delay to let PO finish rendering
+    await new Promise(r => setTimeout(r, 2000));
     
     // Load saved state
     loadState();
@@ -262,6 +265,7 @@ class GPTSignalBot {
     this.stopScanning();
     this.stopDataCollection();
     priceScraper.stop();
+    cleanupPanel();
     
     if (this.statsInterval) {
       clearInterval(this.statsInterval);

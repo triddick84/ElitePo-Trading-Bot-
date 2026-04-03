@@ -2,4 +2,4 @@
  * UI module exports
  */
 
-export { createPanel, initPanelEvents, updateStatsDisplay, updateStatusDot } from './panel.js';
+export { createPanel, initPanelEvents, updateStatsDisplay, updateStatusDot, cleanupPanel } from './panel.js';
