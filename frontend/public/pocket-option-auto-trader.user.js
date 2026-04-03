@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GPT Signal Bot - Pocket Option Auto Trader
 // @namespace    https://ai-broker-dev.preview.emergentagent.com
-// @version      7.5.0
+// @version      7.6.0
 // @description  Auto-trade OTC forex on Pocket Option. v7.4.0 - Holly Crossover + Multi-asset scan
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
@@ -37,7 +37,7 @@
         SCAN_INTERVAL: 5000,         // 5 seconds for scanning
         TRADE_COOLDOWN_SCAN: 30000,  // 30 seconds between SCAN trades
         TRADE_COOLDOWN_APP: 5000,    // 5 seconds between APP trades
-        MIN_CONFIDENCE: 72,
+        MIN_CONFIDENCE: 65,
         MIN_PAYOUT: 65,
         DEBUG: true,
         USE_LOCAL_SIGNALS: true,  // v7.1.0: Generate signals locally using actual OTC prices
@@ -613,8 +613,8 @@
             if (rsi14 < 35) callConfs.push('RSI14_OVERSOLD');
             if (rsi14 > 65) putConfs.push('RSI14_OVERBOUGHT');
             
-            // === STRICTER MINIMUM CONFIRMATIONS ===
-            const minConfs = 4; // Raised from 3 to 4
+            // === MINIMUM CONFIRMATIONS ===
+            const minConfs = 3; // Reduced from 4 to 3 for better signal flow
             
             // === CONFLICT PENALTY ===
             // If both sides have 3+ confirmations, market is conflicted — skip

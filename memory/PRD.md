@@ -1,6 +1,6 @@
 # GPT Signal Bot - Product Requirements Document
 
-## Last Updated: April 2, 2026
+## Last Updated: April 3, 2026
 
 ## Current Status
 ✅ **Backend Refactoring Complete** - server.py reduced from 15,631 to ~3,780 lines. 8 route modules in /app/backend/routes/
@@ -8,17 +8,32 @@
 ✅ **AI/ML Phase 2: LSTM/GRU Time-Series** - BiLSTM(64) + GRU(48) + Attention, 13 features, auto-labeling pipeline
 ✅ **AI/ML Phase 3: PPO Reinforcement Learning** - Actor-Critic (128→64→3), trading environment simulation
 ✅ **AI Ensemble System** - Combines Stacking (40%) + LSTM/GRU (35%) + PPO (25%) with weighted voting
+✅ **Signal Generation Optimized** - Relaxed thresholds for better signal flow (April 3, 2026)
 ✅ **Holly Crossover Strategy (5s/15s/30s)** - EMA(12) x WMA(23) reversal crossover with S/R confirmation
 ✅ **Golden One Moment 30s Strategy** - RSI(2) + Stochastic(4,3,3) mean reversion, 30s expiration
 ✅ **Risk Management System** - Sharpe ratio, drawdown protection, Kelly criterion position sizing
-✅ **Tampermonkey v7.3.2** - Redesigned modern UI + Enhanced price scraper + Local OTC signals + Multi-strategy cascade
+✅ **Tampermonkey v7.6.0** - Relaxed confidence thresholds, better OTC signal flow
 ✅ **Maximized AI/ML v3.0** - 97 features, XGBoost+LightGBM stacking, HMM regime detection
 ✅ **Improved AI/ML v2.0** - 62 features, 56% accuracy, RF+GB+AdaBoost ensemble
 ✅ **Momentum Buster 15s Strategy** - Momentum period 3, green/red bars, 15s expiration
 ✅ **1m Momentum Exhaustion Strategy** - RSI-2 + Stochastic + BB + Candlesticks (70-75% target)
 ✅ **Backend Data Sources** - OANDA (primary), yfinance (fallback) - for regular forex
 
-## Recent Updates (April 2, 2026)
+## Recent Updates (April 3, 2026)
+
+### Signal Generation Optimization (April 3, 2026)
+**Problem**: Tampermonkey scan was not picking up signals despite scanning many assets.
+
+**Fixes Applied**:
+- Deep Analysis confidence floor: 70% → 65%
+- Avoid reason penalties: 8% each → 5% each
+- LOW_VOLUME threshold: 0.8 → 0.5 (better for OTC markets)
+- Quality thresholds relaxed: PREMIUM 88%→85%, HIGH 78%→75%, MEDIUM 70%→65%
+- `is_tradeable` logic: Now allows MEDIUM quality with 1 avoid reason, or 70%+ confidence with 2 avoid reasons
+- Tampermonkey MIN_CONFIDENCE: 72% → 65%
+- Local engine min confirmations: 4 → 3
+
+**Result**: 7 signals from 8 OTC assets (vs 0 before fix)
 
 ### AI/ML Phase 2 & 3 Complete (April 2, 2026)
 **LSTM/GRU Time-Series System v2.0** (`lstm_gru_system.py`)

@@ -144,7 +144,11 @@ class DeepAnalysisSignal:
             "risk_reward_ratio": round(float(self.risk_reward_ratio), 2),
             "timestamp": self.timestamp.isoformat(),
             "avoid_reasons": self.avoid_reasons,
-            "is_tradeable": bool(self.quality in [SignalQuality.PREMIUM, SignalQuality.HIGH] and len(self.avoid_reasons) == 0)
+            # Allow trading if quality is acceptable (MEDIUM+) or confidence is high enough
+            "is_tradeable": bool(
+                (self.quality in [SignalQuality.PREMIUM, SignalQuality.HIGH, SignalQuality.MEDIUM] and len(self.avoid_reasons) <= 1) or
+                (self.confidence >= 70 and len(self.avoid_reasons) <= 2)
+            )
         }
 
 
@@ -847,8 +851,8 @@ class DeepMarketAnalyzer:
             if pattern.pattern_name == "doji":
                 avoid_reasons.append("DOJI_INDECISION")
         
-        # Check volume
-        if not volume_confirmed and volume_ratio < 0.8:
+        # Check volume (relaxed for OTC markets which often have low/synthetic volume)
+        if not volume_confirmed and volume_ratio < 0.5:  # Reduced from 0.8 to 0.5
             avoid_reasons.append("LOW_VOLUME")
         
         # Minimum confirmation requirement (count-based)
@@ -924,21 +928,21 @@ class DeepMarketAnalyzer:
             # Additional penalty when opposite weighted score is close
             confidence -= 5
         
-        # Reduce confidence for avoid reasons
-        confidence -= len(avoid_reasons) * 8
+        # Reduce confidence for avoid reasons (reduced penalty for better signal flow)
+        confidence -= len(avoid_reasons) * 5  # Reduced from 8 to 5
         
         # Cap confidence
         confidence = min(95, max(0, confidence))
         
-        if confidence < 70:
+        if confidence < 65:  # Reduced from 70 to 65 for more signals
             return None
         
-        # Determine quality (tighter thresholds)
-        if confidence >= 88 and conf_count >= 7:
+        # Determine quality (relaxed thresholds for better signal flow)
+        if confidence >= 85 and conf_count >= 6:
             quality = SignalQuality.PREMIUM
-        elif confidence >= 78 and conf_count >= 5:
+        elif confidence >= 75 and conf_count >= 5:
             quality = SignalQuality.HIGH
-        elif confidence >= 70 and conf_count >= 4:
+        elif confidence >= 65 and conf_count >= 4:
             quality = SignalQuality.MEDIUM
         else:
             quality = SignalQuality.LOW

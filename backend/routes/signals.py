@@ -1977,7 +1977,8 @@ async def scan_markets_for_signals(
                     
                     if signal and signal.get("confidence", 0) >= min_confidence:
                         quality = signal.get("quality", "low")
-                        if quality in ["high", "premium", "medium"]:
+                        # Include all qualities that meet confidence threshold (including low)
+                        if quality in ["high", "premium", "medium", "low"]:
                             # ML confluence bonus: boost confidence when systems agree
                             total_ml_agreements = 0
                             
