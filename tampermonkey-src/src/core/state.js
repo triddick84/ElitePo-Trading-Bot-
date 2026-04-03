@@ -65,6 +65,9 @@ export const state = {
   // Last executed trade details (for result matching)
   lastTrade: null,
   
+  // Last scanned signal (for manual WIN/LOSS when no auto-trade)
+  lastSignal: null,
+  
   // Data collection
   collectedCandles: [],
   lastDataSend: 0,

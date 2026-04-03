@@ -242,6 +242,38 @@ function injectCSS() {
       font-size: ${mobile ? 12 : 11}px !important;
       -webkit-appearance: none !important;
     }
+    .${P}stratrow {
+      display: flex !important;
+      align-items: center !important;
+      gap: 4px !important;
+      margin-bottom: ${mobile ? '6px' : '8px'} !important;
+      padding: 4px 6px !important;
+      background: rgba(0,0,0,0.3) !important;
+      border: 1px solid #21262d !important;
+      border-radius: 6px !important;
+    }
+    .${P}stratlbl {
+      font-size: ${mobile ? 9 : 10}px !important;
+      color: #8b949e !important;
+      white-space: nowrap !important;
+    }
+    .${P}stratsel {
+      flex: 1 !important;
+      padding: ${mobile ? '5px 4px' : '3px 4px'} !important;
+      border: 1px solid #30363d !important;
+      border-radius: 4px !important;
+      background: #0d1117 !important;
+      color: #e6edf3 !important;
+      font-size: ${mobile ? 11 : 10}px !important;
+      -webkit-appearance: none !important;
+      appearance: none !important;
+      cursor: pointer !important;
+      min-height: ${mobile ? 30 : 24}px !important;
+    }
+    .${P}stratsel option {
+      background: #0d1117 !important;
+      color: #e6edf3 !important;
+    }
     .${P}loghdr {
       padding: 5px 8px !important;
       background: rgba(0,0,0,0.3) !important;
@@ -312,6 +344,13 @@ export function createPanel() {
           <button id="${P}scan" class="${P}btn">SCAN</button>
           <button id="${P}auto" class="${P}btn">AUTO</button>
           <button id="${P}go" class="${P}btn ${P}btn-go">GO</button>
+        </div>
+        <div class="${P}stratrow">
+          <span class="${P}stratlbl">Strategy:</span>
+          <select id="${P}strat" class="${P}stratsel">
+            <option value="default">All Strategies</option>
+            <option value="ema20_pullback_reversal">EMA 20 Pullback</option>
+          </select>
         </div>
         <div class="${P}row">
           <button id="${P}inv" class="${P}btn ${P}btn-inv">INVERT</button>
@@ -416,6 +455,14 @@ export function initPanelEvents(callbacks = {}) {
   q('inv')?.addEventListener('click', () => callbacks.onInvertToggle?.());
   q('win')?.addEventListener('click', () => callbacks.onWin?.());
   q('loss')?.addEventListener('click', () => callbacks.onLoss?.());
+
+  // Strategy selector
+  const stratSelect = q('strat');
+  if (stratSelect) {
+    stratSelect.addEventListener('change', (e) => {
+      callbacks.onStrategyChange?.(e.target.value);
+    });
+  }
 
   const amtInput = q('amt');
   if (amtInput) {
@@ -554,6 +601,38 @@ export function cleanupPanel() {
   }
 }
 
+/**
+ * Populate strategy dropdown from API data
+ * @param {Array} strategies - [{id, name, win_rate?}]
+ * @param {string} selectedId - Currently active strategy ID
+ */
+export function populateStrategies(strategies, selectedId) {
+  const sel = q('strat');
+  if (!sel) return;
+
+  sel.innerHTML = '';
+
+  // Add "All Strategies" default option
+  const defOpt = document.createElement('option');
+  defOpt.value = 'default';
+  defOpt.textContent = 'All Strategies';
+  sel.appendChild(defOpt);
+
+  if (strategies && strategies.length > 0) {
+    for (const s of strategies) {
+      if (s.id === 'default') continue;
+      const opt = document.createElement('option');
+      opt.value = s.id;
+      opt.textContent = s.win_rate ? `${s.name} (${s.win_rate})` : s.name;
+      sel.appendChild(opt);
+    }
+  }
+
+  if (selectedId) {
+    sel.value = selectedId;
+  }
+}
+
 export default {
   createPanel,
   initPanelEvents,
@@ -561,4 +640,5 @@ export default {
   updateInvertDisplay,
   updateStatusDot,
   cleanupPanel,
+  populateStrategies,
 };

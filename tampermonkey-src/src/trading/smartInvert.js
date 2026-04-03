@@ -61,6 +61,11 @@ class SmartInvertEngine {
     const { count, direction } = getConsecutiveSameDirectionLosses(asset);
     const threshold = CONFIG.INVERT_AFTER_CONSECUTIVE_LOSSES;
 
+    // Log the evaluation for visibility
+    if (count > 0) {
+      info(`Auto-Invert check: ${count} consecutive ${direction || '?'} losses on ${asset} (threshold: ${threshold})`);
+    }
+
     if (!inv.isInverted) {
       // Not inverted: check if we should invert
       if (count >= threshold && direction) {

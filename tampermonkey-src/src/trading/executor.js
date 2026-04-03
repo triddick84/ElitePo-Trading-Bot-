@@ -157,16 +157,19 @@ class TradeExecutor {
     // Core stats
     recordTradeResult(isWin);
     
-    // Get the trade we're recording for
+    // Get the trade we're recording for. Priority: pending trade > last executed trade > last signal
     const trade = this.pendingTrades.length > 0 ? this.pendingTrades.shift() : state.lastTrade;
-    const asset = trade?.asset || getCurrentAsset();
-    const direction = trade?.direction || 'UNKNOWN';
-    const confidence = trade?.confidence || 0;
+    const lastSignal = state.lastSignal || {};
+    const asset = trade?.asset || lastSignal.symbol || getCurrentAsset() || 'UNKNOWN';
+    const direction = trade?.direction || lastSignal.direction || 'UNKNOWN';
+    const confidence = trade?.confidence || lastSignal.confidence || 0;
     
     if (trade) {
       trade.result = isWin ? 'WIN' : 'LOSS';
       trade.resultTime = new Date().toISOString();
     }
+    
+    log(`Recording ${isWin ? 'WIN' : 'LOSS'}: ${asset} ${direction} (conf: ${confidence})`);
     
     // Record per-asset history (for smart inversion)
     recordAssetResult(asset, direction, isWin);

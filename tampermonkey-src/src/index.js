@@ -6,11 +6,12 @@
 import { CONFIG } from './core/config.js';
 import { state, setState, loadState, saveState, resetStats } from './core/state.js';
 import { log, info, warn, success, error } from './core/logger.js';
-import { createPanel, initPanelEvents, updateStatsDisplay, updateInvertDisplay, updateStatusDot, cleanupPanel } from './ui/panel.js';
+import { createPanel, initPanelEvents, updateStatsDisplay, updateInvertDisplay, updateStatusDot, cleanupPanel, populateStrategies } from './ui/panel.js';
 import { strategyManager } from './strategies/manager.js';
 import { tradeExecutor } from './trading/executor.js';
 import { smartInvert } from './trading/smartInvert.js';
 import { scanMarkets } from './utils/api.js';
+import { get, post } from './utils/api.js';
 import { getCurrentAsset, getCurrentPrice, waitForElement } from './utils/dom.js';
 import { priceScraper } from './trading/priceScraper.js';
 
@@ -45,8 +46,8 @@ class EliteTradingBot {
     // Start price scraper
     priceScraper.start(500);
     
-    // Sync strategy selection from app
-    await strategyManager.syncFromApp();
+    // Sync strategy selection from app + populate dropdown
+    await this.loadStrategies();
     
     // Start stats update interval
     this.statsInterval = setInterval(() => {
@@ -90,6 +91,18 @@ class EliteTradingBot {
       onInvertToggle: () => {
         smartInvert.manualToggle();
       },
+      onStrategyChange: async (strategyId) => {
+        log(`Strategy changed to: ${strategyId}`);
+        // Apply locally in Tampermonkey
+        strategyManager.applyAppSelection(strategyId);
+        // Also save to backend
+        try {
+          await post('/strategies/select', { timeframe: '5s', strategy_id: strategyId });
+          info(`Strategy "${strategyId}" synced to server`);
+        } catch (e) {
+          warn(`Failed to sync strategy to server: ${e.message}`);
+        }
+      },
       onWin: () => {
         tradeExecutor.recordResult(true);
         updateStatsDisplay();
@@ -102,6 +115,28 @@ class EliteTradingBot {
         tradeExecutor.setBaseAmount(amount);
       },
     });
+  }
+  
+  async loadStrategies() {
+    try {
+      // Fetch available strategies from API
+      const available = await get('/strategies/available/5s');
+      const strategies = available.strategies || [];
+      
+      // Fetch current selection
+      const selected = await get('/strategies/selected');
+      const selectedId = selected.selections?.['5s'] || 'default';
+      
+      // Populate dropdown UI
+      populateStrategies(strategies, selectedId);
+      
+      // Apply selection locally
+      strategyManager.applyAppSelection(selectedId);
+      
+      info(`Strategies loaded: ${strategies.length} available, active: ${selectedId}`);
+    } catch (e) {
+      warn(`Strategy load failed (using all): ${e.message}`);
+    }
   }
   
   startScanning() {
@@ -151,6 +186,9 @@ class EliteTradingBot {
             signal.symbol = asset;
             signal.source = 'local';
             
+            // Always store last signal for manual WIN/LOSS tracking
+            state.lastSignal = { direction: signal.direction, symbol: asset, confidence: signal.confidence, strategy: signal.strategy };
+            
             log(`Local signal: ${signal.direction} ${asset} @ ${signal.confidence}% [${signal.strategy}]`);
             
             if (state.autoTradeEnabled) {
@@ -166,6 +204,10 @@ class EliteTradingBot {
       
       if (response.success && response.top_signals && response.top_signals.length > 0) {
         const signal = response.top_signals[0];
+        
+        // Always store last signal for manual WIN/LOSS tracking
+        state.lastSignal = { direction: signal.direction, symbol: signal.symbol || asset, confidence: signal.confidence, strategy: signal.strategy || 'API' };
+        
         log(`API signal: ${signal.direction} ${signal.symbol || asset} @ ${signal.confidence}%`);
         
         if (state.autoTradeEnabled) {
