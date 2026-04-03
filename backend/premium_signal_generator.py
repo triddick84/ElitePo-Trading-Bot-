@@ -501,11 +501,12 @@ def get_market_condition(candles: List[Dict]) -> Dict:
 
 
 class AssetPerformanceTracker:
-    """Tracks win rates per asset and per hour+asset combination"""
+    """Tracks win rates per asset and per hour+asset combination, with direction-aware loss detection"""
     
     def __init__(self):
         self.asset_stats_collection = db['asset_performance']
         self.asset_hourly_collection = db['asset_hourly_performance']
+        self.recent_trades_collection = db['recent_asset_trades']
     
     def record_result(self, symbol: str, direction: str, is_win: bool, hour_utc: int, session: str):
         """Record a trade result for asset-level tracking"""
@@ -541,8 +542,88 @@ class AssetPerformanceTracker:
                 upsert=True
             )
             
+            # Store in recent trades for direction-loss detection
+            self.recent_trades_collection.insert_one({
+                "symbol": symbol,
+                "direction": direction.upper(),
+                "is_win": is_win,
+                "hour_utc": hour_utc,
+                "session": session,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+            
+            # Keep only last 20 trades per symbol
+            count = self.recent_trades_collection.count_documents({"symbol": symbol})
+            if count > 20:
+                oldest = list(self.recent_trades_collection.find(
+                    {"symbol": symbol}, {"_id": 1}
+                ).sort("timestamp", 1).limit(count - 20))
+                if oldest:
+                    ids = [doc["_id"] for doc in oldest]
+                    self.recent_trades_collection.delete_many({"_id": {"$in": ids}})
+            
         except Exception as e:
             logger.error(f"Error recording asset result: {e}")
+    
+    def get_consecutive_direction_losses(self, symbol: str) -> Dict:
+        """
+        Detect consecutive same-direction losses for an asset.
+        Returns: { "count": N, "direction": "CALL"|"PUT"|None, "should_invert": bool }
+        """
+        try:
+            recent = list(self.recent_trades_collection.find(
+                {"symbol": symbol},
+                {"_id": 0, "direction": 1, "is_win": 1}
+            ).sort("timestamp", -1).limit(10))
+            
+            if not recent:
+                return {"count": 0, "direction": None, "should_invert": False}
+            
+            count = 0
+            losing_dir = None
+            
+            for trade in recent:
+                if not trade.get("is_win"):
+                    if losing_dir is None:
+                        losing_dir = trade.get("direction")
+                        count = 1
+                    elif trade.get("direction") == losing_dir:
+                        count += 1
+                    else:
+                        break
+                else:
+                    break
+            
+            return {
+                "count": count,
+                "direction": losing_dir,
+                "should_invert": count >= 2
+            }
+        except Exception as e:
+            logger.error(f"Error getting direction losses: {e}")
+            return {"count": 0, "direction": None, "should_invert": False}
+    
+    def get_direction_win_rate(self, symbol: str, direction: str) -> Dict:
+        """Get win rate for a specific direction on a specific asset"""
+        try:
+            stats = self.asset_stats_collection.find_one({"symbol": symbol}, {"_id": 0})
+            if not stats:
+                return {"win_rate": 50.0, "total": 0}
+            
+            dir_lower = direction.lower()
+            wins = stats.get(f"wins_{dir_lower}", 0)
+            losses = stats.get(f"losses_{dir_lower}", 0)
+            total = wins + losses
+            
+            return {
+                "win_rate": round(wins / total * 100, 1) if total > 0 else 50.0,
+                "total": total,
+                "wins": wins,
+                "losses": losses
+            }
+        except Exception as e:
+            logger.error(f"Error getting direction win rate: {e}")
+            return {"win_rate": 50.0, "total": 0}
     
     def get_asset_win_rate(self, symbol: str) -> Dict:
         """Get win rate for a specific asset"""
@@ -690,6 +771,28 @@ def apply_premium_filters(signal: Dict, symbol: str, candles: List[Dict] = None)
             confidence_adj -= 3
             filter_notes.append("Quiet market - limited opportunity")
     
+    # 5. Direction-aware loss detection (-8 to 0)
+    # If recent trades show consecutive losses in the SAME direction as this signal, penalize heavily
+    signal_direction = signal.get("direction", "").upper()
+    dir_losses = asset_tracker.get_consecutive_direction_losses(symbol)
+    invert_suggestion = False
+    
+    if dir_losses.get("should_invert") and dir_losses.get("direction") == signal_direction:
+        loss_count = dir_losses.get("count", 0)
+        penalty = min(loss_count * 4, 15)  # -4 per loss, max -15
+        confidence_adj -= penalty
+        filter_notes.append(
+            f"WARNING: {loss_count} consecutive {signal_direction} losses on {symbol} - "
+            f"consider inverting (penalty: -{penalty})"
+        )
+        invert_suggestion = True
+    elif dir_losses.get("should_invert") and dir_losses.get("direction") != signal_direction:
+        # Signal is already opposite of losing direction - this is good
+        confidence_adj += 2
+        filter_notes.append(
+            f"Signal direction ({signal_direction}) opposite to losing streak ({dir_losses.get('direction')}) - favorable"
+        )
+    
     # Apply adjustment to signal confidence
     original_confidence = signal.get("confidence", 0)
     adjusted_confidence = max(0, min(99, original_confidence + confidence_adj))
@@ -705,7 +808,9 @@ def apply_premium_filters(signal: Dict, symbol: str, candles: List[Dict] = None)
         "market_condition": mkt_condition.value if mkt_condition else "unknown",
         "confidence_adjustment": round(confidence_adj, 1),
         "filter_notes": filter_notes,
-        "recommendation": time_filter.recommendation
+        "recommendation": time_filter.recommendation,
+        "invert_suggestion": invert_suggestion,
+        "direction_loss_streak": dir_losses
     }
     signal["confidence"] = round(adjusted_confidence, 1)
     signal["original_confidence"] = round(original_confidence, 1)

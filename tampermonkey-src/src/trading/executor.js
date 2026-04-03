@@ -1,13 +1,14 @@
 /**
  * Trade Executor
- * Handles trade execution with cooldowns and validation
+ * Handles trade execution with cooldowns, validation, and smart inversion
  */
 
 import { CONFIG } from '../core/config.js';
-import { state, setState, recordTradeResult } from '../core/state.js';
-import { log, success, error, warn } from '../core/logger.js';
+import { state, setState, recordTradeResult, recordAssetResult, saveState } from '../core/state.js';
+import { log, success, error, warn, info } from '../core/logger.js';
 import { executeTrade, setTradeAmount, getCurrentAsset, getPayout } from '../utils/dom.js';
-import { reportTrade } from '../utils/api.js';
+import { reportTrade, recordPremiumResult } from '../utils/api.js';
+import { smartInvert } from './smartInvert.js';
 
 class TradeExecutor {
   constructor() {
@@ -65,41 +66,44 @@ class TradeExecutor {
   }
   
   /**
-   * Execute a trade
+   * Execute a trade (with smart inversion applied)
    * @param {Object} signal - Signal to trade
    * @param {string} source - 'scan' or 'app'
    * @returns {Promise<boolean>} Success
    */
   async execute(signal, source = 'scan') {
-    // Validate
     if (!this.validateSignal(signal)) {
       return false;
     }
     
-    // Check cooldown
     if (!this.canTrade(source)) {
       return false;
     }
     
-    // Check if auto-trade is enabled
     if (!state.autoTradeEnabled) {
       log('Auto-trade disabled, signal received but not executed');
       return false;
     }
     
     try {
-      const direction = signal.direction.toUpperCase();
+      const originalDirection = signal.direction.toUpperCase();
+      
+      // Apply smart inversion
+      const direction = smartInvert.applyInversion(originalDirection);
+      
       const amount = state.moneyManagement.currentAmount;
       const asset = getCurrentAsset();
       
-      log(`Executing ${direction} trade on ${asset} @ $${amount} (${signal.confidence}%)`);
+      if (direction !== originalDirection) {
+        info(`Executing INVERTED ${direction} (original: ${originalDirection}) on ${asset} @ $${amount}`);
+      } else {
+        log(`Executing ${direction} trade on ${asset} @ $${amount} (${signal.confidence}%)`);
+      }
       
-      // Set amount and execute
       setTradeAmount(amount);
       const executed = await executeTrade(direction, amount);
       
       if (executed) {
-        // Update state
         const now = Date.now();
         setState('lastTradeTime', now);
         
@@ -109,24 +113,27 @@ class TradeExecutor {
           setState('lastAppTradeTime', now);
         }
         
-        // Store trade info
         const trade = {
           timestamp: new Date().toISOString(),
           asset,
           direction,
+          originalDirection,
           amount,
           confidence: signal.confidence,
           strategy: signal.strategy || 'Unknown',
           source,
           payout: getPayout(),
+          wasInverted: direction !== originalDirection,
         };
         
         this.tradeHistory.push(trade);
         this.pendingTrades.push(trade);
         
-        success(`Trade executed: ${direction} ${asset} @ $${amount}`);
+        // Store as last trade for result matching
+        state.lastTrade = trade;
         
-        // Report to backend
+        success(`Trade executed: ${direction} ${asset} @ $${amount}${trade.wasInverted ? ' [INVERTED]' : ''}`);
+        
         reportTrade(trade).catch(e => {
           warn(`Failed to report trade: ${e.message}`);
         });
@@ -143,36 +150,67 @@ class TradeExecutor {
   }
   
   /**
-   * Record trade result
+   * Record trade result with premium tracking and smart inversion evaluation
    * @param {boolean} isWin - Whether trade was won
    */
   recordResult(isWin) {
+    // Core stats
     recordTradeResult(isWin);
     
-    if (this.pendingTrades.length > 0) {
-      const trade = this.pendingTrades.shift();
+    // Get the trade we're recording for
+    const trade = this.pendingTrades.length > 0 ? this.pendingTrades.shift() : state.lastTrade;
+    const asset = trade?.asset || getCurrentAsset();
+    const direction = trade?.direction || 'UNKNOWN';
+    const confidence = trade?.confidence || 0;
+    
+    if (trade) {
       trade.result = isWin ? 'WIN' : 'LOSS';
       trade.resultTime = new Date().toISOString();
-      
-      // Update money management
-      if (isWin) {
-        state.moneyManagement.currentStep = 0;
-        state.moneyManagement.currentAmount = state.moneyManagement.baseAmount;
+    }
+    
+    // Record per-asset history (for smart inversion)
+    recordAssetResult(asset, direction, isWin);
+    
+    // Record inverted result tracking
+    smartInvert.recordInvertedResult(isWin);
+    
+    // Send to backend premium result tracker (fire-and-forget)
+    recordPremiumResult(asset, direction, isWin, confidence).then(resp => {
+      if (resp.success && resp.updated_stats) {
+        const stats = resp.updated_stats;
+        log(`Premium tracking: Asset WR ${stats.asset_win_rate}% (${stats.asset_total_trades} trades), Hour WR ${stats.hour_win_rate}%`);
+      }
+    }).catch(() => {
+      // Silently fail - don't block trading
+    });
+    
+    // Money management
+    if (isWin) {
+      state.moneyManagement.currentStep = 0;
+      state.moneyManagement.currentAmount = state.moneyManagement.baseAmount;
+      if (trade) {
         state.moneyManagement.totalProfit += trade.amount * (trade.payout / 100);
-      } else {
-        // Martingale
-        if (state.moneyManagement.currentStep < CONFIG.MAX_MARTINGALE_STEPS) {
-          state.moneyManagement.currentStep++;
-          state.moneyManagement.currentAmount = Math.min(
-            CONFIG.MAX_TRADE_AMOUNT,
-            state.moneyManagement.currentAmount * CONFIG.MARTINGALE_MULTIPLIER
-          );
-        }
+      }
+    } else {
+      if (state.moneyManagement.currentStep < CONFIG.MAX_MARTINGALE_STEPS) {
+        state.moneyManagement.currentStep++;
+        state.moneyManagement.currentAmount = Math.min(
+          CONFIG.MAX_TRADE_AMOUNT,
+          state.moneyManagement.currentAmount * CONFIG.MARTINGALE_MULTIPLIER
+        );
+      }
+      if (trade) {
         state.moneyManagement.totalProfit -= trade.amount;
       }
-      
-      log(`Trade result: ${isWin ? 'WIN' : 'LOSS'} | Streak: ${state.stats.currentStreak} | Profit: $${state.moneyManagement.totalProfit.toFixed(2)}`);
     }
+    
+    log(`Trade result: ${isWin ? 'WIN' : 'LOSS'} | Streak: ${state.stats.currentStreak} | Profit: $${state.moneyManagement.totalProfit.toFixed(2)}`);
+    
+    // Evaluate smart inversion AFTER recording the result
+    smartInvert.evaluateInversion(asset);
+    
+    // Save state after each result
+    saveState();
   }
   
   /**
@@ -212,7 +250,6 @@ class TradeExecutor {
   }
 }
 
-// Singleton instance
 export const tradeExecutor = new TradeExecutor();
 
 export default tradeExecutor;

@@ -152,6 +152,29 @@ export async function reportTrade(trade) {
   }
 }
 
+/**
+ * Record premium trade result for win-rate tracking (session/hour/asset learning)
+ * @param {string} symbol - Asset symbol
+ * @param {string} direction - CALL or PUT
+ * @param {boolean} isWin - Win or loss
+ * @param {number} confidence - Signal confidence at time of trade
+ * @returns {Promise<Object>} Updated stats
+ */
+export async function recordPremiumResult(symbol, direction, isWin, confidence = 0) {
+  try {
+    const response = await post('/signals/record-premium-result', {
+      symbol: symbol || 'UNKNOWN',
+      direction: direction || 'CALL',
+      is_win: isWin,
+      confidence: confidence,
+    });
+    return response;
+  } catch (e) {
+    logError(`Failed to record premium result: ${e.message}`);
+    return { success: false, error: e.message };
+  }
+}
+
 export default {
   request,
   get,
@@ -160,4 +183,5 @@ export default {
   scanMarkets,
   sendCandles,
   reportTrade,
+  recordPremiumResult,
 };

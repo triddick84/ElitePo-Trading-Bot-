@@ -45,6 +45,25 @@ export const state = {
     logExpanded: true,
     soundEnabled: true,
   },
+
+  // Auto-Invert State
+  inversion: {
+    isInverted: false,                // Currently inverting signals?
+    invertedAt: 0,                    // Timestamp when inversion started
+    invertedTradeCount: 0,            // Trades placed while inverted
+    invertedWins: 0,                  // Wins while inverted
+    invertedLosses: 0,                // Losses while inverted
+    lastInvertChange: 0,              // Last time invert state changed
+    reason: '',                       // Why we inverted
+    manualOverride: false,            // User forced inversion manually
+  },
+
+  // Per-asset loss history for smart inversion
+  assetHistory: {},
+  // Structure: { "EURUSD_OTC": [ { direction: "CALL", result: "LOSS", ts: 123 }, ... ] }
+
+  // Last executed trade details (for result matching)
+  lastTrade: null,
   
   // Data collection
   collectedCandles: [],
@@ -96,6 +115,17 @@ export function resetStats() {
     maxWinStreak: 0,
     maxLossStreak: 0,
   };
+  state.inversion = {
+    isInverted: false,
+    invertedAt: 0,
+    invertedTradeCount: 0,
+    invertedWins: 0,
+    invertedLosses: 0,
+    lastInvertChange: 0,
+    reason: '',
+    manualOverride: false,
+  };
+  state.assetHistory = {};
 }
 
 /**
@@ -117,6 +147,64 @@ export function recordTradeResult(isWin) {
 }
 
 /**
+ * Record result for a specific asset (for smart inversion)
+ * @param {string} asset - Asset symbol
+ * @param {string} direction - CALL or PUT
+ * @param {boolean} isWin
+ */
+export function recordAssetResult(asset, direction, isWin) {
+  if (!asset) return;
+  
+  if (!state.assetHistory[asset]) {
+    state.assetHistory[asset] = [];
+  }
+  
+  state.assetHistory[asset].push({
+    direction,
+    result: isWin ? 'WIN' : 'LOSS',
+    ts: Date.now(),
+  });
+  
+  // Keep only last N results
+  const maxSize = 10;
+  if (state.assetHistory[asset].length > maxSize) {
+    state.assetHistory[asset] = state.assetHistory[asset].slice(-maxSize);
+  }
+}
+
+/**
+ * Get consecutive same-direction losses for an asset
+ * @param {string} asset
+ * @returns {{ count: number, direction: string|null }}
+ */
+export function getConsecutiveSameDirectionLosses(asset) {
+  if (!asset || !state.assetHistory[asset] || state.assetHistory[asset].length === 0) {
+    return { count: 0, direction: null };
+  }
+  
+  const history = state.assetHistory[asset];
+  let count = 0;
+  let direction = null;
+  
+  // Walk backward from most recent
+  for (let i = history.length - 1; i >= 0; i--) {
+    const entry = history[i];
+    if (entry.result !== 'LOSS') break;
+    
+    if (direction === null) {
+      direction = entry.direction;
+      count = 1;
+    } else if (entry.direction === direction) {
+      count++;
+    } else {
+      break;
+    }
+  }
+  
+  return { count, direction };
+}
+
+/**
  * Save state to GM storage
  */
 export function saveState() {
@@ -125,6 +213,8 @@ export function saveState() {
       stats: state.stats,
       moneyManagement: state.moneyManagement,
       ui: state.ui,
+      inversion: state.inversion,
+      assetHistory: state.assetHistory,
     }));
   }
 }
@@ -141,6 +231,8 @@ export function loadState() {
         if (parsed.stats) state.stats = { ...state.stats, ...parsed.stats };
         if (parsed.moneyManagement) state.moneyManagement = { ...state.moneyManagement, ...parsed.moneyManagement };
         if (parsed.ui) state.ui = { ...state.ui, ...parsed.ui };
+        if (parsed.inversion) state.inversion = { ...state.inversion, ...parsed.inversion };
+        if (parsed.assetHistory) state.assetHistory = parsed.assetHistory;
       }
     } catch (e) {
       console.error('Failed to load state:', e);

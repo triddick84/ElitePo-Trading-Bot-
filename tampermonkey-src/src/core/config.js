@@ -1,9 +1,13 @@
 /**
- * Configuration module for GPT Signal Bot
+ * Configuration module for Elite Pocket Option Trading Bot
  * Central configuration for all bot settings
  */
 
 export const CONFIG = {
+  // Bot Info
+  BOT_NAME: 'Elite Pocket Option Trading Bot',
+  BOT_VERSION: '8.0.0',
+
   // API Settings
   API_URL: 'https://pocket-trader-ai-8.preview.emergentagent.com/api',
   
@@ -21,8 +25,8 @@ export const CONFIG = {
   
   // Feature Flags
   DEBUG: true,
-  USE_LOCAL_SIGNALS: true,      // Generate signals locally using actual OTC prices
-  LOCAL_CANDLE_COUNT: 50,       // Number of candles to analyze
+  USE_LOCAL_SIGNALS: true,
+  LOCAL_CANDLE_COUNT: 50,
   
   // Money Management
   DEFAULT_TRADE_AMOUNT: 1,
@@ -32,7 +36,14 @@ export const CONFIG = {
   
   // Data Collection
   DATA_COLLECTION_ENABLED: false,
-  DATA_SEND_INTERVAL: 60000,    // Send data every 60 seconds
+  DATA_SEND_INTERVAL: 60000,
+
+  // Auto-Invert System
+  AUTO_INVERT_ENABLED: true,
+  INVERT_AFTER_CONSECUTIVE_LOSSES: 2,    // Invert after N same-direction losses
+  INVERT_COOLDOWN_MS: 10000,             // Min time between invert state changes
+  INVERT_MAX_INVERTED_TRADES: 5,         // Revert after N inverted trades without improvement
+  LOSS_MEMORY_SIZE: 10,                   // How many recent results per asset to remember
 };
 
 /**

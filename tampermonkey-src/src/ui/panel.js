@@ -1,5 +1,5 @@
 /**
- * UI Panel Component
+ * UI Panel Component - Elite Pocket Option Trading Bot
  * Creates and manages the trading bot control panel
  * Uses Shadow DOM for CSS isolation from Pocket Option styles
  */
@@ -17,7 +17,6 @@ let watchdogInterval = null;
  * @returns {HTMLElement} The host element containing the shadow panel
  */
 export function createPanel() {
-  // Create host element
   panelHost = document.createElement('div');
   panelHost.id = 'gpt-bot-host';
   panelHost.setAttribute('style', [
@@ -29,25 +28,21 @@ export function createPanel() {
     'visibility: visible !important',
     'opacity: 1 !important',
     'pointer-events: auto !important',
-    'width: 280px !important',
+    'width: 300px !important',
     'transform: none !important',
   ].join('; '));
 
-  // Attach shadow DOM to isolate styles
   shadowRoot = panelHost.attachShadow({ mode: 'open' });
 
-  // Build panel inside shadow
   const panel = document.createElement('div');
   panel.id = 'gpt-bot-panel';
   panel.innerHTML = getPanelHTML();
 
-  // Inject styles into shadow
   const style = document.createElement('style');
   style.textContent = getPanelCSS();
   shadowRoot.appendChild(style);
   shadowRoot.appendChild(panel);
 
-  // Start watchdog to re-inject if removed
   startWatchdog();
 
   return panelHost;
@@ -62,10 +57,9 @@ function startWatchdog() {
   watchdogInterval = setInterval(() => {
     const host = document.getElementById('gpt-bot-host');
     if (!host || !document.body.contains(host)) {
-      console.log('[GPT Bot] Panel was removed, re-injecting...');
+      console.log('[Elite Bot] Panel was removed, re-injecting...');
       reInjectPanel();
     } else {
-      // Ensure visibility even if PO overrides inline styles
       host.style.setProperty('display', 'block', 'important');
       host.style.setProperty('visibility', 'visible', 'important');
       host.style.setProperty('opacity', '1', 'important');
@@ -79,7 +73,6 @@ function startWatchdog() {
  */
 function reInjectPanel() {
   try {
-    // Remove old host if present
     const old = document.getElementById('gpt-bot-host');
     if (old) old.remove();
 
@@ -94,7 +87,7 @@ function reInjectPanel() {
       'visibility: visible !important',
       'opacity: 1 !important',
       'pointer-events: auto !important',
-      'width: 280px !important',
+      'width: 300px !important',
       'transform: none !important',
     ].join('; '));
 
@@ -111,23 +104,18 @@ function reInjectPanel() {
 
     document.body.appendChild(panelHost);
 
-    // Re-bind events
     if (window._gptBotCallbacks) {
       initPanelEvents(window._gptBotCallbacks);
     }
   } catch (e) {
-    console.error('[GPT Bot] Re-inject failed:', e);
+    console.error('[Elite Bot] Re-inject failed:', e);
   }
 }
 
-/**
- * Get panel HTML content
- * @returns {string}
- */
 function getPanelHTML() {
   return `
     <div class="gpt-panel-header" id="gpt-panel-header">
-      <span class="gpt-panel-title">GPT Signal Bot v7.7.0</span>
+      <span class="gpt-panel-title">${CONFIG.BOT_NAME}</span>
       <div class="gpt-header-right">
         <span class="gpt-status-dot" id="gpt-status-dot"></span>
         <button class="gpt-minimize-btn" id="gpt-minimize-btn">_</button>
@@ -135,17 +123,17 @@ function getPanelHTML() {
     </div>
     
     <div class="gpt-panel-body" id="gpt-panel-body">
-      <!-- Control Buttons -->
+      <!-- Control Buttons Row 1 -->
       <div class="gpt-control-row">
-        <button id="gpt-btn-scan" class="gpt-btn" data-active="false">
-          SCAN
-        </button>
-        <button id="gpt-btn-auto" class="gpt-btn" data-active="false">
-          AUTO
-        </button>
-        <button id="gpt-btn-go" class="gpt-btn gpt-btn-go">
-          GO
-        </button>
+        <button id="gpt-btn-scan" class="gpt-btn" data-active="false">SCAN</button>
+        <button id="gpt-btn-auto" class="gpt-btn" data-active="false">AUTO</button>
+        <button id="gpt-btn-go" class="gpt-btn gpt-btn-go">GO</button>
+      </div>
+      
+      <!-- Control Buttons Row 2 - Invert -->
+      <div class="gpt-control-row">
+        <button id="gpt-btn-invert" class="gpt-btn gpt-btn-invert" data-active="false">INVERT</button>
+        <span class="gpt-invert-status" id="gpt-invert-status">Normal</span>
       </div>
       
       <!-- Stats Display -->
@@ -161,6 +149,10 @@ function getPanelHTML() {
         <div class="gpt-stat">
           <span class="gpt-stat-label">Streak</span>
           <span class="gpt-stat-value" id="gpt-stat-streak">0</span>
+        </div>
+        <div class="gpt-stat">
+          <span class="gpt-stat-label">Profit</span>
+          <span class="gpt-stat-value" id="gpt-stat-profit">$0</span>
         </div>
       </div>
       
@@ -187,10 +179,6 @@ function getPanelHTML() {
   `;
 }
 
-/**
- * Get panel CSS (isolated inside shadow DOM)
- * @returns {string}
- */
 function getPanelCSS() {
   return `
     * {
@@ -200,13 +188,13 @@ function getPanelCSS() {
     }
 
     #gpt-bot-panel {
-      width: 280px;
-      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-      border: 1px solid #0f3460;
+      width: 300px;
+      background: linear-gradient(135deg, #0d1117 0%, #161b22 50%, #0d1117 100%);
+      border: 1px solid #30363d;
       border-radius: 12px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 0 1px rgba(88,166,255,0.3);
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      color: #e4e4e4;
+      color: #e6edf3;
       font-size: 12px;
       user-select: none;
       overflow: hidden;
@@ -217,14 +205,18 @@ function getPanelCSS() {
       justify-content: space-between;
       align-items: center;
       padding: 10px 12px;
-      background: rgba(0,0,0,0.3);
+      background: linear-gradient(90deg, rgba(56,139,253,0.15) 0%, rgba(0,0,0,0.3) 100%);
       cursor: move;
+      border-bottom: 1px solid #21262d;
     }
     
     .gpt-panel-title {
-      font-weight: 600;
-      font-size: 13px;
-      color: #a8dadc;
+      font-weight: 700;
+      font-size: 12px;
+      background: linear-gradient(90deg, #58a6ff, #79c0ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
     }
 
     .gpt-header-right {
@@ -235,8 +227,8 @@ function getPanelCSS() {
 
     .gpt-minimize-btn {
       background: none;
-      border: 1px solid #4a5568;
-      color: #a0aec0;
+      border: 1px solid #30363d;
+      color: #8b949e;
       width: 20px;
       height: 20px;
       border-radius: 4px;
@@ -249,23 +241,23 @@ function getPanelCSS() {
     }
 
     .gpt-minimize-btn:hover {
-      background: #4a5568;
-      color: #e4e4e4;
+      background: #30363d;
+      color: #e6edf3;
     }
     
     .gpt-status-dot {
       width: 10px;
       height: 10px;
       border-radius: 50%;
-      background: #666;
+      background: #484f58;
       display: inline-block;
       transition: background 0.3s;
     }
     
-    .gpt-status-dot.connected { background: #4caf50; }
-    .gpt-status-dot.scanning { background: #2196f3; animation: gpt-pulse 1s infinite; }
-    .gpt-status-dot.trading { background: #ff9800; }
-    .gpt-status-dot.error { background: #f44336; }
+    .gpt-status-dot.connected { background: #3fb950; box-shadow: 0 0 6px rgba(63,185,80,0.4); }
+    .gpt-status-dot.scanning { background: #58a6ff; animation: gpt-pulse 1s infinite; }
+    .gpt-status-dot.trading { background: #d29922; box-shadow: 0 0 6px rgba(210,153,34,0.4); }
+    .gpt-status-dot.error { background: #f85149; }
     
     @keyframes gpt-pulse {
       0%, 100% { opacity: 1; }
@@ -283,16 +275,17 @@ function getPanelCSS() {
     .gpt-control-row {
       display: flex;
       gap: 6px;
-      margin-bottom: 10px;
+      margin-bottom: 8px;
+      align-items: center;
     }
     
     .gpt-btn {
       flex: 1;
-      padding: 8px 4px;
-      border: none;
+      padding: 7px 4px;
+      border: 1px solid #30363d;
       border-radius: 6px;
-      background: #2d3748;
-      color: #e4e4e4;
+      background: #21262d;
+      color: #e6edf3;
       font-size: 11px;
       font-weight: 600;
       cursor: pointer;
@@ -301,94 +294,138 @@ function getPanelCSS() {
     }
     
     .gpt-btn:hover {
-      background: #4a5568;
-      transform: translateY(-1px);
+      background: #30363d;
+      border-color: #58a6ff;
     }
     
     .gpt-btn[data-active="true"] {
-      background: linear-gradient(135deg, #3182ce 0%, #2b6cb0 100%);
-      box-shadow: 0 0 10px rgba(49,130,206,0.4);
+      background: linear-gradient(135deg, #1f6feb 0%, #388bfd 100%);
+      border-color: #58a6ff;
+      box-shadow: 0 0 8px rgba(56,139,253,0.3);
     }
     
     .gpt-btn-go {
-      background: linear-gradient(135deg, #38a169 0%, #2f855a 100%);
+      background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
+      border-color: #3fb950;
     }
     
     .gpt-btn-go:hover {
-      background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+      background: linear-gradient(135deg, #2ea043 0%, #3fb950 100%);
+    }
+
+    .gpt-btn-invert {
+      flex: 0 0 80px;
+    }
+
+    .gpt-btn-invert[data-active="true"] {
+      background: linear-gradient(135deg, #9e6a03 0%, #d29922 100%);
+      border-color: #d29922;
+      box-shadow: 0 0 8px rgba(210,153,34,0.3);
+      animation: gpt-pulse 2s infinite;
+    }
+
+    .gpt-invert-status {
+      flex: 1;
+      font-size: 10px;
+      color: #8b949e;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      padding-left: 4px;
+    }
+
+    .gpt-invert-status.active {
+      color: #d29922;
+      font-weight: 600;
     }
     
     .gpt-stats-row {
       display: flex;
       justify-content: space-between;
       padding: 8px;
-      background: rgba(0,0,0,0.2);
+      background: rgba(0,0,0,0.3);
+      border: 1px solid #21262d;
       border-radius: 6px;
-      margin-bottom: 10px;
+      margin-bottom: 8px;
     }
     
     .gpt-stat {
       text-align: center;
+      flex: 1;
     }
     
     .gpt-stat-label {
       display: block;
-      font-size: 10px;
-      color: #888;
+      font-size: 9px;
+      color: #8b949e;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
     
     .gpt-stat-value {
-      font-weight: 600;
+      font-weight: 700;
       font-size: 13px;
+      color: #e6edf3;
     }
     
     .gpt-manual-row {
       display: flex;
       gap: 6px;
-      margin-bottom: 10px;
+      margin-bottom: 8px;
     }
     
     .gpt-btn-win {
-      background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+      background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
+      border-color: #3fb950;
     }
     
     .gpt-btn-loss {
-      background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
+      background: linear-gradient(135deg, #da3633 0%, #f85149 100%);
+      border-color: #f85149;
     }
     
     .gpt-mm-row {
       display: flex;
       align-items: center;
       gap: 6px;
-      padding: 8px;
-      background: rgba(0,0,0,0.2);
+      padding: 6px 8px;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid #21262d;
       border-radius: 6px;
-      margin-bottom: 10px;
+      margin-bottom: 8px;
       font-size: 11px;
     }
     
+    .gpt-mm-label {
+      color: #8b949e;
+    }
+    
     #gpt-mm-amount {
-      width: 60px;
-      padding: 4px;
-      border: 1px solid #4a5568;
+      width: 55px;
+      padding: 3px 4px;
+      border: 1px solid #30363d;
       border-radius: 4px;
-      background: #2d3748;
-      color: #e4e4e4;
+      background: #0d1117;
+      color: #e6edf3;
       font-size: 11px;
     }
     
     .gpt-log-header {
-      padding: 6px 8px;
-      background: rgba(0,0,0,0.2);
+      padding: 5px 8px;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid #21262d;
       border-radius: 6px 6px 0 0;
       cursor: pointer;
       font-size: 11px;
+      color: #8b949e;
     }
     
     .gpt-log {
-      max-height: 150px;
+      max-height: 120px;
       overflow-y: auto;
-      background: rgba(0,0,0,0.3);
+      background: rgba(0,0,0,0.4);
+      border: 1px solid #21262d;
+      border-top: none;
       border-radius: 0 0 6px 6px;
       font-family: 'Consolas', 'Courier New', monospace;
       font-size: 10px;
@@ -400,30 +437,25 @@ function getPanelCSS() {
     }
     
     .gpt-log::-webkit-scrollbar-thumb {
-      background: #4a5568;
+      background: #30363d;
       border-radius: 2px;
     }
   `;
 }
 
-/**
- * Helper: query inside shadow DOM
- */
 function shadowQuery(selector) {
   return shadowRoot ? shadowRoot.querySelector(selector) : null;
 }
 
 /**
  * Initialize panel event handlers
- * @param {Object} callbacks - Callback functions
+ * @param {Object} callbacks
  */
 export function initPanelEvents(callbacks = {}) {
-  // Store callbacks for re-injection
   window._gptBotCallbacks = callbacks;
 
   if (!shadowRoot) return;
 
-  // Set log container (inside shadow)
   setLogContainer(shadowQuery('#gpt-bot-log'));
 
   // Minimize button
@@ -459,6 +491,12 @@ export function initPanelEvents(callbacks = {}) {
   goBtn?.addEventListener('click', () => {
     callbacks.onGo?.();
   });
+
+  // Invert button
+  const invertBtn = shadowQuery('#gpt-btn-invert');
+  invertBtn?.addEventListener('click', () => {
+    callbacks.onInvertToggle?.();
+  });
   
   // Win/Loss buttons
   shadowQuery('#gpt-btn-win')?.addEventListener('click', () => {
@@ -488,7 +526,6 @@ export function initPanelEvents(callbacks = {}) {
     }
   });
   
-  // Make panel draggable
   makeDraggable();
 }
 
@@ -501,6 +538,7 @@ export function updateStatsDisplay() {
   const wlEl = shadowQuery('#gpt-stat-wl');
   const rateEl = shadowQuery('#gpt-stat-rate');
   const streakEl = shadowQuery('#gpt-stat-streak');
+  const profitEl = shadowQuery('#gpt-stat-profit');
   const stepEl = shadowQuery('#gpt-mm-step');
   
   if (wlEl) {
@@ -511,16 +549,50 @@ export function updateStatsDisplay() {
     const total = state.stats.wins + state.stats.losses;
     const rate = total > 0 ? (state.stats.wins / total * 100).toFixed(1) : 0;
     rateEl.textContent = `${rate}%`;
+    rateEl.style.color = parseFloat(rate) >= 55 ? '#3fb950' : parseFloat(rate) < 45 ? '#f85149' : '#e6edf3';
   }
   
   if (streakEl) {
     const streak = state.stats.currentStreak;
     streakEl.textContent = streak > 0 ? `+${streak}` : streak.toString();
-    streakEl.style.color = streak > 0 ? '#48bb78' : streak < 0 ? '#f56565' : '#e4e4e4';
+    streakEl.style.color = streak > 0 ? '#3fb950' : streak < 0 ? '#f85149' : '#e6edf3';
+  }
+
+  if (profitEl) {
+    const profit = state.moneyManagement.totalProfit;
+    profitEl.textContent = `$${profit.toFixed(0)}`;
+    profitEl.style.color = profit > 0 ? '#3fb950' : profit < 0 ? '#f85149' : '#e6edf3';
   }
   
   if (stepEl) {
     stepEl.textContent = state.moneyManagement.currentStep.toString();
+  }
+}
+
+/**
+ * Update inversion display
+ * @param {boolean} isInverted
+ * @param {string} reason
+ */
+export function updateInvertDisplay(isInverted, reason) {
+  if (!shadowRoot) return;
+
+  const btn = shadowQuery('#gpt-btn-invert');
+  const statusEl = shadowQuery('#gpt-invert-status');
+
+  if (btn) {
+    btn.dataset.active = isInverted.toString();
+    btn.textContent = isInverted ? 'INVERT ON' : 'INVERT';
+  }
+
+  if (statusEl) {
+    if (isInverted) {
+      statusEl.textContent = reason || 'Signals inverted';
+      statusEl.classList.add('active');
+    } else {
+      statusEl.textContent = 'Normal';
+      statusEl.classList.remove('active');
+    }
   }
 }
 
@@ -536,9 +608,6 @@ export function updateStatusDot(status) {
   }
 }
 
-/**
- * Make the host element draggable via the header inside shadow DOM
- */
 function makeDraggable() {
   if (!shadowRoot || !panelHost) return;
 
@@ -581,6 +650,7 @@ export default {
   createPanel,
   initPanelEvents,
   updateStatsDisplay,
+  updateInvertDisplay,
   updateStatusDot,
   cleanupPanel,
 };
