@@ -1,531 +1,419 @@
 /**
  * UI Panel Component - Elite Pocket Option Trading Bot
- * Creates and manages the trading bot control panel
- * Uses Shadow DOM for CSS isolation from Pocket Option styles
+ * 
+ * Uses direct DOM injection with !important inline styles.
+ * No Shadow DOM (unreliable in Tampermonkey context on some sites).
+ * All CSS classes use __epb__ prefix to avoid Pocket Option conflicts.
  */
 
 import { CONFIG } from '../core/config.js';
 import { state, setState, saveState } from '../core/state.js';
 import { log, setLogContainer } from '../core/logger.js';
 
-let shadowRoot = null;
-let panelHost = null;
+let panelEl = null;
 let watchdogInterval = null;
+const PREFIX = '__epb__';
 
 /**
- * Create the main UI panel using Shadow DOM for CSS isolation
- * @returns {HTMLElement} The host element containing the shadow panel
+ * Inject all panel CSS using GM_addStyle (Tampermonkey API)
  */
-export function createPanel() {
-  panelHost = document.createElement('div');
-  panelHost.id = 'gpt-bot-host';
-  panelHost.setAttribute('style', [
-    'position: fixed !important',
-    'top: 10px !important',
-    'right: 10px !important',
-    'z-index: 2147483647 !important',
-    'display: block !important',
-    'visibility: visible !important',
-    'opacity: 1 !important',
-    'pointer-events: auto !important',
-    'width: 300px !important',
-    'transform: none !important',
-  ].join('; '));
+function injectCSS() {
+  const css = `
+    #${PREFIX}host {
+      position: fixed !important;
+      top: 10px !important;
+      right: 10px !important;
+      z-index: 2147483647 !important;
+      display: block !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+      pointer-events: auto !important;
+      width: 300px !important;
+      transform: none !important;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
+      font-size: 12px !important;
+      line-height: 1.4 !important;
+      color: #e6edf3 !important;
+      box-sizing: border-box !important;
+    }
+    #${PREFIX}host * {
+      box-sizing: border-box !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      font-family: inherit !important;
+      line-height: inherit !important;
+    }
+    #${PREFIX}panel {
+      width: 300px !important;
+      background: linear-gradient(135deg, #0d1117 0%, #161b22 50%, #0d1117 100%) !important;
+      border: 1px solid #30363d !important;
+      border-radius: 12px !important;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 0 1px rgba(88,166,255,0.3) !important;
+      user-select: none !important;
+      overflow: hidden !important;
+    }
+    .${PREFIX}header {
+      display: flex !important;
+      justify-content: space-between !important;
+      align-items: center !important;
+      padding: 10px 12px !important;
+      background: linear-gradient(90deg, rgba(56,139,253,0.15) 0%, rgba(0,0,0,0.3) 100%) !important;
+      cursor: move !important;
+      border-bottom: 1px solid #21262d !important;
+    }
+    .${PREFIX}title {
+      font-weight: 700 !important;
+      font-size: 12px !important;
+      background: linear-gradient(90deg, #58a6ff, #79c0ff) !important;
+      -webkit-background-clip: text !important;
+      -webkit-text-fill-color: transparent !important;
+      background-clip: text !important;
+    }
+    .${PREFIX}hright {
+      display: flex !important;
+      align-items: center !important;
+      gap: 8px !important;
+    }
+    .${PREFIX}minbtn {
+      background: none !important;
+      border: 1px solid #30363d !important;
+      color: #8b949e !important;
+      width: 20px !important;
+      height: 20px !important;
+      border-radius: 4px !important;
+      cursor: pointer !important;
+      font-size: 12px !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+    }
+    .${PREFIX}minbtn:hover {
+      background: #30363d !important;
+      color: #e6edf3 !important;
+    }
+    .${PREFIX}dot {
+      width: 10px !important;
+      height: 10px !important;
+      border-radius: 50% !important;
+      background: #484f58 !important;
+      display: inline-block !important;
+      transition: background 0.3s !important;
+    }
+    .${PREFIX}dot.connected { background: #3fb950 !important; box-shadow: 0 0 6px rgba(63,185,80,0.4) !important; }
+    .${PREFIX}dot.scanning { background: #58a6ff !important; animation: ${PREFIX}pulse 1s infinite !important; }
+    .${PREFIX}dot.trading { background: #d29922 !important; }
+    .${PREFIX}dot.error { background: #f85149 !important; }
+    @keyframes ${PREFIX}pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .${PREFIX}body {
+      padding: 10px !important;
+    }
+    .${PREFIX}body.collapsed {
+      display: none !important;
+    }
+    .${PREFIX}row {
+      display: flex !important;
+      gap: 6px !important;
+      margin-bottom: 8px !important;
+      align-items: center !important;
+    }
+    .${PREFIX}btn {
+      flex: 1 !important;
+      padding: 7px 4px !important;
+      border: 1px solid #30363d !important;
+      border-radius: 6px !important;
+      background: #21262d !important;
+      color: #e6edf3 !important;
+      font-size: 11px !important;
+      font-weight: 600 !important;
+      cursor: pointer !important;
+      transition: all 0.2s !important;
+      text-align: center !important;
+    }
+    .${PREFIX}btn:hover {
+      background: #30363d !important;
+      border-color: #58a6ff !important;
+    }
+    .${PREFIX}btn.active {
+      background: linear-gradient(135deg, #1f6feb 0%, #388bfd 100%) !important;
+      border-color: #58a6ff !important;
+      box-shadow: 0 0 8px rgba(56,139,253,0.3) !important;
+    }
+    .${PREFIX}btn-go {
+      background: linear-gradient(135deg, #238636 0%, #2ea043 100%) !important;
+      border-color: #3fb950 !important;
+    }
+    .${PREFIX}btn-go:hover {
+      background: linear-gradient(135deg, #2ea043 0%, #3fb950 100%) !important;
+    }
+    .${PREFIX}btn-inv {
+      flex: 0 0 80px !important;
+    }
+    .${PREFIX}btn-inv.active {
+      background: linear-gradient(135deg, #9e6a03 0%, #d29922 100%) !important;
+      border-color: #d29922 !important;
+      box-shadow: 0 0 8px rgba(210,153,34,0.3) !important;
+      animation: ${PREFIX}pulse 2s infinite !important;
+    }
+    .${PREFIX}invst {
+      flex: 1 !important;
+      font-size: 10px !important;
+      color: #8b949e !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      white-space: nowrap !important;
+      padding-left: 4px !important;
+    }
+    .${PREFIX}invst.on { color: #d29922 !important; font-weight: 600 !important; }
+    .${PREFIX}stats {
+      display: flex !important;
+      justify-content: space-between !important;
+      padding: 8px !important;
+      background: rgba(0,0,0,0.3) !important;
+      border: 1px solid #21262d !important;
+      border-radius: 6px !important;
+      margin-bottom: 8px !important;
+    }
+    .${PREFIX}stat {
+      text-align: center !important;
+      flex: 1 !important;
+    }
+    .${PREFIX}stlbl {
+      display: block !important;
+      font-size: 9px !important;
+      color: #8b949e !important;
+      text-transform: uppercase !important;
+      letter-spacing: 0.5px !important;
+    }
+    .${PREFIX}stval {
+      font-weight: 700 !important;
+      font-size: 13px !important;
+      color: #e6edf3 !important;
+    }
+    .${PREFIX}btn-win {
+      background: linear-gradient(135deg, #238636 0%, #2ea043 100%) !important;
+      border-color: #3fb950 !important;
+    }
+    .${PREFIX}btn-loss {
+      background: linear-gradient(135deg, #da3633 0%, #f85149 100%) !important;
+      border-color: #f85149 !important;
+    }
+    .${PREFIX}mmrow {
+      display: flex !important;
+      align-items: center !important;
+      gap: 6px !important;
+      padding: 6px 8px !important;
+      background: rgba(0,0,0,0.3) !important;
+      border: 1px solid #21262d !important;
+      border-radius: 6px !important;
+      margin-bottom: 8px !important;
+      font-size: 11px !important;
+    }
+    .${PREFIX}mmlbl { color: #8b949e !important; }
+    .${PREFIX}mminp {
+      width: 55px !important;
+      padding: 3px 4px !important;
+      border: 1px solid #30363d !important;
+      border-radius: 4px !important;
+      background: #0d1117 !important;
+      color: #e6edf3 !important;
+      font-size: 11px !important;
+    }
+    .${PREFIX}loghdr {
+      padding: 5px 8px !important;
+      background: rgba(0,0,0,0.3) !important;
+      border: 1px solid #21262d !important;
+      border-radius: 6px 6px 0 0 !important;
+      cursor: pointer !important;
+      font-size: 11px !important;
+      color: #8b949e !important;
+    }
+    .${PREFIX}logbox {
+      max-height: 120px !important;
+      overflow-y: auto !important;
+      background: rgba(0,0,0,0.4) !important;
+      border: 1px solid #21262d !important;
+      border-top: none !important;
+      border-radius: 0 0 6px 6px !important;
+      font-family: 'Consolas', 'Courier New', monospace !important;
+      font-size: 10px !important;
+      padding: 4px !important;
+      color: #8b949e !important;
+    }
+    .${PREFIX}logbox::-webkit-scrollbar { width: 4px !important; }
+    .${PREFIX}logbox::-webkit-scrollbar-thumb { background: #30363d !important; border-radius: 2px !important; }
+  `;
 
-  shadowRoot = panelHost.attachShadow({ mode: 'open' });
-
-  const panel = document.createElement('div');
-  panel.id = 'gpt-bot-panel';
-  panel.innerHTML = getPanelHTML();
-
-  const style = document.createElement('style');
-  style.textContent = getPanelCSS();
-  shadowRoot.appendChild(style);
-  shadowRoot.appendChild(panel);
-
-  startWatchdog();
-
-  return panelHost;
+  if (typeof GM_addStyle !== 'undefined') {
+    GM_addStyle(css);
+  } else {
+    const styleEl = document.createElement('style');
+    styleEl.textContent = css;
+    document.head.appendChild(styleEl);
+  }
 }
 
 /**
- * Watchdog: re-inject panel if Pocket Option removes it
+ * Create the panel DOM element
+ */
+export function createPanel() {
+  injectCSS();
+
+  panelEl = document.createElement('div');
+  panelEl.id = `${PREFIX}host`;
+
+  panelEl.innerHTML = `
+    <div id="${PREFIX}panel">
+      <div class="${PREFIX}header" id="${PREFIX}header">
+        <span class="${PREFIX}title">${CONFIG.BOT_NAME}</span>
+        <div class="${PREFIX}hright">
+          <span class="${PREFIX}dot" id="${PREFIX}dot"></span>
+          <button class="${PREFIX}minbtn" id="${PREFIX}minbtn">_</button>
+        </div>
+      </div>
+      <div class="${PREFIX}body" id="${PREFIX}body">
+        <div class="${PREFIX}row">
+          <button id="${PREFIX}scan" class="${PREFIX}btn">SCAN</button>
+          <button id="${PREFIX}auto" class="${PREFIX}btn">AUTO</button>
+          <button id="${PREFIX}go" class="${PREFIX}btn ${PREFIX}btn-go">GO</button>
+        </div>
+        <div class="${PREFIX}row">
+          <button id="${PREFIX}inv" class="${PREFIX}btn ${PREFIX}btn-inv">INVERT</button>
+          <span class="${PREFIX}invst" id="${PREFIX}invst">Normal</span>
+        </div>
+        <div class="${PREFIX}stats">
+          <div class="${PREFIX}stat"><span class="${PREFIX}stlbl">W/L</span><span class="${PREFIX}stval" id="${PREFIX}wl">0/0</span></div>
+          <div class="${PREFIX}stat"><span class="${PREFIX}stlbl">Rate</span><span class="${PREFIX}stval" id="${PREFIX}rate">0%</span></div>
+          <div class="${PREFIX}stat"><span class="${PREFIX}stlbl">Streak</span><span class="${PREFIX}stval" id="${PREFIX}streak">0</span></div>
+          <div class="${PREFIX}stat"><span class="${PREFIX}stlbl">Profit</span><span class="${PREFIX}stval" id="${PREFIX}profit">$0</span></div>
+        </div>
+        <div class="${PREFIX}row">
+          <button id="${PREFIX}win" class="${PREFIX}btn ${PREFIX}btn-win">WIN</button>
+          <button id="${PREFIX}loss" class="${PREFIX}btn ${PREFIX}btn-loss">LOSS</button>
+        </div>
+        <div class="${PREFIX}mmrow">
+          <span class="${PREFIX}mmlbl">Amount: $</span>
+          <input type="number" id="${PREFIX}amt" class="${PREFIX}mminp" value="1" min="1" max="1000">
+          <span class="${PREFIX}mmlbl">Step:</span>
+          <span id="${PREFIX}step">0</span>
+        </div>
+        <div class="${PREFIX}loghdr" id="${PREFIX}logtog">Log <span id="${PREFIX}arrow">&#9660;</span></div>
+        <div class="${PREFIX}logbox" id="${PREFIX}log"></div>
+      </div>
+    </div>
+  `;
+
+  startWatchdog();
+  return panelEl;
+}
+
+function q(id) {
+  return document.getElementById(`${PREFIX}${id}`);
+}
+
+/**
+ * Watchdog: re-inject panel if PO removes it
  */
 function startWatchdog() {
   if (watchdogInterval) clearInterval(watchdogInterval);
 
   watchdogInterval = setInterval(() => {
-    const host = document.getElementById('gpt-bot-host');
+    const host = document.getElementById(`${PREFIX}host`);
     if (!host || !document.body.contains(host)) {
-      console.log('[Elite Bot] Panel was removed, re-injecting...');
-      reInjectPanel();
-    } else {
-      host.style.setProperty('display', 'block', 'important');
-      host.style.setProperty('visibility', 'visible', 'important');
-      host.style.setProperty('opacity', '1', 'important');
-      host.style.setProperty('z-index', '2147483647', 'important');
+      console.log('[Elite Bot] Panel removed, re-injecting...');
+      reInject();
     }
   }, 2000);
 }
 
-/**
- * Re-inject the panel from scratch
- */
-function reInjectPanel() {
+function reInject() {
   try {
-    const old = document.getElementById('gpt-bot-host');
+    const old = document.getElementById(`${PREFIX}host`);
     if (old) old.remove();
 
-    panelHost = document.createElement('div');
-    panelHost.id = 'gpt-bot-host';
-    panelHost.setAttribute('style', [
-      'position: fixed !important',
-      'top: 10px !important',
-      'right: 10px !important',
-      'z-index: 2147483647 !important',
-      'display: block !important',
-      'visibility: visible !important',
-      'opacity: 1 !important',
-      'pointer-events: auto !important',
-      'width: 300px !important',
-      'transform: none !important',
-    ].join('; '));
+    const newPanel = createPanel();
+    document.body.appendChild(newPanel);
 
-    shadowRoot = panelHost.attachShadow({ mode: 'open' });
-
-    const panel = document.createElement('div');
-    panel.id = 'gpt-bot-panel';
-    panel.innerHTML = getPanelHTML();
-
-    const style = document.createElement('style');
-    style.textContent = getPanelCSS();
-    shadowRoot.appendChild(style);
-    shadowRoot.appendChild(panel);
-
-    document.body.appendChild(panelHost);
-
-    if (window._gptBotCallbacks) {
-      initPanelEvents(window._gptBotCallbacks);
+    if (window._epbCallbacks) {
+      initPanelEvents(window._epbCallbacks);
     }
   } catch (e) {
     console.error('[Elite Bot] Re-inject failed:', e);
   }
 }
 
-function getPanelHTML() {
-  return `
-    <div class="gpt-panel-header" id="gpt-panel-header">
-      <span class="gpt-panel-title">${CONFIG.BOT_NAME}</span>
-      <div class="gpt-header-right">
-        <span class="gpt-status-dot" id="gpt-status-dot"></span>
-        <button class="gpt-minimize-btn" id="gpt-minimize-btn">_</button>
-      </div>
-    </div>
-    
-    <div class="gpt-panel-body" id="gpt-panel-body">
-      <!-- Control Buttons Row 1 -->
-      <div class="gpt-control-row">
-        <button id="gpt-btn-scan" class="gpt-btn" data-active="false">SCAN</button>
-        <button id="gpt-btn-auto" class="gpt-btn" data-active="false">AUTO</button>
-        <button id="gpt-btn-go" class="gpt-btn gpt-btn-go">GO</button>
-      </div>
-      
-      <!-- Control Buttons Row 2 - Invert -->
-      <div class="gpt-control-row">
-        <button id="gpt-btn-invert" class="gpt-btn gpt-btn-invert" data-active="false">INVERT</button>
-        <span class="gpt-invert-status" id="gpt-invert-status">Normal</span>
-      </div>
-      
-      <!-- Stats Display -->
-      <div class="gpt-stats-row">
-        <div class="gpt-stat">
-          <span class="gpt-stat-label">W/L</span>
-          <span class="gpt-stat-value" id="gpt-stat-wl">0/0</span>
-        </div>
-        <div class="gpt-stat">
-          <span class="gpt-stat-label">Rate</span>
-          <span class="gpt-stat-value" id="gpt-stat-rate">0%</span>
-        </div>
-        <div class="gpt-stat">
-          <span class="gpt-stat-label">Streak</span>
-          <span class="gpt-stat-value" id="gpt-stat-streak">0</span>
-        </div>
-        <div class="gpt-stat">
-          <span class="gpt-stat-label">Profit</span>
-          <span class="gpt-stat-value" id="gpt-stat-profit">$0</span>
-        </div>
-      </div>
-      
-      <!-- Manual Win/Loss Buttons -->
-      <div class="gpt-manual-row">
-        <button id="gpt-btn-win" class="gpt-btn gpt-btn-win">WIN</button>
-        <button id="gpt-btn-loss" class="gpt-btn gpt-btn-loss">LOSS</button>
-      </div>
-      
-      <!-- Money Management -->
-      <div class="gpt-mm-row">
-        <span class="gpt-mm-label">Amount: $</span>
-        <input type="number" id="gpt-mm-amount" value="1" min="1" max="1000">
-        <span class="gpt-mm-label">Step:</span>
-        <span id="gpt-mm-step">0</span>
-      </div>
-      
-      <!-- Log Container -->
-      <div class="gpt-log-header" id="gpt-log-toggle">
-        Log <span id="gpt-log-arrow">&#9660;</span>
-      </div>
-      <div class="gpt-log" id="gpt-bot-log"></div>
-    </div>
-  `;
-}
-
-function getPanelCSS() {
-  return `
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    #gpt-bot-panel {
-      width: 300px;
-      background: linear-gradient(135deg, #0d1117 0%, #161b22 50%, #0d1117 100%);
-      border: 1px solid #30363d;
-      border-radius: 12px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 0 1px rgba(88,166,255,0.3);
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      color: #e6edf3;
-      font-size: 12px;
-      user-select: none;
-      overflow: hidden;
-    }
-    
-    .gpt-panel-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 10px 12px;
-      background: linear-gradient(90deg, rgba(56,139,253,0.15) 0%, rgba(0,0,0,0.3) 100%);
-      cursor: move;
-      border-bottom: 1px solid #21262d;
-    }
-    
-    .gpt-panel-title {
-      font-weight: 700;
-      font-size: 12px;
-      background: linear-gradient(90deg, #58a6ff, #79c0ff);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-
-    .gpt-header-right {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .gpt-minimize-btn {
-      background: none;
-      border: 1px solid #30363d;
-      color: #8b949e;
-      width: 20px;
-      height: 20px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 12px;
-      line-height: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .gpt-minimize-btn:hover {
-      background: #30363d;
-      color: #e6edf3;
-    }
-    
-    .gpt-status-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: #484f58;
-      display: inline-block;
-      transition: background 0.3s;
-    }
-    
-    .gpt-status-dot.connected { background: #3fb950; box-shadow: 0 0 6px rgba(63,185,80,0.4); }
-    .gpt-status-dot.scanning { background: #58a6ff; animation: gpt-pulse 1s infinite; }
-    .gpt-status-dot.trading { background: #d29922; box-shadow: 0 0 6px rgba(210,153,34,0.4); }
-    .gpt-status-dot.error { background: #f85149; }
-    
-    @keyframes gpt-pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
-    }
-    
-    .gpt-panel-body {
-      padding: 10px;
-    }
-
-    .gpt-panel-body.collapsed {
-      display: none;
-    }
-    
-    .gpt-control-row {
-      display: flex;
-      gap: 6px;
-      margin-bottom: 8px;
-      align-items: center;
-    }
-    
-    .gpt-btn {
-      flex: 1;
-      padding: 7px 4px;
-      border: 1px solid #30363d;
-      border-radius: 6px;
-      background: #21262d;
-      color: #e6edf3;
-      font-size: 11px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s;
-      text-align: center;
-    }
-    
-    .gpt-btn:hover {
-      background: #30363d;
-      border-color: #58a6ff;
-    }
-    
-    .gpt-btn[data-active="true"] {
-      background: linear-gradient(135deg, #1f6feb 0%, #388bfd 100%);
-      border-color: #58a6ff;
-      box-shadow: 0 0 8px rgba(56,139,253,0.3);
-    }
-    
-    .gpt-btn-go {
-      background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
-      border-color: #3fb950;
-    }
-    
-    .gpt-btn-go:hover {
-      background: linear-gradient(135deg, #2ea043 0%, #3fb950 100%);
-    }
-
-    .gpt-btn-invert {
-      flex: 0 0 80px;
-    }
-
-    .gpt-btn-invert[data-active="true"] {
-      background: linear-gradient(135deg, #9e6a03 0%, #d29922 100%);
-      border-color: #d29922;
-      box-shadow: 0 0 8px rgba(210,153,34,0.3);
-      animation: gpt-pulse 2s infinite;
-    }
-
-    .gpt-invert-status {
-      flex: 1;
-      font-size: 10px;
-      color: #8b949e;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      padding-left: 4px;
-    }
-
-    .gpt-invert-status.active {
-      color: #d29922;
-      font-weight: 600;
-    }
-    
-    .gpt-stats-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 8px;
-      background: rgba(0,0,0,0.3);
-      border: 1px solid #21262d;
-      border-radius: 6px;
-      margin-bottom: 8px;
-    }
-    
-    .gpt-stat {
-      text-align: center;
-      flex: 1;
-    }
-    
-    .gpt-stat-label {
-      display: block;
-      font-size: 9px;
-      color: #8b949e;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-    
-    .gpt-stat-value {
-      font-weight: 700;
-      font-size: 13px;
-      color: #e6edf3;
-    }
-    
-    .gpt-manual-row {
-      display: flex;
-      gap: 6px;
-      margin-bottom: 8px;
-    }
-    
-    .gpt-btn-win {
-      background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
-      border-color: #3fb950;
-    }
-    
-    .gpt-btn-loss {
-      background: linear-gradient(135deg, #da3633 0%, #f85149 100%);
-      border-color: #f85149;
-    }
-    
-    .gpt-mm-row {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 8px;
-      background: rgba(0,0,0,0.3);
-      border: 1px solid #21262d;
-      border-radius: 6px;
-      margin-bottom: 8px;
-      font-size: 11px;
-    }
-    
-    .gpt-mm-label {
-      color: #8b949e;
-    }
-    
-    #gpt-mm-amount {
-      width: 55px;
-      padding: 3px 4px;
-      border: 1px solid #30363d;
-      border-radius: 4px;
-      background: #0d1117;
-      color: #e6edf3;
-      font-size: 11px;
-    }
-    
-    .gpt-log-header {
-      padding: 5px 8px;
-      background: rgba(0,0,0,0.3);
-      border: 1px solid #21262d;
-      border-radius: 6px 6px 0 0;
-      cursor: pointer;
-      font-size: 11px;
-      color: #8b949e;
-    }
-    
-    .gpt-log {
-      max-height: 120px;
-      overflow-y: auto;
-      background: rgba(0,0,0,0.4);
-      border: 1px solid #21262d;
-      border-top: none;
-      border-radius: 0 0 6px 6px;
-      font-family: 'Consolas', 'Courier New', monospace;
-      font-size: 10px;
-      padding: 4px;
-    }
-    
-    .gpt-log::-webkit-scrollbar {
-      width: 4px;
-    }
-    
-    .gpt-log::-webkit-scrollbar-thumb {
-      background: #30363d;
-      border-radius: 2px;
-    }
-  `;
-}
-
-function shadowQuery(selector) {
-  return shadowRoot ? shadowRoot.querySelector(selector) : null;
-}
-
 /**
  * Initialize panel event handlers
- * @param {Object} callbacks
  */
 export function initPanelEvents(callbacks = {}) {
-  window._gptBotCallbacks = callbacks;
+  window._epbCallbacks = callbacks;
 
-  if (!shadowRoot) return;
+  setLogContainer(q('log'));
 
-  setLogContainer(shadowQuery('#gpt-bot-log'));
-
-  // Minimize button
-  const minimizeBtn = shadowQuery('#gpt-minimize-btn');
-  const body = shadowQuery('#gpt-panel-body');
-  minimizeBtn?.addEventListener('click', () => {
-    if (body) {
+  // Minimize
+  const minBtn = q('minbtn');
+  const body = q('body');
+  if (minBtn && body) {
+    minBtn.addEventListener('click', () => {
       body.classList.toggle('collapsed');
-      minimizeBtn.textContent = body.classList.contains('collapsed') ? '+' : '_';
-    }
-  });
+      minBtn.textContent = body.classList.contains('collapsed') ? '+' : '_';
+    });
+  }
 
-  // Scan button
-  const scanBtn = shadowQuery('#gpt-btn-scan');
-  scanBtn?.addEventListener('click', () => {
-    const isActive = scanBtn.dataset.active === 'true';
-    scanBtn.dataset.active = (!isActive).toString();
-    setState('scanEnabled', !isActive);
-    callbacks.onScanToggle?.(!isActive);
-  });
-  
-  // Auto button
-  const autoBtn = shadowQuery('#gpt-btn-auto');
-  autoBtn?.addEventListener('click', () => {
-    const isActive = autoBtn.dataset.active === 'true';
-    autoBtn.dataset.active = (!isActive).toString();
-    setState('autoTradeEnabled', !isActive);
-    callbacks.onAutoToggle?.(!isActive);
-  });
-  
-  // Go button
-  const goBtn = shadowQuery('#gpt-btn-go');
-  goBtn?.addEventListener('click', () => {
-    callbacks.onGo?.();
-  });
+  // Scan
+  const scanBtn = q('scan');
+  if (scanBtn) {
+    scanBtn.addEventListener('click', () => {
+      const isActive = scanBtn.classList.contains('active');
+      scanBtn.classList.toggle('active');
+      setState('scanEnabled', !isActive);
+      callbacks.onScanToggle?.(!isActive);
+    });
+  }
 
-  // Invert button
-  const invertBtn = shadowQuery('#gpt-btn-invert');
-  invertBtn?.addEventListener('click', () => {
-    callbacks.onInvertToggle?.();
-  });
-  
-  // Win/Loss buttons
-  shadowQuery('#gpt-btn-win')?.addEventListener('click', () => {
-    callbacks.onWin?.();
-  });
-  
-  shadowQuery('#gpt-btn-loss')?.addEventListener('click', () => {
-    callbacks.onLoss?.();
-  });
-  
-  // Amount input
-  const amountInput = shadowQuery('#gpt-mm-amount');
-  amountInput?.addEventListener('change', (e) => {
-    const amount = parseFloat(e.target.value) || 1;
-    callbacks.onAmountChange?.(amount);
-  });
-  
+  // Auto
+  const autoBtn = q('auto');
+  if (autoBtn) {
+    autoBtn.addEventListener('click', () => {
+      const isActive = autoBtn.classList.contains('active');
+      autoBtn.classList.toggle('active');
+      setState('autoTradeEnabled', !isActive);
+      callbacks.onAutoToggle?.(!isActive);
+    });
+  }
+
+  // Go
+  q('go')?.addEventListener('click', () => callbacks.onGo?.());
+
+  // Invert
+  q('inv')?.addEventListener('click', () => callbacks.onInvertToggle?.());
+
+  // Win / Loss
+  q('win')?.addEventListener('click', () => callbacks.onWin?.());
+  q('loss')?.addEventListener('click', () => callbacks.onLoss?.());
+
+  // Amount
+  const amtInput = q('amt');
+  if (amtInput) {
+    amtInput.addEventListener('change', (e) => {
+      callbacks.onAmountChange?.(parseFloat(e.target.value) || 1);
+    });
+  }
+
   // Log toggle
-  shadowQuery('#gpt-log-toggle')?.addEventListener('click', () => {
-    const logEl = shadowQuery('#gpt-bot-log');
-    const arrowEl = shadowQuery('#gpt-log-arrow');
-    if (logEl && arrowEl) {
-      const isExpanded = logEl.style.display !== 'none';
-      logEl.style.display = isExpanded ? 'none' : 'block';
-      arrowEl.innerHTML = isExpanded ? '&#9654;' : '&#9660;';
-      setState('ui.logExpanded', !isExpanded);
+  q('logtog')?.addEventListener('click', () => {
+    const logEl = q('log');
+    const arrow = q('arrow');
+    if (logEl && arrow) {
+      const expanded = logEl.style.display !== 'none';
+      logEl.style.display = expanded ? 'none' : 'block';
+      arrow.innerHTML = expanded ? '&#9654;' : '&#9660;';
     }
   });
-  
+
+  // Draggable
   makeDraggable();
 }
 
@@ -533,111 +421,93 @@ export function initPanelEvents(callbacks = {}) {
  * Update stats display
  */
 export function updateStatsDisplay() {
-  if (!shadowRoot) return;
+  const wlEl = q('wl');
+  const rateEl = q('rate');
+  const streakEl = q('streak');
+  const profitEl = q('profit');
+  const stepEl = q('step');
 
-  const wlEl = shadowQuery('#gpt-stat-wl');
-  const rateEl = shadowQuery('#gpt-stat-rate');
-  const streakEl = shadowQuery('#gpt-stat-streak');
-  const profitEl = shadowQuery('#gpt-stat-profit');
-  const stepEl = shadowQuery('#gpt-mm-step');
-  
-  if (wlEl) {
-    wlEl.textContent = `${state.stats.wins}/${state.stats.losses}`;
-  }
-  
+  if (wlEl) wlEl.textContent = `${state.stats.wins}/${state.stats.losses}`;
+
   if (rateEl) {
     const total = state.stats.wins + state.stats.losses;
     const rate = total > 0 ? (state.stats.wins / total * 100).toFixed(1) : 0;
     rateEl.textContent = `${rate}%`;
-    rateEl.style.color = parseFloat(rate) >= 55 ? '#3fb950' : parseFloat(rate) < 45 ? '#f85149' : '#e6edf3';
+    rateEl.style.setProperty('color', parseFloat(rate) >= 55 ? '#3fb950' : parseFloat(rate) < 45 ? '#f85149' : '#e6edf3', 'important');
   }
-  
+
   if (streakEl) {
-    const streak = state.stats.currentStreak;
-    streakEl.textContent = streak > 0 ? `+${streak}` : streak.toString();
-    streakEl.style.color = streak > 0 ? '#3fb950' : streak < 0 ? '#f85149' : '#e6edf3';
+    const s = state.stats.currentStreak;
+    streakEl.textContent = s > 0 ? `+${s}` : String(s);
+    streakEl.style.setProperty('color', s > 0 ? '#3fb950' : s < 0 ? '#f85149' : '#e6edf3', 'important');
   }
 
   if (profitEl) {
-    const profit = state.moneyManagement.totalProfit;
-    profitEl.textContent = `$${profit.toFixed(0)}`;
-    profitEl.style.color = profit > 0 ? '#3fb950' : profit < 0 ? '#f85149' : '#e6edf3';
+    const p = state.moneyManagement.totalProfit;
+    profitEl.textContent = `$${p.toFixed(0)}`;
+    profitEl.style.setProperty('color', p > 0 ? '#3fb950' : p < 0 ? '#f85149' : '#e6edf3', 'important');
   }
-  
-  if (stepEl) {
-    stepEl.textContent = state.moneyManagement.currentStep.toString();
-  }
+
+  if (stepEl) stepEl.textContent = String(state.moneyManagement.currentStep);
 }
 
 /**
  * Update inversion display
- * @param {boolean} isInverted
- * @param {string} reason
  */
 export function updateInvertDisplay(isInverted, reason) {
-  if (!shadowRoot) return;
-
-  const btn = shadowQuery('#gpt-btn-invert');
-  const statusEl = shadowQuery('#gpt-invert-status');
+  const btn = q('inv');
+  const st = q('invst');
 
   if (btn) {
-    btn.dataset.active = isInverted.toString();
+    if (isInverted) btn.classList.add('active');
+    else btn.classList.remove('active');
     btn.textContent = isInverted ? 'INVERT ON' : 'INVERT';
   }
 
-  if (statusEl) {
-    if (isInverted) {
-      statusEl.textContent = reason || 'Signals inverted';
-      statusEl.classList.add('active');
-    } else {
-      statusEl.textContent = 'Normal';
-      statusEl.classList.remove('active');
-    }
+  if (st) {
+    st.textContent = isInverted ? (reason || 'Signals inverted') : 'Normal';
+    if (isInverted) st.classList.add('on');
+    else st.classList.remove('on');
   }
 }
 
 /**
  * Update status dot
- * @param {string} status - 'connected', 'scanning', 'trading', 'error'
  */
 export function updateStatusDot(status) {
-  if (!shadowRoot) return;
-  const dot = shadowQuery('#gpt-status-dot');
-  if (dot) {
-    dot.className = `gpt-status-dot ${status}`;
-  }
-}
-
-function makeDraggable() {
-  if (!shadowRoot || !panelHost) return;
-
-  const header = shadowQuery('#gpt-panel-header');
-  if (!header) return;
-  
-  let isDragging = false;
-  let offsetX, offsetY;
-  
-  header.addEventListener('mousedown', (e) => {
-    isDragging = true;
-    offsetX = e.clientX - panelHost.offsetLeft;
-    offsetY = e.clientY - panelHost.offsetTop;
-    e.preventDefault();
-  });
-  
-  document.addEventListener('mousemove', (e) => {
-    if (!isDragging) return;
-    panelHost.style.setProperty('left', (e.clientX - offsetX) + 'px', 'important');
-    panelHost.style.setProperty('top', (e.clientY - offsetY) + 'px', 'important');
-    panelHost.style.setProperty('right', 'auto', 'important');
-  });
-  
-  document.addEventListener('mouseup', () => {
-    isDragging = false;
-  });
+  const dot = q('dot');
+  if (dot) dot.className = `${PREFIX}dot ${status}`;
 }
 
 /**
- * Cleanup watchdog on unload
+ * Make panel draggable via header
+ */
+function makeDraggable() {
+  const header = q('header');
+  const host = document.getElementById(`${PREFIX}host`);
+  if (!header || !host) return;
+
+  let dragging = false, ox, oy;
+
+  header.addEventListener('mousedown', (e) => {
+    dragging = true;
+    ox = e.clientX - host.offsetLeft;
+    oy = e.clientY - host.offsetTop;
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    host.style.setProperty('left', (e.clientX - ox) + 'px', 'important');
+    host.style.setProperty('top', (e.clientY - oy) + 'px', 'important');
+    host.style.setProperty('right', 'auto', 'important');
+  });
+
+  document.addEventListener('mouseup', () => { dragging = false; });
+}
+
+/**
+ * Cleanup watchdog
  */
 export function cleanupPanel() {
   if (watchdogInterval) {
