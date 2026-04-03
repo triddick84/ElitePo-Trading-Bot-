@@ -3,6 +3,9 @@
 ## Last Updated: April 3, 2026
 
 ## Current Status
+✅ **Elite Pocket Option Trading Bot v8.0.0** - Renamed from GPT Signal Bot (April 3, 2026)
+✅ **Smart Auto-Invert System** - Direction-aware loss detection with automatic signal inversion (April 3, 2026)
+✅ **Premium Result Tracking in Tampermonkey** - WIN/LOSS buttons now feed backend learning system (April 3, 2026)
 ✅ **Premium Signal Filters** - Session/time filters, win-rate tracking per hour/asset, confidence adjustments (April 3, 2026)
 ✅ **Backend Refactoring Complete** - server.py reduced from 15,631 to ~3,780 lines. 8 route modules in /app/backend/routes/
 ✅ **AI/ML v3.1 Optimized** - Stricter filtering pipeline, regime-aware confidence, feature agreement scoring
@@ -25,6 +28,35 @@
 
 ### Premium Signal Filters & Win-Rate Tracking (April 3, 2026)
 **New: Session-aware signal accuracy optimization with continuous learning**
+
+**Renamed to Elite Pocket Option Trading Bot v8.0.0**
+
+**Smart Auto-Invert System (Tampermonkey):**
+- Tracks per-asset direction + win/loss history locally in Tampermonkey
+- After N consecutive same-direction losses -> auto-inverts signal direction
+- After inversion: if wins confirm effectiveness, stays inverted
+- After inversion: if still losing after max inverted trades, reverts
+- Manual INVERT button for user override
+- 3 consecutive wins auto-reverts inversion (trend confirmed)
+- Cooldown prevents rapid flip-flopping between states
+
+**Direction-Aware Loss Detection (Backend):**
+- Stores recent trades per symbol in `recent_asset_trades` MongoDB collection
+- Detects consecutive same-direction losses for each asset
+- When signal matches losing direction: penalty of -4 per consecutive loss (max -15)
+- When signal is opposite to losing direction: +2 confidence bonus
+- `invert_suggestion` and `direction_loss_streak` included in scan-markets response
+
+**Premium Result Tracking in Tampermonkey:**
+- WIN/LOSS buttons now call `/api/signals/record-premium-result` automatically
+- Each trade result feeds session/hour/asset learning for continuous signal improvement
+- Log shows updated asset win rate and hour win rate after each result
+
+**Shadow DOM Panel:**
+- Panel renders inside Shadow DOM for CSS isolation from Pocket Option
+- Watchdog re-injects panel every 2 seconds if PO removes it
+- Max z-index (2147483647) with !important on all positioning
+- New INVERT button with status display in panel
 
 **Session Analyzer:**
 - Identifies current trading session (Sydney, Tokyo, London, NY, overlaps)
