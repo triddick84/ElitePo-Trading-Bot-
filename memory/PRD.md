@@ -3,6 +3,7 @@
 ## Last Updated: April 3, 2026
 
 ## Current Status
+✅ **Premium Signal Filters** - Session/time filters, win-rate tracking per hour/asset, confidence adjustments (April 3, 2026)
 ✅ **Backend Refactoring Complete** - server.py reduced from 15,631 to ~3,780 lines. 8 route modules in /app/backend/routes/
 ✅ **AI/ML v3.1 Optimized** - Stricter filtering pipeline, regime-aware confidence, feature agreement scoring
 ✅ **AI/ML Phase 2: LSTM/GRU Time-Series** - BiLSTM(64) + GRU(48) + Attention, 13 features, auto-labeling pipeline
@@ -21,6 +22,39 @@
 ✅ **Backend Data Sources** - OANDA (primary), Deriv API (synthetics), Tampermonkey scraper (OTC)
 
 ## Recent Updates (April 3, 2026)
+
+### Premium Signal Filters & Win-Rate Tracking (April 3, 2026)
+**New: Session-aware signal accuracy optimization with continuous learning**
+
+**Session Analyzer:**
+- Identifies current trading session (Sydney, Tokyo, London, NY, overlaps)
+- Quality scores: London-NY overlap (95), Tokyo-London overlap (85), London (80), NY (75), Tokyo (65), Sydney (50), Off-hours (30)
+- Recommended and avoid pairs per session
+- Historical win-rate tracking per hour (continuous learning from trades)
+
+**Premium Signal Filters (applied to scan-markets):**
+- Session quality adjustment: -10 to +5 confidence points
+- Historical hour win-rate: -5 to +3 points (requires 10+ trades)
+- Asset-specific win-rate: -5 to +3 points (requires 10+ trades)
+- Market condition: -5 to +3 points (trending=bonus, volatile=penalty)
+
+**Asset Performance Tracker:**
+- Tracks win rates per symbol and per hour+symbol combination
+- Stores in MongoDB: `asset_performance`, `asset_hourly_performance`, `hourly_stats`
+- Identifies worst-performing assets to avoid
+
+**New API Endpoints:**
+- `GET /api/signals/session-info?symbol=X` - Current session, quality, recommended pairs
+- `GET /api/signals/best-hours?top_n=8` - Best/worst hours based on history
+- `GET /api/signals/hourly-stats` - 24-hour win-rate breakdown
+- `POST /api/signals/record-premium-result` - Record trade result for learning
+- `GET /api/signals/asset-performance?symbol=X` - Per-asset win-rate stats
+- `GET /api/signals/should-trade?symbol=X&min_quality=50` - Quick trade-now check
+
+**scan-markets Enhancement:**
+- Response now includes `time_filter` with session info
+- Each signal includes `premium_filters` with confidence adjustment details
+- `original_confidence` preserved alongside adjusted `confidence`
 
 ### Backtesting & Historical Data System (April 3, 2026)
 **New Files Created:**
