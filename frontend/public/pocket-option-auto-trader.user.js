@@ -2957,21 +2957,24 @@
                    ELITE POCKET OPTION BOT v8.0
                    ============================================ */
                 #gpt-panel {
-                    position: fixed;
-                    bottom: 15px;
-                    left: 15px;
-                    background: linear-gradient(145deg, rgba(15,15,30,0.98), rgba(25,25,45,0.98));
-                    border: 1px solid rgba(124,58,237,0.6);
-                    border-radius: 12px;
-                    padding: 0;
-                    z-index: 999999;
-                    font-family: 'Segoe UI', system-ui, sans-serif;
-                    font-size: 11px;
-                    color: #e2e8f0;
-                    width: 280px;
-                    box-shadow: 0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
-                    overflow: hidden;
-                    transition: all 0.3s ease;
+                    position: fixed !important;
+                    bottom: 15px !important;
+                    left: 15px !important;
+                    background: linear-gradient(145deg, rgba(15,15,30,0.98), rgba(25,25,45,0.98)) !important;
+                    border: 1px solid rgba(124,58,237,0.6) !important;
+                    border-radius: 12px !important;
+                    padding: 0 !important;
+                    z-index: 2147483647 !important;
+                    font-family: 'Segoe UI', system-ui, sans-serif !important;
+                    font-size: 11px !important;
+                    color: #e2e8f0 !important;
+                    width: 280px !important;
+                    box-shadow: 0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05) !important;
+                    overflow: visible !important;
+                    transition: width 0.3s ease, border-radius 0.3s ease !important;
+                    touch-action: none !important;
+                    user-select: none !important;
+                    -webkit-user-select: none !important;
                 }
                 #gpt-panel.minimized { 
                     width: 110px; 
@@ -3397,14 +3400,41 @@
         // Make console window draggable
         makeDraggable(consoleWindow, document.getElementById('gpt-console-header'));
         
-        // Apply saved position
+        // Apply saved position (with validation)
         const savedPos = GM_getValue('panelPosition', null);
         if (savedPos && savedPos.top && savedPos.left) {
-            panel.style.top = savedPos.top;
-            panel.style.left = savedPos.left;
-            panel.style.bottom = 'auto';
-            panel.style.right = 'auto';
+            const topVal = parseInt(savedPos.top);
+            const leftVal = parseInt(savedPos.left);
+            // Validate position is within viewport
+            if (topVal >= 0 && topVal < window.innerHeight - 30 && 
+                leftVal > -200 && leftVal < window.innerWidth - 40) {
+                panel.style.top = savedPos.top;
+                panel.style.left = savedPos.left;
+                panel.style.bottom = 'auto';
+                panel.style.right = 'auto';
+            } else {
+                // Invalid position, clear it
+                GM_setValue('panelPosition', null);
+            }
         }
+        
+        // Triple-click header = reset panel position to default bottom-left
+        let clickCount = 0;
+        let clickTimer = null;
+        document.getElementById('gpt-drag').addEventListener('click', () => {
+            clickCount++;
+            if (clickTimer) clearTimeout(clickTimer);
+            clickTimer = setTimeout(() => { clickCount = 0; }, 500);
+            if (clickCount >= 3) {
+                clickCount = 0;
+                panel.style.top = 'auto';
+                panel.style.left = '15px';
+                panel.style.bottom = '15px';
+                panel.style.right = 'auto';
+                GM_setValue('panelPosition', null);
+                log('Panel position reset to default');
+            }
+        });
         
         updateAllUI();
     }
@@ -3458,40 +3488,44 @@
         let isDragging = false;
         let startX, startY, startLeft, startTop;
 
-        // Mouse events
-        handle.addEventListener('mousedown', startDrag);
-        document.addEventListener('mousemove', drag);
-        document.addEventListener('mouseup', endDrag);
+        // Mouse events - use capture phase to beat Pocket Option's event handlers
+        handle.addEventListener('mousedown', startDrag, true);
+        document.addEventListener('mousemove', drag, true);
+        document.addEventListener('mouseup', endDrag, true);
         
         // Touch events for mobile
-        handle.addEventListener('touchstart', startDragTouch, { passive: false });
-        document.addEventListener('touchmove', dragTouch, { passive: false });
-        document.addEventListener('touchend', endDrag);
+        handle.addEventListener('touchstart', startDragTouch, { passive: false, capture: true });
+        document.addEventListener('touchmove', dragTouch, { passive: false, capture: true });
+        document.addEventListener('touchend', endDrag, true);
 
         function startDrag(e) {
             // Don't drag if clicking minimize button or other buttons
-            if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
+            if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
             
             isDragging = true;
             startX = e.clientX;
             startY = e.clientY;
             
-            // Get computed position (handles bottom positioning)
+            // Get computed position
             const rect = panel.getBoundingClientRect();
             startLeft = rect.left;
             startTop = rect.top;
             
-            // Convert to top/left positioning
+            // Convert to top/left positioning immediately
             panel.style.bottom = 'auto';
             panel.style.right = 'auto';
             panel.style.top = startTop + 'px';
             panel.style.left = startLeft + 'px';
             
+            // Disable transition during drag for instant response
+            panel.style.transition = 'none';
+            
             e.preventDefault();
+            e.stopPropagation();
         }
 
         function startDragTouch(e) {
-            if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
+            if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
             
             isDragging = true;
             const touch = e.touches[0];
@@ -3509,7 +3543,11 @@
             panel.style.top = startTop + 'px';
             panel.style.left = startLeft + 'px';
             
+            // Disable transition during drag
+            panel.style.transition = 'none';
+            
             e.preventDefault();
+            e.stopPropagation();
         }
 
         function drag(e) {
@@ -3518,10 +3556,24 @@
             const dx = e.clientX - startX;
             const dy = e.clientY - startY;
             
-            panel.style.left = (startLeft + dx) + 'px';
-            panel.style.top = (startTop + dy) + 'px';
+            // Calculate new position with bounds checking
+            let newLeft = startLeft + dx;
+            let newTop = startTop + dy;
+            
+            // Keep panel within viewport
+            const panelRect = panel.getBoundingClientRect();
+            const maxLeft = window.innerWidth - 40; // At least 40px visible
+            const maxTop = window.innerHeight - 30; // At least 30px visible
+            newLeft = Math.max(-panelRect.width + 40, Math.min(newLeft, maxLeft));
+            newTop = Math.max(0, Math.min(newTop, maxTop));
+            
+            panel.style.left = newLeft + 'px';
+            panel.style.top = newTop + 'px';
             panel.style.right = 'auto';
             panel.style.bottom = 'auto';
+            
+            e.preventDefault();
+            e.stopPropagation();
         }
 
         function dragTouch(e) {
@@ -3531,16 +3583,30 @@
             const dx = touch.clientX - startX;
             const dy = touch.clientY - startY;
             
-            panel.style.left = (startLeft + dx) + 'px';
-            panel.style.top = (startTop + dy) + 'px';
+            // Calculate new position with bounds checking
+            let newLeft = startLeft + dx;
+            let newTop = startTop + dy;
+            
+            const panelRect = panel.getBoundingClientRect();
+            const maxLeft = window.innerWidth - 40;
+            const maxTop = window.innerHeight - 30;
+            newLeft = Math.max(-panelRect.width + 40, Math.min(newLeft, maxLeft));
+            newTop = Math.max(0, Math.min(newTop, maxTop));
+            
+            panel.style.left = newLeft + 'px';
+            panel.style.top = newTop + 'px';
             panel.style.right = 'auto';
             panel.style.bottom = 'auto';
+            
             e.preventDefault();
+            e.stopPropagation();
         }
 
-        function endDrag() {
+        function endDrag(e) {
             if (isDragging) {
                 isDragging = false;
+                // Restore transition
+                panel.style.transition = 'width 0.3s ease, border-radius 0.3s ease';
                 // Save position
                 GM_setValue('panelPosition', {
                     top: panel.style.top,
