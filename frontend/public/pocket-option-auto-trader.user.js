@@ -1206,6 +1206,8 @@
         cooldownMs: 3000,            // Ignore duplicate detections within 3s
         pendingTrade: false,         // Whether we have an open trade waiting for result
         tradeOpenedAt: 0,
+        minWaitAfterTrade: 5000,     // Minimum ms to wait after trade before accepting detection (trade must expire first)
+        ourSoundPlaying: false,      // Flag to ignore our own notification sounds
     };
     
     // ===========================================
@@ -1284,6 +1286,7 @@
     // ===========================================
     function playAppSignalSound() {
         // High-pitched beep for APP signals
+        audioDetection.ourSoundPlaying = true;
         try {
             const ctx = new (window.AudioContext || window.webkitAudioContext)();
             const osc = ctx.createOscillator();
@@ -1294,12 +1297,13 @@
             osc.type = 'sine';
             gain.gain.value = 0.3;
             osc.start();
-            setTimeout(() => { osc.stop(); ctx.close(); }, 150);
-        } catch(e) {}
+            setTimeout(() => { osc.stop(); ctx.close(); audioDetection.ourSoundPlaying = false; }, 150);
+        } catch(e) { audioDetection.ourSoundPlaying = false; }
     }
 
     function playScanSignalSound() {
         // Low-pitched beep for SCAN signals
+        audioDetection.ourSoundPlaying = true;
         try {
             const ctx = new (window.AudioContext || window.webkitAudioContext)();
             const osc = ctx.createOscillator();
@@ -1310,8 +1314,8 @@
             osc.type = 'square';
             gain.gain.value = 0.2;
             osc.start();
-            setTimeout(() => { osc.stop(); ctx.close(); }, 300);
-        } catch(e) {}
+            setTimeout(() => { osc.stop(); ctx.close(); audioDetection.ourSoundPlaying = false; }, 300);
+        } catch(e) { audioDetection.ourSoundPlaying = false; }
     }
 
     // ===========================================
@@ -1319,6 +1323,7 @@
     // ===========================================
     function playWinSound() {
         if (!soundNotificationsEnabled) return;
+        audioDetection.ourSoundPlaying = true;
         try {
             const ctx = new (window.AudioContext || window.webkitAudioContext)();
             const osc = ctx.createOscillator();
@@ -1332,12 +1337,13 @@
             osc.start();
             setTimeout(() => { osc.frequency.value = 659; }, 100); // E5
             setTimeout(() => { osc.frequency.value = 784; }, 200); // G5
-            setTimeout(() => { osc.stop(); ctx.close(); }, 400);
-        } catch(e) {}
+            setTimeout(() => { osc.stop(); ctx.close(); audioDetection.ourSoundPlaying = false; }, 400);
+        } catch(e) { audioDetection.ourSoundPlaying = false; }
     }
 
     function playLossSound() {
         if (!soundNotificationsEnabled) return;
+        audioDetection.ourSoundPlaying = true;
         try {
             const ctx = new (window.AudioContext || window.webkitAudioContext)();
             const osc = ctx.createOscillator();
@@ -1351,12 +1357,13 @@
             osc.start();
             setTimeout(() => { osc.frequency.value = 330; }, 150); // E4
             setTimeout(() => { osc.frequency.value = 262; }, 300); // C4
-            setTimeout(() => { osc.stop(); ctx.close(); }, 500);
-        } catch(e) {}
+            setTimeout(() => { osc.stop(); ctx.close(); audioDetection.ourSoundPlaying = false; }, 500);
+        } catch(e) { audioDetection.ourSoundPlaying = false; }
     }
 
     function playStopSound() {
         if (!soundNotificationsEnabled) return;
+        audioDetection.ourSoundPlaying = true;
         try {
             const ctx = new (window.AudioContext || window.webkitAudioContext)();
             const osc = ctx.createOscillator();
@@ -1371,8 +1378,8 @@
             setTimeout(() => { osc.frequency.value = 150; }, 200);
             setTimeout(() => { osc.frequency.value = 200; }, 400);
             setTimeout(() => { osc.frequency.value = 150; }, 600);
-            setTimeout(() => { osc.stop(); ctx.close(); }, 800);
-        } catch(e) {}
+            setTimeout(() => { osc.stop(); ctx.close(); audioDetection.ourSoundPlaying = false; }, 800);
+        } catch(e) { audioDetection.ourSoundPlaying = false; }
     }
 
     // ===========================================
@@ -2113,8 +2120,16 @@
     function detectOutcomeFromAudio(src, audioEl) {
         if (!audioDetection.enabled) return;
         if (!audioDetection.pendingTrade) return;
+        if (audioDetection.ourSoundPlaying) return; // Ignore our own oscillator sounds
         
         const now = Date.now();
+        
+        // Must wait at least minWaitAfterTrade ms after trade was placed
+        // (trade needs to expire before we can detect the result)
+        const elapsed = now - audioDetection.tradeOpenedAt;
+        if (elapsed < audioDetection.minWaitAfterTrade) return;
+        
+        // Cooldown between detections
         if (now - audioDetection.lastDetectionTime < audioDetection.cooldownMs) return;
         
         // Pocket Option audio patterns:
@@ -2128,19 +2143,12 @@
             outcome = 'loss';
         }
         
-        // Also check by audio duration/frequency patterns if src doesn't help
-        // PO often uses short beep for loss and longer melody for win
-        if (!outcome && audioEl) {
-            // We'll rely on DOM observer as fallback
-            return;
-        }
-        
         if (outcome) {
             audioDetection.lastDetectedOutcome = outcome;
             audioDetection.lastDetectionTime = now;
             audioDetection.pendingTrade = false;
             
-            log(`AUDIO DETECTED: ${outcome.toUpperCase()}`);
+            log(`AUDIO DETECTED: ${outcome.toUpperCase()} (${Math.round(elapsed/1000)}s after trade)`);
             handleAutoDetectedResult(outcome === 'win');
         }
     }
@@ -2150,8 +2158,14 @@
         // PO shows results as popup elements with profit/loss amounts
         const observer = new MutationObserver((mutations) => {
             if (!audioDetection.enabled || !audioDetection.pendingTrade) return;
+            if (audioDetection.ourSoundPlaying) return;
             
             const now = Date.now();
+            
+            // Must wait at least minWaitAfterTrade ms after trade placement
+            const elapsed = now - audioDetection.tradeOpenedAt;
+            if (elapsed < audioDetection.minWaitAfterTrade) return;
+            
             if (now - audioDetection.lastDetectionTime < audioDetection.cooldownMs) return;
             
             for (const mutation of mutations) {
