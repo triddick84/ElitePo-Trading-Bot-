@@ -1,0 +1,87 @@
+{
+  "summary": "Iteration 22 testing complete. All 10 backend tests passed (100%). Frontend Analytics Dashboard fully functional with all features working correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_analytics_dashboard.py",
+    "/app/test_reports/pytest/pytest_analytics_dashboard.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "GET /api/maximized-ml/stats returns stats with model_accuracy, predictions_made, feature_count, models_in_ensemble - verified",
+    "GET /api/lstm-gru/stats returns accuracy, total_predictions, training_history - verified",
+    "GET /api/ppo-rl/stats returns accuracy, training_stats with avg_reward, total_episodes - verified",
+    "GET /api/risk-management/metrics returns sharpe_ratio, sortino_ratio, max_drawdown_pct, profit_factor, win_rate_pct, kelly_fraction_pct - verified",
+    "GET /api/historical/summary returns total_candles, symbols, timeframes, sources - verified",
+    "GET /api/signals/asset-performance returns all_assets array with symbol, win_rate, total - verified",
+    "GET /api/signals/hourly-stats returns hourly_stats array with 24 hours, hour_utc, session, win_rate, is_best_hour, is_bad_hour - verified",
+    "Performance page has 3 tabs (Statistics, Backtesting, Analytics) with correct data-testid attributes - verified",
+    "Analytics tab shows Risk Management section with 7 metric cards - verified",
+    "Analytics tab shows ML Model Performance section with 3 model cards (Stacking Ensemble, BiLSTM+GRU, PPO RL) - verified",
+    "Analytics tab shows Historical Data section with 4 cards - verified",
+    "Analytics tab shows Asset Performance leaderboard (Top 8) - verified",
+    "Analytics tab shows Trading Hours Analysis with Best/Avoid hours - verified",
+    "Analytics tab shows 24h Win Rate Heatmap with 24 cells and color legend - verified"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_analytics_dashboard.py"
+  ],
+  "success_rate": {
+    "backend": "100% (10/10 tests passed)",
+    "frontend": "100% (all features working)"
+  },
+  "test_credentials": "username=triddick84, password=Fallinone#1",
+  "seed_data_creation": "None - used existing data",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Analytics Dashboard fully tested. All 7 backend APIs working. Frontend shows all sections: Risk Management (7 metrics), ML Model Performance (3 models), Historical Data (4 cards), Asset Performance leaderboard, Trading Hours Analysis, 24h Win Rate Heatmap. All data-testid attributes correctly implemented.",
+  "mocked_apis": {
+    "note": "MT4/TradingView webhooks are mocked/simulated as per main agent context"
+  },
+  "endpoints_tested": {
+    "analytics_apis": [
+      "GET /api/maximized-ml/stats ✅ (returns model_accuracy: 54.5%, predictions_made: 2, feature_count: 97, models_in_ensemble: [XGBoost, LightGBM, RandomForest, GradientBoosting])",
+      "GET /api/lstm-gru/stats ✅ (returns accuracy: 5.38%, total_predictions: 30, training_history with train_accuracy, epochs_run, samples)",
+      "GET /api/ppo-rl/stats ✅ (returns accuracy: 11.55%, training_stats with avg_reward: -1.49, total_episodes: 5, final_trades: 141)",
+      "GET /api/risk-management/metrics ✅ (returns sharpe_ratio: 0, sortino_ratio: 0, max_drawdown_pct: 0, profit_factor: 0, win_rate_pct: 0, kelly_fraction_pct: 1.0, risk_level: normal)",
+      "GET /api/historical/summary ✅ (returns total_candles: 2115, symbols: [V100], timeframes: [1m, M1], sources: [deriv])",
+      "GET /api/signals/asset-performance ✅ (returns all_assets array with symbol, win_rate, total)",
+      "GET /api/signals/hourly-stats ✅ (returns 24 hourly_stats with hour_utc, session, win_rate, is_best_hour, is_bad_hour)"
+    ]
+  },
+  "frontend_features_verified": {
+    "performance_page_tabs": {
+      "statistics_tab": "data-testid='tab-statistics' - FOUND",
+      "backtesting_tab": "data-testid='tab-backtest' - FOUND",
+      "analytics_tab": "data-testid='tab-analytics' - FOUND"
+    },
+    "analytics_dashboard": {
+      "container": "data-testid='analytics-dashboard' - FOUND",
+      "risk_management_metrics": [
+        "metric-sharpe - FOUND",
+        "metric-sortino - FOUND",
+        "metric-max-drawdown - FOUND",
+        "metric-profit-factor - FOUND",
+        "metric-win-rate - FOUND",
+        "metric-kelly-% - FOUND",
+        "metric-risk-level - FOUND"
+      ],
+      "ml_model_cards": [
+        "model-card-stacking-ensemble - FOUND",
+        "model-card-bilstm-+-gru-+-attention - FOUND",
+        "model-card-ppo-actor-critic - FOUND"
+      ],
+      "historical_data_cards": "4 cards (Total Candles, Symbols, Timeframes, Sources) - FOUND",
+      "asset_performance_leaderboard": "Top 8 assets displayed - FOUND",
+      "trading_hours_analysis": "Best/Avoid hours sections - FOUND",
+      "24h_win_rate_heatmap": "24 cells with color legend - FOUND"
+    }
+  }
+}
