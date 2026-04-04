@@ -2958,8 +2958,8 @@
                    ============================================ */
                 #gpt-panel {
                     position: fixed !important;
-                    bottom: 15px !important;
-                    left: 15px !important;
+                    bottom: 15px;
+                    left: 15px;
                     background: linear-gradient(145deg, rgba(15,15,30,0.98), rgba(25,25,45,0.98)) !important;
                     border: 1px solid rgba(124,58,237,0.6) !important;
                     border-radius: 12px !important;
@@ -2969,12 +2969,15 @@
                     font-size: 11px !important;
                     color: #e2e8f0 !important;
                     width: 280px !important;
+                    height: auto !important;
+                    max-height: 90vh !important;
                     box-shadow: 0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05) !important;
                     overflow: visible !important;
                     transition: width 0.3s ease, border-radius 0.3s ease !important;
                     touch-action: none !important;
                     user-select: none !important;
                     -webkit-user-select: none !important;
+                    resize: none !important;
                 }
                 #gpt-panel.minimized { 
                     width: 110px; 
@@ -3408,10 +3411,10 @@
             // Validate position is within viewport
             if (topVal >= 0 && topVal < window.innerHeight - 30 && 
                 leftVal > -200 && leftVal < window.innerWidth - 40) {
-                panel.style.top = savedPos.top;
-                panel.style.left = savedPos.left;
-                panel.style.bottom = 'auto';
-                panel.style.right = 'auto';
+                panel.style.setProperty('top', savedPos.top, 'important');
+                panel.style.setProperty('left', savedPos.left, 'important');
+                panel.style.setProperty('bottom', 'auto', 'important');
+                panel.style.setProperty('right', 'auto', 'important');
             } else {
                 // Invalid position, clear it
                 GM_setValue('panelPosition', null);
@@ -3427,10 +3430,10 @@
             clickTimer = setTimeout(() => { clickCount = 0; }, 500);
             if (clickCount >= 3) {
                 clickCount = 0;
-                panel.style.top = 'auto';
-                panel.style.left = '15px';
-                panel.style.bottom = '15px';
-                panel.style.right = 'auto';
+                panel.style.removeProperty('top');
+                panel.style.removeProperty('right');
+                panel.style.setProperty('left', '15px');
+                panel.style.setProperty('bottom', '15px');
                 GM_setValue('panelPosition', null);
                 log('Panel position reset to default');
             }
@@ -3511,14 +3514,14 @@
             startLeft = rect.left;
             startTop = rect.top;
             
-            // Convert to top/left positioning immediately
-            panel.style.bottom = 'auto';
-            panel.style.right = 'auto';
-            panel.style.top = startTop + 'px';
-            panel.style.left = startLeft + 'px';
+            // Convert to top/left positioning - use setProperty with important
+            panel.style.setProperty('bottom', 'auto', 'important');
+            panel.style.setProperty('right', 'auto', 'important');
+            panel.style.setProperty('top', startTop + 'px', 'important');
+            panel.style.setProperty('left', startLeft + 'px', 'important');
             
             // Disable transition during drag for instant response
-            panel.style.transition = 'none';
+            panel.style.setProperty('transition', 'none', 'important');
             
             e.preventDefault();
             e.stopPropagation();
@@ -3538,13 +3541,13 @@
             startTop = rect.top;
             
             // Convert to top/left positioning
-            panel.style.bottom = 'auto';
-            panel.style.right = 'auto';
-            panel.style.top = startTop + 'px';
-            panel.style.left = startLeft + 'px';
+            panel.style.setProperty('bottom', 'auto', 'important');
+            panel.style.setProperty('right', 'auto', 'important');
+            panel.style.setProperty('top', startTop + 'px', 'important');
+            panel.style.setProperty('left', startLeft + 'px', 'important');
             
             // Disable transition during drag
-            panel.style.transition = 'none';
+            panel.style.setProperty('transition', 'none', 'important');
             
             e.preventDefault();
             e.stopPropagation();
@@ -3562,15 +3565,15 @@
             
             // Keep panel within viewport
             const panelRect = panel.getBoundingClientRect();
-            const maxLeft = window.innerWidth - 40; // At least 40px visible
-            const maxTop = window.innerHeight - 30; // At least 30px visible
+            const maxLeft = window.innerWidth - 40;
+            const maxTop = window.innerHeight - 30;
             newLeft = Math.max(-panelRect.width + 40, Math.min(newLeft, maxLeft));
             newTop = Math.max(0, Math.min(newTop, maxTop));
             
-            panel.style.left = newLeft + 'px';
-            panel.style.top = newTop + 'px';
-            panel.style.right = 'auto';
-            panel.style.bottom = 'auto';
+            panel.style.setProperty('left', newLeft + 'px', 'important');
+            panel.style.setProperty('top', newTop + 'px', 'important');
+            panel.style.setProperty('right', 'auto', 'important');
+            panel.style.setProperty('bottom', 'auto', 'important');
             
             e.preventDefault();
             e.stopPropagation();
@@ -3593,10 +3596,10 @@
             newLeft = Math.max(-panelRect.width + 40, Math.min(newLeft, maxLeft));
             newTop = Math.max(0, Math.min(newTop, maxTop));
             
-            panel.style.left = newLeft + 'px';
-            panel.style.top = newTop + 'px';
-            panel.style.right = 'auto';
-            panel.style.bottom = 'auto';
+            panel.style.setProperty('left', newLeft + 'px', 'important');
+            panel.style.setProperty('top', newTop + 'px', 'important');
+            panel.style.setProperty('right', 'auto', 'important');
+            panel.style.setProperty('bottom', 'auto', 'important');
             
             e.preventDefault();
             e.stopPropagation();
@@ -3606,7 +3609,7 @@
             if (isDragging) {
                 isDragging = false;
                 // Restore transition
-                panel.style.transition = 'width 0.3s ease, border-radius 0.3s ease';
+                panel.style.setProperty('transition', 'width 0.3s ease, border-radius 0.3s ease', 'important');
                 // Save position
                 GM_setValue('panelPosition', {
                     top: panel.style.top,
