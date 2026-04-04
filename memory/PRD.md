@@ -3,6 +3,8 @@
 ## Last Updated: February 2026
 
 ## Current Status
+✅ **CYCLE Mode (Favorites Cycling)** - New button that physically clicks through each favorite, dwells 30s scanning, trades on signal, waits for expiry, moves to next (Feb 2026)
+✅ **Panel Drag Fix** - Fixed stretching bug caused by CSS !important on positioning, uses setProperty with important in JS (Feb 2026)
 ✅ **Legacy Tampermonkey v8.0 Feature Port Complete** - Strategy Dropdown, Smart Auto-Invert, Premium Result Recording ported to legacy script (Feb 2026)
 ✅ **EMA 20 Pullback Reversal Strategy** - New 5s strategy with EMA 20, RSI 2, BB(5,2.5), Stoch(3,1,1) (April 3, 2026)
 ✅ **Strategy Selection -> Scan Integration** - App-selected strategy runs FIRST in scan-markets, with fallback chain (April 3, 2026)

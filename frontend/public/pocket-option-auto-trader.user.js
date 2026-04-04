@@ -37,6 +37,8 @@
         SCAN_INTERVAL: 5000,         // 5 seconds for scanning
         TRADE_COOLDOWN_SCAN: 30000,  // 30 seconds between SCAN trades
         TRADE_COOLDOWN_APP: 5000,    // 5 seconds between APP trades
+        CYCLE_DWELL_TIME: 30000,     // 30 seconds per asset in CYCLE mode
+        CYCLE_SCAN_INTERVAL: 3000,   // scan every 3s while dwelling on an asset
         MIN_CONFIDENCE: 65,
         MIN_PAYOUT: 65,
         DEBUG: true,
@@ -1144,6 +1146,9 @@
     let autoEnabled = false;    // Receive APP signals only
     let scanEnabled = false;    // Tampermonkey generates trades
     let invertEnabled = false;  // Local invert toggle
+    let cycleEnabled = false;   // CYCLE mode: physically click through favorites
+    let cycleRunning = false;   // Whether the cycle loop is actively running
+    let cycleAbort = false;     // Signal to stop the cycle loop
     
     // Trading state - v6.8.4 uses globalTradeLock exclusively
     let lastAppTradeTime = 0;
@@ -3104,6 +3109,9 @@
                 .gpt-btn-go { background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; }
                 .gpt-btn-inv { background: #475569; color: white; }
                 .gpt-btn-inv.active { background: linear-gradient(135deg, #f59e0b, #d97706); }
+                .gpt-btn-cycle { background: #475569; color: white; }
+                .gpt-btn-cycle.active { background: linear-gradient(135deg, #38bdf8, #0284c7); animation: gpt-cycle-pulse 2s ease-in-out infinite; }
+                @keyframes gpt-cycle-pulse { 0%,100%{opacity:1} 50%{opacity:0.7} }
                 .gpt-btn-log { background: #475569; color: white; }
                 .gpt-btn-log.active { background: linear-gradient(135deg, #6366f1, #4f46e5); }
                 
@@ -3282,6 +3290,10 @@
                 
                 <!-- Secondary Buttons -->
                 <div class="gpt-btn-row">
+                    <button class="gpt-btn gpt-btn-cycle" id="gpt-cycle">
+                        <span class="gpt-btn-icon">🔁</span>
+                        <span>CYCLE</span>
+                    </button>
                     <button class="gpt-btn gpt-btn-inv" id="gpt-invert">
                         <span class="gpt-btn-icon">🔄</span>
                         <span>INVERT</span>
@@ -3290,6 +3302,11 @@
                         <span class="gpt-btn-icon">📋</span>
                         <span>LOG</span>
                     </button>
+                </div>
+                
+                <!-- Cycle Status -->
+                <div id="gpt-cycle-status" class="gpt-log-bar" style="display:none; color:#38bdf8; font-size:9px; margin-bottom:4px;">
+                    CYCLE: Idle
                 </div>
                 
                 <!-- Stats -->
@@ -3356,6 +3373,7 @@
         document.getElementById('gpt-auto').addEventListener('click', toggleAuto);
         document.getElementById('gpt-scan').addEventListener('click', toggleScan);
         document.getElementById('gpt-invert').addEventListener('click', toggleInvert);
+        document.getElementById('gpt-cycle').addEventListener('click', toggleCycle);
         document.getElementById('gpt-fetch').addEventListener('click', handleFetch);
         document.getElementById('gpt-minimize').addEventListener('click', toggleMinimize);
         document.getElementById('gpt-console-toggle').addEventListener('click', toggleConsoleWindow);
@@ -3807,10 +3825,267 @@
         });
     }
 
+    // ===========================================
+    // CYCLE MODE - v8.1
+    // Physically clicks through each favorite,
+    // dwells ~30s per asset scanning for signals,
+    // places trade if found, waits for expiry, 
+    // then moves to the next favorite.
+    // ===========================================
+    function toggleCycle() {
+        cycleEnabled = !cycleEnabled;
+        GM_setValue('cycleEnabled', cycleEnabled);
+        
+        if (cycleEnabled) {
+            // Disable SCAN/AUTO to avoid conflicts
+            scanEnabled = false;
+            autoEnabled = false;
+            GM_setValue('scanEnabled', false);
+            GM_setValue('autoEnabled', false);
+            manageIntervals(); // clears scan/auto intervals
+            
+            cycleAbort = false;
+            log('CYCLE: ON - Cycling through favorites (30s per asset)');
+            updateCycleStatus('Starting...');
+            startCycleLoop();
+        } else {
+            cycleAbort = true;
+            log('CYCLE: OFF');
+            updateCycleStatus('');
+        }
+        
+        updateAllUI();
+    }
+    
+    function updateCycleStatus(text) {
+        const el = document.getElementById('gpt-cycle-status');
+        if (el) {
+            if (text) {
+                el.style.display = 'block';
+                el.textContent = 'CYCLE: ' + text;
+            } else {
+                el.style.display = 'none';
+            }
+        }
+    }
+    
+    async function startCycleLoop() {
+        if (cycleRunning) {
+            log('CYCLE: Loop already running');
+            return;
+        }
+        cycleRunning = true;
+        
+        try {
+            while (cycleEnabled && !cycleAbort) {
+                // Step 1: Detect favorites
+                detectFavoritesBar();
+                
+                if (favoritesFromBar.length === 0) {
+                    log('CYCLE: No favorites found. Retrying in 5s...');
+                    updateCycleStatus('No favorites detected - retrying...');
+                    await sleep(5000);
+                    continue;
+                }
+                
+                log(`CYCLE: Starting round - ${favoritesFromBar.length} favorites`);
+                
+                // Step 2: Loop through each favorite
+                for (let i = 0; i < favoritesFromBar.length; i++) {
+                    if (!cycleEnabled || cycleAbort) break;
+                    
+                    const favorite = favoritesFromBar[i];
+                    const assetName = favorite.symbol || favorite.normalized;
+                    
+                    log(`CYCLE [${i+1}/${favoritesFromBar.length}]: Switching to ${assetName}`);
+                    updateCycleStatus(`${assetName} (${i+1}/${favoritesFromBar.length})`);
+                    updateStatusDot('trading');
+                    
+                    // Step 3: Click this favorite to switch to it
+                    const switched = await clickFavoriteAsset(favorite);
+                    if (!switched) {
+                        log(`CYCLE: Could not switch to ${assetName}, skipping`);
+                        await sleep(1000);
+                        continue;
+                    }
+                    
+                    // Wait for chart to load after switching
+                    await sleep(2000);
+                    
+                    // Clear price scraper history for fresh data on new asset
+                    PriceScraperV2.priceHistory = [];
+                    PriceScraperV2.candleHistory = [];
+                    PriceScraperV2.foundSelector = null;
+                    
+                    // Step 4: Dwell on this asset, scanning repeatedly
+                    const dwellStart = Date.now();
+                    let tradePlaced = false;
+                    let scanCount = 0;
+                    
+                    while (Date.now() - dwellStart < CONFIG.CYCLE_DWELL_TIME) {
+                        if (!cycleEnabled || cycleAbort) break;
+                        
+                        scanCount++;
+                        const elapsed = Math.round((Date.now() - dwellStart) / 1000);
+                        updateCycleStatus(`${assetName} (${i+1}/${favoritesFromBar.length}) - ${elapsed}s / ${CONFIG.CYCLE_DWELL_TIME/1000}s`);
+                        
+                        // Scrape price and build candles
+                        const price = PriceScraperV2.scrapeCurrentPrice();
+                        if (price) {
+                            const candle = PriceScraperV2.buildCandle(price, 1000);
+                            if (candle) PriceScraperV2.addCandle(candle);
+                        }
+                        
+                        const candles = PriceScraperV2.getCandles();
+                        
+                        // Need enough candles to analyze (at least 10)
+                        if (candles.length >= 10 && !globalTradeLock) {
+                            // Try local signal generation
+                            let signal = LocalSignalEngine.generateSignal(candles);
+                            
+                            if (!signal) signal = LocalSignalEngine.getHollyCrossoverSignal(candles);
+                            if (!signal) signal = LocalSignalEngine.getGoldenOneMomentSignal(candles);
+                            if (!signal) signal = LocalSignalEngine.getMomentumBusterSignal(candles);
+                            
+                            if (signal && signal.confidence >= CONFIG.MIN_CONFIDENCE) {
+                                const assetSymbol = (getCurrentAsset() || assetName).replace(/\s+/g, '').replace('/', '').toUpperCase();
+                                
+                                log(`CYCLE SIGNAL: ${signal.direction} ${assetSymbol} (${signal.confidence}%) [${signal.strategy}]`);
+                                
+                                const tradeSignal = {
+                                    direction: signal.direction,
+                                    symbol: assetSymbol,
+                                    confidence: signal.confidence,
+                                    confirmations: signal.confirmations,
+                                    price: signal.price,
+                                    source: 'CYCLE_LOCAL',
+                                    _willSwitch: false
+                                };
+                                
+                                // Apply Smart Auto-Invert
+                                const processed = processSmartAutoInvert(tradeSignal);
+                                
+                                // Track for premium result
+                                lastTradeInfo.symbol = processed.symbol;
+                                lastTradeInfo.direction = processed.direction;
+                                lastTradeInfo.confidence = processed.confidence;
+                                
+                                // Place the trade
+                                try {
+                                    await executeScanTrade(processed);
+                                    tradePlaced = true;
+                                    
+                                    // Wait for trade expiry before moving on
+                                    const expiryMs = (signal.expiration || 5) * 1000;
+                                    const waitTime = Math.max(expiryMs + 3000, 8000); // expiry + 3s buffer, min 8s
+                                    log(`CYCLE: Trade placed. Waiting ${waitTime/1000}s for expiry...`);
+                                    updateCycleStatus(`${assetName} - TRADE ${processed.direction} - waiting ${waitTime/1000}s`);
+                                    
+                                    await sleep(waitTime);
+                                    
+                                    // After trade expires, break out of dwell loop to move to next asset
+                                    break;
+                                } catch (err) {
+                                    log(`CYCLE: Trade error: ${err.message}`);
+                                }
+                            }
+                        }
+                        
+                        // Also try backend scan if local found nothing and we have enough dwell time
+                        if (scanCount === 5 && candles.length < 10 && !globalTradeLock) {
+                            // After ~15s of no local candles, try a quick backend scan
+                            log(`CYCLE: Low local data, trying backend for ${assetName}...`);
+                            const backendSignal = await cycleBackendScan(assetName);
+                            if (backendSignal && !globalTradeLock) {
+                                const processed = processSmartAutoInvert(backendSignal);
+                                lastTradeInfo.symbol = processed.symbol;
+                                lastTradeInfo.direction = processed.direction;
+                                lastTradeInfo.confidence = processed.confidence;
+                                
+                                try {
+                                    await executeScanTrade(processed);
+                                    tradePlaced = true;
+                                    const waitTime = 8000;
+                                    log(`CYCLE: Backend trade placed. Waiting ${waitTime/1000}s...`);
+                                    updateCycleStatus(`${assetName} - TRADE ${processed.direction} - waiting`);
+                                    await sleep(waitTime);
+                                    break;
+                                } catch (err) {
+                                    log(`CYCLE: Backend trade error: ${err.message}`);
+                                }
+                            }
+                        }
+                        
+                        // Wait before next scan attempt
+                        await sleep(CONFIG.CYCLE_SCAN_INTERVAL);
+                    }
+                    
+                    if (!tradePlaced) {
+                        log(`CYCLE: No signal on ${assetName} after ${CONFIG.CYCLE_DWELL_TIME/1000}s, moving on`);
+                    }
+                    
+                    updateStatusDot('connected');
+                }
+                
+                // Completed one full round
+                if (cycleEnabled && !cycleAbort) {
+                    log(`CYCLE: Round complete. Restarting...`);
+                    updateCycleStatus('Round complete - restarting...');
+                    await sleep(2000);
+                }
+            }
+        } catch (err) {
+            log(`CYCLE ERROR: ${err.message}`);
+            console.error('[GPT CYCLE]', err);
+        }
+        
+        cycleRunning = false;
+        updateCycleStatus('');
+        updateStatusDot(autoEnabled || scanEnabled ? 'connected' : '');
+        log('CYCLE: Loop stopped');
+    }
+    
+    // Quick backend scan for a single asset during CYCLE mode
+    function cycleBackendScan(assetName) {
+        return new Promise((resolve) => {
+            let symbol = assetName.replace(/\s+/g, '').replace('/', '').replace('OTC', '_OTC').toUpperCase();
+            if (!symbol.includes('_OTC')) symbol += '_OTC';
+            
+            const strategyParam = selectedStrategy !== 'default' ? `&strategy=${selectedStrategy}` : '';
+            const url = CONFIG.API_URL + `/signals/scan-markets?assets=${symbol}&min_confidence=${CONFIG.MIN_CONFIDENCE}${strategyParam}`;
+            
+            GM_xmlhttpRequest({
+                method: 'GET',
+                url: url,
+                headers: { 'Accept': 'application/json' },
+                timeout: 10000,
+                onload: function(res) {
+                    try {
+                        if (res.status !== 200) { resolve(null); return; }
+                        const data = JSON.parse(res.responseText);
+                        const signals = data.top_signals || data.signals || [];
+                        if (data.success && signals.length > 0) {
+                            const sig = signals[0];
+                            sig.source = 'CYCLE_BACKEND';
+                            sig._willSwitch = false;
+                            resolve(sig);
+                        } else {
+                            resolve(null);
+                        }
+                    } catch(e) { resolve(null); }
+                },
+                onerror: function() { resolve(null); },
+                ontimeout: function() { resolve(null); }
+            });
+        });
+    }
+
     function resetToDefaults() {
         autoEnabled = false;
         scanEnabled = false;
         invertEnabled = false;
+        cycleEnabled = false;
+        cycleAbort = true;
         lastAppSignalId = '';
         lastAppTradeTime = 0;
         lastScanTradeTime = 0;
@@ -3819,10 +4094,12 @@
         GM_setValue('autoEnabled', false);
         GM_setValue('scanEnabled', false);
         GM_setValue('invertEnabled', false);
+        GM_setValue('cycleEnabled', false);
         
         updateAllUI();
         manageIntervals();
         updateSignalDisplay('READY', null, 'wait', '-');
+        updateCycleStatus('');
         
         log('RESET: All buttons OFF');
     }
@@ -3915,6 +4192,7 @@
         const scanBtn = document.getElementById('gpt-scan');
         const invertBtn = document.getElementById('gpt-invert');
         const logBtn = document.getElementById('gpt-console-toggle');
+        const cycleBtn = document.getElementById('gpt-cycle');
 
         if (autoBtn) {
             autoBtn.className = 'gpt-btn gpt-btn-auto' + (autoEnabled ? ' active' : '');
@@ -3924,6 +4202,9 @@
         }
         if (invertBtn) {
             invertBtn.className = 'gpt-btn gpt-btn-inv' + (invertEnabled ? ' active' : '');
+        }
+        if (cycleBtn) {
+            cycleBtn.className = 'gpt-btn gpt-btn-cycle' + (cycleEnabled ? ' active' : '');
         }
         if (logBtn) {
             const consoleWindow = document.getElementById('gpt-console-window');
@@ -4960,6 +5241,9 @@
             // Load saved strategy selection
             selectedStrategy = GM_getValue('selectedStrategy', 'default');
             
+            // Load cycle mode state (default off - user must manually enable)
+            cycleEnabled = GM_getValue('cycleEnabled', false);
+            
             // Load smart auto-invert state
             const savedInvertState = GM_getValue('smartAutoInvertState', null);
             if (savedInvertState) {
@@ -4995,6 +5279,14 @@
             updateAllUI();
             
             manageIntervals();
+            
+            // Resume CYCLE mode if it was saved as enabled
+            if (cycleEnabled) {
+                cycleAbort = false;
+                log('CYCLE: Resuming from saved state');
+                updateCycleStatus('Resuming...');
+                startCycleLoop();
+            }
             
             // Start heartbeat
             heartbeatInterval = setInterval(() => {
