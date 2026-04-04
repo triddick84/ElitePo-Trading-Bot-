@@ -1182,16 +1182,13 @@
     let currentFavoriteIndex = 0; // For cycling through favorites
 
     // ===========================================
-    // SMART AUTO-INVERT SYSTEM - v8.0
-    // Tracks per-asset direction losses locally
+    // SMART AUTO-INVERT SYSTEM - v8.2
+    // Simple: WIN = keep state, LOSS = toggle state
+    // Audio detection for automatic outcome tracking
     // ===========================================
     let smartAutoInvert = {
-        enabled: true,
-        assetDirectionHistory: {},  // { 'EURUSD_OTC': { lastDirection: 'CALL', consecutiveLosses: 0, inverted: false, invertedWins: 0, cooldownUntil: 0 } }
-        consecutiveLossThreshold: 3,  // After N same-direction losses, invert
-        maxInvertedTrades: 5,         // Max trades while inverted before reverting
-        winsToConfirmRevert: 3,       // Consecutive wins to auto-revert from inversion
-        cooldownMs: 10000,            // 10s cooldown between invert state changes
+        enabled: false,        // User toggles this via INVERT button
+        invertActive: false,   // Current invert state (signals flipped when true)
     };
 
     // Track last trade info for premium result recording
@@ -1199,6 +1196,16 @@
         symbol: '',
         direction: '',
         confidence: 0,
+    };
+
+    // Audio detection state
+    let audioDetection = {
+        enabled: true,
+        lastDetectedOutcome: null,   // 'win' or 'loss'
+        lastDetectionTime: 0,
+        cooldownMs: 3000,            // Ignore duplicate detections within 3s
+        pendingTrade: false,         // Whether we have an open trade waiting for result
+        tradeOpenedAt: 0,
     };
     
     // ===========================================
@@ -1214,8 +1221,7 @@
         tradeHistory: []
     };
     
-    // Manual invert on loss
-    let manualInvertActive = false;     // User pressed LOSS button - signals inverted
+    // Auto-invert uses smartAutoInvert.invertActive (see above)
     
     // ===========================================
     // MONEY MANAGEMENT SYSTEM - v6.8.0
@@ -1640,14 +1646,8 @@
         moneyManagement.sessionTrades++;
         
         // Reset inversion on win (if it was active)
-        if (manualInvertActive) {
-            manualInvertActive = false;
-            invertEnabled = false;
-            GM_setValue('invertEnabled', false);
-            log(`✅ WIN +$${profit.toFixed(2)} - Inversion RESET`);
-        } else {
-            log(`✅ WIN +$${profit.toFixed(2)}`);
-        }
+        const invertState = smartAutoInvert.enabled ? (smartAutoInvert.invertActive ? 'INVERTED' : 'NORMAL') : 'OFF';
+        log(`WIN +$${profit.toFixed(2)} | AUTO-INV: ${invertState}`);
         
         // Reset martingale/smart martingale on win
         if (smartMartingale.enabled) {
@@ -1708,11 +1708,6 @@
         moneyManagement.accountBalance -= tradeAmount;
         moneyManagement.sessionTrades++;
         
-        // Toggle inversion on loss
-        manualInvertActive = !manualInvertActive;
-        invertEnabled = manualInvertActive;
-        GM_setValue('invertEnabled', invertEnabled);
-        
         // Detect current payout for next trade calculation
         detectCurrentPayout();
         
@@ -1736,10 +1731,11 @@
                 moneyManagement.currentTradeAmount = nextAmount;
                 smartMartingale.sequence.push(nextAmount);
                 
-                log(`❌ LOSS -$${tradeAmount.toFixed(2)} | INVERTED: ${manualInvertActive ? 'ON' : 'OFF'}`);
-                log(`📈 Martingale Step ${smartMartingale.step}: $${nextAmount.toFixed(2)} to recover $${smartMartingale.totalLoss.toFixed(2)}`);
+                const invertState = smartAutoInvert.enabled ? (smartAutoInvert.invertActive ? 'INVERTED' : 'NORMAL') : 'OFF';
+                log(`LOSS -$${tradeAmount.toFixed(2)} | AUTO-INV: ${invertState}`);
+                log(`Martingale Step ${smartMartingale.step}: $${nextAmount.toFixed(2)} to recover $${smartMartingale.totalLoss.toFixed(2)}`);
             } else {
-                log(`🛑 MAX MARTINGALE STEPS (${smartMartingale.maxSteps}) - Total loss: $${smartMartingale.totalLoss.toFixed(2)}`);
+                log(`MAX MARTINGALE STEPS (${smartMartingale.maxSteps}) - Total loss: $${smartMartingale.totalLoss.toFixed(2)}`);
                 playStopSound();
                 resetSmartMartingale();
                 nextAmount = moneyManagement.baseTradeAmount;
@@ -1751,13 +1747,15 @@
                 nextAmount = martingaleBaseAmount * Math.pow(martingaleMultiplier, martingaleStep);
                 currentTradeAmount = nextAmount;
                 
-                log(`❌ LOSS -$${tradeAmount.toFixed(2)} | INVERTED: ${manualInvertActive ? 'ON' : 'OFF'} | Martingale Step ${martingaleStep}: $${nextAmount.toFixed(2)}`);
+                const invertState = smartAutoInvert.enabled ? (smartAutoInvert.invertActive ? 'INVERTED' : 'NORMAL') : 'OFF';
+                log(`LOSS -$${tradeAmount.toFixed(2)} | AUTO-INV: ${invertState} | Martingale Step ${martingaleStep}: $${nextAmount.toFixed(2)}`);
             } else {
-                log(`🛑 MAX MARTINGALE REACHED! Step ${martingaleStep}`);
+                log(`MAX MARTINGALE REACHED! Step ${martingaleStep}`);
                 playStopSound();
             }
         } else {
-            log(`❌ LOSS -$${tradeAmount.toFixed(2)} | INVERTED: ${manualInvertActive ? 'ON' : 'OFF'}`);
+            const invertState = smartAutoInvert.enabled ? (smartAutoInvert.invertActive ? 'INVERTED' : 'NORMAL') : 'OFF';
+            log(`LOSS -$${tradeAmount.toFixed(2)} | AUTO-INV: ${invertState}`);
         }
         
         // Update trade amount on Pocket Option UI
@@ -1781,7 +1779,7 @@
         // Record premium result for backend learning
         recordPremiumResult(false);
         
-        // Update smart auto-invert system
+        // Update auto-invert (LOSS = toggle state)
         updateSmartAutoInvertOnResult(false);
     }
     
@@ -1795,12 +1793,13 @@
     function resetMartingale() {
         martingaleStep = 0;
         currentTradeAmount = martingaleBaseAmount;
-        manualInvertActive = false;
+        smartAutoInvert.invertActive = false;
         invertEnabled = false;
         GM_setValue('invertEnabled', false);
+        GM_setValue('smartAutoInvertActive', false);
         updateInvertButton();
         updateMartingaleDisplay();
-        log(`🔄 Martingale reset to $${martingaleBaseAmount}`);
+        log(`Martingale reset to $${martingaleBaseAmount}`);
     }
     
     // Update martingale display
@@ -1857,8 +1856,12 @@
         // Update invert indicator
         const invertIndicator = document.getElementById('gpt-invert-status');
         if (invertIndicator) {
-            invertIndicator.textContent = manualInvertActive ? '🔄 INVERTED' : '';
-            invertIndicator.style.color = '#f59e0b';
+            if (smartAutoInvert.enabled) {
+                invertIndicator.textContent = smartAutoInvert.invertActive ? 'AI: INVERTED' : 'AI: NORMAL';
+                invertIndicator.style.color = smartAutoInvert.invertActive ? '#f59e0b' : '#22c55e';
+            } else {
+                invertIndicator.textContent = '';
+            }
         }
     }
     
@@ -1878,7 +1881,7 @@
                 consecutive_losses: winLossStats.consecutiveLosses,
                 session_profit: winLossStats.sessionProfit,
                 last_result: winLossStats.lastTradeResult,
-                manual_invert_active: manualInvertActive,
+                manual_invert_active: smartAutoInvert.invertActive,
                 martingale_step: martingaleStep,
                 current_trade_amount: currentTradeAmount
             }),
@@ -2026,119 +2029,218 @@
     }
 
     // ===========================================
-    // SMART AUTO-INVERT LOGIC - v8.0
-    // Direction-aware loss tracking per asset
+    // AUTO-INVERT v8.2 - Simple toggle-on-loss
+    // WIN = keep state, LOSS = flip state
     // ===========================================
     function processSmartAutoInvert(signal) {
-        if (!smartAutoInvert.enabled) return signal;
-        
-        const symbol = (signal.symbol || '').toUpperCase();
-        if (!symbol) return signal;
-        
-        // Get or create asset tracking entry
-        if (!smartAutoInvert.assetDirectionHistory[symbol]) {
-            smartAutoInvert.assetDirectionHistory[symbol] = {
-                lastDirection: null,
-                consecutiveLosses: 0,
-                inverted: false,
-                invertedWins: 0,
-                invertedTrades: 0,
-                cooldownUntil: 0
-            };
-        }
-        
-        const assetState = smartAutoInvert.assetDirectionHistory[symbol];
-        const now = Date.now();
-        
-        // Check cooldown
-        if (now < assetState.cooldownUntil) {
-            return signal;
-        }
-        
-        // Check backend invert suggestion from premium_filters
-        if (signal.premium_filters && signal.premium_filters.invert_suggestion) {
-            if (!assetState.inverted) {
-                assetState.inverted = true;
-                assetState.invertedTrades = 0;
-                assetState.invertedWins = 0;
-                assetState.cooldownUntil = now + smartAutoInvert.cooldownMs;
-                log(`SMART INVERT: Backend suggests inversion for ${symbol} (loss streak in ${signal.direction})`);
-            }
-        }
-        
-        // If locally inverted, flip the signal direction
-        if (assetState.inverted) {
+        // If auto-invert is enabled AND currently inverted, flip direction
+        if (smartAutoInvert.enabled && smartAutoInvert.invertActive) {
             const original = signal.direction;
             signal.direction = (signal.direction === 'CALL') ? 'PUT' : 'CALL';
             signal._smartInverted = true;
             signal._originalDirection = original;
-            log(`SMART INVERT: ${symbol} ${original} -> ${signal.direction} (inverted)`);
+            log(`AUTO-INVERT: ${original} -> ${signal.direction} (inverted)`);
         }
-        
         return signal;
     }
     
     function updateSmartAutoInvertOnResult(isWin) {
-        const symbol = (lastTradeInfo.symbol || '').toUpperCase();
-        if (!symbol || !smartAutoInvert.enabled) return;
-        
-        const assetState = smartAutoInvert.assetDirectionHistory[symbol];
-        if (!assetState) return;
-        
-        const direction = lastTradeInfo.direction;
+        if (!smartAutoInvert.enabled) return;
         
         if (isWin) {
-            assetState.consecutiveLosses = 0;
-            
-            if (assetState.inverted) {
-                assetState.invertedWins++;
-                assetState.invertedTrades++;
-                
-                // If we got N consecutive wins while inverted, revert (trend confirmed)
-                if (assetState.invertedWins >= smartAutoInvert.winsToConfirmRevert) {
-                    assetState.inverted = false;
-                    assetState.invertedWins = 0;
-                    assetState.invertedTrades = 0;
-                    assetState.cooldownUntil = Date.now() + smartAutoInvert.cooldownMs;
-                    log(`SMART INVERT: ${symbol} reverted after ${smartAutoInvert.winsToConfirmRevert} wins (trend confirmed)`);
-                }
-            }
+            // WIN: Stay in current state - no change
+            log(`AUTO-INVERT: WIN - staying ${smartAutoInvert.invertActive ? 'INVERTED' : 'NORMAL'}`);
         } else {
-            // Loss
-            if (assetState.lastDirection === direction) {
-                assetState.consecutiveLosses++;
+            // LOSS: Toggle to opposite state
+            smartAutoInvert.invertActive = !smartAutoInvert.invertActive;
+            // Sync invertEnabled so executeScanTrade/executeAppTrade use it
+            invertEnabled = smartAutoInvert.invertActive;
+            GM_setValue('invertEnabled', invertEnabled);
+            GM_setValue('smartAutoInvertActive', smartAutoInvert.invertActive);
+            log(`AUTO-INVERT: LOSS - switched to ${smartAutoInvert.invertActive ? 'INVERTED' : 'NORMAL'}`);
+        }
+        updateInvertDisplay();
+    }
+    
+    function updateInvertDisplay() {
+        const invertIndicator = document.getElementById('gpt-invert-indicator');
+        if (invertIndicator) {
+            if (smartAutoInvert.enabled) {
+                invertIndicator.textContent = smartAutoInvert.invertActive ? 'AI: INVERTED' : 'AI: NORMAL';
+                invertIndicator.style.color = smartAutoInvert.invertActive ? '#f59e0b' : '#22c55e';
             } else {
-                assetState.consecutiveLosses = 1;
-            }
-            
-            if (assetState.inverted) {
-                assetState.invertedWins = 0; // Reset win counter on loss
-                assetState.invertedTrades++;
-                
-                // If still losing after max inverted trades, revert the inversion
-                if (assetState.invertedTrades >= smartAutoInvert.maxInvertedTrades) {
-                    assetState.inverted = false;
-                    assetState.invertedTrades = 0;
-                    assetState.invertedWins = 0;
-                    assetState.cooldownUntil = Date.now() + smartAutoInvert.cooldownMs;
-                    log(`SMART INVERT: ${symbol} reverted after ${smartAutoInvert.maxInvertedTrades} inverted trades (still losing)`);
-                }
-            } else {
-                // Not inverted - check if we should start inverting
-                if (assetState.consecutiveLosses >= smartAutoInvert.consecutiveLossThreshold) {
-                    assetState.inverted = true;
-                    assetState.invertedTrades = 0;
-                    assetState.invertedWins = 0;
-                    assetState.cooldownUntil = Date.now() + smartAutoInvert.cooldownMs;
-                    log(`SMART INVERT: ${symbol} activated after ${assetState.consecutiveLosses} consecutive ${direction} losses`);
-                }
+                invertIndicator.textContent = invertEnabled ? 'MANUAL INVERT' : '';
             }
         }
+    }
+
+    // ===========================================
+    // AUDIO DETECTION SYSTEM - v8.2
+    // Hooks into Pocket Option's win/loss sounds
+    // to auto-detect trade outcomes
+    // ===========================================
+    function setupAudioDetection() {
+        log('AUDIO: Setting up trade outcome detection...');
         
-        assetState.lastDirection = direction;
+        // Method 1: Intercept HTMLAudioElement.prototype.play
+        const origAudioPlay = HTMLAudioElement.prototype.play;
+        HTMLAudioElement.prototype.play = function() {
+            const src = (this.src || '').toLowerCase();
+            detectOutcomeFromAudio(src, this);
+            return origAudioPlay.apply(this, arguments);
+        };
         
-        // Save state
-        GM_setValue('smartAutoInvertState', JSON.stringify(smartAutoInvert.assetDirectionHistory));
+        // Method 2: Intercept new Audio() constructor plays
+        const origAudioConstructor = window.Audio;
+        window.Audio = function(src) {
+            const audio = new origAudioConstructor(src);
+            const origPlay = audio.play.bind(audio);
+            audio.play = function() {
+                const audioSrc = (audio.src || src || '').toLowerCase();
+                detectOutcomeFromAudio(audioSrc, audio);
+                return origPlay.apply(this, arguments);
+            };
+            return audio;
+        };
+        window.Audio.prototype = origAudioConstructor.prototype;
+        
+        // Method 3: Monitor DOM for trade result elements (fallback)
+        setupDOMResultObserver();
+        
+        log('AUDIO: Detection active (audio intercept + DOM observer)');
+    }
+    
+    function detectOutcomeFromAudio(src, audioEl) {
+        if (!audioDetection.enabled) return;
+        if (!audioDetection.pendingTrade) return;
+        
+        const now = Date.now();
+        if (now - audioDetection.lastDetectionTime < audioDetection.cooldownMs) return;
+        
+        // Pocket Option audio patterns:
+        // Win sounds typically contain: "win", "success", "profit", "up"
+        // Loss sounds typically contain: "lose", "loss", "fail", "down"
+        let outcome = null;
+        
+        if (src.includes('win') || src.includes('success') || src.includes('profit') || src.includes('call_win') || src.includes('up_')) {
+            outcome = 'win';
+        } else if (src.includes('lose') || src.includes('loss') || src.includes('fail') || src.includes('call_lose') || src.includes('down_')) {
+            outcome = 'loss';
+        }
+        
+        // Also check by audio duration/frequency patterns if src doesn't help
+        // PO often uses short beep for loss and longer melody for win
+        if (!outcome && audioEl) {
+            // We'll rely on DOM observer as fallback
+            return;
+        }
+        
+        if (outcome) {
+            audioDetection.lastDetectedOutcome = outcome;
+            audioDetection.lastDetectionTime = now;
+            audioDetection.pendingTrade = false;
+            
+            log(`AUDIO DETECTED: ${outcome.toUpperCase()}`);
+            handleAutoDetectedResult(outcome === 'win');
+        }
+    }
+    
+    function setupDOMResultObserver() {
+        // Watch for Pocket Option trade result popups
+        // PO shows results as popup elements with profit/loss amounts
+        const observer = new MutationObserver((mutations) => {
+            if (!audioDetection.enabled || !audioDetection.pendingTrade) return;
+            
+            const now = Date.now();
+            if (now - audioDetection.lastDetectionTime < audioDetection.cooldownMs) return;
+            
+            for (const mutation of mutations) {
+                for (const node of mutation.addedNodes) {
+                    if (node.nodeType !== 1) continue;
+                    
+                    const text = (node.textContent || '').trim();
+                    const className = (node.className || '').toLowerCase();
+                    const html = (node.innerHTML || '').toLowerCase();
+                    
+                    // Check for PO result indicators
+                    // Green "+$X.XX" = win, Red "-$X.XX" = loss
+                    // PO uses classes like "deals-success", "deals-fail", "profit", "loss"
+                    let outcome = null;
+                    
+                    // Check class names
+                    if (className.includes('success') || className.includes('profit') || className.includes('win')) {
+                        outcome = 'win';
+                    } else if (className.includes('fail') || className.includes('loss') || className.includes('lose')) {
+                        outcome = 'loss';
+                    }
+                    
+                    // Check text content for +/- amounts
+                    if (!outcome) {
+                        const amountMatch = text.match(/^[+\-]?\s*\$?\s*[\d,.]+$/);
+                        if (amountMatch) {
+                            if (text.includes('+')) outcome = 'win';
+                            else if (text.includes('-')) outcome = 'loss';
+                        }
+                    }
+                    
+                    // Check for green/red colors in inline styles
+                    if (!outcome) {
+                        const style = node.getAttribute('style') || '';
+                        if ((style.includes('green') || style.includes('#22c55e') || style.includes('#4caf50') || style.includes('rgb(76, 175, 80)')) && text.match(/[\d,.]+/)) {
+                            outcome = 'win';
+                        } else if ((style.includes('red') || style.includes('#ef4444') || style.includes('#f44336') || style.includes('rgb(244, 67, 54)')) && text.match(/[\d,.]+/)) {
+                            outcome = 'loss';
+                        }
+                    }
+                    
+                    // Check nested elements
+                    if (!outcome && node.querySelector) {
+                        const successEl = node.querySelector('[class*="success"], [class*="profit"], [class*="win"]');
+                        const failEl = node.querySelector('[class*="fail"], [class*="loss"], [class*="lose"]');
+                        if (successEl) outcome = 'win';
+                        else if (failEl) outcome = 'loss';
+                    }
+                    
+                    if (outcome) {
+                        audioDetection.lastDetectedOutcome = outcome;
+                        audioDetection.lastDetectionTime = now;
+                        audioDetection.pendingTrade = false;
+                        
+                        log(`DOM DETECTED: ${outcome.toUpperCase()} (${text.substring(0, 30)})`);
+                        handleAutoDetectedResult(outcome === 'win');
+                        return;
+                    }
+                }
+            }
+        });
+        
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true,
+        });
+    }
+    
+    function handleAutoDetectedResult(isWin) {
+        // Trigger the same flow as manual +W/-L buttons
+        if (isWin) {
+            handleManualWin();
+        } else {
+            handleManualLoss();
+        }
+    }
+    
+    // Mark that we have a pending trade (called when trade is placed)
+    function markTradePending() {
+        audioDetection.pendingTrade = true;
+        audioDetection.tradeOpenedAt = Date.now();
+        
+        // Auto-timeout: if no result detected within 60s, clear pending
+        setTimeout(() => {
+            if (audioDetection.pendingTrade && Date.now() - audioDetection.tradeOpenedAt >= 55000) {
+                audioDetection.pendingTrade = false;
+                log('AUDIO: Trade result timeout (60s) - use manual +W/-L');
+            }
+        }, 60000);
     }
 
     // Reset all stats
@@ -3296,7 +3398,7 @@
                     </button>
                     <button class="gpt-btn gpt-btn-inv" id="gpt-invert">
                         <span class="gpt-btn-icon">🔄</span>
-                        <span>INVERT</span>
+                        <span>AUTO-INV</span>
                     </button>
                     <button class="gpt-btn gpt-btn-log" id="gpt-console-toggle">
                         <span class="gpt-btn-icon">📋</span>
@@ -3684,10 +3786,25 @@
     }
 
     function toggleInvert() {
-        invertEnabled = !invertEnabled;
-        GM_setValue('invertEnabled', invertEnabled);
+        smartAutoInvert.enabled = !smartAutoInvert.enabled;
+        GM_setValue('smartAutoInvertEnabled', smartAutoInvert.enabled);
+        
+        if (smartAutoInvert.enabled) {
+            // When enabling auto-invert, sync invertEnabled to current invertActive state
+            invertEnabled = smartAutoInvert.invertActive;
+            GM_setValue('invertEnabled', invertEnabled);
+            log(`AUTO-INVERT: ON (currently ${smartAutoInvert.invertActive ? 'INVERTED' : 'NORMAL'}) - will toggle on losses`);
+        } else {
+            // When disabling, turn off inversion
+            smartAutoInvert.invertActive = false;
+            invertEnabled = false;
+            GM_setValue('invertEnabled', false);
+            GM_setValue('smartAutoInvertActive', false);
+            log(`AUTO-INVERT: OFF (signals normal)`);
+        }
+        
         updateAllUI();
-        log(`INVERT: ${invertEnabled ? 'ON' : 'OFF'}`);
+        updateInvertDisplay();
     }
 
     function handleFetch() {
@@ -4086,15 +4203,18 @@
         invertEnabled = false;
         cycleEnabled = false;
         cycleAbort = true;
+        smartAutoInvert.enabled = false;
+        smartAutoInvert.invertActive = false;
         lastAppSignalId = '';
         lastAppTradeTime = 0;
         lastScanTradeTime = 0;
-        manualInvertActive = false;
         
         GM_setValue('autoEnabled', false);
         GM_setValue('scanEnabled', false);
         GM_setValue('invertEnabled', false);
         GM_setValue('cycleEnabled', false);
+        GM_setValue('smartAutoInvertEnabled', false);
+        GM_setValue('smartAutoInvertActive', false);
         
         updateAllUI();
         manageIntervals();
@@ -4169,13 +4289,7 @@
     function updateInvertButton() {
         const btn = document.getElementById('gpt-invert');
         if (btn) {
-            if (manualInvertActive) {
-                btn.textContent = 'INVERT ON (LOSS)';
-                btn.classList.add('on');
-            } else {
-                btn.textContent = invertEnabled ? 'INVERT ON' : 'INVERT OFF';
-                btn.classList.toggle('on', invertEnabled);
-            }
+            // Do not override button text - it's set by createPanel HTML
         }
     }
 
@@ -4201,7 +4315,7 @@
             scanBtn.className = 'gpt-btn gpt-btn-scan' + (scanEnabled ? ' active' : '');
         }
         if (invertBtn) {
-            invertBtn.className = 'gpt-btn gpt-btn-inv' + (invertEnabled ? ' active' : '');
+            invertBtn.className = 'gpt-btn gpt-btn-inv' + (smartAutoInvert.enabled ? ' active' : '');
         }
         if (cycleBtn) {
             cycleBtn.className = 'gpt-btn gpt-btn-cycle' + (cycleEnabled ? ' active' : '');
@@ -4951,6 +5065,9 @@
             // SINGLE CLICK ONLY
             btn.click();
             
+            // Mark trade as pending for audio detection
+            markTradePending();
+            
             // Release global lock after delay
             setTimeout(() => {
                 globalTradeLock = false;
@@ -5244,12 +5361,11 @@
             // Load cycle mode state (default off - user must manually enable)
             cycleEnabled = GM_getValue('cycleEnabled', false);
             
-            // Load smart auto-invert state
-            const savedInvertState = GM_getValue('smartAutoInvertState', null);
-            if (savedInvertState) {
-                try {
-                    smartAutoInvert.assetDirectionHistory = JSON.parse(savedInvertState);
-                } catch(e) {}
+            // Load auto-invert state
+            smartAutoInvert.enabled = GM_getValue('smartAutoInvertEnabled', false);
+            smartAutoInvert.invertActive = GM_getValue('smartAutoInvertActive', false);
+            if (smartAutoInvert.enabled) {
+                invertEnabled = smartAutoInvert.invertActive;
             }
             
             // Load stats if any
@@ -5279,6 +5395,9 @@
             updateAllUI();
             
             manageIntervals();
+            
+            // Setup audio detection for auto win/loss tracking
+            setupAudioDetection();
             
             // Resume CYCLE mode if it was saved as enabled
             if (cycleEnabled) {
