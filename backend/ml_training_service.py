@@ -281,7 +281,8 @@ class RandomForestModel:
     def load(self, path: str):
         """Load model from file"""
         with open(path, 'rb') as f:
-            data = pickle.load(f)
+            from safe_model_loader import RestrictedUnpickler
+            data = RestrictedUnpickler(f).load()
             self.model = data['model']
             self.scaler = data['scaler']
             self.feature_names = data['feature_names']

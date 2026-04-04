@@ -6,6 +6,7 @@ Provides user registration, login, and role-based access control
 import os
 import logging
 import hashlib
+import hmac
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, List
@@ -19,6 +20,9 @@ logger = logging.getLogger(__name__)
 JWT_SECRET = os.environ.get('JWT_SECRET', secrets.token_hex(32))
 JWT_ALGORITHM = 'HS256'
 JWT_EXPIRATION_HOURS = 24
+
+# Default admin credentials from env
+DEFAULT_ADMIN_PASSWORD = os.environ.get('DEFAULT_ADMIN_PASSWORD', 'admin123')
 
 
 class UserRole(str, Enum):
@@ -54,17 +58,24 @@ class AuthService:
         self.token_expiration = JWT_EXPIRATION_HOURS
     
     def _hash_password(self, password: str) -> str:
-        """Hash password using SHA-256 with salt"""
+        """Hash password using HMAC-SHA256 with salt"""
         salt = secrets.token_hex(16)
-        password_hash = hashlib.sha256(f"{salt}{password}".encode()).hexdigest()
-        return f"{salt}:{password_hash}"
+        password_hash = hmac.new(salt.encode(), password.encode(), hashlib.sha256).hexdigest()
+        return f"hmac:{salt}:{password_hash}"
     
     def _verify_password(self, password: str, stored_hash: str) -> bool:
-        """Verify password against stored hash"""
+        """Verify password against stored hash (supports both old SHA256 and new HMAC-SHA256)"""
         try:
-            salt, hash_value = stored_hash.split(':')
-            password_hash = hashlib.sha256(f"{salt}{password}".encode()).hexdigest()
-            return password_hash == hash_value
+            if stored_hash.startswith('hmac:'):
+                # New format: hmac:salt:hash
+                _, salt, hash_value = stored_hash.split(':')
+                password_hash = hmac.new(salt.encode(), password.encode(), hashlib.sha256).hexdigest()
+                return hmac.compare_digest(password_hash, hash_value)
+            else:
+                # Legacy format: salt:hash (plain SHA-256)
+                salt, hash_value = stored_hash.split(':')
+                password_hash = hashlib.sha256(f"{salt}{password}".encode()).hexdigest()
+                return hmac.compare_digest(password_hash, hash_value)
         except Exception:
             return False
     
@@ -322,11 +333,11 @@ class AuthService:
                 result = await self.register(
                     username='admin',
                     email='admin@elitepocket.com',
-                    password='admin123',
+                    password=DEFAULT_ADMIN_PASSWORD,
                     role=UserRole.ADMIN
                 )
                 if result['success']:
-                    logger.info("Default admin created: admin / admin123")
+                    logger.info("Default admin created")
                     
         except Exception as e:
             logger.error(f"Create default admin error: {e}")

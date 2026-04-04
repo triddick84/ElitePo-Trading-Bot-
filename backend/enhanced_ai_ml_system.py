@@ -465,7 +465,8 @@ class EnhancedAIMLSystem:
         try:
             if os.path.exists(self.model_path):
                 with open(self.model_path, 'rb') as f:
-                    data = pickle.load(f)
+                    from safe_model_loader import RestrictedUnpickler
+                    data = RestrictedUnpickler(f).load()
                 
                 self.model = data['model']
                 self.scaler = data['scaler']

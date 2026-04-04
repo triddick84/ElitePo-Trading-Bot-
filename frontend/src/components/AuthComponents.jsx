@@ -23,7 +23,7 @@ export const useAuth = () => {
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem('token'));
+  const [token, setToken] = useState(sessionStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -65,7 +65,7 @@ export const AuthProvider = ({ children }) => {
       const data = await response.json();
       
       if (data.success) {
-        localStorage.setItem('token', data.token);
+        sessionStorage.setItem('token', data.token);
         setToken(data.token);
         setUser(data.user);
         toast.success(`Welcome back, ${data.user.username}!`);
@@ -90,7 +90,7 @@ export const AuthProvider = ({ children }) => {
       const data = await response.json();
       
       if (data.success) {
-        localStorage.setItem('token', data.token);
+        sessionStorage.setItem('token', data.token);
         setToken(data.token);
         setUser(data.user);
         toast.success('Account created successfully!');
@@ -106,7 +106,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
-    localStorage.removeItem('token');
+    sessionStorage.removeItem('token');
     setToken(null);
     setUser(null);
     toast.info('Logged out');

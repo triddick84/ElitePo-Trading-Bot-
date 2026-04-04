@@ -476,7 +476,8 @@ class HighAccuracyEnsemble:
         
         try:
             with open(model_file, 'rb') as f:
-                data = pickle.load(f)
+                from safe_model_loader import RestrictedUnpickler
+                data = RestrictedUnpickler(f).load()
             
             self.rf_model = data['rf_model']
             self.gb_model = data['gb_model']

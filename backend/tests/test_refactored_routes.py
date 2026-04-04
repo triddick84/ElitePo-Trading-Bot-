@@ -8,9 +8,9 @@ import os
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
-# Test credentials
-TEST_USERNAME = "testuser"
-TEST_PASSWORD = "test123"
+# Test credentials from environment
+TEST_USERNAME = os.environ.get('TEST_USERNAME', 'testuser')
+TEST_PASSWORD = os.environ.get('TEST_PASSWORD', 'test123')
 
 
 class TestAuthRoutes:

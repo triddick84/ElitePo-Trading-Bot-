@@ -3372,7 +3372,7 @@ async def tampermonkey_force_generate(
         
         # Generate simple signal (random direction based on time)
         import hashlib
-        time_hash = hashlib.md5(f"{datetime.now(timezone.utc).isoformat()}{target_asset}".encode()).hexdigest()
+        time_hash = hashlib.sha256(f"{datetime.now(timezone.utc).isoformat()}{target_asset}".encode()).hexdigest()
         raw_direction = "CALL" if int(time_hash[0], 16) > 7 else "PUT"
         
         # Create signal

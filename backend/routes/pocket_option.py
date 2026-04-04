@@ -1841,9 +1841,9 @@ async def start_selenium_bot(
         
         # Use defaults if not provided
         if not email:
-            email = "thomas.riddick84@gmail.com"
+            email = os.environ.get('POCKET_OPTION_EMAIL', '')
         if not password:
-            password = "Tonyistheman#1"
+            password = os.environ.get('POCKET_OPTION_PASSWORD', '')
         
         bot = get_selenium_bot(
             email=email,

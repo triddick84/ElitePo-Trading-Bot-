@@ -589,7 +589,8 @@ class RandomForestPredictor:
         if os.path.exists(self.model_path):
             try:
                 with open(self.model_path, 'rb') as f:
-                    saved = pickle.load(f)
+                    from safe_model_loader import RestrictedUnpickler
+                    saved = RestrictedUnpickler(f).load()
                     self.model = saved['model']
                     self.scaler = saved['scaler']
                     self.is_trained = True

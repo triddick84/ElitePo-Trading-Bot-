@@ -308,7 +308,8 @@ class Supertrend5sAITrainer:
     def load_model(self, filepath: str):
         """Load trained model from disk"""
         with open(filepath, 'rb') as f:
-            model_data = pickle.load(f)
+            from safe_model_loader import RestrictedUnpickler
+            model_data = RestrictedUnpickler(f).load()
         
         self.model = model_data['model']
         self.scaler = model_data['scaler']

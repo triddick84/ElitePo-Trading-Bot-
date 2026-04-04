@@ -13,7 +13,7 @@ import asyncio
 import threading
 import logging
 from datetime import datetime
-from tkinter import *
+import tkinter as tk
 from tkinter import ttk, messagebox
 
 # Add parent directory to path
@@ -45,7 +45,7 @@ class TradingBotGUI:
     
     def _init_window(self):
         """Initialize the main window"""
-        self.window = Tk()
+        self.window = tk.Tk()
         self.window.title('GPT Signal Bot - Desktop Client v2.0')
         self.window.geometry('700x550')
         self.window.resizable(True, True)
@@ -65,121 +65,121 @@ class TradingBotGUI:
     def _create_ui(self):
         """Create the user interface"""
         # Main frame
-        main_frame = Frame(self.window, padx=10, pady=10)
-        main_frame.pack(fill=BOTH, expand=True)
+        main_frame = tk.Frame(self.window, padx=10, pady=10)
+        main_frame.pack(fill=tk.BOTH, expand=True)
         
         # === TOP SECTION: Account Settings ===
-        account_frame = LabelFrame(main_frame, text="Account Settings", padx=10, pady=5)
-        account_frame.pack(fill=X, pady=5)
+        account_frame = tk.LabelFrame(main_frame, text="Account Settings", padx=10, pady=5)
+        account_frame.pack(fill=tk.X, pady=5)
         
         # Account type
-        Label(account_frame, text="Account Type:").grid(row=0, column=0, sticky=W)
-        self.account_type = StringVar(value=self.settings.get('account_type', 'demo'))
+        tk.Label(account_frame, text="Account Type:").grid(row=0, column=0, sticky=tk.W)
+        self.account_type = tk.StringVar(value=self.settings.get('account_type', 'demo'))
         ttk.Radiobutton(account_frame, text="Demo", variable=self.account_type, value='demo').grid(row=0, column=1)
         ttk.Radiobutton(account_frame, text="Live", variable=self.account_type, value='live').grid(row=0, column=2)
         
         # Trade amount
-        Label(account_frame, text="Trade Amount ($):").grid(row=1, column=0, sticky=W)
-        self.trade_amount = IntVar(value=self.settings.get('trade_amount', 1))
-        Entry(account_frame, textvariable=self.trade_amount, width=10).grid(row=1, column=1)
+        tk.Label(account_frame, text="Trade Amount ($):").grid(row=1, column=0, sticky=tk.W)
+        self.trade_amount = tk.IntVar(value=self.settings.get('trade_amount', 1))
+        tk.Entry(account_frame, textvariable=self.trade_amount, width=10).grid(row=1, column=1)
         
         # Min payout
-        Label(account_frame, text="Min Payout (%):").grid(row=1, column=2, sticky=W, padx=(20,0))
-        self.min_payout = IntVar(value=self.settings.get('min_payout', 80))
-        Entry(account_frame, textvariable=self.min_payout, width=10).grid(row=1, column=3)
+        tk.Label(account_frame, text="Min Payout (%):").grid(row=1, column=2, sticky=tk.W, padx=(20,0))
+        self.min_payout = tk.IntVar(value=self.settings.get('min_payout', 80))
+        tk.Entry(account_frame, textvariable=self.min_payout, width=10).grid(row=1, column=3)
         
         # === STRATEGY SECTION ===
-        strategy_frame = LabelFrame(main_frame, text="Strategies", padx=10, pady=5)
-        strategy_frame.pack(fill=X, pady=5)
+        strategy_frame = tk.LabelFrame(main_frame, text="Strategies", padx=10, pady=5)
+        strategy_frame.pack(fill=tk.X, pady=5)
         
         # Moving Averages
-        self.use_ma = IntVar(value=self.settings.get('use_ma_crossover', 1))
-        Checkbutton(strategy_frame, text="MA Crossover", variable=self.use_ma).grid(row=0, column=0, sticky=W)
+        self.use_ma = tk.IntVar(value=self.settings.get('use_ma_crossover', 1))
+        tk.Checkbutton(strategy_frame, text="MA Crossover", variable=self.use_ma).grid(row=0, column=0, sticky=tk.W)
         
-        Label(strategy_frame, text="Fast MA:").grid(row=0, column=1)
-        self.fast_ma = IntVar(value=self.settings.get('fast_ma', 3))
-        Entry(strategy_frame, textvariable=self.fast_ma, width=5).grid(row=0, column=2)
+        tk.Label(strategy_frame, text="Fast MA:").grid(row=0, column=1)
+        self.fast_ma = tk.IntVar(value=self.settings.get('fast_ma', 3))
+        tk.Entry(strategy_frame, textvariable=self.fast_ma, width=5).grid(row=0, column=2)
         
-        Label(strategy_frame, text="Slow MA:").grid(row=0, column=3)
-        self.slow_ma = IntVar(value=self.settings.get('slow_ma', 8))
-        Entry(strategy_frame, textvariable=self.slow_ma, width=5).grid(row=0, column=4)
+        tk.Label(strategy_frame, text="Slow MA:").grid(row=0, column=3)
+        self.slow_ma = tk.IntVar(value=self.settings.get('slow_ma', 8))
+        tk.Entry(strategy_frame, textvariable=self.slow_ma, width=5).grid(row=0, column=4)
         
         # RSI
-        self.use_rsi = IntVar(value=self.settings.get('use_rsi', 1))
-        Checkbutton(strategy_frame, text="RSI Strategy", variable=self.use_rsi).grid(row=1, column=0, sticky=W)
+        self.use_rsi = tk.IntVar(value=self.settings.get('use_rsi', 1))
+        tk.Checkbutton(strategy_frame, text="RSI Strategy", variable=self.use_rsi).grid(row=1, column=0, sticky=tk.W)
         
-        Label(strategy_frame, text="RSI Period:").grid(row=1, column=1)
-        self.rsi_period = IntVar(value=self.settings.get('rsi_period', 14))
-        Entry(strategy_frame, textvariable=self.rsi_period, width=5).grid(row=1, column=2)
+        tk.Label(strategy_frame, text="RSI Period:").grid(row=1, column=1)
+        self.rsi_period = tk.IntVar(value=self.settings.get('rsi_period', 14))
+        tk.Entry(strategy_frame, textvariable=self.rsi_period, width=5).grid(row=1, column=2)
         
         # Enhanced Divergence
-        self.use_enhanced = IntVar(value=self.settings.get('use_enhanced_divergence', 1))
-        Checkbutton(strategy_frame, text="Enhanced Divergence (Advanced)", variable=self.use_enhanced).grid(row=2, column=0, columnspan=2, sticky=W)
+        self.use_enhanced = tk.IntVar(value=self.settings.get('use_enhanced_divergence', 1))
+        tk.Checkbutton(strategy_frame, text="Enhanced Divergence (Advanced)", variable=self.use_enhanced).grid(row=2, column=0, columnspan=2, sticky=tk.W)
         
         # Professional Scalping
-        self.use_scalping = IntVar(value=self.settings.get('use_professional_scalping', 0))
-        Checkbutton(strategy_frame, text="Professional Scalping (Advanced)", variable=self.use_scalping).grid(row=2, column=2, columnspan=2, sticky=W)
+        self.use_scalping = tk.IntVar(value=self.settings.get('use_professional_scalping', 0))
+        tk.Checkbutton(strategy_frame, text="Professional Scalping (Advanced)", variable=self.use_scalping).grid(row=2, column=2, columnspan=2, sticky=tk.W)
         
         # Min confidence
-        Label(strategy_frame, text="Min Confidence (%):").grid(row=3, column=0, sticky=W)
-        self.min_confidence = IntVar(value=self.settings.get('min_confidence', 65))
-        Entry(strategy_frame, textvariable=self.min_confidence, width=5).grid(row=3, column=1)
+        tk.Label(strategy_frame, text="Min Confidence (%):").grid(row=3, column=0, sticky=tk.W)
+        self.min_confidence = tk.IntVar(value=self.settings.get('min_confidence', 65))
+        tk.Entry(strategy_frame, textvariable=self.min_confidence, width=5).grid(row=3, column=1)
         
         # Min strategy votes
-        Label(strategy_frame, text="Min Strategy Votes:").grid(row=3, column=2, sticky=W)
-        self.min_votes = IntVar(value=self.settings.get('min_strategy_votes', 2))
-        Entry(strategy_frame, textvariable=self.min_votes, width=5).grid(row=3, column=3)
+        tk.Label(strategy_frame, text="Min Strategy Votes:").grid(row=3, column=2, sticky=tk.W)
+        self.min_votes = tk.IntVar(value=self.settings.get('min_strategy_votes', 2))
+        tk.Entry(strategy_frame, textvariable=self.min_votes, width=5).grid(row=3, column=3)
         
         # === RISK MANAGEMENT ===
-        risk_frame = LabelFrame(main_frame, text="Risk Management", padx=10, pady=5)
-        risk_frame.pack(fill=X, pady=5)
+        risk_frame = tk.LabelFrame(main_frame, text="Risk Management", padx=10, pady=5)
+        risk_frame.pack(fill=tk.X, pady=5)
         
         # Martingale
-        self.martingale_enabled = IntVar(value=self.settings.get('martingale_enabled', 0))
-        Checkbutton(risk_frame, text="Enable Martingale", variable=self.martingale_enabled).grid(row=0, column=0, sticky=W)
+        self.martingale_enabled = tk.IntVar(value=self.settings.get('martingale_enabled', 0))
+        tk.Checkbutton(risk_frame, text="Enable Martingale", variable=self.martingale_enabled).grid(row=0, column=0, sticky=tk.W)
         
-        Label(risk_frame, text="Martingale List:").grid(row=0, column=1)
-        self.martingale_list = StringVar(value=self.settings.get('martingale_list_str', '1, 3, 7, 15, 32, 67'))
-        Entry(risk_frame, textvariable=self.martingale_list, width=25).grid(row=0, column=2, columnspan=2)
+        tk.Label(risk_frame, text="Martingale List:").grid(row=0, column=1)
+        self.martingale_list = tk.StringVar(value=self.settings.get('martingale_list_str', '1, 3, 7, 15, 32, 67'))
+        tk.Entry(risk_frame, textvariable=self.martingale_list, width=25).grid(row=0, column=2, columnspan=2)
         
         # Take Profit
-        self.take_profit_enabled = IntVar(value=self.settings.get('take_profit_enabled', 0))
-        Checkbutton(risk_frame, text="Take Profit ($):", variable=self.take_profit_enabled).grid(row=1, column=0, sticky=W)
-        self.take_profit = IntVar(value=self.settings.get('take_profit', 100))
-        Entry(risk_frame, textvariable=self.take_profit, width=10).grid(row=1, column=1)
+        self.take_profit_enabled = tk.IntVar(value=self.settings.get('take_profit_enabled', 0))
+        tk.Checkbutton(risk_frame, text="Take Profit ($):", variable=self.take_profit_enabled).grid(row=1, column=0, sticky=tk.W)
+        self.take_profit = tk.IntVar(value=self.settings.get('take_profit', 100))
+        tk.Entry(risk_frame, textvariable=self.take_profit, width=10).grid(row=1, column=1)
         
         # Stop Loss
-        self.stop_loss_enabled = IntVar(value=self.settings.get('stop_loss_enabled', 0))
-        Checkbutton(risk_frame, text="Stop Loss ($):", variable=self.stop_loss_enabled).grid(row=1, column=2, sticky=W)
-        self.stop_loss = IntVar(value=self.settings.get('stop_loss', 50))
-        Entry(risk_frame, textvariable=self.stop_loss, width=10).grid(row=1, column=3)
+        self.stop_loss_enabled = tk.IntVar(value=self.settings.get('stop_loss_enabled', 0))
+        tk.Checkbutton(risk_frame, text="Stop Loss ($):", variable=self.stop_loss_enabled).grid(row=1, column=2, sticky=tk.W)
+        self.stop_loss = tk.IntVar(value=self.settings.get('stop_loss', 50))
+        tk.Entry(risk_frame, textvariable=self.stop_loss, width=10).grid(row=1, column=3)
         
         # Vice Versa
-        self.vice_versa = IntVar(value=self.settings.get('vice_versa', 0))
-        Checkbutton(risk_frame, text="Vice Versa (Invert Signals)", variable=self.vice_versa).grid(row=2, column=0, columnspan=2, sticky=W)
+        self.vice_versa = tk.IntVar(value=self.settings.get('vice_versa', 0))
+        tk.Checkbutton(risk_frame, text="Vice Versa (Invert Signals)", variable=self.vice_versa).grid(row=2, column=0, columnspan=2, sticky=tk.W)
         
         # Max trades per hour
-        Label(risk_frame, text="Max Trades/Hour:").grid(row=2, column=2, sticky=W)
-        self.max_trades = IntVar(value=self.settings.get('max_trades_per_hour', 30))
-        Entry(risk_frame, textvariable=self.max_trades, width=10).grid(row=2, column=3)
+        tk.Label(risk_frame, text="Max Trades/Hour:").grid(row=2, column=2, sticky=tk.W)
+        self.max_trades = tk.IntVar(value=self.settings.get('max_trades_per_hour', 30))
+        tk.Entry(risk_frame, textvariable=self.max_trades, width=10).grid(row=2, column=3)
         
         # === LOG SECTION ===
-        log_frame = LabelFrame(main_frame, text="Activity Log", padx=10, pady=5)
-        log_frame.pack(fill=BOTH, expand=True, pady=5)
+        log_frame = tk.LabelFrame(main_frame, text="Activity Log", padx=10, pady=5)
+        log_frame.pack(fill=tk.BOTH, expand=True, pady=5)
         
         # Log text with scrollbar
-        self.log_text = Text(log_frame, height=10, state=DISABLED, wrap=WORD)
-        scrollbar = Scrollbar(log_frame, command=self.log_text.yview)
+        self.log_text = tk.Text(log_frame, height=10, state=DISABLED, wrap=tk.WORD)
+        scrollbar = tk.Scrollbar(log_frame, command=self.log_text.yview)
         self.log_text.configure(yscrollcommand=scrollbar.set)
         
-        self.log_text.pack(side=LEFT, fill=BOTH, expand=True)
-        scrollbar.pack(side=RIGHT, fill=Y)
+        self.log_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=Y)
         
         # === BUTTON SECTION ===
-        button_frame = Frame(main_frame)
-        button_frame.pack(fill=X, pady=10)
+        button_frame = tk.Frame(main_frame)
+        button_frame.pack(fill=tk.X, pady=10)
         
-        self.start_button = Button(
+        self.start_button = tk.Button(
             button_frame, 
             text="🚀 Start Trading", 
             command=self._start_bot,
@@ -188,9 +188,9 @@ class TradingBotGUI:
             font=('Arial', 12, 'bold'),
             width=20
         )
-        self.start_button.pack(side=LEFT, padx=5)
+        self.start_button.pack(side=tk.LEFT, padx=5)
         
-        self.stop_button = Button(
+        self.stop_button = tk.Button(
             button_frame,
             text="🛑 Stop",
             command=self._stop_bot,
@@ -200,12 +200,12 @@ class TradingBotGUI:
             width=15,
             state=DISABLED
         )
-        self.stop_button.pack(side=LEFT, padx=5)
+        self.stop_button.pack(side=tk.LEFT, padx=5)
         
         # Status label
-        self.status_var = StringVar(value="Status: Ready")
-        self.status_label = Label(button_frame, textvariable=self.status_var, font=('Arial', 10))
-        self.status_label.pack(side=RIGHT, padx=10)
+        self.status_var = tk.StringVar(value="Status: Ready")
+        self.status_label = tk.Label(button_frame, textvariable=self.status_var, font=('Arial', 10))
+        self.status_label.pack(side=tk.RIGHT, padx=10)
     
     def _setup_logging(self):
         """Setup logging to display in GUI"""
@@ -217,10 +217,10 @@ class TradingBotGUI:
             def emit(self, record):
                 msg = self.format(record)
                 def append():
-                    self.text_widget.configure(state=NORMAL)
+                    self.text_widget.configure(state=tk.NORMAL)
                     self.text_widget.insert(END, msg + '\n')
                     self.text_widget.see(END)
-                    self.text_widget.configure(state=DISABLED)
+                    self.text_widget.configure(state=tk.DISABLED)
                 self.text_widget.after(0, append)
         
         # Setup logging
@@ -299,8 +299,8 @@ class TradingBotGUI:
         self.status_var.set("Status: Starting...")
         
         # Disable start button, enable stop
-        self.start_button.config(state=DISABLED)
-        self.stop_button.config(state=NORMAL)
+        self.start_button.config(state=tk.DISABLED)
+        self.stop_button.config(state=tk.NORMAL)
         
         # Create and start bot in separate thread
         self.bot = PocketOptionTradingBot(config)
@@ -331,18 +331,18 @@ class TradingBotGUI:
     
     def _on_bot_stopped(self):
         """Called when bot stops"""
-        self.start_button.config(state=NORMAL)
-        self.stop_button.config(state=DISABLED)
+        self.start_button.config(state=tk.NORMAL)
+        self.stop_button.config(state=tk.DISABLED)
         self.status_var.set("Status: Stopped")
         self.log_message("🛑 Bot stopped")
     
     def log_message(self, message: str):
         """Add message to log"""
         timestamp = datetime.now().strftime('%H:%M:%S')
-        self.log_text.configure(state=NORMAL)
+        self.log_text.configure(state=tk.NORMAL)
         self.log_text.insert(END, f"{timestamp} - {message}\n")
         self.log_text.see(END)
-        self.log_text.configure(state=DISABLED)
+        self.log_text.configure(state=tk.DISABLED)
     
     def save_settings(self, settings: dict = None):
         """Save settings to file"""

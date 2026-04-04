@@ -10,9 +10,9 @@ BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 if not BASE_URL:
     BASE_URL = "https://auto-trade-bot-pro.preview.emergentagent.com"
 
-# Test credentials provided
-TEST_USERNAME = "triddick84"
-TEST_PASSWORD = "Fallinone#1"
+# Test credentials from environment
+TEST_USERNAME = os.environ.get('TEST_USERNAME', 'triddick84')
+TEST_PASSWORD = os.environ.get('TEST_PASSWORD', '')
 
 
 class TestHealthCheck:

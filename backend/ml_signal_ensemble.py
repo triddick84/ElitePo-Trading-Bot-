@@ -464,7 +464,8 @@ class MLSignalEnsemble:
             model_path = os.path.join(self.model_dir, 'ensemble_models.pkl')
             if os.path.exists(model_path):
                 with open(model_path, 'rb') as f:
-                    saved_data = pickle.load(f)
+                    from safe_model_loader import RestrictedUnpickler
+                    saved_data = RestrictedUnpickler(f).load()
                     self.models = saved_data.get('models', {})
                     self.scaler = saved_data.get('scaler', StandardScaler())
                     self.is_trained = saved_data.get('is_trained', False)
