@@ -1198,7 +1198,7 @@
         confidence: 0,
     };
 
-    // Audio detection state
+    // Trade outcome detection state
     let audioDetection = {
         enabled: true,
         lastDetectedOutcome: null,   // 'win' or 'loss'
@@ -1206,7 +1206,8 @@
         cooldownMs: 3000,            // Ignore duplicate detections within 3s
         pendingTrade: false,         // Whether we have an open trade waiting for result
         tradeOpenedAt: 0,
-        minWaitAfterTrade: 5000,     // Minimum ms to wait after trade before accepting detection (trade must expire first)
+        minWaitAfterTrade: 5000,     // Minimum ms to wait after trade before checking (trade must expire)
+        balanceBeforeTrade: 0,       // Snapshot of balance before trade was placed
         ourSoundPlaying: false,      // Flag to ignore our own notification sounds
     };
     
@@ -2082,156 +2083,163 @@
     }
 
     // ===========================================
-    // AUDIO DETECTION SYSTEM - v8.2
-    // Hooks into Pocket Option's win/loss sounds
-    // to auto-detect trade outcomes
+    // TRADE OUTCOME DETECTION SYSTEM - v8.3
+    // Uses balance change monitoring + DOM scanning
+    // to reliably detect wins and losses
     // ===========================================
-    function setupAudioDetection() {
-        log('AUDIO: Setting up trade outcome detection...');
-        
-        // Method 1: Intercept HTMLAudioElement.prototype.play
-        const origAudioPlay = HTMLAudioElement.prototype.play;
-        HTMLAudioElement.prototype.play = function() {
-            const src = (this.src || '').toLowerCase();
-            detectOutcomeFromAudio(src, this);
-            return origAudioPlay.apply(this, arguments);
-        };
-        
-        // Method 2: Intercept new Audio() constructor plays
-        const origAudioConstructor = window.Audio;
-        window.Audio = function(src) {
-            const audio = new origAudioConstructor(src);
-            const origPlay = audio.play.bind(audio);
-            audio.play = function() {
-                const audioSrc = (audio.src || src || '').toLowerCase();
-                detectOutcomeFromAudio(audioSrc, audio);
-                return origPlay.apply(this, arguments);
-            };
-            return audio;
-        };
-        window.Audio.prototype = origAudioConstructor.prototype;
-        
-        // Method 3: Monitor DOM for trade result elements (fallback)
-        setupDOMResultObserver();
-        
-        log('AUDIO: Detection active (audio intercept + DOM observer)');
+    function setupOutcomeDetection() {
+        log('OUTCOME: Setting up trade result detection (balance monitor + DOM)...');
+        log('OUTCOME: Detection active');
     }
     
-    function detectOutcomeFromAudio(src, audioEl) {
-        if (!audioDetection.enabled) return;
-        if (!audioDetection.pendingTrade) return;
-        if (audioDetection.ourSoundPlaying) return; // Ignore our own oscillator sounds
+    // Called when a trade is placed - starts monitoring for the result
+    function markTradePending() {
+        audioDetection.pendingTrade = true;
+        audioDetection.tradeOpenedAt = Date.now();
         
-        const now = Date.now();
+        // Snapshot the balance BEFORE the trade
+        audioDetection.balanceBeforeTrade = detectAccountBalance();
+        log(`OUTCOME: Trade placed. Balance before: $${audioDetection.balanceBeforeTrade.toFixed(2)}. Monitoring for result...`);
         
-        // Must wait at least minWaitAfterTrade ms after trade was placed
-        // (trade needs to expire before we can detect the result)
-        const elapsed = now - audioDetection.tradeOpenedAt;
-        if (elapsed < audioDetection.minWaitAfterTrade) return;
-        
-        // Cooldown between detections
-        if (now - audioDetection.lastDetectionTime < audioDetection.cooldownMs) return;
-        
-        // Pocket Option audio patterns:
-        // Win sounds typically contain: "win", "success", "profit", "up"
-        // Loss sounds typically contain: "lose", "loss", "fail", "down"
-        let outcome = null;
-        
-        if (src.includes('win') || src.includes('success') || src.includes('profit') || src.includes('call_win') || src.includes('up_')) {
-            outcome = 'win';
-        } else if (src.includes('lose') || src.includes('loss') || src.includes('fail') || src.includes('call_lose') || src.includes('down_')) {
-            outcome = 'loss';
-        }
-        
-        if (outcome) {
-            audioDetection.lastDetectedOutcome = outcome;
-            audioDetection.lastDetectionTime = now;
-            audioDetection.pendingTrade = false;
-            
-            log(`AUDIO DETECTED: ${outcome.toUpperCase()} (${Math.round(elapsed/1000)}s after trade)`);
-            handleAutoDetectedResult(outcome === 'win');
-        }
+        // Start polling for result after the trade should expire
+        startResultPolling();
     }
     
-    function setupDOMResultObserver() {
-        // Watch for Pocket Option trade result popups
-        // PO shows results as popup elements with profit/loss amounts
-        const observer = new MutationObserver((mutations) => {
-            if (!audioDetection.enabled || !audioDetection.pendingTrade) return;
-            if (audioDetection.ourSoundPlaying) return;
+    function startResultPolling() {
+        const pollDelay = audioDetection.minWaitAfterTrade; // 5s initial wait
+        
+        setTimeout(() => {
+            if (!audioDetection.pendingTrade) return; // Already detected by other means
             
-            const now = Date.now();
+            // Start active polling every 1s for up to 30s
+            let pollCount = 0;
+            const maxPolls = 30;
             
-            // Must wait at least minWaitAfterTrade ms after trade placement
-            const elapsed = now - audioDetection.tradeOpenedAt;
-            if (elapsed < audioDetection.minWaitAfterTrade) return;
-            
-            if (now - audioDetection.lastDetectionTime < audioDetection.cooldownMs) return;
-            
-            for (const mutation of mutations) {
-                for (const node of mutation.addedNodes) {
-                    if (node.nodeType !== 1) continue;
-                    
-                    const text = (node.textContent || '').trim();
-                    const className = (node.className || '').toLowerCase();
-                    const html = (node.innerHTML || '').toLowerCase();
-                    
-                    // Check for PO result indicators
-                    // Green "+$X.XX" = win, Red "-$X.XX" = loss
-                    // PO uses classes like "deals-success", "deals-fail", "profit", "loss"
-                    let outcome = null;
-                    
-                    // Check class names
-                    if (className.includes('success') || className.includes('profit') || className.includes('win')) {
-                        outcome = 'win';
-                    } else if (className.includes('fail') || className.includes('loss') || className.includes('lose')) {
-                        outcome = 'loss';
-                    }
-                    
-                    // Check text content for +/- amounts
-                    if (!outcome) {
-                        const amountMatch = text.match(/^[+\-]?\s*\$?\s*[\d,.]+$/);
-                        if (amountMatch) {
-                            if (text.includes('+')) outcome = 'win';
-                            else if (text.includes('-')) outcome = 'loss';
-                        }
-                    }
-                    
-                    // Check for green/red colors in inline styles
-                    if (!outcome) {
-                        const style = node.getAttribute('style') || '';
-                        if ((style.includes('green') || style.includes('#22c55e') || style.includes('#4caf50') || style.includes('rgb(76, 175, 80)')) && text.match(/[\d,.]+/)) {
-                            outcome = 'win';
-                        } else if ((style.includes('red') || style.includes('#ef4444') || style.includes('#f44336') || style.includes('rgb(244, 67, 54)')) && text.match(/[\d,.]+/)) {
-                            outcome = 'loss';
-                        }
-                    }
-                    
-                    // Check nested elements
-                    if (!outcome && node.querySelector) {
-                        const successEl = node.querySelector('[class*="success"], [class*="profit"], [class*="win"]');
-                        const failEl = node.querySelector('[class*="fail"], [class*="loss"], [class*="lose"]');
-                        if (successEl) outcome = 'win';
-                        else if (failEl) outcome = 'loss';
-                    }
-                    
-                    if (outcome) {
-                        audioDetection.lastDetectedOutcome = outcome;
-                        audioDetection.lastDetectionTime = now;
+            const poller = setInterval(() => {
+                pollCount++;
+                
+                if (!audioDetection.pendingTrade || pollCount > maxPolls) {
+                    clearInterval(poller);
+                    if (pollCount > maxPolls && audioDetection.pendingTrade) {
                         audioDetection.pendingTrade = false;
+                        log('OUTCOME: Timeout - no result detected after 35s. Use manual +W/-L.');
+                    }
+                    return;
+                }
+                
+                // Method 1: Check balance change
+                const currentBalance = detectAccountBalance();
+                const balanceBefore = audioDetection.balanceBeforeTrade;
+                
+                if (balanceBefore > 0 && currentBalance > 0) {
+                    const diff = currentBalance - balanceBefore;
+                    
+                    // Need a meaningful change (more than $0.01)
+                    if (Math.abs(diff) > 0.01) {
+                        audioDetection.pendingTrade = false;
+                        audioDetection.lastDetectionTime = Date.now();
+                        clearInterval(poller);
                         
-                        log(`DOM DETECTED: ${outcome.toUpperCase()} (${text.substring(0, 30)})`);
-                        handleAutoDetectedResult(outcome === 'win');
+                        const isWin = diff > 0;
+                        const elapsed = Math.round((Date.now() - audioDetection.tradeOpenedAt) / 1000);
+                        log(`BALANCE DETECTED: ${isWin ? 'WIN' : 'LOSS'} ($${diff > 0 ? '+' : ''}${diff.toFixed(2)}) after ${elapsed}s`);
+                        handleAutoDetectedResult(isWin);
                         return;
                     }
                 }
-            }
-        });
+                
+                // Method 2: Scan DOM for result elements
+                const domResult = scanDOMForResult();
+                if (domResult !== null) {
+                    audioDetection.pendingTrade = false;
+                    audioDetection.lastDetectionTime = Date.now();
+                    clearInterval(poller);
+                    
+                    const elapsed = Math.round((Date.now() - audioDetection.tradeOpenedAt) / 1000);
+                    log(`DOM DETECTED: ${domResult ? 'WIN' : 'LOSS'} after ${elapsed}s`);
+                    handleAutoDetectedResult(domResult);
+                    return;
+                }
+            }, 1000);
+        }, pollDelay);
+    }
+    
+    // Actively scan the DOM for trade result indicators
+    function scanDOMForResult() {
+        // Look for recently appeared deal result elements
+        // PO typically shows results in deal history or popup notifications
         
-        observer.observe(document.body, {
-            childList: true,
-            subtree: true,
-        });
+        // Check for deal result popups with green/red indicators
+        const resultSelectors = [
+            // PO deal result classes
+            '[class*="deals-item"][class*="success"]',
+            '[class*="deals-item"][class*="fail"]',
+            '[class*="deal"][class*="win"]',
+            '[class*="deal"][class*="loss"]',
+            '[class*="deal"][class*="lose"]',
+            '[class*="notification"][class*="success"]',
+            '[class*="notification"][class*="fail"]',
+            '[class*="result"][class*="profit"]',
+            '[class*="result"][class*="loss"]',
+            // Closed deals section
+            '.deals-list .deals-item:first-child',
+            '[class*="closed-deals"] [class*="item"]:first-child',
+        ];
+        
+        for (const sel of resultSelectors) {
+            try {
+                const el = document.querySelector(sel);
+                if (!el) continue;
+                
+                const text = (el.textContent || '').trim();
+                const className = (el.className || '').toLowerCase();
+                const style = el.getAttribute('style') || '';
+                
+                // Determine win or loss
+                if (className.includes('success') || className.includes('win') || className.includes('profit')) {
+                    return true; // WIN
+                }
+                if (className.includes('fail') || className.includes('loss') || className.includes('lose')) {
+                    return false; // LOSS
+                }
+                
+                // Check for +/- in text
+                if (text.match(/\+\s*\$?\s*[\d,.]+/)) return true; // WIN
+                if (text.match(/-\s*\$?\s*[\d,.]+/)) return false; // LOSS
+                
+                // Check inline style colors
+                const computedStyle = window.getComputedStyle(el);
+                const color = computedStyle.color || style;
+                if (color.includes('rgb(0, 128') || color.includes('rgb(76, 175') || color.includes('green') || color.includes('#4caf50') || color.includes('#22c55e') || color.includes('#00c853')) {
+                    if (text.match(/[\d,.]+/)) return true; // WIN
+                }
+                if (color.includes('rgb(244, 67') || color.includes('rgb(255, 0') || color.includes('red') || color.includes('#f44336') || color.includes('#ef4444') || color.includes('#ff1744')) {
+                    if (text.match(/[\d,.]+/)) return false; // LOSS
+                }
+            } catch(e) {}
+        }
+        
+        // Also scan for the most recent notification/popup with amount
+        try {
+            const allPopups = document.querySelectorAll('[class*="notification"], [class*="popup"], [class*="toast"], [class*="alert"]');
+            for (const popup of allPopups) {
+                if (!popup.offsetParent) continue; // Not visible
+                const text = (popup.textContent || '').trim();
+                const className = (popup.className || '').toLowerCase();
+                
+                // Skip our own GPT panel elements
+                if (popup.closest('#gpt-panel')) continue;
+                
+                if (text.match(/\+\s*\$?\s*[\d,.]+/) && (className.includes('success') || className.includes('profit') || className.includes('win'))) {
+                    return true;
+                }
+                if (text.match(/-\s*\$?\s*[\d,.]+/) && (className.includes('fail') || className.includes('loss') || className.includes('lose'))) {
+                    return false;
+                }
+            }
+        } catch(e) {}
+        
+        return null; // No result found yet
     }
     
     function handleAutoDetectedResult(isWin) {
@@ -2241,20 +2249,6 @@
         } else {
             handleManualLoss();
         }
-    }
-    
-    // Mark that we have a pending trade (called when trade is placed)
-    function markTradePending() {
-        audioDetection.pendingTrade = true;
-        audioDetection.tradeOpenedAt = Date.now();
-        
-        // Auto-timeout: if no result detected within 60s, clear pending
-        setTimeout(() => {
-            if (audioDetection.pendingTrade && Date.now() - audioDetection.tradeOpenedAt >= 55000) {
-                audioDetection.pendingTrade = false;
-                log('AUDIO: Trade result timeout (60s) - use manual +W/-L');
-            }
-        }, 60000);
     }
 
     // Reset all stats
@@ -5410,8 +5404,8 @@
             
             manageIntervals();
             
-            // Setup audio detection for auto win/loss tracking
-            setupAudioDetection();
+            // Setup trade outcome detection (balance monitor + DOM scanning)
+            setupOutcomeDetection();
             
             // Resume CYCLE mode if it was saved as enabled
             if (cycleEnabled) {
