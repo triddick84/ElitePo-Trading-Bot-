@@ -13,7 +13,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List
 
 # Test configuration
-BACKEND_URL = "https://auto-trade-bot-pro.preview.emergentagent.com/api"
+BACKEND_URL = "https://momentum-trade-test.preview.emergentagent.com/api"
 
 class AutomatedTradingTester:
     def __init__(self):

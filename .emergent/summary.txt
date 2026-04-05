@@ -1,118 +1,120 @@
-<analysis>**original_problem_statement**: The user is building a GPT Signal Bot (now renamed to Elite Pocket Option Trading Bot) for the Pocket Option platform. The system utilizes a full-stack React/FastAPI app paired with a Tampermonkey userscript. The core goal is integrating multiple signal sources, maintaining high-accuracy AI/ML-based strategies (stacking ensembles, deep market analysis, LSTM/RL models), robust risk management, collecting historical data for backtesting, and executing trades directly on the Pocket Option broker.
+<analysis>**original_problem_statement**: 
+The user is building an Elite Pocket Option Trading Bot (formerly GPT Signal Bot) for the Pocket Option platform. The system uses a full-stack React/FastAPI app paired with a Tampermonkey userscript to execute trades directly on the broker. PRODUCT REQUIREMENTS: The bot requires high-accuracy AI/ML-based strategies, automated strategy selection, smart auto-invert logic based on loss streaks, momentum-aware trading, risk management, comprehensive backtesting analytics, and automatic cycle-scanning of favorite assets. The user heavily relies on a monolithic legacy Tampermonkey script () which acts as the primary trading execution engine.
 
 **User's preferred language**: English
 *(INSTRUCTING NEXT AGENT: Please respond in English only)*
 
-**what currently exists?**: A full-stack application (React frontend, FastAPI backend, MongoDB). A highly optimized backend signal generation pipeline with Premium Signal Generators that implement session-aware filtering, time-of-day win-rate tracking, and direction-aware loss tracking. A new EMA 20 Pullback Reversal 5-second strategy is available on the backend. **CRITICAL STATE:** There are currently *two* versions of the Tampermonkey script. The agent spent the session updating a modern Webpack-based modular script (), but the user is stubbornly running the older, monolithic 4,600+ line legacy script (). 
+**what currently exists?**: 
+A robust FastAPI backend featuring ML/AI signal generation (Stacking Ensembles, LSTM, PPO), premium signal filtering, and a safe model loader (replacing vulnerable Pickle serialization). The React frontend includes a detailed Performance Analytics Dashboard. The active Tampermonkey userscript () handles panel dragging, CYCLE mode (auto-switching favorite assets), balance-change detection for accurate win/loss tracking, and momentum-aware auto-invert logic. 
 
-**Last working item**:
-- **Last item agent was working**: Porting the newly built advanced features (Strategy Selector Dropdown, Smart Auto-Invert logic based on consecutive losses, and wiring manual WIN/LOSS buttons to the  API) directly into the **legacy monolithic Tampermonkey script** (). The agent had to pivot to updating this massive file because the user continues to use it instead of the modular Webpack build.
+**Last working item**: 
+- **Last item agent was working**: Fixing the /Force Generate button's direction mapping (API returns SELL/BUY but script needs PUT/CALL) and adding new UI features to the Tampermonkey panel: a 3-mode Invert Control (ON/OFF/AUTO), a Signal Status Display (showing accuracy, confidence, invert status), and a Reset Stats button. The agent injected the new HTML/JS into the userscript but ran out of context before testing.
 - **Status**: IN PROGRESS
 - **Agent Testing Done**: N
 - **Which testing method agent to use?**: manual testing by curl / python -c for API endpoints + screenshot tool / user verification for the Tampermonkey UI.
 - **User Testing Done**: N
 
 **All Pending/In progress Issue list**: 
-Issue 1: Port Advanced Features to Legacy Script (P0)
-- **Attempted fixes**: The agent successfully built all features into the modular script () and tried to guide the user to install it. The user either couldn't or wouldn't switch, experiencing errors (switch failed, v7.3, missing dropdowns) because they were still running the old 4,600-line script. The agent just started injecting the HTML for the dropdown into the legacy script via  before context ended.
+Issue 1: Finish Tampermonkey Panel UI Updates & GO Button Fix (P0)
+- **Attempted fixes**: Agent used  to add the 3-mode invert selector, Reset Stats button, and Signal Status display HTML/event listeners to . 
 - **Next debug checklist**: 
-  - Complete injecting the Strategy Dropdown HTML into the panel in .
-  - Wire the dropdown to fetch  and .
-  - Implement the Smart Auto-Invert logic (tracking consecutive direction-aware losses).
-  - Wire the existing manual  and  buttons ( and ) to send data to .
-- **Why fix this issue and what will be achieved with the fix?**: The user relies heavily on the legacy script. Adding these features bridges the gap between the new backend logic (premium signal tracking, EMA20 strategy) and the user's active UI.
+  - Ensure the  API response mapping correctly translates SELL to PUT and BUY to CALL in .
+  - Validate the newly injected UI elements (3-mode Invert, Reset Stats, Signal Display) render correctly in the userscript without breaking the panel.
+- **Why fix this issue and what will be achieved with the fix?**: Resolves API-to-execution mismatch for manual signal generation and provides the user with granular control over the invert logic and visibility into the technical analysis.
 - **Status**: IN PROGRESS
-- **Is recurring issue?**: Y (Userscript sync/update issues are recurring)
-- **Should Test frontend/backend/both after fix?**: Frontend (User Verification via browser)
+- **Is recurring issue?**: N
+- **Should Test frontend/backend/both after fix?**: Frontend (User Verification)
 - **Blocked on other issue**: None
 
 **In progress Task List**:
-Task 1: Legacy Userscript Feature Parity (P0)
-- **Where to resume**:  - Continue adding the strategy dropdown logic, API calls, and smart auto-invert.
-- **What will be achieved with this?**: The user will finally see the strategy selector and working auto-invert system on the screen they are actively looking at.
-- **Status**: IN PROGRESS
+Task 1: Update React Web App Pages & Add Save System (P1)
+- **Where to resume**:  and .
+- **What will be achieved with this?**: The user requested that the strategy and process explanations on the Tampermonkey script page be updated, the Pocket Option Integration page be updated, and a save system be implemented for the Tampermonkey script page.
+- **Status**: NOT STARTED
 - **Should Test frontend/backend/both after fix?**: Frontend
 - **Blocked on something**: None
 
 **Upcoming and Future Tasks**
 Upcoming Tasks:
-- (P1) **Build Frontend Backtesting Dashboard**: Create a React UI to visualize backtest results, historical data summaries, and ML model performance metrics utilizing the newly created  endpoints.
+- (P2) Test TradingView Webhook / MT4 Integrations (currently mocked).
 Future Tasks:
-- (P2) **Test TradingView Webhook / MT4 Integrations**: Currently mocked/simulated.
+- Consolidate legacy monolithic Tampermonkey script with the modular Webpack codebase.
+- Further ML model tuning for higher accuracy.
 
 **Completed work in this session**
-- Premium Signal Clarification & Accuracy Optimization: Added session-aware filters, win-rate tracking, and direction-aware loss penalization to the backend. (DONE)
-- Smart Auto-Invert API Logic: Backend endpoints updated to suggest inversions when facing consecutive losses in a specific direction. (DONE)
-- EMA 20 Pullback Reversal Strategy: Implemented new 5s strategy based on EMA 20, RSI, and Bollinger Bands on the backend. (DONE)
-- Modular Userscript Fixes: Fixed Shadow DOM CSP issues on Pocket Option, added mobile-responsive touch support to the panel. (DONE)
-- Legacy Userscript Patch: Disabled broken cross-asset switching logic () in the legacy script to stop the Switch failed error loop. (DONE)
+- Tampermonkey panel drag/stretching bugs fixed (CSS  conflicts resolved). (DONE)
+- CYCLE mode implemented to automatically switch and scan Pocket Option favorite assets. (DONE)
+- Analytics Dashboard built in React (Risk metrics, ML stats, 24h Heatmap). (DONE)
+- Replaced unreliable Audio detection with robust Balance-change polling for Win/Loss outcome tracking. (DONE)
+- Code Quality & Security Audit: Fixed 13 High-Severity Pickle RCE vulnerabilities via , replaced MD5 with SHA-256 HMAC, removed hardcoded secrets, migrated frontend  to . (DONE)
+- Implemented  for momentum-aware auto-invert logic. (DONE)
 
 **Earlier issues found/mentioned but not fixed**
-Issue 1: Codebase divergence (Two Userscripts)
-- **Debug checklist**: The repository currently maintains both a massive legacy script and a modular Webpack setup. 
-- **Why to solve this issue and what will be achieved with this?**: Modifying a 4,600-line monolithic file via  is error-prone. The user needs clear instructions on how to remove the old script from their Tampermonkey dashboard and install the newly compiled one, or the modular repo folder () should be abandoned.
-- **Should Test frontend/backend/both after fix**: N/A
-- **Is recurring issue?**: Y
+- None. Agent actively addressed the codebase review findings systematically.
 
 **Known issue recurrence from previous fork**
-- **Issue recurrence in previous fork**: Tampermonkey panel visibility/injection blocking by Pocket Option.
-- **Recurrence count**: 3
-- **Status**: RESOLVED (Agent moved away from Shadow DOM to direct DOM injection with  and  tags).
+- **Issue recurrence in previous fork**: Tampermonkey script UI conflicts with Pocket Option DOM.
+- **Recurrence count**: 4
+- **Status**: RESOLVED (Handled via z-index adjustments and strict JS property overrides).
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
-- **Frontend**: React, Tampermonkey userscript.
-- **Backend**: FastAPI, Python, MongoDB.
-- **Trading Logic**: Price action, EMA, RSI, Bollinger Bands, consecutive loss tracking.
+- **Frontend**: React, Tailwind, Shadcn UI, Tampermonkey userscript (DOM scraping, DOM mutation).
+- **Backend**: FastAPI, Python, MongoDB, Machine Learning (scikit-learn, XGBoost).
+- **Security**: RestrictedUnpickler for safe model loading, HMAC-SHA256 for auth,  for JWTs.
 
 **key DB schema**
 - : 
 
 **changes in tech stack**
-- None.
+-  replaced with  in React Auth.
+-  deserialization replaced with  custom loader.
 
 **All files of reference**
--  (CRITICAL: Must edit this file to satisfy the user)
--  (Completed)
--  (Completed)
--  (Completed)
+-  (Target for current UI injection and bug fixes)
+-  (Needs updates)
+-  (Needs updates)
+-  (Created in this session)
+-  (Created in this session)
 
 **Areas that need refactoring**:
--  is a 4,600+ line monolith. Modifying it is tedious, but strictly necessary right now due to the user's environment.
+- The legacy Tampermonkey script () remains extremely massive (>5700 lines) and complex. 
+- React hooks: Code review flagged multiple missing hook dependencies.
 
 **key api endpoints**
--  (Now supports strategy parameters & premium filters)
--  (Endpoint to record WIN/LOSS)
-- 
-- 
+-  (Used by GO button - returns SELL/BUY)
+-  (Used for auto-invert logic)
+-  (Fallback for TM script balance sync)
 
 **Critical Info for New Agent**
-- **DO NOT IGNORE THIS:** The user is *not* using the Webpack modular script (). They are using the legacy script located at . You *must* apply any userscript UI or logic changes to this legacy file!
-- The backend features (EMA 20 strategy, Premium Tracking, Direction-aware inversion) are fully implemented and passed 100% of the  checks. 
+- **Tampermonkey Target**: The user relies *exclusively* on . Do not modify the  Webpack folder. 
+- The agent *just* performed a massive block of  edits to the Tampermonkey script to add a 3-mode invert switch, reset stats button, and signal status UI. You must review the script to ensure the GO/Force-Generate  mapping (SELL -> PUT, BUY -> CALL) is successfully implemented and the UI works correctly.
+- Proceed to update the React pages ( and ) as requested by the user in the final prompt.
 
 **documents and test reports created in this job**
 - 
--  (Passed)
--  (Passed)
--  (Passed)
+- 
+- 
+-  (Updated)
 
 **Last 10 User Messages and any pending HUMAN messages** 
-1. *User*: (Requests EMA 20 strategy and Tampermonkey strategy selection integration)
-2. *Agent*: (Builds features in backend and modular script, tests, finishes task)
-3. *User*: tampermonkey is not being displayed in pocket option trading platform website
-4. *Agent*: (Fixes modular script injection)
-5. *User*: still not a panel being displayed
-6. *Agent*: (Adds  to modular script)
-7. *User*: tampermonkey wont show up on mobile but will on pc"
-8. *Agent*: (Adds mobile touch controls to modular script)
-9. *User*: "its now showing the panel, also need to implement the strategies... and thought tampermonkey was going to be on an auto invert system
-10. *Agent*: (Discovers user is on the legacy script showing v7.3, patches legacy script to v8.0, user complains missing features -> Agent starts backporting features to the legacy monolith).
+*(Latest to Oldest)*
+1. *User*: Requests GO/Force Generate bug fix, Reset stats button on TM panel, signal display for invert/normal status & technical analysis, updates to React App Tampermonkey/Pocket Option integration pages, 3-mode invert control (ON/OFF/AUTO), and a save system for the TM script page. (PENDING - Partially started)
+2. *Agent*: (Updates PRD, calls finish for TM balance sync & auto-invert)
+3. *Agent*: (Runs test agent iteration 23, 100% pass)
+4. *User*: Chooses Option C (Both TM and Backend implementation) for balance syncing and auto-invert momentum tracking.
+5. *Agent*: (Updates PRD, calls finish for Code Quality audit)
+6. *Agent*: (Runs 7 API endpoints manually, takes React login screenshot, verifies fixing code quality findings)
+7. *Agent*: (Fixes 13 Pickle RCEs, MD5 hashes, localStorage, hardcoded secrets, circular imports)
+8. *User*: Provides massive Code Quality Report detailing circular imports, 13 High-Severity security vulnerabilities, and React hooks issues.
+9. *Agent*: (Updates PRD, calls finish for Trade Outcome Detection v8.3)
+10. *User*: tampermonkey wont recognize losses after auto invert is enabled... seems to just do wins.
 
 **Project Health Check:**
-- **Broken**: None on backend.
-- **Mocked**: MT4 / TradingView Webhooks.
+- **Broken**: None detected on backend. TM script UI currently mid-edit.
+- **Mocked**: TradingView Webhooks / MT4.
 
 **3rd Party Integrations**
 - Deriv WebSocket API (Historical Synthetic Market Data) — Free public WS
@@ -120,13 +122,22 @@ Issue 1: Codebase divergence (Two Userscripts)
 - Telegram Bot (Notifications) — requires User API Key
 
 **Testing status**
-- Testing agent used after significant changes: YES (Iterations 18, 19, 20 passed)
+- Testing agent used after significant changes: YES (Iterations 21, 22, 23 passed)
 - Troubleshoot agent used after agent stuck in loop: NO
-- Test files created: Iteration JSON reports.
-- Known regressions: Legacy script was failing on asset switching (patched manually to ignore switching).
+- Test files created: Iteration JSON reports
+- Known regressions: None currently known.
 
 **Credentials to test flow:**
--  / 
+-  /  (Admin role available)
 
 **What agent forgot to execute**
-- The agent started injecting the Strategy Dropdown UI into the legacy script () but ran out of context before adding the JavaScript logic for the dropdown (API calls) and the Smart Auto-Invert logic. Ensure this is completed.</analysis>
+- The user requested a save system for the Tampermonkey script page in the React App. The previous agent acknowledged it but context exhausted before it could be started.
+- Missing hook dependencies (99 instances flagged in the code review) were de-prioritized to tackle high-severity security vulnerabilities first. They remain unresolved.
+
+**Debugging checklist for current issue**
+    Issue: Tampermonkey GO/Force Generate mapping + UI updates 
+
+    Frontend files to check: 
+    -  (Check , , , and the new 3-mode Invert UI listeners).
+    -  (Needs UI copy updates + save system).
+    -  (Needs UI copy updates).</analysis>

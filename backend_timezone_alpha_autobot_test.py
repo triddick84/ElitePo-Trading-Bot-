@@ -19,7 +19,7 @@ import pytz
 sys.path.append('/app/backend')
 
 # Test configuration
-BACKEND_URL = "https://auto-trade-bot-pro.preview.emergentagent.com/api"
+BACKEND_URL = "https://momentum-trade-test.preview.emergentagent.com/api"
 CHICAGO_TZ = pytz.timezone('America/Chicago')
 
 class TimezoneAlphaAutobotTester:

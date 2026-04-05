@@ -134,6 +134,35 @@ const TampermonkeyControlPanel = () => {
     }
   };
 
+  // Save settings profile to localStorage
+  const saveSettingsProfile = (profileName) => {
+    const profile = {
+      ...settings,
+      timestamp: new Date().toISOString(),
+      stats: stats
+    };
+    localStorage.setItem(`tm_profile_${profileName}`, JSON.stringify(profile));
+    alert(`Settings saved to "${profileName}" profile!`);
+  };
+
+  // Load settings profile from localStorage
+  const loadSettingsProfile = async (profileName) => {
+    const saved = localStorage.getItem(`tm_profile_${profileName}`);
+    if (!saved) {
+      alert('No saved profile found. Save your current settings first.');
+      return;
+    }
+    try {
+      const profile = JSON.parse(saved);
+      // Apply loaded settings to backend
+      await updateSettings(profile);
+      alert(`Settings loaded from "${profileName}" profile!`);
+    } catch (error) {
+      console.error('Failed to load profile:', error);
+      alert('Failed to load profile. It may be corrupted.');
+    }
+  };
+
   // Update settings on server
   const updateSettings = async (newSettings) => {
     setLoading(true);
@@ -397,35 +426,85 @@ const TampermonkeyControlPanel = () => {
         </CardContent>
       </Card>
 
-      {/* Button Logic Guide */}
+      {/* Button Logic Guide v8.4 */}
       <Card className="bg-slate-800/50 border-slate-700">
         <CardHeader>
-          <CardTitle className="text-white">📖 Button Logic Guide v6.5.0</CardTitle>
+          <CardTitle className="text-white">📖 Tampermonkey Button Guide v8.4</CardTitle>
+          <CardDescription>Complete guide to bot controls on Pocket Option</CardDescription>
         </CardHeader>
         <CardContent className="text-slate-300 text-sm space-y-3">
-          <div className="bg-green-900/30 border border-green-600 rounded p-3">
-            <strong className="text-green-400">📡 AUTO</strong> - Receives APP signals only (no generation)
-            <p className="text-xs mt-1">Enable for incoming signals from app dashboard</p>
+          {/* Main Control Buttons */}
+          <div className="space-y-2">
+            <h4 className="text-white font-semibold text-xs uppercase tracking-wide">Main Controls</h4>
+            <div className="bg-green-900/30 border border-green-600 rounded p-3">
+              <strong className="text-green-400">📡 AUTO</strong> - Receives APP signals only
+              <p className="text-xs mt-1 text-green-200">Listens for signals from this dashboard. No local scanning.</p>
+            </div>
+            <div className="bg-pink-900/30 border border-pink-600 rounded p-3">
+              <strong className="text-pink-400">🔍 SCAN</strong> - Local signal generation
+              <p className="text-xs mt-1 text-pink-200">Generates signals using live Pocket Option prices (RSI, EMA, Stochastic). 30s cooldown.</p>
+            </div>
+            <div className="bg-yellow-900/30 border border-yellow-600 rounded p-3">
+              <strong className="text-yellow-400">⚡ GO</strong> - Force generate signal
+              <p className="text-xs mt-1 text-yellow-200">Immediately generates a signal for the current asset using backend AI analysis.</p>
+            </div>
           </div>
-          <div className="bg-pink-900/30 border border-pink-600 rounded p-3">
-            <strong className="text-pink-400">🔍 SCAN</strong> - Tampermonkey generates & places trades
-            <p className="text-xs mt-1">30 second cooldown between scan trades</p>
+          
+          {/* Secondary Controls */}
+          <div className="space-y-2 mt-4">
+            <h4 className="text-white font-semibold text-xs uppercase tracking-wide">Secondary Controls</h4>
+            <div className="bg-cyan-900/30 border border-cyan-600 rounded p-3">
+              <strong className="text-cyan-400">🔁 CYCLE</strong> - Auto-rotate favorites
+              <p className="text-xs mt-1 text-cyan-200">Automatically clicks through each favorite asset, dwells 30s scanning, trades on signal, moves to next.</p>
+            </div>
+            <div className="bg-slate-700 border border-slate-600 rounded p-3">
+              <strong className="text-slate-300">📋 LOG</strong> - Debug console
+              <p className="text-xs mt-1 text-slate-400">Opens floating console showing price scraping, signal generation, and trade execution logs.</p>
+            </div>
+            <div className="bg-red-900/30 border border-red-600 rounded p-3">
+              <strong className="text-red-400">🗑 RESET</strong> - Clear all stats
+              <p className="text-xs mt-1 text-red-200">Resets wins, losses, profit, and martingale step to zero.</p>
+            </div>
           </div>
-          <div className="bg-purple-900/30 border border-purple-600 rounded p-3">
-            <strong className="text-purple-400">🔀 SWITCH</strong> - Cycles through favorites BAR
-            <p className="text-xs mt-1">v6.5.0: Now uses the visual favorites bar, not search</p>
+          
+          {/* Invert Modes */}
+          <div className="space-y-2 mt-4">
+            <h4 className="text-white font-semibold text-xs uppercase tracking-wide">3-Mode Invert Control</h4>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="bg-slate-700 rounded p-2 text-center">
+                <div className="text-slate-300 font-bold text-sm">OFF</div>
+                <div className="text-xs text-slate-400">Normal signals</div>
+              </div>
+              <div className="bg-orange-900/50 border border-orange-500 rounded p-2 text-center">
+                <div className="text-orange-400 font-bold text-sm">AUTO</div>
+                <div className="text-xs text-orange-200">Momentum-aware</div>
+              </div>
+              <div className="bg-red-900/50 border border-red-500 rounded p-2 text-center">
+                <div className="text-red-400 font-bold text-sm">ON</div>
+                <div className="text-xs text-red-200">Always invert</div>
+              </div>
+            </div>
+            <p className="text-xs text-slate-400 mt-2">
+              <strong>AUTO mode:</strong> Uses backend momentum-check API + local RSI/EMA analysis. Automatically inverts when detecting trend reversal or loss streaks.
+            </p>
           </div>
-          <div className="bg-orange-900/30 border border-orange-600 rounded p-3">
-            <strong className="text-orange-400">🔄 INVERT</strong> - Local toggle (overrides app)
-            <p className="text-xs mt-1">CALL → PUT, PUT → CALL</p>
-          </div>
-          <div className="bg-slate-700 rounded p-3 mt-4">
-            <strong className="text-white">Combinations:</strong>
-            <ul className="text-xs mt-2 space-y-1">
-              <li>• <span className="text-green-400">AUTO only</span>: App signals on current asset</li>
-              <li>• <span className="text-pink-400">SCAN only</span>: TM scans current asset only</li>
-              <li>• <span className="text-pink-400">SCAN + SWITCH</span>: TM cycles through favorites bar</li>
-              <li>• <span className="text-purple-400">AUTO + SCAN</span>: BOTH sources on current asset</li>
+          
+          {/* Recommended Setups */}
+          <div className="bg-gradient-to-r from-purple-900/30 to-blue-900/30 border border-purple-600 rounded p-3 mt-4">
+            <strong className="text-white">Recommended Setups:</strong>
+            <ul className="text-xs mt-2 space-y-1.5">
+              <li className="flex items-center gap-2">
+                <span className="bg-green-600 text-white px-2 py-0.5 rounded text-xs">Best</span>
+                <span><strong>CYCLE</strong> + <strong>AUTO Invert</strong> = Fully automated multi-asset trading</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="bg-blue-600 text-white px-2 py-0.5 rounded text-xs">Good</span>
+                <span><strong>SCAN</strong> + <strong>AUTO Invert</strong> = Single asset with smart inversion</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="bg-slate-600 text-white px-2 py-0.5 rounded text-xs">Manual</span>
+                <span><strong>GO</strong> button only = On-demand signal generation</span>
+              </li>
             </ul>
           </div>
         </CardContent>
@@ -635,15 +714,71 @@ const TampermonkeyControlPanel = () => {
         </CardContent>
       </Card>
 
+      {/* Save/Load Settings System */}
+      <Card className="bg-slate-800/50 border-slate-700">
+        <CardHeader>
+          <CardTitle className="text-white flex items-center justify-between">
+            <span>💾 Settings Profiles</span>
+            <Badge className="bg-blue-600">Save/Load</Badge>
+          </CardTitle>
+          <CardDescription>Save your configuration for quick switching between setups</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <Button 
+              onClick={() => saveSettingsProfile('default')}
+              className="bg-green-600 hover:bg-green-700"
+              data-testid="save-settings-btn"
+            >
+              💾 Save Current
+            </Button>
+            <Button 
+              onClick={() => loadSettingsProfile('default')}
+              variant="outline"
+              className="border-slate-600 hover:bg-slate-700"
+              data-testid="load-settings-btn"
+            >
+              📂 Load Saved
+            </Button>
+          </div>
+          <div className="bg-slate-900 rounded-lg p-3">
+            <p className="text-xs text-slate-400 mb-2">Current Configuration:</p>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="flex justify-between">
+                <span className="text-slate-500">Strategy:</span>
+                <span className="text-purple-400">{settings.selected_strategy || 'Auto'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Signal Source:</span>
+                <span className="text-purple-400">{signalSources.find(s => s.id === settings.signal_source)?.name || 'App AI'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Invert:</span>
+                <span className={settings.invert_signals ? 'text-orange-400' : 'text-green-400'}>
+                  {settings.invert_signals ? 'ON' : 'OFF'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Min Payout:</span>
+                <span className="text-blue-400">{settings.min_payout}%</span>
+              </div>
+            </div>
+          </div>
+          <p className="text-xs text-slate-500">
+            Settings are saved to your browser's local storage and synced with the Tampermonkey script.
+          </p>
+        </CardContent>
+      </Card>
+
       {/* Script Info */}
       <Card className="bg-slate-800/50 border-slate-700">
         <CardHeader>
-          <CardTitle className="text-white">📄 Script Information</CardTitle>
+          <CardTitle className="text-white">📄 Script Information v8.4</CardTitle>
         </CardHeader>
         <CardContent className="text-slate-300 text-sm space-y-2">
           <div className="flex justify-between">
             <span>Script Version:</span>
-            <span className="text-purple-400 font-mono">v6.5.0</span>
+            <span className="text-purple-400 font-mono">v8.4.0</span>
           </div>
           <div className="flex justify-between">
             <span>Connection:</span>
@@ -670,10 +805,37 @@ const TampermonkeyControlPanel = () => {
             </span>
           </div>
           <div className="mt-4 p-3 bg-slate-900 rounded-lg">
-            <p className="text-xs text-slate-400 mb-2">Script URL:</p>
-            <code className="text-xs text-purple-400 break-all">
-              {API_BASE}/pocket-option-auto-trader.user.js
-            </code>
+            <p className="text-xs text-slate-400 mb-2">Script URL (copy for Tampermonkey):</p>
+            <div className="flex items-center gap-2">
+              <code className="text-xs text-purple-400 break-all flex-1">
+                {API_BASE}/pocket-option-auto-trader.user.js
+              </code>
+              <Button 
+                size="sm" 
+                variant="outline" 
+                className="text-xs border-slate-600 shrink-0"
+                onClick={() => {
+                  navigator.clipboard.writeText(`${API_BASE}/pocket-option-auto-trader.user.js`);
+                  alert('Script URL copied!');
+                }}
+              >
+                📋
+              </Button>
+            </div>
+          </div>
+          
+          {/* Features List */}
+          <div className="mt-4 p-3 bg-gradient-to-r from-purple-900/20 to-blue-900/20 rounded-lg border border-purple-500/30">
+            <p className="text-xs text-purple-300 font-semibold mb-2">v8.4 Features:</p>
+            <ul className="text-xs text-slate-400 space-y-1">
+              <li>✅ Live balance sync from Pocket Option UI</li>
+              <li>✅ Momentum-aware auto-invert (RSI + EMA + backend API)</li>
+              <li>✅ Balance-change trade outcome detection</li>
+              <li>✅ CYCLE mode for multi-asset automation</li>
+              <li>✅ 3-mode invert control (OFF/AUTO/ON)</li>
+              <li>✅ Signal status display with technical analysis</li>
+              <li>✅ Strategy selection dropdown</li>
+            </ul>
           </div>
         </CardContent>
       </Card>

@@ -497,9 +497,9 @@ const PocketOptionPage = () => {
         <div>
           <h1 className="text-3xl font-bold text-white flex items-center gap-3">
             <span className="text-4xl">⚙️</span>
-            Pocket Option Settings
+            Pocket Option Integration
           </h1>
-          <p className="text-slate-400 mt-1">Manage your trading connection and parameters</p>
+          <p className="text-slate-400 mt-1">Elite Pocket Option Trading Bot v8.4 - AI-Powered Automation</p>
         </div>
         <Button 
           onClick={fetchAllStatus}
@@ -509,6 +509,27 @@ const PocketOptionPage = () => {
           🔄 Refresh
         </Button>
       </div>
+
+      {/* Integration Overview Card */}
+      <Card className="bg-gradient-to-r from-purple-900/30 to-indigo-900/30 border-purple-500/50 p-6">
+        <div className="grid md:grid-cols-3 gap-6">
+          <div className="text-center">
+            <div className="text-4xl mb-2">🤖</div>
+            <h3 className="text-white font-bold">Tampermonkey Script</h3>
+            <p className="text-slate-400 text-sm mt-1">Auto-trades directly in your browser on Pocket Option</p>
+          </div>
+          <div className="text-center">
+            <div className="text-4xl mb-2">🧠</div>
+            <h3 className="text-white font-bold">AI Signal Engine</h3>
+            <p className="text-slate-400 text-sm mt-1">XGBoost + LSTM + PPO ensemble for high-accuracy signals</p>
+          </div>
+          <div className="text-center">
+            <div className="text-4xl mb-2">📊</div>
+            <h3 className="text-white font-bold">Smart Auto-Invert</h3>
+            <p className="text-slate-400 text-sm mt-1">Momentum-aware inversion based on RSI/EMA + backend analysis</p>
+          </div>
+        </div>
+      </Card>
 
       {/* Connection Status Banner */}
       <Card className={`p-6 ${isDemo ? 'bg-gradient-to-r from-blue-900/50 to-purple-900/50 border-blue-500/50' : 'bg-gradient-to-r from-emerald-900/50 to-teal-900/50 border-emerald-500/50'}`}>

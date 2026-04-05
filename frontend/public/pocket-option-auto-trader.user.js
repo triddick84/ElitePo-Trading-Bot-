@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Elite Pocket Option Trading Bot (Legacy)
-// @namespace    https://auto-trade-bot-pro.preview.emergentagent.com
-// @version      8.0.0
-// @description  Elite AI-powered trading bot for Pocket Option
+// @namespace    https://momentum-trade-test.preview.emergentagent.com
+// @version      8.4.0
+// @description  Elite AI-powered trading bot for Pocket Option with momentum-aware auto-invert
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -32,7 +32,7 @@
     // CONFIGURATION
     // ===========================================
     const CONFIG = {
-        API_URL: 'https://auto-trade-bot-pro.preview.emergentagent.com/api',
+        API_URL: 'https://momentum-trade-test.preview.emergentagent.com/api',
         APP_POLL_INTERVAL: 3000,     // 3 seconds for app signals
         SCAN_INTERVAL: 5000,         // 5 seconds for scanning
         TRADE_COOLDOWN_SCAN: 30000,  // 30 seconds between SCAN trades
@@ -3601,7 +3601,7 @@
                 <div class="gpt-header-left">
                     <div class="gpt-status-dot" id="gpt-dot"></div>
                     <span class="gpt-logo">GPT Bot</span>
-                    <span class="gpt-version">v8.0</span>
+                    <span class="gpt-version">v8.4</span>
                 </div>
                 <button class="gpt-minimize-btn" id="gpt-minimize">−</button>
             </div>
@@ -3644,14 +3644,45 @@
                         <span class="gpt-btn-icon">🔁</span>
                         <span>CYCLE</span>
                     </button>
-                    <button class="gpt-btn gpt-btn-inv" id="gpt-invert">
-                        <span class="gpt-btn-icon">🔄</span>
-                        <span>AUTO-INV</span>
-                    </button>
                     <button class="gpt-btn gpt-btn-log" id="gpt-console-toggle">
                         <span class="gpt-btn-icon">📋</span>
                         <span>LOG</span>
                     </button>
+                    <button class="gpt-btn gpt-btn-reset" id="gpt-reset-stats" style="background:#991b1b;">
+                        <span class="gpt-btn-icon">🗑</span>
+                        <span>RESET</span>
+                    </button>
+                </div>
+                
+                <!-- Invert Control: OFF / AUTO / ON -->
+                <div class="gpt-settings-row" style="margin-bottom:6px; padding:4px 8px;">
+                    <span class="gpt-input-label" style="white-space:nowrap; font-size:9px;">INVERT:</span>
+                    <div style="display:flex; gap:2px; flex:1;">
+                        <button class="gpt-inv-mode" id="gpt-inv-off" style="flex:1; padding:3px 0; border:1px solid #475569; border-radius:4px; background:#1e293b; color:#94a3b8; font-size:9px; cursor:pointer;">OFF</button>
+                        <button class="gpt-inv-mode" id="gpt-inv-auto" style="flex:1; padding:3px 0; border:1px solid #475569; border-radius:4px; background:#1e293b; color:#94a3b8; font-size:9px; cursor:pointer;">AUTO</button>
+                        <button class="gpt-inv-mode" id="gpt-inv-on" style="flex:1; padding:3px 0; border:1px solid #475569; border-radius:4px; background:#1e293b; color:#94a3b8; font-size:9px; cursor:pointer;">ON</button>
+                    </div>
+                </div>
+                <div id="gpt-invert-status" style="font-size:9px; color:#94a3b8; padding:0 8px 4px; display:none;"></div>
+                
+                <!-- Signal Status Display -->
+                <div id="gpt-signal-status" style="padding:4px 8px; margin-bottom:4px; display:none;">
+                    <div style="background:rgba(30,41,59,0.8); border:1px solid rgba(71,85,105,0.4); border-radius:6px; padding:6px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:3px;">
+                            <span style="color:#94a3b8; font-size:8px; text-transform:uppercase;">LAST SIGNAL</span>
+                            <span id="gpt-sig-inv-badge" style="font-size:8px; padding:1px 5px; border-radius:3px; background:#475569; color:#e2e8f0;">—</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                            <span id="gpt-sig-direction" style="font-weight:bold; font-size:12px; color:#e2e8f0;">—</span>
+                            <span id="gpt-sig-symbol" style="color:#a78bfa; font-size:10px;">—</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; font-size:9px; color:#94a3b8;">
+                            <span>Conf: <span id="gpt-sig-confidence" style="color:#22c55e;">—</span></span>
+                            <span>RSI: <span id="gpt-sig-rsi" style="color:#38bdf8;">—</span></span>
+                            <span>EMA: <span id="gpt-sig-trend" style="color:#f59e0b;">—</span></span>
+                        </div>
+                        <div style="font-size:8px; color:#64748b; margin-top:2px;" id="gpt-sig-source">—</div>
+                    </div>
                 </div>
                 
                 <!-- Cycle Status -->
@@ -3722,7 +3753,10 @@
         // Button handlers
         document.getElementById('gpt-auto').addEventListener('click', toggleAuto);
         document.getElementById('gpt-scan').addEventListener('click', toggleScan);
-        document.getElementById('gpt-invert').addEventListener('click', toggleInvert);
+        document.getElementById('gpt-inv-off').addEventListener('click', () => setInvertMode('off'));
+        document.getElementById('gpt-inv-auto').addEventListener('click', () => setInvertMode('auto'));
+        document.getElementById('gpt-inv-on').addEventListener('click', () => setInvertMode('on'));
+        document.getElementById('gpt-reset-stats').addEventListener('click', resetAllStats);
         document.getElementById('gpt-cycle').addEventListener('click', toggleCycle);
         document.getElementById('gpt-fetch').addEventListener('click', handleFetch);
         document.getElementById('gpt-minimize').addEventListener('click', toggleMinimize);
@@ -4033,26 +4067,161 @@
         }
     }
 
-    function toggleInvert() {
-        smartAutoInvert.enabled = !smartAutoInvert.enabled;
-        GM_setValue('smartAutoInvertEnabled', smartAutoInvert.enabled);
+    // ===========================================
+    // INVERT MODE CONTROL - OFF / AUTO / ON
+    // ===========================================
+    function setInvertMode(mode) {
+        // mode: 'off', 'auto', 'on'
+        GM_setValue('invertMode', mode);
         
-        if (smartAutoInvert.enabled) {
-            // When enabling auto-invert, sync invertEnabled to current invertActive state
-            invertEnabled = smartAutoInvert.invertActive;
-            GM_setValue('invertEnabled', invertEnabled);
-            log(`AUTO-INVERT: ON (currently ${smartAutoInvert.invertActive ? 'INVERTED' : 'NORMAL'}) - will toggle on losses`);
-        } else {
-            // When disabling, turn off inversion
+        if (mode === 'off') {
+            smartAutoInvert.enabled = false;
             smartAutoInvert.invertActive = false;
             invertEnabled = false;
-            GM_setValue('invertEnabled', false);
+            GM_setValue('smartAutoInvertEnabled', false);
             GM_setValue('smartAutoInvertActive', false);
-            log(`AUTO-INVERT: OFF (signals normal)`);
+            GM_setValue('invertEnabled', false);
+            log('INVERT: OFF - Signals trade as-is');
+        } else if (mode === 'auto') {
+            smartAutoInvert.enabled = true;
+            // Keep current invertActive state
+            invertEnabled = smartAutoInvert.invertActive;
+            GM_setValue('smartAutoInvertEnabled', true);
+            GM_setValue('invertEnabled', invertEnabled);
+            log(`INVERT: AUTO - Momentum-aware (currently ${smartAutoInvert.invertActive ? 'INVERTED' : 'NORMAL'})`);
+        } else if (mode === 'on') {
+            smartAutoInvert.enabled = false;
+            smartAutoInvert.invertActive = true;
+            invertEnabled = true;
+            GM_setValue('smartAutoInvertEnabled', false);
+            GM_setValue('smartAutoInvertActive', true);
+            GM_setValue('invertEnabled', true);
+            log('INVERT: ON - All signals inverted');
         }
         
-        updateAllUI();
+        updateInvertModeUI(mode);
         updateInvertDisplay();
+    }
+    
+    function updateInvertModeUI(mode) {
+        const offBtn = document.getElementById('gpt-inv-off');
+        const autoBtn = document.getElementById('gpt-inv-auto');
+        const onBtn = document.getElementById('gpt-inv-on');
+        const statusEl = document.getElementById('gpt-invert-status');
+        
+        if (!offBtn) return;
+        
+        // Reset all
+        [offBtn, autoBtn, onBtn].forEach(b => {
+            b.style.background = '#1e293b';
+            b.style.color = '#94a3b8';
+            b.style.borderColor = '#475569';
+        });
+        
+        if (mode === 'off') {
+            offBtn.style.background = '#475569';
+            offBtn.style.color = '#e2e8f0';
+            if (statusEl) statusEl.style.display = 'none';
+        } else if (mode === 'auto') {
+            autoBtn.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
+            autoBtn.style.color = '#fff';
+            autoBtn.style.borderColor = '#f59e0b';
+            if (statusEl) {
+                statusEl.style.display = 'block';
+                statusEl.textContent = smartAutoInvert.invertActive ? 'AUTO: INVERTED (momentum shift)' : 'AUTO: NORMAL (trend intact)';
+                statusEl.style.color = smartAutoInvert.invertActive ? '#f59e0b' : '#22c55e';
+            }
+        } else if (mode === 'on') {
+            onBtn.style.background = 'linear-gradient(135deg, #ef4444, #b91c1c)';
+            onBtn.style.color = '#fff';
+            onBtn.style.borderColor = '#ef4444';
+            if (statusEl) {
+                statusEl.style.display = 'block';
+                statusEl.textContent = 'ALWAYS INVERTED - All signals flipped';
+                statusEl.style.color = '#ef4444';
+            }
+        }
+    }
+    
+    function getCurrentInvertMode() {
+        if (smartAutoInvert.enabled) return 'auto';
+        if (invertEnabled) return 'on';
+        return 'off';
+    }
+    
+    // ===========================================
+    // SIGNAL STATUS DISPLAY - Shows current signal info
+    // ===========================================
+    function updateSignalStatusDisplay(signal) {
+        const container = document.getElementById('gpt-signal-status');
+        if (!container) return;
+        
+        container.style.display = 'block';
+        
+        const dirEl = document.getElementById('gpt-sig-direction');
+        const symEl = document.getElementById('gpt-sig-symbol');
+        const confEl = document.getElementById('gpt-sig-confidence');
+        const rsiEl = document.getElementById('gpt-sig-rsi');
+        const trendEl = document.getElementById('gpt-sig-trend');
+        const srcEl = document.getElementById('gpt-sig-source');
+        const invBadge = document.getElementById('gpt-sig-inv-badge');
+        
+        if (dirEl) {
+            dirEl.textContent = signal.direction || '—';
+            dirEl.style.color = signal.direction === 'CALL' ? '#22c55e' : signal.direction === 'PUT' ? '#ef4444' : '#e2e8f0';
+        }
+        if (symEl) symEl.textContent = signal.symbol || '—';
+        if (confEl) {
+            const conf = Math.round(signal.confidence || 0);
+            confEl.textContent = conf + '%';
+            confEl.style.color = conf >= 70 ? '#22c55e' : conf >= 50 ? '#f59e0b' : '#ef4444';
+        }
+        
+        // Show local RSI if available
+        if (rsiEl) {
+            const candles = PriceScraperV2.getCandles();
+            if (candles && candles.length >= 5) {
+                const closes = candles.map(c => c.close);
+                const rsi = LocalSignalEngine.calculateRSI(closes, 5);
+                rsiEl.textContent = rsi.toFixed(0);
+                rsiEl.style.color = rsi > 70 ? '#ef4444' : rsi < 30 ? '#22c55e' : '#38bdf8';
+            } else {
+                rsiEl.textContent = '—';
+            }
+        }
+        
+        // Show EMA trend
+        if (trendEl) {
+            const candles = PriceScraperV2.getCandles();
+            if (candles && candles.length >= 10) {
+                const closes = candles.map(c => c.close);
+                const ema5 = LocalSignalEngine.calculateEMA(closes, 5);
+                const ema10 = LocalSignalEngine.calculateEMA(closes, 10);
+                if (ema5 > ema10) {
+                    trendEl.textContent = 'BULL';
+                    trendEl.style.color = '#22c55e';
+                } else {
+                    trendEl.textContent = 'BEAR';
+                    trendEl.style.color = '#ef4444';
+                }
+            } else {
+                trendEl.textContent = '—';
+            }
+        }
+        
+        if (srcEl) srcEl.textContent = `Source: ${signal.source || '—'}`;
+        
+        if (invBadge) {
+            if (signal._smartInverted) {
+                invBadge.textContent = 'INVERTED';
+                invBadge.style.background = '#f59e0b';
+                invBadge.style.color = '#000';
+            } else {
+                invBadge.textContent = 'NORMAL';
+                invBadge.style.background = '#22c55e';
+                invBadge.style.color = '#000';
+            }
+        }
     }
 
     function handleFetch() {
@@ -4134,7 +4303,7 @@
     
     function _goForceGenerate(assetSymbol) {
         const forceUrl = CONFIG.API_URL + `/signals/force-generate/asset/${encodeURIComponent(assetSymbol)}?wait_for_candle=false`;
-        log(`📡 Force-generate: ${forceUrl}`);
+        log(`Force-generate: ${forceUrl}`);
         
         GM_xmlhttpRequest({
             method: 'POST',
@@ -4143,7 +4312,7 @@
             timeout: 20000,
             onload: function(res) {
                 try {
-                    log(`📡 Force response: ${res.status}`);
+                    log(`Force response: ${res.status}`);
                     const data = JSON.parse(res.responseText);
                     
                     if (data.success) {
@@ -4151,40 +4320,55 @@
                         const signal = signals[0] || data.signal;
                         
                         if (signal) {
-                            log(`✅ FORCED: ${signal.direction} ${signal.symbol || assetSymbol} (${signal.probability || signal.confidence || 85}%)`);
+                            // Normalize direction: BUY/SELL → CALL/PUT
+                            let direction = (signal.direction || '').toUpperCase();
+                            if (direction === 'BUY' || direction === 'LONG') direction = 'CALL';
+                            if (direction === 'SELL' || direction === 'SHORT') direction = 'PUT';
+                            
+                            const conf = signal.confidence || signal.probability || 85;
+                            log(`FORCED: ${direction} ${signal.symbol || assetSymbol} (${conf}%)`);
                             
                             const tradeSignal = {
-                                direction: signal.direction,
+                                direction: direction,
                                 symbol: signal.symbol || assetSymbol,
-                                confidence: signal.confidence || signal.probability || 85,
+                                confidence: conf,
                                 source: 'FORCE_GENERATE',
-                                expiration_seconds: signal.expiry_seconds || 60,
-                                _willSwitch: false
+                                expiration_seconds: signal.expiry_seconds || signal.expiration_minutes ? signal.expiration_minutes * 60 : 5,
+                                _willSwitch: false,
+                                technical_analysis: signal.technical_analysis || null,
                             };
                             
-                            executeScanTrade(tradeSignal).catch(err => {
-                                log(`❌ Trade error: ${err.message}`);
+                            // Apply auto-invert if enabled
+                            const processed = processSmartAutoInvert(tradeSignal);
+                            
+                            lastTradeInfo.symbol = processed.symbol;
+                            lastTradeInfo.direction = processed.direction;
+                            lastTradeInfo.confidence = processed.confidence;
+                            
+                            updateSignalStatusDisplay(processed);
+                            
+                            executeScanTrade(processed).catch(err => {
+                                log(`Trade error: ${err.message}`);
                                 updateStatusDot('connected');
                             });
                             return;
                         }
                     }
                     
-                    log(`⚠️ Force-generate returned no signal`);
+                    log(`Force-generate returned no signal`);
                     updateStatusDot('connected');
                 } catch (e) {
-                    log(`❌ Force parse error: ${e.message}`);
+                    log(`Force parse error: ${e.message}`);
                     updateStatusDot('connected');
                 }
             },
             onerror: function(e) {
-                log(`❌ BOTH scan & force-generate failed. Check API connection.`);
+                log(`BOTH scan & force-generate failed. Check API connection.`);
                 log(`   API URL: ${CONFIG.API_URL}`);
-                log(`   Try opening this in browser: ${CONFIG.API_URL}/health`);
                 updateStatusDot('error');
             },
             ontimeout: function() {
-                log(`❌ Force-generate timeout. API may be slow.`);
+                log(`Force-generate timeout. API may be slow.`);
                 updateStatusDot('error');
             }
         });
@@ -5627,7 +5811,7 @@
             }
 
             console.log('[GPT Bot] Creating panel...');
-            console.log('[GPT Bot] v8.0.0 - Strategy selector + Smart Auto-Invert + Premium tracking');
+            console.log('[GPT Bot] v8.4.0 - 3-mode Invert + Signal Status Display + Reset Stats');
             
             // Create panel immediately, don't wait
             createPanel();

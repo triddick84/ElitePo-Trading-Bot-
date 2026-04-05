@@ -10,7 +10,7 @@ import json
 import subprocess
 from datetime import datetime, timezone
 
-BACKEND_URL = "https://auto-trade-bot-pro.preview.emergentagent.com/api"
+BACKEND_URL = "https://momentum-trade-test.preview.emergentagent.com/api"
 
 async def test_complete_flow():
     """Test the complete auto signal generation start/stop flow"""

@@ -1,8 +1,11 @@
-# GPT Signal Bot - Product Requirements Document
+# Elite Pocket Option Trading Bot - Product Requirements Document
 
-## Last Updated: February 2026
+## Last Updated: April 5, 2026
 
 ## Current Status
+✅ **Tampermonkey v8.4.0 — UI Updates Complete** - 3-mode Invert Control (OFF/AUTO/ON), Signal Status Display, Reset Stats button, GO button direction mapping fix (April 5, 2026)
+✅ **React App Updates** - Updated TampermonkeyControlPanel with comprehensive Button Guide v8.4, Save/Load Settings System, Script Info v8.4 with features list (April 5, 2026)
+✅ **PocketOptionPage Header Update** - New Integration Overview card with AI Signal Engine and Smart Auto-Invert info (April 5, 2026)
 ✅ **Tampermonkey v8.4 — Balance Sync + Momentum Auto-Invert** - Live PO balance scrape + backend fallback, auto-bet recalc, momentum-aware invert using local RSI/EMA + backend momentum-check endpoint (Feb 2026)
 ✅ **Code Quality Audit Fixes** - Security vulnerabilities, circular imports, hardcoded secrets, weak crypto all resolved (Feb 2026)
 ✅ **Auto-Invert v8.2 + Audio Detection** - Simple WIN=keep/LOSS=toggle logic with Pocket Option audio/DOM monitoring for automatic trade outcome detection (Feb 2026)

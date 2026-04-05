@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 sys.path.append('/app/backend')
 
 # Test configuration
-BACKEND_URL = "https://auto-trade-bot-pro.preview.emergentagent.com/api"
+BACKEND_URL = "https://momentum-trade-test.preview.emergentagent.com/api"
 
 class ClearAllRestartTester:
     def __init__(self):
