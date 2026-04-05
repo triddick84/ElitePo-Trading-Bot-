@@ -8,6 +8,7 @@
 
 ## Admin Account
 - Username: triddick84
+- Password: Fallinone#1
 - Email: triddick84@admin.local
 - Role: admin
 
@@ -16,3 +17,5 @@
 - PPO RL: `/api/ppo-rl/stats`, `/api/ppo-rl/predict`, `/api/ppo-rl/train`
 - AI Ensemble: `/api/ai-ensemble/predict`
 - Maximized ML: `/api/maximized-ml/stats`, `/api/maximized-ml/predict/{symbol}`, `/api/maximized-ml/train`
+
+## Last Updated: April 5, 2026
