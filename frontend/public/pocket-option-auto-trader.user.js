@@ -1585,44 +1585,144 @@
         return null;
     }
     
+    // ===========================================
+    // BALANCE SYNC SYSTEM - v8.4
+    // Primary: Scrape PO UI | Fallback: Backend API
+    // Auto-recalculates bet from live balance
+    // ===========================================
+    let balanceSync = {
+        lastUIBalance: 0,
+        lastAPIBalance: 0,
+        lastSyncTime: 0,
+        syncIntervalMs: 5000,     // Sync every 5 seconds
+        apiFailCount: 0,
+        maxAPIFails: 3,
+    };
+    
     // Detect current account balance from UI
     function detectAccountBalance() {
         // Look for balance display on Pocket Option
         const balanceSelectors = [
-            '[class*="balance"]',
-            '[class*="account-value"]',
-            '[class*="user-balance"]',
+            '.balance__value',
+            '[class*="balance__value"]',
+            '[class*="balance-value"]',
+            '.js-balance',
             '[data-testid="balance"]',
+            '.balance span',
+            '[class*="balances"] [class*="amount"]',
+            '[class*="balance"] [class*="value"]',
+            '[class*="user-balance"]',
+            '[class*="account-value"]',
             '.balance',
-            '.account-balance'
+            '.account-balance',
         ];
         
         for (const sel of balanceSelectors) {
-            const elements = document.querySelectorAll(sel);
-            for (const el of elements) {
-                if (!el || !el.offsetParent) continue;
-                
-                const text = el.textContent || '';
-                // Match patterns like "$1,234.56" or "1234.56" or "$ 1,234.56"
-                const match = text.match(/\$?\s?([\d,]+\.?\d*)/);
-                if (match) {
-                    const balance = parseFloat(match[1].replace(/,/g, ''));
-                    if (balance >= 1 && balance <= 1000000) {
-                        log(`📊 Detected balance: $${balance}`);
-                        moneyManagement.accountBalance = balance;
-                        
-                        // Update session start balance if session is starting
-                        if (!moneyManagement.sessionActive) {
-                            moneyManagement.sessionStartBalance = balance;
+            try {
+                const elements = document.querySelectorAll(sel);
+                for (const el of elements) {
+                    if (!el || !el.offsetParent) continue;
+                    
+                    const text = el.textContent || '';
+                    // Match patterns like "$1,234.56" or "1234.56" or "$ 1,234.56"
+                    const match = text.match(/\$?\s?([\d,]+\.?\d*)/);
+                    if (match) {
+                        const balance = parseFloat(match[1].replace(/,/g, ''));
+                        if (balance >= 0.01 && balance <= 10000000) {
+                            balanceSync.lastUIBalance = balance;
+                            moneyManagement.accountBalance = balance;
+                            
+                            // Update session start balance if session is starting
+                            if (!moneyManagement.sessionActive) {
+                                moneyManagement.sessionStartBalance = balance;
+                            }
+                            
+                            return balance;
                         }
-                        
-                        return balance;
                     }
                 }
-            }
+            } catch(e) {}
         }
         
         return moneyManagement.accountBalance; // Return cached value
+    }
+    
+    // Fetch balance from backend API (fallback)
+    function fetchBackendBalance() {
+        if (balanceSync.apiFailCount >= balanceSync.maxAPIFails) return;
+        
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: CONFIG.API_URL + '/pocket-option/balance',
+            headers: { 'Accept': 'application/json' },
+            timeout: 5000,
+            onload: function(res) {
+                try {
+                    if (res.status !== 200) {
+                        balanceSync.apiFailCount++;
+                        return;
+                    }
+                    const data = JSON.parse(res.responseText);
+                    if (data.success && data.balance > 0) {
+                        balanceSync.lastAPIBalance = data.balance;
+                        balanceSync.apiFailCount = 0;
+                        
+                        // Only use API balance if UI balance seems stale
+                        const uiAge = Date.now() - balanceSync.lastSyncTime;
+                        if (uiAge > 10000 || balanceSync.lastUIBalance === 0) {
+                            moneyManagement.accountBalance = data.balance;
+                            recalculateBetSize();
+                        }
+                    }
+                } catch(e) {
+                    balanceSync.apiFailCount++;
+                }
+            },
+            onerror: function() { balanceSync.apiFailCount++; }
+        });
+    }
+    
+    // Recalculate bet size from current live balance
+    function recalculateBetSize() {
+        const balance = moneyManagement.accountBalance;
+        if (balance <= 0) return;
+        
+        const riskPct = moneyManagement.riskPercentage || 2;
+        const newBase = Math.max(1, Math.round(balance * (riskPct / 100) * 100) / 100);
+        
+        // Only update base amount (don't override martingale step amount)
+        if (Math.abs(newBase - moneyManagement.baseTradeAmount) > 0.1) {
+            moneyManagement.baseTradeAmount = newBase;
+            
+            // If not in a martingale sequence, update current trade amount too
+            if (!smartMartingale.enabled || smartMartingale.step === 0) {
+                moneyManagement.currentTradeAmount = newBase;
+                if (!martingaleEnabled || martingaleStep === 0) {
+                    currentTradeAmount = newBase;
+                }
+            }
+        }
+    }
+    
+    // Balance sync loop - runs on an interval
+    function startBalanceSync() {
+        setInterval(() => {
+            // Primary: UI scrape
+            const uiBalance = detectAccountBalance();
+            balanceSync.lastSyncTime = Date.now();
+            
+            if (uiBalance > 0) {
+                recalculateBetSize();
+            }
+            
+            // Fallback: backend API (every 3rd cycle to avoid spam)
+            if (Date.now() % 3 === 0) {
+                fetchBackendBalance();
+            }
+            
+            // Update display
+            updateMoneyManagementDisplay();
+        }, balanceSync.syncIntervalMs);
     }
 
     // ===========================================
@@ -2037,8 +2137,10 @@
     }
 
     // ===========================================
-    // AUTO-INVERT v8.2 - Simple toggle-on-loss
-    // WIN = keep state, LOSS = flip state
+    // AUTO-INVERT v8.4 - Momentum & Trend Aware
+    // After LOSS: checks local RSI/EMA + backend momentum
+    // Only inverts if momentum has shifted (pullback/reversal)
+    // If trend intact, stays in current direction
     // ===========================================
     function processSmartAutoInvert(signal) {
         // If auto-invert is enabled AND currently inverted, flip direction
@@ -2056,17 +2158,155 @@
         if (!smartAutoInvert.enabled) return;
         
         if (isWin) {
-            // WIN: Stay in current state - no change
+            // WIN: Stay in current state
             log(`AUTO-INVERT: WIN - staying ${smartAutoInvert.invertActive ? 'INVERTED' : 'NORMAL'}`);
         } else {
-            // LOSS: Toggle to opposite state
-            smartAutoInvert.invertActive = !smartAutoInvert.invertActive;
-            // Sync invertEnabled so executeScanTrade/executeAppTrade use it
-            invertEnabled = smartAutoInvert.invertActive;
-            GM_setValue('invertEnabled', invertEnabled);
-            GM_setValue('smartAutoInvertActive', smartAutoInvert.invertActive);
-            log(`AUTO-INVERT: LOSS - switched to ${smartAutoInvert.invertActive ? 'INVERTED' : 'NORMAL'}`);
+            // LOSS: Check momentum before deciding to invert
+            log(`AUTO-INVERT: LOSS detected - checking momentum...`);
+            checkMomentumAndInvert();
         }
+        updateInvertDisplay();
+    }
+    
+    // After a loss, do a quick local + backend momentum check
+    function checkMomentumAndInvert() {
+        const symbol = lastTradeInfo.symbol || '';
+        
+        // Step 1: Quick LOCAL momentum check (immediate)
+        const localResult = localMomentumCheck();
+        
+        // Step 2: BACKEND momentum check (async, confirms or overrides local)
+        backendMomentumCheck(symbol, localResult);
+    }
+    
+    // Quick local RSI + EMA analysis from scraped candles
+    function localMomentumCheck() {
+        const candles = PriceScraperV2.getCandles();
+        if (!candles || candles.length < 10) {
+            log(`AUTO-INVERT: Not enough local candles (${candles ? candles.length : 0}), defaulting to toggle`);
+            // Not enough data — fall back to simple toggle
+            doInvertToggle('insufficient local data');
+            return { shouldInvert: true, confidence: 30, reason: 'No local data' };
+        }
+        
+        const closes = candles.map(c => c.close);
+        
+        // Calculate RSI (fast 5-period for 5s trades)
+        const rsi = LocalSignalEngine.calculateRSI(closes, 5);
+        
+        // Calculate EMA 5 and EMA 10 for slope
+        const ema5_curr = LocalSignalEngine.calculateEMA(closes, 5);
+        const ema10_curr = LocalSignalEngine.calculateEMA(closes, 10);
+        const ema5_prev = LocalSignalEngine.calculateEMA(closes.slice(0, -1), 5);
+        const ema10_prev = LocalSignalEngine.calculateEMA(closes.slice(0, -1), 10);
+        
+        // EMA slope (direction of movement)
+        const emaSlope = (ema5_curr - ema5_prev) / Math.max(Math.abs(ema5_prev), 0.0001);
+        
+        // EMA crossover check
+        const prevAbove = ema5_prev > ema10_prev;
+        const currAbove = ema5_curr > ema10_curr;
+        const crossover = prevAbove !== currAbove;
+        
+        // Price velocity
+        const recentCloses = closes.slice(-5);
+        const velocity = (recentCloses[recentCloses.length - 1] - recentCloses[0]) / Math.max(Math.abs(recentCloses[0]), 0.0001) * 100;
+        
+        let confidence = 0;
+        let reasons = [];
+        
+        // RSI extremes suggest reversal/pullback
+        if (rsi > 75) {
+            confidence += 30;
+            reasons.push(`RSI overbought (${rsi.toFixed(1)})`);
+        } else if (rsi < 25) {
+            confidence += 30;
+            reasons.push(`RSI oversold (${rsi.toFixed(1)})`);
+        }
+        
+        // EMA crossover = momentum shift
+        if (crossover) {
+            confidence += 35;
+            reasons.push('EMA 5/10 crossover');
+        }
+        
+        // Slope reversal
+        const lastDirection = lastTradeInfo.direction;
+        if (lastDirection === 'CALL' && emaSlope < -0.001) {
+            confidence += 20;
+            reasons.push('EMA slope turned bearish');
+        } else if (lastDirection === 'PUT' && emaSlope > 0.001) {
+            confidence += 20;
+            reasons.push('EMA slope turned bullish');
+        }
+        
+        // Sharp velocity spike against trade direction
+        if ((lastDirection === 'CALL' && velocity < -0.05) || (lastDirection === 'PUT' && velocity > 0.05)) {
+            confidence += 25;
+            reasons.push(`Price spike against direction (${velocity.toFixed(3)}%)`);
+        }
+        
+        const shouldInvert = confidence >= 50;
+        
+        log(`AUTO-INVERT LOCAL: RSI=${rsi.toFixed(1)} EMAslope=${emaSlope.toFixed(4)} conf=${confidence} → ${shouldInvert ? 'INVERT' : 'HOLD'}`);
+        
+        if (shouldInvert) {
+            doInvertToggle(reasons.join(', '));
+        } else {
+            log(`AUTO-INVERT: Momentum intact locally (conf=${confidence}), staying ${smartAutoInvert.invertActive ? 'INVERTED' : 'NORMAL'}`);
+        }
+        
+        return { shouldInvert, confidence, reason: reasons.join(', '), rsi, emaSlope };
+    }
+    
+    // Backend momentum confirmation (async)
+    function backendMomentumCheck(symbol, localResult) {
+        if (!symbol) return;
+        
+        const normalizedSymbol = symbol.replace(/\s+/g, '').replace('/', '').toUpperCase();
+        
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: CONFIG.API_URL + `/signals/momentum-check?symbol=${normalizedSymbol}`,
+            headers: { 'Accept': 'application/json' },
+            timeout: 5000,
+            onload: function(res) {
+                try {
+                    if (res.status !== 200) return;
+                    const data = JSON.parse(res.responseText);
+                    if (!data.success) return;
+                    
+                    log(`AUTO-INVERT BACKEND: momentum=${data.momentum} trend=${data.trend} rsi=${data.rsi} conf=${data.confidence} → ${data.should_invert ? 'INVERT' : 'HOLD'}`);
+                    
+                    // Backend can override local decision in two cases:
+                    // 1. Local said HOLD but backend sees strong shift → invert
+                    // 2. Local said INVERT but backend says trend intact → revert
+                    
+                    if (data.should_invert && !localResult.shouldInvert) {
+                        // Backend overrides: momentum shifted, force invert
+                        log(`AUTO-INVERT: Backend override → INVERT (${data.reason})`);
+                        doInvertToggle('Backend: ' + data.reason);
+                    } else if (!data.should_invert && localResult.shouldInvert && data.confidence < 20) {
+                        // Backend says strong trend intact, local was wrong — revert
+                        log(`AUTO-INVERT: Backend override → REVERT (trend intact: ${data.reason})`);
+                        // Only revert if we just inverted
+                        if (smartAutoInvert.invertActive && localResult.confidence < 70) {
+                            doInvertToggle('Backend correction: trend intact');
+                        }
+                    }
+                } catch(e) {}
+            },
+            onerror: function() {} // Silently fail, local decision stands
+        });
+    }
+    
+    // Actually toggle the invert state
+    function doInvertToggle(reason) {
+        smartAutoInvert.invertActive = !smartAutoInvert.invertActive;
+        invertEnabled = smartAutoInvert.invertActive;
+        GM_setValue('invertEnabled', invertEnabled);
+        GM_setValue('smartAutoInvertActive', smartAutoInvert.invertActive);
+        log(`AUTO-INVERT: → ${smartAutoInvert.invertActive ? 'INVERTED' : 'NORMAL'} (${reason})`);
         updateInvertDisplay();
     }
     
@@ -5406,6 +5646,9 @@
             
             // Setup trade outcome detection (balance monitor + DOM scanning)
             setupOutcomeDetection();
+            
+            // Start balance sync loop (PO UI scrape + backend API fallback)
+            startBalanceSync();
             
             // Resume CYCLE mode if it was saved as enabled
             if (cycleEnabled) {

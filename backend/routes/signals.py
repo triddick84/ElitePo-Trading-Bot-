@@ -2862,3 +2862,151 @@ async def should_trade_check(
     except Exception as e:
         logger.error(f"Should trade check error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+
+@router.get("/signals/momentum-check")
+async def momentum_check(symbol: str = "EURUSD_OTC", timeframe: str = "5s"):
+    """
+    Quick momentum/trend analysis for auto-invert decisions.
+    Returns whether momentum has shifted (suggesting inversion) or trend is intact.
+    Used by Tampermonkey script after a loss to decide whether to invert.
+    """
+    try:
+        import numpy as np
+        
+        # Get recent candle data from DB
+        db = router.app_state.get("db") if hasattr(router, 'app_state') else None
+        if not db:
+            from server import db as server_db
+            db = server_db
+        
+        candles = []
+        if db is not None:
+            cursor = db.historical_candles.find(
+                {"symbol": symbol.replace("_OTC", "").replace("_", "/")},
+                {"_id": 0}
+            ).sort("timestamp", -1).limit(50)
+            candles = await cursor.to_list(50)
+            candles.reverse()
+        
+        if len(candles) < 10:
+            # Not enough data — return neutral (don't invert)
+            return {
+                "success": True,
+                "should_invert": False,
+                "momentum": "NEUTRAL",
+                "trend": "UNKNOWN",
+                "confidence": 0,
+                "reason": "Insufficient candle data",
+                "rsi": None,
+                "ema_slope": None,
+                "price_velocity": None,
+            }
+        
+        closes = np.array([c.get("close", c.get("price", 0)) for c in candles], dtype=float)
+        
+        # Calculate RSI (14-period)
+        deltas = np.diff(closes)
+        gains = np.where(deltas > 0, deltas, 0)
+        losses = np.where(deltas < 0, -deltas, 0)
+        
+        period = min(14, len(deltas) - 1)
+        avg_gain = np.mean(gains[-period:]) if len(gains) >= period else 0
+        avg_loss = np.mean(losses[-period:]) if len(losses) >= period else 0.0001
+        rs = avg_gain / max(avg_loss, 0.0001)
+        rsi = 100 - (100 / (1 + rs))
+        
+        # Calculate short EMA slope (5-period)
+        def ema(data, period):
+            alpha = 2 / (period + 1)
+            result = [data[0]]
+            for i in range(1, len(data)):
+                result.append(alpha * data[i] + (1 - alpha) * result[-1])
+            return result
+        
+        ema5 = ema(closes.tolist(), 5)
+        ema20 = ema(closes.tolist(), 20)
+        
+        # EMA slope: positive = uptrend, negative = downtrend
+        ema_slope_short = (ema5[-1] - ema5[-3]) / max(abs(ema5[-3]), 0.0001) * 100 if len(ema5) >= 3 else 0
+        ema_slope_long = (ema20[-1] - ema20[-5]) / max(abs(ema20[-5]), 0.0001) * 100 if len(ema20) >= 5 else 0
+        
+        # Price velocity (rate of change over last 5 candles)
+        price_velocity = (closes[-1] - closes[-5]) / max(abs(closes[-5]), 0.0001) * 100 if len(closes) >= 5 else 0
+        
+        # Determine trend
+        if ema5[-1] > ema20[-1] and ema_slope_short > 0:
+            trend = "BULLISH"
+        elif ema5[-1] < ema20[-1] and ema_slope_short < 0:
+            trend = "BEARISH"
+        else:
+            trend = "NEUTRAL"
+        
+        # Determine momentum shift
+        # A momentum shift = RSI extreme + EMA slope reversal + price velocity change
+        momentum_shifted = False
+        invert_confidence = 0
+        reasons = []
+        
+        # Check for pullback/reversal indicators
+        if rsi > 70:
+            reasons.append(f"RSI overbought ({rsi:.1f})")
+            invert_confidence += 30
+        elif rsi < 30:
+            reasons.append(f"RSI oversold ({rsi:.1f})")
+            invert_confidence += 30
+        
+        # EMA crossover or slope reversal
+        if len(ema5) >= 2 and len(ema20) >= 2:
+            prev_above = ema5[-2] > ema20[-2]
+            curr_above = ema5[-1] > ema20[-1]
+            if prev_above != curr_above:
+                reasons.append("EMA 5/20 crossover detected")
+                invert_confidence += 35
+        
+        # Sharp price velocity change (spike/reversal)
+        if abs(price_velocity) > 0.1:  # > 0.1% move in 5 candles
+            if (price_velocity > 0 and ema_slope_short < 0) or (price_velocity < 0 and ema_slope_short > 0):
+                reasons.append(f"Price/EMA divergence (velocity={price_velocity:.3f}%)")
+                invert_confidence += 25
+        
+        # Short-term slope reversal
+        if abs(ema_slope_short) > 0.01:
+            if (ema_slope_short > 0 and ema_slope_long < 0) or (ema_slope_short < 0 and ema_slope_long > 0):
+                reasons.append("Short vs long EMA slope divergence")
+                invert_confidence += 20
+        
+        should_invert = invert_confidence >= 50
+        
+        if should_invert:
+            momentum = "SHIFTED"
+        elif invert_confidence >= 30:
+            momentum = "WEAKENING"
+        else:
+            momentum = "INTACT"
+        
+        return {
+            "success": True,
+            "should_invert": should_invert,
+            "momentum": momentum,
+            "trend": trend,
+            "confidence": min(invert_confidence, 100),
+            "reason": " | ".join(reasons) if reasons else "Trend intact, no inversion needed",
+            "rsi": round(rsi, 1),
+            "ema_slope": round(ema_slope_short, 4),
+            "price_velocity": round(price_velocity, 4),
+        }
+    except Exception as e:
+        logger.error(f"Momentum check error: {e}")
+        return {
+            "success": True,
+            "should_invert": False,
+            "momentum": "ERROR",
+            "trend": "UNKNOWN",
+            "confidence": 0,
+            "reason": str(e),
+            "rsi": None,
+            "ema_slope": None,
+            "price_velocity": None,
+        }
