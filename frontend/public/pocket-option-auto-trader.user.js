@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Elite Pocket Option Trading Bot (Legacy)
 // @namespace    https://momentum-trade-test.preview.emergentagent.com
-// @version      8.5.0
-// @description  Elite AI-powered trading bot for Pocket Option with MutationObserver-based real-time outcome detection
+// @version      8.5.1
+// @description  Elite AI-powered trading bot with ML data collection, latency adjustment, and real-time outcome detection
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -44,6 +44,15 @@
         DEBUG: true,
         USE_LOCAL_SIGNALS: true,  // v7.1.0: Generate signals locally using actual OTC prices
         LOCAL_CANDLE_COUNT: 50,   // Number of candles to analyze
+        
+        // v8.5.1 LATENCY ADJUSTMENT - adjustable timing for outcome detection
+        // Positive = wait longer after expiry, Negative = detect earlier
+        RESULT_LATENCY_OFFSET: 0,    // Adjustable from -5 to +5 seconds
+        
+        // v8.5.1 AI/ML DATA COLLECTION
+        COLLECT_TRAINING_DATA: true,   // Send trade data to backend for ML training
+        ADAPTIVE_MODEL_UPDATE: true,   // Request model updates based on recent performance
+        BACKTEST_WINDOW: 100,          // Number of trades to use for local backtesting
     };
 
     // ===========================================
@@ -1375,12 +1384,18 @@
         invertActive: false,   // Current invert state (signals flipped when true)
     };
 
-    // Track last trade info for premium result recording
+    // Track last trade info for premium result recording and ML training
     let lastTradeInfo = {
         symbol: '',
         direction: '',
         confidence: 0,
+        strategy: 'unknown',
+        indicators: {}
     };
+    
+    // Store indicators globally for ML training
+    window.lastTradeIndicators = {};
+    window.lastTradeStrategy = 'unknown';
 
     // Trade outcome detection state
     let audioDetection = {
@@ -2739,19 +2754,200 @@
         
         const elapsed = Math.round((Date.now() - audioDetection.tradeOpenedAt) / 1000);
         const expectedExpiry = audioDetection.tradeExpirySeconds || 60;
+        const latencyOffset = CONFIG.RESULT_LATENCY_OFFSET || 0;
         
-        // Sanity check: result should come AFTER trade expiry (with some tolerance)
-        // Allow 2 seconds early to account for platform timing variations
-        if (elapsed < (expectedExpiry - 2)) {
-            log(`OUTCOME: Ignoring early ${source} detection at ${elapsed}s (expected ~${expectedExpiry}s)`);
+        // Sanity check with user-adjustable latency
+        // Formula: result should come AFTER (expiry - 5 + latencyOffset) seconds
+        // Default allows 5s early. If latencyOffset = +3, allows only 2s early
+        // If latencyOffset = -2, allows 7s early
+        const minElapsed = Math.max(0, expectedExpiry - 5 + latencyOffset);
+        
+        if (elapsed < minElapsed) {
+            log(`OUTCOME: Ignoring early ${source} detection at ${elapsed}s (min: ${minElapsed}s, expiry: ${expectedExpiry}s, offset: ${latencyOffset}s)`);
             return;
         }
         
         audioDetection.pendingTrade = false;
         audioDetection.lastDetectionTime = Date.now();
         
-        log(`✅ TRADE RESULT [${source}]: ${isWin ? 'WIN' : 'LOSS'} after ${elapsed}s (expected ~${expectedExpiry}s)`);
+        log(`✅ TRADE RESULT [${source}]: ${isWin ? 'WIN' : 'LOSS'} after ${elapsed}s (expected ~${expectedExpiry}s, offset: ${latencyOffset}s)`);
+        
+        // Record for AI/ML training
+        recordTradeForML(isWin, elapsed, expectedExpiry, source);
+        
         handleAutoDetectedResult(isWin);
+    }
+    
+    // Record trade outcome for AI/ML training and backtesting
+    function recordTradeForML(isWin, elapsed, expiry, detectionSource) {
+        if (!CONFIG.COLLECT_TRAINING_DATA) return;
+        
+        const tradeData = {
+            timestamp: new Date().toISOString(),
+            symbol: lastTradeInfo.symbol || getCurrentAsset() || 'UNKNOWN',
+            direction: lastTradeInfo.direction || 'UNKNOWN',
+            confidence: lastTradeInfo.confidence || 0,
+            outcome: isWin ? 'WIN' : 'LOSS',
+            expiry_seconds: expiry,
+            actual_elapsed: elapsed,
+            detection_source: detectionSource,
+            latency_offset: CONFIG.RESULT_LATENCY_OFFSET,
+            indicators: window.lastTradeIndicators || {},
+            balance_before: audioDetection.balanceBeforeTrade,
+            balance_after: detectAccountBalance(),
+            invert_active: smartAutoInvert.invertActive,
+            strategy: window.lastTradeStrategy || 'unknown'
+        };
+        
+        // Store locally for backtest analysis
+        if (!window.mlTradeHistory) window.mlTradeHistory = [];
+        window.mlTradeHistory.push(tradeData);
+        
+        // Keep only last N trades for local analysis
+        if (window.mlTradeHistory.length > CONFIG.BACKTEST_WINDOW) {
+            window.mlTradeHistory = window.mlTradeHistory.slice(-CONFIG.BACKTEST_WINDOW);
+        }
+        
+        // Send to backend for model training
+        try {
+            GM_xmlhttpRequest({
+                method: 'POST',
+                url: CONFIG.API_URL + '/ml/record-trade',
+                headers: { 'Content-Type': 'application/json' },
+                data: JSON.stringify(tradeData),
+                timeout: 5000,
+                onload: function(res) {
+                    if (res.status === 200) {
+                        try {
+                            const data = JSON.parse(res.responseText);
+                            if (data.model_update_available) {
+                                log(`ML: Model update available - ${data.update_reason}`);
+                                if (CONFIG.ADAPTIVE_MODEL_UPDATE) {
+                                    requestModelUpdate();
+                                }
+                            }
+                        } catch(e) {}
+                    }
+                },
+                onerror: function() {}
+            });
+        } catch(e) {}
+        
+        // Update local performance metrics
+        updateLocalBacktest(tradeData);
+    }
+    
+    // Local backtesting and performance analysis
+    function updateLocalBacktest(trade) {
+        if (!window.localBacktest) {
+            window.localBacktest = {
+                totalTrades: 0,
+                wins: 0,
+                losses: 0,
+                bySymbol: {},
+                byStrategy: {},
+                byConfidenceRange: { low: {w:0,l:0}, medium: {w:0,l:0}, high: {w:0,l:0} },
+                recentPerformance: [] // Last 20 trades for adaptive adjustments
+            };
+        }
+        
+        const bt = window.localBacktest;
+        bt.totalTrades++;
+        
+        if (trade.outcome === 'WIN') {
+            bt.wins++;
+        } else {
+            bt.losses++;
+        }
+        
+        // By symbol
+        if (!bt.bySymbol[trade.symbol]) bt.bySymbol[trade.symbol] = { w: 0, l: 0 };
+        if (trade.outcome === 'WIN') bt.bySymbol[trade.symbol].w++;
+        else bt.bySymbol[trade.symbol].l++;
+        
+        // By confidence range
+        const confRange = trade.confidence < 70 ? 'low' : trade.confidence < 80 ? 'medium' : 'high';
+        if (trade.outcome === 'WIN') bt.byConfidenceRange[confRange].w++;
+        else bt.byConfidenceRange[confRange].l++;
+        
+        // Recent performance (for adaptive logic)
+        bt.recentPerformance.push({ outcome: trade.outcome, ts: Date.now() });
+        if (bt.recentPerformance.length > 20) bt.recentPerformance.shift();
+        
+        // Log performance summary every 10 trades
+        if (bt.totalTrades % 10 === 0) {
+            const winRate = ((bt.wins / bt.totalTrades) * 100).toFixed(1);
+            log(`📊 BACKTEST: ${bt.wins}W/${bt.losses}L (${winRate}% WR) over ${bt.totalTrades} trades`);
+            
+            // Check for adaptive adjustments
+            checkAdaptiveAdjustments();
+        }
+    }
+    
+    // Request updated model parameters from backend
+    function requestModelUpdate() {
+        GM_xmlhttpRequest({
+            method: 'POST',
+            url: CONFIG.API_URL + '/ml/request-update',
+            headers: { 'Content-Type': 'application/json' },
+            data: JSON.stringify({
+                recent_trades: window.mlTradeHistory?.slice(-20) || [],
+                current_settings: {
+                    min_confidence: CONFIG.MIN_CONFIDENCE,
+                    latency_offset: CONFIG.RESULT_LATENCY_OFFSET
+                }
+            }),
+            timeout: 10000,
+            onload: function(res) {
+                try {
+                    const data = JSON.parse(res.responseText);
+                    if (data.success && data.adjustments) {
+                        applyModelAdjustments(data.adjustments);
+                    }
+                } catch(e) {}
+            }
+        });
+    }
+    
+    // Apply AI-recommended adjustments
+    function applyModelAdjustments(adjustments) {
+        if (adjustments.min_confidence !== undefined) {
+            const oldConf = CONFIG.MIN_CONFIDENCE;
+            CONFIG.MIN_CONFIDENCE = Math.max(50, Math.min(90, adjustments.min_confidence));
+            log(`ML ADJUST: Min confidence ${oldConf} → ${CONFIG.MIN_CONFIDENCE}`);
+        }
+        
+        if (adjustments.latency_offset !== undefined) {
+            const oldOffset = CONFIG.RESULT_LATENCY_OFFSET;
+            CONFIG.RESULT_LATENCY_OFFSET = Math.max(-5, Math.min(5, adjustments.latency_offset));
+            log(`ML ADJUST: Latency offset ${oldOffset} → ${CONFIG.RESULT_LATENCY_OFFSET}`);
+        }
+        
+        if (adjustments.strategy_weights) {
+            window.strategyWeights = adjustments.strategy_weights;
+            log(`ML ADJUST: Strategy weights updated`);
+        }
+    }
+    
+    // Check if we need to make adaptive adjustments locally
+    function checkAdaptiveAdjustments() {
+        const bt = window.localBacktest;
+        if (!bt || bt.recentPerformance.length < 10) return;
+        
+        // Calculate recent win rate
+        const recent = bt.recentPerformance.slice(-10);
+        const recentWins = recent.filter(t => t.outcome === 'WIN').length;
+        const recentWR = (recentWins / 10) * 100;
+        
+        // If recent performance is bad (<40%), suggest increasing confidence threshold
+        if (recentWR < 40) {
+            log(`⚠️ ADAPTIVE: Poor recent performance (${recentWR}% WR) - consider increasing MIN_CONFIDENCE`);
+        }
+        
+        // If recent performance is excellent (>70%), can be more aggressive
+        if (recentWR > 70) {
+            log(`✅ ADAPTIVE: Strong recent performance (${recentWR}% WR) - strategy working well`);
+        }
     }
     
     // Check balance change triggered by mutation
@@ -4042,7 +4238,7 @@
                 <div class="gpt-header-left">
                     <div class="gpt-status-dot" id="gpt-dot"></div>
                     <span class="gpt-logo">GPT Bot</span>
-                    <span class="gpt-version">v8.5</span>
+                    <span class="gpt-version">v8.5.1</span>
                 </div>
                 <button class="gpt-minimize-btn" id="gpt-minimize">−</button>
             </div>
@@ -4105,6 +4301,17 @@
                     </div>
                 </div>
                 <div id="gpt-invert-status" style="font-size:9px; color:#94a3b8; padding:0 8px 4px; display:none;"></div>
+                
+                <!-- Latency Adjustment Control -->
+                <div class="gpt-settings-row" style="margin-bottom:6px; padding:4px 8px;">
+                    <span class="gpt-input-label" style="white-space:nowrap; font-size:9px;">TIMING:</span>
+                    <div style="display:flex; align-items:center; gap:4px; flex:1;">
+                        <button id="gpt-lat-minus" style="width:24px; height:20px; border:1px solid #475569; border-radius:4px; background:#1e293b; color:#94a3b8; font-size:12px; cursor:pointer;">-</button>
+                        <span id="gpt-lat-value" style="font-size:10px; color:#e2e8f0; min-width:35px; text-align:center;">0s</span>
+                        <button id="gpt-lat-plus" style="width:24px; height:20px; border:1px solid #475569; border-radius:4px; background:#1e293b; color:#94a3b8; font-size:12px; cursor:pointer;">+</button>
+                        <span style="font-size:8px; color:#64748b; margin-left:4px;">±5s</span>
+                    </div>
+                </div>
                 
                 <!-- Signal Status Display -->
                 <div id="gpt-signal-status" style="padding:4px 8px; margin-bottom:4px; display:none;">
@@ -4203,6 +4410,10 @@
         document.getElementById('gpt-minimize').addEventListener('click', toggleMinimize);
         document.getElementById('gpt-console-toggle').addEventListener('click', toggleConsoleWindow);
         document.getElementById('gpt-console-close').addEventListener('click', toggleConsoleWindow);
+        
+        // Latency adjustment handlers
+        document.getElementById('gpt-lat-minus').addEventListener('click', () => adjustLatency(-1));
+        document.getElementById('gpt-lat-plus').addEventListener('click', () => adjustLatency(1));
         
         // Double-click header to expand (for stuck minimized state)
         document.getElementById('gpt-drag').addEventListener('dblclick', (e) => {
@@ -4588,6 +4799,35 @@
         if (smartAutoInvert.enabled) return 'auto';
         if (invertEnabled) return 'on';
         return 'off';
+    }
+    
+    // ===========================================
+    // LATENCY ADJUSTMENT - +/- 5 seconds for timing
+    // ===========================================
+    function adjustLatency(delta) {
+        const newValue = Math.max(-5, Math.min(5, CONFIG.RESULT_LATENCY_OFFSET + delta));
+        CONFIG.RESULT_LATENCY_OFFSET = newValue;
+        GM_setValue('resultLatencyOffset', newValue);
+        
+        // Update display
+        const valueEl = document.getElementById('gpt-lat-value');
+        if (valueEl) {
+            valueEl.textContent = (newValue >= 0 ? '+' : '') + newValue + 's';
+            valueEl.style.color = newValue === 0 ? '#e2e8f0' : newValue > 0 ? '#22c55e' : '#f59e0b';
+        }
+        
+        log(`TIMING: Latency offset set to ${newValue}s (${newValue > 0 ? 'wait longer' : newValue < 0 ? 'detect earlier' : 'default'})`);
+    }
+    
+    function initLatencyDisplay() {
+        const savedLatency = GM_getValue('resultLatencyOffset', 0);
+        CONFIG.RESULT_LATENCY_OFFSET = savedLatency;
+        
+        const valueEl = document.getElementById('gpt-lat-value');
+        if (valueEl) {
+            valueEl.textContent = (savedLatency >= 0 ? '+' : '') + savedLatency + 's';
+            valueEl.style.color = savedLatency === 0 ? '#e2e8f0' : savedLatency > 0 ? '#22c55e' : '#f59e0b';
+        }
     }
     
     // ===========================================
@@ -5574,10 +5814,16 @@
             // Apply Smart Auto-Invert
             const processedSignal = processSmartAutoInvert(tradeSignal);
             
-            // Track trade info for premium result recording
+            // Track trade info for premium result recording and ML training
             lastTradeInfo.symbol = processedSignal.symbol || '';
             lastTradeInfo.direction = processedSignal.direction || '';
             lastTradeInfo.confidence = processedSignal.confidence || 0;
+            lastTradeInfo.strategy = signal.strategy || 'Local Engine v8.5';
+            lastTradeInfo.indicators = signal.indicators || {};
+            
+            // Store globally for ML training
+            window.lastTradeIndicators = signal.indicators || {};
+            window.lastTradeStrategy = signal.strategy || 'Local Engine v8.5';
             
             if (processedSignal._smartInverted) {
                 log(`SMART INVERT applied: ${processedSignal._originalDirection} -> ${processedSignal.direction}`);
@@ -6262,7 +6508,7 @@
             }
 
             console.log('[GPT Bot] Creating panel...');
-            console.log('[GPT Bot] v8.5.0 - MutationObserver real-time outcome detection');
+            console.log('[GPT Bot] v8.5.1 - ML data collection + Latency adjustment + MutationObserver detection');
             
             // Create panel immediately, don't wait
             createPanel();
@@ -6281,6 +6527,9 @@
             
             // Setup trade outcome detection (balance monitor + DOM scanning)
             setupOutcomeDetection();
+            
+            // Initialize latency display from saved value
+            initLatencyDisplay();
             
             // Start balance sync loop (PO UI scrape + backend API fallback)
             startBalanceSync();

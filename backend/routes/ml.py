@@ -1717,3 +1717,231 @@ async def ensemble_predict(symbol: str = Query("EUR_USD"), granularity: str = Qu
         "individual_predictions": predictions,
         "votes": {k: round(v, 2) for k, v in votes.items()}
     }
+
+
+# ============================================================
+# TAMPERMONKEY ML DATA COLLECTION ENDPOINTS - v8.5.1
+# For real-time trade recording and adaptive model updates
+# ============================================================
+
+class TampermonkeyTradeRecord(BaseModel):
+    timestamp: str
+    symbol: str
+    direction: str
+    confidence: float = 0
+    outcome: str  # WIN or LOSS
+    expiry_seconds: int = 60
+    actual_elapsed: int = 0
+    detection_source: str = 'unknown'
+    latency_offset: int = 0
+    indicators: Dict[str, Any] = {}
+    balance_before: float = 0
+    balance_after: float = 0
+    invert_active: bool = False
+    strategy: str = 'unknown'
+
+
+@router.post("/ml/record-trade")
+async def record_tampermonkey_trade(trade: TampermonkeyTradeRecord):
+    """
+    Record a trade result from Tampermonkey script for ML training.
+    This data is used to train and improve AI models.
+    """
+    try:
+        # Store in database for training
+        trade_doc = trade.dict()
+        trade_doc['recorded_at'] = datetime.now(timezone.utc).isoformat()
+        trade_doc['source'] = 'tampermonkey'
+        
+        await db.ml_trade_history.insert_one(trade_doc)
+        
+        # Check if we should trigger model update
+        model_update_available = False
+        update_reason = None
+        
+        # Count recent trades
+        recent_count = await db.ml_trade_history.count_documents({
+            'recorded_at': {'$gte': (datetime.now(timezone.utc).replace(hour=0, minute=0, second=0)).isoformat()}
+        })
+        
+        # Check recent win rate
+        recent_trades = await db.ml_trade_history.find({
+            'recorded_at': {'$gte': (datetime.now(timezone.utc).replace(hour=0, minute=0, second=0)).isoformat()}
+        }, {'_id': 0}).to_list(100)
+        
+        if len(recent_trades) >= 20:
+            wins = sum(1 for t in recent_trades if t.get('outcome') == 'WIN')
+            win_rate = (wins / len(recent_trades)) * 100
+            
+            if win_rate < 45:
+                model_update_available = True
+                update_reason = f"Low win rate ({win_rate:.1f}%) - model adjustment recommended"
+            elif win_rate > 65:
+                model_update_available = True  
+                update_reason = f"High win rate ({win_rate:.1f}%) - model performing well, consider saving weights"
+        
+        # Check if enough data for retraining
+        if recent_count >= 50 and recent_count % 50 == 0:
+            model_update_available = True
+            update_reason = f"Training milestone reached ({recent_count} trades today)"
+        
+        return {
+            "success": True,
+            "message": "Trade recorded for ML training",
+            "trades_today": recent_count,
+            "model_update_available": model_update_available,
+            "update_reason": update_reason
+        }
+        
+    except Exception as e:
+        logger.error(f"Error recording trade: {e}")
+        return {"success": False, "error": str(e)}
+
+
+class ModelUpdateRequest(BaseModel):
+    recent_trades: List[Dict[str, Any]] = []
+    current_settings: Dict[str, Any] = {}
+
+
+@router.post("/ml/request-update")
+async def request_model_update(request: ModelUpdateRequest):
+    """
+    Request adaptive model adjustments based on recent performance.
+    Returns recommended parameter changes for the Tampermonkey script.
+    """
+    try:
+        recent_trades = request.recent_trades
+        current_settings = request.current_settings
+        
+        adjustments = {}
+        
+        if len(recent_trades) >= 10:
+            # Analyze recent performance
+            wins = sum(1 for t in recent_trades if t.get('outcome') == 'WIN')
+            losses = len(recent_trades) - wins
+            win_rate = (wins / len(recent_trades)) * 100
+            
+            # Analyze by confidence level
+            high_conf_trades = [t for t in recent_trades if t.get('confidence', 0) >= 75]
+            low_conf_trades = [t for t in recent_trades if t.get('confidence', 0) < 75]
+            
+            high_conf_wr = 0
+            if high_conf_trades:
+                high_conf_wins = sum(1 for t in high_conf_trades if t.get('outcome') == 'WIN')
+                high_conf_wr = (high_conf_wins / len(high_conf_trades)) * 100
+            
+            # Recommend confidence threshold adjustment
+            current_min_conf = current_settings.get('min_confidence', 65)
+            
+            if win_rate < 45 and high_conf_wr > win_rate + 10:
+                # Low overall win rate but high conf trades doing better - raise threshold
+                adjustments['min_confidence'] = min(85, current_min_conf + 5)
+            elif win_rate > 60 and current_min_conf > 60:
+                # Good win rate, can be slightly more aggressive
+                adjustments['min_confidence'] = max(55, current_min_conf - 3)
+            
+            # Analyze timing
+            timing_issues = [t for t in recent_trades 
+                           if abs(t.get('actual_elapsed', 0) - t.get('expiry_seconds', 60)) > 5]
+            
+            if len(timing_issues) > len(recent_trades) * 0.3:
+                # Many trades have timing issues
+                current_offset = current_settings.get('latency_offset', 0)
+                avg_diff = sum(t.get('actual_elapsed', 0) - t.get('expiry_seconds', 60) 
+                              for t in timing_issues) / len(timing_issues)
+                
+                if avg_diff > 3:
+                    adjustments['latency_offset'] = max(-5, current_offset - 1)
+                elif avg_diff < -3:
+                    adjustments['latency_offset'] = min(5, current_offset + 1)
+            
+            # Analyze by symbol performance
+            symbol_stats = {}
+            for t in recent_trades:
+                sym = t.get('symbol', 'UNKNOWN')
+                if sym not in symbol_stats:
+                    symbol_stats[sym] = {'w': 0, 'l': 0}
+                if t.get('outcome') == 'WIN':
+                    symbol_stats[sym]['w'] += 1
+                else:
+                    symbol_stats[sym]['l'] += 1
+            
+            # Calculate strategy weights based on symbol performance
+            strategy_weights = {}
+            for sym, stats in symbol_stats.items():
+                total = stats['w'] + stats['l']
+                if total >= 3:
+                    strategy_weights[sym] = round((stats['w'] / total) * 100, 1)
+            
+            if strategy_weights:
+                adjustments['strategy_weights'] = strategy_weights
+        
+        return {
+            "success": True,
+            "adjustments": adjustments,
+            "analysis": {
+                "trades_analyzed": len(recent_trades),
+                "win_rate": round((wins / len(recent_trades)) * 100, 1) if recent_trades else 0
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error processing model update request: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/ml/training-data-stats")
+async def get_training_data_stats():
+    """Get statistics about collected training data."""
+    try:
+        total_trades = await db.ml_trade_history.count_documents({})
+        
+        # Get trades from last 24h
+        day_ago = (datetime.now(timezone.utc).replace(hour=0, minute=0, second=0)).isoformat()
+        today_trades = await db.ml_trade_history.find(
+            {'recorded_at': {'$gte': day_ago}},
+            {'_id': 0}
+        ).to_list(1000)
+        
+        # Calculate stats
+        wins = sum(1 for t in today_trades if t.get('outcome') == 'WIN')
+        losses = len(today_trades) - wins
+        
+        # By symbol
+        by_symbol = {}
+        for t in today_trades:
+            sym = t.get('symbol', 'UNKNOWN')
+            if sym not in by_symbol:
+                by_symbol[sym] = {'w': 0, 'l': 0}
+            if t.get('outcome') == 'WIN':
+                by_symbol[sym]['w'] += 1
+            else:
+                by_symbol[sym]['l'] += 1
+        
+        # Calculate win rates
+        symbol_performance = {}
+        for sym, stats in by_symbol.items():
+            total = stats['w'] + stats['l']
+            symbol_performance[sym] = {
+                'wins': stats['w'],
+                'losses': stats['l'],
+                'total': total,
+                'win_rate': round((stats['w'] / total) * 100, 1) if total > 0 else 0
+            }
+        
+        return {
+            "success": True,
+            "total_trades_recorded": total_trades,
+            "today": {
+                "trades": len(today_trades),
+                "wins": wins,
+                "losses": losses,
+                "win_rate": round((wins / len(today_trades)) * 100, 1) if today_trades else 0
+            },
+            "by_symbol": symbol_performance,
+            "training_ready": total_trades >= 100
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting training data stats: {e}")
+        return {"success": False, "error": str(e)}
