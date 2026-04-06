@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Elite Pocket Option Trading Bot (Legacy)
 // @namespace    https://momentum-trade-test.preview.emergentagent.com
-// @version      8.4.0
-// @description  Elite AI-powered trading bot for Pocket Option with momentum-aware auto-invert
+// @version      8.4.1
+// @description  Elite AI-powered trading bot for Pocket Option with momentum-aware auto-invert and proper timeframe-synced outcome detection
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -1206,7 +1206,8 @@
         cooldownMs: 3000,            // Ignore duplicate detections within 3s
         pendingTrade: false,         // Whether we have an open trade waiting for result
         tradeOpenedAt: 0,
-        minWaitAfterTrade: 5000,     // Minimum ms to wait after trade before checking (trade must expire)
+        tradeExpirySeconds: 60,      // The actual expiry time for the current trade
+        minWaitAfterTrade: 3000,     // Small buffer after expiry before checking
         balanceBeforeTrade: 0,       // Snapshot of balance before trade was placed
         ourSoundPlaying: false,      // Flag to ignore our own notification sounds
     };
@@ -1471,6 +1472,93 @@
         };
         
         return mappings[tf] || 60;
+    }
+    
+    // ===========================================
+    // DETECT CURRENT TIMEFRAME FROM POCKET OPTION UI - v8.4.1
+    // ===========================================
+    function detectCurrentTimeframe() {
+        // Pocket Option shows the selected timeframe in various places
+        // Try to detect from the UI
+        
+        const timeframeSelectors = [
+            // Common PO timeframe display locations
+            '[class*="time-option"].active',
+            '[class*="expiration"].selected',
+            '[class*="time-button"].active',
+            '[class*="expiry-time"] .active',
+            '[data-testid*="time"] .selected',
+            '.deal-duration .active',
+            '.expiry-control .active',
+            // Look for common timeframe buttons that are selected
+            'button.time-option.active',
+            '.time-selector .active',
+        ];
+        
+        for (const sel of timeframeSelectors) {
+            try {
+                const el = document.querySelector(sel);
+                if (el) {
+                    const text = (el.textContent || '').trim();
+                    // Parse text like "5s", "30s", "1m", "5:00", etc.
+                    const seconds = parseTimeframeText(text);
+                    if (seconds > 0) {
+                        log(`TIMEFRAME: Detected ${text} = ${seconds}s from UI`);
+                        return seconds;
+                    }
+                }
+            } catch (e) {}
+        }
+        
+        // Try to find any visible timeframe indicator
+        const allButtons = document.querySelectorAll('button, [role="button"], [class*="time"]');
+        for (const btn of allButtons) {
+            if (!btn || !btn.offsetParent) continue;
+            
+            const text = (btn.textContent || '').trim();
+            const classes = (btn.className || '').toLowerCase();
+            
+            // Look for active/selected state
+            if ((classes.includes('active') || classes.includes('selected')) && 
+                (text.match(/^\d+s?$/) || text.match(/^\d+:\d{2}$/) || text.match(/^\d+m$/))) {
+                const seconds = parseTimeframeText(text);
+                if (seconds > 0 && seconds <= 3600) {
+                    log(`TIMEFRAME: Detected ${text} = ${seconds}s from button`);
+                    return seconds;
+                }
+            }
+        }
+        
+        // Default to 60 seconds
+        log('TIMEFRAME: Could not detect, using default 60s');
+        return 60;
+    }
+    
+    function parseTimeframeText(text) {
+        if (!text) return 0;
+        
+        // Handle "5s", "30s", "1m", "5m" format
+        const match1 = text.match(/^(\d+)(s|m)$/i);
+        if (match1) {
+            const value = parseInt(match1[1]);
+            return match1[2].toLowerCase() === 'm' ? value * 60 : value;
+        }
+        
+        // Handle "1:00", "5:00" format (mm:ss)
+        const match2 = text.match(/^(\d+):(\d{2})$/);
+        if (match2) {
+            return parseInt(match2[1]) * 60 + parseInt(match2[2]);
+        }
+        
+        // Handle just number (assume seconds if small, minutes if larger)
+        const num = parseInt(text);
+        if (!isNaN(num)) {
+            if (num <= 60) return num;  // Assume seconds
+            if (num <= 300) return num; // Still seconds
+            return num;
+        }
+        
+        return 0;
     }
     
     // ===========================================
@@ -2333,25 +2421,33 @@
     }
     
     // Called when a trade is placed - starts monitoring for the result
-    function markTradePending() {
+    // expirySeconds: How long the trade takes to expire (e.g., 5, 15, 30, 60)
+    function markTradePending(expirySeconds = 60) {
         audioDetection.pendingTrade = true;
         audioDetection.tradeOpenedAt = Date.now();
+        audioDetection.tradeExpirySeconds = expirySeconds;
         
         // Snapshot the balance BEFORE the trade
         audioDetection.balanceBeforeTrade = detectAccountBalance();
-        log(`OUTCOME: Trade placed. Balance before: $${audioDetection.balanceBeforeTrade.toFixed(2)}. Monitoring for result...`);
+        log(`OUTCOME: Trade placed (${expirySeconds}s expiry). Balance before: $${audioDetection.balanceBeforeTrade.toFixed(2)}. Will check result after expiry...`);
         
-        // Start polling for result after the trade should expire
-        startResultPolling();
+        // Start polling for result after the trade SHOULD expire (expiry + small buffer)
+        startResultPolling(expirySeconds);
     }
     
-    function startResultPolling() {
-        const pollDelay = audioDetection.minWaitAfterTrade; // 5s initial wait
+    function startResultPolling(expirySeconds = 60) {
+        // Wait for the trade to actually expire before checking!
+        // Add a small buffer (3s) after expiry to ensure PO has processed the result
+        const waitMs = (expirySeconds * 1000) + audioDetection.minWaitAfterTrade;
+        
+        log(`OUTCOME: Waiting ${expirySeconds}s + 3s buffer = ${waitMs/1000}s before checking result...`);
         
         setTimeout(() => {
             if (!audioDetection.pendingTrade) return; // Already detected by other means
             
-            // Start active polling every 1s for up to 30s
+            log(`OUTCOME: Trade should be expired now. Starting result polling...`);
+            
+            // Start active polling every 1s for up to 30s after expiry
             let pollCount = 0;
             const maxPolls = 30;
             
@@ -2362,7 +2458,7 @@
                     clearInterval(poller);
                     if (pollCount > maxPolls && audioDetection.pendingTrade) {
                         audioDetection.pendingTrade = false;
-                        log('OUTCOME: Timeout - no result detected after 35s. Use manual +W/-L.');
+                        log(`OUTCOME: Timeout - no result detected ${expirySeconds + 33}s after trade. Use manual +W/-L.`);
                     }
                     return;
                 }
@@ -2382,7 +2478,7 @@
                         
                         const isWin = diff > 0;
                         const elapsed = Math.round((Date.now() - audioDetection.tradeOpenedAt) / 1000);
-                        log(`BALANCE DETECTED: ${isWin ? 'WIN' : 'LOSS'} ($${diff > 0 ? '+' : ''}${diff.toFixed(2)}) after ${elapsed}s`);
+                        log(`BALANCE DETECTED: ${isWin ? 'WIN' : 'LOSS'} ($${diff > 0 ? '+' : ''}${diff.toFixed(2)}) after ${elapsed}s (expected ~${expirySeconds}s)`);
                         handleAutoDetectedResult(isWin);
                         return;
                     }
@@ -2396,12 +2492,12 @@
                     clearInterval(poller);
                     
                     const elapsed = Math.round((Date.now() - audioDetection.tradeOpenedAt) / 1000);
-                    log(`DOM DETECTED: ${domResult ? 'WIN' : 'LOSS'} after ${elapsed}s`);
+                    log(`DOM DETECTED: ${domResult ? 'WIN' : 'LOSS'} after ${elapsed}s (expected ~${expirySeconds}s)`);
                     handleAutoDetectedResult(domResult);
                     return;
                 }
             }, 1000);
-        }, pollDelay);
+        }, waitMs);
     }
     
     // Actively scan the DOM for trade result indicators
@@ -3601,7 +3697,7 @@
                 <div class="gpt-header-left">
                     <div class="gpt-status-dot" id="gpt-dot"></div>
                     <span class="gpt-logo">GPT Bot</span>
-                    <span class="gpt-version">v8.4</span>
+                    <span class="gpt-version">v8.4.1</span>
                 </div>
                 <button class="gpt-minimize-btn" id="gpt-minimize">−</button>
             </div>
@@ -4333,7 +4429,7 @@
                                 symbol: signal.symbol || assetSymbol,
                                 confidence: conf,
                                 source: 'FORCE_GENERATE',
-                                expiration_seconds: signal.expiry_seconds || signal.expiration_minutes ? signal.expiration_minutes * 60 : 5,
+                                expiration_seconds: signal.expiry_seconds || (signal.expiration_minutes ? signal.expiration_minutes * 60 : 60),
                                 _willSwitch: false,
                                 technical_analysis: signal.technical_analysis || null,
                             };
@@ -4928,16 +5024,16 @@
         }
 
         // Click button - v6.8.1 pass source for logging
-        const clicked = clickTradeButton(isCall, 'APP');
+        // Pass expiry time from signal or use default based on timeframe
+        const expirySeconds = signal.expiration_seconds || signal.expiry || getExpiryFromTimeframe(signal.timeframe) || 60;
+        const clicked = clickTradeButton(isCall, 'APP', expirySeconds);
         
         if (clicked) {
             incrementTradeCount();
             lastAppTradeTime = Date.now();
-            log(`✅ APP TRADE: ${finalDirection} on ${signal.symbol}`);
+            log(`✅ APP TRADE: ${finalDirection} on ${signal.symbol} (${expirySeconds}s expiry)`);
             
-            // Start monitoring for win/loss result - v6.6.0
-            // Pass expiry time from signal or use default based on timeframe
-            const expirySeconds = signal.expiration_seconds || signal.expiry || getExpiryFromTimeframe(signal.timeframe) || 60;
+            // Store trade info for manual result entry if needed
             startTradeResultMonitor(finalDirection, signal.amount || 1, expirySeconds);
             
             try {
@@ -5116,6 +5212,9 @@
             }
             
             // Build signal object for execution
+            // Detect the current timeframe from PO UI for proper outcome timing
+            const detectedExpiry = detectCurrentTimeframe();
+            
             const tradeSignal = {
                 direction: signal.direction,
                 symbol: currentAsset.replace(/\s+/g, '').replace('/', '').toUpperCase(),
@@ -5123,6 +5222,7 @@
                 confirmations: signal.confirmations,
                 price: signal.price,
                 source: 'LOCAL_OTC',
+                expiration_seconds: detectedExpiry,
                 _willSwitch: willSwitchAssets
             };
             
@@ -5226,6 +5326,11 @@
                         // Store OTHER signals for fallback (excluding best to avoid circular ref)
                         bestSignal._allSignals = signals.slice(1);
                         bestSignal.source = 'BACKEND_OANDA';
+                        
+                        // Ensure expiration is set from UI timeframe if not in signal
+                        if (!bestSignal.expiration_seconds && !bestSignal.expiry) {
+                            bestSignal.expiration_seconds = detectCurrentTimeframe();
+                        }
                         
                         // Apply Smart Auto-Invert
                         bestSignal = processSmartAutoInvert(bestSignal);
@@ -5382,15 +5487,16 @@
             }
         }
 
-        // Click trade button
-        const clicked = clickTradeButton(isCall, 'SCAN');
+        // Click trade button - pass expiry for proper outcome timing
+        const expirySeconds = signal.expiration_seconds || signal.expiry || signal.expiry_seconds || 60;
+        const clicked = clickTradeButton(isCall, 'SCAN', expirySeconds);
         
         if (clicked) {
             incrementTradeCount();
             lastScanTradeTime = Date.now();
-            log(`✅ TRADE: ${finalDirection} ${signal.symbol}`);
+            log(`✅ TRADE: ${finalDirection} ${signal.symbol} (${expirySeconds}s expiry)`);
             
-            const expirySeconds = signal.expiration_seconds || signal.expiry || signal.expiry_seconds || 60;
+            // Store trade info for manual result entry if needed
             startTradeResultMonitor(finalDirection, signal.amount || 1, expirySeconds);
             
             try {
@@ -5410,7 +5516,7 @@
     // ===========================================
     // TRADE EXECUTION - v6.9.5 FIXED DOUBLE-CLICK
     // ===========================================
-    function clickTradeButton(isCall, source = 'unknown') {
+    function clickTradeButton(isCall, source = 'unknown', expirySeconds = 60) {
         const now = Date.now();
         const direction = isCall ? 'CALL' : 'PUT';
         
@@ -5497,8 +5603,8 @@
             // SINGLE CLICK ONLY
             btn.click();
             
-            // Mark trade as pending for audio detection
-            markTradePending();
+            // Mark trade as pending for outcome detection - pass the actual expiry time!
+            markTradePending(expirySeconds);
             
             // Release global lock after delay
             setTimeout(() => {
@@ -5811,7 +5917,7 @@
             }
 
             console.log('[GPT Bot] Creating panel...');
-            console.log('[GPT Bot] v8.4.0 - 3-mode Invert + Signal Status Display + Reset Stats');
+            console.log('[GPT Bot] v8.4.1 - Timeframe-synced outcome detection + 3-mode Invert');
             
             // Create panel immediately, don't wait
             createPanel();
