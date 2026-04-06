@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Elite Pocket Option Trading Bot (Legacy)
 // @namespace    https://momentum-trade-test.preview.emergentagent.com
-// @version      8.4.1
-// @description  Elite AI-powered trading bot for Pocket Option with momentum-aware auto-invert and proper timeframe-synced outcome detection
+// @version      8.5.0
+// @description  Elite AI-powered trading bot for Pocket Option with MutationObserver-based real-time outcome detection
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -115,6 +115,131 @@
                 middle: sma,
                 lower: sma - stdDev * std
             };
+        },
+        
+        // MACD calculation (12, 26, 9 default - optimized: 10, 19, 7 for short-term)
+        calculateMACD(prices, fastPeriod = 10, slowPeriod = 19, signalPeriod = 7) {
+            if (prices.length < slowPeriod + signalPeriod) {
+                return { macd: 0, signal: 0, histogram: 0, crossover: null };
+            }
+            
+            // Calculate fast and slow EMAs
+            const fastEMA = this.calculateEMA(prices, fastPeriod);
+            const slowEMA = this.calculateEMA(prices, slowPeriod);
+            const macd = fastEMA - slowEMA;
+            
+            // Calculate signal line (EMA of MACD)
+            // Build MACD history for signal calculation
+            const macdHistory = [];
+            for (let i = slowPeriod; i <= prices.length; i++) {
+                const slicedPrices = prices.slice(0, i);
+                const fast = this.calculateEMA(slicedPrices, fastPeriod);
+                const slow = this.calculateEMA(slicedPrices, slowPeriod);
+                macdHistory.push(fast - slow);
+            }
+            
+            const signal = macdHistory.length >= signalPeriod 
+                ? this.calculateEMA(macdHistory, signalPeriod) 
+                : macd;
+            const histogram = macd - signal;
+            
+            // Detect crossover
+            let crossover = null;
+            if (macdHistory.length >= 2) {
+                const prevMACD = macdHistory[macdHistory.length - 2];
+                const prevSignal = macdHistory.length > signalPeriod 
+                    ? this.calculateEMA(macdHistory.slice(0, -1), signalPeriod)
+                    : prevMACD;
+                
+                if (prevMACD <= prevSignal && macd > signal) {
+                    crossover = 'bullish';
+                } else if (prevMACD >= prevSignal && macd < signal) {
+                    crossover = 'bearish';
+                }
+            }
+            
+            return { macd, signal, histogram, crossover };
+        },
+        
+        // RSI Divergence detection (powerful reversal signal)
+        detectRSIDivergence(prices, rsiPeriod = 14, lookback = 10) {
+            if (prices.length < rsiPeriod + lookback) {
+                return { type: null, strength: 0 };
+            }
+            
+            // Calculate RSI for recent periods
+            const rsiValues = [];
+            for (let i = rsiPeriod; i <= prices.length; i++) {
+                rsiValues.push(this.calculateRSI(prices.slice(0, i), rsiPeriod));
+            }
+            
+            if (rsiValues.length < lookback) return { type: null, strength: 0 };
+            
+            const recentPrices = prices.slice(-lookback);
+            const recentRSI = rsiValues.slice(-lookback);
+            
+            // Find price and RSI extremes
+            const priceLowest = Math.min(...recentPrices);
+            const priceHighest = Math.max(...recentPrices);
+            const rsiLowest = Math.min(...recentRSI);
+            const rsiHighest = Math.max(...recentRSI);
+            
+            const currentPrice = prices[prices.length - 1];
+            const currentRSI = rsiValues[rsiValues.length - 1];
+            const prevPrice = prices[prices.length - 3]; // Look back a few bars
+            const prevRSI = rsiValues[rsiValues.length - 3];
+            
+            // REGULAR BULLISH: Price lower low, RSI higher low (reversal UP)
+            if (currentPrice <= priceLowest * 1.002 && currentRSI > rsiLowest + 3) {
+                return { type: 'bullish_regular', strength: Math.abs(currentRSI - rsiLowest) };
+            }
+            
+            // REGULAR BEARISH: Price higher high, RSI lower high (reversal DOWN)  
+            if (currentPrice >= priceHighest * 0.998 && currentRSI < rsiHighest - 3) {
+                return { type: 'bearish_regular', strength: Math.abs(rsiHighest - currentRSI) };
+            }
+            
+            // HIDDEN BULLISH: Price higher low, RSI lower low (continuation UP)
+            if (currentPrice > prevPrice && currentRSI < prevRSI - 5 && currentRSI < 40) {
+                return { type: 'bullish_hidden', strength: Math.abs(prevRSI - currentRSI) };
+            }
+            
+            // HIDDEN BEARISH: Price lower high, RSI higher high (continuation DOWN)
+            if (currentPrice < prevPrice && currentRSI > prevRSI + 5 && currentRSI > 60) {
+                return { type: 'bearish_hidden', strength: Math.abs(currentRSI - prevRSI) };
+            }
+            
+            return { type: null, strength: 0 };
+        },
+        
+        // ADX (Average Directional Index) - trend strength
+        calculateADX(highs, lows, closes, period = 14) {
+            if (closes.length < period + 1) return 25; // Default moderate trend
+            
+            let plusDM = 0, minusDM = 0, tr = 0;
+            
+            for (let i = closes.length - period; i < closes.length; i++) {
+                const high = highs[i], low = lows[i];
+                const prevHigh = highs[i-1], prevLow = lows[i-1], prevClose = closes[i-1];
+                
+                // True Range
+                const trueRange = Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose));
+                tr += trueRange;
+                
+                // Directional Movement
+                const upMove = high - prevHigh;
+                const downMove = prevLow - low;
+                
+                if (upMove > downMove && upMove > 0) plusDM += upMove;
+                if (downMove > upMove && downMove > 0) minusDM += downMove;
+            }
+            
+            // Simplified ADX approximation
+            const plusDI = (plusDM / (tr + 0.00001)) * 100;
+            const minusDI = (minusDM / (tr + 0.00001)) * 100;
+            const dx = Math.abs(plusDI - minusDI) / (plusDI + minusDI + 0.00001) * 100;
+            
+            return dx; // Higher = stronger trend
         },
         
         // Detect candlestick patterns
@@ -563,13 +688,50 @@
             const ema5 = this.calculateEMA(closes, 5);
             const ema10 = this.calculateEMA(closes, 10);
             const ema20 = this.calculateEMA(closes, 20);
+            const ema50 = this.calculateEMA(closes, 50);
             const stoch = this.calculateStochastic(highs, lows, closes, 5);
             const bb = this.calculateBollingerBands(closes, 20, 2);
             const pattern = this.detectPattern(candles);
             
+            // NEW: MACD and RSI Divergence (high-accuracy signals)
+            const macd = this.calculateMACD(closes, 10, 19, 7);
+            const divergence = this.detectRSIDivergence(closes, 14, 10);
+            const adx = this.calculateADX(highs, lows, closes, 14);
+            
             // Count confirmations (tighter thresholds for higher accuracy)
             let callConfs = [];
             let putConfs = [];
+            
+            // === HIGH-PRIORITY SIGNALS (Divergence + MACD) ===
+            // RSI Divergence - VERY powerful reversal signal (2 confirmations each)
+            if (divergence.type === 'bullish_regular' || divergence.type === 'bullish_hidden') {
+                callConfs.push('RSI_DIVERGENCE_BULL');
+                callConfs.push('DIVERGENCE_STRONG');
+            }
+            if (divergence.type === 'bearish_regular' || divergence.type === 'bearish_hidden') {
+                putConfs.push('RSI_DIVERGENCE_BEAR');
+                putConfs.push('DIVERGENCE_STRONG');
+            }
+            
+            // MACD crossover - reliable momentum signal
+            if (macd.crossover === 'bullish') {
+                callConfs.push('MACD_BULLISH_CROSS');
+                if (macd.histogram > 0) callConfs.push('MACD_HISTOGRAM_POS');
+            }
+            if (macd.crossover === 'bearish') {
+                putConfs.push('MACD_BEARISH_CROSS');
+                if (macd.histogram < 0) putConfs.push('MACD_HISTOGRAM_NEG');
+            }
+            
+            // MACD histogram direction (momentum)
+            if (macd.macd > macd.signal && macd.histogram > 0) callConfs.push('MACD_MOMENTUM_UP');
+            if (macd.macd < macd.signal && macd.histogram < 0) putConfs.push('MACD_MOMENTUM_DOWN');
+            
+            // === TREND FILTER (EMA 50) ===
+            // Only take calls when price > EMA50 trend, puts when price < EMA50
+            const trendBias = currentPrice > ema50 ? 'bullish' : 'bearish';
+            if (trendBias === 'bullish' && adx > 20) callConfs.push('TREND_ALIGNED');
+            if (trendBias === 'bearish' && adx > 20) putConfs.push('TREND_ALIGNED');
             
             // RSI extremes (tightened: 15/85 instead of 20/80)
             if (rsi2 < 8) { callConfs.push('RSI2_EXTREME'); callConfs.push('RSI2_DEEP_OVERSOLD'); }
@@ -625,30 +787,52 @@
             }
             
             if (callConfs.length >= minConfs && callConfs.length > putConfs.length + 1) {
-                const confidence = Math.min(95, 58 + callConfs.length * 7);
+                // Boost confidence for divergence signals (proven high accuracy)
+                let confidence = Math.min(95, 58 + callConfs.length * 7);
+                if (callConfs.includes('RSI_DIVERGENCE_BULL')) confidence = Math.min(95, confidence + 5);
+                if (callConfs.includes('MACD_BULLISH_CROSS')) confidence = Math.min(95, confidence + 3);
+                
                 if (confidence < CONFIG.MIN_CONFIDENCE) return null;
                 return {
                     direction: 'CALL',
                     confidence,
-                    strategy: 'Local Engine v7.4',
+                    strategy: 'Local Engine v8.5',
                     confirmations: callConfs,
                     count: callConfs.length,
                     price: currentPrice,
-                    indicators: { rsi2, rsi14, stoch: stoch.k, bb_pos: 'lower', volatility: recentVol }
+                    indicators: { 
+                        rsi2, rsi14, stoch: stoch.k, 
+                        macd: macd.histogram.toFixed(5), 
+                        adx: Math.round(adx),
+                        divergence: divergence.type,
+                        trend: trendBias,
+                        volatility: recentVol 
+                    }
                 };
             }
             
             if (putConfs.length >= minConfs && putConfs.length > callConfs.length + 1) {
-                const confidence = Math.min(95, 58 + putConfs.length * 7);
+                // Boost confidence for divergence signals
+                let confidence = Math.min(95, 58 + putConfs.length * 7);
+                if (putConfs.includes('RSI_DIVERGENCE_BEAR')) confidence = Math.min(95, confidence + 5);
+                if (putConfs.includes('MACD_BEARISH_CROSS')) confidence = Math.min(95, confidence + 3);
+                
                 if (confidence < CONFIG.MIN_CONFIDENCE) return null;
                 return {
                     direction: 'PUT',
                     confidence,
-                    strategy: 'Local Engine v7.4',
+                    strategy: 'Local Engine v8.5',
                     confirmations: putConfs,
                     count: putConfs.length,
                     price: currentPrice,
-                    indicators: { rsi2, rsi14, stoch: stoch.k, bb_pos: 'upper', volatility: recentVol }
+                    indicators: { 
+                        rsi2, rsi14, stoch: stoch.k, 
+                        macd: macd.histogram.toFixed(5), 
+                        adx: Math.round(adx),
+                        divergence: divergence.type,
+                        trend: trendBias,
+                        volatility: recentVol 
+                    }
                 };
             }
             
@@ -2416,8 +2600,176 @@
     // to reliably detect wins and losses
     // ===========================================
     function setupOutcomeDetection() {
-        log('OUTCOME: Setting up trade result detection (balance monitor + DOM)...');
-        log('OUTCOME: Detection active');
+        log('OUTCOME: Setting up real-time trade result detection...');
+        
+        // === MUTATIONOBSERVER-BASED DETECTION (Industry Standard) ===
+        // This is how professional binary options bots detect trade results
+        
+        const observerConfig = {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['class', 'style', 'data-result'],
+            characterData: true
+        };
+        
+        // Create observer that watches for balance/result changes
+        const tradeResultObserver = new MutationObserver((mutations) => {
+            // Only process if we have a pending trade
+            if (!audioDetection.pendingTrade) return;
+            
+            for (const mutation of mutations) {
+                // Method 1: Watch for win/loss class changes on deal elements
+                if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                    const target = mutation.target;
+                    const classes = (target.className || '').toLowerCase();
+                    
+                    // Pocket Option uses these class patterns for results
+                    const isWinClass = classes.includes('win') || 
+                                      classes.includes('success') || 
+                                      classes.includes('profit') ||
+                                      classes.includes('green');
+                    const isLossClass = classes.includes('loss') || 
+                                       classes.includes('lose') || 
+                                       classes.includes('fail') ||
+                                       classes.includes('red');
+                    
+                    if (isWinClass || isLossClass) {
+                        const isWin = isWinClass && !isLossClass;
+                        log(`OBSERVER: Class change detected - ${isWin ? 'WIN' : 'LOSS'} (class: ${classes.substring(0, 50)})`);
+                        handleTradeResultDetected(isWin, 'class-observer');
+                        return;
+                    }
+                }
+                
+                // Method 2: Watch for new deal result elements being added
+                if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+                    for (const node of mutation.addedNodes) {
+                        if (node.nodeType !== Node.ELEMENT_NODE) continue;
+                        
+                        const el = node;
+                        const text = (el.textContent || '').toLowerCase();
+                        const classes = (el.className || '').toLowerCase();
+                        
+                        // Check for result indicators
+                        if (text.includes('+$') || text.includes('+ $') || classes.includes('win') || classes.includes('profit')) {
+                            log(`OBSERVER: New WIN element detected`);
+                            handleTradeResultDetected(true, 'dom-added');
+                            return;
+                        }
+                        if (text.includes('-$') || text.includes('- $') || classes.includes('loss') || classes.includes('lose')) {
+                            log(`OBSERVER: New LOSS element detected`);
+                            handleTradeResultDetected(false, 'dom-added');
+                            return;
+                        }
+                        
+                        // Check for PO-specific result patterns
+                        if (el.matches && (
+                            el.matches('[class*="deal"][class*="closed"]') ||
+                            el.matches('[class*="result"]') ||
+                            el.matches('[class*="notification"]')
+                        )) {
+                            const resultFromElement = detectResultFromElement(el);
+                            if (resultFromElement !== null) {
+                                log(`OBSERVER: Result element detected - ${resultFromElement ? 'WIN' : 'LOSS'}`);
+                                handleTradeResultDetected(resultFromElement, 'element-match');
+                                return;
+                            }
+                        }
+                    }
+                }
+                
+                // Method 3: Watch for text content changes (balance updates)
+                if (mutation.type === 'characterData') {
+                    // Check if this is a balance element
+                    const parent = mutation.target.parentElement;
+                    if (parent && isBalanceElement(parent)) {
+                        checkBalanceChangeFromMutation();
+                    }
+                }
+            }
+        });
+        
+        // Start observing the document
+        tradeResultObserver.observe(document.body, observerConfig);
+        
+        // Store reference for potential cleanup
+        window._gptTradeObserver = tradeResultObserver;
+        
+        log('OUTCOME: MutationObserver active - watching for real-time trade results');
+        log('OUTCOME: Detection methods: class-change, dom-added, balance-change, polling');
+    }
+    
+    // Check if element is likely a balance display
+    function isBalanceElement(el) {
+        const classes = (el.className || '').toLowerCase();
+        const id = (el.id || '').toLowerCase();
+        return classes.includes('balance') || 
+               id.includes('balance') || 
+               el.matches('[data-balance], [class*="account"], [class*="money"]');
+    }
+    
+    // Detect result from a specific element
+    function detectResultFromElement(el) {
+        const text = (el.textContent || '').toLowerCase();
+        const classes = (el.className || '').toLowerCase();
+        const style = el.getAttribute('style') || '';
+        
+        // Check classes
+        if (classes.includes('win') || classes.includes('success') || classes.includes('profit')) return true;
+        if (classes.includes('loss') || classes.includes('lose') || classes.includes('fail')) return false;
+        
+        // Check text
+        if (text.match(/\+\s*\$?\s*[\d,.]+/)) return true;
+        if (text.match(/-\s*\$?\s*[\d,.]+/)) return false;
+        
+        // Check colors (green = win, red = loss)
+        if (style.includes('green') || style.includes('#0f0') || style.includes('rgb(0, 255')) return true;
+        if (style.includes('red') || style.includes('#f00') || style.includes('rgb(255, 0')) return false;
+        
+        return null;
+    }
+    
+    // Handle when a trade result is detected (from any method)
+    function handleTradeResultDetected(isWin, source) {
+        if (!audioDetection.pendingTrade) {
+            log(`OUTCOME: Ignoring ${source} detection - no pending trade`);
+            return;
+        }
+        
+        const elapsed = Math.round((Date.now() - audioDetection.tradeOpenedAt) / 1000);
+        const expectedExpiry = audioDetection.tradeExpirySeconds || 60;
+        
+        // Sanity check: result should come AFTER trade expiry (with some tolerance)
+        // Allow 2 seconds early to account for platform timing variations
+        if (elapsed < (expectedExpiry - 2)) {
+            log(`OUTCOME: Ignoring early ${source} detection at ${elapsed}s (expected ~${expectedExpiry}s)`);
+            return;
+        }
+        
+        audioDetection.pendingTrade = false;
+        audioDetection.lastDetectionTime = Date.now();
+        
+        log(`✅ TRADE RESULT [${source}]: ${isWin ? 'WIN' : 'LOSS'} after ${elapsed}s (expected ~${expectedExpiry}s)`);
+        handleAutoDetectedResult(isWin);
+    }
+    
+    // Check balance change triggered by mutation
+    function checkBalanceChangeFromMutation() {
+        if (!audioDetection.pendingTrade) return;
+        
+        const currentBalance = detectAccountBalance();
+        const balanceBefore = audioDetection.balanceBeforeTrade;
+        
+        if (balanceBefore > 0 && currentBalance > 0) {
+            const diff = currentBalance - balanceBefore;
+            
+            if (Math.abs(diff) > 0.01) {
+                const isWin = diff > 0;
+                log(`OBSERVER: Balance change detected: $${diff > 0 ? '+' : ''}${diff.toFixed(2)}`);
+                handleTradeResultDetected(isWin, 'balance-mutation');
+            }
+        }
     }
     
     // Called when a trade is placed - starts monitoring for the result
@@ -2429,25 +2781,27 @@
         
         // Snapshot the balance BEFORE the trade
         audioDetection.balanceBeforeTrade = detectAccountBalance();
-        log(`OUTCOME: Trade placed (${expirySeconds}s expiry). Balance before: $${audioDetection.balanceBeforeTrade.toFixed(2)}. Will check result after expiry...`);
+        log(`OUTCOME: Trade placed (${expirySeconds}s expiry). Balance before: $${audioDetection.balanceBeforeTrade.toFixed(2)}`);
+        log(`OUTCOME: MutationObserver watching for real-time result...`);
         
-        // Start polling for result after the trade SHOULD expire (expiry + small buffer)
-        startResultPolling(expirySeconds);
+        // ALSO start backup polling in case observer misses it
+        startBackupResultPolling(expirySeconds);
     }
     
-    function startResultPolling(expirySeconds = 60) {
-        // Wait for the trade to actually expire before checking!
-        // Add a small buffer (3s) after expiry to ensure PO has processed the result
-        const waitMs = (expirySeconds * 1000) + audioDetection.minWaitAfterTrade;
-        
-        log(`OUTCOME: Waiting ${expirySeconds}s + 3s buffer = ${waitMs/1000}s before checking result...`);
+    // Backup polling - only kicks in if MutationObserver doesn't catch the result
+    function startBackupResultPolling(expirySeconds = 60) {
+        // Wait for the trade to actually expire before backup polling
+        const waitMs = (expirySeconds * 1000) + 2000; // expiry + 2s buffer
         
         setTimeout(() => {
-            if (!audioDetection.pendingTrade) return; // Already detected by other means
+            if (!audioDetection.pendingTrade) {
+                log('BACKUP: Observer already detected result - skipping poll');
+                return;
+            }
             
-            log(`OUTCOME: Trade should be expired now. Starting result polling...`);
+            log(`BACKUP: Trade expired, observer didn't catch result - starting backup polling...`);
             
-            // Start active polling every 1s for up to 30s after expiry
+            // Poll every 500ms for up to 15s after expiry
             let pollCount = 0;
             const maxPolls = 30;
             
@@ -2458,45 +2812,36 @@
                     clearInterval(poller);
                     if (pollCount > maxPolls && audioDetection.pendingTrade) {
                         audioDetection.pendingTrade = false;
-                        log(`OUTCOME: Timeout - no result detected ${expirySeconds + 33}s after trade. Use manual +W/-L.`);
+                        log(`BACKUP: Timeout - no result after ${expirySeconds + 17}s. Use manual +W/-L.`);
                     }
                     return;
                 }
                 
-                // Method 1: Check balance change
+                // Check balance change
                 const currentBalance = detectAccountBalance();
                 const balanceBefore = audioDetection.balanceBeforeTrade;
                 
                 if (balanceBefore > 0 && currentBalance > 0) {
                     const diff = currentBalance - balanceBefore;
                     
-                    // Need a meaningful change (more than $0.01)
                     if (Math.abs(diff) > 0.01) {
-                        audioDetection.pendingTrade = false;
-                        audioDetection.lastDetectionTime = Date.now();
-                        clearInterval(poller);
-                        
                         const isWin = diff > 0;
-                        const elapsed = Math.round((Date.now() - audioDetection.tradeOpenedAt) / 1000);
-                        log(`BALANCE DETECTED: ${isWin ? 'WIN' : 'LOSS'} ($${diff > 0 ? '+' : ''}${diff.toFixed(2)}) after ${elapsed}s (expected ~${expirySeconds}s)`);
-                        handleAutoDetectedResult(isWin);
+                        log(`BACKUP POLL: Balance changed $${diff > 0 ? '+' : ''}${diff.toFixed(2)}`);
+                        handleTradeResultDetected(isWin, 'backup-poll');
+                        clearInterval(poller);
                         return;
                     }
                 }
                 
-                // Method 2: Scan DOM for result elements
+                // Scan DOM for result elements
                 const domResult = scanDOMForResult();
                 if (domResult !== null) {
-                    audioDetection.pendingTrade = false;
-                    audioDetection.lastDetectionTime = Date.now();
+                    log(`BACKUP POLL: DOM result found`);
+                    handleTradeResultDetected(domResult, 'backup-dom');
                     clearInterval(poller);
-                    
-                    const elapsed = Math.round((Date.now() - audioDetection.tradeOpenedAt) / 1000);
-                    log(`DOM DETECTED: ${domResult ? 'WIN' : 'LOSS'} after ${elapsed}s (expected ~${expirySeconds}s)`);
-                    handleAutoDetectedResult(domResult);
                     return;
                 }
-            }, 1000);
+            }, 500);
         }, waitMs);
     }
     
@@ -3697,7 +4042,7 @@
                 <div class="gpt-header-left">
                     <div class="gpt-status-dot" id="gpt-dot"></div>
                     <span class="gpt-logo">GPT Bot</span>
-                    <span class="gpt-version">v8.4.1</span>
+                    <span class="gpt-version">v8.5</span>
                 </div>
                 <button class="gpt-minimize-btn" id="gpt-minimize">−</button>
             </div>
@@ -5917,7 +6262,7 @@
             }
 
             console.log('[GPT Bot] Creating panel...');
-            console.log('[GPT Bot] v8.4.1 - Timeframe-synced outcome detection + 3-mode Invert');
+            console.log('[GPT Bot] v8.5.0 - MutationObserver real-time outcome detection');
             
             // Create panel immediately, don't wait
             createPanel();

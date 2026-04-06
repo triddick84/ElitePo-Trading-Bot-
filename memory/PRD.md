@@ -3,6 +3,7 @@
 ## Last Updated: April 5, 2026
 
 ## Current Status
+✅ **Tampermonkey v8.5.0 — MutationObserver Real-Time Detection + Enhanced Signals** - Complete rewrite of outcome detection using industry-standard MutationObserver for real-time win/loss tracking. Added MACD, RSI Divergence, ADX trend strength indicators. (April 5, 2026)
 ✅ **Tampermonkey v8.4.1 — Timeframe-Synced Outcome Detection** - Fixed win/loss detection to wait for actual trade expiry based on selected timeframe (5s/15s/30s/1m etc). Trades now properly sync with PO UI timeframe. (April 5, 2026)
 ✅ **Tampermonkey v8.4.0 — UI Updates Complete** - 3-mode Invert Control (OFF/AUTO/ON), Signal Status Display, Reset Stats button, GO button direction mapping fix (April 5, 2026)
 ✅ **React App Updates** - Updated TampermonkeyControlPanel with comprehensive Button Guide v8.4, Save/Load Settings System, Script Info v8.4 with features list (April 5, 2026)
