@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Elite Pocket Option Trading Bot (Legacy)
 // @namespace    https://momentum-trade-test.preview.emergentagent.com
-// @version      8.5.2
-// @description  Elite AI-powered trading bot with simplified win/loss detection and latency control
+// @version      8.5.3
+// @description  Elite AI-powered trading bot with improved win/loss detection logic
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -1406,6 +1406,7 @@
         pendingTrade: false,         // Whether we have an open trade waiting for result
         tradeOpenedAt: 0,
         tradeExpirySeconds: 60,      // The actual expiry time for the current trade
+        tradeAmount: 1,              // The bet amount for the current trade
         minWaitAfterTrade: 3000,     // Small buffer after expiry before checking
         balanceBeforeTrade: 0,       // Snapshot of balance before trade was placed
         ourSoundPlaying: false,      // Flag to ignore our own notification sounds
@@ -2887,8 +2888,14 @@
         audioDetection.tradeExpirySeconds = expirySeconds;
         
         // Snapshot the balance BEFORE the trade
+        // IMPORTANT: Balance might drop immediately when bet is placed
         audioDetection.balanceBeforeTrade = detectAccountBalance();
-        log(`OUTCOME: Trade placed (${expirySeconds}s expiry). Balance: $${audioDetection.balanceBeforeTrade.toFixed(2)}`);
+        
+        // Also store the current trade amount for win calculation
+        audioDetection.tradeAmount = moneyManagement.currentTradeAmount || currentTradeAmount || 1;
+        
+        log(`OUTCOME: Trade placed (${expirySeconds}s expiry)`);
+        log(`OUTCOME: Balance before: $${audioDetection.balanceBeforeTrade.toFixed(2)}, Bet: $${audioDetection.tradeAmount.toFixed(2)}`);
         
         // Start polling for result after expiry
         startSimpleResultPolling(expirySeconds);
@@ -2912,9 +2919,17 @@
             
             log(`OUTCOME: Starting result polling...`);
             
+            // Store the balance right when polling starts (after bet is deducted)
+            const balanceAtPollStart = detectAccountBalance();
+            const balanceBefore = audioDetection.balanceBeforeTrade;
+            const tradeAmount = audioDetection.tradeAmount;
+            
+            log(`OUTCOME: Balance at poll start: $${balanceAtPollStart.toFixed(2)} (before bet: $${balanceBefore.toFixed(2)})`);
+            
             // Poll every 500ms for up to 25 seconds
             let pollCount = 0;
             const maxPolls = 50;
+            let lastBalance = balanceAtPollStart;
             
             const poller = setInterval(() => {
                 pollCount++;
@@ -2931,20 +2946,60 @@
                     return;
                 }
                 
-                // Check balance change
+                // Check current balance
                 const currentBalance = detectAccountBalance();
-                const balanceBefore = audioDetection.balanceBeforeTrade;
                 
-                if (balanceBefore > 0 && currentBalance > 0) {
-                    const diff = currentBalance - balanceBefore;
+                // Compare to balance at poll start (after bet was placed)
+                // If balance INCREASES from poll start, it's likely a WIN (payout received)
+                // If balance stays same or decreases, need to compare to before-bet balance
+                
+                if (currentBalance > 0 && lastBalance > 0) {
+                    const diffFromPollStart = currentBalance - balanceAtPollStart;
+                    const diffFromBeforeBet = currentBalance - balanceBefore;
                     
-                    if (Math.abs(diff) > 0.01) {
+                    // Only process if balance changed significantly from poll start
+                    if (Math.abs(diffFromPollStart) > 0.01) {
                         audioDetection.pendingTrade = false;
                         clearInterval(poller);
                         
-                        const isWin = diff > 0;
                         const elapsed = Math.round((Date.now() - audioDetection.tradeOpenedAt) / 1000);
-                        log(`✅ DETECTED: ${isWin ? 'WIN' : 'LOSS'} ($${diff > 0 ? '+' : ''}${diff.toFixed(2)}) at ${elapsed}s`);
+                        
+                        // WIN: Balance increased from poll start (got payout)
+                        // LOSS: Balance stayed same at poll start (no payout, bet already deducted)
+                        // 
+                        // Better logic: Compare to BEFORE bet balance
+                        // If currentBalance > beforeBet - tradeAmount * 0.1 => WIN (profit or small loss)
+                        // If currentBalance < beforeBet - tradeAmount * 0.5 => LOSS (lost the bet)
+                        
+                        let isWin;
+                        
+                        // If balance increased from poll start, definitely a win
+                        if (diffFromPollStart > tradeAmount * 0.5) {
+                            isWin = true;
+                            log(`✅ WIN DETECTED: Balance +$${diffFromPollStart.toFixed(2)} from poll start`);
+                        } 
+                        // If balance is higher than before bet, win
+                        else if (diffFromBeforeBet > 0) {
+                            isWin = true;
+                            log(`✅ WIN DETECTED: Balance +$${diffFromBeforeBet.toFixed(2)} net profit`);
+                        }
+                        // If balance dropped by more than the trade amount, loss
+                        else if (diffFromBeforeBet < -tradeAmount * 0.8) {
+                            isWin = false;
+                            log(`❌ LOSS DETECTED: Balance -$${Math.abs(diffFromBeforeBet).toFixed(2)} (bet was $${tradeAmount.toFixed(2)})`);
+                        }
+                        // If balance dropped but less than trade amount, probably win (partial or pushed)
+                        else if (diffFromPollStart > 0) {
+                            isWin = true;
+                            log(`✅ WIN DETECTED: Balance recovered +$${diffFromPollStart.toFixed(2)}`);
+                        }
+                        // Default: if balance dropped, it's a loss
+                        else {
+                            isWin = false;
+                            log(`❌ LOSS DETECTED: Balance diff $${diffFromBeforeBet.toFixed(2)}`);
+                        }
+                        
+                        log(`OUTCOME DETAILS: before=$${balanceBefore.toFixed(2)}, pollStart=$${balanceAtPollStart.toFixed(2)}, now=$${currentBalance.toFixed(2)}, bet=$${tradeAmount.toFixed(2)}`);
                         
                         try { recordTradeForML(isWin, elapsed, expirySeconds, 'balance'); } catch(e) {}
                         handleAutoDetectedResult(isWin);
@@ -2952,18 +3007,22 @@
                     }
                 }
                 
-                // Also check DOM for result elements
-                const domResult = scanDOMForResult();
-                if (domResult !== null) {
-                    audioDetection.pendingTrade = false;
-                    clearInterval(poller);
-                    
-                    const elapsed = Math.round((Date.now() - audioDetection.tradeOpenedAt) / 1000);
-                    log(`✅ DOM DETECTED: ${domResult ? 'WIN' : 'LOSS'} at ${elapsed}s`);
-                    
-                    try { recordTradeForML(domResult, elapsed, expirySeconds, 'dom'); } catch(e) {}
-                    handleAutoDetectedResult(domResult);
-                    return;
+                lastBalance = currentBalance;
+                
+                // Also check DOM for result elements (as backup)
+                if (pollCount % 4 === 0) { // Check DOM every 2 seconds
+                    const domResult = scanDOMForResult();
+                    if (domResult !== null) {
+                        audioDetection.pendingTrade = false;
+                        clearInterval(poller);
+                        
+                        const elapsed = Math.round((Date.now() - audioDetection.tradeOpenedAt) / 1000);
+                        log(`✅ DOM DETECTED: ${domResult ? 'WIN' : 'LOSS'} at ${elapsed}s`);
+                        
+                        try { recordTradeForML(domResult, elapsed, expirySeconds, 'dom'); } catch(e) {}
+                        handleAutoDetectedResult(domResult);
+                        return;
+                    }
                 }
             }, 500);
         }, waitMs);
@@ -2974,71 +3033,75 @@
         // Look for recently appeared deal result elements
         // PO typically shows results in deal history or popup notifications
         
-        // Check for deal result popups with green/red indicators
-        const resultSelectors = [
-            // PO deal result classes
-            '[class*="deals-item"][class*="success"]',
-            '[class*="deals-item"][class*="fail"]',
-            '[class*="deal"][class*="win"]',
-            '[class*="deal"][class*="loss"]',
-            '[class*="deal"][class*="lose"]',
-            '[class*="notification"][class*="success"]',
-            '[class*="notification"][class*="fail"]',
-            '[class*="result"][class*="profit"]',
-            '[class*="result"][class*="loss"]',
-            // Closed deals section
-            '.deals-list .deals-item:first-child',
-            '[class*="closed-deals"] [class*="item"]:first-child',
-        ];
-        
-        for (const sel of resultSelectors) {
-            try {
-                const el = document.querySelector(sel);
-                if (!el) continue;
+        // First priority: Check the MOST RECENT closed deal in deals list
+        try {
+            const closedDealsSelectors = [
+                '.deals-list .deals-item:first-child',
+                '[class*="closed-deals"] [class*="item"]:first-child',
+                '[class*="deals"] [class*="closed"]:first-child',
+                '.closed-deals-list > div:first-child',
+            ];
+            
+            for (const sel of closedDealsSelectors) {
+                const deal = document.querySelector(sel);
+                if (!deal || !deal.offsetParent) continue;
                 
-                const text = (el.textContent || '').trim();
-                const className = (el.className || '').toLowerCase();
-                const style = el.getAttribute('style') || '';
+                // Check if this deal was created recently (within last minute)
+                const text = (deal.textContent || '').trim();
+                const className = (deal.className || '').toLowerCase();
                 
-                // Determine win or loss
+                // Look for profit indicator
+                const profitEl = deal.querySelector('[class*="profit"], [class*="payout"], [class*="result"]');
+                if (profitEl) {
+                    const profitText = profitEl.textContent || '';
+                    const profitClass = (profitEl.className || '').toLowerCase();
+                    
+                    // Green/profit class or + sign = WIN
+                    if (profitClass.includes('success') || profitClass.includes('profit') || profitClass.includes('win') || profitClass.includes('green')) {
+                        log(`DOM: Found winning deal element`);
+                        return true;
+                    }
+                    // Red/loss class or - sign = LOSS
+                    if (profitClass.includes('fail') || profitClass.includes('loss') || profitClass.includes('lose') || profitClass.includes('red')) {
+                        log(`DOM: Found losing deal element`);
+                        return false;
+                    }
+                    // Check text for +/- amount
+                    if (profitText.match(/^\s*\+/)) return true;
+                    if (profitText.match(/^\s*-/)) return false;
+                }
+                
+                // Check entire deal element
                 if (className.includes('success') || className.includes('win') || className.includes('profit')) {
-                    return true; // WIN
+                    return true;
                 }
                 if (className.includes('fail') || className.includes('loss') || className.includes('lose')) {
-                    return false; // LOSS
+                    return false;
                 }
-                
-                // Check for +/- in text
-                if (text.match(/\+\s*\$?\s*[\d,.]+/)) return true; // WIN
-                if (text.match(/-\s*\$?\s*[\d,.]+/)) return false; // LOSS
-                
-                // Check inline style colors
-                const computedStyle = window.getComputedStyle(el);
-                const color = computedStyle.color || style;
-                if (color.includes('rgb(0, 128') || color.includes('rgb(76, 175') || color.includes('green') || color.includes('#4caf50') || color.includes('#22c55e') || color.includes('#00c853')) {
-                    if (text.match(/[\d,.]+/)) return true; // WIN
-                }
-                if (color.includes('rgb(244, 67') || color.includes('rgb(255, 0') || color.includes('red') || color.includes('#f44336') || color.includes('#ef4444') || color.includes('#ff1744')) {
-                    if (text.match(/[\d,.]+/)) return false; // LOSS
-                }
-            } catch(e) {}
-        }
+            }
+        } catch(e) {}
         
-        // Also scan for the most recent notification/popup with amount
+        // Second priority: Check for popup notifications
         try {
-            const allPopups = document.querySelectorAll('[class*="notification"], [class*="popup"], [class*="toast"], [class*="alert"]');
-            for (const popup of allPopups) {
-                if (!popup.offsetParent) continue; // Not visible
+            const popupSelectors = [
+                '[class*="notification"][class*="deal"]',
+                '[class*="trade-result"]',
+                '[class*="popup"][class*="result"]',
+            ];
+            
+            for (const sel of popupSelectors) {
+                const popup = document.querySelector(sel);
+                if (!popup || !popup.offsetParent) continue;
+                
                 const text = (popup.textContent || '').trim();
                 const className = (popup.className || '').toLowerCase();
                 
-                // Skip our own GPT panel elements
-                if (popup.closest('#gpt-panel')) continue;
-                
-                if (text.match(/\+\s*\$?\s*[\d,.]+/) && (className.includes('success') || className.includes('profit') || className.includes('win'))) {
+                if (className.includes('success') || className.includes('win') || text.match(/\+\s*\$?\s*[\d,.]+/)) {
+                    log(`DOM: Found win notification popup`);
                     return true;
                 }
-                if (text.match(/-\s*\$?\s*[\d,.]+/) && (className.includes('fail') || className.includes('loss') || className.includes('lose'))) {
+                if (className.includes('fail') || className.includes('loss') || text.match(/-\s*\$?\s*[\d,.]+/)) {
+                    log(`DOM: Found loss notification popup`);
                     return false;
                 }
             }
@@ -4166,7 +4229,7 @@
                 <div class="gpt-header-left">
                     <div class="gpt-status-dot" id="gpt-dot"></div>
                     <span class="gpt-logo">GPT Bot</span>
-                    <span class="gpt-version">v8.5.2</span>
+                    <span class="gpt-version">v8.5.3</span>
                 </div>
                 <button class="gpt-minimize-btn" id="gpt-minimize">−</button>
             </div>
@@ -6436,7 +6499,7 @@
             }
 
             console.log('[GPT Bot] Creating panel...');
-            console.log('[GPT Bot] v8.5.2 - Simplified polling detection + Latency control');
+            console.log('[GPT Bot] v8.5.3 - Improved win/loss detection with bet amount tracking');
             
             // Create panel immediately, don't wait
             createPanel();
