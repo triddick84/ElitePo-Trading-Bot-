@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Elite Pocket Option Trading Bot (Legacy)
 // @namespace    https://momentum-trade-test.preview.emergentagent.com
-// @version      8.5.1
-// @description  Elite AI-powered trading bot with ML data collection, latency adjustment, and real-time outcome detection
+// @version      8.5.2
+// @description  Elite AI-powered trading bot with simplified win/loss detection and latency control
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -2470,10 +2470,9 @@
     function localMomentumCheck() {
         const candles = PriceScraperV2.getCandles();
         if (!candles || candles.length < 10) {
-            log(`AUTO-INVERT: Not enough local candles (${candles ? candles.length : 0}), defaulting to toggle`);
-            // Not enough data — fall back to simple toggle
-            doInvertToggle('insufficient local data');
-            return { shouldInvert: true, confidence: 30, reason: 'No local data' };
+            log(`AUTO-INVERT: Not enough local candles (${candles ? candles.length : 0}), keeping current state`);
+            // v8.5.2 FIX: Don't toggle on insufficient data - stay in current state
+            return { shouldInvert: false, confidence: 30, reason: 'No local data - staying current' };
         }
         
         const closes = candles.map(c => c.close);
@@ -2615,104 +2614,8 @@
     // to reliably detect wins and losses
     // ===========================================
     function setupOutcomeDetection() {
-        log('OUTCOME: Setting up real-time trade result detection...');
-        
-        // === MUTATIONOBSERVER-BASED DETECTION (Industry Standard) ===
-        // This is how professional binary options bots detect trade results
-        
-        const observerConfig = {
-            childList: true,
-            subtree: true,
-            attributes: true,
-            attributeFilter: ['class', 'style', 'data-result'],
-            characterData: true
-        };
-        
-        // Create observer that watches for balance/result changes
-        const tradeResultObserver = new MutationObserver((mutations) => {
-            // Only process if we have a pending trade
-            if (!audioDetection.pendingTrade) return;
-            
-            for (const mutation of mutations) {
-                // Method 1: Watch for win/loss class changes on deal elements
-                if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
-                    const target = mutation.target;
-                    const classes = (target.className || '').toLowerCase();
-                    
-                    // Pocket Option uses these class patterns for results
-                    const isWinClass = classes.includes('win') || 
-                                      classes.includes('success') || 
-                                      classes.includes('profit') ||
-                                      classes.includes('green');
-                    const isLossClass = classes.includes('loss') || 
-                                       classes.includes('lose') || 
-                                       classes.includes('fail') ||
-                                       classes.includes('red');
-                    
-                    if (isWinClass || isLossClass) {
-                        const isWin = isWinClass && !isLossClass;
-                        log(`OBSERVER: Class change detected - ${isWin ? 'WIN' : 'LOSS'} (class: ${classes.substring(0, 50)})`);
-                        handleTradeResultDetected(isWin, 'class-observer');
-                        return;
-                    }
-                }
-                
-                // Method 2: Watch for new deal result elements being added
-                if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-                    for (const node of mutation.addedNodes) {
-                        if (node.nodeType !== Node.ELEMENT_NODE) continue;
-                        
-                        const el = node;
-                        const text = (el.textContent || '').toLowerCase();
-                        const classes = (el.className || '').toLowerCase();
-                        
-                        // Check for result indicators
-                        if (text.includes('+$') || text.includes('+ $') || classes.includes('win') || classes.includes('profit')) {
-                            log(`OBSERVER: New WIN element detected`);
-                            handleTradeResultDetected(true, 'dom-added');
-                            return;
-                        }
-                        if (text.includes('-$') || text.includes('- $') || classes.includes('loss') || classes.includes('lose')) {
-                            log(`OBSERVER: New LOSS element detected`);
-                            handleTradeResultDetected(false, 'dom-added');
-                            return;
-                        }
-                        
-                        // Check for PO-specific result patterns
-                        if (el.matches && (
-                            el.matches('[class*="deal"][class*="closed"]') ||
-                            el.matches('[class*="result"]') ||
-                            el.matches('[class*="notification"]')
-                        )) {
-                            const resultFromElement = detectResultFromElement(el);
-                            if (resultFromElement !== null) {
-                                log(`OBSERVER: Result element detected - ${resultFromElement ? 'WIN' : 'LOSS'}`);
-                                handleTradeResultDetected(resultFromElement, 'element-match');
-                                return;
-                            }
-                        }
-                    }
-                }
-                
-                // Method 3: Watch for text content changes (balance updates)
-                if (mutation.type === 'characterData') {
-                    // Check if this is a balance element
-                    const parent = mutation.target.parentElement;
-                    if (parent && isBalanceElement(parent)) {
-                        checkBalanceChangeFromMutation();
-                    }
-                }
-            }
-        });
-        
-        // Start observing the document
-        tradeResultObserver.observe(document.body, observerConfig);
-        
-        // Store reference for potential cleanup
-        window._gptTradeObserver = tradeResultObserver;
-        
-        log('OUTCOME: MutationObserver active - watching for real-time trade results');
-        log('OUTCOME: Detection methods: class-change, dom-added, balance-change, polling');
+        log('OUTCOME: Setting up simplified trade result detection...');
+        log('OUTCOME: Will poll balance + DOM after trades expire');
     }
     
     // Check if element is likely a balance display
@@ -2756,25 +2659,34 @@
         const expectedExpiry = audioDetection.tradeExpirySeconds || 60;
         const latencyOffset = CONFIG.RESULT_LATENCY_OFFSET || 0;
         
-        // Sanity check with user-adjustable latency
-        // Formula: result should come AFTER (expiry - 5 + latencyOffset) seconds
-        // Default allows 5s early. If latencyOffset = +3, allows only 2s early
-        // If latencyOffset = -2, allows 7s early
-        const minElapsed = Math.max(0, expectedExpiry - 5 + latencyOffset);
+        // v8.5.2 FIX: More lenient timing - allow detection any time after 3 seconds
+        // The latency offset adjusts how early we accept results relative to expiry
+        // With offset=0 and expiry=30, minElapsed = max(3, 30-10+0) = 20s
+        // With offset=-5 and expiry=30, minElapsed = max(3, 30-10-5) = 15s
+        const minElapsed = Math.max(3, expectedExpiry - 10 + latencyOffset);
+        
+        // ALWAYS log what we're seeing for debugging
+        log(`OUTCOME CHECK: ${source} at ${elapsed}s, expiry=${expectedExpiry}s, min=${minElapsed}s, offset=${latencyOffset}s`);
         
         if (elapsed < minElapsed) {
-            log(`OUTCOME: Ignoring early ${source} detection at ${elapsed}s (min: ${minElapsed}s, expiry: ${expectedExpiry}s, offset: ${latencyOffset}s)`);
+            log(`OUTCOME: Too early (${elapsed}s < ${minElapsed}s) - waiting...`);
             return;
         }
         
+        // ACCEPT THE RESULT!
         audioDetection.pendingTrade = false;
         audioDetection.lastDetectionTime = Date.now();
         
-        log(`✅ TRADE RESULT [${source}]: ${isWin ? 'WIN' : 'LOSS'} after ${elapsed}s (expected ~${expectedExpiry}s, offset: ${latencyOffset}s)`);
+        log(`✅ TRADE RESULT [${source}]: ${isWin ? 'WIN' : 'LOSS'} after ${elapsed}s`);
         
-        // Record for AI/ML training
-        recordTradeForML(isWin, elapsed, expectedExpiry, source);
+        // Record for AI/ML training (non-blocking)
+        try {
+            recordTradeForML(isWin, elapsed, expectedExpiry, source);
+        } catch(e) {
+            log(`ML record error: ${e.message}`);
+        }
         
+        // UPDATE WIN/LOSS STATS - this is critical!
         handleAutoDetectedResult(isWin);
     }
     
@@ -2969,7 +2881,6 @@
     }
     
     // Called when a trade is placed - starts monitoring for the result
-    // expirySeconds: How long the trade takes to expire (e.g., 5, 15, 30, 60)
     function markTradePending(expirySeconds = 60) {
         audioDetection.pendingTrade = true;
         audioDetection.tradeOpenedAt = Date.now();
@@ -2977,39 +2888,46 @@
         
         // Snapshot the balance BEFORE the trade
         audioDetection.balanceBeforeTrade = detectAccountBalance();
-        log(`OUTCOME: Trade placed (${expirySeconds}s expiry). Balance before: $${audioDetection.balanceBeforeTrade.toFixed(2)}`);
-        log(`OUTCOME: MutationObserver watching for real-time result...`);
+        log(`OUTCOME: Trade placed (${expirySeconds}s expiry). Balance: $${audioDetection.balanceBeforeTrade.toFixed(2)}`);
         
-        // ALSO start backup polling in case observer misses it
-        startBackupResultPolling(expirySeconds);
+        // Start polling for result after expiry
+        startSimpleResultPolling(expirySeconds);
     }
     
-    // Backup polling - only kicks in if MutationObserver doesn't catch the result
-    function startBackupResultPolling(expirySeconds = 60) {
-        // Wait for the trade to actually expire before backup polling
-        const waitMs = (expirySeconds * 1000) + 2000; // expiry + 2s buffer
+    // SIMPLE polling - starts checking near expiry time
+    function startSimpleResultPolling(expirySeconds = 60) {
+        const latencyOffset = CONFIG.RESULT_LATENCY_OFFSET || 0;
+        
+        // Wait until close to expiry, then start polling
+        // Formula: expiry - 3 + offset (allows early detection if offset is negative)
+        const waitMs = Math.max(2000, (expirySeconds - 3 + latencyOffset) * 1000);
+        
+        log(`OUTCOME: Will check in ${Math.round(waitMs/1000)}s (expiry=${expirySeconds}s, offset=${latencyOffset}s)`);
         
         setTimeout(() => {
             if (!audioDetection.pendingTrade) {
-                log('BACKUP: Observer already detected result - skipping poll');
+                log('OUTCOME: Already detected');
                 return;
             }
             
-            log(`BACKUP: Trade expired, observer didn't catch result - starting backup polling...`);
+            log(`OUTCOME: Starting result polling...`);
             
-            // Poll every 500ms for up to 15s after expiry
+            // Poll every 500ms for up to 25 seconds
             let pollCount = 0;
-            const maxPolls = 30;
+            const maxPolls = 50;
             
             const poller = setInterval(() => {
                 pollCount++;
                 
-                if (!audioDetection.pendingTrade || pollCount > maxPolls) {
+                if (!audioDetection.pendingTrade) {
                     clearInterval(poller);
-                    if (pollCount > maxPolls && audioDetection.pendingTrade) {
-                        audioDetection.pendingTrade = false;
-                        log(`BACKUP: Timeout - no result after ${expirySeconds + 17}s. Use manual +W/-L.`);
-                    }
+                    return;
+                }
+                
+                if (pollCount > maxPolls) {
+                    audioDetection.pendingTrade = false;
+                    clearInterval(poller);
+                    log(`OUTCOME: Timeout. Use manual +W/-L buttons.`);
                     return;
                 }
                 
@@ -3021,20 +2939,30 @@
                     const diff = currentBalance - balanceBefore;
                     
                     if (Math.abs(diff) > 0.01) {
-                        const isWin = diff > 0;
-                        log(`BACKUP POLL: Balance changed $${diff > 0 ? '+' : ''}${diff.toFixed(2)}`);
-                        handleTradeResultDetected(isWin, 'backup-poll');
+                        audioDetection.pendingTrade = false;
                         clearInterval(poller);
+                        
+                        const isWin = diff > 0;
+                        const elapsed = Math.round((Date.now() - audioDetection.tradeOpenedAt) / 1000);
+                        log(`✅ DETECTED: ${isWin ? 'WIN' : 'LOSS'} ($${diff > 0 ? '+' : ''}${diff.toFixed(2)}) at ${elapsed}s`);
+                        
+                        try { recordTradeForML(isWin, elapsed, expirySeconds, 'balance'); } catch(e) {}
+                        handleAutoDetectedResult(isWin);
                         return;
                     }
                 }
                 
-                // Scan DOM for result elements
+                // Also check DOM for result elements
                 const domResult = scanDOMForResult();
                 if (domResult !== null) {
-                    log(`BACKUP POLL: DOM result found`);
-                    handleTradeResultDetected(domResult, 'backup-dom');
+                    audioDetection.pendingTrade = false;
                     clearInterval(poller);
+                    
+                    const elapsed = Math.round((Date.now() - audioDetection.tradeOpenedAt) / 1000);
+                    log(`✅ DOM DETECTED: ${domResult ? 'WIN' : 'LOSS'} at ${elapsed}s`);
+                    
+                    try { recordTradeForML(domResult, elapsed, expirySeconds, 'dom'); } catch(e) {}
+                    handleAutoDetectedResult(domResult);
                     return;
                 }
             }, 500);
@@ -4238,7 +4166,7 @@
                 <div class="gpt-header-left">
                     <div class="gpt-status-dot" id="gpt-dot"></div>
                     <span class="gpt-logo">GPT Bot</span>
-                    <span class="gpt-version">v8.5.1</span>
+                    <span class="gpt-version">v8.5.2</span>
                 </div>
                 <button class="gpt-minimize-btn" id="gpt-minimize">−</button>
             </div>
@@ -6508,7 +6436,7 @@
             }
 
             console.log('[GPT Bot] Creating panel...');
-            console.log('[GPT Bot] v8.5.1 - ML data collection + Latency adjustment + MutationObserver detection');
+            console.log('[GPT Bot] v8.5.2 - Simplified polling detection + Latency control');
             
             // Create panel immediately, don't wait
             createPanel();

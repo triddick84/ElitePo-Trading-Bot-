@@ -3,13 +3,12 @@
 ## Last Updated: April 5, 2026
 
 ## Current Status
-✅ **Tampermonkey v8.5.1 — ML Data Collection + Latency Adjustment + Fixed Outcome Detection** 
-- Rewrote outcome detection with MutationObserver for real-time win/loss tracking
-- Added latency adjustment control (+/- 5 seconds) on panel
-- Added ML data collection: trades sent to backend for model training
-- Added local backtesting and performance analysis
-- Enhanced signal engine with MACD, RSI Divergence, ADX trend strength
-- Fixed early detection timing issue (now respects user latency offset)
+✅ **Tampermonkey v8.5.2 — Simplified Win/Loss Detection Fix**
+- Reverted from complex MutationObserver to simple polling (like v8.3 that worked)
+- Fixed: Win/loss now detected via balance change + DOM scanning after expiry
+- Fixed: Auto-invert no longer gets stuck (removed toggle-on-no-data behavior)  
+- Latency adjustment (+/- 5s) still available on panel
+- ML data collection still sends trade results to backend
 (April 5, 2026)
 
 ✅ **Tampermonkey v8.4.0 — UI Updates Complete** - 3-mode Invert Control (OFF/AUTO/ON), Signal Status Display, Reset Stats button, GO button direction mapping fix (April 5, 2026)
