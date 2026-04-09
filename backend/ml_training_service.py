@@ -641,17 +641,23 @@ class MLTrainingService:
         # Create features from trade metadata
         features = pd.DataFrame()
         
-        # Trade-based features
-        features['confidence'] = df.get('confidence', 75)
-        features['is_call'] = (df.get('direction', 'call') == 'call').astype(int)
+        # Trade-based features - use bracket notation for DataFrame columns
+        features['confidence'] = df['confidence'] if 'confidence' in df.columns else 75
+        features['is_call'] = (df['direction'].str.lower() == 'call').astype(int) if 'direction' in df.columns else 0
         
         # Strategy encoding
-        strategies = df.get('backtest_strategy', 'unknown').unique()
-        for strategy in strategies:
-            features[f'strategy_{strategy}'] = (df['backtest_strategy'] == strategy).astype(int)
+        if 'backtest_strategy' in df.columns:
+            strategies = df['backtest_strategy'].unique()
+            for strategy in strategies:
+                features[f'strategy_{strategy}'] = (df['backtest_strategy'] == strategy).astype(int)
         
         # Target: did the trade win?
-        target = (df.get('result', 'loss') == 'win').astype(int)
+        if 'result' in df.columns:
+            target = (df['result'].str.lower() == 'win').astype(int)
+        elif 'outcome' in df.columns:
+            target = (df['outcome'].str.lower() == 'win').astype(int)
+        else:
+            target = pd.Series([0] * len(df))
         
         # Add some noise features to make the model more robust
         features['noise_1'] = np.random.randn(len(df))

@@ -647,7 +647,7 @@ class DeepMarketAnalyzer:
         highs = df['high']
         lows = df['low']
         closes = df['close']
-        volumes = df.get('volume', pd.Series([0] * len(df)))
+        volumes = df['volume'] if 'volume' in df.columns else pd.Series([0] * len(df))
         
         # Calculate all indicators
         rsi = self.calculate_rsi(closes, 14)

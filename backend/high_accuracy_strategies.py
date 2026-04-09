@@ -364,7 +364,7 @@ class MomentumBreakoutStrategy:
         closes = df['close'].astype(float)
         highs = df['high'].astype(float)
         lows = df['low'].astype(float)
-        volumes = df.get('volume', pd.Series([1]*len(df))).astype(float)
+        volumes = df['volume'].astype(float) if 'volume' in df.columns else pd.Series([1]*len(df))
         
         # Find support/resistance levels
         resistance = highs.rolling(20).max().iloc[-2]  # Previous high

@@ -194,7 +194,7 @@ class EnhancedStrategyWrapper:
         required = ['open', 'high', 'low', 'close']
         for col in required:
             if col not in df.columns:
-                df[col] = df.get('close', 0)
+                df[col] = df['close'] if 'close' in df.columns else 0
         
         if 'volume' not in df.columns:
             df['volume'] = 1.0

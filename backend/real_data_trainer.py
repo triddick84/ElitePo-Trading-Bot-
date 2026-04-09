@@ -529,10 +529,20 @@ class RealDataTrainer:
         collector = get_historical_data_collector(self.db)
         training_data = await collector.get_training_data(asset, timeframe, days=30)
         
-        if not training_data or training_data.get('candle_count', 0) < min_samples:
+        # Check if training_data is None or empty
+        if training_data is None:
             return {
                 "success": False,
-                "error": f"Insufficient data: {training_data.get('candle_count', 0)} candles, need {min_samples}+",
+                "error": f"No data available for {asset} {timeframe}",
+                "suggestion": "Run data collection first to gather samples"
+            }
+        
+        candle_count = training_data.get('candle_count', 0) if training_data else 0
+        
+        if candle_count < min_samples:
+            return {
+                "success": False,
+                "error": f"Insufficient data: {candle_count} candles, need {min_samples}+",
                 "suggestion": "Run data collection for longer to gather more samples"
             }
         
