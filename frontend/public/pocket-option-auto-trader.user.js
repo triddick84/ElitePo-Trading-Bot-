@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Elite Pocket Option Trading Bot (Legacy)
 // @namespace    https://momentum-trade-test.preview.emergentagent.com
-// @version      8.5.5
-// @description  Elite AI-powered trading bot - fixed win detection by capturing balance BEFORE trade click
+// @version      8.6.0
+// @description  Elite AI-powered trading bot - post-bet balance comparison for accurate win/loss detection
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -1407,8 +1407,9 @@
         tradeOpenedAt: 0,
         tradeExpirySeconds: 60,      // The actual expiry time for the current trade
         tradeAmount: 1,              // The bet amount for the current trade
-        minWaitAfterTrade: 3000,     // Small buffer after expiry before checking
-        balanceBeforeTrade: 0,       // Snapshot of balance before trade was placed
+        minWaitAfterTrade: 3000,     // Buffer after expiry before checking
+        balanceBeforeTrade: 0,       // Balance before trade (pre-click)
+        balanceAfterBet: 0,          // Balance AFTER bet deducted (2s after click)
         ourSoundPlaying: false,      // Flag to ignore our own notification sounds
     };
     
@@ -2900,35 +2901,42 @@
     }
     
     // Called when a trade is placed - starts monitoring for the result
-    function markTradePending(expirySeconds = 60, preClickBalance = null) {
+    function markTradePending(expirySeconds = 60) {
         audioDetection.pendingTrade = true;
         audioDetection.tradeOpenedAt = Date.now();
         audioDetection.tradeExpirySeconds = expirySeconds;
         audioDetection.tradeAmount = moneyManagement.currentTradeAmount || currentTradeAmount || 1;
         
-        // Use the pre-click balance if provided, otherwise read current
-        audioDetection.balanceBeforeTrade = preClickBalance !== null ? preClickBalance : detectAccountBalance(true);
-        
         log(`════════════════════════════════`);
-        log(`   TRADE OPENED`);
+        log(`   TRADE PLACED`);
         log(`════════════════════════════════`);
         log(`Expiry: ${expirySeconds}s`);
         log(`Bet Amount: $${audioDetection.tradeAmount.toFixed(2)}`);
-        log(`Balance BEFORE: $${audioDetection.balanceBeforeTrade.toFixed(2)}`);
-        log(`════════════════════════════════`);
         
-        // Start polling for result after expiry
-        startOutcomePolling(expirySeconds);
+        // NEW APPROACH: Wait 2 seconds for bet to be deducted, THEN capture balance
+        // This "post-bet" balance is what we compare against after expiry
+        setTimeout(() => {
+            if (!audioDetection.pendingTrade) return;
+            
+            // Capture balance AFTER bet is deducted (2 seconds after click)
+            audioDetection.balanceAfterBet = detectAccountBalance(true);
+            log(`Balance AFTER BET: $${audioDetection.balanceAfterBet.toFixed(2)}`);
+            log(`════════════════════════════════`);
+            
+            // Now wait for trade to expire
+            startOutcomePolling(expirySeconds);
+        }, 2000);
     }
     
-    // SIMPLIFIED outcome polling - waits for expiry then checks balance change
+    // Outcome polling - waits for expiry then checks if balance increased
     function startOutcomePolling(expirySeconds = 60) {
         const latencyOffset = CONFIG.RESULT_LATENCY_OFFSET || 0;
         
-        // Wait until AFTER expiry to start checking (expiry + 2s + offset)
-        const waitMs = (expirySeconds + 2 + latencyOffset) * 1000;
+        // Wait for expiry + 2-3 seconds (we already waited 2s for bet deduction)
+        // So total wait from trade click = 2s + expiry + 3s + offset
+        const waitMs = (expirySeconds + 3 + latencyOffset) * 1000;
         
-        log(`OUTCOME: Waiting ${Math.round(waitMs/1000)}s for trade to complete...`);
+        log(`OUTCOME: Waiting ${Math.round(waitMs/1000)}s for trade to expire...`);
         
         setTimeout(() => {
             if (!audioDetection.pendingTrade) {
@@ -2936,14 +2944,22 @@
                 return;
             }
             
-            const balanceBeforeTrade = audioDetection.balanceBeforeTrade;
-            const tradeAmount = audioDetection.tradeAmount;
+            const balanceAfterBet = audioDetection.balanceAfterBet;
+            
+            if (!balanceAfterBet || balanceAfterBet <= 0) {
+                log('OUTCOME: No post-bet balance recorded. Use +W/-L buttons.');
+                audioDetection.pendingTrade = false;
+                return;
+            }
             
             log(`OUTCOME: Trade should be complete. Checking result...`);
+            log(`OUTCOME: Balance after bet was: $${balanceAfterBet.toFixed(2)}`);
             
-            // Poll for result - check balance change
+            // Poll for result
             let pollCount = 0;
-            const maxPolls = 40; // 20 seconds max
+            const maxPolls = 20; // 10 seconds max
+            let lastBalance = 0;
+            let stableCount = 0; // Count how many times balance stayed same
             
             const poller = setInterval(() => {
                 pollCount++;
@@ -2956,44 +2972,61 @@
                 if (pollCount > maxPolls) {
                     clearInterval(poller);
                     audioDetection.pendingTrade = false;
-                    log(`OUTCOME: Timeout. Use +W or -L buttons manually.`);
+                    log(`OUTCOME: Timeout. Use +W or -L buttons.`);
                     return;
                 }
                 
-                // FORCE fresh balance read from DOM
+                // Force fresh balance read
                 const currentBalance = detectAccountBalance(true);
-                const netChange = currentBalance - balanceBeforeTrade;
+                const change = currentBalance - balanceAfterBet;
                 
-                // Log every 3 polls (1.5 seconds)
-                if (pollCount % 3 === 1) {
-                    log(`POLL #${pollCount}: Balance=$${currentBalance.toFixed(2)}, Change=$${netChange >= 0 ? '+' : ''}${netChange.toFixed(2)}`);
+                log(`POLL #${pollCount}: Balance=$${currentBalance.toFixed(2)}, Change from post-bet=$${change >= 0 ? '+' : ''}${change.toFixed(2)}`);
+                
+                // Check if balance is stable (same as last poll)
+                if (Math.abs(currentBalance - lastBalance) < 0.01) {
+                    stableCount++;
+                } else {
+                    stableCount = 0;
                 }
+                lastBalance = currentBalance;
                 
-                // Check if balance changed significantly
-                // For a WIN: balance should be HIGHER than before (we got payout)
-                // For a LOSS: balance should be LOWER than before (we lost our bet)
-                
-                if (Math.abs(netChange) >= 0.01) {
+                // Need balance to be stable for at least 2 polls before deciding
+                if (stableCount >= 2) {
                     clearInterval(poller);
                     audioDetection.pendingTrade = false;
                     
                     const elapsed = Math.round((Date.now() - audioDetection.tradeOpenedAt) / 1000);
                     
-                    // SIMPLE LOGIC:
-                    // netChange > 0 means we have MORE money = WIN
-                    // netChange < 0 means we have LESS money = LOSS
-                    const isWin = netChange > 0;
+                    // LOGIC:
+                    // - If current balance > post-bet balance → WIN (payout was added)
+                    // - If current balance == post-bet balance → LOSS (no payout, bet already gone)
+                    // - If current balance < post-bet balance → Could be another trade, treat as LOSS
+                    
+                    let isWin = false;
+                    let resultReason = '';
+                    
+                    if (change > 0.01) {
+                        isWin = true;
+                        resultReason = `Balance INCREASED by $${change.toFixed(2)} (payout received)`;
+                    } else if (Math.abs(change) < 0.01) {
+                        isWin = false;
+                        resultReason = `Balance UNCHANGED (no payout = loss)`;
+                    } else {
+                        isWin = false;
+                        resultReason = `Balance DECREASED by $${Math.abs(change).toFixed(2)} (loss or another trade)`;
+                    }
                     
                     log(`════════════════════════════════`);
                     log(`   TRADE RESULT: ${isWin ? '✅ WIN' : '❌ LOSS'}`);
                     log(`════════════════════════════════`);
-                    log(`Before: $${balanceBeforeTrade.toFixed(2)}`);
-                    log(`After:  $${currentBalance.toFixed(2)}`);
-                    log(`Change: $${netChange >= 0 ? '+' : ''}${netChange.toFixed(2)}`);
-                    log(`Time:   ${elapsed}s`);
+                    log(`After Bet:  $${balanceAfterBet.toFixed(2)}`);
+                    log(`After Exp:  $${currentBalance.toFixed(2)}`);
+                    log(`Change:     $${change >= 0 ? '+' : ''}${change.toFixed(2)}`);
+                    log(`Reason:     ${resultReason}`);
+                    log(`Time:       ${elapsed}s`);
                     log(`════════════════════════════════`);
                     
-                    // Record for ML training
+                    // Record for ML
                     try { recordTradeForML(isWin, elapsed, expirySeconds, 'balance'); } catch(e) {}
                     
                     // Update stats
@@ -4205,7 +4238,7 @@
                 <div class="gpt-header-left">
                     <div class="gpt-status-dot" id="gpt-dot"></div>
                     <span class="gpt-logo">GPT Bot</span>
-                    <span class="gpt-version">v8.5.5</span>
+                    <span class="gpt-version">v8.6.0</span>
                 </div>
                 <button class="gpt-minimize-btn" id="gpt-minimize">−</button>
             </div>
@@ -6097,11 +6130,6 @@
             return false;
         }
         
-        // CAPTURE BALANCE ***BEFORE*** CLICKING THE TRADE BUTTON
-        // This is critical for accurate win/loss detection
-        const preClickBalance = detectAccountBalance(true);
-        log(`PRE-TRADE BALANCE: $${preClickBalance.toFixed(2)}`);
-        
         // SET LOCK IMMEDIATELY to prevent any race conditions
         globalTradeLock = true;
         
@@ -6167,8 +6195,8 @@
             btn.click();
             
             // Mark trade as pending for outcome detection
-            // Pass the balance we captured BEFORE clicking
-            markTradePending(expirySeconds, preClickBalance);
+            // Balance will be captured 2 seconds after click (after bet deduction)
+            markTradePending(expirySeconds);
             
             // Release global lock after delay
             setTimeout(() => {
@@ -6481,7 +6509,7 @@
             }
 
             console.log('[GPT Bot] Creating panel...');
-            console.log('[GPT Bot] v8.5.5 - Pre-click balance capture for accurate win/loss detection');
+            console.log('[GPT Bot] v8.6.0 - Post-bet balance comparison for accurate win/loss detection');
             
             // Create panel immediately, don't wait
             createPanel();

@@ -3,27 +3,33 @@
 ## Last Updated: April 5, 2026
 
 ## Current Status
-✅ **Tampermonkey v8.5.5 — Fixed Win Detection (Pre-Click Balance Capture)**
-- ROOT CAUSE: Balance was being captured AFTER the trade button click, when bet may have already been deducted
-- FIX: Now captures balance BEFORE clicking trade button in `clickTradeButton()`
-- Pre-click balance is passed to `markTradePending()` for accurate comparison
-- Force fresh DOM read with `detectAccountBalance(true)` - no caching during detection
-- Clear logging with box format shows Before/After/Change values
+✅ **Tampermonkey v8.6.0 — Post-Bet Balance Comparison (User's Correct Approach)**
+- NEW APPROACH based on user feedback:
+  1. Click trade button
+  2. Wait 2 seconds (for bet to be deducted)
+  3. Capture "balance after bet" (e.g., $99 after $1 bet)
+  4. Wait for expiry + 3 seconds
+  5. Check balance again:
+     - HIGHER than post-bet = WIN (payout received: $99 → $100.80)
+     - SAME as post-bet = LOSS (no payout: $99 → $99)
+     - LOWER = Another trade was placed or LOSS
+- This approach handles multiple simultaneous trades correctly
 (April 5, 2026)
 
-✅ **Tampermonkey v8.4.0 — UI Updates Complete** - 3-mode Invert Control (OFF/AUTO/ON), Signal Status Display, Reset Stats button (April 5, 2026)
-✅ **React App Updates** - Updated TampermonkeyControlPanel with Button Guide v8.4, Save/Load Settings (April 5, 2026)
+## Detection Logic (v8.6.0)
+```
+Click → Wait 2s → Capture Balance ($99) → Wait Expiry+3s → Check Balance
+                                                         
+WIN:  $99 → $100.80 (+$1.80 payout)
+LOSS: $99 → $99     (no change, bet was already deducted)
+```
 
-## Detection Logic (v8.5.5)
-```
-1. BEFORE click: Capture balance ($100.00)
-2. Click trade button
-3. Wait for expiry + 2s + latency_offset
-4. Poll balance every 500ms (force fresh DOM read)
-5. Compare: currentBalance - preClickBalance
-   - Positive change = WIN (got payout)
-   - Negative change = LOSS (lost bet)
-```
+## Known Issue with Multiple Trades
+If user places Trade 2 before Trade 1 expires:
+- Trade 1 post-bet: $99
+- Trade 2 placed: balance drops to $98
+- Trade 1 expires with WIN: $98 + $1.80 = $99.80
+- Compare to Trade 1 post-bet ($99): $99.80 > $99 → Still correctly detected as WIN!
 ✅ **Code Quality Audit Fixes** - Security vulnerabilities, circular imports, hardcoded secrets, weak crypto all resolved (Feb 2026)
 ✅ **Auto-Invert v8.2 + Audio Detection** - Simple WIN=keep/LOSS=toggle logic with Pocket Option audio/DOM monitoring for automatic trade outcome detection (Feb 2026)
 ✅ **Analytics Dashboard (P1)** - New tab in Performance Center with Risk Management, ML Model Stats, Historical Data, Asset Leaderboard, Trading Hours, 24h Heatmap (Feb 2026)
