@@ -3,21 +3,27 @@
 ## Last Updated: April 5, 2026
 
 ## Current Status
-✅ **Tampermonkey v8.5.4 — Simplified Outcome Detection**
-- SIMPLIFIED: Now waits AFTER trade expires (expiry + 1s + latency_offset) before checking
-- SIMPLIFIED: Just compares current balance vs balance-before-trade
-- WIN = current > before (made profit)
-- LOSS = current < before (lost bet)
-- Improved balance detection with more selectors for Pocket Option UI
-- Clear logging: "=== TRADE OPENED ===" and "=== TRADE RESULT ===" markers
+✅ **Tampermonkey v8.5.5 — Fixed Win Detection (Pre-Click Balance Capture)**
+- ROOT CAUSE: Balance was being captured AFTER the trade button click, when bet may have already been deducted
+- FIX: Now captures balance BEFORE clicking trade button in `clickTradeButton()`
+- Pre-click balance is passed to `markTradePending()` for accurate comparison
+- Force fresh DOM read with `detectAccountBalance(true)` - no caching during detection
+- Clear logging with box format shows Before/After/Change values
 (April 5, 2026)
 
-✅ **Tampermonkey v8.4.0 — UI Updates Complete** - 3-mode Invert Control (OFF/AUTO/ON), Signal Status Display, Reset Stats button, GO button direction mapping fix (April 5, 2026)
-✅ **React App Updates** - Updated TampermonkeyControlPanel with comprehensive Button Guide v8.4, Save/Load Settings System (April 5, 2026)
+✅ **Tampermonkey v8.4.0 — UI Updates Complete** - 3-mode Invert Control (OFF/AUTO/ON), Signal Status Display, Reset Stats button (April 5, 2026)
+✅ **React App Updates** - Updated TampermonkeyControlPanel with Button Guide v8.4, Save/Load Settings (April 5, 2026)
 
-## Known Issues
-- ML Training Data Corrupted: Previous detection bug recorded incorrect wins/losses. Models need retraining.
-- Timeframe detection might default to 60s if not detected from PO UI - trades may timeout early for short expiries.
+## Detection Logic (v8.5.5)
+```
+1. BEFORE click: Capture balance ($100.00)
+2. Click trade button
+3. Wait for expiry + 2s + latency_offset
+4. Poll balance every 500ms (force fresh DOM read)
+5. Compare: currentBalance - preClickBalance
+   - Positive change = WIN (got payout)
+   - Negative change = LOSS (lost bet)
+```
 ✅ **Code Quality Audit Fixes** - Security vulnerabilities, circular imports, hardcoded secrets, weak crypto all resolved (Feb 2026)
 ✅ **Auto-Invert v8.2 + Audio Detection** - Simple WIN=keep/LOSS=toggle logic with Pocket Option audio/DOM monitoring for automatic trade outcome detection (Feb 2026)
 ✅ **Analytics Dashboard (P1)** - New tab in Performance Center with Risk Management, ML Model Stats, Historical Data, Asset Leaderboard, Trading Hours, 24h Heatmap (Feb 2026)
