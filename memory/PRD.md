@@ -3,23 +3,21 @@
 ## Last Updated: April 5, 2026
 
 ## Current Status
-✅ **Tampermonkey v8.5.3 — Fixed Inverted Win/Loss Detection**
-- ROOT CAUSE FOUND: Balance detection was comparing wrong values. When a bet is placed, balance drops immediately, then changes again at expiry. The old code was comparing final balance to "before bet" which caused inversions.
-- NEW LOGIC: Now tracks `balanceBeforeTrade`, `tradeAmount`, and `balanceAtPollStart` separately
-- WIN = balance increased from poll start OR net profit from before bet
-- LOSS = balance dropped by more than 80% of bet amount
-- Added detailed OUTCOME DETAILS logging to debug future issues
-- Improved DOM scanning to focus on most recent closed deal
+✅ **Tampermonkey v8.5.4 — Simplified Outcome Detection**
+- SIMPLIFIED: Now waits AFTER trade expires (expiry + 1s + latency_offset) before checking
+- SIMPLIFIED: Just compares current balance vs balance-before-trade
+- WIN = current > before (made profit)
+- LOSS = current < before (lost bet)
+- Improved balance detection with more selectors for Pocket Option UI
+- Clear logging: "=== TRADE OPENED ===" and "=== TRADE RESULT ===" markers
 (April 5, 2026)
 
 ✅ **Tampermonkey v8.4.0 — UI Updates Complete** - 3-mode Invert Control (OFF/AUTO/ON), Signal Status Display, Reset Stats button, GO button direction mapping fix (April 5, 2026)
-✅ **React App Updates** - Updated TampermonkeyControlPanel with comprehensive Button Guide v8.4, Save/Load Settings System, Script Info v8.4 with features list (April 5, 2026)
-✅ **PocketOptionPage Header Update** - New Integration Overview card with AI Signal Engine and Smart Auto-Invert info (April 5, 2026)
-✅ **Tampermonkey v8.4 — Balance Sync + Momentum Auto-Invert** - Live PO balance scrape + backend fallback, auto-bet recalc, momentum-aware invert using local RSI/EMA + backend momentum-check endpoint (Feb 2026)
+✅ **React App Updates** - Updated TampermonkeyControlPanel with comprehensive Button Guide v8.4, Save/Load Settings System (April 5, 2026)
 
 ## Known Issues
-- ML Training Data Corrupted: Previous detection bug recorded 22 losses / 1 win incorrectly. Models trained on this data will have low accuracy.
-- Models need retraining after fix is verified to be working correctly.
+- ML Training Data Corrupted: Previous detection bug recorded incorrect wins/losses. Models need retraining.
+- Timeframe detection might default to 60s if not detected from PO UI - trades may timeout early for short expiries.
 ✅ **Code Quality Audit Fixes** - Security vulnerabilities, circular imports, hardcoded secrets, weak crypto all resolved (Feb 2026)
 ✅ **Auto-Invert v8.2 + Audio Detection** - Simple WIN=keep/LOSS=toggle logic with Pocket Option audio/DOM monitoring for automatic trade outcome detection (Feb 2026)
 ✅ **Analytics Dashboard (P1)** - New tab in Performance Center with Risk Management, ML Model Stats, Historical Data, Asset Leaderboard, Trading Hours, 24h Heatmap (Feb 2026)
