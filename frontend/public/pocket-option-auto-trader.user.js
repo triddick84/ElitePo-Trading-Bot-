@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Elite Pocket Option Trading Bot (Legacy)
 // @namespace    https://momentum-trade-test.preview.emergentagent.com
-// @version      8.6.0
-// @description  Elite AI-powered trading bot - post-bet balance comparison for accurate win/loss detection
+// @version      8.6.1
+// @description  Elite AI-powered trading bot - Auto-invert stays on same asset after loss for immediate retry
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -2461,158 +2461,56 @@
         return signal;
     }
     
+    // ===========================================
+    // SMART AUTO-INVERT - v8.6.1
+    // On LOSS: Stay on same asset + invert + retry immediately
+    // On WIN: Can proceed to next asset
+    // ===========================================
+    
+    // Track last trade result for cycle integration
+    let lastTradeResult = {
+        isWin: null,
+        timestamp: 0,
+        asset: '',
+        wasInverted: false
+    };
+    
     function updateSmartAutoInvertOnResult(isWin) {
         if (!smartAutoInvert.enabled) return;
         
+        // Store the result
+        lastTradeResult.isWin = isWin;
+        lastTradeResult.timestamp = Date.now();
+        lastTradeResult.asset = lastTradeInfo.symbol || '';
+        lastTradeResult.wasInverted = smartAutoInvert.invertActive;
+        
         if (isWin) {
-            // WIN: Stay in current state
-            log(`AUTO-INVERT: WIN - staying ${smartAutoInvert.invertActive ? 'INVERTED' : 'NORMAL'}`);
+            // WIN: Turn OFF invert (back to normal signals)
+            if (smartAutoInvert.invertActive) {
+                smartAutoInvert.invertActive = false;
+                invertEnabled = false;
+                GM_setValue('invertEnabled', false);
+                GM_setValue('smartAutoInvertActive', false);
+                log(`AUTO-INVERT: ✅ WIN while inverted → Back to NORMAL`);
+            } else {
+                log(`AUTO-INVERT: ✅ WIN (normal) → Stay NORMAL`);
+            }
         } else {
-            // LOSS: Check momentum before deciding to invert
-            log(`AUTO-INVERT: LOSS detected - checking momentum...`);
-            checkMomentumAndInvert();
+            // LOSS: Turn ON invert immediately (to try opposite direction)
+            if (!smartAutoInvert.invertActive) {
+                smartAutoInvert.invertActive = true;
+                invertEnabled = true;
+                GM_setValue('invertEnabled', true);
+                GM_setValue('smartAutoInvertActive', true);
+                log(`AUTO-INVERT: ❌ LOSS (normal) → Switching to INVERTED`);
+            } else {
+                // Already inverted and still losing - keep inverted but log
+                log(`AUTO-INVERT: ❌ LOSS (inverted) → Staying INVERTED`);
+            }
+            
+            // Signal that we should retry on same asset (for CYCLE mode)
+            lastTradeResult.shouldRetry = true;
         }
-        updateInvertDisplay();
-    }
-    
-    // After a loss, do a quick local + backend momentum check
-    function checkMomentumAndInvert() {
-        const symbol = lastTradeInfo.symbol || '';
-        
-        // Step 1: Quick LOCAL momentum check (immediate)
-        const localResult = localMomentumCheck();
-        
-        // Step 2: BACKEND momentum check (async, confirms or overrides local)
-        backendMomentumCheck(symbol, localResult);
-    }
-    
-    // Quick local RSI + EMA analysis from scraped candles
-    function localMomentumCheck() {
-        const candles = PriceScraperV2.getCandles();
-        if (!candles || candles.length < 10) {
-            log(`AUTO-INVERT: Not enough local candles (${candles ? candles.length : 0}), keeping current state`);
-            // v8.5.2 FIX: Don't toggle on insufficient data - stay in current state
-            return { shouldInvert: false, confidence: 30, reason: 'No local data - staying current' };
-        }
-        
-        const closes = candles.map(c => c.close);
-        
-        // Calculate RSI (fast 5-period for 5s trades)
-        const rsi = LocalSignalEngine.calculateRSI(closes, 5);
-        
-        // Calculate EMA 5 and EMA 10 for slope
-        const ema5_curr = LocalSignalEngine.calculateEMA(closes, 5);
-        const ema10_curr = LocalSignalEngine.calculateEMA(closes, 10);
-        const ema5_prev = LocalSignalEngine.calculateEMA(closes.slice(0, -1), 5);
-        const ema10_prev = LocalSignalEngine.calculateEMA(closes.slice(0, -1), 10);
-        
-        // EMA slope (direction of movement)
-        const emaSlope = (ema5_curr - ema5_prev) / Math.max(Math.abs(ema5_prev), 0.0001);
-        
-        // EMA crossover check
-        const prevAbove = ema5_prev > ema10_prev;
-        const currAbove = ema5_curr > ema10_curr;
-        const crossover = prevAbove !== currAbove;
-        
-        // Price velocity
-        const recentCloses = closes.slice(-5);
-        const velocity = (recentCloses[recentCloses.length - 1] - recentCloses[0]) / Math.max(Math.abs(recentCloses[0]), 0.0001) * 100;
-        
-        let confidence = 0;
-        let reasons = [];
-        
-        // RSI extremes suggest reversal/pullback
-        if (rsi > 75) {
-            confidence += 30;
-            reasons.push(`RSI overbought (${rsi.toFixed(1)})`);
-        } else if (rsi < 25) {
-            confidence += 30;
-            reasons.push(`RSI oversold (${rsi.toFixed(1)})`);
-        }
-        
-        // EMA crossover = momentum shift
-        if (crossover) {
-            confidence += 35;
-            reasons.push('EMA 5/10 crossover');
-        }
-        
-        // Slope reversal
-        const lastDirection = lastTradeInfo.direction;
-        if (lastDirection === 'CALL' && emaSlope < -0.001) {
-            confidence += 20;
-            reasons.push('EMA slope turned bearish');
-        } else if (lastDirection === 'PUT' && emaSlope > 0.001) {
-            confidence += 20;
-            reasons.push('EMA slope turned bullish');
-        }
-        
-        // Sharp velocity spike against trade direction
-        if ((lastDirection === 'CALL' && velocity < -0.05) || (lastDirection === 'PUT' && velocity > 0.05)) {
-            confidence += 25;
-            reasons.push(`Price spike against direction (${velocity.toFixed(3)}%)`);
-        }
-        
-        const shouldInvert = confidence >= 50;
-        
-        log(`AUTO-INVERT LOCAL: RSI=${rsi.toFixed(1)} EMAslope=${emaSlope.toFixed(4)} conf=${confidence} → ${shouldInvert ? 'INVERT' : 'HOLD'}`);
-        
-        if (shouldInvert) {
-            doInvertToggle(reasons.join(', '));
-        } else {
-            log(`AUTO-INVERT: Momentum intact locally (conf=${confidence}), staying ${smartAutoInvert.invertActive ? 'INVERTED' : 'NORMAL'}`);
-        }
-        
-        return { shouldInvert, confidence, reason: reasons.join(', '), rsi, emaSlope };
-    }
-    
-    // Backend momentum confirmation (async)
-    function backendMomentumCheck(symbol, localResult) {
-        if (!symbol) return;
-        
-        const normalizedSymbol = symbol.replace(/\s+/g, '').replace('/', '').toUpperCase();
-        
-        GM_xmlhttpRequest({
-            method: 'GET',
-            url: CONFIG.API_URL + `/signals/momentum-check?symbol=${normalizedSymbol}`,
-            headers: { 'Accept': 'application/json' },
-            timeout: 5000,
-            onload: function(res) {
-                try {
-                    if (res.status !== 200) return;
-                    const data = JSON.parse(res.responseText);
-                    if (!data.success) return;
-                    
-                    log(`AUTO-INVERT BACKEND: momentum=${data.momentum} trend=${data.trend} rsi=${data.rsi} conf=${data.confidence} → ${data.should_invert ? 'INVERT' : 'HOLD'}`);
-                    
-                    // Backend can override local decision in two cases:
-                    // 1. Local said HOLD but backend sees strong shift → invert
-                    // 2. Local said INVERT but backend says trend intact → revert
-                    
-                    if (data.should_invert && !localResult.shouldInvert) {
-                        // Backend overrides: momentum shifted, force invert
-                        log(`AUTO-INVERT: Backend override → INVERT (${data.reason})`);
-                        doInvertToggle('Backend: ' + data.reason);
-                    } else if (!data.should_invert && localResult.shouldInvert && data.confidence < 20) {
-                        // Backend says strong trend intact, local was wrong — revert
-                        log(`AUTO-INVERT: Backend override → REVERT (trend intact: ${data.reason})`);
-                        // Only revert if we just inverted
-                        if (smartAutoInvert.invertActive && localResult.confidence < 70) {
-                            doInvertToggle('Backend correction: trend intact');
-                        }
-                    }
-                } catch(e) {}
-            },
-            onerror: function() {} // Silently fail, local decision stands
-        });
-    }
-    
-    // Actually toggle the invert state
-    function doInvertToggle(reason) {
-        smartAutoInvert.invertActive = !smartAutoInvert.invertActive;
-        invertEnabled = smartAutoInvert.invertActive;
-        GM_setValue('invertEnabled', invertEnabled);
-        GM_setValue('smartAutoInvertActive', smartAutoInvert.invertActive);
-        log(`AUTO-INVERT: → ${smartAutoInvert.invertActive ? 'INVERTED' : 'NORMAL'} (${reason})`);
         updateInvertDisplay();
     }
     
@@ -4238,7 +4136,7 @@
                 <div class="gpt-header-left">
                     <div class="gpt-status-dot" id="gpt-dot"></div>
                     <span class="gpt-logo">GPT Bot</span>
-                    <span class="gpt-version">v8.6.0</span>
+                    <span class="gpt-version">v8.6.1</span>
                 </div>
                 <button class="gpt-minimize-btn" id="gpt-minimize">−</button>
             </div>
@@ -5205,15 +5103,26 @@
                                     await executeScanTrade(processed);
                                     tradePlaced = true;
                                     
-                                    // Wait for trade expiry before moving on
+                                    // Wait for trade expiry before checking result
                                     const expiryMs = (signal.expiration || 5) * 1000;
-                                    const waitTime = Math.max(expiryMs + 3000, 8000); // expiry + 3s buffer, min 8s
-                                    log(`CYCLE: Trade placed. Waiting ${waitTime/1000}s for expiry...`);
+                                    const waitTime = Math.max(expiryMs + 5000, 10000); // expiry + 5s buffer for result detection
+                                    log(`CYCLE: Trade placed. Waiting ${waitTime/1000}s for result...`);
                                     updateCycleStatus(`${assetName} - TRADE ${processed.direction} - waiting ${waitTime/1000}s`);
                                     
                                     await sleep(waitTime);
                                     
-                                    // After trade expires, break out of dwell loop to move to next asset
+                                    // Check if we should retry on same asset (LOSS with AUTO-INVERT)
+                                    if (smartAutoInvert.enabled && lastTradeResult.shouldRetry && !lastTradeResult.isWin) {
+                                        log(`CYCLE: LOSS detected - staying on ${assetName} for inverted retry`);
+                                        lastTradeResult.shouldRetry = false; // Reset flag
+                                        
+                                        // Don't break - continue the dwell loop to place another trade
+                                        tradePlaced = false; // Allow another trade
+                                        await sleep(2000); // Brief pause before retry
+                                        continue; // Stay on this asset
+                                    }
+                                    
+                                    // WIN or no auto-invert - move to next asset
                                     break;
                                 } catch (err) {
                                     log(`CYCLE: Trade error: ${err.message}`);
@@ -5235,10 +5144,20 @@
                                 try {
                                     await executeScanTrade(processed);
                                     tradePlaced = true;
-                                    const waitTime = 8000;
-                                    log(`CYCLE: Backend trade placed. Waiting ${waitTime/1000}s...`);
+                                    const waitTime = 10000; // 10s for result detection
+                                    log(`CYCLE: Backend trade placed. Waiting ${waitTime/1000}s for result...`);
                                     updateCycleStatus(`${assetName} - TRADE ${processed.direction} - waiting`);
                                     await sleep(waitTime);
+                                    
+                                    // Check if we should retry on same asset (LOSS with AUTO-INVERT)
+                                    if (smartAutoInvert.enabled && lastTradeResult.shouldRetry && !lastTradeResult.isWin) {
+                                        log(`CYCLE: LOSS detected - staying on ${assetName} for inverted retry`);
+                                        lastTradeResult.shouldRetry = false;
+                                        tradePlaced = false;
+                                        await sleep(2000);
+                                        continue;
+                                    }
+                                    
                                     break;
                                 } catch (err) {
                                     log(`CYCLE: Backend trade error: ${err.message}`);
@@ -6509,7 +6428,7 @@
             }
 
             console.log('[GPT Bot] Creating panel...');
-            console.log('[GPT Bot] v8.6.0 - Post-bet balance comparison for accurate win/loss detection');
+            console.log('[GPT Bot] v8.6.1 - Auto-invert stays on same asset after loss');
             
             // Create panel immediately, don't wait
             createPanel();

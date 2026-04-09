@@ -3,33 +3,21 @@
 ## Last Updated: April 5, 2026
 
 ## Current Status
-✅ **Tampermonkey v8.6.0 — Post-Bet Balance Comparison (User's Correct Approach)**
-- NEW APPROACH based on user feedback:
-  1. Click trade button
-  2. Wait 2 seconds (for bet to be deducted)
-  3. Capture "balance after bet" (e.g., $99 after $1 bet)
-  4. Wait for expiry + 3 seconds
-  5. Check balance again:
-     - HIGHER than post-bet = WIN (payout received: $99 → $100.80)
-     - SAME as post-bet = LOSS (no payout: $99 → $99)
-     - LOWER = Another trade was placed or LOSS
-- This approach handles multiple simultaneous trades correctly
+✅ **Tampermonkey v8.6.1 — Auto-Invert Stays on Same Asset After Loss**
+- NEW AUTO-INVERT BEHAVIOR:
+  1. Start with NORMAL signals (not inverted)
+  2. On LOSS → Immediately switch to INVERTED + STAY on same asset + retry
+  3. On WIN while inverted → Switch back to NORMAL, can move to next asset
+  4. On WIN while normal → Stay NORMAL, can move to next asset
+- CYCLE mode now respects auto-invert: doesn't switch assets on loss
+- Added `lastTradeResult` tracking for cycle integration
 (April 5, 2026)
 
-## Detection Logic (v8.6.0)
-```
-Click → Wait 2s → Capture Balance ($99) → Wait Expiry+3s → Check Balance
-                                                         
-WIN:  $99 → $100.80 (+$1.80 payout)
-LOSS: $99 → $99     (no change, bet was already deducted)
-```
+✅ **Tampermonkey v8.6.0 — Post-Bet Balance Comparison**
+- Captures balance 2 seconds AFTER trade click (after bet deducted)
+- Compares: If balance increased = WIN, if same = LOSS
+(April 5, 2026)
 
-## Known Issue with Multiple Trades
-If user places Trade 2 before Trade 1 expires:
-- Trade 1 post-bet: $99
-- Trade 2 placed: balance drops to $98
-- Trade 1 expires with WIN: $98 + $1.80 = $99.80
-- Compare to Trade 1 post-bet ($99): $99.80 > $99 → Still correctly detected as WIN!
 ✅ **Code Quality Audit Fixes** - Security vulnerabilities, circular imports, hardcoded secrets, weak crypto all resolved (Feb 2026)
 ✅ **Auto-Invert v8.2 + Audio Detection** - Simple WIN=keep/LOSS=toggle logic with Pocket Option audio/DOM monitoring for automatic trade outcome detection (Feb 2026)
 ✅ **Analytics Dashboard (P1)** - New tab in Performance Center with Risk Management, ML Model Stats, Historical Data, Asset Leaderboard, Trading Hours, 24h Heatmap (Feb 2026)
