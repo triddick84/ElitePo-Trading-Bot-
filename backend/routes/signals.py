@@ -3010,3 +3010,229 @@ async def momentum_check(symbol: str = "EURUSD_OTC", timeframe: str = "5s"):
             "ema_slope": None,
             "price_velocity": None,
         }
+
+
+@router.get("/signals/momentum-indicator")
+async def momentum_indicator_analysis(
+    symbol: str = "EURUSD_OTC",
+    period: int = Query(14, ge=1, le=50, description="Momentum period"),
+    threshold: float = Query(0, ge=-50, le=50, description="Signal threshold"),
+    smoothing: int = Query(3, ge=1, le=20, description="EMA smoothing period")
+):
+    """
+    Advanced momentum indicator analysis using configurable parameters.
+    
+    Returns:
+    - momentum_value: Current smoothed momentum
+    - momentum_slope: Rate of change of momentum (acceleration/deceleration)
+    - signal: Trading signal (CALL/PUT/NEUTRAL) with confidence
+    - conditions: List of met conditions for strategy integration
+    """
+    try:
+        from high_accuracy_strategies import MomentumIndicator
+        import numpy as np
+        
+        closes = None
+        candle_count = 0
+        
+        # Try OANDA first (most reliable)
+        try:
+            oanda_symbol = symbol.replace("_OTC", "").replace("/", "_")
+            # Ensure proper format (EURUSD -> EUR_USD)
+            if '_' not in oanda_symbol and len(oanda_symbol) == 6:
+                oanda_symbol = f"{oanda_symbol[:3]}_{oanda_symbol[3:]}"
+            
+            oanda_df = enhanced_oanda.get_candles(oanda_symbol, granularity="S5", count=100)
+            if oanda_df is not None and len(oanda_df) > 0:
+                closes = oanda_df['close'] if 'close' in oanda_df.columns else oanda_df['Close']
+                candle_count = len(closes)
+        except Exception as e:
+            logger.debug(f"OANDA fetch failed: {e}")
+        
+        # Fallback to DB historical candles
+        if closes is None or len(closes) < period + smoothing + 5:
+            db_ref = router.app_state.get("db") if hasattr(router, 'app_state') else None
+            if not db_ref:
+                from server import db as server_db
+                db_ref = server_db
+            
+            if db_ref is not None:
+                cursor = db_ref.historical_candles.find(
+                    {"symbol": symbol.replace("_OTC", "").replace("_", "/")},
+                    {"_id": 0}
+                ).sort("timestamp", -1).limit(100)
+                candles = await cursor.to_list(100)
+                candles.reverse()
+                
+                if len(candles) >= period + smoothing + 5:
+                    closes = pd.Series([float(c.get("close", c.get("Close", c.get("price", 0)))) for c in candles])
+                    candle_count = len(closes)
+        
+        if closes is None or len(closes) < period + smoothing + 5:
+            return {
+                "success": False,
+                "error": "Insufficient data",
+                "candles_available": candle_count,
+                "candles_required": period + smoothing + 5
+            }
+        
+        # Ensure closes is a pandas Series
+        if not isinstance(closes, pd.Series):
+            closes = pd.Series(closes)
+        
+        # Initialize momentum indicator
+        mom_indicator = MomentumIndicator(period=period, threshold=threshold, smoothing=smoothing)
+        
+        # Calculate momentum values
+        result = mom_indicator.calculate(closes)
+        if result is None:
+            return {
+                "success": False,
+                "error": "Could not calculate momentum"
+            }
+        
+        # Get trading signal
+        signal = mom_indicator.get_signal(closes)
+        
+        # Check all conditions and return which are met
+        conditions_status = {}
+        condition_types = [
+            'crosses_above_zero', 'crosses_below_zero',
+            'strong_positive', 'strong_negative',
+            'momentum_increasing', 'momentum_decreasing',
+            'bullish_divergence', 'bearish_divergence'
+        ]
+        
+        for cond in condition_types:
+            met, boost, desc = mom_indicator.check_condition(closes, cond)
+            conditions_status[cond] = {
+                "met": bool(met),  # Convert numpy.bool to Python bool
+                "confidence_boost": float(boost),
+                "description": str(desc)
+            }
+        
+        return {
+            "success": True,
+            "symbol": symbol,
+            "candles_used": int(len(closes)),
+            "parameters": {
+                "period": int(period),
+                "threshold": float(threshold),
+                "smoothing": int(smoothing)
+            },
+            "momentum": {
+                "raw": float(result['momentum']) if not np.isnan(result['momentum']) else 0.0,
+                "smoothed": float(result['smoothed']) if not np.isnan(result['smoothed']) else 0.0,
+                "slope": float(result['slope']) if not np.isnan(result['slope']) else 0.0,
+                "previous": float(result['previous']) if not np.isnan(result['previous']) else 0.0
+            },
+            "signal": {
+                "direction": str(signal['direction']) if signal else "NEUTRAL",
+                "confidence": float(signal['confidence']) if signal else 0,
+                "confirmations": list(signal['confirmations']) if signal else []
+            } if signal else {"direction": "NEUTRAL", "confidence": 0, "confirmations": []},
+            "conditions": conditions_status
+        }
+        
+    except Exception as e:
+        logger.error(f"Momentum indicator analysis error: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@router.post("/signals/evaluate-momentum-condition")
+async def evaluate_momentum_condition(
+    symbol: str = Query(..., description="Asset symbol"),
+    condition_type: str = Query(..., description="Condition type to check"),
+    period: int = Query(14, ge=1, le=50),
+    threshold: float = Query(0, ge=-50, le=50),
+    smoothing: int = Query(3, ge=1, le=20)
+):
+    """
+    Evaluate a specific momentum condition for Strategy Builder integration.
+    
+    Used when a custom strategy includes a MOMENTUM indicator condition.
+    
+    Condition types:
+    - crosses_above_zero
+    - crosses_below_zero
+    - strong_positive
+    - strong_negative
+    - momentum_increasing
+    - momentum_decreasing
+    - bullish_divergence
+    - bearish_divergence
+    """
+    try:
+        from high_accuracy_strategies import MomentumIndicator
+        
+        closes = None
+        
+        # Try OANDA first
+        try:
+            oanda_symbol = symbol.replace("_OTC", "").replace("/", "_")
+            if '_' not in oanda_symbol and len(oanda_symbol) == 6:
+                oanda_symbol = f"{oanda_symbol[:3]}_{oanda_symbol[3:]}"
+            
+            oanda_df = enhanced_oanda.get_candles(oanda_symbol, granularity="S5", count=100)
+            if oanda_df is not None and len(oanda_df) > 0:
+                closes = oanda_df['close'] if 'close' in oanda_df.columns else oanda_df['Close']
+        except Exception as e:
+            logger.debug(f"OANDA fetch failed: {e}")
+        
+        # Fallback to DB
+        if closes is None or len(closes) < period + smoothing + 5:
+            db_ref = router.app_state.get("db") if hasattr(router, 'app_state') else None
+            if not db_ref:
+                from server import db as server_db
+                db_ref = server_db
+            
+            if db_ref is not None:
+                cursor = db_ref.historical_candles.find(
+                    {"symbol": symbol.replace("_OTC", "").replace("_", "/")},
+                    {"_id": 0}
+                ).sort("timestamp", -1).limit(100)
+                candles = await cursor.to_list(100)
+                candles.reverse()
+                
+                if len(candles) >= period + smoothing + 5:
+                    closes = pd.Series([float(c.get("close", c.get("Close", c.get("price", 0)))) for c in candles])
+        
+        if closes is None or len(closes) < period + smoothing + 5:
+            return {
+                "success": False,
+                "condition_met": False,
+                "error": "Insufficient data"
+            }
+        
+        if not isinstance(closes, pd.Series):
+            closes = pd.Series(closes)
+        
+        mom_indicator = MomentumIndicator(period=period, threshold=threshold, smoothing=smoothing)
+        met, confidence_boost, description = mom_indicator.check_condition(closes, condition_type)
+        
+        return {
+            "success": True,
+            "symbol": str(symbol),
+            "condition_type": str(condition_type),
+            "condition_met": bool(met),  # Convert numpy.bool to Python bool
+            "confidence_boost": float(confidence_boost),
+            "description": str(description),
+            "parameters": {
+                "period": int(period),
+                "threshold": float(threshold),
+                "smoothing": int(smoothing)
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Momentum condition evaluation error: {e}")
+        return {
+            "success": False,
+            "condition_met": False,
+            "error": str(e)
+        }

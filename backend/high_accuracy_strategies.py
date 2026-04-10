@@ -31,6 +31,230 @@ class SignalStrength(Enum):
     EXTREME = 5
 
 
+# =====================================================
+# MOMENTUM INDICATOR MODULE
+# =====================================================
+
+class MomentumIndicator:
+    """
+    Standalone Momentum Indicator with full configuration options.
+    
+    Calculates rate of price change and provides multiple signal types:
+    - Zero-line crossovers
+    - Threshold-based signals (strong positive/negative)
+    - Momentum slope (acceleration/deceleration)
+    - Divergence detection (price vs momentum)
+    """
+    
+    def __init__(self, period: int = 14, threshold: float = 0, smoothing: int = 3):
+        self.period = period
+        self.threshold = threshold
+        self.smoothing = smoothing
+    
+    def calculate(self, closes: pd.Series) -> Optional[Dict]:
+        """
+        Calculate momentum indicator values.
+        
+        Returns dict with:
+        - momentum: raw momentum value (current close - close N periods ago)
+        - smoothed: EMA-smoothed momentum
+        - slope: momentum slope (rate of change of momentum)
+        - previous: previous momentum value (for crossover detection)
+        """
+        if len(closes) < self.period + self.smoothing + 2:
+            return None
+        
+        # Raw momentum: current price - price N periods ago
+        momentum = closes - closes.shift(self.period)
+        
+        # Apply EMA smoothing
+        smoothed = momentum.ewm(span=self.smoothing, adjust=False).mean()
+        
+        # Calculate slope (rate of change of smoothed momentum)
+        slope = smoothed.diff()
+        
+        return {
+            'momentum': momentum.iloc[-1],
+            'smoothed': smoothed.iloc[-1],
+            'slope': slope.iloc[-1],
+            'previous': smoothed.iloc[-2] if len(smoothed) > 1 else 0,
+            'prev_slope': slope.iloc[-2] if len(slope) > 1 else 0,
+            'series': smoothed  # Full series for divergence detection
+        }
+    
+    def check_condition(self, closes: pd.Series, condition_type: str) -> Tuple[bool, float, str]:
+        """
+        Check if a specific momentum condition is met.
+        
+        Args:
+            closes: Price series
+            condition_type: One of the condition types from MOMENTUM indicator
+            
+        Returns:
+            (condition_met: bool, confidence_boost: float, description: str)
+        """
+        result = self.calculate(closes)
+        if result is None:
+            return False, 0, "Insufficient data"
+        
+        mom = result['smoothed']
+        prev_mom = result['previous']
+        slope = result['slope']
+        
+        if condition_type == 'crosses_above_zero':
+            met = prev_mom <= 0 and mom > 0
+            return met, 2.0 if met else 0, f"Momentum crossed above zero ({mom:.4f})"
+        
+        elif condition_type == 'crosses_below_zero':
+            met = prev_mom >= 0 and mom < 0
+            return met, 2.0 if met else 0, f"Momentum crossed below zero ({mom:.4f})"
+        
+        elif condition_type == 'strong_positive':
+            met = mom > self.threshold and mom > 0
+            strength = min(3.0, (mom / max(abs(self.threshold), 0.0001)) * 1.5) if met else 0
+            return met, strength, f"Strong positive momentum ({mom:.4f} > {self.threshold})"
+        
+        elif condition_type == 'strong_negative':
+            neg_threshold = -abs(self.threshold) if self.threshold > 0 else self.threshold
+            met = mom < neg_threshold and mom < 0
+            strength = min(3.0, (abs(mom) / max(abs(neg_threshold), 0.0001)) * 1.5) if met else 0
+            return met, strength, f"Strong negative momentum ({mom:.4f} < {neg_threshold})"
+        
+        elif condition_type == 'momentum_increasing':
+            met = slope > 0 and mom > prev_mom
+            return met, 1.5 if met else 0, f"Momentum accelerating (slope: {slope:.4f})"
+        
+        elif condition_type == 'momentum_decreasing':
+            met = slope < 0 and mom < prev_mom
+            return met, 1.5 if met else 0, f"Momentum decelerating (slope: {slope:.4f})"
+        
+        elif condition_type == 'bullish_divergence':
+            # Price making lower lows but momentum making higher lows
+            met = self._check_bullish_divergence(closes, result['series'])
+            return met, 3.0 if met else 0, "Bullish divergence detected"
+        
+        elif condition_type == 'bearish_divergence':
+            # Price making higher highs but momentum making lower highs
+            met = self._check_bearish_divergence(closes, result['series'])
+            return met, 3.0 if met else 0, "Bearish divergence detected"
+        
+        return False, 0, "Unknown condition"
+    
+    def _check_bullish_divergence(self, closes: pd.Series, momentum: pd.Series, lookback: int = 10) -> bool:
+        """Check for bullish divergence: price lower low + momentum higher low"""
+        if len(closes) < lookback or len(momentum) < lookback:
+            return False
+        
+        recent_closes = closes.iloc[-lookback:]
+        recent_mom = momentum.iloc[-lookback:]
+        
+        # Find recent lows
+        prev_section = recent_closes.iloc[:len(recent_closes)//2]
+        if len(prev_section) == 0:
+            return False
+        
+        price_low_current = recent_closes.iloc[-3:].min()
+        price_low_prev = prev_section.min()
+        
+        mom_low_current = recent_mom.iloc[-3:].min()
+        mom_low_prev = recent_mom.iloc[:len(recent_mom)//2].min()
+        
+        # Bullish divergence: price making lower lows, momentum making higher lows
+        return price_low_current < price_low_prev and mom_low_current > mom_low_prev
+    
+    def _check_bearish_divergence(self, closes: pd.Series, momentum: pd.Series, lookback: int = 10) -> bool:
+        """Check for bearish divergence: price higher high + momentum lower high"""
+        if len(closes) < lookback or len(momentum) < lookback:
+            return False
+        
+        recent_closes = closes.iloc[-lookback:]
+        recent_mom = momentum.iloc[-lookback:]
+        
+        price_high_current = recent_closes.iloc[-3:].max()
+        price_high_prev = recent_closes.iloc[:len(recent_closes)//2].max()
+        
+        mom_high_current = recent_mom.iloc[-3:].max()
+        mom_high_prev = recent_mom.iloc[:len(recent_mom)//2].max()
+        
+        # Bearish divergence: price making higher highs, momentum making lower highs
+        return price_high_current > price_high_prev and mom_high_current < mom_high_prev
+    
+    def get_signal(self, closes: pd.Series) -> Optional[Dict]:
+        """
+        Generate a trading signal based on momentum analysis.
+        
+        Returns signal dict with direction, confidence, and confirmations.
+        """
+        result = self.calculate(closes)
+        if result is None:
+            return None
+        
+        mom = result['smoothed']
+        prev_mom = result['previous']
+        slope = result['slope']
+        
+        confirmations = []
+        direction = None
+        confidence = 50
+        
+        # Check for zero-line crossover (primary signal)
+        if prev_mom <= 0 and mom > 0:
+            direction = "CALL"
+            confidence += 15
+            confirmations.append("MOMENTUM_BULLISH_CROSS")
+        elif prev_mom >= 0 and mom < 0:
+            direction = "PUT"
+            confidence += 15
+            confirmations.append("MOMENTUM_BEARISH_CROSS")
+        
+        # Check momentum strength
+        if mom > self.threshold and mom > 0:
+            if direction != "PUT":
+                direction = direction or "CALL"
+                confidence += 8
+                confirmations.append("STRONG_POSITIVE_MOMENTUM")
+        elif mom < -abs(self.threshold) and mom < 0:
+            if direction != "CALL":
+                direction = direction or "PUT"
+                confidence += 8
+                confirmations.append("STRONG_NEGATIVE_MOMENTUM")
+        
+        # Check slope (acceleration)
+        if slope > 0 and direction == "CALL":
+            confidence += 5
+            confirmations.append("MOMENTUM_ACCELERATING")
+        elif slope < 0 and direction == "PUT":
+            confidence += 5
+            confirmations.append("MOMENTUM_DECELERATING")
+        
+        # Check divergence
+        if self._check_bullish_divergence(closes, result['series']):
+            if direction != "PUT":
+                direction = direction or "CALL"
+                confidence += 12
+                confirmations.append("BULLISH_DIVERGENCE")
+        elif self._check_bearish_divergence(closes, result['series']):
+            if direction != "CALL":
+                direction = direction or "PUT"
+                confidence += 12
+                confirmations.append("BEARISH_DIVERGENCE")
+        
+        if direction and len(confirmations) >= 1:
+            return {
+                'direction': direction,
+                'confidence': min(95, confidence),
+                'confirmations': confirmations,
+                'momentum_value': mom,
+                'momentum_slope': slope
+            }
+        
+        return None
+
+
+# Global momentum indicator instance (default config)
+default_momentum = MomentumIndicator()
+
+
 class MarketCondition(Enum):
     TRENDING_UP = "trending_up"
     TRENDING_DOWN = "trending_down"
@@ -81,12 +305,15 @@ class UltraScalpingStrategy:
     - Price action + momentum alignment
     - Strict noise filtering
     - Only trade clear setups
+    - NEW: Integrated momentum indicator for additional confirmation
     """
     
-    def __init__(self):
+    def __init__(self, use_momentum: bool = True, momentum_period: int = 7, momentum_threshold: float = 0):
         self.name = "ultra_scalping_5s"
         self.expiry = 5
         self.min_confirmations = 4
+        self.use_momentum = use_momentum
+        self.momentum = MomentumIndicator(period=momentum_period, threshold=momentum_threshold, smoothing=2)
         
     def analyze(self, candles: List[Dict], current_price: float) -> Optional[PrecisionSignal]:
         """
@@ -165,6 +392,13 @@ class UltraScalpingStrategy:
             call_score += 1
             confirmations.append("BULLISH_CANDLE")
         
+        # 6. NEW: Momentum indicator confirmation
+        if self.use_momentum:
+            mom_signal = self.momentum.get_signal(closes)
+            if mom_signal and mom_signal['direction'] == 'CALL':
+                call_score += 2
+                confirmations.extend([f"MOM_{c}" for c in mom_signal['confirmations'][:2]])
+        
         # PUT Setup Analysis
         put_score = 0
         put_confirmations = []
@@ -204,6 +438,13 @@ class UltraScalpingStrategy:
         if closes.iloc[-1] < closes.iloc[-2]:
             put_score += 1
             put_confirmations.append("BEARISH_CANDLE")
+        
+        # 6. NEW: Momentum indicator confirmation for PUT
+        if self.use_momentum:
+            mom_signal = self.momentum.get_signal(closes)
+            if mom_signal and mom_signal['direction'] == 'PUT':
+                put_score += 2
+                put_confirmations.extend([f"MOM_{c}" for c in mom_signal['confirmations'][:2]])
         
         # Determine direction based on scores
         if call_score > put_score and call_score >= 5:
@@ -339,12 +580,15 @@ class MomentumBreakoutStrategy:
     - Volume spike validation
     - Multiple timeframe alignment
     - False breakout filtering
+    - NEW: Enhanced momentum indicator integration
     """
     
-    def __init__(self):
+    def __init__(self, use_momentum: bool = True, momentum_period: int = 10, momentum_threshold: float = 0):
         self.name = "momentum_breakout_15s"
         self.expiry = 15
         self.min_confirmations = 4
+        self.use_momentum = use_momentum
+        self.momentum = MomentumIndicator(period=momentum_period, threshold=momentum_threshold, smoothing=3)
         
     def analyze(self, candles: List[Dict], current_price: float) -> Optional[PrecisionSignal]:
         """
@@ -425,6 +669,16 @@ class MomentumBreakoutStrategy:
             call_score += 2
             confirmations.append("MACD_BULLISH")
         
+        # 6. NEW: Momentum indicator for breakout confirmation
+        if self.use_momentum:
+            mom_signal = self.momentum.get_signal(closes)
+            if mom_signal and mom_signal['direction'] == 'CALL':
+                call_score += 2
+                confirmations.append("MOMENTUM_CONFIRMS_BREAKOUT")
+                if 'MOMENTUM_ACCELERATING' in mom_signal['confirmations']:
+                    call_score += 1
+                    confirmations.append("MOMENTUM_ACCELERATING")
+        
         # SUPPORT BREAKOUT (PUT)
         put_score = 0
         put_confirmations = []
@@ -458,6 +712,16 @@ class MomentumBreakoutStrategy:
         if macd_hist[-1] < 0 and macd_hist[-1] < macd_hist[-2]:
             put_score += 2
             put_confirmations.append("MACD_BEARISH")
+        
+        # 6. NEW: Momentum indicator for breakdown confirmation
+        if self.use_momentum:
+            mom_signal = self.momentum.get_signal(closes)
+            if mom_signal and mom_signal['direction'] == 'PUT':
+                put_score += 2
+                put_confirmations.append("MOMENTUM_CONFIRMS_BREAKDOWN")
+                if 'MOMENTUM_DECELERATING' in mom_signal['confirmations']:
+                    put_score += 1
+                    put_confirmations.append("MOMENTUM_DECELERATING")
         
         # Determine best direction
         if call_score > put_score and call_score >= 5:
@@ -763,7 +1027,7 @@ class TrendConfirmationStrategy:
         ema_9 = closes.ewm(span=9).mean()
         ema_21 = closes.ewm(span=21).mean()
         ema_50 = closes.ewm(span=50).mean()
-        sma_200 = closes.rolling(min(200, len(closes))).mean()
+        # sma_200 available for longer-term trend analysis if needed
         
         # ADX for trend strength
         adx = self._calculate_adx(closes, highs, lows, 14)

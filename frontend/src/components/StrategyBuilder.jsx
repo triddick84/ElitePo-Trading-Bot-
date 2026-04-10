@@ -289,6 +289,30 @@ const INDICATOR_TEMPLATES = {
     ]
   },
 
+  // Momentum Indicator (NEW)
+  MOMENTUM: {
+    name: 'Momentum Indicator',
+    category: 'momentum',
+    icon: '⚡',
+    description: 'Measures rate of price change - identifies trend strength and potential reversals',
+    parameters: {
+      period: { label: 'Period', type: 'number', default: 14, min: 1, max: 50 },
+      threshold: { label: 'Threshold', type: 'number', default: 0, min: -50, max: 50 },
+      smoothing: { label: 'Smoothing (EMA)', type: 'number', default: 3, min: 1, max: 20 },
+      signal_type: { label: 'Signal Type (1=cross, 2=zone)', type: 'number', default: 1, min: 1, max: 2 }
+    },
+    conditions: [
+      { id: 'crosses_above_zero', label: 'Momentum crosses above zero', signal: 'CALL', description: 'Bullish momentum shift - price acceleration turning positive' },
+      { id: 'crosses_below_zero', label: 'Momentum crosses below zero', signal: 'PUT', description: 'Bearish momentum shift - price acceleration turning negative' },
+      { id: 'strong_positive', label: 'Strong positive momentum', signal: 'CALL', description: 'Momentum above threshold - strong upward pressure' },
+      { id: 'strong_negative', label: 'Strong negative momentum', signal: 'PUT', description: 'Momentum below threshold - strong downward pressure' },
+      { id: 'momentum_increasing', label: 'Momentum increasing (acceleration)', signal: 'CALL', description: 'Momentum slope positive - trend strengthening' },
+      { id: 'momentum_decreasing', label: 'Momentum decreasing (deceleration)', signal: 'PUT', description: 'Momentum slope negative - trend weakening' },
+      { id: 'bullish_divergence', label: 'Bullish divergence (price down, momentum up)', signal: 'CALL', description: 'Hidden bullish signal - potential reversal up' },
+      { id: 'bearish_divergence', label: 'Bearish divergence (price up, momentum down)', signal: 'PUT', description: 'Hidden bearish signal - potential reversal down' },
+    ]
+  },
+
   // Parabolic SAR
   PARABOLIC_SAR: {
     name: 'Parabolic SAR',
@@ -890,6 +914,24 @@ const StrategyBuilder = () => {
           { id: 'c1', indicator: 'SUPERTREND', conditionType: 'turns_bullish', parameters: { period: 10, multiplier: 3 } },
           { id: 'c2', indicator: 'SUPERTREND', conditionType: 'turns_bearish', parameters: { period: 10, multiplier: 3 } }
         ]
+      },
+      'Momentum Crossover': {
+        name: 'Momentum Zero-Line Cross',
+        description: 'Trade momentum zero-line crossovers',
+        conditions: [
+          { id: 'c1', indicator: 'MOMENTUM', conditionType: 'crosses_above_zero', parameters: { period: 14, smoothing: 3, threshold: 0, signal_type: 1 } },
+          { id: 'c2', indicator: 'MOMENTUM', conditionType: 'crosses_below_zero', parameters: { period: 14, smoothing: 3, threshold: 0, signal_type: 1 } }
+        ]
+      },
+      'Momentum + RSI': {
+        name: 'Momentum with RSI Filter',
+        description: 'Momentum signals filtered by RSI',
+        conditions: [
+          { id: 'c1', indicator: 'MOMENTUM', conditionType: 'strong_positive', parameters: { period: 10, smoothing: 3, threshold: 5, signal_type: 2 } },
+          { id: 'c2', indicator: 'RSI', conditionType: 'above_50', parameters: { period: 14, overbought: 70, oversold: 30 } },
+          { id: 'c3', indicator: 'MOMENTUM', conditionType: 'strong_negative', parameters: { period: 10, smoothing: 3, threshold: -5, signal_type: 2 } },
+          { id: 'c4', indicator: 'RSI', conditionType: 'below_50', parameters: { period: 14, overbought: 70, oversold: 30 } }
+        ]
       }
     };
 
@@ -938,7 +980,7 @@ const StrategyBuilder = () => {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {['EMA Crossover', 'RSI Reversal', 'Bollinger Breakout', 'MACD Signal', 'SuperTrend'].map(name => (
+                {['EMA Crossover', 'RSI Reversal', 'Bollinger Breakout', 'MACD Signal', 'SuperTrend', 'Momentum Crossover', 'Momentum + RSI'].map(name => (
                   <Card 
                     key={name} 
                     className="cursor-pointer hover:border-purple-500/50 transition-colors border-slate-600"
