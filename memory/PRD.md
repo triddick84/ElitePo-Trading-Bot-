@@ -1,8 +1,17 @@
 # Elite Pocket Option Trading Bot - Product Requirements Document
 
-## Last Updated: April 5, 2026
+## Last Updated: April 10, 2026
 
 ## Current Status
+✅ **Momentum Indicator Feature (April 10, 2026)**
+- NEW: Added comprehensive Momentum Indicator to Strategy Builder
+- Frontend: Full configuration with 4 parameters (Period, Threshold, Smoothing, Signal Type)
+- Frontend: 8 condition types including zero-line crossovers, strength zones, acceleration, and divergence
+- Backend: New API endpoints `/api/signals/momentum-indicator` and `/api/signals/evaluate-momentum-condition`
+- Backend: MomentumIndicator class integrated into UltraScalpingStrategy and MomentumBreakoutStrategy as enhancement filter
+- Templates: Added "Momentum Crossover" and "Momentum + RSI" quick start templates
+- Uses OANDA real-time data feed for momentum calculations
+
 ✅ **Tampermonkey v8.6.1 — Auto-Invert Stays on Same Asset After Loss**
 - NEW AUTO-INVERT BEHAVIOR:
   1. Start with NORMAL signals (not inverted)
