@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Elite Pocket Option Trading Bot (Legacy)
 // @namespace    https://momentum-trade-test.preview.emergentagent.com
-// @version      8.6.4
+// @version      8.6.5
 // @description  Elite AI-powered trading bot - Auto-invert stays on same asset after loss for immediate retry
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
@@ -2541,9 +2541,33 @@
                 smartAutoInvert.invertActive = false;
                 lastTradeResult.shouldRetry = false;
                 lastTradeResult.consecutiveLosses = 0;
+                GM_setValue('smartAutoInvertActive', false);
             }
         }
+        
+        // v8.6.4: SAVE STATE for persistence across refresh
+        saveAutoInvertState();
+        
         updateInvertDisplay();
+    }
+    
+    // Save auto-invert state to persist across page refresh
+    function saveAutoInvertState() {
+        GM_setValue('smartAutoInvertEnabled', smartAutoInvert.enabled);
+        GM_setValue('smartAutoInvertActive', smartAutoInvert.invertActive);
+        GM_setValue('invertEnabled', invertEnabled);
+        
+        // Save lastTradeResult state
+        const stateToSave = {
+            isWin: lastTradeResult.isWin,
+            consecutiveWins: lastTradeResult.consecutiveWins,
+            consecutiveLosses: lastTradeResult.consecutiveLosses,
+            wasInverted: lastTradeResult.wasInverted,
+            timestamp: lastTradeResult.timestamp
+        };
+        GM_setValue('lastTradeResultState', JSON.stringify(stateToSave));
+        
+        log(`STATE SAVED: Invert=${smartAutoInvert.invertActive}, Wins=${lastTradeResult.consecutiveWins}, Losses=${lastTradeResult.consecutiveLosses}`);
     }
     
     function updateInvertDisplay() {
@@ -3091,6 +3115,11 @@
         lastTradeResult.shouldRetry = false;
         lastTradeResult.shouldRideTrend = false;
         smartAutoInvert.invertActive = false;
+        invertEnabled = false;
+        
+        // Save reset state
+        saveAutoInvertState();
+        GM_setValue('winLossStats', JSON.stringify(winLossStats));
         
         resetMartingale();
         resetSmartMartingale();
@@ -3098,7 +3127,7 @@
         updateMoneyManagementDisplay();
         updateInvertDisplay();
         syncStatsToBackend();
-        log('📊 All stats reset (including Auto-Invert)');
+        log('📊 All stats reset (including Auto-Invert state)');
     }
 
     // ===========================================
@@ -4684,26 +4713,25 @@
             smartAutoInvert.enabled = false;
             smartAutoInvert.invertActive = false;
             invertEnabled = false;
-            GM_setValue('smartAutoInvertEnabled', false);
-            GM_setValue('smartAutoInvertActive', false);
-            GM_setValue('invertEnabled', false);
             log('INVERT: OFF - Signals trade as-is');
         } else if (mode === 'auto') {
             smartAutoInvert.enabled = true;
-            // Keep current invertActive state
+            // Keep current invertActive state OR restore from saved
+            const savedActive = GM_getValue('smartAutoInvertActive', false);
+            if (!smartAutoInvert.invertActive && savedActive) {
+                smartAutoInvert.invertActive = savedActive;
+            }
             invertEnabled = smartAutoInvert.invertActive;
-            GM_setValue('smartAutoInvertEnabled', true);
-            GM_setValue('invertEnabled', invertEnabled);
             log(`INVERT: AUTO - Momentum-aware (currently ${smartAutoInvert.invertActive ? 'INVERTED' : 'NORMAL'})`);
         } else if (mode === 'on') {
             smartAutoInvert.enabled = false;
             smartAutoInvert.invertActive = true;
             invertEnabled = true;
-            GM_setValue('smartAutoInvertEnabled', false);
-            GM_setValue('smartAutoInvertActive', true);
-            GM_setValue('invertEnabled', true);
             log('INVERT: ON - All signals inverted');
         }
+        
+        // Save ALL invert-related state
+        saveAutoInvertState();
         
         updateInvertModeUI(mode);
         updateInvertDisplay();
@@ -5032,14 +5060,15 @@
             GM_setValue('autoEnabled', false);
             manageIntervals(); // clears scan/auto intervals
             
-            // Reset invert state to NORMAL at start
+            // v8.6.4: PRESERVE invert state - don't reset!
+            // Just reset the streak counters for a fresh start, but keep the mode
             if (smartAutoInvert.enabled) {
-                smartAutoInvert.invertActive = false;
+                // Keep smartAutoInvert.invertActive as-is (user's preference)
                 lastTradeResult.consecutiveWins = 0;
                 lastTradeResult.consecutiveLosses = 0;
                 lastTradeResult.shouldRetry = false;
                 lastTradeResult.shouldRideTrend = false;
-                log('CYCLE: Auto-Invert starting in NORMAL mode');
+                log(`CYCLE: Auto-Invert ON (currently ${smartAutoInvert.invertActive ? 'INVERTED' : 'NORMAL'})`);
             }
             
             cycleAbort = false;
@@ -6719,10 +6748,10 @@
     }
 
     // ===========================================
-    // INITIALIZATION - v6.9.0
+    // INITIALIZATION - v8.6.4
     // ===========================================
     function init() {
-        console.log('[GPT Bot] Starting initialization v8.0.0...');
+        console.log('[GPT Bot] Starting initialization v8.6.4...');
         
         try {
             // Load saved settings (all default to false)
@@ -6758,12 +6787,38 @@
             // Load cycle mode state (default off - user must manually enable)
             cycleEnabled = GM_getValue('cycleEnabled', false);
             
-            // Load auto-invert state
+            // ===========================================
+            // RESTORE AUTO-INVERT STATE (v8.6.4 FIX)
+            // ===========================================
+            const savedInvertMode = GM_getValue('invertMode', 'off');
             smartAutoInvert.enabled = GM_getValue('smartAutoInvertEnabled', false);
             smartAutoInvert.invertActive = GM_getValue('smartAutoInvertActive', false);
+            invertEnabled = GM_getValue('invertEnabled', false);
+            
+            // Restore lastTradeResult state for streak tracking
+            const savedLastTradeResult = GM_getValue('lastTradeResultState', null);
+            if (savedLastTradeResult) {
+                try {
+                    const parsed = JSON.parse(savedLastTradeResult);
+                    lastTradeResult.consecutiveWins = parsed.consecutiveWins || 0;
+                    lastTradeResult.consecutiveLosses = parsed.consecutiveLosses || 0;
+                    lastTradeResult.isWin = parsed.isWin;
+                    lastTradeResult.wasInverted = parsed.wasInverted || false;
+                } catch(e) {
+                    console.log('[GPT Bot] Failed to parse lastTradeResult');
+                }
+            }
+            
+            // Sync invertEnabled with smartAutoInvert state
             if (smartAutoInvert.enabled) {
                 invertEnabled = smartAutoInvert.invertActive;
             }
+            
+            // Log restored state
+            console.log(`[GPT Bot] Restored Invert Mode: ${savedInvertMode}`);
+            console.log(`[GPT Bot] Auto-Invert Enabled: ${smartAutoInvert.enabled}`);
+            console.log(`[GPT Bot] Invert Active: ${smartAutoInvert.invertActive}`);
+            console.log(`[GPT Bot] Loss Streak: ${lastTradeResult.consecutiveLosses}`);
             
             // Load stats if any
             const savedStats = GM_getValue('winLossStats', null);
@@ -6776,7 +6831,7 @@
             }
 
             console.log('[GPT Bot] Creating panel...');
-            console.log('[GPT Bot] v8.6.1 - Auto-invert stays on same asset after loss');
+            console.log('[GPT Bot] v8.6.4 - Precision timing + settings persistence');
             
             // Create panel immediately, don't wait
             createPanel();
@@ -6790,6 +6845,10 @@
             initMoneyManagementUI();
             updateWinLossDisplay();
             updateAllUI();
+            
+            // Restore invert mode UI after panel is created
+            updateInvertModeUI(savedInvertMode);
+            updateInvertDisplay();
             
             manageIntervals();
             
