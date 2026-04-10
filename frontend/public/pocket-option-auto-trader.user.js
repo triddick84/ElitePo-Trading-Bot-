@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Elite Pocket Option Trading Bot (Legacy)
 // @namespace    https://momentum-trade-test.preview.emergentagent.com
-// @version      8.6.1
+// @version      8.6.2
 // @description  Elite AI-powered trading bot - Auto-invert stays on same asset after loss for immediate retry
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
@@ -2784,6 +2784,12 @@
     function checkBalanceChangeFromMutation() {
         if (!audioDetection.pendingTrade) return;
         
+        // v8.6.2 FIX: Don't use mutation-based detection - it conflicts with the 
+        // post-bet balance comparison system. The mutation observer detects the 
+        // bet deduction as a "loss" before the trade even expires.
+        // We rely ONLY on startOutcomePolling() for outcome detection.
+        return;
+        
         const currentBalance = detectAccountBalance();
         const balanceBefore = audioDetection.balanceBeforeTrade;
         
@@ -3018,6 +3024,14 @@
     }
     
     function handleAutoDetectedResult(isWin) {
+        // v8.6.2 FIX: Add timestamp guard to prevent double-counting
+        const now = Date.now();
+        if (window._lastAutoResultTime && (now - window._lastAutoResultTime) < 3000) {
+            log(`⚠️ BLOCKED: Duplicate result detection (${now - window._lastAutoResultTime}ms since last)`);
+            return;
+        }
+        window._lastAutoResultTime = now;
+        
         // Trigger the same flow as manual +W/-L buttons
         if (isWin) {
             handleManualWin();
