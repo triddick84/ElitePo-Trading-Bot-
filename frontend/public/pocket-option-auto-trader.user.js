@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Elite Pocket Option Trading Bot (Legacy)
 // @namespace    https://momentum-trade-test.preview.emergentagent.com
-// @version      8.6.5
+// @version      8.7.0
 // @description  Elite AI-powered trading bot - Auto-invert stays on same asset after loss for immediate retry
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
@@ -5039,40 +5039,28 @@
 
     // ===========================================
     // ===========================================
-    // CYCLE MODE - v8.6.4 (Precision Timing + Immediate Invert)
+    // CYCLE MODE - v8.7.0 (Simplified + Fixed)
     // ===========================================
-    // 1. Cycles through favorites (30s per asset scanning)
-    // 2. When signal found → AI validates → Place trade
-    // 3. Detect ACTUAL trade expiry from Pocket Option UI
-    // 4. Wait EXACTLY expiry time → Verify WIN/LOSS
-    // 5. On LOSS: IMMEDIATELY place inverted trade (same signal, flipped)
-    // 6. On WIN: Return to 30s scan cycle, keep invert state unchanged
+    // SIMPLIFIED WORKFLOW:
+    // 1. Cycle through favorites (30s scan per asset)
+    // 2. Signal found → Place trade immediately
+    // 3. Wait trade expiry → Check balance for win/loss
+    // 4. LOSS + Auto-Invert → Flip direction, trade immediately
+    // 5. WIN → Continue to next asset
     // ===========================================
     function toggleCycle() {
         cycleEnabled = !cycleEnabled;
         GM_setValue('cycleEnabled', cycleEnabled);
         
         if (cycleEnabled) {
-            // Disable SCAN/AUTO to avoid conflicts
             scanEnabled = false;
             autoEnabled = false;
             GM_setValue('scanEnabled', false);
             GM_setValue('autoEnabled', false);
-            manageIntervals(); // clears scan/auto intervals
-            
-            // v8.6.4: PRESERVE invert state - don't reset!
-            // Just reset the streak counters for a fresh start, but keep the mode
-            if (smartAutoInvert.enabled) {
-                // Keep smartAutoInvert.invertActive as-is (user's preference)
-                lastTradeResult.consecutiveWins = 0;
-                lastTradeResult.consecutiveLosses = 0;
-                lastTradeResult.shouldRetry = false;
-                lastTradeResult.shouldRideTrend = false;
-                log(`CYCLE: Auto-Invert ON (currently ${smartAutoInvert.invertActive ? 'INVERTED' : 'NORMAL'})`);
-            }
+            manageIntervals();
             
             cycleAbort = false;
-            log('CYCLE: ON - Cycling through favorites (30s per asset)');
+            log('CYCLE: ON');
             updateCycleStatus('Starting...');
             startCycleLoop();
         } else {
@@ -5096,479 +5084,231 @@
         }
     }
     
-    // Detect the currently selected trade expiration time from Pocket Option UI
-    function detectTradeExpiryFromUI() {
-        // Try various selectors that Pocket Option uses for expiry display
-        const expirySelectors = [
-            // Active/selected expiry buttons
-            '[class*="time-option"].active',
-            '[class*="expiration"].selected',
-            '[class*="expiry"].active',
-            '[class*="time-button"].active',
-            '.deal-duration .active',
-            '.expiry-control .active',
-            // Timer/countdown displays
-            '[class*="time-left"]',
-            '[class*="countdown"]',
-            '[class*="timer"]',
-            '[class*="duration"]',
-            // Common PO UI patterns
-            '.time-selector .selected',
-            '[data-testid*="expir"]',
-            '.trading-panel [class*="time"]'
-        ];
-        
-        for (const sel of expirySelectors) {
-            try {
-                const elements = document.querySelectorAll(sel);
-                for (const el of elements) {
-                    if (!el || !el.offsetParent) continue;
-                    
-                    const text = (el.textContent || '').trim();
-                    const seconds = parseExpiryText(text);
-                    
-                    if (seconds > 0 && seconds <= 3600) {
-                        log(`EXPIRY: Detected ${text} = ${seconds}s from UI`);
-                        return seconds;
-                    }
-                }
-            } catch (e) {}
-        }
-        
-        // Try finding any element with time-like content in trading area
-        const tradingArea = document.querySelector('.trading-panel, .chart-area, [class*="trading"]');
-        if (tradingArea) {
-            const allText = tradingArea.innerText || '';
-            const matches = allText.match(/(\d{1,2}):(\d{2})/g) || allText.match(/(\d+)\s*[sS]ec/g);
-            if (matches && matches.length > 0) {
-                for (const m of matches) {
-                    const secs = parseExpiryText(m);
-                    if (secs >= 5 && secs <= 300) {
-                        log(`EXPIRY: Found ${m} = ${secs}s in trading area`);
-                        return secs;
-                    }
-                }
-            }
-        }
-        
-        // Fallback to detectCurrentTimeframe
-        const fallback = detectCurrentTimeframe();
-        log(`EXPIRY: Using fallback detection = ${fallback}s`);
-        return fallback;
+    // Get expiry from UI or default
+    function getTradeExpiry() {
+        const tf = detectCurrentTimeframe();
+        return tf > 0 ? tf : 5;
     }
     
-    function parseExpiryText(text) {
-        if (!text) return 0;
-        text = text.trim();
+    // Simplified balance-based win/loss check
+    async function checkTradeResult(preTradeBalance, expirySeconds) {
+        // Wait for trade to expire + small buffer
+        const waitMs = (expirySeconds * 1000) + 3000;
+        log(`RESULT: Waiting ${Math.round(waitMs/1000)}s for trade to complete...`);
         
-        // "5s", "30s", "60s"
-        let match = text.match(/^(\d+)\s*s(ec(ond)?s?)?$/i);
-        if (match) return parseInt(match[1]);
+        await sleep(waitMs);
         
-        // "1m", "5m"
-        match = text.match(/^(\d+)\s*m(in(ute)?s?)?$/i);
-        if (match) return parseInt(match[1]) * 60;
+        // Check balance now
+        const currentBalance = detectAccountBalance(true);
+        const diff = currentBalance - preTradeBalance;
         
-        // "1:00", "0:30" (mm:ss or m:ss)
-        match = text.match(/^(\d{1,2}):(\d{2})$/);
-        if (match) {
-            return parseInt(match[1]) * 60 + parseInt(match[2]);
-        }
+        log(`RESULT: Pre=$${preTradeBalance.toFixed(2)}, Now=$${currentBalance.toFixed(2)}, Diff=$${diff >= 0 ? '+' : ''}${diff.toFixed(2)}`);
         
-        // Just a number like "30" or "60"
-        match = text.match(/^(\d+)$/);
-        if (match) {
-            const num = parseInt(match[1]);
-            // If small number, assume seconds; if larger, could be seconds too
-            return num <= 300 ? num : 0;
-        }
+        // If balance increased, it's a win
+        const isWin = diff > 0.5;
         
-        return 0;
-    }
-    
-    // AI Pre-Trade Validation - checks all conditions before placing trade
-    function validateTradeConditions(signal, candles) {
-        const validations = [];
-        let isValid = true;
-        
-        // 1. Check minimum confidence
-        if (signal.confidence < CONFIG.MIN_CONFIDENCE) {
-            validations.push(`❌ Low confidence: ${signal.confidence}% < ${CONFIG.MIN_CONFIDENCE}%`);
-            isValid = false;
-        } else {
-            validations.push(`✅ Confidence OK: ${signal.confidence}%`);
-        }
-        
-        // 2. Check if we have enough candle data
-        if (candles && candles.length < 5) {
-            validations.push(`❌ Insufficient data: ${candles.length} candles`);
-            isValid = false;
-        } else {
-            validations.push(`✅ Data OK: ${candles ? candles.length : 'N/A'} candles`);
-        }
-        
-        // 3. Check trade lock
-        if (globalTradeLock) {
-            validations.push(`❌ Trade lock active`);
-            isValid = false;
-        } else {
-            validations.push(`✅ No trade lock`);
-        }
-        
-        // 4. Check cooldown
-        const timeSinceLast = Date.now() - lastTradeClickTime;
-        if (timeSinceLast < TRADE_LOCK_MS) {
-            validations.push(`❌ Cooldown: ${Math.round((TRADE_LOCK_MS - timeSinceLast)/1000)}s remaining`);
-            isValid = false;
-        } else {
-            validations.push(`✅ Cooldown clear`);
-        }
-        
-        // 5. Check if signal has required fields
-        if (!signal.direction || !['CALL', 'PUT'].includes(signal.direction)) {
-            validations.push(`❌ Invalid direction: ${signal.direction}`);
-            isValid = false;
-        } else {
-            validations.push(`✅ Direction: ${signal.direction}`);
-        }
-        
-        log(`AI PRE-TRADE CHECK:`);
-        validations.forEach(v => log(`  ${v}`));
-        
-        return { isValid, validations };
+        return { isWin, diff, currentBalance };
     }
     
     async function startCycleLoop() {
         if (cycleRunning) {
-            log('CYCLE: Loop already running');
+            log('CYCLE: Already running');
             return;
         }
         cycleRunning = true;
         
         try {
             while (cycleEnabled && !cycleAbort) {
-                // Step 1: Detect favorites
                 detectFavoritesBar();
                 
                 if (favoritesFromBar.length === 0) {
-                    log('CYCLE: No favorites found. Retrying in 5s...');
-                    updateCycleStatus('No favorites detected - retrying...');
+                    log('CYCLE: No favorites. Retrying...');
+                    updateCycleStatus('No favorites - retrying...');
                     await sleep(5000);
                     continue;
                 }
                 
-                log(`════════════════════════════════════════`);
-                log(`CYCLE: Starting round - ${favoritesFromBar.length} favorites`);
-                log(`════════════════════════════════════════`);
+                log(`CYCLE: ${favoritesFromBar.length} favorites found`);
                 
-                // Step 2: Loop through each favorite
                 for (let i = 0; i < favoritesFromBar.length; i++) {
                     if (!cycleEnabled || cycleAbort) break;
                     
                     const favorite = favoritesFromBar[i];
                     const assetName = favorite.symbol || favorite.normalized;
                     
-                    log(`════════════════════════════════════════`);
-                    log(`CYCLE [${i+1}/${favoritesFromBar.length}]: ${assetName}`);
-                    log(`════════════════════════════════════════`);
+                    log(`════════ CYCLE [${i+1}/${favoritesFromBar.length}]: ${assetName} ════════`);
                     updateCycleStatus(`${assetName} (${i+1}/${favoritesFromBar.length})`);
-                    updateStatusDot('trading');
                     
-                    // Step 3: Click this favorite to switch to it
+                    // Switch to asset
                     const switched = await clickFavoriteAsset(favorite);
                     if (!switched) {
-                        log(`CYCLE: Could not switch to ${assetName}, skipping`);
+                        log(`CYCLE: Failed to switch to ${assetName}`);
                         await sleep(1000);
                         continue;
                     }
                     
-                    // Wait for chart to load after switching
                     await sleep(2000);
                     
-                    // Clear price scraper history for fresh data on new asset
+                    // Clear candle data for new asset
                     PriceScraperV2.priceHistory = [];
                     PriceScraperV2.candleHistory = [];
-                    PriceScraperV2.foundSelector = null;
                     
-                    // Reset per-asset tracking
-                    let assetTradeCount = 0;
-                    const maxTradesPerAsset = 10; // Safety limit
-                    let lastSignalForRetry = null; // Store signal for immediate invert retry
+                    // Scan for signal (30 seconds max)
+                    let signal = null;
+                    let lastDirection = null;
+                    let retryCount = 0;
+                    const maxRetries = 5;
                     
-                    // ===========================================
-                    // ASSET LOOP: 30s scan cycle + immediate invert retries
-                    // ===========================================
-                    let stayOnAsset = true;
+                    // === SCAN PHASE ===
+                    const scanStart = Date.now();
+                    updateCycleStatus(`${assetName} - Scanning...`);
                     
-                    while (stayOnAsset && cycleEnabled && !cycleAbort) {
+                    while (Date.now() - scanStart < CONFIG.CYCLE_DWELL_TIME) {
+                        if (!cycleEnabled || cycleAbort) break;
                         
-                        let signalToTrade = null;
+                        const price = PriceScraperV2.scrapeCurrentPrice();
+                        if (price) {
+                            const candle = PriceScraperV2.buildCandle(price, 1000);
+                            if (candle) PriceScraperV2.addCandle(candle);
+                        }
                         
-                        // Check if we need to do IMMEDIATE inverted retry (no scanning)
-                        if (lastSignalForRetry && smartAutoInvert.enabled && smartAutoInvert.invertActive) {
-                            // IMMEDIATE RETRY: Use same signal, just flip direction
-                            signalToTrade = { ...lastSignalForRetry };
-                            signalToTrade.direction = lastSignalForRetry.direction === 'CALL' ? 'PUT' : 'CALL';
-                            signalToTrade._isImmediateRetry = true;
+                        const candles = PriceScraperV2.getCandles();
+                        
+                        if (candles.length >= 10) {
+                            signal = LocalSignalEngine.generateSignal(candles);
+                            if (!signal) signal = LocalSignalEngine.getHollyCrossoverSignal(candles);
+                            if (!signal) signal = LocalSignalEngine.getMomentumBusterSignal(candles);
                             
-                            log(`CYCLE: ⚡ IMMEDIATE INVERTED RETRY - ${signalToTrade.direction} (was ${lastSignalForRetry.direction})`);
-                            lastSignalForRetry = null; // Clear after use
-                        } else {
-                            // NORMAL SCAN: 30s scanning for signal
-                            const dwellStart = Date.now();
-                            let scanCount = 0;
-                            
-                            log(`CYCLE: 🔍 Scanning ${assetName} for ${CONFIG.CYCLE_DWELL_TIME/1000}s...`);
-                            
-                            while (Date.now() - dwellStart < CONFIG.CYCLE_DWELL_TIME) {
-                                if (!cycleEnabled || cycleAbort) break;
-                                
-                                scanCount++;
-                                const elapsed = Math.round((Date.now() - dwellStart) / 1000);
-                                const invertStatus = smartAutoInvert.enabled ? 
-                                    (smartAutoInvert.invertActive ? ' [INVERTED]' : ' [NORMAL]') : '';
-                                updateCycleStatus(`${assetName}${invertStatus} - Scan ${elapsed}s/${CONFIG.CYCLE_DWELL_TIME/1000}s`);
-                                
-                                // Scrape price and build candles
-                                const price = PriceScraperV2.scrapeCurrentPrice();
-                                if (price) {
-                                    const candle = PriceScraperV2.buildCandle(price, 1000);
-                                    if (candle) PriceScraperV2.addCandle(candle);
-                                }
-                                
-                                const candles = PriceScraperV2.getCandles();
-                                
-                                // Need enough candles to analyze (at least 10)
-                                if (candles.length >= 10 && !globalTradeLock) {
-                                    // Try local signal generation with multiple strategies
-                                    let signal = LocalSignalEngine.generateSignal(candles);
-                                    if (!signal) signal = LocalSignalEngine.getHollyCrossoverSignal(candles);
-                                    if (!signal) signal = LocalSignalEngine.getGoldenOneMomentSignal(candles);
-                                    if (!signal) signal = LocalSignalEngine.getMomentumBusterSignal(candles);
-                                    
-                                    if (signal && signal.confidence >= CONFIG.MIN_CONFIDENCE) {
-                                        // AI Pre-Trade Validation
-                                        const validation = validateTradeConditions(signal, candles);
-                                        
-                                        if (validation.isValid) {
-                                            signalToTrade = signal;
-                                            signalToTrade.source = 'CYCLE_LOCAL';
-                                            log(`CYCLE: 🎯 SIGNAL VALIDATED: ${signal.direction} (${signal.confidence}%) [${signal.strategy}]`);
-                                            break; // Exit scan loop
-                                        } else {
-                                            log(`CYCLE: Signal rejected by AI validation`);
-                                        }
-                                    }
-                                }
-                                
-                                // Try backend scan if local found nothing after 15s
-                                if (scanCount === 5 && candles.length < 10 && !globalTradeLock) {
-                                    log(`CYCLE: Low local data, trying backend for ${assetName}...`);
-                                    const backendSignal = await cycleBackendScan(assetName);
-                                    if (backendSignal) {
-                                        const validation = validateTradeConditions(backendSignal, null);
-                                        if (validation.isValid) {
-                                            signalToTrade = backendSignal;
-                                            signalToTrade.source = 'CYCLE_BACKEND';
-                                            log(`CYCLE: 🎯 BACKEND SIGNAL: ${backendSignal.direction} (${backendSignal.confidence}%)`);
-                                            break;
-                                        }
-                                    }
-                                }
-                                
-                                await sleep(CONFIG.CYCLE_SCAN_INTERVAL);
-                            }
-                            
-                            // No signal found during dwell - move to next asset
-                            if (!signalToTrade) {
-                                log(`CYCLE: No signal on ${assetName} after ${CONFIG.CYCLE_DWELL_TIME/1000}s - moving to next asset`);
-                                stayOnAsset = false;
+                            if (signal && signal.confidence >= CONFIG.MIN_CONFIDENCE) {
+                                log(`CYCLE: Signal ${signal.direction} (${signal.confidence}%)`);
                                 break;
                             }
                         }
                         
-                        // ===========================================
-                        // TRADE EXECUTION
-                        // ===========================================
-                        assetTradeCount++;
+                        await sleep(CONFIG.CYCLE_SCAN_INTERVAL);
+                    }
+                    
+                    if (!signal) {
+                        log(`CYCLE: No signal on ${assetName}`);
+                        continue; // Next asset
+                    }
+                    
+                    // === TRADE + INVERT RETRY LOOP ===
+                    let continueTrading = true;
+                    lastDirection = signal.direction;
+                    
+                    while (continueTrading && cycleEnabled && !cycleAbort && retryCount < maxRetries) {
+                        retryCount++;
                         
-                        if (assetTradeCount > maxTradesPerAsset) {
-                            log(`CYCLE: ⚠️ Max trades (${maxTradesPerAsset}) on ${assetName} - moving to next asset`);
-                            stayOnAsset = false;
+                        // Apply invert if active
+                        let tradeDirection = lastDirection;
+                        if (smartAutoInvert.invertActive) {
+                            tradeDirection = lastDirection === 'CALL' ? 'PUT' : 'CALL';
+                            log(`INVERT: Flipping ${lastDirection} → ${tradeDirection}`);
+                        }
+                        
+                        const expiry = getTradeExpiry();
+                        const preBalance = detectAccountBalance(true);
+                        
+                        log(`TRADE #${retryCount}: ${tradeDirection} on ${assetName} (${expiry}s expiry)`);
+                        updateCycleStatus(`${assetName} - ${tradeDirection} (${retryCount})`);
+                        
+                        // Place trade
+                        const isCall = tradeDirection === 'CALL';
+                        const clicked = clickTradeButton(isCall, 'CYCLE', expiry);
+                        
+                        if (!clicked) {
+                            log(`CYCLE: Trade click failed`);
+                            continueTrading = false;
                             break;
                         }
                         
-                        const assetSymbol = (getCurrentAsset() || assetName).replace(/\s+/g, '').replace('/', '').toUpperCase();
+                        // Wait and check result
+                        const result = await checkTradeResult(preBalance, expiry);
                         
-                        // Detect ACTUAL expiry time from Pocket Option UI
-                        const detectedExpiry = detectTradeExpiryFromUI();
-                        
-                        const tradeSignal = {
-                            direction: signalToTrade.direction,
-                            symbol: assetSymbol,
-                            confidence: signalToTrade.confidence,
-                            confirmations: signalToTrade.confirmations || [],
-                            price: signalToTrade.price,
-                            source: signalToTrade.source,
-                            expiration: detectedExpiry,
-                            _willSwitch: false,
-                            _isImmediateRetry: signalToTrade._isImmediateRetry || false
-                        };
-                        
-                        // Apply Smart Auto-Invert (only if NOT an immediate retry - those are already inverted)
-                        let processed = tradeSignal;
-                        if (!tradeSignal._isImmediateRetry) {
-                            processed = processSmartAutoInvert(tradeSignal);
-                        }
-                        
-                        // Store original signal for potential retry (BEFORE invert)
-                        const originalDirection = signalToTrade._isImmediateRetry ? 
-                            (processed.direction === 'CALL' ? 'PUT' : 'CALL') : // Reverse to get original
-                            signalToTrade.direction;
-                        
-                        // Track for result detection
-                        lastTradeInfo.symbol = processed.symbol;
-                        lastTradeInfo.direction = processed.direction;
-                        lastTradeInfo.confidence = processed.confidence;
-                        
-                        log(`════════════════════════════════════════`);
-                        log(`CYCLE: 📍 PLACING TRADE #${assetTradeCount} on ${assetName}`);
-                        log(`Direction: ${processed.direction} | Expiry: ${detectedExpiry}s | Invert: ${smartAutoInvert.invertActive ? 'YES' : 'NO'}`);
-                        log(`════════════════════════════════════════`);
-                        
-                        try {
-                            // Execute the trade
-                            await executeScanTrade(processed);
+                        if (result.isWin) {
+                            log(`✅ WIN! +$${result.diff.toFixed(2)}`);
                             
-                            // ===========================================
-                            // WAIT EXACTLY THE TRADE EXPIRATION TIME
-                            // ===========================================
-                            const waitMs = detectedExpiry * 1000;
-                            const bufferMs = 2000; // 2s buffer for balance update
+                            // Update stats
+                            winLossStats.totalWins++;
+                            winLossStats.consecutiveWins++;
+                            winLossStats.consecutiveLosses = 0;
+                            lastTradeResult.isWin = true;
+                            lastTradeResult.consecutiveWins++;
+                            lastTradeResult.consecutiveLosses = 0;
                             
-                            updateCycleStatus(`${assetName} - ${processed.direction} - Waiting ${detectedExpiry}s`);
-                            log(`CYCLE: ⏳ Waiting EXACTLY ${detectedExpiry}s for trade to expire...`);
+                            // Turn off invert on win
+                            if (smartAutoInvert.enabled && smartAutoInvert.invertActive) {
+                                smartAutoInvert.invertActive = false;
+                                invertEnabled = false;
+                                log(`AUTO-INVERT: WIN → Back to NORMAL`);
+                            }
                             
-                            // Reset flags
-                            lastTradeResult.shouldRetry = false;
-                            lastTradeResult.isWin = null;
-                            audioDetection.pendingTrade = true;
+                            saveAutoInvertState();
+                            updateWinLossDisplay();
                             
-                            // Wait for expiry
-                            await sleep(waitMs);
+                            // Exit retry loop, move to next asset
+                            continueTrading = false;
                             
-                            log(`CYCLE: Trade expired. Checking balance for result...`);
+                        } else {
+                            log(`❌ LOSS! $${result.diff.toFixed(2)}`);
                             
-                            // Small buffer for balance to update
-                            await sleep(bufferMs);
+                            // Update stats
+                            winLossStats.totalLosses++;
+                            winLossStats.consecutiveLosses++;
+                            winLossStats.consecutiveWins = 0;
+                            lastTradeResult.isWin = false;
+                            lastTradeResult.consecutiveLosses++;
+                            lastTradeResult.consecutiveWins = 0;
                             
-                            // Force result detection if not already triggered
-                            if (audioDetection.pendingTrade) {
-                                // Manual balance check
-                                const currentBalance = detectAccountBalance(true);
-                                const postBetBalance = audioDetection.balanceAfterBet;
+                            updateWinLossDisplay();
+                            
+                            // Check if auto-invert should retry
+                            if (smartAutoInvert.enabled) {
+                                // Turn on invert
+                                if (!smartAutoInvert.invertActive) {
+                                    smartAutoInvert.invertActive = true;
+                                    invertEnabled = true;
+                                    log(`AUTO-INVERT: LOSS → Switching to INVERTED`);
+                                }
                                 
-                                if (postBetBalance && postBetBalance > 0) {
-                                    const change = currentBalance - postBetBalance;
-                                    const isWin = change > 0.01;
-                                    
-                                    log(`CYCLE: Manual result check - Balance: $${currentBalance.toFixed(2)}, Change: $${change >= 0 ? '+' : ''}${change.toFixed(2)}`);
-                                    
-                                    audioDetection.pendingTrade = false;
-                                    handleAutoDetectedResult(isWin);
-                                } else {
-                                    // No balance data, wait a bit more
-                                    await sleep(3000);
-                                }
-                            }
-                            
-                            // ===========================================
-                            // DECISION: WIN or LOSS
-                            // ===========================================
-                            const isWin = lastTradeResult.isWin;
-                            const lossStreak = lastTradeResult.consecutiveLosses;
-                            
-                            log(`════════════════════════════════════════`);
-                            log(`CYCLE RESULT: ${isWin ? '✅ WIN' : '❌ LOSS'}`);
-                            log(`Loss Streak: ${lossStreak} | Invert: ${smartAutoInvert.invertActive ? 'ON' : 'OFF'}`);
-                            log(`════════════════════════════════════════`);
-                            
-                            if (isWin) {
-                                // ========== WIN ==========
-                                // Return to normal 30s scan cycle
-                                // Keep invert state UNCHANGED (already handled by updateSmartAutoInvertOnResult)
-                                log(`CYCLE: ✅ WIN! Returning to 30s scan cycle...`);
-                                updateCycleStatus(`${assetName} - WIN! Resuming scan...`);
-                                lastSignalForRetry = null; // Clear retry signal
-                                await sleep(1000);
-                                // Continue asset loop (will go back to scanning)
-                                stayOnAsset = true;
-                            } else {
-                                // ========== LOSS ==========
-                                if (smartAutoInvert.enabled && lastTradeResult.shouldRetry) {
-                                    // IMMEDIATE INVERTED RETRY - Store signal for next iteration
-                                    log(`CYCLE: ❌ LOSS! Setting up IMMEDIATE INVERTED RETRY...`);
-                                    
-                                    // Store original signal for retry
-                                    lastSignalForRetry = {
-                                        direction: originalDirection,
-                                        symbol: assetSymbol,
-                                        confidence: processed.confidence,
-                                        confirmations: processed.confirmations,
-                                        source: 'RETRY'
-                                    };
-                                    
-                                    lastTradeResult.shouldRetry = false;
-                                    updateCycleStatus(`${assetName} [INVERT] - Immediate retry...`);
-                                    
-                                    // Brief pause then continue loop (will use lastSignalForRetry)
-                                    await sleep(1500);
-                                    stayOnAsset = true;
-                                } else if (lossStreak >= 5) {
-                                    // Safety limit reached
-                                    log(`CYCLE: ⚠️ ${lossStreak} consecutive losses - SAFETY STOP`);
-                                    lastTradeResult.consecutiveLosses = 0;
+                                saveAutoInvertState();
+                                
+                                // Safety limit
+                                if (lastTradeResult.consecutiveLosses >= 5) {
+                                    log(`AUTO-INVERT: 5 losses - stopping`);
                                     smartAutoInvert.invertActive = false;
-                                    lastSignalForRetry = null;
-                                    stayOnAsset = false;
+                                    lastTradeResult.consecutiveLosses = 0;
+                                    continueTrading = false;
                                 } else {
-                                    // Auto-invert disabled - move on
-                                    log(`CYCLE: ❌ LOSS (Auto-Invert OFF) - moving to next asset`);
-                                    lastSignalForRetry = null;
-                                    stayOnAsset = false;
+                                    // Continue retry loop with inverted direction
+                                    log(`AUTO-INVERT: Retrying inverted immediately...`);
+                                    await sleep(1500);
+                                    continueTrading = true;
                                 }
+                            } else {
+                                // No auto-invert, move to next asset
+                                continueTrading = false;
                             }
-                            
-                        } catch (err) {
-                            log(`CYCLE: Trade error: ${err.message}`);
-                            lastSignalForRetry = null;
-                            stayOnAsset = false;
                         }
-                        
-                    } // End asset loop
-                    
-                    updateStatusDot('connected');
+                    }
                     
                 } // End favorites loop
                 
-                // Completed one full round
                 if (cycleEnabled && !cycleAbort) {
-                    log(`════════════════════════════════════════`);
                     log(`CYCLE: Round complete. Restarting...`);
-                    log(`════════════════════════════════════════`);
-                    updateCycleStatus('Round complete - restarting...');
+                    updateCycleStatus('Round complete...');
                     await sleep(3000);
                 }
             }
         } catch (err) {
             log(`CYCLE ERROR: ${err.message}`);
-            console.error('[GPT CYCLE]', err);
+            console.error('[CYCLE]', err);
         }
         
         cycleRunning = false;
         updateCycleStatus('');
-        updateStatusDot(autoEnabled || scanEnabled ? 'connected' : '');
-        log('CYCLE: Loop stopped');
+        log('CYCLE: Stopped');
     }
     
     // Quick backend scan for a single asset during CYCLE mode
@@ -6748,10 +6488,10 @@
     }
 
     // ===========================================
-    // INITIALIZATION - v8.6.4
+    // INITIALIZATION - v8.7.0
     // ===========================================
     function init() {
-        console.log('[GPT Bot] Starting initialization v8.6.4...');
+        console.log('[GPT Bot] Starting initialization v8.7.0...');
         
         try {
             // Load saved settings (all default to false)
@@ -6831,7 +6571,7 @@
             }
 
             console.log('[GPT Bot] Creating panel...');
-            console.log('[GPT Bot] v8.6.4 - Precision timing + settings persistence');
+            console.log('[GPT Bot] v8.7.0 - Simplified CYCLE + Fixed Win/Loss');
             
             // Create panel immediately, don't wait
             createPanel();
