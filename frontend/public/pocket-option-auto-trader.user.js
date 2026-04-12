@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Elite Pocket Option Trading Bot (Legacy)
 // @namespace    https://momentum-trade-test.preview.emergentagent.com
-// @version      8.7.1
+// @version      8.7.2
 // @description  Elite AI-powered trading bot - Auto-invert stays on same asset after loss for immediate retry
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
@@ -45,9 +45,17 @@
         USE_LOCAL_SIGNALS: true,  // v7.1.0: Generate signals locally using actual OTC prices
         LOCAL_CANDLE_COUNT: 50,   // Number of candles to analyze
         
-        // v8.5.1 LATENCY ADJUSTMENT - adjustable timing for outcome detection
-        // Positive = wait longer after expiry, Negative = detect earlier
-        RESULT_LATENCY_OFFSET: 0,    // Adjustable from -5 to +5 seconds
+        // ===========================================
+        // v8.7.2 LATENCY & TIMING CONFIGURATION
+        // Syncs the script timing with Pocket Option's platform
+        // ===========================================
+        RESULT_LATENCY_OFFSET: 0,       // Fine-tune result detection (-5 to +5 seconds)
+        BET_DEDUCTION_DELAY: 2000,      // Wait after click for bet deduction (ms)
+        POST_EXPIRY_BUFFER: 3000,       // Wait after expiry for PO balance update (ms)
+        BALANCE_STABILITY_CHECKS: 2,    // Stable readings before confirming result
+        BALANCE_POLL_INTERVAL: 500,     // Balance polling interval (ms)
+        MAX_BALANCE_POLLS: 20,          // Max polls before timeout
+        IMMEDIATE_RETRY_DELAY: 1500,    // Delay before inverted retry (ms)
         
         // v8.5.1 AI/ML DATA COLLECTION
         COLLECT_TRAINING_DATA: true,   // Send trade data to backend for ML training
@@ -3091,42 +3099,56 @@
     }
     
     // Called when a trade is placed - starts monitoring for the result
+    // v8.7.2: Uses configurable timing settings
     function markTradePending(expirySeconds = 60) {
         audioDetection.pendingTrade = true;
         audioDetection.tradeOpenedAt = Date.now();
         audioDetection.tradeExpirySeconds = expirySeconds;
         audioDetection.tradeAmount = moneyManagement.currentTradeAmount || currentTradeAmount || 1;
         
+        // Capture balance BEFORE trade
+        if (audioDetection.balanceBeforeTrade <= 0) {
+            audioDetection.balanceBeforeTrade = detectAccountBalance(true);
+        }
+        
         log(`════════════════════════════════`);
         log(`   TRADE PLACED`);
         log(`════════════════════════════════`);
         log(`Expiry: ${expirySeconds}s`);
         log(`Bet Amount: $${audioDetection.tradeAmount.toFixed(2)}`);
+        log(`Balance Before: $${audioDetection.balanceBeforeTrade.toFixed(2)}`);
         
-        // NEW APPROACH: Wait 2 seconds for bet to be deducted, THEN capture balance
-        // This "post-bet" balance is what we compare against after expiry
+        // v8.7.2: Use configurable delay for bet deduction
+        const betDeductionDelay = CONFIG.BET_DEDUCTION_DELAY || 2000;
+        
         setTimeout(() => {
             if (!audioDetection.pendingTrade) return;
             
-            // Capture balance AFTER bet is deducted (2 seconds after click)
+            // Capture balance AFTER bet is deducted
             audioDetection.balanceAfterBet = detectAccountBalance(true);
-            log(`Balance AFTER BET: $${audioDetection.balanceAfterBet.toFixed(2)}`);
+            log(`Balance AFTER BET: $${audioDetection.balanceAfterBet.toFixed(2)} (waited ${betDeductionDelay}ms)`);
             log(`════════════════════════════════`);
             
             // Now wait for trade to expire
             startOutcomePolling(expirySeconds);
-        }, 2000);
+        }, betDeductionDelay);
     }
     
-    // Outcome polling - waits for expiry then checks if balance increased
+    // v8.7.2: Improved outcome polling with configurable timing
     function startOutcomePolling(expirySeconds = 60) {
         const latencyOffset = CONFIG.RESULT_LATENCY_OFFSET || 0;
+        const postExpiryBuffer = CONFIG.POST_EXPIRY_BUFFER || 3000;
         
-        // Wait for expiry + 2-3 seconds (we already waited 2s for bet deduction)
-        // So total wait from trade click = 2s + expiry + 3s + offset
-        const waitMs = (expirySeconds + 3 + latencyOffset) * 1000;
+        // Total wait: expiry + buffer + latency offset
+        const waitMs = (expirySeconds * 1000) + postExpiryBuffer + (latencyOffset * 1000);
         
-        log(`OUTCOME: Waiting ${Math.round(waitMs/1000)}s for trade to expire...`);
+        log(`════════════════════════════════`);
+        log(`TIMING SYNC:`);
+        log(`  Expiry: ${expirySeconds}s`);
+        log(`  Buffer: ${postExpiryBuffer}ms`);
+        log(`  Latency Offset: ${latencyOffset}s`);
+        log(`  Total Wait: ${Math.round(waitMs/1000)}s`);
+        log(`════════════════════════════════`);
         
         setTimeout(() => {
             if (!audioDetection.pendingTrade) {
@@ -3142,14 +3164,17 @@
                 return;
             }
             
-            log(`OUTCOME: Trade should be complete. Checking result...`);
-            log(`OUTCOME: Balance after bet was: $${balanceAfterBet.toFixed(2)}`);
+            log(`OUTCOME: Trade expired. Checking balance...`);
+            log(`OUTCOME: Post-bet balance was: $${balanceAfterBet.toFixed(2)}`);
             
-            // Poll for result
+            // Use configurable polling settings
+            const pollInterval = CONFIG.BALANCE_POLL_INTERVAL || 500;
+            const maxPolls = CONFIG.MAX_BALANCE_POLLS || 20;
+            const requiredStableChecks = CONFIG.BALANCE_STABILITY_CHECKS || 2;
+            
             let pollCount = 0;
-            const maxPolls = 20; // 10 seconds max
             let lastBalance = 0;
-            let stableCount = 0; // Count how many times balance stayed same
+            let stableCount = 0;
             
             const poller = setInterval(() => {
                 pollCount++;
@@ -3162,17 +3187,16 @@
                 if (pollCount > maxPolls) {
                     clearInterval(poller);
                     audioDetection.pendingTrade = false;
-                    log(`OUTCOME: Timeout. Use +W or -L buttons.`);
+                    log(`OUTCOME: Timeout after ${pollCount} polls. Use +W or -L buttons.`);
                     return;
                 }
                 
-                // Force fresh balance read
                 const currentBalance = detectAccountBalance(true);
                 const change = currentBalance - balanceAfterBet;
                 
-                log(`POLL #${pollCount}: Balance=$${currentBalance.toFixed(2)}, Change from post-bet=$${change >= 0 ? '+' : ''}${change.toFixed(2)}`);
+                log(`POLL #${pollCount}: Balance=$${currentBalance.toFixed(2)}, Change=$${change >= 0 ? '+' : ''}${change.toFixed(2)}`);
                 
-                // Check if balance is stable (same as last poll)
+                // Check if balance is stable
                 if (Math.abs(currentBalance - lastBalance) < 0.01) {
                     stableCount++;
                 } else {
@@ -3180,17 +3204,17 @@
                 }
                 lastBalance = currentBalance;
                 
-                // Need balance to be stable for at least 2 polls before deciding
-                if (stableCount >= 2) {
+                // Need balance to be stable for required checks before deciding
+                if (stableCount >= requiredStableChecks) {
                     clearInterval(poller);
                     audioDetection.pendingTrade = false;
                     
                     const elapsed = Math.round((Date.now() - audioDetection.tradeOpenedAt) / 1000);
                     
-                    // LOGIC:
-                    // - If current balance > post-bet balance → WIN (payout was added)
-                    // - If current balance == post-bet balance → LOSS (no payout, bet already gone)
-                    // - If current balance < post-bet balance → Could be another trade, treat as LOSS
+                    // WIN/LOSS LOGIC:
+                    // - Balance increased → WIN (payout received)
+                    // - Balance unchanged → LOSS (no payout)
+                    // - Balance decreased → LOSS
                     
                     let isWin = false;
                     let resultReason = '';
@@ -3203,17 +3227,17 @@
                         resultReason = `Balance UNCHANGED (no payout = loss)`;
                     } else {
                         isWin = false;
-                        resultReason = `Balance DECREASED by $${Math.abs(change).toFixed(2)} (loss or another trade)`;
+                        resultReason = `Balance DECREASED by $${Math.abs(change).toFixed(2)} (loss)`;
                     }
                     
                     log(`════════════════════════════════`);
                     log(`   TRADE RESULT: ${isWin ? '✅ WIN' : '❌ LOSS'}`);
                     log(`════════════════════════════════`);
-                    log(`After Bet:  $${balanceAfterBet.toFixed(2)}`);
-                    log(`After Exp:  $${currentBalance.toFixed(2)}`);
-                    log(`Change:     $${change >= 0 ? '+' : ''}${change.toFixed(2)}`);
-                    log(`Reason:     ${resultReason}`);
-                    log(`Time:       ${elapsed}s`);
+                    log(`Post-Bet:  $${balanceAfterBet.toFixed(2)}`);
+                    log(`Current:   $${currentBalance.toFixed(2)}`);
+                    log(`Change:    $${change >= 0 ? '+' : ''}${change.toFixed(2)}`);
+                    log(`Reason:    ${resultReason}`);
+                    log(`Duration:  ${elapsed}s`);
                     log(`════════════════════════════════`);
                     
                     // Record for ML
@@ -3223,7 +3247,7 @@
                     handleAutoDetectedResult(isWin);
                     return;
                 }
-            }, 500);
+            }, pollInterval);
         }, waitMs);
     }
     
@@ -6809,7 +6833,7 @@
             }
 
             console.log('[GPT Bot] Creating panel...');
-            console.log('[GPT Bot] v8.7.0 - Simplified CYCLE + Fixed Win/Loss');
+            console.log('[GPT Bot] v8.7.2 - Improved Latency Sync + Keltner-MACD 5s');
             
             // Create panel immediately, don't wait
             createPanel();
@@ -6835,6 +6859,9 @@
             
             // Initialize latency display from saved value
             initLatencyDisplay();
+            
+            // v8.7.2: Sync timing config with backend
+            syncTimingWithBackend();
             
             // Start balance sync loop (PO UI scrape + backend API fallback)
             startBalanceSync();
@@ -6874,6 +6901,60 @@
         
         if (balanceInput) balanceInput.value = moneyManagement.accountBalance;
         if (riskInput) riskInput.value = moneyManagement.riskPercentage;
+    }
+    
+    // v8.7.2: Sync timing configuration with backend
+    async function syncTimingWithBackend() {
+        try {
+            log('TIMING SYNC: Fetching config from backend...');
+            
+            const clientTime = Date.now();
+            
+            // Try to sync with backend
+            const response = await fetch(`${CONFIG.API_URL}/signals/timing-config`);
+            
+            if (response.ok) {
+                const data = await response.json();
+                
+                if (data.success && data.timing) {
+                    // Apply timing configuration
+                    CONFIG.BET_DEDUCTION_DELAY = data.timing.bet_deduction_delay_ms || 2000;
+                    CONFIG.POST_EXPIRY_BUFFER = data.timing.post_expiry_buffer_ms || 3000;
+                    CONFIG.BALANCE_POLL_INTERVAL = data.timing.balance_poll_interval_ms || 500;
+                    CONFIG.BALANCE_STABILITY_CHECKS = data.timing.balance_stability_checks || 2;
+                    CONFIG.MAX_BALANCE_POLLS = data.timing.max_balance_polls || 20;
+                    CONFIG.IMMEDIATE_RETRY_DELAY = data.timing.immediate_retry_delay_ms || 1500;
+                    
+                    // Calculate latency
+                    const responseTime = Date.now();
+                    const latency = responseTime - clientTime;
+                    
+                    log(`TIMING SYNC: Success!`);
+                    log(`  Bet Deduction Delay: ${CONFIG.BET_DEDUCTION_DELAY}ms`);
+                    log(`  Post-Expiry Buffer: ${CONFIG.POST_EXPIRY_BUFFER}ms`);
+                    log(`  Balance Poll Interval: ${CONFIG.BALANCE_POLL_INTERVAL}ms`);
+                    log(`  Network Latency: ${latency}ms`);
+                    log(`  Server Time: ${data.server_time}`);
+                    
+                    // Adjust for high latency
+                    if (latency > 500) {
+                        const extraBuffer = Math.min(latency, 2000);
+                        CONFIG.POST_EXPIRY_BUFFER += extraBuffer;
+                        log(`  High latency detected - adding ${extraBuffer}ms to buffer`);
+                    }
+                    
+                    return true;
+                }
+            }
+            
+            log('TIMING SYNC: Using default timing values');
+            return false;
+            
+        } catch (e) {
+            log(`TIMING SYNC: Error - ${e.message}`);
+            log('TIMING SYNC: Using default timing values');
+            return false;
+        }
     }
     
     // Update settings display from synced settings - v6.8.3 (compact UI)

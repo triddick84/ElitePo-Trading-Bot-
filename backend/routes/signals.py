@@ -3389,3 +3389,87 @@ async def evaluate_momentum_condition(
             "condition_met": False,
             "error": str(e)
         }
+
+
+# =====================================================
+# TIMING SYNC ENDPOINTS
+# =====================================================
+
+@router.get("/signals/timing-config")
+async def get_timing_config():
+    """
+    Get recommended timing configuration for Tampermonkey script
+    to sync with Pocket Option platform.
+    """
+    return {
+        "success": True,
+        "timing": {
+            "bet_deduction_delay_ms": 2000,      # Wait for bet to be deducted
+            "post_expiry_buffer_ms": 3000,       # Wait after expiry for balance update
+            "balance_poll_interval_ms": 500,     # Balance polling frequency
+            "balance_stability_checks": 2,        # Required stable readings
+            "max_balance_polls": 20,              # Max polls before timeout
+            "immediate_retry_delay_ms": 1500,     # Delay before inverted retry
+            "trade_cooldown_ms": 5000,            # Min time between trades
+        },
+        "expiry_times": {
+            "5s": {"total_wait": 8, "description": "5s trade + 3s buffer"},
+            "15s": {"total_wait": 18, "description": "15s trade + 3s buffer"},
+            "30s": {"total_wait": 33, "description": "30s trade + 3s buffer"},
+            "60s": {"total_wait": 63, "description": "60s trade + 3s buffer"},
+        },
+        "server_time": datetime.now(timezone.utc).isoformat(),
+        "recommendations": [
+            "Use BET_DEDUCTION_DELAY of 2000ms - PO needs time to process the bet",
+            "POST_EXPIRY_BUFFER of 3000ms handles PO's balance update delay",
+            "Increase RESULT_LATENCY_OFFSET if results are being missed",
+            "Decrease if detecting wrong trades"
+        ]
+    }
+
+
+@router.post("/signals/sync-timing")
+async def sync_timing(
+    client_timestamp: float = Body(..., description="Client timestamp for latency calculation"),
+    trade_expiry: int = Body(5, description="Trade expiry in seconds")
+):
+    """
+    Sync timing between client and server.
+    Returns recommended wait times adjusted for network latency.
+    """
+    try:
+        server_time = datetime.now(timezone.utc).timestamp()
+        latency_ms = (server_time * 1000) - client_timestamp
+        
+        # Calculate recommended timing based on latency
+        base_buffer = 3000  # 3 seconds base buffer
+        
+        # Add extra buffer for high latency
+        if latency_ms > 500:
+            latency_adjustment = min(latency_ms, 2000)  # Cap at 2s extra
+        else:
+            latency_adjustment = 0
+        
+        total_buffer = base_buffer + latency_adjustment
+        total_wait = (trade_expiry * 1000) + total_buffer
+        
+        return {
+            "success": True,
+            "sync": {
+                "server_time": server_time,
+                "client_time": client_timestamp / 1000,
+                "latency_ms": round(latency_ms),
+                "latency_adjustment_ms": round(latency_adjustment),
+            },
+            "recommended_timing": {
+                "trade_expiry_ms": trade_expiry * 1000,
+                "post_expiry_buffer_ms": total_buffer,
+                "total_wait_ms": total_wait,
+                "bet_deduction_delay_ms": 2000,
+            },
+            "message": f"With {round(latency_ms)}ms latency, wait {round(total_wait/1000)}s after trade for result"
+        }
+    
+    except Exception as e:
+        logger.error(f"Timing sync error: {e}")
+        return {"success": False, "error": str(e)}

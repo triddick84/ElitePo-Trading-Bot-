@@ -1,8 +1,19 @@
 # Elite Pocket Option Trading Bot - Product Requirements Document
 
-## Last Updated: April 10, 2026
+## Last Updated: April 12, 2026
 
 ## Current Status
+✅ **Tampermonkey v8.7.2 — Improved Latency Sync (April 12, 2026)**
+- **Configurable Timing Settings** in CONFIG:
+  - `BET_DEDUCTION_DELAY`: 2000ms (wait for bet to deduct)
+  - `POST_EXPIRY_BUFFER`: 3000ms (wait after expiry for PO update)
+  - `BALANCE_POLL_INTERVAL`: 500ms (how often to check balance)
+  - `BALANCE_STABILITY_CHECKS`: 2 (stable readings before confirming)
+  - `MAX_BALANCE_POLLS`: 20 (timeout after 10 seconds)
+- **Auto-sync with backend** via `syncTimingWithBackend()` on init
+- **Network latency detection** - adds extra buffer for high latency
+- New API endpoints: `/api/signals/timing-config`, `/api/signals/sync-timing`
+
 ✅ **Keltner-MACD 5-Second Strategy (April 10, 2026)**
 - NEW STRATEGY implemented across backend, frontend, and Tampermonkey
 - **Keltner Channel**: EMA(20), ATR(60), Multiplier 4
