@@ -155,6 +155,27 @@ const INDICATOR_TEMPLATES = {
     ]
   },
 
+  // Keltner Channel (for 5s strategy)
+  KELTNER_CHANNEL: {
+    name: 'Keltner Channel',
+    category: 'volatility',
+    icon: '📊',
+    description: 'ATR-based channel around EMA - excellent for 5s scalping',
+    parameters: {
+      ema_period: { label: 'EMA Period', type: 'number', default: 20, min: 5, max: 50 },
+      atr_period: { label: 'ATR Period', type: 'number', default: 60, min: 10, max: 100 },
+      multiplier: { label: 'Multiplier', type: 'number', default: 4, min: 1, max: 10, step: 0.5 }
+    },
+    conditions: [
+      { id: 'price_crosses_above_middle', label: 'Price crosses above Middle (EMA)', signal: 'CALL', description: 'Bullish breakout above EMA - key 5s entry' },
+      { id: 'price_crosses_below_middle', label: 'Price crosses below Middle (EMA)', signal: 'PUT', description: 'Bearish breakdown below EMA - key 5s entry' },
+      { id: 'price_above_middle', label: 'Price above Middle line', signal: 'CALL', description: 'Bullish trend - price above EMA' },
+      { id: 'price_below_middle', label: 'Price below Middle line', signal: 'PUT', description: 'Bearish trend - price below EMA' },
+      { id: 'price_touches_upper', label: 'Price touches Upper Band', signal: 'PUT', description: 'Overbought - potential reversal' },
+      { id: 'price_touches_lower', label: 'Price touches Lower Band', signal: 'CALL', description: 'Oversold - potential reversal' },
+    ]
+  },
+
   ATR: {
     name: 'ATR (Average True Range)',
     category: 'volatility',
@@ -932,6 +953,16 @@ const StrategyBuilder = () => {
           { id: 'c3', indicator: 'MOMENTUM', conditionType: 'strong_negative', parameters: { period: 10, smoothing: 3, threshold: -5, signal_type: 2 } },
           { id: 'c4', indicator: 'RSI', conditionType: 'below_50', parameters: { period: 14, overbought: 70, oversold: 30 } }
         ]
+      },
+      'Keltner-MACD 5s': {
+        name: 'Keltner-MACD 5-Second Strategy',
+        description: 'Professional 5s scalping: Keltner Channel (EMA20, ATR60, x4) + MACD (13,24,11)',
+        conditions: [
+          { id: 'c1', indicator: 'KELTNER_CHANNEL', conditionType: 'price_crosses_above_middle', parameters: { ema_period: 20, atr_period: 60, multiplier: 4 } },
+          { id: 'c2', indicator: 'MACD', conditionType: 'bullish_crossover', parameters: { fast: 13, slow: 24, signal: 11 } },
+          { id: 'c3', indicator: 'KELTNER_CHANNEL', conditionType: 'price_crosses_below_middle', parameters: { ema_period: 20, atr_period: 60, multiplier: 4 } },
+          { id: 'c4', indicator: 'MACD', conditionType: 'bearish_crossover', parameters: { fast: 13, slow: 24, signal: 11 } }
+        ]
       }
     };
 
@@ -980,7 +1011,7 @@ const StrategyBuilder = () => {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {['EMA Crossover', 'RSI Reversal', 'Bollinger Breakout', 'MACD Signal', 'SuperTrend', 'Momentum Crossover', 'Momentum + RSI'].map(name => (
+                {['EMA Crossover', 'RSI Reversal', 'Bollinger Breakout', 'MACD Signal', 'SuperTrend', 'Momentum Crossover', 'Momentum + RSI', 'Keltner-MACD 5s'].map(name => (
                   <Card 
                     key={name} 
                     className="cursor-pointer hover:border-purple-500/50 transition-colors border-slate-600"

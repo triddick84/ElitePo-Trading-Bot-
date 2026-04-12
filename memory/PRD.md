@@ -3,6 +3,21 @@
 ## Last Updated: April 10, 2026
 
 ## Current Status
+✅ **Keltner-MACD 5-Second Strategy (April 10, 2026)**
+- NEW STRATEGY implemented across backend, frontend, and Tampermonkey
+- **Keltner Channel**: EMA(20), ATR(60), Multiplier 4
+- **MACD**: Fast(13), Slow(24), Signal(11)
+- **BUY (CALL)**: Price breaks above KC middle line + MACD bullish cross
+- **SELL (PUT)**: Price breaks below KC middle line + MACD bearish cross
+- API Endpoints: `/api/signals/keltner-macd-5s`, `/api/signals/keltner-macd-indicators`
+- Strategy Builder: Added "Keltner-MACD 5s" template + Keltner Channel indicator
+- Tampermonkey v8.7.1: Added `getKeltnerMACDSignal()` to LocalSignalEngine (priority strategy)
+
+✅ **Tampermonkey v8.7.0 — Simplified CYCLE + Fixed Win/Loss (April 10, 2026)**
+- Completely rewrote CYCLE loop with simpler flow
+- Direct balance-based win/loss detection with `checkTradeResult()` function
+- Cleaner workflow: Scan → Signal → Trade → Wait → Check Balance → Update Stats
+
 ✅ **Tampermonkey v8.6.4 — Precision Timing + Immediate Invert (April 10, 2026)**
 - **AI Pre-Trade Validation**: Checks confidence, data, cooldowns, direction before trade
 - **Detects ACTUAL trade expiry from Pocket Option UI** - Not hardcoded values

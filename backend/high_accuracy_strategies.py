@@ -296,6 +296,250 @@ class PrecisionSignal:
         }
 
 
+# =====================================================
+# KELTNER-MACD 5-SECOND STRATEGY
+# =====================================================
+
+class KeltnerMACDStrategy:
+    """
+    5-Second Strategy using Keltner Channel + MACD
+    
+    Indicators:
+    - Keltner Channel: EMA(20), ATR(60), Multiplier 4
+    - MACD: Fast(13), Slow(24), Signal(11)
+    
+    BUY (CALL) Conditions:
+    - Price breaks ABOVE the middle line (EMA) of Keltner Channel
+    - MACD lines cross UPWARDS (MACD crosses above Signal)
+    
+    SELL (PUT) Conditions:
+    - Price breaks BELOW the middle line (EMA) of Keltner Channel
+    - MACD lines cross DOWNWARDS (MACD crosses below Signal)
+    """
+    
+    def __init__(self):
+        self.name = "keltner_macd_5s"
+        self.expiry = 5
+        
+        # Keltner Channel settings
+        self.kc_ema_period = 20
+        self.kc_atr_period = 60
+        self.kc_multiplier = 4
+        
+        # MACD settings
+        self.macd_fast = 13
+        self.macd_slow = 24
+        self.macd_signal = 11
+    
+    def calculate_atr(self, highs: pd.Series, lows: pd.Series, closes: pd.Series, period: int) -> pd.Series:
+        """Calculate Average True Range"""
+        high_low = highs - lows
+        high_close = abs(highs - closes.shift(1))
+        low_close = abs(lows - closes.shift(1))
+        
+        true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+        atr = true_range.rolling(window=period).mean()
+        return atr
+    
+    def calculate_keltner_channel(self, highs: pd.Series, lows: pd.Series, closes: pd.Series) -> Tuple[pd.Series, pd.Series, pd.Series]:
+        """
+        Calculate Keltner Channel
+        
+        Returns: (middle_line, upper_band, lower_band)
+        """
+        # Middle line = EMA of close
+        middle = closes.ewm(span=self.kc_ema_period, adjust=False).mean()
+        
+        # ATR for band width
+        atr = self.calculate_atr(highs, lows, closes, self.kc_atr_period)
+        
+        # Upper and Lower bands
+        upper = middle + (self.kc_multiplier * atr)
+        lower = middle - (self.kc_multiplier * atr)
+        
+        return middle, upper, lower
+    
+    def calculate_macd(self, closes: pd.Series) -> Tuple[pd.Series, pd.Series, pd.Series]:
+        """
+        Calculate MACD
+        
+        Returns: (macd_line, signal_line, histogram)
+        """
+        ema_fast = closes.ewm(span=self.macd_fast, adjust=False).mean()
+        ema_slow = closes.ewm(span=self.macd_slow, adjust=False).mean()
+        
+        macd_line = ema_fast - ema_slow
+        signal_line = macd_line.ewm(span=self.macd_signal, adjust=False).mean()
+        histogram = macd_line - signal_line
+        
+        return macd_line, signal_line, histogram
+    
+    def analyze(self, candles: List[Dict], current_price: float) -> Optional[PrecisionSignal]:
+        """
+        Analyze for Keltner-MACD 5-second signal
+        """
+        if len(candles) < max(self.kc_atr_period, self.macd_slow) + 5:
+            return None
+        
+        try:
+            # Extract OHLC data
+            closes = pd.Series([float(c.get('close', c.get('Close', 0))) for c in candles])
+            highs = pd.Series([float(c.get('high', c.get('High', c.get('close', 0)))) for c in candles])
+            lows = pd.Series([float(c.get('low', c.get('Low', c.get('close', 0)))) for c in candles])
+            
+            # Calculate Keltner Channel
+            kc_middle, kc_upper, kc_lower = self.calculate_keltner_channel(highs, lows, closes)
+            
+            # Calculate MACD
+            macd_line, signal_line, histogram = self.calculate_macd(closes)
+            
+            # Get current and previous values
+            current_close = closes.iloc[-1]
+            prev_close = closes.iloc[-2]
+            
+            kc_mid_current = kc_middle.iloc[-1]
+            kc_mid_prev = kc_middle.iloc[-2]
+            
+            macd_current = macd_line.iloc[-1]
+            macd_prev = macd_line.iloc[-2]
+            signal_current = signal_line.iloc[-1]
+            signal_prev = signal_line.iloc[-2]
+            
+            confirmations = []
+            direction = None
+            confidence = 50
+            
+            # ===== CALL (BUY) CONDITIONS =====
+            # 1. Price breaks ABOVE Keltner middle line
+            price_above_kc_mid = current_close > kc_mid_current and prev_close <= kc_mid_prev
+            
+            # 2. MACD crosses ABOVE signal line (bullish crossover)
+            macd_bullish_cross = macd_prev <= signal_prev and macd_current > signal_current
+            
+            # Also check if MACD is already above signal and rising
+            macd_bullish_momentum = macd_current > signal_current and macd_current > macd_prev
+            
+            if price_above_kc_mid:
+                confirmations.append("PRICE_ABOVE_KC_MIDDLE")
+                confidence += 15
+            
+            if macd_bullish_cross:
+                confirmations.append("MACD_BULLISH_CROSS")
+                confidence += 20
+            elif macd_bullish_momentum:
+                confirmations.append("MACD_BULLISH_MOMENTUM")
+                confidence += 10
+            
+            # CALL signal when both conditions met
+            if price_above_kc_mid and (macd_bullish_cross or macd_bullish_momentum):
+                direction = "CALL"
+                if macd_bullish_cross:
+                    confidence += 10  # Extra confidence for actual crossover
+            
+            # ===== PUT (SELL) CONDITIONS =====
+            # 1. Price breaks BELOW Keltner middle line
+            price_below_kc_mid = current_close < kc_mid_current and prev_close >= kc_mid_prev
+            
+            # 2. MACD crosses BELOW signal line (bearish crossover)
+            macd_bearish_cross = macd_prev >= signal_prev and macd_current < signal_current
+            
+            # Also check if MACD is already below signal and falling
+            macd_bearish_momentum = macd_current < signal_current and macd_current < macd_prev
+            
+            if direction is None:  # Only check PUT if CALL not triggered
+                if price_below_kc_mid:
+                    confirmations.append("PRICE_BELOW_KC_MIDDLE")
+                    confidence += 15
+                
+                if macd_bearish_cross:
+                    confirmations.append("MACD_BEARISH_CROSS")
+                    confidence += 20
+                elif macd_bearish_momentum:
+                    confirmations.append("MACD_BEARISH_MOMENTUM")
+                    confidence += 10
+                
+                # PUT signal when both conditions met
+                if price_below_kc_mid and (macd_bearish_cross or macd_bearish_momentum):
+                    direction = "PUT"
+                    if macd_bearish_cross:
+                        confidence += 10
+            
+            # Additional confirmations for higher confidence
+            # Check price position relative to Keltner bands
+            if direction == "CALL" and current_close > kc_mid_current:
+                if current_close < kc_upper.iloc[-1]:  # Not overbought
+                    confirmations.append("ROOM_TO_UPPER_BAND")
+                    confidence += 5
+            elif direction == "PUT" and current_close < kc_mid_current:
+                if current_close > kc_lower.iloc[-1]:  # Not oversold
+                    confirmations.append("ROOM_TO_LOWER_BAND")
+                    confidence += 5
+            
+            # Check histogram direction
+            if direction == "CALL" and histogram.iloc[-1] > histogram.iloc[-2]:
+                confirmations.append("MACD_HIST_RISING")
+                confidence += 5
+            elif direction == "PUT" and histogram.iloc[-1] < histogram.iloc[-2]:
+                confirmations.append("MACD_HIST_FALLING")
+                confidence += 5
+            
+            if direction and len(confirmations) >= 2:
+                confidence = min(95, confidence)
+                
+                return PrecisionSignal(
+                    direction=direction,
+                    confidence=confidence,
+                    strategy_name=self.name,
+                    timeframe="5s",
+                    confirmations=confirmations,
+                    entry_price=current_price,
+                    timestamp=datetime.now(timezone.utc),
+                    expiry_seconds=self.expiry,
+                    market_condition=MarketCondition.TRENDING if abs(macd_current) > abs(signal_current) else MarketCondition.RANGING,
+                    entry_window_ms=1000
+                )
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Keltner-MACD strategy error: {e}")
+            return None
+    
+    def get_indicator_values(self, candles: List[Dict]) -> Optional[Dict]:
+        """Get current indicator values for display"""
+        if len(candles) < max(self.kc_atr_period, self.macd_slow) + 5:
+            return None
+        
+        try:
+            closes = pd.Series([float(c.get('close', c.get('Close', 0))) for c in candles])
+            highs = pd.Series([float(c.get('high', c.get('High', c.get('close', 0)))) for c in candles])
+            lows = pd.Series([float(c.get('low', c.get('Low', c.get('close', 0)))) for c in candles])
+            
+            kc_middle, kc_upper, kc_lower = self.calculate_keltner_channel(highs, lows, closes)
+            macd_line, signal_line, histogram = self.calculate_macd(closes)
+            
+            return {
+                "keltner": {
+                    "middle": float(kc_middle.iloc[-1]),
+                    "upper": float(kc_upper.iloc[-1]),
+                    "lower": float(kc_lower.iloc[-1])
+                },
+                "macd": {
+                    "macd_line": float(macd_line.iloc[-1]),
+                    "signal_line": float(signal_line.iloc[-1]),
+                    "histogram": float(histogram.iloc[-1])
+                },
+                "current_price": float(closes.iloc[-1])
+            }
+        except Exception as e:
+            logger.error(f"Error getting indicator values: {e}")
+            return None
+
+
+# Global instance
+keltner_macd_strategy = KeltnerMACDStrategy()
+
+
 class UltraScalpingStrategy:
     """
     Ultra-fast scalping strategy for 5-second expiry

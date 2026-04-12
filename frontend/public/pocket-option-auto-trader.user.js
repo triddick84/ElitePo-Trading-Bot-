@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Elite Pocket Option Trading Bot (Legacy)
 // @namespace    https://momentum-trade-test.preview.emergentagent.com
-// @version      8.7.0
+// @version      8.7.1
 // @description  Elite AI-powered trading bot - Auto-invert stays on same asset after loss for immediate retry
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
@@ -401,6 +401,236 @@
                     strength,
                     consecutiveBars: currentColor === 'green' ? consecutiveGreen : consecutiveRed,
                     reversal
+                }
+            };
+        },
+        
+        // =====================================================
+        // KELTNER-MACD 5-SECOND STRATEGY
+        // =====================================================
+        // Keltner Channel: EMA(20), ATR(60), Multiplier 4
+        // MACD: Fast(13), Slow(24), Signal(11)
+        // BUY: Price above KC middle + MACD bullish cross
+        // SELL: Price below KC middle + MACD bearish cross
+        
+        calculateATR(highs, lows, closes, period = 60) {
+            if (closes.length < period + 1) return null;
+            
+            const trueRanges = [];
+            for (let i = 1; i < closes.length; i++) {
+                const hl = highs[i] - lows[i];
+                const hc = Math.abs(highs[i] - closes[i - 1]);
+                const lc = Math.abs(lows[i] - closes[i - 1]);
+                trueRanges.push(Math.max(hl, hc, lc));
+            }
+            
+            if (trueRanges.length < period) return null;
+            
+            // Simple moving average of TR for ATR
+            const recentTR = trueRanges.slice(-period);
+            return recentTR.reduce((a, b) => a + b, 0) / period;
+        },
+        
+        calculateKeltnerChannel(highs, lows, closes) {
+            const emaPeriod = 20;
+            const atrPeriod = 60;
+            const multiplier = 4;
+            
+            if (closes.length < Math.max(emaPeriod, atrPeriod) + 1) {
+                return null;
+            }
+            
+            // Middle line = EMA(20)
+            const middle = this.calculateEMA(closes, emaPeriod);
+            
+            // ATR(60)
+            const atr = this.calculateATR(highs, lows, closes, atrPeriod);
+            if (!atr) return null;
+            
+            // Previous values for crossover detection
+            const prevCloses = closes.slice(0, -1);
+            const prevMiddle = this.calculateEMA(prevCloses, emaPeriod);
+            
+            return {
+                middle,
+                upper: middle + (multiplier * atr),
+                lower: middle - (multiplier * atr),
+                prevMiddle,
+                atr
+            };
+        },
+        
+        calculateMACDKeltner(prices) {
+            // MACD settings for this strategy: 13, 24, 11
+            const fastPeriod = 13;
+            const slowPeriod = 24;
+            const signalPeriod = 11;
+            
+            if (prices.length < slowPeriod + signalPeriod) {
+                return null;
+            }
+            
+            // Build MACD line history
+            const macdHistory = [];
+            for (let i = slowPeriod; i <= prices.length; i++) {
+                const sliced = prices.slice(0, i);
+                const fast = this.calculateEMA(sliced, fastPeriod);
+                const slow = this.calculateEMA(sliced, slowPeriod);
+                macdHistory.push(fast - slow);
+            }
+            
+            // Current MACD
+            const macd = macdHistory[macdHistory.length - 1];
+            const prevMacd = macdHistory[macdHistory.length - 2];
+            
+            // Signal line (EMA of MACD)
+            if (macdHistory.length < signalPeriod) return null;
+            
+            const k = 2 / (signalPeriod + 1);
+            let signal = macdHistory.slice(0, signalPeriod).reduce((a, b) => a + b, 0) / signalPeriod;
+            for (let i = signalPeriod; i < macdHistory.length; i++) {
+                signal = macdHistory[i] * k + signal * (1 - k);
+            }
+            
+            // Previous signal
+            const prevMacdHistory = macdHistory.slice(0, -1);
+            let prevSignal = prevMacdHistory.slice(0, signalPeriod).reduce((a, b) => a + b, 0) / signalPeriod;
+            for (let i = signalPeriod; i < prevMacdHistory.length; i++) {
+                prevSignal = prevMacdHistory[i] * k + prevSignal * (1 - k);
+            }
+            
+            const histogram = macd - signal;
+            const prevHistogram = prevMacd - prevSignal;
+            
+            return {
+                macd,
+                signal,
+                histogram,
+                prevMacd,
+                prevSignal,
+                prevHistogram,
+                bullishCross: prevMacd <= prevSignal && macd > signal,
+                bearishCross: prevMacd >= prevSignal && macd < signal,
+                bullishMomentum: macd > signal && macd > prevMacd,
+                bearishMomentum: macd < signal && macd < prevMacd
+            };
+        },
+        
+        getKeltnerMACDSignal(candles) {
+            // Requires at least 65 candles for ATR(60) calculation
+            if (!candles || candles.length < 65) return null;
+            
+            const closes = candles.map(c => c.close);
+            const highs = candles.map(c => c.high || c.close);
+            const lows = candles.map(c => c.low || c.close);
+            
+            // Calculate Keltner Channel
+            const kc = this.calculateKeltnerChannel(highs, lows, closes);
+            if (!kc) return null;
+            
+            // Calculate MACD
+            const macd = this.calculateMACDKeltner(closes);
+            if (!macd) return null;
+            
+            const currentClose = closes[closes.length - 1];
+            const prevClose = closes[closes.length - 2];
+            
+            let direction = null;
+            let confidence = 60;
+            const confirmations = [];
+            
+            // ===== CALL (BUY) CONDITIONS =====
+            // Price breaks above Keltner middle line
+            const priceAboveKC = currentClose > kc.middle && prevClose <= kc.prevMiddle;
+            
+            if (priceAboveKC) {
+                confirmations.push('PRICE_ABOVE_KC_MIDDLE');
+                confidence += 15;
+            }
+            
+            if (macd.bullishCross) {
+                confirmations.push('MACD_BULLISH_CROSS');
+                confidence += 20;
+            } else if (macd.bullishMomentum) {
+                confirmations.push('MACD_BULLISH_MOMENTUM');
+                confidence += 10;
+            }
+            
+            // CALL when both conditions met
+            if (priceAboveKC && (macd.bullishCross || macd.bullishMomentum)) {
+                direction = 'CALL';
+                if (macd.bullishCross) confidence += 5;
+                
+                // Bonus: histogram rising
+                if (macd.histogram > macd.prevHistogram) {
+                    confirmations.push('MACD_HIST_RISING');
+                    confidence += 5;
+                }
+                
+                // Bonus: room to upper band
+                if (currentClose < kc.upper) {
+                    confirmations.push('ROOM_TO_UPPER');
+                    confidence += 3;
+                }
+            }
+            
+            // ===== PUT (SELL) CONDITIONS =====
+            if (!direction) {
+                // Price breaks below Keltner middle line
+                const priceBelowKC = currentClose < kc.middle && prevClose >= kc.prevMiddle;
+                
+                if (priceBelowKC) {
+                    confirmations.push('PRICE_BELOW_KC_MIDDLE');
+                    confidence += 15;
+                }
+                
+                if (macd.bearishCross) {
+                    confirmations.push('MACD_BEARISH_CROSS');
+                    confidence += 20;
+                } else if (macd.bearishMomentum) {
+                    confirmations.push('MACD_BEARISH_MOMENTUM');
+                    confidence += 10;
+                }
+                
+                // PUT when both conditions met
+                if (priceBelowKC && (macd.bearishCross || macd.bearishMomentum)) {
+                    direction = 'PUT';
+                    if (macd.bearishCross) confidence += 5;
+                    
+                    // Bonus: histogram falling
+                    if (macd.histogram < macd.prevHistogram) {
+                        confirmations.push('MACD_HIST_FALLING');
+                        confidence += 5;
+                    }
+                    
+                    // Bonus: room to lower band
+                    if (currentClose > kc.lower) {
+                        confirmations.push('ROOM_TO_LOWER');
+                        confidence += 3;
+                    }
+                }
+            }
+            
+            if (!direction || confirmations.length < 2) return null;
+            
+            return {
+                direction,
+                confidence: Math.min(95, confidence),
+                strategy: 'Keltner-MACD 5s',
+                expiration: 5,
+                confirmations,
+                price: currentClose,
+                indicators: {
+                    keltner: {
+                        middle: kc.middle,
+                        upper: kc.upper,
+                        lower: kc.lower
+                    },
+                    macd: {
+                        macd: macd.macd,
+                        signal: macd.signal,
+                        histogram: macd.histogram
+                    }
                 }
             };
         },
@@ -5176,6 +5406,7 @@
                         
                         if (candles.length >= 10) {
                             signal = LocalSignalEngine.generateSignal(candles);
+                            if (!signal) signal = LocalSignalEngine.getKeltnerMACDSignal(candles);
                             if (!signal) signal = LocalSignalEngine.getHollyCrossoverSignal(candles);
                             if (!signal) signal = LocalSignalEngine.getMomentumBusterSignal(candles);
                             
@@ -5804,6 +6035,13 @@
         let signal = LocalSignalEngine.generateSignal(candles);
         
         // Try Holly Crossover (reversal) if general strategy found nothing
+        // Try Keltner-MACD 5s first (priority strategy)
+        if (!signal) {
+            signal = LocalSignalEngine.getKeltnerMACDSignal(candles);
+            if (signal) log(`Keltner-MACD 5s triggered`);
+        }
+        
+        // Try Holly Crossover
         if (!signal) {
             signal = LocalSignalEngine.getHollyCrossoverSignal(candles);
             if (signal) log(`Holly Crossover triggered`);

@@ -1477,6 +1477,159 @@ async def micro_momentum_5s_otc_signal_generation(asset_symbol: str, trade_durat
         raise HTTPException(status_code=500, detail=f"Micro-momentum signal generation failed: {str(e)}")
 
 
+@router.post("/signals/keltner-macd-5s")
+async def keltner_macd_5s_signal(
+    symbol: str = Query("EURUSD_OTC", description="Asset symbol"),
+    background_tasks: BackgroundTasks = None
+):
+    """
+    5-Second Keltner Channel + MACD Strategy
+    
+    Indicators:
+    - Keltner Channel: EMA(20), ATR(60), Multiplier 4
+    - MACD: Fast(13), Slow(24), Signal(11)
+    
+    BUY (CALL): Price breaks above KC middle + MACD bullish cross
+    SELL (PUT): Price breaks below KC middle + MACD bearish cross
+    """
+    try:
+        from high_accuracy_strategies import keltner_macd_strategy
+        
+        # Get candle data (need at least 65 candles for ATR(60))
+        candles = []
+        
+        # Try OANDA first
+        try:
+            oanda_symbol = symbol.replace("_OTC", "").replace("/", "_")
+            if '_' not in oanda_symbol and len(oanda_symbol) == 6:
+                oanda_symbol = f"{oanda_symbol[:3]}_{oanda_symbol[3:]}"
+            
+            oanda_df = enhanced_oanda.get_candles(oanda_symbol, granularity="S5", count=100)
+            if oanda_df is not None and len(oanda_df) > 0:
+                candles = oanda_df.to_dict('records')
+        except Exception as e:
+            logger.debug(f"OANDA fetch failed: {e}")
+        
+        # Fallback to DB
+        if len(candles) < 65:
+            db_ref = router.app_state.get("db") if hasattr(router, 'app_state') else None
+            if not db_ref:
+                from server import db as server_db
+                db_ref = server_db
+            
+            if db_ref is not None:
+                cursor = db_ref.historical_candles.find(
+                    {"symbol": symbol.replace("_OTC", "").replace("_", "/")},
+                    {"_id": 0}
+                ).sort("timestamp", -1).limit(100)
+                db_candles = await cursor.to_list(100)
+                if len(db_candles) > len(candles):
+                    candles = list(reversed(db_candles))
+        
+        if len(candles) < 65:
+            return {
+                "success": False,
+                "error": "Insufficient data",
+                "candles_available": len(candles),
+                "candles_required": 65
+            }
+        
+        # Get current price
+        current_price = float(candles[-1].get('close', candles[-1].get('Close', 0)))
+        
+        # Analyze with Keltner-MACD strategy
+        signal = keltner_macd_strategy.analyze(candles, current_price)
+        
+        # Get indicator values for display
+        indicators = keltner_macd_strategy.get_indicator_values(candles)
+        
+        if signal:
+            return {
+                "success": True,
+                "signal": {
+                    "direction": signal.direction,
+                    "confidence": signal.confidence,
+                    "strategy": signal.strategy_name,
+                    "timeframe": "5s",
+                    "expiry_seconds": 5,
+                    "confirmations": signal.confirmations,
+                    "entry_price": signal.entry_price,
+                    "timestamp": signal.timestamp.isoformat()
+                },
+                "indicators": indicators,
+                "symbol": symbol
+            }
+        else:
+            return {
+                "success": True,
+                "signal": None,
+                "message": "No valid signal - conditions not met",
+                "indicators": indicators,
+                "symbol": symbol
+            }
+    
+    except Exception as e:
+        logger.error(f"Keltner-MACD 5s signal error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/signals/keltner-macd-indicators")
+async def get_keltner_macd_indicators(
+    symbol: str = Query("EURUSD_OTC", description="Asset symbol")
+):
+    """
+    Get current Keltner Channel and MACD indicator values
+    """
+    try:
+        from high_accuracy_strategies import keltner_macd_strategy
+        
+        candles = []
+        
+        # Get candles from OANDA
+        try:
+            oanda_symbol = symbol.replace("_OTC", "").replace("/", "_")
+            if '_' not in oanda_symbol and len(oanda_symbol) == 6:
+                oanda_symbol = f"{oanda_symbol[:3]}_{oanda_symbol[3:]}"
+            
+            oanda_df = enhanced_oanda.get_candles(oanda_symbol, granularity="S5", count=100)
+            if oanda_df is not None and len(oanda_df) > 0:
+                candles = oanda_df.to_dict('records')
+        except:
+            pass
+        
+        if len(candles) < 65:
+            return {
+                "success": False,
+                "error": "Insufficient data"
+            }
+        
+        indicators = keltner_macd_strategy.get_indicator_values(candles)
+        
+        return {
+            "success": True,
+            "symbol": symbol,
+            "indicators": indicators,
+            "settings": {
+                "keltner": {
+                    "ema_period": 20,
+                    "atr_period": 60,
+                    "multiplier": 4
+                },
+                "macd": {
+                    "fast_period": 13,
+                    "slow_period": 24,
+                    "signal_period": 11
+                }
+            }
+        }
+    
+    except Exception as e:
+        logger.error(f"Keltner-MACD indicators error: {e}")
+        return {"success": False, "error": str(e)}
+
+
 # Legacy endpoints for compatibility
 @router.get("/")
 
