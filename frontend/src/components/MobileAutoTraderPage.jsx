@@ -208,36 +208,73 @@ const MobileAutoTraderPage = () => {
         {/* Control Panel Preview */}
         <Card className="bg-slate-800/50 border-slate-700 mt-6">
           <CardHeader>
-            <CardTitle className="text-white">📱 What You'll See</CardTitle>
-            <CardDescription>The auto-trader control panel appears on Pocket Option</CardDescription>
+            <CardTitle className="text-white">📱 Panel Preview (v8.8.0)</CardTitle>
+            <CardDescription>The auto-trader control panel on Pocket Option</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="bg-gradient-to-br from-slate-900 to-purple-900/50 border-2 border-purple-600 rounded-xl p-4 max-w-xs">
               <div className="flex justify-between items-center border-b border-purple-600 pb-2 mb-3">
-                <span className="text-purple-400 font-bold text-sm">🤖 GPT Signal Bot</span>
+                <span className="text-purple-400 font-bold text-sm">Elite PO Trading Bot</span>
                 <span className="text-slate-400">−</span>
               </div>
               <div className="space-y-2 text-xs">
                 <div className="flex justify-between">
                   <span className="text-slate-400">Status:</span>
-                  <span className="text-green-400">● Connected</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Trades:</span>
-                  <span className="text-white">12</span>
+                  <span className="text-green-400">Connected</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400">Win/Loss:</span>
                   <span><span className="text-green-400">9</span> / <span className="text-red-400">3</span></span>
                 </div>
               </div>
-              <button className="w-full mt-3 py-2 bg-green-600 text-white text-sm font-bold rounded-lg">
-                🟢 AUTO-TRADE ON
-              </button>
-              <div className="bg-slate-800 rounded-lg p-2 mt-3 text-xs">
-                <div className="text-green-400 font-bold">📈 CALL (UP)</div>
-                <div className="text-slate-400">EURUSD | 92% confidence</div>
+              <div className="flex gap-1 mt-2">
+                <button className="flex-1 py-1.5 bg-slate-700 text-white text-[10px] font-bold rounded">AUTO</button>
+                <button className="flex-1 py-1.5 bg-blue-600 text-white text-[10px] font-bold rounded">SCAN</button>
+                <button className="flex-1 py-1.5 bg-purple-600 text-white text-[10px] font-bold rounded">GO</button>
               </div>
+              <div className="flex gap-1 mt-1">
+                <button className="flex-1 py-1.5 bg-sky-600 text-white text-[10px] font-bold rounded">CYCLE</button>
+                <button className="flex-1 py-1.5 bg-cyan-600 text-white text-[10px] font-bold rounded">KC-5s</button>
+                <button className="flex-1 py-1.5 bg-indigo-600 text-white text-[10px] font-bold rounded">LOG</button>
+              </div>
+              <div className="bg-slate-800 rounded-lg p-2 mt-2 text-xs">
+                <div className="text-green-400 font-bold">CALL (UP)</div>
+                <div className="text-slate-400">EUR/USD OTC | 78% [IQ-720]</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Strategies Available */}
+        <Card className="bg-slate-800/50 border-slate-700 mt-6" data-testid="tm-strategies-card">
+          <CardHeader>
+            <CardTitle className="text-white">Local Signal Strategies (v8.8.0)</CardTitle>
+            <CardDescription>These strategies run locally on the Pocket Option page using scraped OTC prices — no backend needed</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {[
+                { name: 'General Multi-Indicator', desc: 'RSI-2/14, MACD, Stochastic, Bollinger, EMA alignment, ADX, Candlestick patterns', badge: 'Primary', color: 'bg-purple-600' },
+                { name: 'Keltner-MACD 5s', desc: 'Keltner Channel (EMA20, ATR60, x4) + MACD (13/24/11) crossover for 5-second scalps', badge: '5s', color: 'bg-cyan-600' },
+                { name: 'IQ-720 Ensemble', desc: '8 weighted sub-strategies + market regime detection + session awareness + confidence calibration', badge: 'Advanced', color: 'bg-indigo-600' },
+                { name: 'Holly Crossover', desc: 'EMA(12) x WMA(23) reversal crossover with support/resistance confirmation', badge: '5s/15s/30s', color: 'bg-emerald-600' },
+                { name: 'Golden One Moment', desc: 'RSI(2) + Stochastic(4,3,3) mean reversion from oversold/overbought zones', badge: '30s', color: 'bg-amber-600' },
+                { name: 'Momentum Buster', desc: 'Momentum period 3 — green/red bars with confirmation signals', badge: '15s', color: 'bg-orange-600' },
+              ].map(s => (
+                <div key={s.name} className="p-3 bg-slate-900/60 rounded-lg border border-slate-700/50">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-sm font-semibold text-white">{s.name}</span>
+                    <Badge className={`text-[10px] ${s.color} text-white`}>{s.badge}</Badge>
+                  </div>
+                  <p className="text-xs text-slate-400">{s.desc}</p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 p-3 bg-blue-900/20 border border-blue-600/30 rounded-lg">
+              <p className="text-xs text-blue-300">
+                <strong>Signal Priority Chain:</strong> General → Keltner-MACD → IQ-720 Ensemble → Holly Crossover → Golden One Moment → Momentum Buster. 
+                If all local strategies fail, the GO button falls back to backend API (scan-markets → force-generate).
+              </p>
             </div>
           </CardContent>
         </Card>

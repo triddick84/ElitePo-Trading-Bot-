@@ -826,15 +826,22 @@ const TampermonkeyControlPanel = () => {
           
           {/* Features List */}
           <div className="mt-4 p-3 bg-gradient-to-r from-purple-900/20 to-blue-900/20 rounded-lg border border-purple-500/30">
-            <p className="text-xs text-purple-300 font-semibold mb-2">v8.4 Features:</p>
+            <p className="text-xs text-purple-300 font-semibold mb-2">v8.8.0 Features:</p>
             <ul className="text-xs text-slate-400 space-y-1">
-              <li>✅ Live balance sync from Pocket Option UI</li>
-              <li>✅ Momentum-aware auto-invert (RSI + EMA + backend API)</li>
-              <li>✅ Balance-change trade outcome detection</li>
-              <li>✅ CYCLE mode for multi-asset automation</li>
-              <li>✅ 3-mode invert control (OFF/AUTO/ON)</li>
-              <li>✅ Signal status display with technical analysis</li>
-              <li>✅ Strategy selection dropdown</li>
+              <li>✅ <strong>6 Local Signal Strategies</strong> (no backend needed for OTC)</li>
+              <li className="pl-3">General Multi-Indicator (RSI, MACD, Stoch, BB, EMA, ADX)</li>
+              <li className="pl-3">Keltner-MACD 5s (KC EMA20 + MACD 13/24/11)</li>
+              <li className="pl-3">IQ-720 Ensemble (8 weighted strategies + regime detection)</li>
+              <li className="pl-3">Holly Crossover (EMA12 x WMA23 reversal)</li>
+              <li className="pl-3">Golden One Moment 30s (RSI2 + Stoch mean reversion)</li>
+              <li className="pl-3">Momentum Buster 15s (momentum period 3)</li>
+              <li>✅ <strong>GO button</strong> tries local signals FIRST, backend API fallback</li>
+              <li>✅ <strong>KC-5s button</strong> for dedicated Keltner-MACD quick trade</li>
+              <li>✅ CYCLE mode with auto-invert and expiry detection</li>
+              <li>✅ Session-aware trading with London/NY overlap boost</li>
+              <li>✅ Balance-based WIN/LOSS detection from PO UI</li>
+              <li>✅ Latency sync with backend timing config</li>
+              <li>✅ Settings persistence across page refreshes</li>
             </ul>
           </div>
         </CardContent>

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Elite Pocket Option Trading Bot (Legacy)
 // @namespace    https://momentum-trade-test.preview.emergentagent.com
-// @version      8.7.2
+// @version      8.8.0
 // @description  Elite AI-powered trading bot - Auto-invert stays on same asset after loss for immediate retry
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
@@ -5309,7 +5309,8 @@
     }
 
     function handleFetch() {
-        // GO button forces signal generation for CURRENT ASSET using backend API
+        // GO button: Force generate signal for CURRENT ASSET
+        // v8.8 — Try LOCAL signals first (using scraped OTC prices), then backend API fallback
         const currentAssetRaw = getCurrentAsset() || 'EURUSD';
         let assetSymbol = currentAssetRaw
             .replace(/\s+/g, '')
@@ -5324,28 +5325,92 @@
             assetSymbol += '_OTC';
         }
         
-        log(`🔄 GO: Generating signal for ${assetSymbol}...`);
+        log(`GO: Generating signal for ${assetSymbol}...`);
         updateStatusDot('trading');
         
-        // PRIMARY: Use scan-markets GET (simpler, more reliable)
+        // ===== STEP 1: Try LOCAL signal engine first (uses actual OTC prices) =====
+        if (CONFIG.USE_LOCAL_SIGNALS) {
+            const currentPrice = PriceScraperV2.scrapeCurrentPrice();
+            if (currentPrice) {
+                const candle = PriceScraperV2.buildCandle(currentPrice, 1000);
+                if (candle) PriceScraperV2.addCandle(candle);
+            }
+            
+            const candles = PriceScraperV2.getCandles();
+            log(`GO LOCAL: ${candles.length} candles available`);
+            
+            if (candles.length >= 10) {
+                // Try ALL local strategies in priority order
+                let signal = LocalSignalEngine.generateSignal(candles);
+                if (!signal) { signal = LocalSignalEngine.getKeltnerMACDSignal(candles); if (signal) log(`GO: Keltner-MACD 5s triggered`); }
+                if (!signal) { signal = LocalSignalEngine.getIQ720EnsembleSignal(candles); if (signal) log(`GO: IQ-720 Ensemble triggered`); }
+                if (!signal) { signal = LocalSignalEngine.getHollyCrossoverSignal(candles); if (signal) log(`GO: Holly Crossover triggered`); }
+                if (!signal) { signal = LocalSignalEngine.getGoldenOneMomentSignal(candles); if (signal) log(`GO: Golden One Moment triggered`); }
+                if (!signal) { signal = LocalSignalEngine.getMomentumBusterSignal(candles); if (signal) log(`GO: Momentum Buster triggered`); }
+                
+                if (signal && signal.confidence >= CONFIG.MIN_CONFIDENCE) {
+                    log(`GO LOCAL SIGNAL: ${signal.direction} (${signal.confidence}%) [${signal.strategy || 'Local'}]`);
+                    log(`Confirmations: ${signal.confirmations.join(', ')}`);
+                    
+                    const detectedExpiry = detectCurrentTimeframe();
+                    const tradeSignal = {
+                        direction: signal.direction,
+                        symbol: assetSymbol,
+                        confidence: signal.confidence,
+                        confirmations: signal.confirmations,
+                        price: signal.price,
+                        source: 'GO_LOCAL',
+                        expiration_seconds: detectedExpiry,
+                        _willSwitch: false
+                    };
+                    
+                    const processedSignal = processSmartAutoInvert(tradeSignal);
+                    lastTradeInfo.symbol = processedSignal.symbol || '';
+                    lastTradeInfo.direction = processedSignal.direction || '';
+                    lastTradeInfo.confidence = processedSignal.confidence || 0;
+                    lastTradeInfo.strategy = signal.strategy || 'Local Engine v8.8';
+                    lastTradeInfo.indicators = signal.indicators || {};
+                    window.lastTradeIndicators = signal.indicators || {};
+                    window.lastTradeStrategy = signal.strategy || 'Local Engine v8.8';
+                    
+                    if (processedSignal._smartInverted) {
+                        log(`SMART INVERT: ${processedSignal._originalDirection} -> ${processedSignal.direction}`);
+                    }
+                    
+                    updateSignalStatusDisplay(processedSignal);
+                    executeScanTrade(processedSignal).catch(err => {
+                        log(`Trade error: ${err.message}`);
+                        updateStatusDot('connected');
+                    });
+                    return;
+                } else if (signal) {
+                    log(`GO: Local signal found but low confidence (${signal.confidence}% < ${CONFIG.MIN_CONFIDENCE}%), trying backend...`);
+                } else {
+                    log(`GO: No local signal from ${candles.length} candles, trying backend API...`);
+                }
+            } else {
+                log(`GO: Only ${candles.length} candles locally, trying backend API...`);
+            }
+        }
+        
+        // ===== STEP 2: Fall back to backend scan-markets API =====
         const scanUrl = CONFIG.API_URL + `/signals/scan-markets?assets=${assetSymbol}&min_confidence=60`;
-        log(`📡 Calling: ${scanUrl}`);
+        log(`GO BACKEND: ${scanUrl}`);
         
         GM_xmlhttpRequest({
             method: 'GET',
             url: scanUrl,
             headers: { 'Accept': 'application/json' },
-            timeout: 20000,
+            timeout: 15000,
             onload: function(res) {
                 try {
-                    log(`📡 Scan response: ${res.status}`);
                     if (res.status === 200) {
                         const data = JSON.parse(res.responseText);
                         const signals = data.top_signals || data.signals || [];
                         
                         if (data.success && signals.length > 0) {
                             const signal = signals[0];
-                            log(`✅ GO SIGNAL: ${signal.direction} ${signal.symbol} (${Math.round(signal.confidence)}%) [${signal.analysis_type}]`);
+                            log(`GO BACKEND SIGNAL: ${signal.direction} ${signal.symbol} (${Math.round(signal.confidence)}%) [${signal.analysis_type}]`);
                             
                             const tradeSignal = {
                                 direction: signal.direction,
@@ -5356,30 +5421,35 @@
                                 _willSwitch: false
                             };
                             
-                            executeScanTrade(tradeSignal).catch(err => {
-                                log(`❌ Trade execution error: ${err.message}`);
+                            const processed = processSmartAutoInvert(tradeSignal);
+                            lastTradeInfo.symbol = processed.symbol;
+                            lastTradeInfo.direction = processed.direction;
+                            lastTradeInfo.confidence = processed.confidence;
+                            updateSignalStatusDisplay(processed);
+                            
+                            executeScanTrade(processed).catch(err => {
+                                log(`Trade error: ${err.message}`);
                                 updateStatusDot('connected');
                             });
                             return;
                         }
                     }
                     
-                    // No signal from scan - try force-generate
-                    log('⚠️ No scan signal, trying force-generate...');
+                    // No signal from scan - try force-generate as last resort
+                    log('GO: No backend scan signal, trying force-generate...');
                     _goForceGenerate(assetSymbol);
                     
                 } catch (e) {
-                    log(`❌ Parse error: ${e.message}`);
+                    log(`GO: Parse error: ${e.message}`);
                     _goForceGenerate(assetSymbol);
                 }
             },
             onerror: function(e) {
-                log(`❌ Scan connection error - trying force-generate...`);
-                log(`   Error: ${e?.message || 'Unknown error'}`);
+                log(`GO: Backend scan error - trying force-generate...`);
                 _goForceGenerate(assetSymbol);
             },
             ontimeout: function() {
-                log('❌ Scan timeout - trying force-generate...');
+                log('GO: Backend scan timeout - trying force-generate...');
                 _goForceGenerate(assetSymbol);
             }
         });
