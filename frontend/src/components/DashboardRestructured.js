@@ -35,6 +35,7 @@ import { toast } from 'sonner';
 import MarketAssetSelector from './MarketAssetSelector';
 import ImprovedSignalPopup from './ImprovedSignalPopup';
 import LatencyAdjustment from './LatencyAdjustment';
+import IQ720Widget from './IQ720Widget';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -746,6 +747,11 @@ const DashboardRestructured = ({
             </div>
           </div>
         </Card>
+      </div>
+
+      {/* IQ-720 Live Market Intelligence Widget */}
+      <div className="mb-6">
+        <IQ720Widget selectedAsset={config.selected_assets?.[0] || 'EURUSD'} />
       </div>
 
       {/* Main Content Grid */}

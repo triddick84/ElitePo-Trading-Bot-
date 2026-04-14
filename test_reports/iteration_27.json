@@ -1,0 +1,142 @@
+{
+  "summary": "Iteration 27 testing complete for IQ-720 Dashboard Widget. All 17 backend tests passed (100%). Frontend verified: IQ-720 Widget renders on Dashboard with Market Regime, Session, Kelly Size, and Signal sections. Strategy Builder Templates tab shows IQ-720 Ensemble. AI Models page shows IQ-720 Ensemble (Advanced) first with 82% accuracy.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iq720_widget.py",
+    "/app/test_reports/pytest/pytest_iq720_widget.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "IQ-720 Widget (data-testid='iq720-widget') renders correctly on Dashboard - VERIFIED",
+    "Market Regime section (data-testid='iq720-regime') shows regime label with correct coloring - VERIFIED",
+    "Session section (data-testid='iq720-session') shows session name and quality badge - VERIFIED",
+    "Kelly Size section (data-testid='iq720-kelly') shows percentage of capital - VERIFIED",
+    "Signal/No-Signal section (data-testid='iq720-signal' or 'iq720-no-signal') displays correctly - VERIFIED",
+    "Refresh button (data-testid='iq720-refresh-btn') triggers data reload - VERIFIED",
+    "Widget auto-refreshes every 30 seconds (code review confirmed) - VERIFIED",
+    "All IQ-720 backend endpoints working: iq720-ensemble, iq720-market-regime, iq720-kelly, iq720-features - VERIFIED",
+    "Strategy Builder Templates tab shows 'IQ-720 Ensemble' template - VERIFIED",
+    "AI Models page shows 'IQ-720 Ensemble (Advanced)' first with 82% accuracy - VERIFIED"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iq720_widget.py"
+  ],
+  "success_rate": {
+    "backend": "100% (17/17 tests passed)",
+    "frontend": "100% (all IQ-720 Widget features verified)"
+  },
+  "test_credentials": "username=triddick84, password=Fallinone#1",
+  "seed_data_creation": "None - used existing OANDA data feed",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "IQ-720 Dashboard Widget fully tested. Widget renders on Dashboard with data-testid='iq720-widget'. Shows Market Regime (trending_up/down/ranging/high_volatility/low_volatility), Session (asian/london/new_york/overlap/off_hours with quality badge), Kelly Size (percentage), and Signal/No-Signal sections. Refresh button works. Auto-refresh every 30 seconds. Backend endpoints /api/signals/iq720-ensemble, /api/signals/iq720-market-regime, /api/signals/iq720-kelly, /api/signals/iq720-features all working. KC-MACD 5s button added to Tampermonkey panel (cannot test - requires Pocket Option website).",
+  "mocked_apis": {
+    "note": "TradingView Webhooks and MT4 ZeroMQ integrations are MOCKED. IQ-720 endpoints use real OANDA data feed."
+  },
+  "iq720_widget_features_tested": {
+    "widget_component": {
+      "file": "/app/frontend/src/components/IQ720Widget.jsx",
+      "data_testid": "iq720-widget",
+      "status": "RENDERED"
+    },
+    "market_regime_section": {
+      "data_testid": "iq720-regime",
+      "displays": "Market Regime label with color coding",
+      "values": ["trending_up (emerald)", "trending_down (red)", "ranging (amber)", "high_volatility (orange)", "low_volatility (sky)", "unknown (slate)"],
+      "status": "WORKING"
+    },
+    "session_section": {
+      "data_testid": "iq720-session",
+      "displays": "Session name and quality badge (Q:XX)",
+      "values": ["asian (Q:65)", "london (Q:80)", "new_york (Q:75)", "overlap (Q:95)", "off_hours (Q:30)"],
+      "status": "WORKING"
+    },
+    "kelly_section": {
+      "data_testid": "iq720-kelly",
+      "displays": "Kelly Size percentage of capital",
+      "status": "WORKING"
+    },
+    "signal_section": {
+      "data_testid_signal": "iq720-signal",
+      "data_testid_no_signal": "iq720-no-signal",
+      "displays": "CALL/PUT signal with confidence or 'No clear signal' message",
+      "status": "WORKING"
+    },
+    "refresh_button": {
+      "data_testid": "iq720-refresh-btn",
+      "action": "Triggers fetchAll() to reload all data",
+      "status": "WORKING"
+    },
+    "auto_refresh": {
+      "interval": "30 seconds",
+      "implementation": "setInterval(fetchAll, 30000)",
+      "status": "VERIFIED (code review)"
+    }
+  },
+  "backend_endpoints_tested": {
+    "iq720_market_regime": {
+      "endpoint": "GET /api/signals/iq720-market-regime",
+      "parameters": ["symbol (optional)"],
+      "response_fields": ["regime", "session", "session_weight", "regime_adjustments", "timestamp"],
+      "status": "WORKING"
+    },
+    "iq720_ensemble": {
+      "endpoint": "POST /api/signals/iq720-ensemble",
+      "parameters": ["symbol", "timeframe", "candle_count"],
+      "response_fields": ["direction", "confidence", "confirmations", "market_regime", "session", "call_score", "put_score", "features"],
+      "status": "WORKING"
+    },
+    "iq720_kelly": {
+      "endpoint": "POST /api/signals/iq720-kelly",
+      "parameters": ["win_rate", "avg_win", "avg_loss"],
+      "response_fields": ["kelly_fraction", "kelly_percent", "risk_per_trade", "inputs", "note"],
+      "status": "WORKING"
+    },
+    "iq720_features": {
+      "endpoint": "POST /api/signals/iq720-features",
+      "parameters": ["symbol"],
+      "response_fields": ["feature_count", "features", "categories", "timestamp"],
+      "status": "WORKING"
+    }
+  },
+  "tampermonkey_kc_macd_5s_button": {
+    "file": "/app/frontend/public/pocket-option-auto-trader.user.js",
+    "note": "KC-MACD 5s button added to Tampermonkey panel. Cannot test - requires Pocket Option website.",
+    "status": "SKIPPED (requires Pocket Option website)"
+  },
+  "regression_tests": {
+    "health_endpoint": "WORKING",
+    "config_endpoint": "WORKING",
+    "bot_status_endpoint": "WORKING",
+    "candle_sync_status": "WORKING",
+    "performance_metrics": "WORKING",
+    "latency_status": "WORKING",
+    "keltner_macd_5s": "WORKING",
+    "evaluate_momentum_condition": "WORKING"
+  },
+  "endpoints_tested": [
+    "GET /api/health ✅",
+    "GET /api/signals/iq720-market-regime ✅ (default)",
+    "GET /api/signals/iq720-market-regime?symbol=EURUSD ✅",
+    "POST /api/signals/iq720-ensemble ✅",
+    "POST /api/signals/iq720-kelly ✅ (normal win rate)",
+    "POST /api/signals/iq720-kelly ✅ (low win rate)",
+    "POST /api/signals/iq720-kelly ✅ (high win rate - capped)",
+    "POST /api/signals/iq720-features ✅",
+    "GET /api/config ✅",
+    "GET /api/bot/status ✅",
+    "GET /api/bot/candle-sync/status ✅",
+    "GET /api/performance/metrics ✅",
+    "GET /api/latency/status ✅",
+    "POST /api/signals/keltner-macd-5s ✅",
+    "POST /api/signals/evaluate-momentum-condition ✅"
+  ]
+}

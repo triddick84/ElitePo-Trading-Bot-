@@ -4653,10 +4653,16 @@
                         <span class="gpt-btn-icon">🔁</span>
                         <span>CYCLE</span>
                     </button>
+                    <button class="gpt-btn" id="gpt-kc-macd" style="background:linear-gradient(135deg,#06b6d4,#0891b2);color:white;">
+                        <span class="gpt-btn-icon">📊</span>
+                        <span>KC-5s</span>
+                    </button>
                     <button class="gpt-btn gpt-btn-log" id="gpt-console-toggle">
                         <span class="gpt-btn-icon">📋</span>
                         <span>LOG</span>
                     </button>
+                </div>
+                <div class="gpt-btn-row">
                     <button class="gpt-btn gpt-btn-reset" id="gpt-reset-stats" style="background:#991b1b;">
                         <span class="gpt-btn-icon">🗑</span>
                         <span>RESET</span>
@@ -4779,6 +4785,32 @@
         document.getElementById('gpt-reset-stats').addEventListener('click', resetAllStats);
         document.getElementById('gpt-cycle').addEventListener('click', toggleCycle);
         document.getElementById('gpt-fetch').addEventListener('click', handleFetch);
+        
+        // KC-MACD 5s dedicated button — force scan using Keltner-MACD strategy only
+        document.getElementById('gpt-kc-macd').addEventListener('click', async () => {
+            log('KC-MACD 5s: Force scanning with Keltner-MACD strategy...');
+            const candles = PriceScraperV2.getCandles();
+            if (!candles || candles.length < 65) {
+                log('KC-MACD 5s: Not enough candles (need 65+), trying backend...');
+                doBackendScan(true, true, false);
+                return;
+            }
+            const signal = LocalSignalEngine.getKeltnerMACDSignal(candles);
+            if (signal && signal.confidence >= CONFIG.MIN_CONFIDENCE) {
+                log(`KC-MACD 5s: ${signal.direction} (${signal.confidence}%) - placing trade`);
+                executeTrade(signal);
+            } else {
+                log('KC-MACD 5s: No signal from local engine, trying IQ-720 Ensemble...');
+                const iq720Signal = LocalSignalEngine.getIQ720EnsembleSignal(candles);
+                if (iq720Signal && iq720Signal.confidence >= CONFIG.MIN_CONFIDENCE) {
+                    log(`IQ-720 Ensemble: ${iq720Signal.direction} (${iq720Signal.confidence}%) - placing trade`);
+                    executeTrade(iq720Signal);
+                } else {
+                    log('KC-MACD 5s: No clear signal at this time');
+                }
+            }
+        });
+        
         document.getElementById('gpt-minimize').addEventListener('click', toggleMinimize);
         document.getElementById('gpt-console-toggle').addEventListener('click', toggleConsoleWindow);
         document.getElementById('gpt-console-close').addEventListener('click', toggleConsoleWindow);
