@@ -17,6 +17,20 @@
 - **Scan-Markets**: Added as final fallback in strategy chain (Deep → Holly → Golden → Momentum → IQ-720)
 - **Tampermonkey**: `getIQ720EnsembleSignal()` added to LocalSignalEngine with full fallback chain integration
 
+✅ **IQ-720 Real-Time Dashboard Widget (April 14, 2026)**
+- **Live Market Intelligence** widget on main Dashboard showing real-time data
+- **Market Regime**: Color-coded display (green=trending up, red=trending down, amber=ranging, etc.)
+- **Session Quality**: Current session (Asian/London/NY/Overlap) with quality score badge
+- **Kelly Position Size**: Recommended % of capital per trade with half-Kelly safety
+- **Live Signal**: Direction (CALL/PUT) with confidence % and confirmation badges
+- **Auto-refresh**: Updates every 30 seconds with manual refresh button
+- Component: `/app/frontend/src/components/IQ720Widget.jsx`
+
+✅ **KC-MACD 5s Dedicated Button on Tampermonkey Panel (April 14, 2026)**
+- New "KC-5s" button with cyan gradient in secondary button row
+- Click handler: Force scans using Keltner-MACD strategy → Falls back to IQ-720 Ensemble
+- Provides quick one-click access to the 5-second scalping strategy
+
 ✅ **Tampermonkey v8.7.2 — Improved Latency Sync (April 12, 2026)**
 - **Configurable Timing Settings** in CONFIG:
   - `BET_DEDUCTION_DELAY`: 2000ms (wait for bet to deduct)
