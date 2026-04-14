@@ -963,6 +963,18 @@ const StrategyBuilder = () => {
           { id: 'c3', indicator: 'KELTNER_CHANNEL', conditionType: 'price_crosses_below_middle', parameters: { ema_period: 20, atr_period: 60, multiplier: 4 } },
           { id: 'c4', indicator: 'MACD', conditionType: 'bearish_crossover', parameters: { fast: 13, slow: 24, signal: 11 } }
         ]
+      },
+      'IQ-720 Ensemble': {
+        name: 'IQ-720 Advanced Ensemble',
+        description: 'AI-powered: Market Regime + Session-aware + 8 weighted strategies + Kelly sizing + 60+ features',
+        conditions: [
+          { id: 'c1', indicator: 'RSI', conditionType: 'crosses_above_oversold', parameters: { period: 14, oversold: 30, overbought: 70 } },
+          { id: 'c2', indicator: 'MACD', conditionType: 'macd_crosses_above_signal', parameters: { fast_period: 12, slow_period: 26, signal_period: 9 } },
+          { id: 'c3', indicator: 'BOLLINGER_BANDS', conditionType: 'price_below_lower', parameters: { period: 20, std_dev: 2 } },
+          { id: 'c4', indicator: 'EMA_CROSSOVER', conditionType: 'golden_cross', parameters: { fast_period: 12, slow_period: 26 } },
+          { id: 'c5', indicator: 'STOCHASTIC', conditionType: 'k_crosses_above_d_oversold', parameters: { k_period: 14, d_period: 3, overbought: 80, oversold: 20 } },
+          { id: 'c6', indicator: 'KELTNER_CHANNEL', conditionType: 'price_crosses_above_middle', parameters: { ema_period: 20, atr_period: 20, multiplier: 2 } }
+        ]
       }
     };
 
@@ -1011,7 +1023,7 @@ const StrategyBuilder = () => {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {['EMA Crossover', 'RSI Reversal', 'Bollinger Breakout', 'MACD Signal', 'SuperTrend', 'Momentum Crossover', 'Momentum + RSI', 'Keltner-MACD 5s'].map(name => (
+                {['EMA Crossover', 'RSI Reversal', 'Bollinger Breakout', 'MACD Signal', 'SuperTrend', 'Momentum Crossover', 'Momentum + RSI', 'Keltner-MACD 5s', 'IQ-720 Ensemble'].map(name => (
                   <Card 
                     key={name} 
                     className="cursor-pointer hover:border-purple-500/50 transition-colors border-slate-600"

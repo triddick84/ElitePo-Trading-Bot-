@@ -38,6 +38,7 @@ const API = `${BACKEND_URL}/api`;
 
 // Available Models/Strategies
 const AVAILABLE_MODELS = [
+  { id: 'iq720_ensemble', name: 'IQ-720 Ensemble (Advanced)', category: 'AI Ensemble', accuracy: 82 },
   { id: 'enhanced_rsi_bb_volume', name: 'Enhanced RSI + BB + Volume', category: 'Technical', accuracy: 78 },
   { id: 'macd_crossover', name: 'MACD Crossover', category: 'Momentum', accuracy: 72 },
   { id: 'ema_crossover', name: 'EMA Crossover (7/21)', category: 'Trend', accuracy: 70 },

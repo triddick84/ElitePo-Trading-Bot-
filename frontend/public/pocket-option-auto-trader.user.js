@@ -643,6 +643,141 @@
             };
         },
         
+        // IQ-720 ENSEMBLE STRATEGY (Advanced Multi-Indicator)
+        // Combines: RSI, MACD, Stochastic, EMA alignment, BB, ADX, Keltner, Patterns
+        // With market regime detection and session weighting
+        getIQ720EnsembleSignal(candles) {
+            if (!candles || candles.length < 50) return null;
+            
+            const closes = candles.map(c => c.close);
+            const highs = candles.map(c => c.high || c.close);
+            const lows = candles.map(c => c.low || c.close);
+            const currentPrice = closes[closes.length - 1];
+            
+            // === Market Regime Detection ===
+            const emaFast = this.calculateEMA(closes, 12);
+            const emaSlow = this.calculateEMA(closes, 26);
+            const trendDir = emaFast > emaSlow ? 1 : -1;
+            
+            // Volatility check
+            const returns = [];
+            for (let i = Math.max(1, closes.length - 20); i < closes.length; i++) {
+                returns.push(Math.abs((closes[i] - closes[i-1]) / closes[i-1]));
+            }
+            const avgVol = returns.reduce((s, v) => s + v, 0) / returns.length;
+            const recentVol = returns.slice(-5).reduce((s, v) => s + v, 0) / 5;
+            const isHighVol = recentVol > avgVol * 1.5;
+            
+            // === Session Weight ===
+            const hour = new Date().getUTCHours();
+            let sessionWeight = 1.0;
+            if (hour >= 13 && hour < 16) sessionWeight = 1.2;        // London/NY overlap
+            else if (hour >= 8 && hour < 16) sessionWeight = 1.0;    // London
+            else if (hour >= 13 && hour < 21) sessionWeight = 1.0;   // NY
+            else if (hour >= 0 && hour < 8) sessionWeight = 0.8;     // Asian
+            else sessionWeight = 0.6;                                  // Off hours
+            
+            let callScore = 0, putScore = 0;
+            const confirmations = [];
+            
+            // 1. RSI (weight: 20%)
+            const rsi = this.calculateRSI(closes, 14);
+            if (rsi < 30) { callScore += 15; confirmations.push('RSI_OVERSOLD'); }
+            else if (rsi > 70) { putScore += 15; confirmations.push('RSI_OVERBOUGHT'); }
+            else if (rsi < 40) { callScore += 5; }
+            else if (rsi > 60) { putScore += 5; }
+            
+            // 2. MACD (weight: 20%)
+            const macd = this.calculateMACD(closes, 12, 26, 9);
+            if (macd) {
+                if (macd.crossover === 'bullish') { callScore += 20; confirmations.push('MACD_BULL_CROSS'); }
+                else if (macd.histogram > 0) { callScore += 10; confirmations.push('MACD_BULLISH'); }
+                if (macd.crossover === 'bearish') { putScore += 20; confirmations.push('MACD_BEAR_CROSS'); }
+                else if (macd.histogram < 0) { putScore += 10; confirmations.push('MACD_BEARISH'); }
+            }
+            
+            // 3. Stochastic (weight: 15%)
+            const stoch = this.calculateStochastic(highs, lows, closes, 14);
+            if (stoch.k < 20) { callScore += 15; confirmations.push('STOCH_OVERSOLD'); }
+            else if (stoch.k > 80) { putScore += 15; confirmations.push('STOCH_OVERBOUGHT'); }
+            if (stoch.k < 25 && stoch.k > stoch.d) { callScore += 10; confirmations.push('STOCH_BULL_CROSS'); }
+            if (stoch.k > 75 && stoch.k < stoch.d) { putScore += 10; confirmations.push('STOCH_BEAR_CROSS'); }
+            
+            // 4. EMA Alignment (weight: 15%)
+            const ema5 = this.calculateEMA(closes, 5);
+            const ema10 = this.calculateEMA(closes, 10);
+            const ema20 = this.calculateEMA(closes, 20);
+            if (ema5 > ema10 && ema10 > ema20) { callScore += 15; confirmations.push('EMA_ALIGNED_BULL'); }
+            else if (ema5 < ema10 && ema10 < ema20) { putScore += 15; confirmations.push('EMA_ALIGNED_BEAR'); }
+            
+            // 5. Bollinger Band Position (weight: 10%)
+            const bb = this.calculateBollingerBands(closes, 20, 2);
+            if (bb) {
+                const bbRange = bb.upper - bb.lower;
+                const bbPos = bbRange > 0 ? (currentPrice - bb.lower) / bbRange : 0.5;
+                if (bbPos < 0.1) { callScore += 10; confirmations.push('BB_OVERSOLD'); }
+                else if (bbPos > 0.9) { putScore += 10; confirmations.push('BB_OVERBOUGHT'); }
+            }
+            
+            // 6. ADX Trend Strength (weight: 10%)
+            const adx = this.calculateADX(highs, lows, closes, 14);
+            if (adx > 25) {
+                if (trendDir > 0) { callScore += 10; confirmations.push('ADX_STRONG_UP'); }
+                else { putScore += 10; confirmations.push('ADX_STRONG_DOWN'); }
+            }
+            
+            // 7. Candlestick patterns (bonus)
+            const pattern = this.detectPattern(candles);
+            if (pattern && pattern.type === 'hammer') { callScore += 8; confirmations.push('HAMMER'); }
+            if (pattern && pattern.type === 'shooting_star') { putScore += 8; confirmations.push('SHOOTING_STAR'); }
+            if (pattern && pattern.type === 'bullish_engulfing') { callScore += 8; confirmations.push('BULL_ENGULF'); }
+            if (pattern && pattern.type === 'bearish_engulfing') { putScore += 8; confirmations.push('BEAR_ENGULF'); }
+            
+            // === Market Regime Adjustments ===
+            if (trendDir > 0) { callScore += 10; }
+            else { putScore += 10; }
+            if (isHighVol) { callScore -= 10; putScore -= 10; } // Penalty for high volatility
+            
+            // === Determine Direction ===
+            const minScoreDiff = 15;
+            let direction = null;
+            let rawConf = 0;
+            
+            if (callScore > putScore + minScoreDiff) {
+                direction = 'CALL';
+                rawConf = 50 + callScore;
+            } else if (putScore > callScore + minScoreDiff) {
+                direction = 'PUT';
+                rawConf = 50 + putScore;
+            } else {
+                return null;
+            }
+            
+            // === Calibrate Confidence ===
+            let confidence = rawConf * 0.85 * sessionWeight;
+            if (isHighVol) confidence -= 10;
+            if (confirmations.length >= 3) confidence += 5;
+            else if (confirmations.length <= 1) confidence -= 5;
+            
+            confidence = Math.max(0, Math.min(95, confidence));
+            
+            if (confidence < 65) return null;
+            
+            return {
+                direction,
+                confidence: Math.round(confidence),
+                strategy: 'IQ-720 Ensemble',
+                expiration: 5,
+                confirmations,
+                price: currentPrice,
+                indicators: {
+                    rsi, stoch_k: stoch.k, adx,
+                    call_score: callScore, put_score: putScore,
+                    session_weight: sessionWeight
+                }
+            };
+        },
+        
         // HOLLY CROSSOVER STRATEGY (5s/15s/30s)
         // EMA(12) x WMA(23) reversal crossover with S/R confirmation
         calculateWMA(prices, period) {
@@ -5433,6 +5568,7 @@
                             if (!signal) signal = LocalSignalEngine.getKeltnerMACDSignal(candles);
                             if (!signal) signal = LocalSignalEngine.getHollyCrossoverSignal(candles);
                             if (!signal) signal = LocalSignalEngine.getMomentumBusterSignal(candles);
+                            if (!signal) signal = LocalSignalEngine.getIQ720EnsembleSignal(candles);
                             
                             if (signal && signal.confidence >= CONFIG.MIN_CONFIDENCE) {
                                 log(`CYCLE: Signal ${signal.direction} (${signal.confidence}%)`);
@@ -6081,6 +6217,12 @@
         if (!signal) {
             signal = LocalSignalEngine.getMomentumBusterSignal(candles);
             if (signal) log(`Momentum Buster 15s triggered`);
+        }
+        
+        // Try IQ-720 Ensemble (advanced multi-indicator) if still no signal
+        if (!signal) {
+            signal = LocalSignalEngine.getIQ720EnsembleSignal(candles);
+            if (signal) log(`IQ-720 Ensemble triggered`);
         }
         
         if (signal) {

@@ -1,0 +1,113 @@
+{
+  "summary": "Iteration 26 testing complete for IQ-720 Advanced Ensemble Strategies. All 19 backend tests passed (100%). Frontend verified: IQ-720 Ensemble template visible in Strategy Builder Templates tab, IQ-720 Ensemble (Advanced) model listed first in AI Models page with 82% accuracy.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iq720_ensemble.py",
+    "/app/test_reports/pytest/pytest_iq720_ensemble.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "POST /api/signals/iq720-ensemble - Returns signal with direction, confidence, confirmations, market_regime, session - VERIFIED",
+    "GET /api/signals/iq720-market-regime - Returns regime (trending_up/down/ranging/high_volatility/low_volatility/unknown), session info - VERIFIED",
+    "POST /api/signals/iq720-kelly - Returns kelly_fraction and kelly_percent for position sizing - VERIFIED",
+    "POST /api/signals/iq720-features - Returns 55+ features categorized into price, moving_averages, momentum, trend, volatility, patterns - VERIFIED",
+    "IQ-720 Ensemble in scan-markets fallback chain - Available as last fallback strategy - VERIFIED",
+    "Frontend Strategy Builder Templates tab shows 'IQ-720 Ensemble' template - VERIFIED",
+    "Frontend AI Models page shows 'IQ-720 Ensemble (Advanced)' as first model with 82% accuracy and 'AI Ensemble' category - VERIFIED",
+    "Existing endpoints still working: keltner-macd-5s, evaluate-momentum-condition - VERIFIED"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iq720_ensemble.py"
+  ],
+  "success_rate": {
+    "backend": "100% (19/19 tests passed)",
+    "frontend": "100% (all IQ-720 features verified)"
+  },
+  "test_credentials": "username=triddick84, password=Fallinone#1",
+  "seed_data_creation": "None - used existing OANDA data feed",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "IQ-720 Ensemble feature fully tested. Backend endpoints /api/signals/iq720-ensemble, /api/signals/iq720-market-regime, /api/signals/iq720-kelly, /api/signals/iq720-features all working with OANDA data feed. Frontend Strategy Builder shows IQ-720 Ensemble template. AI Models page shows IQ-720 Ensemble (Advanced) as first model.",
+  "mocked_apis": {
+    "note": "TradingView Webhooks and MT4 ZeroMQ integrations are MOCKED. IQ-720 endpoints use real OANDA data feed."
+  },
+  "iq720_features_tested": {
+    "backend_endpoints": {
+      "iq720_ensemble": {
+        "endpoint": "POST /api/signals/iq720-ensemble",
+        "parameters": ["symbol (optional, default EUR_USD)"],
+        "response_fields": ["direction", "confidence", "raw_confidence", "strategy", "confirmations", "market_regime", "session", "call_score", "put_score", "features", "expiry", "timestamp", "symbol"],
+        "status": "WORKING"
+      },
+      "iq720_market_regime": {
+        "endpoint": "GET /api/signals/iq720-market-regime",
+        "parameters": ["symbol (optional)"],
+        "response_fields": ["regime", "session", "session_weight", "regime_adjustments", "timestamp"],
+        "regime_values": ["trending_up", "trending_down", "ranging", "high_volatility", "low_volatility", "unknown"],
+        "session_values": ["asian", "london", "new_york", "overlap", "off_hours"],
+        "status": "WORKING"
+      },
+      "iq720_kelly": {
+        "endpoint": "POST /api/signals/iq720-kelly",
+        "parameters": ["win_rate", "avg_win", "avg_loss"],
+        "response_fields": ["kelly_fraction", "kelly_percent", "risk_per_trade", "inputs", "note"],
+        "status": "WORKING"
+      },
+      "iq720_features": {
+        "endpoint": "POST /api/signals/iq720-features",
+        "parameters": ["symbol (optional)"],
+        "response_fields": ["feature_count", "features", "categories", "timestamp"],
+        "feature_count": "55+ features",
+        "categories": ["price", "moving_averages", "momentum", "trend", "volatility", "patterns"],
+        "status": "WORKING"
+      }
+    },
+    "frontend_strategy_builder": {
+      "templates_tab": {
+        "iq720_ensemble_template": "FOUND - 'IQ-720 Ensemble' with description 'AI-powered: Market Regime + Session-aware + 8 weighted strategies + Kelly sizing + 60+ features'"
+      }
+    },
+    "frontend_ai_models_page": {
+      "available_models_list": {
+        "iq720_ensemble": {
+          "name": "IQ-720 Ensemble (Advanced)",
+          "category": "AI Ensemble",
+          "accuracy": "82%",
+          "position": "First in list",
+          "status": "FOUND"
+        }
+      }
+    },
+    "scan_markets_integration": {
+      "iq720_in_fallback_chain": "VERIFIED - IQ-720 Ensemble is available as last fallback strategy in scan-markets endpoint"
+    }
+  },
+  "regression_tests": {
+    "keltner_macd_5s": "WORKING - Returns indicators with keltner and macd data",
+    "evaluate_momentum_condition": "WORKING - Returns condition_met, confidence_boost, description",
+    "health_endpoint": "WORKING - Returns status: healthy"
+  },
+  "endpoints_tested": [
+    "GET /api/health ✅",
+    "POST /api/signals/iq720-ensemble ✅ (default symbol)",
+    "POST /api/signals/iq720-ensemble {symbol: GBP_USD} ✅",
+    "GET /api/signals/iq720-market-regime ✅",
+    "GET /api/signals/iq720-market-regime?symbol=GBP_USD ✅",
+    "POST /api/signals/iq720-kelly {win_rate: 0.65, avg_win: 1.8, avg_loss: 1.0} ✅",
+    "POST /api/signals/iq720-kelly {win_rate: 0.40, avg_win: 1.5, avg_loss: 1.0} ✅ (low win rate)",
+    "POST /api/signals/iq720-kelly {win_rate: 0.80, avg_win: 2.0, avg_loss: 1.0} ✅ (high win rate)",
+    "POST /api/signals/iq720-features ✅ (default symbol)",
+    "POST /api/signals/iq720-features {symbol: USD_JPY} ✅",
+    "POST /api/signals/keltner-macd-5s ✅ (regression)",
+    "POST /api/signals/evaluate-momentum-condition ✅ (regression)",
+    "GET /api/signals/scan-markets ✅ (IQ-720 in fallback chain)"
+  ]
+}

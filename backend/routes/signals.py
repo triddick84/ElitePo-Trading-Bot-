@@ -36,6 +36,7 @@ router = APIRouter()
 from trading_models import TradingSignal, FlexibleStrategyRequest, TradingStrategy, AssetType, SignalDirection
 from deep_market_analyzer import get_deep_analysis_signal
 from high_accuracy_strategies import high_accuracy_generator, get_high_accuracy_signal
+from advanced_signal_strategies import advanced_signal_generator as iq720_generator, generate_iq720_signal
 from enhanced_oanda_service import enhanced_oanda
 from signal_validator import signal_validator
 from advanced_signal_generator import advanced_signal_generator
@@ -2297,6 +2298,19 @@ async def scan_markets_for_signals(
                             continue
                     except Exception:
                         pass
+
+                    # Fallback: Try IQ-720 Ensemble strategy (advanced multi-indicator)
+                    try:
+                        iq720_signal = generate_iq720_signal(candles)
+                        if iq720_signal and iq720_signal.get("confidence", 0) >= min_confidence:
+                            iq720_signal["symbol"] = asset
+                            iq720_signal["oanda_symbol"] = oanda_symbol
+                            iq720_signal["expiry_seconds"] = iq720_signal.get("expiry", 5)
+                            iq720_signal["analysis_type"] = "iq720_ensemble"
+                            signals_found.append(_convert_numpy_types(iq720_signal))
+                            continue
+                    except Exception:
+                        pass
                 else:
                     # Fallback to old high-accuracy signal
                     signal = get_high_accuracy_signal(candles, current_price, expiry=expiry_to_use)
@@ -3473,3 +3487,181 @@ async def sync_timing(
     except Exception as e:
         logger.error(f"Timing sync error: {e}")
         return {"success": False, "error": str(e)}
+
+
+# ============================================================================
+# IQ-720 ADVANCED STRATEGY ENDPOINTS
+# ============================================================================
+
+@router.post("/signals/iq720-ensemble")
+async def generate_iq720_ensemble_signal(
+    symbol: str = Body("EURUSD", description="Trading symbol"),
+    timeframe: str = Body("M1", description="OANDA timeframe"),
+    candle_count: int = Body(100, description="Number of candles to fetch")
+):
+    """
+    Generate an IQ-720 inspired ensemble signal.
+    
+    Combines: Market Regime Detection + Session Awareness + 
+    8 weighted technical sub-strategies + Confidence Calibration + 60+ features
+    """
+    try:
+        oanda_symbol = symbol.replace('_OTC', '').replace('OTC', '')
+        if '_' not in oanda_symbol and len(oanda_symbol) == 6:
+            oanda_symbol = f"{oanda_symbol[:3]}_{oanda_symbol[3:]}"
+
+        candles = []
+        try:
+            oanda_df = enhanced_oanda.get_candles(oanda_symbol, timeframe, candle_count)
+            if oanda_df is not None and not oanda_df.empty:
+                candles = oanda_df.reset_index().to_dict('records')
+        except Exception as e:
+            logger.warning(f"OANDA fetch failed for IQ720: {e}")
+
+        if len(candles) < 60:
+            return {
+                "success": False,
+                "message": f"Insufficient data for IQ-720 analysis (need 60+, got {len(candles)})",
+                "signal": None
+            }
+
+        signal = generate_iq720_signal(candles)
+
+        if signal:
+            signal["symbol"] = symbol
+            return {
+                "success": True,
+                "signal": _convert_numpy_types(signal),
+                "message": f"IQ-720 Ensemble: {signal['direction']} with {signal['confidence']}% confidence"
+            }
+        else:
+            return {
+                "success": False,
+                "message": "No IQ-720 signal — conditions not met (confidence below threshold or no clear direction)",
+                "signal": None,
+                "market_regime": iq720_generator.detect_market_regime(
+                    pd.Series([float(c.get('close', c.get('Close', 0))) for c in candles]),
+                    pd.Series([float(c.get('high', c.get('High', c.get('close', 0)))) for c in candles]),
+                    pd.Series([float(c.get('low', c.get('Low', c.get('close', 0)))) for c in candles])
+                ).value,
+                "session": iq720_generator.get_current_session().value
+            }
+
+    except Exception as e:
+        logger.error(f"IQ-720 ensemble error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/signals/iq720-market-regime")
+async def get_iq720_market_regime(
+    symbol: str = Query("EURUSD", description="Trading symbol"),
+    timeframe: str = Query("M1", description="OANDA timeframe")
+):
+    """
+    Get current market regime detection from IQ-720 system.
+    Returns: trending_up, trending_down, ranging, high_volatility, low_volatility, unknown
+    """
+    try:
+        oanda_symbol = symbol.replace('_OTC', '').replace('OTC', '')
+        if '_' not in oanda_symbol and len(oanda_symbol) == 6:
+            oanda_symbol = f"{oanda_symbol[:3]}_{oanda_symbol[3:]}"
+
+        oanda_df = enhanced_oanda.get_candles(oanda_symbol, timeframe, 100)
+        if oanda_df is None or oanda_df.empty:
+            return {"success": False, "message": "No market data available", "regime": "unknown"}
+
+        closes = pd.to_numeric(oanda_df['close'], errors='coerce')
+        highs = pd.to_numeric(oanda_df['high'], errors='coerce') if 'high' in oanda_df else closes
+        lows = pd.to_numeric(oanda_df['low'], errors='coerce') if 'low' in oanda_df else closes
+
+        regime = iq720_generator.detect_market_regime(closes, highs, lows)
+        session = iq720_generator.get_current_session()
+
+        return {
+            "success": True,
+            "symbol": symbol,
+            "regime": regime.value,
+            "session": session.value,
+            "session_weight": iq720_generator.session_weights.get(session, 1.0),
+            "regime_adjustments": iq720_generator.regime_adjustments.get(regime, {}),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"Market regime detection error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/signals/iq720-kelly")
+async def calculate_iq720_kelly(
+    win_rate: float = Body(0.65, description="Historical win rate (0-1)"),
+    avg_win: float = Body(0.82, description="Average win amount (payout ratio)"),
+    avg_loss: float = Body(1.0, description="Average loss amount (usually 1.0 for binary)")
+):
+    """
+    Calculate Kelly Criterion optimal position sizing.
+    Returns fraction of capital to risk per trade (half-Kelly for safety).
+    """
+    try:
+        kelly = iq720_generator.calculate_kelly_criterion(win_rate, avg_win, avg_loss)
+        
+        return {
+            "success": True,
+            "kelly_fraction": round(kelly, 4),
+            "kelly_percent": round(kelly * 100, 2),
+            "risk_per_trade": f"{round(kelly * 100, 2)}%",
+            "inputs": {
+                "win_rate": win_rate,
+                "avg_win": avg_win,
+                "avg_loss": avg_loss
+            },
+            "note": "Half-Kelly applied for safety. Capped at 12.5% of capital."
+        }
+    except Exception as e:
+        logger.error(f"Kelly criterion error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/signals/iq720-features")
+async def get_iq720_features(
+    symbol: str = Body("EURUSD", description="Trading symbol"),
+    timeframe: str = Body("M1", description="OANDA timeframe")
+):
+    """
+    Get 60+ technical features computed by the IQ-720 system.
+    Useful for ML model input, dashboards, or advanced analysis.
+    """
+    try:
+        oanda_symbol = symbol.replace('_OTC', '').replace('OTC', '')
+        if '_' not in oanda_symbol and len(oanda_symbol) == 6:
+            oanda_symbol = f"{oanda_symbol[:3]}_{oanda_symbol[3:]}"
+
+        oanda_df = enhanced_oanda.get_candles(oanda_symbol, timeframe, 100)
+        if oanda_df is None or oanda_df.empty:
+            return {"success": False, "message": "No market data available", "features": {}}
+
+        candles = oanda_df.reset_index().to_dict('records')
+        features = iq720_generator.generate_60_features(candles)
+
+        if not features:
+            return {"success": False, "message": "Insufficient data for feature generation", "features": {}}
+
+        return {
+            "success": True,
+            "symbol": symbol,
+            "feature_count": len(features),
+            "features": _convert_numpy_types(features),
+            "categories": {
+                "price": [k for k in features if k.startswith(('return_', 'high_low', 'close_pos', 'gap', 'volatility_', 'price_'))],
+                "moving_averages": [k for k in features if k.startswith(('sma_', 'ema_'))],
+                "momentum": [k for k in features if k.startswith(('rsi_', 'stoch_', 'roc_', 'williams_', 'momentum_'))],
+                "trend": [k for k in features if k.startswith(('macd', 'adx', 'ema_aligned', 'higher_', 'lower_'))],
+                "volatility": [k for k in features if k.startswith(('atr', 'bb_', 'kc_'))],
+                "patterns": [k for k in features if k in ('doji', 'hammer', 'shooting_star', 'bullish_engulfing', 'bearish_engulfing', 'three_white_soldiers')]
+            },
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"IQ-720 features error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
