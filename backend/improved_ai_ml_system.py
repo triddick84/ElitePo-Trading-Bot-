@@ -137,7 +137,7 @@ class ImprovedAIMLSystem:
             ada = AdaBoostClassifier(
                 n_estimators=150,
                 learning_rate=0.05,
-                algorithm='SAMME.R',
+                algorithm='SAMME',
                 random_state=42
             )
             

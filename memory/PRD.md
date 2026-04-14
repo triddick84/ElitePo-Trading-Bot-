@@ -31,6 +31,15 @@
 - Click handler: Force scans using Keltner-MACD strategy → Falls back to IQ-720 Ensemble
 - Provides quick one-click access to the 5-second scalping strategy
 
+✅ **Clean Retrain ML Models Pipeline (April 14, 2026)**
+- **POST /api/ml/clean-retrain**: One-click clean retrain of all 4 ML model types
+- **GET /api/ml/retrain-status**: Real-time progress tracking with phase/percentage
+- Clears corrupted Win/Loss data from 6 MongoDB collections
+- Retrains: Maximized ML v3 (XGBoost/LightGBM), Improved ML v2 (RF/GB/AdaBoost), LSTM/GRU, PPO RL
+- Uses `asyncio.to_thread` for CPU-intensive training to keep server responsive
+- Fixed AdaBoost SAMME.R → SAMME for sklearn compatibility
+- Frontend: Updated AI Models "Retrain" tab with clean retrain UI, progress bar, real-time log, model cards
+
 ✅ **Tampermonkey v8.7.2 — Improved Latency Sync (April 12, 2026)**
 - **Configurable Timing Settings** in CONFIG:
   - `BET_DEDUCTION_DELAY`: 2000ms (wait for bet to deduct)

@@ -215,6 +215,198 @@ async def reset_ai_learning():
         return {"success": False, "error": str(e)}
 
 
+# Global retrain status tracker
+_retrain_status = {
+    "running": False,
+    "phase": "",
+    "progress": 0,
+    "results": {},
+    "started_at": None,
+    "completed_at": None,
+    "error": None
+}
+
+
+@router.post("/ml/clean-retrain")
+async def clean_retrain_all_models(background_tasks: BackgroundTasks):
+    """
+    Clean retrain ALL ML models with fresh OANDA data.
+    Runs as background task — check progress via GET /api/ml/retrain-status
+    """
+    global _retrain_status
+    
+    if _retrain_status["running"]:
+        return {
+            "success": False,
+            "message": "Retrain already in progress",
+            "status": _retrain_status
+        }
+    
+    _retrain_status = {
+        "running": True,
+        "phase": "starting",
+        "progress": 0,
+        "results": {},
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "completed_at": None,
+        "error": None
+    }
+    
+    async def _do_clean_retrain():
+        global _retrain_status
+        try:
+            # Phase 1: Clear corrupted performance data
+            _retrain_status["phase"] = "clearing_corrupted_data"
+            _retrain_status["progress"] = 5
+            
+            collections_cleared = {}
+            for coll_name in [
+                "premium_asset_performance",
+                "asset_performance", 
+                "asset_hourly_performance",
+                "hourly_stats",
+                "recent_asset_trades",
+                "signal_validations"
+            ]:
+                try:
+                    result = await db[coll_name].delete_many({})
+                    collections_cleared[coll_name] = result.deleted_count
+                except Exception as e:
+                    collections_cleared[coll_name] = f"error: {e}"
+            
+            _retrain_status["results"]["cleared_collections"] = collections_cleared
+            _retrain_status["progress"] = 15
+            logger.info(f"Cleared corrupted data: {collections_cleared}")
+            
+            # Phase 2: Retrain Maximized ML v3.0
+            _retrain_status["phase"] = "training_maximized_ml_v3"
+            _retrain_status["progress"] = 20
+            
+            try:
+                if maximized_ai_ml is not None:
+                    result = await asyncio.to_thread(
+                        lambda: asyncio.run(maximized_ai_ml.train_from_oanda(
+                            enhanced_oanda,
+                            symbols=['EUR_USD', 'GBP_USD', 'USD_JPY', 'AUD_USD', 'EUR_JPY'],
+                            candle_count=2000
+                        ))
+                    )
+                    _retrain_status["results"]["maximized_ml"] = {"success": True, "result": "trained"}
+                    logger.info(f"Maximized ML retrained")
+                else:
+                    _retrain_status["results"]["maximized_ml"] = {"skipped": True}
+            except Exception as e:
+                _retrain_status["results"]["maximized_ml"] = {"error": str(e)}
+                logger.error(f"Maximized ML retrain error: {e}")
+            
+            _retrain_status["progress"] = 45
+            
+            # Phase 3: Retrain Improved ML v2.0
+            _retrain_status["phase"] = "training_improved_ml_v2"
+            
+            try:
+                if improved_ai_ml is not None:
+                    result = await asyncio.to_thread(
+                        lambda: asyncio.run(improved_ai_ml.train_from_oanda(
+                            enhanced_oanda,
+                            symbols=['EUR_USD', 'GBP_USD', 'USD_JPY'],
+                            candle_count=2000
+                        ))
+                    )
+                    _retrain_status["results"]["improved_ml"] = {"success": True, "result": "trained"}
+                    logger.info(f"Improved ML retrained")
+                else:
+                    _retrain_status["results"]["improved_ml"] = {"skipped": True}
+            except Exception as e:
+                _retrain_status["results"]["improved_ml"] = {"error": str(e)}
+                logger.error(f"Improved ML retrain error: {e}")
+            
+            _retrain_status["progress"] = 65
+            
+            # Phase 4: Retrain LSTM/GRU
+            _retrain_status["phase"] = "training_lstm_gru"
+            
+            try:
+                if lstm_gru_system is not None:
+                    df = enhanced_oanda.get_candles('EUR_USD', 'M1', 2000)
+                    if df is not None and len(df) >= 100:
+                        candles = [{'open': float(r['open']), 'high': float(r['high']),
+                                    'low': float(r['low']), 'close': float(r['close']),
+                                    'volume': float(r.get('volume', 0))}
+                                   for _, r in df.iterrows()]
+                        result = await asyncio.to_thread(lstm_gru_system.train, candles, 30)
+                        _retrain_status["results"]["lstm_gru"] = {"success": True, "result": str(result)[:200]}
+                        logger.info(f"LSTM/GRU retrained")
+                    else:
+                        _retrain_status["results"]["lstm_gru"] = {"error": "Insufficient data"}
+                else:
+                    _retrain_status["results"]["lstm_gru"] = {"skipped": True}
+            except Exception as e:
+                _retrain_status["results"]["lstm_gru"] = {"error": str(e)}
+                logger.error(f"LSTM/GRU retrain error: {e}")
+            
+            _retrain_status["progress"] = 85
+            
+            # Phase 5: Retrain PPO RL
+            _retrain_status["phase"] = "training_ppo_rl"
+            
+            try:
+                if ppo_agent is not None:
+                    from lstm_gru_system import FeatureEngine
+                    df = enhanced_oanda.get_candles('EUR_USD', 'M1', 2000)
+                    if df is not None and len(df) >= 100:
+                        candles = [{'open': float(r['open']), 'high': float(r['high']),
+                                    'low': float(r['low']), 'close': float(r['close']),
+                                    'volume': float(r.get('volume', 0))}
+                                   for _, r in df.iterrows()]
+                        features = FeatureEngine.compute(candles)
+                        if features is not None:
+                            closes = np.array([float(c['close']) for c in candles])
+                            result = await asyncio.to_thread(ppo_agent.train, features, closes, 10)
+                            _retrain_status["results"]["ppo_rl"] = {"success": True, "result": str(result)[:200]}
+                            logger.info(f"PPO RL retrained")
+                        else:
+                            _retrain_status["results"]["ppo_rl"] = {"error": "Feature computation failed"}
+                    else:
+                        _retrain_status["results"]["ppo_rl"] = {"error": "Insufficient data"}
+                else:
+                    _retrain_status["results"]["ppo_rl"] = {"skipped": True}
+            except Exception as e:
+                _retrain_status["results"]["ppo_rl"] = {"error": str(e)}
+                logger.error(f"PPO RL retrain error: {e}")
+            
+            # Done
+            _retrain_status["phase"] = "complete"
+            _retrain_status["progress"] = 100
+            _retrain_status["running"] = False
+            _retrain_status["completed_at"] = datetime.now(timezone.utc).isoformat()
+            logger.info(f"Clean retrain complete")
+            
+        except Exception as e:
+            _retrain_status["phase"] = "error"
+            _retrain_status["error"] = str(e)
+            _retrain_status["running"] = False
+            logger.error(f"Clean retrain failed: {e}")
+    
+    # Use asyncio.create_task so it runs on the main event loop but doesn't block the response
+    asyncio.create_task(_do_clean_retrain())
+    
+    return {
+        "success": True,
+        "message": "Clean retrain started. Clearing corrupted data and retraining all 4 ML model types with fresh OANDA data.",
+        "check_status": "GET /api/ml/retrain-status"
+    }
+
+
+@router.get("/ml/retrain-status")
+async def get_retrain_status():
+    """Get the current status of the clean retrain process."""
+    return {
+        "success": True,
+        **_retrain_status
+    }
+
+
 
 
 # =====================================================

@@ -210,41 +210,75 @@ const AIMLModelsPage = () => {
     setRetrainLog([]);
     
     try {
-      // Simulate progress (in real implementation, this would be WebSocket updates)
-      const progressInterval = setInterval(() => {
-        setRetrainProgress(prev => {
-          if (prev >= 95) {
-            clearInterval(progressInterval);
-            return prev;
+      setRetrainLog(prev => [...prev, { time: new Date().toLocaleTimeString(), msg: 'Clearing corrupted Win/Loss data...' }]);
+      
+      const response = await axios.post(`${API}/ml/clean-retrain`);
+      
+      if (!response.data.success) {
+        throw new Error(response.data.message || 'Failed to start retrain');
+      }
+      
+      setRetrainLog(prev => [...prev, { time: new Date().toLocaleTimeString(), msg: 'Clean retrain started — training all 4 ML models with fresh OANDA data...' }]);
+      
+      // Poll for status
+      const pollInterval = setInterval(async () => {
+        try {
+          const status = await axios.get(`${API}/ml/retrain-status`);
+          const d = status.data;
+          
+          setRetrainProgress(d.progress || 0);
+          
+          if (d.phase && d.phase !== 'starting') {
+            const phaseNames = {
+              clearing_corrupted_data: 'Clearing corrupted performance data...',
+              training_maximized_ml_v3: 'Training Maximized ML v3.0 (XGBoost/LightGBM)...',
+              training_improved_ml_v2: 'Training Improved ML v2.0 (RF/GB/AdaBoost)...',
+              training_lstm_gru: 'Training LSTM/GRU time-series model...',
+              training_ppo_rl: 'Training PPO Reinforcement Learning agent...',
+              complete: 'All models retrained successfully!',
+              error: `Error: ${d.error}`
+            };
+            const msg = phaseNames[d.phase] || d.phase;
+            setRetrainLog(prev => {
+              if (prev.length === 0 || prev[prev.length - 1].msg !== msg) {
+                return [...prev, { time: new Date().toLocaleTimeString(), msg }];
+              }
+              return prev;
+            });
           }
-          return prev + Math.random() * 10;
-        });
-      }, 500);
+          
+          if (!d.running) {
+            clearInterval(pollInterval);
+            setRetrainProgress(100);
+            
+            // Log results
+            if (d.results) {
+              Object.entries(d.results).forEach(([key, val]) => {
+                if (key === 'cleared_collections') return;
+                const status = val.success ? 'trained' : val.skipped ? 'skipped' : 'error';
+                setRetrainLog(prev => [...prev, { 
+                  time: new Date().toLocaleTimeString(), 
+                  msg: `${status === 'trained' ? 'OK' : status === 'skipped' ? 'SKIP' : 'ERR'} ${key}: ${val.accuracy ? val.accuracy + '%' : val.skipped || val.error || 'done'}`
+                }]);
+              });
+            }
+            
+            if (d.phase === 'complete') {
+              toast.success('All ML models retrained with fresh data!');
+            } else {
+              toast.error(`Retrain ended: ${d.error || 'unknown error'}`);
+            }
+            setIsRetraining(false);
+            fetchModelPerformance();
+          }
+        } catch (err) {
+          // polling error, keep trying
+        }
+      }, 3000);
       
-      setRetrainLog(prev => [...prev, { time: new Date().toLocaleTimeString(), msg: '🚀 Starting model retraining...' }]);
-      
-      const response = await axios.post(`${API}/ai-learning/retrain`, {
-        models: [modelConfig.primary_model, modelConfig.secondary_model],
-        use_recent_data: true,
-        epochs: 100
-      });
-      
-      clearInterval(progressInterval);
-      setRetrainProgress(100);
-      
-      setRetrainLog(prev => [
-        ...prev, 
-        { time: new Date().toLocaleTimeString(), msg: '📊 Processing historical data...' },
-        { time: new Date().toLocaleTimeString(), msg: '🧠 Training neural networks...' },
-        { time: new Date().toLocaleTimeString(), msg: '✅ Retraining complete!' }
-      ]);
-      
-      toast.success('✅ Models retrained successfully!');
-      fetchModelPerformance();
     } catch (error) {
-      setRetrainLog(prev => [...prev, { time: new Date().toLocaleTimeString(), msg: `❌ Error: ${error.message}` }]);
-      toast.error('Failed to retrain models');
-    } finally {
+      setRetrainLog(prev => [...prev, { time: new Date().toLocaleTimeString(), msg: `Error: ${error.message}` }]);
+      toast.error('Failed to start clean retrain');
       setIsRetraining(false);
     }
   };
@@ -1085,23 +1119,45 @@ const AIMLModelsPage = () => {
             <CardHeader>
               <CardTitle className="text-white flex items-center gap-2">
                 <Zap className="w-5 h-5" />
-                Retrain Models
+                Clean Retrain All Models
               </CardTitle>
-              <CardDescription>Manually trigger model retraining with recent data</CardDescription>
+              <CardDescription>Clear corrupted data and retrain all ML models with fresh OANDA market data</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <Alert className="bg-yellow-500/10 border-yellow-500/30">
-                <AlertTriangle className="w-4 h-4 text-yellow-400" />
-                <AlertDescription className="text-yellow-300 text-sm">
-                  Retraining uses recent trade data to update model parameters. This process may take a few minutes.
+              <Alert className="bg-amber-500/10 border-amber-500/30">
+                <AlertTriangle className="w-4 h-4 text-amber-400" />
+                <AlertDescription className="text-amber-300 text-sm">
+                  <strong>Why retrain?</strong> Previous Win/Loss detection had a bug that corrupted performance tracking data. 
+                  Clean retrain clears all corrupted data and retrains 4 ML models (Maximized v3, Improved v2, LSTM/GRU, PPO RL) 
+                  using fresh OANDA price data. This takes 2-5 minutes.
                 </AlertDescription>
               </Alert>
               
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="p-3 bg-slate-800/50 rounded-lg border border-slate-700/50 text-center">
+                  <div className="text-xs text-slate-400 mb-1">Maximized v3</div>
+                  <div className="text-sm font-semibold text-purple-400">XGBoost + LightGBM</div>
+                </div>
+                <div className="p-3 bg-slate-800/50 rounded-lg border border-slate-700/50 text-center">
+                  <div className="text-xs text-slate-400 mb-1">Improved v2</div>
+                  <div className="text-sm font-semibold text-blue-400">RF + GB + AdaBoost</div>
+                </div>
+                <div className="p-3 bg-slate-800/50 rounded-lg border border-slate-700/50 text-center">
+                  <div className="text-xs text-slate-400 mb-1">LSTM/GRU</div>
+                  <div className="text-sm font-semibold text-emerald-400">Time-Series</div>
+                </div>
+                <div className="p-3 bg-slate-800/50 rounded-lg border border-slate-700/50 text-center">
+                  <div className="text-xs text-slate-400 mb-1">PPO RL</div>
+                  <div className="text-sm font-semibold text-orange-400">Reinforcement</div>
+                </div>
+              </div>
+
               <div className="flex items-center gap-4">
                 <Button
+                  data-testid="clean-retrain-btn"
                   onClick={handleRetrainModels}
                   disabled={isRetraining}
-                  className="bg-purple-500 hover:bg-purple-600"
+                  className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-semibold"
                 >
                   {isRetraining ? (
                     <>
@@ -1110,8 +1166,8 @@ const AIMLModelsPage = () => {
                     </>
                   ) : (
                     <>
-                      <Play className="w-4 h-4 mr-2" />
-                      Start Retraining
+                      <Zap className="w-4 h-4 mr-2" />
+                      Clean Retrain All Models
                     </>
                   )}
                 </Button>
@@ -1122,7 +1178,7 @@ const AIMLModelsPage = () => {
                   className="border-red-500/30 text-red-400 hover:bg-red-500/10"
                 >
                   <RotateCcw className="w-4 h-4 mr-2" />
-                  Reset All Learning
+                  Reset Learning Data
                 </Button>
               </div>
               
