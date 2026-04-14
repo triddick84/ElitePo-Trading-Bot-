@@ -3,6 +3,13 @@
 ## Last Updated: April 14, 2026
 
 ## Current Status
+✅ **Tampermonkey v8.8.0 — GO Button Fix + Updated Strategy Page (April 14, 2026)**
+- **FIXED**: GO button now tries LOCAL OTC signals FIRST (6 strategies), then falls back to backend API
+- **Signal Priority Chain**: General → Keltner-MACD → IQ-720 Ensemble → Holly Crossover → Golden One Moment → Momentum Buster → Backend scan-markets → force-generate
+- **Updated Mobile Auto-Trade page**: Shows all 6 local signal strategies with descriptions and badges
+- **Updated TampermonkeyControlPanel**: v8.8.0 feature list with all current capabilities
+- **Panel Preview**: Updated to show KC-5s button and current v8.8.0 layout
+
 ✅ **IQ-720 Advanced Ensemble Strategy (April 14, 2026)**
 - **NEW**: IQ-720 inspired advanced signal generation system
 - **Market Regime Detection**: Trending Up/Down, Ranging, High/Low Volatility
