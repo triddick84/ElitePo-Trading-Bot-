@@ -1,8 +1,22 @@
 # Elite Pocket Option Trading Bot - Product Requirements Document
 
-## Last Updated: April 12, 2026
+## Last Updated: April 14, 2026
 
 ## Current Status
+✅ **IQ-720 Advanced Ensemble Strategy (April 14, 2026)**
+- **NEW**: IQ-720 inspired advanced signal generation system
+- **Market Regime Detection**: Trending Up/Down, Ranging, High/Low Volatility
+- **Session-Aware Trading**: Asian, London, NY, Overlap, Off-hours with weighted confidence
+- **Ensemble Signal Combination**: 8 weighted sub-strategies (RSI, MACD, Stoch, EMA, BB, KC, ADX, Patterns)
+- **Confidence Calibration**: Anti-overconfidence with regime + session + confirmation adjustments
+- **Kelly Criterion Position Sizing**: Half-Kelly for safe capital allocation
+- **60+ Technical Features**: Price, MA, Momentum, Trend, Volatility, Pattern categories
+- **API Endpoints**: `/api/signals/iq720-ensemble`, `/api/signals/iq720-market-regime`, `/api/signals/iq720-kelly`, `/api/signals/iq720-features`
+- **Frontend**: IQ-720 Ensemble template added to Strategy Builder Templates tab
+- **AI Models**: IQ-720 Ensemble (Advanced) listed first in AI Models page (82% accuracy target)
+- **Scan-Markets**: Added as final fallback in strategy chain (Deep → Holly → Golden → Momentum → IQ-720)
+- **Tampermonkey**: `getIQ720EnsembleSignal()` added to LocalSignalEngine with full fallback chain integration
+
 ✅ **Tampermonkey v8.7.2 — Improved Latency Sync (April 12, 2026)**
 - **Configurable Timing Settings** in CONFIG:
   - `BET_DEDUCTION_DELAY`: 2000ms (wait for bet to deduct)
