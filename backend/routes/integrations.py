@@ -20,7 +20,9 @@ from tradingview_webhook_service import TradingViewAlertModel
 from force_signal_generator import force_signal_generator
 from pocket_option_auto_trader import get_auto_trading_service
 from telegram_signal_notifier import get_telegram_notifier
+from telegram_bot_service import get_telegram_bot, TradingSignal as TelegramTradingSignal
 from platform_integrations import platform_integration
+from ssid_auto_refresh_service import get_ssid_service, initialize_ssid_service
 
 # Import MT5 services (may not be available on all platforms)
 try:

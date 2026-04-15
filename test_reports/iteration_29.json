@@ -1,0 +1,114 @@
+{
+  "summary": "Iteration 29 testing complete - Telegram bot integration bug fix verified. All missing imports (get_telegram_bot, TelegramTradingSignal, get_ssid_service, initialize_ssid_service) in routes/integrations.py are now correctly imported and all Telegram bot endpoints are working. 12/12 backend tests passed. Frontend Telegram Bot page renders correctly with all components.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_telegram_bot.py",
+    "/app/test_reports/pytest/pytest_telegram_bot.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/integrations.py imports verified: get_telegram_bot, TelegramTradingSignal from telegram_bot_service - WORKING",
+    "routes/integrations.py imports verified: get_ssid_service, initialize_ssid_service from ssid_auto_refresh_service - WORKING",
+    "GET /api/telegram-bot/status - Returns bot status with is_running, bot_token_configured, chat_id - WORKING",
+    "POST /api/telegram-bot/start - Starts bot polling and SSID auto-refresh - WORKING",
+    "POST /api/telegram-bot/stop - Stops bot and SSID service - WORKING",
+    "POST /api/telegram-bot/send - Sends message to Telegram (message_id returned) - WORKING",
+    "PUT /api/telegram-bot/settings - Updates auto_trading_enabled, demo_mode, trade_amount - WORKING",
+    "GET /api/telegram-bot/history - Returns signal and trade history - WORKING",
+    "GET /api/telegram-bot/stats - Returns trading statistics (wins, losses, win_rate) - WORKING",
+    "GET /api/telegram/status - Returns telegram notifier status - WORKING",
+    "POST /api/telegram/test - Sends test notification to Telegram - WORKING",
+    "Frontend Telegram Bot page: Bot Controls card with Start/Stop buttons - VERIFIED",
+    "Frontend Telegram Bot page: Trading Stats card (21 signals, 4 trades, 100% win rate) - VERIFIED",
+    "Frontend Telegram Bot page: Recent Signals card showing AUDCAD_OTC, EURUSD_OTC etc - VERIFIED",
+    "Frontend Telegram Bot page: Bot Activity Log showing start/stop messages - VERIFIED",
+    "Frontend Telegram Bot page: Trade Status card with connection status - VERIFIED",
+    "Regression: Dashboard IQ-720 widget (data-testid='iq720-widget') - VERIFIED",
+    "Regression: POST /api/signals/iq720-ensemble - WORKING (returns 'Insufficient data' when no candles - expected)",
+    "Regression: GET /api/signals/scan-markets - WORKING (found 2 signals)"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_telegram_bot.py"
+  ],
+  "success_rate": {
+    "backend": "100% (12/12 tests passed)",
+    "frontend": "100% (all Telegram Bot page components verified)"
+  },
+  "test_credentials": "username=triddick84, password=Fallinone#1",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Telegram bot integration bug fix verified. The missing imports in routes/integrations.py have been added: get_telegram_bot and TelegramTradingSignal from telegram_bot_service, and get_ssid_service and initialize_ssid_service from ssid_auto_refresh_service. All 10 Telegram bot endpoints are working correctly. The bot has a real Telegram token configured (TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in .env) and sends real messages. Test file created at /app/backend/tests/test_telegram_bot.py for regression testing.",
+  "mocked_apis": {
+    "note": "TradingView Webhooks and MT4 ZeroMQ integrations are MOCKED. Telegram bot uses real Telegram API."
+  },
+  "endpoints_tested": [
+    "GET /api/telegram-bot/status - WORKING",
+    "POST /api/telegram-bot/start - WORKING",
+    "POST /api/telegram-bot/stop - WORKING",
+    "POST /api/telegram-bot/send - WORKING (message_id: 70927+)",
+    "PUT /api/telegram-bot/settings - WORKING",
+    "GET /api/telegram-bot/history - WORKING",
+    "GET /api/telegram-bot/stats - WORKING",
+    "GET /api/telegram/status - WORKING",
+    "POST /api/telegram/test - WORKING",
+    "POST /api/signals/iq720-ensemble - WORKING (regression)",
+    "GET /api/signals/scan-markets - WORKING (regression)",
+    "GET /api/health - WORKING"
+  ],
+  "frontend_features_tested": {
+    "telegram_bot_page": {
+      "bot_controls_card": {
+        "start_button": "VERIFIED - triggers /api/telegram-bot/start",
+        "stop_button": "VERIFIED - triggers /api/telegram-bot/stop",
+        "auto_trading_toggle": "VERIFIED",
+        "demo_mode_toggle": "VERIFIED",
+        "force_generate_signal_button": "VERIFIED"
+      },
+      "trading_stats_card": {
+        "signals_sent": "21",
+        "trades_placed": "4",
+        "wins": "4",
+        "losses": "0",
+        "win_rate": "100.0%",
+        "status": "VERIFIED"
+      },
+      "recent_signals_card": {
+        "signals_displayed": ["AUDCAD_OTC", "EURUSD_OTC", "AUDUSD_OTC"],
+        "status": "VERIFIED"
+      },
+      "bot_activity_log": {
+        "messages_shown": ["Bot started successfully", "Bot stopped"],
+        "status": "VERIFIED"
+      },
+      "trade_status_card": {
+        "connection_status": "VERIFIED",
+        "auto_trade_status": "VERIFIED",
+        "trade_amount": "$1",
+        "status": "VERIFIED"
+      }
+    },
+    "dashboard": {
+      "iq720_widget": {
+        "data_testid": "iq720-widget",
+        "status": "VERIFIED"
+      }
+    }
+  },
+  "bug_fix_verification": {
+    "issue": "Missing imports in routes/integrations.py",
+    "imports_added": [
+      "from telegram_bot_service import get_telegram_bot, TradingSignal as TelegramTradingSignal",
+      "from ssid_auto_refresh_service import get_ssid_service, initialize_ssid_service"
+    ],
+    "verification": "All Telegram bot endpoints now working correctly - imports are properly resolved"
+  }
+}
