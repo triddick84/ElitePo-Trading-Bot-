@@ -3,6 +3,13 @@
 ## Last Updated: April 14, 2026
 
 ## Current Status
+✅ **Telegram Bot Integration Fix (April 15, 2026)**
+- **FIXED**: Missing imports in `routes/integrations.py` causing 500 errors on all `/telegram-bot/*` endpoints
+- Added: `get_telegram_bot`, `TelegramTradingSignal` from `telegram_bot_service`
+- Added: `get_ssid_service`, `initialize_ssid_service` from `ssid_auto_refresh_service`
+- All 10 Telegram bot endpoints verified working (status, start, stop, send, settings, history, stats, etc.)
+- Real Telegram messages delivered successfully (message_id returned)
+
 ✅ **Tampermonkey v8.8.0 — GO Button Fix + Updated Strategy Page (April 14, 2026)**
 - **FIXED**: GO button now tries LOCAL OTC signals FIRST (6 strategies), then falls back to backend API
 - **Signal Priority Chain**: General → Keltner-MACD → IQ-720 Ensemble → Holly Crossover → Golden One Moment → Momentum Buster → Backend scan-markets → force-generate
