@@ -43,32 +43,82 @@ export function waitForElement(selector, timeout = 10000) {
  * @returns {string|null} Asset symbol
  */
 export function getCurrentAsset() {
-  // Try multiple selectors for asset name
+  // Method 1: Try specific selectors
   const selectors = [
+    '.pair-title',
+    '.asset-name',
+    '[data-testid="asset-name"]',
+    '.trading-pair-name',
+    '.chart-header-pair',
+    '.current-symbol',
+    '.symbol-name',
     '.current-symbol span.symbol',
     '.pair-select__value',
-    '.pair-title',
-    '[data-testid="current-asset"]',
-    '.current-asset-name',
+    '[class*="pair-title"]',
+    '[class*="asset-name"]',
+    '[class*="symbol"]',
   ];
   
   for (const selector of selectors) {
     const el = document.querySelector(selector);
-    if (el) {
+    if (el && el.textContent) {
       const text = el.textContent.trim();
-      // Normalize to SYMBOL_otc format
-      return text.replace(/[\/\s-]/g, '').replace(/OTC$/i, '_otc').toUpperCase() + '_otc';
+      if (text.includes('/') || text.includes('USD') || text.includes('EUR') || text.includes('GBP') || text.includes('JPY') || text.includes('AUD') || text.includes('NZD') || text.includes('CHF') || text.includes('CAD')) {
+        return text;
+      }
     }
   }
-  
-  // Fallback: try to get from URL
-  const url = window.location.href;
-  const match = url.match(/[?&]asset=([^&]+)/);
-  if (match) {
-    return match[1];
+
+  // Method 2: Search visible elements for currency pair patterns
+  const allElements = document.querySelectorAll('*');
+  for (const el of allElements) {
+    if (!el || !el.offsetParent) continue;
+    if (el.children.length > 3) continue;
+
+    const text = (el.textContent || '').trim();
+    if (text.length >= 6 && text.length <= 20) {
+      // Exact pair patterns: "EUR/USD" or "EUR/USD OTC" or "EURUSD_OTC"
+      const pairPattern = /^[A-Z]{3}\/[A-Z]{3}(\s*OTC)?$/i;
+      const compactPattern = /^[A-Z]{6}(_OTC)?$/i;
+
+      if (pairPattern.test(text) || compactPattern.test(text)) {
+        try {
+          const rect = el.getBoundingClientRect();
+          if (rect.top < 150 && rect.width > 50) {
+            return text;
+          }
+        } catch (e) { /* ignore */ }
+      }
+
+      // Also match "XXX/XXX" anywhere in text, near top of page
+      const match = text.match(/([A-Z]{3})\/([A-Z]{3})/i);
+      if (match) {
+        try {
+          const rect = el.getBoundingClientRect();
+          if (rect.top < 200 && rect.top > 0) {
+            return match[0] + (text.toLowerCase().includes('otc') ? ' OTC' : '');
+          }
+        } catch (e) { /* ignore */ }
+      }
+    }
   }
-  
-  return null;
+
+  // Method 3: Check page title
+  const title = document.title;
+  const titleMatch = title.match(/([A-Z]{3})\/([A-Z]{3})/i);
+  if (titleMatch) {
+    return titleMatch[0];
+  }
+
+  // Method 4: Check URL
+  const url = window.location.href;
+  const urlMatch = url.match(/[?&]asset=([^&]+)/);
+  if (urlMatch) {
+    return decodeURIComponent(urlMatch[1]);
+  }
+
+  // Default fallback
+  return 'EUR/USD OTC';
 }
 
 /**
@@ -76,34 +126,51 @@ export function getCurrentAsset() {
  * @returns {number|null} Current price
  */
 export function getCurrentPrice() {
-  // Aggressive price scraping - try multiple methods
-  const selectors = [
+  // Try multiple selectors for price display
+  const priceSelectors = [
     '.current-price',
-    '.current-symbol-price',
-    '[data-testid="current-price"]',
     '.price-value',
-    '.quotation-price',
+    '[data-testid="current-price"]',
     '.chart-price',
+    '.bid-price',
+    '.ask-price',
+    '.current-symbol-price',
+    '.quotation-price',
+    '[class*="price"]',
+    '[class*="quote"]',
   ];
   
-  for (const selector of selectors) {
-    const el = document.querySelector(selector);
-    if (el) {
-      const text = el.textContent.trim().replace(/[^0-9.]/g, '');
-      const price = parseFloat(text);
-      if (!isNaN(price) && price > 0) {
-        return price;
+  for (const sel of priceSelectors) {
+    const els = document.querySelectorAll(sel);
+    for (const el of els) {
+      if (!el || !el.offsetParent) continue;
+      const text = (el.textContent || '').trim();
+      // Match forex price patterns like "1.08234" or "108.234"
+      const priceMatch = text.match(/(\d+\.\d{3,5})/);
+      if (priceMatch) {
+        const price = parseFloat(priceMatch[1]);
+        if (price > 0.1 && price < 200000) {
+          return price;
+        }
       }
     }
   }
   
-  // Try getting from chart data
-  try {
-    const chartData = document.querySelector('canvas')?.__chart_data__;
-    if (chartData?.lastPrice) {
-      return chartData.lastPrice;
+  // Search in chart area elements
+  const chartArea = document.querySelector('[class*="chart"]');
+  if (chartArea) {
+    const priceElements = chartArea.querySelectorAll('text, span, div');
+    for (const el of priceElements) {
+      const text = (el.textContent || '').trim();
+      const priceMatch = text.match(/^(\d+\.\d{3,5})$/);
+      if (priceMatch) {
+        const price = parseFloat(priceMatch[1]);
+        if (price > 0.1 && price < 200000) {
+          return price;
+        }
+      }
     }
-  } catch (e) {}
+  }
   
   return null;
 }
