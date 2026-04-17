@@ -11,14 +11,15 @@ import { MomentumBusterStrategy } from './momentumBuster.js';
 import { HollyCrossoverStrategy } from './hollyCrossover.js';
 import { GoldenOneMomentStrategy } from './goldenOneMoment.js';
 import { EMA20PullbackReversalStrategy } from './ema20PullbackReversal.js';
+import { KeltnerMACDStrategy } from './keltnerMACD.js';
+import { IQ720EnsembleStrategy } from './iq720Ensemble.js';
 import { get } from '../utils/api.js';
 
 /**
  * Mapping of app strategy IDs -> Tampermonkey strategy names
- * This lets Tampermonkey use the same strategy the user selected in the app UI
  */
 const APP_TO_LOCAL_MAP = {
-  'default': null,                        // Use all strategies
+  'default': null,
   'ema20_pullback_reversal': 'EMA 20 Pullback Reversal',
   'holly_crossover_5s': 'Holly Crossover',
   'holly_crossover_15s': 'Holly Crossover',
@@ -30,6 +31,8 @@ const APP_TO_LOCAL_MAP = {
   'rsi_bb_scalp': 'Local Signal Engine',
   'golden_one_moment': 'Golden One Moment',
   'momentum_buster_15s': 'Momentum Buster',
+  'keltner_macd_5s': 'Keltner-MACD 5s',
+  'iq720_ensemble': 'IQ-720 Ensemble',
 };
 
 class StrategyManager {
@@ -42,9 +45,11 @@ class StrategyManager {
   
   initializeStrategies() {
     this.registerStrategy(new LocalSignalStrategy());
-    this.registerStrategy(new MomentumBusterStrategy());
+    this.registerStrategy(new KeltnerMACDStrategy());
+    this.registerStrategy(new IQ720EnsembleStrategy());
     this.registerStrategy(new HollyCrossoverStrategy());
     this.registerStrategy(new GoldenOneMomentStrategy());
+    this.registerStrategy(new MomentumBusterStrategy());
     this.registerStrategy(new EMA20PullbackReversalStrategy());
     
     log(`Initialized ${this.strategies.size} trading strategies`);

@@ -6,18 +6,18 @@
 export const CONFIG = {
   // Bot Info
   BOT_NAME: 'Elite Pocket Option Trading Bot',
-  BOT_VERSION: '8.0.0',
+  BOT_VERSION: '8.8.0',
 
   // API Settings
   API_URL: 'https://momentum-trade-test.preview.emergentagent.com/api',
   
   // Polling Intervals
-  APP_POLL_INTERVAL: 3000,      // 3 seconds for app signals
-  SCAN_INTERVAL: 5000,          // 5 seconds for scanning
+  APP_POLL_INTERVAL: 3000,
+  SCAN_INTERVAL: 5000,
   
   // Trade Cooldowns
-  TRADE_COOLDOWN_SCAN: 30000,   // 30 seconds between SCAN trades
-  TRADE_COOLDOWN_APP: 5000,     // 5 seconds between APP trades
+  TRADE_COOLDOWN_SCAN: 30000,
+  TRADE_COOLDOWN_APP: 5000,
   
   // Signal Thresholds
   MIN_CONFIDENCE: 65,
@@ -40,10 +40,19 @@ export const CONFIG = {
 
   // Auto-Invert System
   AUTO_INVERT_ENABLED: true,
-  INVERT_AFTER_CONSECUTIVE_LOSSES: 2,    // Invert after N same-direction losses
-  INVERT_COOLDOWN_MS: 10000,             // Min time between invert state changes
-  INVERT_MAX_INVERTED_TRADES: 5,         // Revert after N inverted trades without improvement
-  LOSS_MEMORY_SIZE: 10,                   // How many recent results per asset to remember
+  INVERT_AFTER_CONSECUTIVE_LOSSES: 2,
+  INVERT_COOLDOWN_MS: 10000,
+  INVERT_MAX_INVERTED_TRADES: 5,
+  LOSS_MEMORY_SIZE: 10,
+
+  // CYCLE Mode
+  CYCLE_ENABLED: false,
+  CYCLE_DWELL_TIME: 30000,
+  CYCLE_ASSETS: [
+    'EURUSD_OTC', 'GBPUSD_OTC', 'USDJPY_OTC', 'AUDUSD_OTC',
+    'EURJPY_OTC', 'GBPJPY_OTC', 'AUDCAD_OTC', 'NZDUSD_OTC',
+    'CADCHF_OTC', 'EURGBP_OTC',
+  ],
 };
 
 /**

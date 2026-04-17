@@ -11,6 +11,7 @@ const MobileAutoTraderPage = () => {
   const [showSetup, setShowSetup] = useState(false);
 
   const userscriptUrl = `${API.replace('/api', '')}/pocket-option-auto-trader.user.js`;
+  const modularScriptUrl = `${API.replace('/api', '')}/pocket-option-auto-trader-modular.user.js`;
 
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
@@ -133,14 +134,37 @@ const MobileAutoTraderPage = () => {
               </CardTitle>
             </CardHeader>
             <CardContent className="text-slate-300">
-              <p className="mb-4">Click the button below to install the auto-trader userscript:</p>
-              <a href={userscriptUrl} target="_blank" rel="noopener noreferrer">
-                <Button className="bg-purple-600 hover:bg-purple-700 mr-2 mb-2">
-                  📜 Install Auto-Trader Script
-                </Button>
-              </a>
-              <p className="text-sm text-slate-400 mt-2">
-                Or copy this URL and paste in Tampermonkey → Add New Script:
+              <p className="mb-4">Choose a script version to install:</p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                <div className="p-3 bg-slate-900/60 rounded-lg border border-purple-500/30">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Badge className="bg-purple-600 text-white text-xs">Legacy v8.8.0</Badge>
+                    <span className="text-xs text-slate-400">7200+ lines</span>
+                  </div>
+                  <p className="text-xs text-slate-400 mb-2">Full-featured monolithic script with CYCLE mode, balance detection, latency sync</p>
+                  <a href={userscriptUrl} target="_blank" rel="noopener noreferrer">
+                    <Button size="sm" className="bg-purple-600 hover:bg-purple-700 w-full">
+                      Install Legacy Script
+                    </Button>
+                  </a>
+                </div>
+                <div className="p-3 bg-slate-900/60 rounded-lg border border-indigo-500/30">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Badge className="bg-indigo-600 text-white text-xs">Modular v8.8.0</Badge>
+                    <span className="text-xs text-slate-400">109 KB bundled</span>
+                  </div>
+                  <p className="text-xs text-slate-400 mb-2">Webpack-bundled modular build — 7 strategies, clean architecture, same features</p>
+                  <a href={modularScriptUrl} target="_blank" rel="noopener noreferrer">
+                    <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 w-full">
+                      Install Modular Script
+                    </Button>
+                  </a>
+                </div>
+              </div>
+
+              <p className="text-sm text-slate-400">
+                Or copy a URL and paste in Tampermonkey → Add New Script:
               </p>
               <div className="flex items-center gap-2 mt-2">
                 <code className="bg-slate-900 px-3 py-2 rounded text-xs flex-1 overflow-x-auto">
@@ -152,7 +176,7 @@ const MobileAutoTraderPage = () => {
                   onClick={() => copyToClipboard(userscriptUrl)}
                   className="border-slate-600"
                 >
-                  {copied ? '✓' : '📋'}
+                  {copied ? 'OK' : 'Copy'}
                 </Button>
               </div>
             </CardContent>

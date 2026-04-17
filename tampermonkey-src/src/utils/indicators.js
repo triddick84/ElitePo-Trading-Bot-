@@ -184,6 +184,41 @@ export function calculateATR(highs, lows, closes, period = 14) {
 }
 
 /**
+ * Calculate ADX (Average Directional Index)
+ * @param {number[]} highs - Array of high prices
+ * @param {number[]} lows - Array of low prices
+ * @param {number[]} closes - Array of close prices
+ * @param {number} period - ADX period
+ * @returns {number} ADX value
+ */
+export function calculateADX(highs, lows, closes, period = 14) {
+  if (highs.length < period * 2) return 0;
+
+  const len = highs.length;
+  let plusDM = 0, minusDM = 0, tr = 0;
+
+  for (let i = len - period; i < len; i++) {
+    const upMove = highs[i] - highs[i - 1];
+    const downMove = lows[i - 1] - lows[i];
+    plusDM += (upMove > downMove && upMove > 0) ? upMove : 0;
+    minusDM += (downMove > upMove && downMove > 0) ? downMove : 0;
+    tr += Math.max(
+      highs[i] - lows[i],
+      Math.abs(highs[i] - closes[i - 1]),
+      Math.abs(lows[i] - closes[i - 1])
+    );
+  }
+
+  if (tr === 0) return 0;
+  const plusDI = (plusDM / tr) * 100;
+  const minusDI = (minusDM / tr) * 100;
+  const diSum = plusDI + minusDI;
+  if (diSum === 0) return 0;
+
+  return Math.abs(plusDI - minusDI) / diSum * 100;
+}
+
+/**
  * Detect candlestick patterns
  * @param {Object[]} candles - Array of candle objects
  * @returns {Object} Pattern detection results
@@ -255,6 +290,7 @@ export default {
   calculateBollingerBands,
   calculateMACD,
   calculateATR,
+  calculateADX,
   detectCandlePatterns,
   calculateSupportResistance,
 };
