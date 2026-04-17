@@ -8,7 +8,14 @@
 - Added: `get_telegram_bot`, `TelegramTradingSignal` from `telegram_bot_service`
 - Added: `get_ssid_service`, `initialize_ssid_service` from `ssid_auto_refresh_service`
 - All 10 Telegram bot endpoints verified working (status, start, stop, send, settings, history, stats, etc.)
-- Real Telegram messages delivered successfully (message_id returned)
+
+✅ **Modular Webpack Tampermonkey Consolidation (April 17, 2026)**
+- **DONE**: Consolidated 7200-line legacy script into modular Webpack build (15 modules)
+- **63% size reduction**: 112KB modular vs 304KB legacy
+- **7 strategies** registered: LocalSignal, Keltner-MACD 5s, IQ-720 Ensemble, Holly Crossover, Golden One Moment, Momentum Buster, EMA20 Pullback
+- **Architecture**: `/app/tampermonkey-src/src/` → core/, strategies/, trading/, ui/, utils/
+- **Build**: `yarn build:deploy` compiles + copies to frontend/public
+- **UI**: Mobile Auto-Trade page offers both Legacy and Modular install options side-by-side
 
 ✅ **Tampermonkey v8.8.0 — GO Button Fix + Updated Strategy Page (April 14, 2026)**
 - **FIXED**: GO button now tries LOCAL OTC signals FIRST (6 strategies), then falls back to backend API
