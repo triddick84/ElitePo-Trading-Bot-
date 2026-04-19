@@ -9,6 +9,14 @@
 - Added: `get_ssid_service`, `initialize_ssid_service` from `ssid_auto_refresh_service`
 - All 10 Telegram bot endpoints verified working (status, start, stop, send, settings, history, stats, etc.)
 
+✅ **TradingView + MetaTrader 4/5 Integration (April 19, 2026)**
+- **FIXED**: Missing `tradingview_webhook_service` import in `routes/integrations.py` (caused 500 errors)
+- **FIXED**: TradingView webhook None handling for price/quantity (testing agent fix)
+- **TradingView Webhook**: Receives alerts, processes them, routes to Pocket Option or MT5. Endpoints: webhook, stats, history, setup, pine-script
+- **MT5 Connection**: Live connect/disconnect with account info (Balance, Equity, Profit, Leverage). Runs in simulation mode on Linux
+- **Frontend**: Fully rewritten IntegrationsPage with live MT5 connection form, TradingView webhook tester, alert stats/history, and API Reference
+- **Pine Script Template**: Auto-generated for TradingView alert configuration
+
 ✅ **Modular Webpack Tampermonkey Consolidation (April 17, 2026)**
 - **DONE**: Consolidated 7200-line legacy script into modular Webpack build (15 modules)
 - **63% size reduction**: 112KB modular vs 304KB legacy
