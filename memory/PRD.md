@@ -9,6 +9,15 @@
 - Added: `get_ssid_service`, `initialize_ssid_service` from `ssid_auto_refresh_service`
 - All 10 Telegram bot endpoints verified working (status, start, stop, send, settings, history, stats, etc.)
 
+✅ **Auto-Retrain Scheduler (April 19, 2026)**
+- **Scheduled retraining** at London Open (08:00 UTC) and NY Open (13:00 UTC), Mon-Fri
+- **Dual data source**: Trains from collected OTC 5s candles + OANDA S5/M1 historical data
+- **Configurable**: retrain_hours_utc, retrain_days, min_hours_between_retrain, timeframes, symbols, OTC/OANDA toggles
+- **Manual trigger**: `POST /api/ml/scheduler/trigger` for immediate retrain (30min cooldown)
+- **History tracking**: Duration, models trained, accuracy per retrain
+- **API**: status, start, stop, config update, manual trigger
+- **Verified**: Manual retrain completed 2 models in 64.8s (OTC 46.86% + OANDA trained)
+
 ✅ **Core Decision Engine v2.0 (April 19, 2026)**
 - **Multi-Model Ensemble**: IQ-720 (15%), Maximized ML XGBoost (30%), Improved ML RF/GB (20%), LSTM/GRU (25%), PPO RL (10%) — configurable weights
 - **5 Market Regimes**: Trending Up/Down, Ranging, High/Low Volatility — auto-detected from EMA slopes + ATR
