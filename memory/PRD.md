@@ -9,6 +9,15 @@
 - Added: `get_ssid_service`, `initialize_ssid_service` from `ssid_auto_refresh_service`
 - All 10 Telegram bot endpoints verified working (status, start, stop, send, settings, history, stats, etc.)
 
+✅ **Tampermonkey v8.8.1 — Win/Loss Detection Fix (April 19, 2026)**
+- **FIXED**: Both TM scripts not recognizing wins/losses of automated trades
+- **Root causes**: Balance selectors didn't match current PO layouts (returned 0), silent failure when balance=0, tight timing for 5s trades
+- **Balance detection**: Expanded to 30+ selectors + deep DOM search in header area + cached fallback
+- **Adaptive timing**: 5s=5000ms buffer, 15s=4000ms, 30s=3500ms, 60s+=3000ms (was flat 3000ms for all)
+- **3-layer fallback**: Balance polling → DOM scan (deals list + popups) → Pre-trade balance comparison
+- **5s trade fixes**: 30 polls (vs 20), 1500ms bet deduction delay (vs 2000ms), estimated balance when DOM fails
+- **Modular script**: Added `getAccountBalance()` and `scanDOMForTradeResult()` to `dom.js`
+
 ✅ **Auto-Retrain Scheduler (April 19, 2026)**
 - **Scheduled retraining** at London Open (08:00 UTC) and NY Open (13:00 UTC), Mon-Fri
 - **Dual data source**: Trains from collected OTC 5s candles + OANDA S5/M1 historical data
