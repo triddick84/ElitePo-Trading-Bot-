@@ -1,0 +1,83 @@
+{
+  "summary": "Iteration 33 testing complete - Signal Routing Integration into Signal Generation Pipeline. All 14 backend tests passed (100%). Frontend Signal Routing page and Dashboard IQ-720 widget verified working correctly. Signal routing is properly wired into scan-markets and iq720-ensemble endpoints with dispatch to pocket_option, mt5, and telegram destinations.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/pytest/pytest_signal_routing_integration.xml",
+    "/app/backend/tests/test_signal_routing_integration.py"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "_route_and_dispatch helper function properly routes signals through rules engine",
+    "Dispatch to pocket_option returns {queued: true} as expected",
+    "Dispatch to mt5 returns {executed: true, ticket: <num>} when connected or {reason: 'not_connected'} when not",
+    "Dispatch to telegram sends notification via send_message",
+    "Signal routing is non-blocking: if routing fails, signal generation still succeeds",
+    "Routing stats show total_routed increasing with each signal generation (currently 26)",
+    "Routing log shows recent entries with signal details and destinations"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_signal_routing_integration.py (New test file for signal routing integration)"
+  ],
+  "success_rate": {
+    "backend": "100% (14/14 tests passed)",
+    "frontend": "100% (Signal Routing page and Dashboard IQ-720 widget verified)"
+  },
+  "test_credentials": "username=triddick84, password=Fallinone#1",
+  "seed_data_creation": "None - used existing routing rules",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Signal routing is now wired into the signal generation pipeline. The _route_and_dispatch function in signals.py is called after every signal generation (scan-markets, iq720-ensemble). Two routing rules exist: 'High-Confidence to MT5' (EURUSD/GBPUSD, 80%+, -> mt5+telegram) and 'All Signals to PO' (65%+, -> pocket_option). Stats show 26 signals routed, 19 to MT5, 21 to Telegram. MT5 runs in simulation mode. Pocket Option dispatch is queued (not live execution). Telegram may return sent:false if bot service not started.",
+  "mocked_apis": {
+    "note": "MT5 runs in SIMULATION mode. Pocket Option dispatch returns {queued: true} (not live execution). Telegram dispatch depends on bot service status.",
+    "value": {
+      "has_mocked_apis": true,
+      "mocked_apis_list": ["MT5 (simulation)", "Pocket Option (queued)"]
+    }
+  },
+  "endpoints_tested": {
+    "signal_routing_integration": [
+      "GET /api/signals/scan-markets?assets=EURUSD_OTC&min_confidence=55 - WORKING (returns routing field with matched_rules, destinations, dispatch_results)",
+      "POST /api/signals/iq720-ensemble - WORKING (returns routing field when signal is generated)",
+      "GET /api/signal-routing/stats - WORKING (shows total_routed=26, by_destination counts)",
+      "GET /api/signal-routing/log - WORKING (shows recent routing log entries)",
+      "GET /api/signal-routing/rules - WORKING (returns 2 rules)"
+    ],
+    "dispatch_results_verified": [
+      "pocket_option: {queued: true} - VERIFIED",
+      "mt5: {executed: false, reason: 'not_connected'} or {executed: true, ticket: <num>} - VERIFIED",
+      "telegram: {sent: true/false} - VERIFIED"
+    ],
+    "regression": [
+      "GET /api/health - WORKING",
+      "GET /api/mt5/status - WORKING",
+      "POST /api/tradingview/webhook - WORKING",
+      "GET /api/telegram-bot/status - WORKING",
+      "POST /api/mt5/connect - WORKING (simulation mode)"
+    ]
+  },
+  "frontend_features_tested": {
+    "signal_routing_page": {
+      "stats_row": "Shows Total Rules (2), Active (2), Signals Routed (26), To MT5 (19), To Telegram (21) - VERIFIED",
+      "routing_rules_card": "Shows 'High-Confidence to MT5' and 'All Signals to PO' rules with toggle/delete - VERIFIED",
+      "test_signal_router": "Form with Symbol, Direction, Confidence inputs and Test Route button - VERIFIED",
+      "routing_log": "Shows recent routed signals with destinations (telegram, pocket_option, mt5) - VERIFIED"
+    },
+    "dashboard_iq720_widget": {
+      "iq720_live": "Shows Market Regime (Trending Up), Session (Asian Tokyo 0.65), Kelly Size (11.16%), Signal (CALL 75%) - VERIFIED",
+      "indicators": "MACD_BULLISH, EMA_ALIGNED_BULLISH, ADX_STRONG_UPTREND, BULLISH_ENGULFING - VERIFIED"
+    }
+  },
+  "ui_flow_verified": [
+    "Login -> Dashboard -> Signal Routing navigation",
+    "Signal Routing page displays stats, rules, test router, and routing log",
+    "Dashboard IQ-720 LIVE widget shows real-time market analysis"
+  ]
+}

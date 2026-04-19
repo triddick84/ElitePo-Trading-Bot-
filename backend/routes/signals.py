@@ -43,6 +43,7 @@ from advanced_signal_generator import advanced_signal_generator
 from force_signal_generator import force_signal_generator
 from pocket_option_client import get_pocket_option_client
 from routes import get_realtime_market_hub
+from signal_routing_service import get_signal_router
 from real_market_data_service import RealMarketDataService
 from platform_integrations import platform_integration
 from continuous_scanner import ContinuousMarketScanner
@@ -59,6 +60,64 @@ import time
 # Initialize services
 adaptive_strategy_service_instance = AdaptiveStrategyService(db)
 continuous_scanner = ContinuousMarketScanner(force_signal_generator, db)
+
+
+async def _route_and_dispatch(signal: Dict) -> Optional[Dict]:
+    """
+    Route a signal through the signal routing engine and dispatch to matched destinations.
+    Returns routing result or None if routing is not configured.
+    """
+    try:
+        router = get_signal_router(db)
+        routing = await router.route_signal(signal)
+        destinations = routing.get("destinations", [])
+
+        dispatch_results = {}
+
+        for dest in destinations:
+            if dest == "telegram":
+                try:
+                    from telegram_signal_notifier import get_telegram_notifier
+                    notifier = get_telegram_notifier()
+                    if notifier and notifier.config.bot_token and notifier.config.chat_id:
+                        direction = signal.get("direction", "?")
+                        symbol = signal.get("symbol", "?")
+                        confidence = signal.get("confidence", 0)
+                        strategy = signal.get("strategy") or signal.get("analysis_type") or "Auto"
+                        msg = (
+                            f"*Signal Routed*\n"
+                            f"{direction} {symbol}\n"
+                            f"Confidence: {confidence}%\n"
+                            f"Strategy: {strategy}"
+                        )
+                        sent = await notifier.send_message(msg)
+                        dispatch_results["telegram"] = {"sent": sent}
+                except Exception as e:
+                    dispatch_results["telegram"] = {"sent": False, "error": str(e)}
+
+            elif dest == "mt5":
+                try:
+                    from mt5_trading_service import mt5_service as _mt5
+                    if _mt5 and _mt5.connection.is_connected():
+                        direction = signal.get("direction", "CALL").upper()
+                        mt5_dir = "BUY" if direction in ("CALL", "BUY") else "SELL"
+                        sym = signal.get("symbol", "EURUSD").replace("_OTC", "").replace("OTC", "")
+                        result = _mt5.execute_order(symbol=sym, direction=mt5_dir, volume=0.01, comment="Auto-routed")
+                        dispatch_results["mt5"] = {"executed": result.success, "ticket": result.ticket}
+                    else:
+                        dispatch_results["mt5"] = {"executed": False, "reason": "not_connected"}
+                except Exception as e:
+                    dispatch_results["mt5"] = {"executed": False, "error": str(e)}
+
+            elif dest == "pocket_option":
+                dispatch_results["pocket_option"] = {"queued": True}
+
+        routing["dispatch_results"] = dispatch_results
+        return routing
+
+    except Exception as e:
+        logger.warning(f"Signal routing error (non-fatal): {e}")
+        return None
 
 
 def get_advanced_ml_ensemble_validation(candles: List[Dict], deep_signal: Optional[Dict] = None) -> Dict:
@@ -2049,6 +2108,14 @@ async def scan_markets_deep_analysis(
         
         time_filter_info = get_time_filter()
         
+        # === SIGNAL ROUTING: Route top signal through rules engine ===
+        routing_result = None
+        if top_signals:
+            try:
+                routing_result = await _route_and_dispatch(top_signals[0])
+            except Exception as e:
+                logger.warning(f"Signal routing failed (non-fatal): {e}")
+        
         return {
             "success": True,
             "analysis_type": "deep_confluence",
@@ -2056,6 +2123,7 @@ async def scan_markets_deep_analysis(
             "signals_found": len(signals_found),
             "top_signals": top_signals,
             "time_filter": time_filter_info,
+            "routing": routing_result,
             "message": f"Found {len(signals_found)} high-quality signals above {min_confidence}% confidence"
         }
         
@@ -2341,6 +2409,14 @@ async def scan_markets_for_signals(
         # Re-sort after premium adjustments
         top_signals.sort(key=lambda x: x.get("confidence", 0), reverse=True)
         
+        # === SIGNAL ROUTING: Route top signal through rules engine ===
+        routing_result = None
+        if top_signals:
+            try:
+                routing_result = await _route_and_dispatch(top_signals[0])
+            except Exception as e:
+                logger.warning(f"Signal routing failed (non-fatal): {e}")
+        
         return {
             "success": True,
             "analysis_type": "deep_confluence" if use_deep_analysis else "high_accuracy",
@@ -2350,6 +2426,7 @@ async def scan_markets_for_signals(
             "top_signals": top_signals,
             "preferred_expiry": expiry_to_use,
             "time_filter": time_filter_info,
+            "routing": routing_result,
             "message": f"Found {len(signals_found)} signals above {min_confidence}% confidence"
         }
         
@@ -3529,9 +3606,18 @@ async def generate_iq720_ensemble_signal(
 
         if signal:
             signal["symbol"] = symbol
+            
+            # === SIGNAL ROUTING: Route IQ-720 signal through rules engine ===
+            routing_result = None
+            try:
+                routing_result = await _route_and_dispatch(signal)
+            except Exception as e:
+                logger.warning(f"IQ-720 signal routing failed (non-fatal): {e}")
+            
             return {
                 "success": True,
                 "signal": _convert_numpy_types(signal),
+                "routing": routing_result,
                 "message": f"IQ-720 Ensemble: {signal['direction']} with {signal['confidence']}% confidence"
             }
         else:
