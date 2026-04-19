@@ -9,6 +9,21 @@
 - Added: `get_ssid_service`, `initialize_ssid_service` from `ssid_auto_refresh_service`
 - All 10 Telegram bot endpoints verified working (status, start, stop, send, settings, history, stats, etc.)
 
+✅ **Signal Routing Dashboard (April 19, 2026)**
+- **NEW**: Full signal routing engine with CRUD rules, filter matching, and destination routing
+- **Rules Engine**: Match signals by asset, min/max confidence, direction, strategy, session
+- **Destinations**: Pocket Option, MetaTrader 5, Telegram — configurable per rule
+- **Priority System**: Rules matched top-to-bottom by priority number
+- **Test Router**: Send test signals through the engine to verify routing decisions
+- **Routing Log**: Full audit trail of every routed signal with timestamps
+- **Stats Dashboard**: Total rules, active count, signals routed, per-destination counts
+- **API**: 7 endpoints under `/api/signal-routing/` (rules CRUD, test, log, stats)
+- **Frontend**: New SignalRoutingPage with rule management, destination toggles, filter builder, test panel
+
+✅ **P3: React Hook Dependencies (April 19, 2026)**
+- Verified: ESLint passes cleanly, no missing hook dependencies found
+- Only one intentional eslint-disable in App.js (for auth flow)
+
 ✅ **TradingView + MetaTrader 4/5 Integration (April 19, 2026)**
 - **FIXED**: Missing `tradingview_webhook_service` import in `routes/integrations.py` (caused 500 errors)
 - **FIXED**: TradingView webhook None handling for price/quantity (testing agent fix)
