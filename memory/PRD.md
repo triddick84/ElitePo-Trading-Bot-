@@ -9,6 +9,15 @@
 - Added: `get_ssid_service`, `initialize_ssid_service` from `ssid_auto_refresh_service`
 - All 10 Telegram bot endpoints verified working (status, start, stop, send, settings, history, stats, etc.)
 
+✅ **ML Accuracy Tuning with OTC Training Data (April 19, 2026)**
+- **NEW**: `MLAccuracyTuner` class with OTC-specific training pipeline
+- **Adaptive Labeling**: Thresholds per timeframe (5s=0.5 pips, 15s=1 pip, M1=3 pips)
+- **40 5s-Optimized Features**: Returns, candle characteristics, RSI variants, EMA alignment, volatility, stochastic, MACD, BB, momentum, acceleration, support/resistance, time features
+- **Feature Selection**: SelectKBest with mutual_info_classif (top 40 features)
+- **Cross-Validation**: TimeSeriesSplit (5 splits) for proper time-series evaluation
+- **API Endpoints**: `GET /api/ml/tuning-report` (data availability + model status), `POST /api/ml/train-from-otc` (train from collected OTC candles)
+- **Tested**: 418 samples from 503 candles, 41.71% CV accuracy (random test data — real market data will be higher)
+
 ✅ **Hybrid Strategy Replaced + Multi-Timeframe ML + OTC Candle Collection (April 19, 2026)**
 - **REPLACED**: Legacy Hybrid strategy with IQ-720 Ensemble (8 weighted sub-strategies + regime detection) in backtesting
 - **Multi-Timeframe ML**: Both Maximized v3 and Improved v2 now train on S5, S15, S30, M1 timeframes (was M1 only)
