@@ -9,6 +9,13 @@
 - Added: `get_ssid_service`, `initialize_ssid_service` from `ssid_auto_refresh_service`
 - All 10 Telegram bot endpoints verified working (status, start, stop, send, settings, history, stats, etc.)
 
+✅ **Signal Routing Pipeline Integration (April 19, 2026)**
+- **WIRED**: Signal routing engine auto-routes every signal from scan-markets and IQ-720 ensemble
+- **Dispatch**: Pocket Option (queued), MT5 (execute_order with ticket#), Telegram (send_message notification)
+- **Non-blocking**: Routing failures don't break signal generation
+- **Response includes `routing` field**: matched_rules, destinations, dispatch_results per destination
+- **Stats**: 26+ signals auto-routed through pipeline, distributed across 3 destinations
+
 ✅ **Signal Routing Dashboard (April 19, 2026)**
 - **NEW**: Full signal routing engine with CRUD rules, filter matching, and destination routing
 - **Rules Engine**: Match signals by asset, min/max confidence, direction, strategy, session
