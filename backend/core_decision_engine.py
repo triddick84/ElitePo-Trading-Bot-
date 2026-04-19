@@ -519,8 +519,8 @@ class CoreDecisionEngine:
 
     # ==================== TRADE OUTCOME TRACKING ====================
 
-    def record_trade_result(self, symbol: str, direction: str, outcome: str, pnl: float = 0):
-        """Record trade result for performance tracking and continuous learning."""
+    def record_trade_result(self, symbol: str, direction: str, outcome: str, pnl: float = 0, strategy: str = ""):
+        """Record trade result for performance tracking, per-asset/strategy stats, and auto-promotion."""
         is_win = outcome.lower() in ("win", "profit", "1")
 
         self.performance.total_trades += 1
@@ -549,12 +549,45 @@ class CoreDecisionEngine:
         # Daily returns for Sharpe
         self.performance.sharpe_daily_returns.append(pnl / self.performance.peak_balance if self.performance.peak_balance > 0 else 0)
 
+        # === Per-asset performance tracking ===
+        if symbol not in self.performance.strategy_performance:
+            self.performance.strategy_performance[symbol] = {}
+        asset_perf = self.performance.strategy_performance[symbol]
+        
+        if "_total" not in asset_perf:
+            asset_perf["_total"] = {"wins": 0, "losses": 0, "pnl": 0.0, "best_strategy": ""}
+        asset_perf["_total"]["wins" if is_win else "losses"] += 1
+        asset_perf["_total"]["pnl"] += pnl
+
+        # === Per-strategy-per-asset tracking ===
+        strat_key = strategy or "unknown"
+        if strat_key not in asset_perf:
+            asset_perf[strat_key] = {"wins": 0, "losses": 0, "pnl": 0.0}
+        asset_perf[strat_key]["wins" if is_win else "losses"] += 1
+        asset_perf[strat_key]["pnl"] += pnl
+
+        # === Auto-promotion: find best strategy per asset ===
+        best_strat = ""
+        best_wr = 0.0
+        for sk, sv in asset_perf.items():
+            if sk.startswith("_"):
+                continue
+            total = sv["wins"] + sv["losses"]
+            if total >= 5:  # Min 5 trades to judge
+                wr = sv["wins"] / total
+                if wr > best_wr:
+                    best_wr = wr
+                    best_strat = sk
+        asset_perf["_total"]["best_strategy"] = best_strat
+        asset_perf["_total"]["best_win_rate"] = round(best_wr * 100, 1)
+
         # Trade history
         self.performance.trade_history.append({
             "symbol": symbol,
             "direction": direction,
             "outcome": outcome,
             "pnl": pnl,
+            "strategy": strat_key,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "cumulative_balance": self.performance.current_balance,
             "win_rate": self.performance.win_rate,
@@ -565,6 +598,40 @@ class CoreDecisionEngine:
             self.performance.trade_history = self.performance.trade_history[-500:]
 
         self.performance.last_trade_time = datetime.now(timezone.utc).isoformat()
+
+    def get_strategy_tracker(self) -> Dict:
+        """Get per-asset strategy performance with auto-promotion recommendations."""
+        tracker = {}
+        for symbol, perf in self.performance.strategy_performance.items():
+            total_info = perf.get("_total", {})
+            total_trades = total_info.get("wins", 0) + total_info.get("losses", 0)
+            strategies = {}
+            for sk, sv in perf.items():
+                if sk.startswith("_"):
+                    continue
+                st = sv["wins"] + sv["losses"]
+                strategies[sk] = {
+                    "wins": sv["wins"],
+                    "losses": sv["losses"],
+                    "total": st,
+                    "win_rate": round(sv["wins"] / st * 100, 1) if st > 0 else 0,
+                    "pnl": round(sv["pnl"], 2),
+                }
+            tracker[symbol] = {
+                "total_trades": total_trades,
+                "win_rate": round(total_info.get("wins", 0) / total_trades * 100, 1) if total_trades > 0 else 0,
+                "pnl": round(total_info.get("pnl", 0), 2),
+                "best_strategy": total_info.get("best_strategy", ""),
+                "best_win_rate": total_info.get("best_win_rate", 0),
+                "strategies": strategies,
+            }
+        return tracker
+
+    def get_best_strategy_for_asset(self, symbol: str) -> Optional[str]:
+        """Get the best-performing strategy for a specific asset (auto-promotion)."""
+        perf = self.performance.strategy_performance.get(symbol, {})
+        total = perf.get("_total", {})
+        return total.get("best_strategy", "") or None
 
     # ==================== STATUS & REPORTING ====================
 

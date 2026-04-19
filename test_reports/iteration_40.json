@@ -1,0 +1,120 @@
+{
+  "summary": "Iteration 40 testing complete - Strategy Performance Tracker & Decision Engine Widget. All 11 backend tests passed (100%). All frontend widget tests passed. New features: 1) Per-asset per-strategy tracking with auto-promotion (best_strategy selected by highest win_rate with min 5 trades). 2) Decision Engine dashboard widget showing win rate, trades, Sharpe, max DD, active strategies, model accuracies. 3) Strategy Tracker dashboard widget showing per-asset breakdown with best strategy badges. All 3 widgets displayed in 3-column grid on Dashboard.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration40_strategy_tracker.py",
+    "/app/test_reports/pytest/pytest_iteration40_strategy_tracker.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "core_decision_engine.py correctly implements per-asset/strategy tracking in record_trade_result()",
+    "Auto-promotion logic correctly selects best_strategy by highest win_rate with minimum 5 trades threshold",
+    "get_strategy_tracker() returns proper structure with total_trades, win_rate, pnl, best_strategy, strategies breakdown",
+    "DecisionEngineWidget.jsx correctly displays Win Rate, Trades, Sharpe, Max DD metrics",
+    "DecisionEngineWidget.jsx shows active strategies badges (trend following, mean reversion, scalping, momentum)",
+    "DecisionEngineWidget.jsx shows model accuracy cards (lstm gru, ppo rl, iq720)",
+    "StrategyTrackerWidget.jsx correctly displays per-asset performance with best strategy star badges",
+    "DashboardRestructured.js correctly arranges all 3 widgets in grid-cols-3 layout"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration40_strategy_tracker.py"
+  ],
+  "success_rate": {
+    "backend": "100% (11/11 passed)",
+    "frontend": "100%"
+  },
+  "test_credentials": "Username: triddick84, Password: Fallinone#1",
+  "seed_data_creation": "Test data created via record-outcome API calls during testing",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 40 tested Strategy Performance Tracker and Decision Engine Widget features. Key endpoints: GET /api/signals/engine-status (returns models, strategies, risk limits, performance), POST /api/signals/record-outcome (accepts strategy field, returns best_strategy_for_asset), GET /api/signals/strategy-tracker (returns per-asset strategy performance). Frontend widgets: IQ-720 LIVE (data-testid='iq720-widget'), DECISION ENGINE v2.0 (data-testid='decision-engine-widget'), STRATEGY TRACKER (data-testid='strategy-tracker-widget'). All 3 widgets in 3-column grid on Dashboard. Regression tests passed: Signal Routing page, Telegram Bot page.",
+  "tests_executed": {
+    "backend_tests": [
+      "test_engine_status_endpoint - PASSED (returns models, strategies, risk_limits, performance)",
+      "test_engine_status_models - PASSED (iq720 model found with trained/accuracy fields)",
+      "test_engine_status_active_strategies - PASSED (trend_following, mean_reversion, scalping, momentum)",
+      "test_strategy_tracker_endpoint - PASSED (returns tracker, total_assets_tracked, overall)",
+      "test_record_outcome_with_strategy - PASSED (accepts strategy field, returns best_strategy_for_asset)",
+      "test_record_multiple_outcomes_for_auto_promotion - PASSED (5+ trades triggers auto-promotion)",
+      "test_strategy_tracker_per_asset_structure - PASSED (total_trades, win_rate, pnl, best_strategy, strategies)",
+      "test_api_health - PASSED",
+      "test_iq720_ensemble_endpoint - PASSED",
+      "test_signal_routing_rules - PASSED (3 rules found)",
+      "test_telegram_bot_status - PASSED"
+    ],
+    "frontend_tests": [
+      "Login with credentials - PASSED",
+      "Dashboard loads - PASSED",
+      "IQ-720 Widget found (data-testid='iq720-widget') - PASSED",
+      "IQ-720 LIVE header found - PASSED",
+      "Market Regime label found - PASSED",
+      "Session label found - PASSED",
+      "Kelly Size label found - PASSED",
+      "Decision Engine Widget found (data-testid='decision-engine-widget') - PASSED",
+      "DECISION ENGINE v2.0 header found - PASSED",
+      "Win Rate label found - PASSED",
+      "Trades label found - PASSED",
+      "Sharpe label found - PASSED",
+      "Max DD label found - PASSED",
+      "Strategy badges found (trend following, mean reversion, scalping, momentum) - PASSED",
+      "Model cards found (lstm gru, ppo rl, iq720) - PASSED",
+      "Strategy Tracker Widget found (data-testid='strategy-tracker-widget') - PASSED",
+      "STRATEGY TRACKER header found - PASSED",
+      "Overall stats found - PASSED",
+      "Asset entries found (GBPUSD_OTC, EURUSD_OTC, USDJPY_OTC) - PASSED",
+      "Best strategy indicator found - PASSED",
+      "3-column grid layout verified - PASSED",
+      "Signal Routing page loads - PASSED",
+      "Telegram Bot page loads - PASSED"
+    ]
+  },
+  "features_verified": {
+    "engine_status_endpoint": {
+      "endpoint": "GET /api/signals/engine-status",
+      "status": "WORKING",
+      "notes": "Returns models (iq720, lstm_gru, ppo_rl, etc.), active_strategies, risk_limits, performance metrics"
+    },
+    "record_outcome_endpoint": {
+      "endpoint": "POST /api/signals/record-outcome",
+      "status": "WORKING",
+      "notes": "Accepts symbol, direction, outcome, pnl, strategy fields. Returns performance and best_strategy_for_asset"
+    },
+    "strategy_tracker_endpoint": {
+      "endpoint": "GET /api/signals/strategy-tracker",
+      "status": "WORKING",
+      "notes": "Returns per-asset strategy performance with auto-promotion recommendations"
+    },
+    "auto_promotion": {
+      "status": "VERIFIED",
+      "notes": "Best strategy selected by highest win_rate with minimum 5 trades threshold"
+    },
+    "decision_engine_widget": {
+      "status": "WORKING",
+      "notes": "Shows Win Rate, Trades, Sharpe, Max DD, active strategies badges, model accuracy cards"
+    },
+    "strategy_tracker_widget": {
+      "status": "WORKING",
+      "notes": "Shows per-asset performance with best strategy star badges"
+    },
+    "3_column_grid_layout": {
+      "status": "WORKING",
+      "notes": "IQ-720 LIVE | DECISION ENGINE v2.0 | STRATEGY TRACKER in grid-cols-3"
+    }
+  },
+  "regression_tests": {
+    "api_health": "PASSED - /api/health returns healthy",
+    "iq720_ensemble": "PASSED - POST /api/signals/iq720-ensemble responds",
+    "signal_routing_rules": "PASSED - GET /api/signal-routing/rules returns 3 rules",
+    "telegram_bot_status": "PASSED - GET /api/telegram/status responds",
+    "signal_routing_page": "PASSED - Page loads with routing rules and stats",
+    "telegram_bot_page": "PASSED - Page loads with bot controls and activity log"
+  }
+}

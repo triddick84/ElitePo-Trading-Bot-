@@ -3959,12 +3959,13 @@ async def record_trade_outcome(
     symbol: str = Body(...),
     direction: str = Body(...),
     outcome: str = Body(..., description="win or loss"),
-    pnl: float = Body(0.0, description="Profit/loss amount")
+    pnl: float = Body(0.0, description="Profit/loss amount"),
+    strategy: str = Body("", description="Strategy that generated the signal")
 ):
     """Record a trade outcome for the decision engine's performance tracking."""
     try:
         engine = get_decision_engine(db)
-        engine.record_trade_result(symbol, direction, outcome, pnl)
+        engine.record_trade_result(symbol, direction, outcome, pnl, strategy)
         return {
             "success": True,
             "performance": {
@@ -3973,6 +3974,30 @@ async def record_trade_outcome(
                 "consecutive_losses": engine.performance.consecutive_losses,
                 "sharpe_ratio": round(engine.performance.sharpe_ratio, 2),
                 "max_drawdown_pct": round(engine.performance.max_drawdown_pct, 2),
+            },
+            "best_strategy_for_asset": engine.get_best_strategy_for_asset(symbol)
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/signals/strategy-tracker")
+async def get_strategy_performance_tracker():
+    """
+    Get per-asset strategy performance with auto-promotion recommendations.
+    Shows which strategy performs best for each asset.
+    """
+    try:
+        engine = get_decision_engine(db)
+        tracker = engine.get_strategy_tracker()
+        return {
+            "success": True,
+            "tracker": tracker,
+            "total_assets_tracked": len(tracker),
+            "overall": {
+                "total_trades": engine.performance.total_trades,
+                "win_rate": round(engine.performance.win_rate * 100, 2),
+                "sharpe_ratio": round(engine.performance.sharpe_ratio, 2),
             }
         }
     except Exception as e:

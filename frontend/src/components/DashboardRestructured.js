@@ -36,6 +36,8 @@ import MarketAssetSelector from './MarketAssetSelector';
 import ImprovedSignalPopup from './ImprovedSignalPopup';
 import LatencyAdjustment from './LatencyAdjustment';
 import IQ720Widget from './IQ720Widget';
+import DecisionEngineWidget from './DecisionEngineWidget';
+import StrategyTrackerWidget from './StrategyTrackerWidget';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -749,9 +751,11 @@ const DashboardRestructured = ({
         </Card>
       </div>
 
-      {/* IQ-720 Live Market Intelligence Widget */}
-      <div className="mb-6">
+      {/* AI Intelligence Widgets */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <IQ720Widget selectedAsset={config.selected_assets?.[0] || 'EURUSD'} />
+        <DecisionEngineWidget />
+        <StrategyTrackerWidget />
       </div>
 
       {/* Main Content Grid */}
