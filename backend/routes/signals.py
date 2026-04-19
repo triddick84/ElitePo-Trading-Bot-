@@ -44,6 +44,7 @@ from force_signal_generator import force_signal_generator
 from pocket_option_client import get_pocket_option_client
 from routes import get_realtime_market_hub
 from signal_routing_service import get_signal_router
+from core_decision_engine import get_decision_engine
 from real_market_data_service import RealMarketDataService
 from platform_integrations import platform_integration
 from continuous_scanner import ContinuousMarketScanner
@@ -3847,6 +3848,132 @@ async def get_otc_candle_stats():
             "success": True,
             "total_candles": total,
             "by_symbol": stats
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+
+# ============================================================================
+# CORE DECISION ENGINE ENDPOINTS
+# ============================================================================
+
+def _init_decision_engine():
+    """Initialize the decision engine with all ML model references."""
+    engine = get_decision_engine(db)
+    engine.iq720 = iq720_generator
+    try:
+        from maximized_ai_ml_system import MaximizedAIMLSystem
+        if maximized_ai_ml:
+            engine.maximized_ml = maximized_ai_ml
+    except Exception:
+        pass
+    try:
+        if improved_ai_ml:
+            engine.improved_ml = improved_ai_ml
+    except Exception:
+        pass
+    try:
+        if lstm_gru_system:
+            engine.lstm_gru = lstm_gru_system
+    except Exception:
+        pass
+    try:
+        if ppo_agent:
+            engine.ppo_agent = ppo_agent
+    except Exception:
+        pass
+    return engine
+
+
+@router.post("/signals/decision")
+async def get_ai_decision(
+    symbol: str = Body("EURUSD", description="Trading symbol"),
+    timeframe: str = Body("M1", description="OANDA timeframe"),
+    candle_count: int = Body(100, description="Number of candles")
+):
+    """
+    Core Decision Engine — generates a fully risk-managed trade decision.
+    
+    Pipeline: Regime Detection → Multi-Model Ensemble → Risk Checks → Position Sizing → Decision
+    """
+    try:
+        engine = _init_decision_engine()
+
+        # Fetch candles
+        oanda_symbol = symbol.replace('_OTC', '').replace('OTC', '')
+        if '_' not in oanda_symbol and len(oanda_symbol) == 6:
+            oanda_symbol = f"{oanda_symbol[:3]}_{oanda_symbol[3:]}"
+
+        candles = []
+        try:
+            df = enhanced_oanda.get_candles(oanda_symbol, timeframe, candle_count)
+            if df is not None and not df.empty:
+                candles = df.reset_index().to_dict('records')
+        except Exception as e:
+            logger.warning(f"OANDA fetch for decision engine: {e}")
+
+        if len(candles) < 30:
+            return {"success": False, "message": f"Insufficient data ({len(candles)} candles)", "decision": None}
+
+        decision = engine.generate_decision(candles, symbol)
+
+        # Route if actionable
+        routing = None
+        if decision.action in ("CALL", "PUT") and decision.risk_check_passed:
+            try:
+                routing = await _route_and_dispatch({
+                    "direction": decision.action,
+                    "symbol": symbol,
+                    "confidence": decision.confidence,
+                    "strategy": decision.strategy_mode,
+                    "source": "core_decision_engine"
+                })
+            except Exception:
+                pass
+
+        return {
+            "success": True,
+            "decision": decision.to_dict(),
+            "routing": routing,
+            "message": f"Decision: {decision.action} ({decision.confidence}%) via {decision.strategy_mode}"
+        }
+
+    except Exception as e:
+        logger.error(f"Decision engine error: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/signals/engine-status")
+async def get_engine_status():
+    """Get the Core Decision Engine status: models, performance, risk limits."""
+    try:
+        engine = _init_decision_engine()
+        return {"success": True, **engine.get_engine_status()}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@router.post("/signals/record-outcome")
+async def record_trade_outcome(
+    symbol: str = Body(...),
+    direction: str = Body(...),
+    outcome: str = Body(..., description="win or loss"),
+    pnl: float = Body(0.0, description="Profit/loss amount")
+):
+    """Record a trade outcome for the decision engine's performance tracking."""
+    try:
+        engine = get_decision_engine(db)
+        engine.record_trade_result(symbol, direction, outcome, pnl)
+        return {
+            "success": True,
+            "performance": {
+                "total_trades": engine.performance.total_trades,
+                "win_rate": round(engine.performance.win_rate * 100, 2),
+                "consecutive_losses": engine.performance.consecutive_losses,
+                "sharpe_ratio": round(engine.performance.sharpe_ratio, 2),
+                "max_drawdown_pct": round(engine.performance.max_drawdown_pct, 2),
+            }
         }
     except Exception as e:
         return {"success": False, "error": str(e)}

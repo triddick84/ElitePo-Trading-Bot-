@@ -1,0 +1,114 @@
+{
+  "summary": "Iteration 37 testing complete - Core Decision Engine v2.0. All 25 backend tests passed (100%). Frontend dashboard, AI Models, and Performance pages load correctly. New endpoints /api/signals/decision, /api/signals/engine-status, and /api/signals/record-outcome all working as expected.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration37_core_decision_engine.py",
+    "/app/test_reports/pytest/pytest_iteration37_core_decision_engine.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "CoreDecisionEngine correctly implements multi-model ensemble voting with configurable weights (IQ-720: 15%, Maximized ML: 30%, Improved ML: 20%, LSTM/GRU: 25%, PPO RL: 10%)",
+    "Market regime detection properly identifies 5 regimes: trending_up, trending_down, ranging, high_volatility, low_volatility",
+    "Risk management includes 7 risk limits: max_drawdown_pct, max_daily_loss_pct, max_consecutive_losses, min_confidence, max_position_pct, min_win_rate_threshold, cooldown_after_loss_streak_s",
+    "Kelly-based position sizing correctly adjusts for confidence, regime, and drawdown",
+    "Trade outcome tracking properly updates win_rate, consecutive_losses, max_drawdown_pct, and sharpe_ratio",
+    "Decision endpoint correctly returns HOLD when confidence < 65% threshold with LOW_CONFIDENCE warning"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration37_core_decision_engine.py"
+  ],
+  "success_rate": {
+    "backend": "100% (25/25 passed)",
+    "frontend": "100%"
+  },
+  "test_credentials": "Username: triddick84, Password: Fallinone#1",
+  "seed_data_creation": "None - used existing OANDA market data",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 37 features tested: 1) GET /api/signals/engine-status returns version 2.0.0, models status (iq720 always trained), model_weights, active_strategies (4 strategies), risk_limits (7 limits), and performance metrics. 2) POST /api/signals/decision generates risk-managed trade decisions with regime detection, model_votes, confidence, position_size_pct, expiry_seconds, stop_loss_pips, take_profit_pips. Returns HOLD when confidence < 65%. 3) POST /api/signals/record-outcome tracks trade results and updates win_rate, consecutive_losses, max_drawdown_pct, sharpe_ratio. 4) Regression tests passed: /api/signals/iq720-ensemble, /api/signals/scan-markets, /api/signal-routing/stats, /api/ml/tuning-report, /api/health. 5) Frontend: Dashboard, AI Models, Performance pages all load correctly.",
+  "tests_executed": {
+    "backend_tests": [
+      "test_engine_status_returns_success - PASSED",
+      "test_engine_status_has_version - PASSED",
+      "test_engine_status_has_models - PASSED",
+      "test_engine_status_has_model_weights - PASSED",
+      "test_engine_status_has_active_strategies - PASSED",
+      "test_engine_status_has_risk_limits - PASSED",
+      "test_engine_status_has_performance - PASSED",
+      "test_decision_endpoint_returns_success - PASSED",
+      "test_decision_has_decision_object - PASSED",
+      "test_decision_has_action - PASSED",
+      "test_decision_has_confidence - PASSED",
+      "test_decision_has_regime - PASSED",
+      "test_decision_has_model_votes - PASSED",
+      "test_decision_has_position_sizing - PASSED",
+      "test_decision_has_risk_fields - PASSED",
+      "test_decision_hold_on_low_confidence - PASSED",
+      "test_record_win_outcome - PASSED",
+      "test_record_loss_outcome - PASSED",
+      "test_record_outcome_updates_sharpe - PASSED",
+      "test_iq720_ensemble_still_works - PASSED",
+      "test_scan_markets_still_works - PASSED",
+      "test_signal_routing_stats_still_works - PASSED",
+      "test_ml_tuning_report_still_works - PASSED",
+      "test_api_health - PASSED",
+      "test_full_decision_pipeline - PASSED"
+    ],
+    "frontend_tests": [
+      "Login page loads - PASSED",
+      "Login with credentials - PASSED",
+      "Dashboard loads after login - PASSED",
+      "AI Models page loads - PASSED",
+      "Performance page loads - PASSED"
+    ]
+  },
+  "features_verified": {
+    "engine_status_endpoint": {
+      "endpoint": "GET /api/signals/engine-status",
+      "status": "WORKING",
+      "notes": "Returns version 2.0.0, models (iq720 trained), model_weights (5 models), active_strategies (4 strategies), risk_limits (7 limits), performance metrics"
+    },
+    "decision_endpoint": {
+      "endpoint": "POST /api/signals/decision",
+      "status": "WORKING",
+      "notes": "Returns action (CALL/PUT/HOLD), confidence, regime, model_votes, position_size_pct, expiry_seconds, stop_loss_pips, take_profit_pips, risk_reward_ratio"
+    },
+    "record_outcome_endpoint": {
+      "endpoint": "POST /api/signals/record-outcome",
+      "status": "WORKING",
+      "notes": "Accepts symbol, direction, outcome (win/loss), pnl. Updates total_trades, win_rate, consecutive_losses, max_drawdown_pct, sharpe_ratio"
+    },
+    "hold_on_low_confidence": {
+      "status": "WORKING",
+      "notes": "Decision returns HOLD with LOW_CONFIDENCE warning when confidence < 65%"
+    },
+    "model_votes": {
+      "status": "WORKING",
+      "notes": "Decision includes model_votes showing which models voted and their directions"
+    },
+    "regime_detection": {
+      "status": "WORKING",
+      "notes": "Decision includes regime (trending_up/down, ranging, high/low_volatility)"
+    },
+    "signal_routing": {
+      "status": "WORKING",
+      "notes": "Actionable decisions are routed through signal routing service"
+    }
+  },
+  "regression_tests": {
+    "iq720_ensemble": "PASSED - /api/signals/iq720-ensemble returns success",
+    "scan_markets": "PASSED - /api/signals/scan-markets returns signals",
+    "signal_routing_stats": "PASSED - /api/signal-routing/stats returns stats",
+    "ml_tuning_report": "PASSED - /api/ml/tuning-report returns report",
+    "api_health": "PASSED - /api/health returns healthy status",
+    "frontend_dashboard": "PASSED - Dashboard loads correctly"
+  }
+}
