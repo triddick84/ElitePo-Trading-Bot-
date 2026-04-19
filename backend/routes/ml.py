@@ -2198,3 +2198,53 @@ async def train_ml_from_otc_data(
         min_samples=min_samples
     )
     return result
+
+
+
+# ==================== AUTO-RETRAIN SCHEDULER ENDPOINTS ====================
+
+from auto_retrain_scheduler import get_retrain_scheduler
+
+
+@router.get("/ml/scheduler/status")
+async def get_scheduler_status():
+    """Get auto-retrain scheduler status, config, and history."""
+    scheduler = get_retrain_scheduler(db)
+    return {"success": True, **scheduler.get_status()}
+
+
+@router.post("/ml/scheduler/start")
+async def start_scheduler():
+    """Start the auto-retrain scheduler."""
+    scheduler = get_retrain_scheduler(db)
+    scheduler.start()
+    return {"success": True, "message": "Auto-retrain scheduler started", "status": scheduler.get_status()}
+
+
+@router.post("/ml/scheduler/stop")
+async def stop_scheduler():
+    """Stop the auto-retrain scheduler."""
+    scheduler = get_retrain_scheduler(db)
+    scheduler.stop()
+    return {"success": True, "message": "Auto-retrain scheduler stopped"}
+
+
+@router.put("/ml/scheduler/config")
+async def update_scheduler_config(config: dict = Body(...)):
+    """
+    Update scheduler config.
+    
+    Fields: enabled, retrain_hours_utc, retrain_days, min_hours_between_retrain,
+    use_otc_data, use_oanda_data, timeframes, symbols_oanda, symbols_otc, min_otc_candles
+    """
+    scheduler = get_retrain_scheduler(db)
+    scheduler.update_config(config)
+    return {"success": True, "config": scheduler._config}
+
+
+@router.post("/ml/scheduler/trigger")
+async def trigger_manual_retrain():
+    """Trigger an immediate retrain (manual override, respects 30min cooldown)."""
+    scheduler = get_retrain_scheduler(db)
+    result = await scheduler.trigger_manual_retrain()
+    return result

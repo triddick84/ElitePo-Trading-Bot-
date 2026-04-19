@@ -1,0 +1,127 @@
+{
+  "summary": "Iteration 38 testing complete - Auto-Retrain Scheduler. All 30 backend tests passed (100%). New scheduler endpoints for scheduled ML model retraining at market open times (London 08:00 UTC, NY 13:00 UTC, Mon-Fri) are working correctly. Frontend dashboard loads successfully.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration38_auto_retrain_scheduler.py",
+    "/app/test_reports/pytest/pytest_iteration38_auto_retrain_scheduler.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "AutoRetrainScheduler correctly implements asyncio background task for scheduled retraining",
+    "Scheduler config includes all required fields: enabled, retrain_hours_utc [8,13], retrain_days [0-4], min_hours_between_retrain, use_otc_data, use_oanda_data, timeframes, symbols_oanda, symbols_otc",
+    "_should_retrain_now() correctly checks: weekday in retrain_days, hour in retrain_hours_utc, minute < 2, and min interval since last retrain",
+    "Manual trigger respects 30min cooldown between retrains",
+    "Scheduler history tracks: started_at, status, completed_at, duration_seconds, models_trained, models_count",
+    "Config can be updated at runtime via PUT /api/ml/scheduler/config without restart"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration38_auto_retrain_scheduler.py"
+  ],
+  "success_rate": {
+    "backend": "100% (30/30 passed)",
+    "frontend": "100%"
+  },
+  "test_credentials": "Username: triddick84, Password: Fallinone#1",
+  "seed_data_creation": "None - used existing OANDA market data",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 38 features tested: 1) GET /api/ml/scheduler/status returns running state, config (enabled, retrain_hours_utc [8,13], retrain_days [0-4], min_hours_between_retrain, use_otc_data, use_oanda_data, timeframes, symbols_oanda, symbols_otc, min_otc_candles), last_retrain, next_scheduled, retrain_count, recent_history. 2) POST /api/ml/scheduler/start starts the asyncio background task. 3) POST /api/ml/scheduler/stop stops the scheduler. 4) PUT /api/ml/scheduler/config updates config at runtime. 5) POST /api/ml/scheduler/trigger triggers immediate manual retrain (may timeout >30s but runs in background, respects 30min cooldown). 6) Regression tests passed: /api/signals/engine-status, /api/signals/decision, /api/ml/tuning-report, /api/signals/iq720-ensemble, /api/health. 7) Frontend dashboard loads correctly.",
+  "tests_executed": {
+    "backend_tests": [
+      "test_scheduler_status_returns_success - PASSED",
+      "test_scheduler_status_has_running_field - PASSED",
+      "test_scheduler_status_has_config - PASSED",
+      "test_scheduler_config_has_retrain_hours_utc - PASSED",
+      "test_scheduler_config_has_retrain_days - PASSED",
+      "test_scheduler_config_has_enabled - PASSED",
+      "test_scheduler_config_has_use_otc_data - PASSED",
+      "test_scheduler_config_has_use_oanda_data - PASSED",
+      "test_scheduler_config_has_timeframes - PASSED",
+      "test_scheduler_config_has_symbols - PASSED",
+      "test_scheduler_status_has_last_retrain - PASSED",
+      "test_scheduler_status_has_recent_history - PASSED",
+      "test_scheduler_start_returns_success - PASSED",
+      "test_scheduler_start_returns_status - PASSED",
+      "test_scheduler_stop_returns_success - PASSED",
+      "test_scheduler_stop_then_status_shows_not_running - PASSED",
+      "test_scheduler_start_then_status_shows_running - PASSED",
+      "test_update_config_returns_success - PASSED",
+      "test_update_config_returns_updated_config - PASSED",
+      "test_update_retrain_hours_utc - PASSED",
+      "test_update_enabled_flag - PASSED",
+      "test_update_multiple_config_fields - PASSED",
+      "test_recent_history_structure - PASSED",
+      "test_retrain_count_matches_history - PASSED",
+      "test_engine_status_still_works - PASSED",
+      "test_decision_endpoint_still_works - PASSED",
+      "test_ml_tuning_report_still_works - PASSED",
+      "test_iq720_ensemble_still_works - PASSED",
+      "test_api_health - PASSED",
+      "test_scheduler_full_flow - PASSED"
+    ],
+    "frontend_tests": [
+      "Login page loads - PASSED",
+      "Login with credentials - PASSED",
+      "Dashboard loads after login - PASSED"
+    ]
+  },
+  "features_verified": {
+    "scheduler_status_endpoint": {
+      "endpoint": "GET /api/ml/scheduler/status",
+      "status": "WORKING",
+      "notes": "Returns running state, config (all fields), last_retrain, next_scheduled, retrain_count, recent_history"
+    },
+    "scheduler_start_endpoint": {
+      "endpoint": "POST /api/ml/scheduler/start",
+      "status": "WORKING",
+      "notes": "Starts asyncio background task, returns success and current status"
+    },
+    "scheduler_stop_endpoint": {
+      "endpoint": "POST /api/ml/scheduler/stop",
+      "status": "WORKING",
+      "notes": "Stops the scheduler, cancels background task"
+    },
+    "scheduler_config_endpoint": {
+      "endpoint": "PUT /api/ml/scheduler/config",
+      "status": "WORKING",
+      "notes": "Updates config at runtime without restart. Supports: enabled, retrain_hours_utc, retrain_days, min_hours_between_retrain, use_otc_data, use_oanda_data, timeframes, symbols_oanda, symbols_otc"
+    },
+    "scheduler_trigger_endpoint": {
+      "endpoint": "POST /api/ml/scheduler/trigger",
+      "status": "WORKING",
+      "notes": "Triggers immediate manual retrain. May timeout (>30s) but retrain runs in background. Respects 30min cooldown."
+    },
+    "scheduler_history": {
+      "status": "WORKING",
+      "notes": "recent_history shows completed retrains with started_at, status, completed_at, duration_seconds, models_trained, models_count"
+    }
+  },
+  "regression_tests": {
+    "engine_status": "PASSED - /api/signals/engine-status returns version 2.0.0",
+    "decision": "PASSED - /api/signals/decision returns action, confidence, regime",
+    "ml_tuning_report": "PASSED - /api/ml/tuning-report returns report",
+    "iq720_ensemble": "PASSED - /api/signals/iq720-ensemble returns response (success=false when no signal is valid)",
+    "api_health": "PASSED - /api/health returns healthy status",
+    "frontend_dashboard": "PASSED - Dashboard loads correctly"
+  },
+  "scheduler_config_defaults": {
+    "enabled": true,
+    "retrain_hours_utc": [8, 13],
+    "retrain_days": [0, 1, 2, 3, 4],
+    "min_hours_between_retrain": 4,
+    "use_otc_data": true,
+    "use_oanda_data": true,
+    "timeframes": ["S5", "M1"],
+    "symbols_oanda": ["EUR_USD", "GBP_USD", "USD_JPY", "AUD_USD", "EUR_JPY"],
+    "symbols_otc": ["EURUSD_OTC"],
+    "min_otc_candles": 200
+  }
+}
