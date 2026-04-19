@@ -32,6 +32,7 @@ import {
   GitBranch, LineChart, Award
 } from 'lucide-react';
 import DataCollectionDashboard from './DataCollectionDashboard';
+import OTCTuningPanel from './OTCTuningPanel';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -461,8 +462,9 @@ const AIMLModelsPage = () => {
           <TabsTrigger value="optimization">🎯 Optimization</TabsTrigger>
           <TabsTrigger value="learning">📚 Learning System</TabsTrigger>
           <TabsTrigger value="adaptive">🔄 Adaptive Strategy</TabsTrigger>
-          <TabsTrigger value="retrain">⚡ Retrain Models</TabsTrigger>
-          <TabsTrigger value="performance">📊 Performance</TabsTrigger>
+          <TabsTrigger value="retrain">Retrain Models</TabsTrigger>
+          <TabsTrigger value="otc-tuning">5s OTC Tuning</TabsTrigger>
+          <TabsTrigger value="performance">Performance</TabsTrigger>
         </TabsList>
 
         {/* Real Data Training Tab - NEW */}
@@ -1204,6 +1206,12 @@ const AIMLModelsPage = () => {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+
+        {/* OTC Tuning Tab */}
+        <TabsContent value="otc-tuning">
+          <OTCTuningPanel />
         </TabsContent>
 
         {/* Performance Tab */}
