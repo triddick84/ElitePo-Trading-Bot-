@@ -16,7 +16,7 @@ from routes import db, convert_numpy_types, logger
 # Re-use the main api_router — routes are registered via include in server.py
 # This module uses a local router that gets included by server.py
 router = APIRouter()
-from tradingview_webhook_service import TradingViewAlertModel
+from tradingview_webhook_service import TradingViewAlertModel, tradingview_webhook_service
 from force_signal_generator import force_signal_generator
 from pocket_option_auto_trader import get_auto_trading_service
 from telegram_signal_notifier import get_telegram_notifier

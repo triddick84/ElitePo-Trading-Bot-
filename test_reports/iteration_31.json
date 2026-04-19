@@ -1,0 +1,90 @@
+{
+  "summary": "Iteration 31 testing complete - MT5 and TradingView integrations fully functional. Fixed TradingView webhook bug (float() error when price is None). All 24 backend tests passed. Frontend Integrations page verified with MT5 connection, TradingView webhook testing, alert history, and API reference. MT5 runs in SIMULATION mode (MetaTrader5 package unavailable on Linux).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/pytest/pytest_mt5_tradingview.xml",
+    "/app/backend/tests/test_mt5_tradingview_integrations.py"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Fixed TradingView webhook bug: float() error when price/quantity is None - changed to handle None values properly",
+    "MT5 endpoints all working: /api/mt5/status, /api/mt5/connect, /api/mt5/account, /api/mt5/symbol/{symbol}, /api/mt5/order, /api/mt5/disconnect",
+    "TradingView endpoints all working: /api/tradingview/webhook, /api/tradingview/stats, /api/tradingview/history, /api/tradingview/setup, /api/tradingview/pine-script",
+    "MT5 runs in SIMULATION mode - returns simulated $10,000 balance, 1:100 leverage",
+    "TradingView webhooks process alerts and route to Pocket Option signal queue",
+    "Frontend IntegrationsPage.jsx has all required data-testid attributes",
+    "All regression endpoints working: /api/health, /api/telegram-bot/status, /api/signals/iq720-ensemble"
+  ],
+  "updated_files": [
+    "/app/backend/tradingview_webhook_service.py (Fixed None handling for price/quantity)",
+    "/app/backend/tests/test_mt5_tradingview_integrations.py (New test file)"
+  ],
+  "success_rate": {
+    "backend": "100% (24/24 tests passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+  "test_credentials": "username=triddick84, password=Fallinone#1",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "MT5 and TradingView integrations are now functional. MT5 runs in simulation mode (no native MetaTrader5 package on Linux) - returns simulated account with $10,000 balance. TradingView webhooks process alerts and route to internal signal queue for Pocket Option. The fix in tradingview_webhook_service.py handles None values for price/quantity fields. Frontend Integrations page has three tabs: MetaTrader 4/5, TradingView, and API Reference.",
+  "mocked_apis": {
+    "note": "MT5 runs in SIMULATION mode (MetaTrader5 package unavailable on Linux). TradingView webhooks are real but route to internal signal queue, not live broker."
+  },
+  "endpoints_tested": {
+    "mt5": [
+      "GET /api/mt5/status - WORKING (returns connection status)",
+      "POST /api/mt5/connect?login=12345678&password=test&server=MetaQuotes-Demo - WORKING (connects in simulation mode)",
+      "GET /api/mt5/account - WORKING (returns simulated $10,000 balance)",
+      "GET /api/mt5/symbol/EURUSD - WORKING (returns bid/ask/spread)",
+      "POST /api/mt5/order?symbol=EURUSD&direction=BUY&volume=0.1 - WORKING (simulated order execution)",
+      "POST /api/mt5/disconnect - WORKING"
+    ],
+    "tradingview": [
+      "POST /api/tradingview/webhook - WORKING (processes alerts, routes to Pocket Option)",
+      "GET /api/tradingview/stats - WORKING (returns total/valid/executed counts)",
+      "GET /api/tradingview/history?limit=10 - WORKING (returns recent alerts)",
+      "GET /api/tradingview/setup - WORKING (returns webhook setup instructions)",
+      "GET /api/tradingview/pine-script - WORKING (returns Pine Script template)"
+    ],
+    "regression": [
+      "GET /api/health - WORKING",
+      "GET /api/telegram-bot/status - WORKING",
+      "POST /api/signals/iq720-ensemble - WORKING"
+    ]
+  },
+  "frontend_features_tested": {
+    "integrations_page": {
+      "mt5_connection_card": "data-testid='mt5-connection-card' - VERIFIED",
+      "mt5_status_badge": "data-testid='mt5-status-badge' - VERIFIED (shows Connected/Disconnected)",
+      "mt5_login_input": "data-testid='mt5-login-input' - VERIFIED",
+      "mt5_password_input": "data-testid='mt5-password-input' - VERIFIED",
+      "mt5_server_input": "data-testid='mt5-server-input' - VERIFIED",
+      "mt5_connect_btn": "data-testid='mt5-connect-btn' - VERIFIED",
+      "mt5_disconnect_btn": "data-testid='mt5-disconnect-btn' - VERIFIED",
+      "mt5_account_info": "data-testid='mt5-account-info' - VERIFIED (shows balance/equity/profit/leverage)",
+      "tv_webhook_url": "data-testid='tv-webhook-url' - VERIFIED",
+      "tv_test_symbol": "data-testid='tv-test-symbol' - VERIFIED",
+      "tv_test_action": "data-testid='tv-test-action' - VERIFIED",
+      "tv_test_send_btn": "data-testid='tv-test-send-btn' - VERIFIED",
+      "tv_test_result": "data-testid='tv-test-result' - VERIFIED (shows alert_id, status, symbol)",
+      "tv_stats_cards": "Total Alerts, Valid, Executed - VERIFIED",
+      "tv_recent_alerts": "Recent Alerts list - VERIFIED",
+      "api_reference_tab": "API Endpoints Reference - VERIFIED"
+    }
+  },
+  "bug_fixed": {
+    "issue": "TradingView webhook returning 500 error: float() argument must be a string or a real number, not 'NoneType'",
+    "root_cause": "In tradingview_webhook_service.py, the code did float(alert_data.get('price', 0)) but when price is explicitly None in the Pydantic model, it fails",
+    "fix": "Changed to handle None values: price_val = alert_data.get('price'); price = float(price_val) if price_val is not None else 0.0",
+    "file_modified": "/app/backend/tradingview_webhook_service.py"
+  }
+}

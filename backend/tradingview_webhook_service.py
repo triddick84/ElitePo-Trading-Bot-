@@ -260,11 +260,13 @@ class TradingViewWebhookService:
         # Normalize symbol for destination
         normalized_symbol = self.normalize_symbol(symbol, destination.value)
         
-        # Extract price
-        price = float(alert_data.get("price", 0))
+        # Extract price (handle None values)
+        price_val = alert_data.get("price")
+        price = float(price_val) if price_val is not None else 0.0
         
-        # Extract quantity/lot size
-        quantity = float(alert_data.get("quantity", alert_data.get("qty", alert_data.get("lot", 0.01))))
+        # Extract quantity/lot size (handle None values)
+        qty_val = alert_data.get("quantity") or alert_data.get("qty") or alert_data.get("lot")
+        quantity = float(qty_val) if qty_val is not None else 0.01
         
         # Extract TP/SL
         take_profit = alert_data.get("take_profit") or alert_data.get("tp")
