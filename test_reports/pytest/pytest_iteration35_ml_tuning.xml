@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="4" skipped="0" tests="14" time="280.929" timestamp="2026-04-19T08:57:30.405406+00:00" hostname="agent-env-d2b81558-cd45-4bd9-92a8-e0eea9b0d14c"><testcase classname="backend.tests.test_iteration35_ml_tuning.TestMLTuningReport" name="test_tuning_report_returns_success" time="60.159"><failure message="AssertionError: Expected 200, got 502: The preview environment is not responding. It may be starting up.&#10;  &#10;assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code">backend/tests/test_iteration35_ml_tuning.py:28: in test_tuning_report_returns_success
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+E   AssertionError: Expected 200, got 502: The preview environment is not responding. It may be starting up.
+E     
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_iteration35_ml_tuning.TestMLTuningReport" name="test_tuning_report_has_otc_data_section" time="60.161"><failure message="requests.exceptions.JSONDecodeError: Expecting value: line 1 column 1 (char 0)">/root/.venv/lib/python3.11/site-packages/requests/models.py:976: in json
+    return complexjson.loads(self.text, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/__init__.py:346: in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/decoder.py:337: in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/decoder.py:355: in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+E   json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+During handling of the above exception, another exception occurred:
+backend/tests/test_iteration35_ml_tuning.py:36: in test_tuning_report_has_otc_data_section
+    data = response.json()
+           ^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/models.py:980: in json
+    raise RequestsJSONDecodeError(e.msg, e.doc, e.pos)
+E   requests.exceptions.JSONDecodeError: Expecting value: line 1 column 1 (char 0)</failure></testcase><testcase classname="backend.tests.test_iteration35_ml_tuning.TestMLTuningReport" name="test_tuning_report_has_model_status" time="60.126"><failure message="requests.exceptions.JSONDecodeError: Expecting value: line 1 column 1 (char 0)">/root/.venv/lib/python3.11/site-packages/requests/models.py:976: in json
+    return complexjson.loads(self.text, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/__init__.py:346: in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/decoder.py:337: in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/decoder.py:355: in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+E   json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+During handling of the above exception, another exception occurred:
+backend/tests/test_iteration35_ml_tuning.py:52: in test_tuning_report_has_model_status
+    data = response.json()
+           ^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/models.py:980: in json
+    raise RequestsJSONDecodeError(e.msg, e.doc, e.pos)
+E   requests.exceptions.JSONDecodeError: Expecting value: line 1 column 1 (char 0)</failure></testcase><testcase classname="backend.tests.test_iteration35_ml_tuning.TestMLTuningReport" name="test_tuning_report_has_tuning_config" time="60.146"><failure message="requests.exceptions.JSONDecodeError: Expecting value: line 1 column 1 (char 0)">/root/.venv/lib/python3.11/site-packages/requests/models.py:976: in json
+    return complexjson.loads(self.text, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/__init__.py:346: in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/decoder.py:337: in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/decoder.py:355: in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+E   json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+During handling of the above exception, another exception occurred:
+backend/tests/test_iteration35_ml_tuning.py:67: in test_tuning_report_has_tuning_config
+    data = response.json()
+           ^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/models.py:980: in json
+    raise RequestsJSONDecodeError(e.msg, e.doc, e.pos)
+E   requests.exceptions.JSONDecodeError: Expecting value: line 1 column 1 (char 0)</failure></testcase><testcase classname="backend.tests.test_iteration35_ml_tuning.TestTrainFromOTC" name="test_train_from_otc_with_maximized_model" time="31.687" /><testcase classname="backend.tests.test_iteration35_ml_tuning.TestTrainFromOTC" name="test_train_from_otc_with_improved_model" time="3.150" /><testcase classname="backend.tests.test_iteration35_ml_tuning.TestTrainFromOTC" name="test_train_from_otc_insufficient_data_returns_helpful_error" time="0.099" /><testcase classname="backend.tests.test_iteration35_ml_tuning.TestTrainFromOTC" name="test_train_from_otc_default_model_works" time="3.139" /><testcase classname="backend.tests.test_iteration35_ml_tuning.TestOTCCandleEndpointsRegression" name="test_collect_otc_candles_still_works" time="0.154" /><testcase classname="backend.tests.test_iteration35_ml_tuning.TestOTCCandleEndpointsRegression" name="test_otc_candle_stats_still_works" time="0.096" /><testcase classname="backend.tests.test_iteration35_ml_tuning.TestRetrainStatusRegression" name="test_retrain_status_still_works" time="0.095" /><testcase classname="backend.tests.test_iteration35_ml_tuning.TestSignalEndpointsRegression" name="test_scan_markets_still_works" time="1.494" /><testcase classname="backend.tests.test_iteration35_ml_tuning.TestSignalEndpointsRegression" name="test_iq720_ensemble_still_works" time="0.153" /><testcase classname="backend.tests.test_iteration35_ml_tuning.TestDashboardWidgetRegression" name="test_maximized_ml_stats_still_works" time="0.096" /></testsuite></testsuites>

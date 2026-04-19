@@ -2139,3 +2139,62 @@ async def get_training_data_stats():
     except Exception as e:
         logger.error(f"Error getting training data stats: {e}")
         return {"success": False, "error": str(e)}
+
+
+
+# ==================== ML ACCURACY TUNING ENDPOINTS ====================
+
+from ml_accuracy_tuner import get_ml_tuner
+
+
+@router.get("/ml/tuning-report")
+async def get_ml_tuning_report():
+    """
+    Get ML accuracy tuning report: OTC data availability, model status,
+    and configuration for training.
+    """
+    tuner = get_ml_tuner(db)
+    report = await tuner.get_tuning_report()
+
+    # Add current model accuracy
+    model_status = {}
+    if maximized_ai_ml:
+        model_status["maximized_v3"] = {
+            "is_trained": maximized_ai_ml.is_trained,
+            "accuracy": round(maximized_ai_ml.model_accuracy * 100, 2) if maximized_ai_ml.model_accuracy else 0,
+            "features": maximized_ai_ml.selected_feature_count if hasattr(maximized_ai_ml, 'selected_feature_count') else 0,
+            "last_trained": maximized_ai_ml.last_training_time.isoformat() if maximized_ai_ml.last_training_time else None
+        }
+    if improved_ai_ml:
+        model_status["improved_v2"] = {
+            "is_trained": improved_ai_ml.is_trained,
+            "accuracy": round(improved_ai_ml.model_accuracy * 100, 2) if improved_ai_ml.model_accuracy else 0,
+            "last_trained": improved_ai_ml.last_training_time.isoformat() if improved_ai_ml.last_training_time else None
+        }
+
+    report["model_status"] = model_status
+    return report
+
+
+@router.post("/ml/train-from-otc")
+async def train_ml_from_otc_data(
+    model: str = Body("maximized", description="Which model: maximized or improved"),
+    symbols: List[str] = Body(None, description="OTC symbols to train on"),
+    min_samples: int = Body(200, description="Minimum samples required")
+):
+    """
+    Train ML model using accumulated OTC 5-second candle data.
+    Uses adaptive thresholds, 5s-optimized features, and feature selection.
+    """
+    tuner = get_ml_tuner(db)
+
+    target_system = maximized_ai_ml if model == "maximized" else improved_ai_ml
+    if target_system is None:
+        return {"success": False, "error": f"ML system '{model}' not available"}
+
+    result = await tuner.train_from_otc(
+        ml_system=target_system,
+        symbols=symbols,
+        min_samples=min_samples
+    )
+    return result
