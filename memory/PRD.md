@@ -9,6 +9,15 @@
 - Added: `get_ssid_service`, `initialize_ssid_service` from `ssid_auto_refresh_service`
 - All 10 Telegram bot endpoints verified working (status, start, stop, send, settings, history, stats, etc.)
 
+✅ **Hybrid Strategy Replaced + Multi-Timeframe ML + OTC Candle Collection (April 19, 2026)**
+- **REPLACED**: Legacy Hybrid strategy with IQ-720 Ensemble (8 weighted sub-strategies + regime detection) in backtesting
+- **Multi-Timeframe ML**: Both Maximized v3 and Improved v2 now train on S5, S15, S30, M1 timeframes (was M1 only)
+- **OANDA S5 Data**: ML systems fetch 5-second candles from OANDA for primary training
+- **Live OTC Collection**: `POST /api/signals/collect-otc-candles` stores Tampermonkey-scraped 5s OTC candles to MongoDB
+- **Auto-Collection**: TM script sends last 30 candles to backend every 30 seconds via heartbeat
+- **Stats**: `GET /api/signals/otc-candle-stats` shows collected candle counts per symbol
+- **30-day TTL**: Auto-deletes old collected candles via MongoDB TTL index
+
 ✅ **Signal Routing Pipeline Integration (April 19, 2026)**
 - **WIRED**: Signal routing engine auto-routes every signal from scan-markets and IQ-720 ensemble
 - **Dispatch**: Pocket Option (queued), MT5 (execute_order with ticket#), Telegram (send_message notification)
