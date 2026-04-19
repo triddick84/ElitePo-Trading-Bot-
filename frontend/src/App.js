@@ -16,6 +16,7 @@ import SettingsPage from "./components/SettingsPage";
 import PocketOptionPage from "./components/PocketOptionPage";
 import MobileAutoTraderPage from "./components/MobileAutoTraderPage";
 import IntegrationsPage from "./components/IntegrationsPage";
+import SignalRoutingPage from "./components/SignalRoutingPage";
 import { AuthProvider, LoginPage, useAuth } from "./components/AuthComponents";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
@@ -141,6 +142,7 @@ function ProtectedApp() {
     { id: "pocket-option", label: "Pocket Option", icon: "🎰" },
     { id: "mobile-trader", label: "Mobile Auto-Trade", icon: "📲" },
     { id: "integrations", label: "Integrations", icon: "🔗" },
+    { id: "signal-routing", label: "Signal Routing", icon: "🔀" },
     { id: "strategies", label: "Strategies", icon: "🎯" },
     { id: "ai-models", label: "AI Models", icon: "🧠" },
     { id: "performance", label: "Performance", icon: "📈" },
@@ -167,6 +169,8 @@ function ProtectedApp() {
         return <MobileAutoTraderPage />;
       case "integrations":
         return <IntegrationsPage />;
+      case "signal-routing":
+        return <SignalRoutingPage />;
       case "strategies":
         return <StrategyBuilder />;
       case "ai-models":

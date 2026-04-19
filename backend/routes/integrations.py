@@ -1999,3 +1999,95 @@ async def execute_mt5_trade(request: MT5TradeRequest):
         return {"success": False, "error": str(e)}
 
 
+
+
+# ==================== SIGNAL ROUTING ENDPOINTS ====================
+
+from signal_routing_service import get_signal_router
+import uuid
+
+
+@router.get("/signal-routing/rules")
+async def get_routing_rules():
+    """Get all signal routing rules."""
+    router_svc = get_signal_router(db)
+    rules = await router_svc.get_rules()
+    return {"success": True, "rules": rules}
+
+
+@router.post("/signal-routing/rules")
+async def create_routing_rule(
+    name: str = Body(...),
+    destinations: List[str] = Body(...),
+    filters: dict = Body({}),
+    priority: int = Body(50),
+    enabled: bool = Body(True)
+):
+    """
+    Create a signal routing rule.
+    
+    destinations: ["pocket_option", "mt5", "telegram"]
+    filters: {
+        "assets": ["EURUSD", "GBPUSD"],
+        "min_confidence": 70,
+        "max_confidence": 100,
+        "directions": ["CALL", "PUT"],
+        "strategies": ["iq720", "keltner"],
+        "sessions": ["london", "new_york", "overlap"]
+    }
+    """
+    router_svc = get_signal_router(db)
+    rule = await router_svc.create_rule({
+        "rule_id": str(uuid.uuid4())[:8],
+        "name": name,
+        "destinations": destinations,
+        "filters": filters,
+        "priority": priority,
+        "enabled": enabled,
+    })
+    return {"success": True, "rule": rule}
+
+
+@router.put("/signal-routing/rules/{rule_id}")
+async def update_routing_rule(rule_id: str, updates: dict = Body(...)):
+    """Update a routing rule."""
+    router_svc = get_signal_router(db)
+    rule = await router_svc.update_rule(rule_id, updates)
+    if rule:
+        return {"success": True, "rule": rule}
+    return {"success": False, "message": "Rule not found"}
+
+
+@router.delete("/signal-routing/rules/{rule_id}")
+async def delete_routing_rule(rule_id: str):
+    """Delete a routing rule."""
+    router_svc = get_signal_router(db)
+    deleted = await router_svc.delete_rule(rule_id)
+    return {"success": deleted, "message": "Deleted" if deleted else "Not found"}
+
+
+@router.post("/signal-routing/test")
+async def test_route_signal(signal: dict = Body(...)):
+    """
+    Test routing a signal through the rules engine.
+    Returns which destinations the signal would be sent to.
+    """
+    router_svc = get_signal_router(db)
+    result = await router_svc.route_signal(signal)
+    return {"success": True, **result}
+
+
+@router.get("/signal-routing/log")
+async def get_routing_log(limit: int = Query(50)):
+    """Get recent signal routing log."""
+    router_svc = get_signal_router(db)
+    logs = await router_svc.get_routing_log(limit)
+    return {"success": True, "logs": logs}
+
+
+@router.get("/signal-routing/stats")
+async def get_routing_stats():
+    """Get signal routing statistics."""
+    router_svc = get_signal_router(db)
+    stats = await router_svc.get_routing_stats()
+    return {"success": True, "stats": stats}
