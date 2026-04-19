@@ -7118,12 +7118,45 @@
                 startCycleLoop();
             }
             
-            // Start heartbeat
+            // Start heartbeat + OTC candle collection
             heartbeatInterval = setInterval(() => {
                 sendHeartbeat();
                 GM_setValue('winLossStats', JSON.stringify(winLossStats));
                 GM_setValue('martingaleStep', martingaleStep);
-            }, 10000);
+                
+                // Collect and send 5s OTC candles for ML training
+                try {
+                    const candles = PriceScraperV2.getCandles();
+                    if (candles && candles.length >= 5) {
+                        const asset = getCurrentAsset() || 'EURUSD_OTC';
+                        const symbol = asset.replace(/[\s\/]/g, '').replace(/OTC$/i, '_OTC').toUpperCase();
+                        const recent = candles.slice(-30); // Send last 30 candles
+                        GM_xmlhttpRequest({
+                            method: 'POST',
+                            url: CONFIG.API_URL + '/signals/collect-otc-candles',
+                            headers: { 'Content-Type': 'application/json' },
+                            data: JSON.stringify({
+                                symbol: symbol,
+                                timeframe: '5s',
+                                candles: recent.map(c => ({
+                                    open: c.open, high: c.high, low: c.low, close: c.close,
+                                    volume: c.volume || 0,
+                                    timestamp: c.timestamp || new Date().toISOString()
+                                }))
+                            }),
+                            timeout: 5000,
+                            onload: function(res) {
+                                try {
+                                    const d = JSON.parse(res.responseText);
+                                    if (d.success && d.stored > 0) {
+                                        log(`OTC data: stored ${d.stored} candles (total: ${d.total_for_symbol})`);
+                                    }
+                                } catch(e) {}
+                            }
+                        });
+                    }
+                } catch(e) { /* non-critical */ }
+            }, 30000);
             
             sendHeartbeat();
             console.log('[GPT Bot] Initialization complete');

@@ -3751,3 +3751,102 @@ async def get_iq720_features(
     except Exception as e:
         logger.error(f"IQ-720 features error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+
+# ============================================================================
+# LIVE OTC CANDLE COLLECTION (5-Second)
+# ============================================================================
+
+@router.post("/signals/collect-otc-candles")
+async def collect_otc_candles(
+    symbol: str = Body("EURUSD_OTC"),
+    candles: List[Dict] = Body(..., description="Array of {open, high, low, close, volume, timestamp}"),
+    timeframe: str = Body("5s", description="Candle timeframe")
+):
+    """
+    Store live OTC candles from Tampermonkey for ML training.
+    Called periodically by the TM script with scraped 5s candles.
+    """
+    try:
+        if not candles:
+            return {"success": False, "message": "No candles provided"}
+        
+        collection = db["otc_candles_5s"]
+        
+        stored = 0
+        for c in candles:
+            doc = {
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "open": float(c.get("open", 0)),
+                "high": float(c.get("high", 0)),
+                "low": float(c.get("low", 0)),
+                "close": float(c.get("close", 0)),
+                "volume": float(c.get("volume", 0)),
+                "timestamp": c.get("timestamp", datetime.now(timezone.utc).isoformat()),
+                "collected_at": datetime.now(timezone.utc).isoformat()
+            }
+            
+            # Upsert by symbol + timestamp to avoid duplicates
+            await collection.update_one(
+                {"symbol": symbol, "timestamp": doc["timestamp"]},
+                {"$set": doc},
+                upsert=True
+            )
+            stored += 1
+        
+        # Create TTL index on first insert (auto-delete after 30 days)
+        try:
+            await collection.create_index("collected_at", expireAfterSeconds=2592000)
+        except Exception:
+            pass
+        
+        total = await collection.count_documents({"symbol": symbol})
+        
+        return {
+            "success": True,
+            "stored": stored,
+            "total_for_symbol": total,
+            "symbol": symbol,
+            "timeframe": timeframe
+        }
+    except Exception as e:
+        logger.error(f"OTC candle collection error: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/signals/otc-candle-stats")
+async def get_otc_candle_stats():
+    """Get statistics on collected OTC candle data."""
+    try:
+        collection = db["otc_candles_5s"]
+        
+        pipeline = [
+            {"$group": {
+                "_id": "$symbol",
+                "count": {"$sum": 1},
+                "oldest": {"$min": "$timestamp"},
+                "newest": {"$max": "$timestamp"}
+            }},
+            {"$sort": {"count": -1}}
+        ]
+        
+        stats = []
+        async for doc in collection.aggregate(pipeline):
+            stats.append({
+                "symbol": doc["_id"],
+                "candle_count": doc["count"],
+                "oldest": doc.get("oldest"),
+                "newest": doc.get("newest")
+            })
+        
+        total = await collection.count_documents({})
+        
+        return {
+            "success": True,
+            "total_candles": total,
+            "by_symbol": stats
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}

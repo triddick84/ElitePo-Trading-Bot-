@@ -1,0 +1,82 @@
+{
+  "summary": "Iteration 34 testing complete - All 14 backend tests passed, frontend verified. New OTC candle collection endpoints working, multi-timeframe ML training accepted, IQ-720 Ensemble strategy available in backtesting, all regression tests passed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration34_features.py",
+    "/app/test_reports/pytest/pytest_iteration34_features.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "OTC candle collection endpoint correctly implements upsert to prevent duplicates",
+    "TTL index on collected_at field ensures auto-cleanup after 30 days",
+    "Backtesting strategies list includes both 'hybrid' (renamed to IQ-720 Ensemble) and 'iq720_ensemble' for backward compatibility"
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "100%"
+  },
+  "test_credentials": "Username: triddick84, Password: Fallinone#1",
+  "seed_data_creation": "Test OTC candles created for EURUSD_OTC_TEST and GBPUSD_OTC_TEST symbols",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 34 features fully tested: 1) POST /api/signals/collect-otc-candles stores candles with upsert, 2) GET /api/signals/otc-candle-stats returns aggregated stats, 3) POST /api/ml/clean-retrain accepts multi-timeframe training, 4) GET /api/backtest/strategies returns strategy list including iq720_ensemble. All regression endpoints (mt5/status, tradingview/stats, telegram-bot/status, signal-routing/stats, iq720-ensemble, scan-markets) working correctly.",
+  "tests_executed": {
+    "backend_tests": [
+      "test_collect_otc_candles_basic - PASSED",
+      "test_collect_otc_candles_upsert_no_duplicates - PASSED",
+      "test_collect_otc_candles_empty_array - PASSED",
+      "test_otc_candle_stats - PASSED",
+      "test_retrain_status_endpoint - PASSED",
+      "test_clean_retrain_accepts_request - PASSED",
+      "test_backtest_strategies_list - PASSED",
+      "test_scan_markets_still_works - PASSED",
+      "test_iq720_ensemble_still_works - PASSED",
+      "test_signal_routing_stats_still_works - PASSED",
+      "test_mt5_status - PASSED",
+      "test_tradingview_stats - PASSED",
+      "test_telegram_bot_status - PASSED",
+      "test_health_endpoint - PASSED"
+    ],
+    "frontend_tests": [
+      "Login flow - PASSED",
+      "Dashboard IQ-720 LIVE widget - PASSED (shows Market Regime, Session, Kelly Size, CALL signal with 92.5% confidence)",
+      "Signal Routing page - PASSED (shows 2 rules, 29 signals routed, routing log)"
+    ]
+  },
+  "features_verified": {
+    "otc_candle_collection": {
+      "endpoint": "POST /api/signals/collect-otc-candles",
+      "status": "WORKING",
+      "notes": "Stores candles with upsert by symbol+timestamp, returns stored count and total"
+    },
+    "otc_candle_stats": {
+      "endpoint": "GET /api/signals/otc-candle-stats",
+      "status": "WORKING",
+      "notes": "Returns aggregated stats by symbol with oldest/newest timestamps"
+    },
+    "multi_timeframe_ml_training": {
+      "endpoint": "POST /api/ml/clean-retrain",
+      "status": "WORKING",
+      "notes": "Accepts request and starts training with S5/S15/S30/M1 timeframes"
+    },
+    "iq720_ensemble_strategy": {
+      "endpoint": "GET /api/backtest/strategies",
+      "status": "WORKING",
+      "notes": "Returns 4 strategies including deep_confluence, momentum_buster, lstm_gru, ppo_rl"
+    },
+    "iq720_live_widget": {
+      "location": "Dashboard",
+      "status": "WORKING",
+      "notes": "Shows Market Regime, Session, Kelly Size, signal direction with confidence"
+    }
+  }
+}

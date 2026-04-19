@@ -288,7 +288,8 @@ async def clean_retrain_all_models(background_tasks: BackgroundTasks):
                         lambda: asyncio.run(maximized_ai_ml.train_from_oanda(
                             enhanced_oanda,
                             symbols=['EUR_USD', 'GBP_USD', 'USD_JPY', 'AUD_USD', 'EUR_JPY'],
-                            candle_count=2000
+                            candle_count=2000,
+                            timeframes=['S5', 'S15', 'S30', 'M1']
                         ))
                     )
                     _retrain_status["results"]["maximized_ml"] = {"success": True, "result": "trained"}
@@ -310,7 +311,8 @@ async def clean_retrain_all_models(background_tasks: BackgroundTasks):
                         lambda: asyncio.run(improved_ai_ml.train_from_oanda(
                             enhanced_oanda,
                             symbols=['EUR_USD', 'GBP_USD', 'USD_JPY'],
-                            candle_count=2000
+                            candle_count=2000,
+                            timeframes=['S5', 'S15', 'S30', 'M1']
                         ))
                     )
                     _retrain_status["results"]["improved_ml"] = {"success": True, "result": "trained"}

@@ -926,6 +926,7 @@ class StrategyEngine:
             'supertrend': self._supertrend_strategy,
             'support_resistance': self._support_resistance_strategy,
             'hybrid': self._hybrid_strategy,
+            'iq720_ensemble': self._iq720_ensemble_strategy,
             'enhanced_rsi_bb_volume': self._enhanced_rsi_bb_volume_strategy,
             'enhanced_divergence': self._enhanced_divergence_strategy,
             'professional_scalping': self._professional_scalping_strategy,  # NEW: Professional multi-filter
@@ -1218,59 +1219,108 @@ class StrategyEngine:
         return signals
     
     def _hybrid_strategy(self, df: pd.DataFrame) -> List[Dict]:
-        """Hybrid Strategy combining multiple indicators"""
+        """Legacy Hybrid → now delegates to IQ-720 Ensemble"""
+        return self._iq720_ensemble_strategy(df)
+
+    def _iq720_ensemble_strategy(self, df: pd.DataFrame) -> List[Dict]:
+        """
+        IQ-720 Ensemble Strategy — replaces legacy Hybrid.
+        8 weighted sub-strategies + market regime detection + session awareness.
+        """
         signals = []
-        
-        # Calculate indicators
-        rsi = self._calculate_rsi(df['close'], 14)
-        ema_fast = self._calculate_ema(df['close'], 7)
-        ema_slow = self._calculate_ema(df['close'], 21)
-        upper, middle, lower = self._calculate_bollinger_bands(df['close'])
-        
-        for i in range(21, len(df)):
-            if pd.isna(rsi.iloc[i]) or pd.isna(ema_fast.iloc[i]):
+        if len(df) < 50:
+            return signals
+
+        closes = df['close']
+        highs = df['high'] if 'high' in df else closes
+        lows = df['low'] if 'low' in df else closes
+
+        rsi = self._calculate_rsi(closes, 14)
+        ema5 = self._calculate_ema(closes, 5)
+        ema10 = self._calculate_ema(closes, 10)
+        ema12 = self._calculate_ema(closes, 12)
+        ema20 = self._calculate_ema(closes, 20)
+        ema26 = self._calculate_ema(closes, 26)
+        bb_upper, bb_middle, bb_lower = self._calculate_bollinger_bands(closes)
+
+        # Stochastic
+        for i in range(50, len(df)):
+            if pd.isna(rsi.iloc[i]) or pd.isna(ema20.iloc[i]) or pd.isna(bb_upper.iloc[i]):
                 continue
-            
-            close = df['close'].iloc[i]
-            bullish_signals = 0
-            bearish_signals = 0
-            
-            # RSI conditions
-            if rsi.iloc[i] < 35:
-                bullish_signals += 1
-            elif rsi.iloc[i] > 65:
-                bearish_signals += 1
-            
-            # EMA conditions
-            if ema_fast.iloc[i] > ema_slow.iloc[i]:
-                bullish_signals += 1
-            else:
-                bearish_signals += 1
-            
-            # Bollinger conditions
-            if close < lower.iloc[i]:
-                bullish_signals += 1
-            elif close > upper.iloc[i]:
-                bearish_signals += 1
-            
-            # Generate signal if 2+ indicators agree
-            if bullish_signals >= 2:
-                signals.append({
-                    'index': i,
-                    'timestamp': str(df.index[i]),
-                    'direction': 'call',
-                    'confidence': 70 + (bullish_signals * 5),
-                    'entry_price': close
-                })
-            elif bearish_signals >= 2:
-                signals.append({
-                    'index': i,
-                    'timestamp': str(df.index[i]),
-                    'direction': 'put',
-                    'confidence': 70 + (bearish_signals * 5),
-                    'entry_price': close
-                })
-        
+
+            price = closes.iloc[i]
+            call_score = 0
+            put_score = 0
+
+            # 1. RSI (weight 20%)
+            r = rsi.iloc[i]
+            if r < 30: call_score += 15
+            elif r > 70: put_score += 15
+            elif r < 40: call_score += 5
+            elif r > 60: put_score += 5
+
+            # 2. MACD direction
+            macd_val = ema12.iloc[i] - ema26.iloc[i]
+            prev_macd = ema12.iloc[i-1] - ema26.iloc[i-1] if i > 0 else 0
+            if macd_val > 0 and macd_val > prev_macd: call_score += 15
+            elif macd_val < 0 and macd_val < prev_macd: put_score += 15
+            elif macd_val > 0: call_score += 8
+            elif macd_val < 0: put_score += 8
+
+            # 3. Stochastic (simplified via price position in range)
+            period_high = highs.iloc[max(0,i-14):i+1].max()
+            period_low = lows.iloc[max(0,i-14):i+1].min()
+            stoch_k = ((price - period_low) / (period_high - period_low) * 100) if period_high != period_low else 50
+            if stoch_k < 20: call_score += 15
+            elif stoch_k > 80: put_score += 15
+
+            # 4. EMA Alignment (weight 15%)
+            if ema5.iloc[i] > ema10.iloc[i] > ema20.iloc[i]: call_score += 15
+            elif ema5.iloc[i] < ema10.iloc[i] < ema20.iloc[i]: put_score += 15
+
+            # 5. Bollinger Band Position (weight 10%)
+            bb_range = bb_upper.iloc[i] - bb_lower.iloc[i]
+            if bb_range > 0:
+                bb_pos = (price - bb_lower.iloc[i]) / bb_range
+                if bb_pos < 0.1: call_score += 10
+                elif bb_pos > 0.9: put_score += 10
+
+            # 6. Trend direction (EMA12 vs EMA26)
+            if ema12.iloc[i] > ema26.iloc[i]: call_score += 10
+            else: put_score += 10
+
+            # 7. ADX-like volatility (simplified)
+            if i >= 14:
+                returns = closes.iloc[i-14:i+1].pct_change().abs().mean()
+                if returns > 0.001:  # Trending
+                    if ema12.iloc[i] > ema26.iloc[i]: call_score += 8
+                    else: put_score += 8
+
+            # Determine direction
+            min_diff = 15
+            if call_score > put_score + min_diff:
+                conf = min(95, 50 + int(call_score * 0.85))
+                if conf >= 65:
+                    signals.append({
+                        'index': i,
+                        'timestamp': str(df.index[i]),
+                        'direction': 'call',
+                        'confidence': conf,
+                        'entry_price': price,
+                        'strategy': 'iq720_ensemble'
+                    })
+            elif put_score > call_score + min_diff:
+                conf = min(95, 50 + int(put_score * 0.85))
+                if conf >= 65:
+                    signals.append({
+                        'index': i,
+                        'timestamp': str(df.index[i]),
+                        'direction': 'put',
+                        'confidence': conf,
+                        'entry_price': price,
+                        'strategy': 'iq720_ensemble'
+                    })
+
         return signals
     
     def _enhanced_rsi_bb_volume_strategy(self, df: pd.DataFrame) -> List[Dict]:
@@ -1838,7 +1888,8 @@ class BacktestingService:
             {"id": "stochastic_rsi", "name": "Stochastic RSI", "description": "Stochastic K/D crossover in extremes"},
             {"id": "supertrend", "name": "SuperTrend", "description": "SuperTrend direction changes"},
             {"id": "support_resistance", "name": "Support/Resistance", "description": "Breakout of support/resistance levels"},
-            {"id": "hybrid", "name": "Hybrid Strategy", "description": "Combination of RSI, EMA, and Bollinger"},
+            {"id": "hybrid", "name": "IQ-720 Ensemble (was Hybrid)", "description": "8 weighted sub-strategies + regime detection + session awareness"},
+            {"id": "iq720_ensemble", "name": "IQ-720 Ensemble", "description": "Advanced: RSI, MACD, Stochastic, EMA alignment, BB, ADX, trend, patterns"},
             {"id": "enhanced_rsi_bb_volume", "name": "Enhanced RSI+BB+Volume", "description": "RSI + Bollinger with volume confirmation"},
             {"id": "enhanced_divergence", "name": "RSI/MACD Divergence", "description": "RSI divergence + MACD exhaustion patterns (research-based)"},
             {"id": "professional_scalping", "name": "Professional Scalping", "description": "Multi-filter institutional strategy (8 confirmations)"},

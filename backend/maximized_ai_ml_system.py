@@ -556,94 +556,103 @@ class MaximizedAIMLSystem:
         features['strong_trend'] = 0
     
     async def train_from_oanda(self, oanda_service, symbols: List[str] = None,
-                                candle_count: int = 3000) -> Dict:
+                                candle_count: int = 3000,
+                                timeframes: List[str] = None) -> Dict:
         """
         Train maximized model using OANDA data with walk-forward validation.
+        Supports multi-timeframe training (S5, S15, S30, M1).
         """
         if not ML_AVAILABLE:
             return {"success": False, "error": "ML libraries not available"}
         
         try:
-            logger.info("🎓 Starting MAXIMIZED ML training (v3.0)...")
+            logger.info("Starting MAXIMIZED ML training (v3.0)...")
             
             if symbols is None:
                 symbols = ['EUR_USD', 'GBP_USD', 'USD_JPY', 'AUD_USD', 'EUR_JPY',
                           'USD_CHF', 'NZD_USD', 'EUR_GBP', 'GBP_JPY', 'AUD_JPY']
+            
+            if timeframes is None:
+                timeframes = ['S5', 'M1']
             
             all_features = []
             all_labels = []
             all_returns = []
             all_volatility = []
             
-            for symbol in symbols:
-                try:
-                    logger.info(f"📊 Fetching {symbol} data...")
-                    
-                    df = oanda_service.get_candles(symbol, granularity='M1', count=candle_count)
-                    
-                    if df is None or df.empty:
-                        continue
-                    
-                    if df.index.name == 'timestamp':
-                        df = df.reset_index()
-                    
-                    if len(df) < self.lookback_candles + self.prediction_horizon + 10:
-                        continue
-                    
-                    required_cols = ['open', 'high', 'low', 'close']
-                    if not all(col in df.columns for col in required_cols):
-                        continue
-                    
-                    for col in required_cols:
-                        df[col] = pd.to_numeric(df[col], errors='coerce')
-                    
-                    if 'volume' not in df.columns:
-                        df['volume'] = 1.0
-                    
-                    df = df.dropna(subset=required_cols)
-                    
-                    logger.info(f"✅ {symbol}: {len(df)} candles loaded")
-                    
-                    # Calculate returns and volatility for regime detection
-                    close_prices = df['close'].values
-                    symbol_returns = np.diff(close_prices) / close_prices[:-1]
-                    symbol_volatility = pd.Series(symbol_returns).rolling(20).std().values
-                    
-                    # Generate features and labels
-                    samples_generated = 0
-                    for i in range(self.lookback_candles, len(df) - self.prediction_horizon):
-                        df_window = df.iloc[:i+1].copy()
-                        features, _ = self.extract_features(df_window)
+            for tf in timeframes:
+                tf_count = min(candle_count, 5000) if tf == 'S5' else candle_count
+                logger.info(f"Training timeframe: {tf} ({tf_count} candles per symbol)")
+                
+                for symbol in symbols:
+                    try:
+                        logger.info(f"Fetching {symbol} {tf} data...")
                         
-                        if features is not None:
-                            current_price = df['close'].iloc[i]
-                            future_price = df['close'].iloc[i + self.prediction_horizon]
-                            
-                            # Wider threshold = cleaner labels (reduces noisy 50/50 samples)
-                            threshold = current_price * 0.0003
-                            if future_price > current_price + threshold:
-                                label = 1  # CALL
-                            elif future_price < current_price - threshold:
-                                label = 0  # PUT
-                            else:
-                                continue  # Skip ambiguous samples
-                            
-                            all_features.append(features.flatten())
-                            all_labels.append(label)
-                            
-                            # Store for regime detection
-                            if i < len(symbol_returns) and i < len(symbol_volatility):
-                                if not np.isnan(symbol_volatility[i]):
-                                    all_returns.append(symbol_returns[i])
-                                    all_volatility.append(symbol_volatility[i])
-                            
-                            samples_generated += 1
+                        df = oanda_service.get_candles(symbol, granularity=tf, count=tf_count)
                     
-                    logger.info(f"📈 {symbol}: Generated {samples_generated} samples")
+                        if df is None or df.empty:
+                            continue
                     
-                except Exception as e:
-                    logger.warning(f"Error processing {symbol}: {e}")
-                    continue
+                        if df.index.name == 'timestamp':
+                            df = df.reset_index()
+                    
+                        if len(df) < self.lookback_candles + self.prediction_horizon + 10:
+                            continue
+                    
+                        required_cols = ['open', 'high', 'low', 'close']
+                        if not all(col in df.columns for col in required_cols):
+                            continue
+                    
+                        for col in required_cols:
+                            df[col] = pd.to_numeric(df[col], errors='coerce')
+                    
+                        if 'volume' not in df.columns:
+                            df['volume'] = 1.0
+                    
+                        df = df.dropna(subset=required_cols)
+                    
+                        logger.info(f"{symbol} {tf}: {len(df)} candles loaded")
+                    
+                        # Calculate returns and volatility for regime detection
+                        close_prices = df['close'].values
+                        symbol_returns = np.diff(close_prices) / close_prices[:-1]
+                        symbol_volatility = pd.Series(symbol_returns).rolling(20).std().values
+                    
+                        # Generate features and labels
+                        samples_generated = 0
+                        for i in range(self.lookback_candles, len(df) - self.prediction_horizon):
+                            df_window = df.iloc[:i+1].copy()
+                            features, _ = self.extract_features(df_window)
+                        
+                            if features is not None:
+                                current_price = df['close'].iloc[i]
+                                future_price = df['close'].iloc[i + self.prediction_horizon]
+                            
+                                # Wider threshold = cleaner labels (reduces noisy 50/50 samples)
+                                threshold = current_price * 0.0003
+                                if future_price > current_price + threshold:
+                                    label = 1  # CALL
+                                elif future_price < current_price - threshold:
+                                    label = 0  # PUT
+                                else:
+                                    continue  # Skip ambiguous samples
+                            
+                                all_features.append(features.flatten())
+                                all_labels.append(label)
+                            
+                                # Store for regime detection
+                                if i < len(symbol_returns) and i < len(symbol_volatility):
+                                    if not np.isnan(symbol_volatility[i]):
+                                        all_returns.append(symbol_returns[i])
+                                        all_volatility.append(symbol_volatility[i])
+                            
+                                samples_generated += 1
+                    
+                        logger.info(f"{symbol} {tf}: Generated {samples_generated} samples")
+                    
+                    except Exception as e:
+                        logger.warning(f"Error processing {symbol} {tf}: {e}")
+                        continue
             
             if len(all_features) < self.min_training_samples:
                 return {"success": False, "error": f"Insufficient data: {len(all_features)} < {self.min_training_samples}"}

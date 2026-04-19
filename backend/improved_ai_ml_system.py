@@ -421,95 +421,102 @@ class ImprovedAIMLSystem:
         return features
     
     async def train_from_oanda(self, oanda_service, symbols: List[str] = None, 
-                                candle_count: int = 2000) -> Dict:
+                                candle_count: int = 2000,
+                                timeframes: List[str] = None) -> Dict:
         """
         Train model using OANDA historical data with proper labeling.
-        Labels are based on actual future price direction.
+        Supports multi-timeframe training (S5, S15, S30, M1).
         """
         if not ML_AVAILABLE:
             return {"success": False, "error": "ML libraries not available"}
         
         try:
-            logger.info("🎓 Starting improved ML training from OANDA data...")
+            logger.info("Starting improved ML training from OANDA data...")
             
             if symbols is None:
                 symbols = ['EUR_USD', 'GBP_USD', 'USD_JPY', 'AUD_USD', 'EUR_JPY']
             
+            if timeframes is None:
+                timeframes = ['S5', 'M1']
+            
             all_features = []
             all_labels = []
             
-            for symbol in symbols:
-                try:
-                    logger.info(f"📊 Fetching {symbol} data...")
-                    
-                    # Get historical candles from OANDA - returns DataFrame
-                    df = oanda_service.get_candles(
-                        symbol, 
-                        granularity='M1',  # 1-minute candles
-                        count=candle_count
-                    )
-                    
-                    if df is None or df.empty:
-                        logger.warning(f"No data returned for {symbol}")
-                        continue
-                    
-                    # Reset index if timestamp is the index
-                    if df.index.name == 'timestamp':
-                        df = df.reset_index()
-                    
-                    if len(df) < self.lookback_candles + self.prediction_horizon + 10:
-                        logger.warning(f"Insufficient data for {symbol}: {len(df)} candles")
-                        continue
-                    
-                    # Ensure we have required columns
-                    required_cols = ['open', 'high', 'low', 'close']
-                    if not all(col in df.columns for col in required_cols):
-                        logger.warning(f"Missing columns in {symbol} data")
-                        continue
-                    
-                    # Ensure numeric types
-                    for col in required_cols:
-                        df[col] = pd.to_numeric(df[col], errors='coerce')
-                    
-                    if 'volume' not in df.columns:
-                        df['volume'] = 1.0
-                    
-                    # Drop any NaN rows
-                    df = df.dropna(subset=required_cols)
-                    
-                    logger.info(f"✅ {symbol}: {len(df)} candles loaded")
-                    
-                    # Generate features and labels for each valid window
-                    samples_generated = 0
-                    for i in range(self.lookback_candles, len(df) - self.prediction_horizon):
-                        df_window = df.iloc[:i+1].copy()
-                        features, _ = self.extract_features(df_window)
+            for tf in timeframes:
+                tf_count = min(candle_count, 5000) if tf in ('S5', 'S15') else candle_count
+                logger.info(f"Training timeframe: {tf} ({tf_count} candles per symbol)")
+                
+                for symbol in symbols:
+                    try:
+                        logger.info(f"Fetching {symbol} {tf} data...")
                         
-                        if features is not None:
-                            # Label: 1 if price goes UP in prediction_horizon candles, 0 otherwise
-                            current_price = df['close'].iloc[i]
-                            future_price = df['close'].iloc[i + self.prediction_horizon]
-                            
-                            # Add small threshold to avoid noise (0.01%)
-                            threshold = current_price * 0.0001
-                            if future_price > current_price + threshold:
-                                label = 1  # CALL
-                            elif future_price < current_price - threshold:
-                                label = 0  # PUT
-                            else:
-                                continue  # Skip sideways movements
-                            
-                            all_features.append(features.flatten())
-                            all_labels.append(label)
-                            samples_generated += 1
+                        df = oanda_service.get_candles(
+                            symbol, 
+                            granularity=tf,
+                            count=tf_count
+                        )
+                        
+                        if df is None or df.empty:
+                            logger.warning(f"No data returned for {symbol}")
+                            continue
                     
-                    logger.info(f"📈 {symbol}: Generated {samples_generated} training samples")
+                        # Reset index if timestamp is the index
+                        if df.index.name == 'timestamp':
+                            df = df.reset_index()
                     
-                except Exception as e:
-                    logger.warning(f"Error processing {symbol}: {e}")
-                    import traceback
-                    traceback.print_exc()
-                    continue
+                        if len(df) < self.lookback_candles + self.prediction_horizon + 10:
+                            logger.warning(f"Insufficient data for {symbol}: {len(df)} candles")
+                            continue
+                    
+                        # Ensure we have required columns
+                        required_cols = ['open', 'high', 'low', 'close']
+                        if not all(col in df.columns for col in required_cols):
+                            logger.warning(f"Missing columns in {symbol} data")
+                            continue
+                    
+                        # Ensure numeric types
+                        for col in required_cols:
+                            df[col] = pd.to_numeric(df[col], errors='coerce')
+                    
+                        if 'volume' not in df.columns:
+                            df['volume'] = 1.0
+                    
+                        # Drop any NaN rows
+                        df = df.dropna(subset=required_cols)
+                    
+                        logger.info(f"{symbol} {tf}: {len(df)} candles loaded")
+                    
+                        # Generate features and labels for each valid window
+                        samples_generated = 0
+                        for i in range(self.lookback_candles, len(df) - self.prediction_horizon):
+                            df_window = df.iloc[:i+1].copy()
+                            features, _ = self.extract_features(df_window)
+                        
+                            if features is not None:
+                                # Label: 1 if price goes UP in prediction_horizon candles, 0 otherwise
+                                current_price = df['close'].iloc[i]
+                                future_price = df['close'].iloc[i + self.prediction_horizon]
+                            
+                                # Add small threshold to avoid noise (0.01%)
+                                threshold = current_price * 0.0001
+                                if future_price > current_price + threshold:
+                                    label = 1  # CALL
+                                elif future_price < current_price - threshold:
+                                    label = 0  # PUT
+                                else:
+                                    continue  # Skip sideways movements
+                            
+                                all_features.append(features.flatten())
+                                all_labels.append(label)
+                                samples_generated += 1
+                    
+                        logger.info(f"{symbol} {tf}: Generated {samples_generated} training samples")
+                    
+                    except Exception as e:
+                        logger.warning(f"Error processing {symbol} {tf}: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        continue
             
             if len(all_features) < self.min_training_samples:
                 return {
