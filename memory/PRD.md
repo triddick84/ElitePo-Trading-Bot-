@@ -9,6 +9,14 @@
 - Added: `get_ssid_service`, `initialize_ssid_service` from `ssid_auto_refresh_service`
 - All 10 Telegram bot endpoints verified working (status, start, stop, send, settings, history, stats, etc.)
 
+✅ **Strategy Performance Tracker + Decision Engine Dashboard (April 19, 2026)**
+- **Per-Asset Per-Strategy Tracking**: Records win/loss per strategy per asset with PnL
+- **Auto-Promotion**: Selects best-performing strategy per asset (min 5 trades, highest win rate)
+- **API**: `GET /api/signals/strategy-tracker` (full breakdown), `POST /api/signals/record-outcome` (now accepts strategy field)
+- **Decision Engine Widget**: Win Rate, Trades, Sharpe Ratio, Max Drawdown, active strategies, model accuracy cards
+- **Strategy Tracker Widget**: Per-asset breakdown with best strategy star badges, PnL, win rates per strategy
+- **Dashboard**: 3-column grid — IQ-720 LIVE | Decision Engine v2.0 | Strategy Tracker
+
 ✅ **Tampermonkey v8.8.1 — Win/Loss Detection Fix (April 19, 2026)**
 - **FIXED**: Both TM scripts not recognizing wins/losses of automated trades
 - **Root causes**: Balance selectors didn't match current PO layouts (returned 0), silent failure when balance=0, tight timing for 5s trades
