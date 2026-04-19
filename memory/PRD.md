@@ -9,6 +9,14 @@
 - Added: `get_ssid_service`, `initialize_ssid_service` from `ssid_auto_refresh_service`
 - All 10 Telegram bot endpoints verified working (status, start, stop, send, settings, history, stats, etc.)
 
+✅ **ML Accuracy Tuning UI — OTC Tuning Panel (April 19, 2026)**
+- **NEW**: `OTCTuningPanel` component added as "5s OTC Tuning" tab in AI Models page
+- **OTC Data Status**: Total candles, symbols count, READY/COLLECTING status, progress bar, per-symbol breakdown with Trainable badges
+- **Model Status Cards**: Maximized V3 and Improved V2 with accuracy %, trained date, trained/not-trained badges
+- **Training Controls**: One-click "Train Maximized v3 (XGBoost)" and "Train Improved v2 (RF/GB)" buttons
+- **Training Results**: CV accuracy, total samples, features used, selected features list, CV scores, class distribution
+- **Tuning Configuration**: Labeling thresholds per timeframe (5s=0.5 pips, M1=3.0 pips), prediction horizons, feature selection method
+
 ✅ **ML Accuracy Tuning with OTC Training Data (April 19, 2026)**
 - **NEW**: `MLAccuracyTuner` class with OTC-specific training pipeline
 - **Adaptive Labeling**: Thresholds per timeframe (5s=0.5 pips, 15s=1 pip, M1=3 pips)
