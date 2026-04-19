@@ -365,4 +365,107 @@ export default {
   executeTrade,
   getFavorites,
   switchAsset,
+  getAccountBalance,
+  scanDOMForTradeResult,
 };
+
+
+/**
+ * Get account balance from Pocket Option UI
+ * v8.8.1: Comprehensive selector set + deep DOM search
+ * @returns {number} Balance or 0
+ */
+export function getAccountBalance() {
+  const selectors = [
+    '.balance__value', '.balance-value', '[class*="balance__value"]',
+    '[class*="balance-value"]', '.js-balance', '[data-testid="balance"]',
+    '.balance span', '.balance', '[class*="balances"] [class*="amount"]',
+    '[class*="balance"] [class*="value"]', '[class*="user-balance"]',
+    'header [class*="balance"]', '.header__balance', '.main-balance',
+    '[class*="BalanceValue"]', '[class*="balanceValue"]',
+    '.popover-balance__item-value',
+  ];
+
+  for (const sel of selectors) {
+    try {
+      const elements = document.querySelectorAll(sel);
+      for (const el of elements) {
+        if (!el || !el.offsetParent) continue;
+        const text = el.textContent || '';
+        const match = text.match(/\$?\s?([\d\s,]+\.?\d*)/);
+        if (match) {
+          const balance = parseFloat(match[1].replace(/[\s,]/g, ''));
+          if (balance >= 0.01 && balance <= 10000000) return balance;
+        }
+      }
+    } catch (e) { /* skip */ }
+  }
+
+  // Deep search in header
+  try {
+    const header = document.querySelector('header') || document.querySelector('[class*="header"]');
+    if (header) {
+      for (const el of header.querySelectorAll('span, div')) {
+        if (!el || !el.offsetParent || el.children.length > 2) continue;
+        const match = (el.textContent || '').match(/\$\s?([\d,]+\.\d{2})/);
+        if (match) {
+          const bal = parseFloat(match[1].replace(/,/g, ''));
+          if (bal >= 1 && bal <= 10000000) return bal;
+        }
+      }
+    }
+  } catch (e) { /* skip */ }
+
+  return 0;
+}
+
+
+/**
+ * Scan DOM for trade result (win/loss) from deal history or notifications
+ * @returns {boolean|null} true=WIN, false=LOSS, null=not found
+ */
+export function scanDOMForTradeResult() {
+  const dealSelectors = [
+    '.deals-list .deals-item:first-child',
+    '[class*="closed-deals"] [class*="item"]:first-child',
+    '[class*="deals-list"] > div:first-child',
+    '[class*="deal-item"]:first-child',
+    '[class*="history"] [class*="item"]:first-child',
+  ];
+
+  for (const sel of dealSelectors) {
+    try {
+      const deal = document.querySelector(sel);
+      if (!deal || !deal.offsetParent) continue;
+
+      const profitEl = deal.querySelector('[class*="profit"], [class*="payout"], [class*="result"], [class*="amount"]');
+      if (profitEl) {
+        const cls = (profitEl.className || '').toLowerCase();
+        const text = (profitEl.textContent || '').trim();
+        if (cls.includes('success') || cls.includes('win') || cls.includes('green') || cls.includes('positive')) return true;
+        if (cls.includes('fail') || cls.includes('loss') || cls.includes('red') || cls.includes('negative')) return false;
+        if (text.match(/^\s*\+/)) return true;
+        if (text.match(/^\s*-/) || text === '0') return false;
+      }
+
+      const cls = (deal.className || '').toLowerCase();
+      if (cls.includes('win') || cls.includes('success') || cls.includes('profit')) return true;
+      if (cls.includes('loss') || cls.includes('fail')) return false;
+    } catch (e) { /* skip */ }
+  }
+
+  // Popup/toast notifications
+  const popupSels = ['[class*="notification"][class*="deal"]', '[class*="trade-result"]', '[class*="toast"]'];
+  for (const sel of popupSels) {
+    try {
+      const popup = document.querySelector(sel);
+      if (!popup || !popup.offsetParent) continue;
+      const cls = (popup.className || '').toLowerCase();
+      const text = (popup.textContent || '').trim();
+      if (cls.includes('win') || text.match(/\+\s*\$?\s*[\d,.]+/)) return true;
+      if (cls.includes('loss') || text.match(/-\s*\$?\s*[\d,.]+/)) return false;
+    } catch (e) { /* skip */ }
+  }
+
+  return null;
+}

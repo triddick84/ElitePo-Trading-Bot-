@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Elite Pocket Option Trading Bot (Legacy)
 // @namespace    https://momentum-trade-test.preview.emergentagent.com
-// @version      8.8.0
+// @version      8.8.1
 // @description  Elite AI-powered trading bot - Auto-invert stays on same asset after loss for immediate retry
 // @author       GPT Signal Bot
 // @match        *://*.pocketoption.com/*
@@ -2264,9 +2264,9 @@
     // Detect current account balance from UI
     function detectAccountBalance(forceRefresh = false) {
         // Look for balance display on Pocket Option
-        // PO shows balance in various formats depending on version/layout
+        // v8.8.1: Expanded selectors + deep DOM search for current PO layouts
         const balanceSelectors = [
-            // Primary PO balance selectors
+            // Primary PO balance selectors (2024-2026 layouts)
             '.balance__value',
             '.balance-value',
             '[class*="balance__value"]',
@@ -2292,22 +2292,28 @@
             'header [class*="balance"]',
             '.header__balance',
             '[class*="header"] [class*="amount"]',
+            
+            // Pocket Option specific newer layouts
+            '.main-balance',
+            '[class*="main-balance"]',
+            '[class*="BalanceValue"]',
+            '[class*="balanceValue"]',
+            '[class*="Amount"]',
+            '.popover-balance__item-value',
         ];
         
         for (const sel of balanceSelectors) {
             try {
                 const elements = document.querySelectorAll(sel);
                 for (const el of elements) {
-                    if (!el || !el.offsetParent) continue; // Skip hidden elements
+                    if (!el || !el.offsetParent) continue;
                     
                     const text = el.textContent || '';
-                    // Match patterns like "$1,234.56" or "1234.56" or "$ 1,234.56" or "1 234.56"
                     const match = text.match(/\$?\s?([\d\s,]+\.?\d*)/);
                     if (match) {
                         const cleanNumber = match[1].replace(/[\s,]/g, '');
                         const balance = parseFloat(cleanNumber);
                         if (balance >= 0.01 && balance <= 10000000) {
-                            // Only cache if not force refresh
                             if (!forceRefresh) {
                                 balanceSync.lastUIBalance = balance;
                                 moneyManagement.accountBalance = balance;
@@ -2319,7 +2325,31 @@
             } catch(e) {}
         }
         
-        // If no balance found in DOM and not forcing refresh, return cached value
+        // v8.8.1: Deep search — scan all visible elements for dollar amounts in the header area
+        try {
+            const headerArea = document.querySelector('header') || document.querySelector('[class*="header"]') || document.querySelector('[class*="toolbar"]');
+            if (headerArea) {
+                const spans = headerArea.querySelectorAll('span, div, p');
+                for (const el of spans) {
+                    if (!el || !el.offsetParent || el.children.length > 2) continue;
+                    const text = (el.textContent || '').trim();
+                    // Match $ followed by digits: "$10,000.00" or "10000.00"
+                    const match = text.match(/\$\s?([\d,]+\.\d{2})/);
+                    if (match) {
+                        const balance = parseFloat(match[1].replace(/,/g, ''));
+                        if (balance >= 1 && balance <= 10000000) {
+                            if (!forceRefresh) {
+                                balanceSync.lastUIBalance = balance;
+                                moneyManagement.accountBalance = balance;
+                            }
+                            return balance;
+                        }
+                    }
+                }
+            }
+        } catch(e) {}
+        
+        // If no balance found in DOM, return cached value
         if (!forceRefresh && moneyManagement.accountBalance > 0) {
             return moneyManagement.accountBalance;
         }
@@ -3234,56 +3264,64 @@
     }
     
     // Called when a trade is placed - starts monitoring for the result
-    // v8.7.2: Uses configurable timing settings
+    // v8.8.1: Robust balance capture + adaptive timing for all expiry types
     function markTradePending(expirySeconds = 60) {
         audioDetection.pendingTrade = true;
         audioDetection.tradeOpenedAt = Date.now();
         audioDetection.tradeExpirySeconds = expirySeconds;
         audioDetection.tradeAmount = moneyManagement.currentTradeAmount || currentTradeAmount || 1;
         
-        // Capture balance BEFORE trade
-        if (audioDetection.balanceBeforeTrade <= 0) {
-            audioDetection.balanceBeforeTrade = detectAccountBalance(true);
+        // Capture balance BEFORE trade — try multiple times if first attempt fails
+        let preBal = detectAccountBalance(true);
+        if (preBal <= 0) {
+            // Retry after short delay
+            setTimeout(() => {
+                preBal = detectAccountBalance(true);
+                if (preBal > 0) {
+                    audioDetection.balanceBeforeTrade = preBal;
+                    log(`Balance Before (retry): $${preBal.toFixed(2)}`);
+                }
+            }, 500);
         }
+        audioDetection.balanceBeforeTrade = preBal > 0 ? preBal : (moneyManagement.accountBalance || 0);
         
-        log(`════════════════════════════════`);
-        log(`   TRADE PLACED`);
-        log(`════════════════════════════════`);
-        log(`Expiry: ${expirySeconds}s`);
-        log(`Bet Amount: $${audioDetection.tradeAmount.toFixed(2)}`);
-        log(`Balance Before: $${audioDetection.balanceBeforeTrade.toFixed(2)}`);
+        log(`TRADE PLACED | Expiry: ${expirySeconds}s | Bet: $${audioDetection.tradeAmount.toFixed(2)} | Balance: $${audioDetection.balanceBeforeTrade.toFixed(2)}`);
         
-        // v8.7.2: Use configurable delay for bet deduction
-        const betDeductionDelay = CONFIG.BET_DEDUCTION_DELAY || 2000;
+        // v8.8.1: Adaptive bet deduction delay — shorter for fast trades
+        const betDeductionDelay = expirySeconds <= 5 ? 1500 : (CONFIG.BET_DEDUCTION_DELAY || 2000);
         
         setTimeout(() => {
             if (!audioDetection.pendingTrade) return;
             
             // Capture balance AFTER bet is deducted
             audioDetection.balanceAfterBet = detectAccountBalance(true);
-            log(`Balance AFTER BET: $${audioDetection.balanceAfterBet.toFixed(2)} (waited ${betDeductionDelay}ms)`);
-            log(`════════════════════════════════`);
+            
+            // If still 0, use pre-trade minus bet amount as estimate
+            if (audioDetection.balanceAfterBet <= 0 && audioDetection.balanceBeforeTrade > 0) {
+                audioDetection.balanceAfterBet = audioDetection.balanceBeforeTrade - audioDetection.tradeAmount;
+                log(`Balance AFTER BET (estimated): $${audioDetection.balanceAfterBet.toFixed(2)}`);
+            } else {
+                log(`Balance AFTER BET: $${audioDetection.balanceAfterBet.toFixed(2)}`);
+            }
             
             // Now wait for trade to expire
             startOutcomePolling(expirySeconds);
         }, betDeductionDelay);
     }
     
-    // v8.7.2: Improved outcome polling with configurable timing
+    // v8.8.1: Improved outcome polling with DOM fallback + adaptive timing
     function startOutcomePolling(expirySeconds = 60) {
         const latencyOffset = CONFIG.RESULT_LATENCY_OFFSET || 0;
-        const postExpiryBuffer = CONFIG.POST_EXPIRY_BUFFER || 3000;
+        // v8.8.1: Adaptive buffer — short trades need more relative buffer
+        const postExpiryBuffer = expirySeconds <= 5 ? 5000 : 
+                                 expirySeconds <= 15 ? 4000 : 
+                                 expirySeconds <= 30 ? 3500 : 3000;
         
         // Total wait: expiry + buffer + latency offset
         const waitMs = (expirySeconds * 1000) + postExpiryBuffer + (latencyOffset * 1000);
         
-        log(`════════════════════════════════`);
         log(`TIMING SYNC:`);
-        log(`  Expiry: ${expirySeconds}s`);
-        log(`  Buffer: ${postExpiryBuffer}ms`);
-        log(`  Latency Offset: ${latencyOffset}s`);
-        log(`  Total Wait: ${Math.round(waitMs/1000)}s`);
-        log(`════════════════════════════════`);
+        log(`  Expiry: ${expirySeconds}s | Buffer: ${postExpiryBuffer}ms | Wait: ${Math.round(waitMs/1000)}s`);
         
         setTimeout(() => {
             if (!audioDetection.pendingTrade) {
@@ -3293,18 +3331,43 @@
             
             const balanceAfterBet = audioDetection.balanceAfterBet;
             
+            // v8.8.1: If no post-bet balance, try DOM-based detection first before giving up
             if (!balanceAfterBet || balanceAfterBet <= 0) {
-                log('OUTCOME: No post-bet balance recorded. Use +W/-L buttons.');
+                log('OUTCOME: No post-bet balance. Trying DOM result detection...');
+                
+                // Try DOM scan
+                const domResult = scanDOMForResult();
+                if (domResult !== null) {
+                    log(`OUTCOME (DOM): ${domResult ? 'WIN' : 'LOSS'} detected from deal history`);
+                    audioDetection.pendingTrade = false;
+                    handleAutoDetectedResult(domResult);
+                    return;
+                }
+                
+                // Try fresh balance comparison against pre-trade balance
+                const currentBal = detectAccountBalance(true);
+                const preTradeBal = audioDetection.balanceBeforeTrade;
+                if (currentBal > 0 && preTradeBal > 0) {
+                    const diff = currentBal - preTradeBal;
+                    if (Math.abs(diff) > 0.01) {
+                        const isWin = diff > 0;
+                        log(`OUTCOME (PRE-TRADE CMP): ${isWin ? 'WIN' : 'LOSS'} | Pre: $${preTradeBal.toFixed(2)} Now: $${currentBal.toFixed(2)} Diff: $${diff.toFixed(2)}`);
+                        audioDetection.pendingTrade = false;
+                        handleAutoDetectedResult(isWin);
+                        return;
+                    }
+                }
+                
+                log('OUTCOME: Cannot detect result. Use +W/-L buttons.');
                 audioDetection.pendingTrade = false;
                 return;
             }
             
-            log(`OUTCOME: Trade expired. Checking balance...`);
-            log(`OUTCOME: Post-bet balance was: $${balanceAfterBet.toFixed(2)}`);
+            log(`OUTCOME: Trade expired. Polling balance...`);
             
-            // Use configurable polling settings
             const pollInterval = CONFIG.BALANCE_POLL_INTERVAL || 500;
-            const maxPolls = CONFIG.MAX_BALANCE_POLLS || 20;
+            // v8.8.1: More polls for short-expiry trades (PO may be slow to settle)
+            const maxPolls = expirySeconds <= 5 ? 30 : (CONFIG.MAX_BALANCE_POLLS || 20);
             const requiredStableChecks = CONFIG.BALANCE_STABILITY_CHECKS || 2;
             
             let pollCount = 0;
@@ -3321,6 +3384,30 @@
                 
                 if (pollCount > maxPolls) {
                     clearInterval(poller);
+                    
+                    // v8.8.1: On timeout, try DOM fallback before giving up
+                    const domResult = scanDOMForResult();
+                    if (domResult !== null) {
+                        log(`OUTCOME (DOM FALLBACK): ${domResult ? 'WIN' : 'LOSS'}`);
+                        audioDetection.pendingTrade = false;
+                        handleAutoDetectedResult(domResult);
+                        return;
+                    }
+                    
+                    // Last resort: compare against pre-trade balance
+                    const currentBal = detectAccountBalance(true);
+                    const preTradeBal = audioDetection.balanceBeforeTrade;
+                    if (currentBal > 0 && preTradeBal > 0) {
+                        const diff = currentBal - preTradeBal;
+                        if (Math.abs(diff) > 0.01) {
+                            const isWin = diff > 0;
+                            log(`OUTCOME (TIMEOUT CMP): ${isWin ? 'WIN' : 'LOSS'} | Pre: $${preTradeBal.toFixed(2)} Now: $${currentBal.toFixed(2)}`);
+                            audioDetection.pendingTrade = false;
+                            handleAutoDetectedResult(isWin);
+                            return;
+                        }
+                    }
+                    
                     audioDetection.pendingTrade = false;
                     log(`OUTCOME: Timeout after ${pollCount} polls. Use +W or -L buttons.`);
                     return;
@@ -3329,7 +3416,9 @@
                 const currentBalance = detectAccountBalance(true);
                 const change = currentBalance - balanceAfterBet;
                 
-                log(`POLL #${pollCount}: Balance=$${currentBalance.toFixed(2)}, Change=$${change >= 0 ? '+' : ''}${change.toFixed(2)}`);
+                if (pollCount <= 3 || pollCount % 5 === 0) {
+                    log(`POLL #${pollCount}: $${currentBalance.toFixed(2)}, Chg: $${change >= 0 ? '+' : ''}${change.toFixed(2)}`);
+                }
                 
                 // Check if balance is stable
                 if (Math.abs(currentBalance - lastBalance) < 0.01) {
@@ -3346,39 +3435,23 @@
                     
                     const elapsed = Math.round((Date.now() - audioDetection.tradeOpenedAt) / 1000);
                     
-                    // WIN/LOSS LOGIC:
-                    // - Balance increased → WIN (payout received)
-                    // - Balance unchanged → LOSS (no payout)
-                    // - Balance decreased → LOSS
-                    
                     let isWin = false;
                     let resultReason = '';
                     
                     if (change > 0.01) {
                         isWin = true;
-                        resultReason = `Balance INCREASED by $${change.toFixed(2)} (payout received)`;
+                        resultReason = `Balance UP +$${change.toFixed(2)}`;
                     } else if (Math.abs(change) < 0.01) {
                         isWin = false;
-                        resultReason = `Balance UNCHANGED (no payout = loss)`;
+                        resultReason = `Balance UNCHANGED (loss)`;
                     } else {
                         isWin = false;
-                        resultReason = `Balance DECREASED by $${Math.abs(change).toFixed(2)} (loss)`;
+                        resultReason = `Balance DOWN -$${Math.abs(change).toFixed(2)}`;
                     }
                     
-                    log(`════════════════════════════════`);
-                    log(`   TRADE RESULT: ${isWin ? '✅ WIN' : '❌ LOSS'}`);
-                    log(`════════════════════════════════`);
-                    log(`Post-Bet:  $${balanceAfterBet.toFixed(2)}`);
-                    log(`Current:   $${currentBalance.toFixed(2)}`);
-                    log(`Change:    $${change >= 0 ? '+' : ''}${change.toFixed(2)}`);
-                    log(`Reason:    ${resultReason}`);
-                    log(`Duration:  ${elapsed}s`);
-                    log(`════════════════════════════════`);
+                    log(`RESULT: ${isWin ? 'WIN' : 'LOSS'} | ${resultReason} | ${elapsed}s`);
                     
-                    // Record for ML
                     try { recordTradeForML(isWin, elapsed, expirySeconds, 'balance'); } catch(e) {}
-                    
-                    // Update stats
                     handleAutoDetectedResult(isWin);
                     return;
                 }
@@ -3386,65 +3459,81 @@
         }, waitMs);
     }
     
-    // Actively scan the DOM for trade result indicators
+    // v8.8.1: Enhanced DOM scan for trade result indicators
     function scanDOMForResult() {
-        // Look for recently appeared deal result elements
-        // PO typically shows results in deal history or popup notifications
-        
-        // First priority: Check the MOST RECENT closed deal in deals list
+        // 1. Check the MOST RECENT closed deal in deals/history panel
         try {
             const closedDealsSelectors = [
                 '.deals-list .deals-item:first-child',
                 '[class*="closed-deals"] [class*="item"]:first-child',
                 '[class*="deals"] [class*="closed"]:first-child',
                 '.closed-deals-list > div:first-child',
+                // PO-specific newer layouts
+                '[class*="deals-list"] > div:first-child',
+                '[class*="DealsItem"]:first-child',
+                '[class*="deal-item"]:first-child',
+                '[class*="history"] [class*="item"]:first-child',
+                '[class*="trade-history"] > div:first-child',
             ];
             
             for (const sel of closedDealsSelectors) {
                 const deal = document.querySelector(sel);
                 if (!deal || !deal.offsetParent) continue;
                 
-                // Check if this deal was created recently (within last minute)
                 const text = (deal.textContent || '').trim();
                 const className = (deal.className || '').toLowerCase();
+                const style = deal.getAttribute('style') || '';
                 
-                // Look for profit indicator
-                const profitEl = deal.querySelector('[class*="profit"], [class*="payout"], [class*="result"]');
+                // Look for profit indicator in children
+                const profitEl = deal.querySelector('[class*="profit"], [class*="payout"], [class*="result"], [class*="amount"], [class*="return"]');
                 if (profitEl) {
-                    const profitText = profitEl.textContent || '';
+                    const profitText = (profitEl.textContent || '').trim();
                     const profitClass = (profitEl.className || '').toLowerCase();
+                    const profitStyle = profitEl.getAttribute('style') || '';
                     
-                    // Green/profit class or + sign = WIN
-                    if (profitClass.includes('success') || profitClass.includes('profit') || profitClass.includes('win') || profitClass.includes('green')) {
-                        log(`DOM: Found winning deal element`);
+                    // Green/profit indicators = WIN
+                    if (profitClass.includes('success') || profitClass.includes('profit') || profitClass.includes('win') || profitClass.includes('green') || profitClass.includes('positive')) {
                         return true;
                     }
-                    // Red/loss class or - sign = LOSS
-                    if (profitClass.includes('fail') || profitClass.includes('loss') || profitClass.includes('lose') || profitClass.includes('red')) {
-                        log(`DOM: Found losing deal element`);
+                    // Red/loss indicators = LOSS
+                    if (profitClass.includes('fail') || profitClass.includes('loss') || profitClass.includes('lose') || profitClass.includes('red') || profitClass.includes('negative')) {
                         return false;
                     }
-                    // Check text for +/- amount
+                    // Color-based detection
+                    if (profitStyle.includes('color') && (profitStyle.includes('#2') || profitStyle.includes('green') || profitStyle.includes('rgb(0'))) {
+                        return true;
+                    }
+                    if (profitStyle.includes('color') && (profitStyle.includes('#f') || profitStyle.includes('#e') || profitStyle.includes('red') || profitStyle.includes('rgb(2'))) {
+                        return false;
+                    }
+                    // Text-based: +amount = WIN, -amount = LOSS
                     if (profitText.match(/^\s*\+/)) return true;
-                    if (profitText.match(/^\s*-/)) return false;
+                    if (profitText.match(/^\s*-/) || profitText === '0' || profitText === '0.00') return false;
                 }
                 
-                // Check entire deal element
-                if (className.includes('success') || className.includes('win') || className.includes('profit')) {
+                // Check entire deal element classes/style
+                if (className.includes('success') || className.includes('win') || className.includes('profit') || className.includes('positive')) {
                     return true;
                 }
-                if (className.includes('fail') || className.includes('loss') || className.includes('lose')) {
+                if (className.includes('fail') || className.includes('loss') || className.includes('lose') || className.includes('negative')) {
                     return false;
                 }
+                // Style-based (green/red background)
+                if (style.includes('green') || (style.includes('background') && style.includes('#2'))) return true;
+                if (style.includes('red') || (style.includes('background') && style.includes('#f'))) return false;
             }
         } catch(e) {}
         
-        // Second priority: Check for popup notifications
+        // 2. Check for popup/toast notifications
         try {
             const popupSelectors = [
                 '[class*="notification"][class*="deal"]',
                 '[class*="trade-result"]',
                 '[class*="popup"][class*="result"]',
+                '[class*="toast"]',
+                '[class*="snackbar"]',
+                '[class*="TradeResult"]',
+                '[class*="dealResult"]',
             ];
             
             for (const sel of popupSelectors) {
@@ -3455,13 +3544,22 @@
                 const className = (popup.className || '').toLowerCase();
                 
                 if (className.includes('success') || className.includes('win') || text.match(/\+\s*\$?\s*[\d,.]+/)) {
-                    log(`DOM: Found win notification popup`);
                     return true;
                 }
                 if (className.includes('fail') || className.includes('loss') || text.match(/-\s*\$?\s*[\d,.]+/)) {
-                    log(`DOM: Found loss notification popup`);
                     return false;
                 }
+            }
+        } catch(e) {}
+        
+        // 3. Check for any recently appeared green/red overlays
+        try {
+            const overlays = document.querySelectorAll('[class*="result-overlay"], [class*="trade-overlay"], [class*="deal-overlay"]');
+            for (const el of overlays) {
+                if (!el || !el.offsetParent) continue;
+                const cls = (el.className || '').toLowerCase();
+                if (cls.includes('win') || cls.includes('profit') || cls.includes('success')) return true;
+                if (cls.includes('loss') || cls.includes('fail')) return false;
             }
         } catch(e) {}
         
