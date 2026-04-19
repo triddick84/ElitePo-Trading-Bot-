@@ -9,6 +9,17 @@
 - Added: `get_ssid_service`, `initialize_ssid_service` from `ssid_auto_refresh_service`
 - All 10 Telegram bot endpoints verified working (status, start, stop, send, settings, history, stats, etc.)
 
+✅ **Core Decision Engine v2.0 (April 19, 2026)**
+- **Multi-Model Ensemble**: IQ-720 (15%), Maximized ML XGBoost (30%), Improved ML RF/GB (20%), LSTM/GRU (25%), PPO RL (10%) — configurable weights
+- **5 Market Regimes**: Trending Up/Down, Ranging, High/Low Volatility — auto-detected from EMA slopes + ATR
+- **4 Strategy Modes**: Trend-Following, Mean-Reversion, Scalping, Momentum — auto-selected per regime with weighted priority
+- **7 Risk Limits**: Max drawdown (10%), daily loss (5%), position size (5%), min confidence (65%), max consecutive losses (5), win rate threshold (45%), loss streak cooldown (5 min)
+- **Dynamic Kelly Sizing**: Half-Kelly adjusted for confidence, regime, and current drawdown
+- **Trade Outcome Tracking**: Win rate, Sharpe ratio, max drawdown, consecutive losses/wins, balance tracking
+- **Risk-Controlled Decisions**: Stop-loss/take-profit in pips, risk-reward ratio, volatility filters
+- **API**: `POST /api/signals/decision` (full pipeline), `GET /api/signals/engine-status`, `POST /api/signals/record-outcome`
+- **Signal Routing**: Actionable decisions auto-routed to Pocket Option/MT5/Telegram
+
 ✅ **ML Accuracy Tuning UI — OTC Tuning Panel (April 19, 2026)**
 - **NEW**: `OTCTuningPanel` component added as "5s OTC Tuning" tab in AI Models page
 - **OTC Data Status**: Total candles, symbols count, READY/COLLECTING status, progress bar, per-symbol breakdown with Trainable badges
