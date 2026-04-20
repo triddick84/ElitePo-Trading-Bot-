@@ -1,0 +1,95 @@
+{
+  "summary": "Iteration 42 testing complete - OTC Data Health dashboard widget + Tampermonkey modular script promotion / legacy deprecation. All 9 backend tests passed (100%). All frontend checks passed: widget renders, polls every 10s, overall-health badge (OFFLINE), per-symbol rows (6 shown + '+23 more'), summary counts (healthy 0 / stale 0 / offline 29), total 901 candles, refresh button works. Mobile Auto-Trader Step 3 now recommends Modular script with RECOMMENDED badge and deprecates Legacy with DEPRECATED badge. Control Panel script URL correctly points to pocket-option-auto-trader-modular.user.js. Dashboard widget grid is now 4 columns (lg:grid-cols-4). Both legacy and modular .user.js files are downloadable.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration42_otc_health.py",
+    "/app/test_reports/pytest/pytest_iteration42_otc_health.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "signals.py /signals/otc-candle-stats correctly classifies health based on last_scrape_age (<=30s healthy, <=300s stale, else offline) and returns all expected fields (total_candles, by_symbol, overall_health, summary, server_time)",
+    "OTCDataHealthWidget correctly polls every 10s via setInterval, cleans up on unmount, and sorts rows healthy->stale->offline",
+    "DashboardRestructured renders 4 widgets in lg:grid-cols-4 responsive grid; mobile falls back to 1-col, tablet 2-col",
+    "MobileAutoTraderPage Step 3 visually differentiates modular (primary indigo, RECOMMENDED emerald badge) vs legacy (opacity-70, DEPRECATED amber badge, outline variant); both buttons expose correct data-testids",
+    "TampermonkeyControlPanel script URL correctly uses pocket-option-auto-trader-modular.user.js and copy button writes modular URL to clipboard",
+    "Both user scripts remain served from /app/frontend/public/ and respond 200 with '==UserScript==' header intact",
+    "Minor: the widget's fetchData swallows errors silently (/* ignore */); consider surfacing a small 'connection lost' state for debugging. Non-blocking."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration42_otc_health.py"
+  ],
+  "success_rate": {
+    "backend": "100% (9/9 passed)",
+    "frontend": "100%"
+  },
+  "test_credentials": "Username: triddick84, Password: Fallinone#1 (admin)",
+  "seed_data_creation": "None - existing 901 OTC candles across 29 symbols from prior iterations used as-is. As expected all symbols report offline (no live TM currently scraping), matching the agent-to-agent context note.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 42 verified the new OTCDataHealthWidget on the Dashboard and the Tampermonkey modular script promotion. Key endpoints: GET /api/signals/otc-candle-stats returns {success, total_candles, by_symbol[...], overall_health, summary:{total_symbols,healthy,stale,offline}, server_time}. Dashboard has 4 widgets in order: IQ720 | DecisionEngine | StrategyTracker | OTCDataHealth (lg:grid-cols-4), then SignalFeedWidget full-width below. Mobile Auto-Trader page (nav-mobile-trader sidebar item) has Control Panel + Setup Guide tabs. tm-install-modular-btn is now primary; tm-install-legacy-btn is deprecated. tm-script-url and tm-copy-script-url-btn in Control Panel use modular filename. Both /pocket-option-auto-trader.user.js and /pocket-option-auto-trader-modular.user.js still served 200.",
+  "tests_executed": {
+    "backend_tests": [
+      "TestOTCCandleStats::test_endpoint_returns_200_and_success - PASSED",
+      "TestOTCCandleStats::test_top_level_fields - PASSED",
+      "TestOTCCandleStats::test_summary_fields - PASSED",
+      "TestOTCCandleStats::test_by_symbol_row_fields - PASSED",
+      "TestOTCCandleStats::test_total_candles_consistent - PASSED",
+      "TestOTCCandleStats::test_overall_health_valid - PASSED",
+      "TestTampermonkeyScripts::test_legacy_script_available - PASSED (200, UserScript header present)",
+      "TestTampermonkeyScripts::test_modular_script_available - PASSED (200, UserScript header present)",
+      "TestHealthRegression::test_api_health - PASSED"
+    ],
+    "frontend_tests": [
+      "Login with triddick84/Fallinone#1 - PASSED",
+      "Dashboard loads - PASSED",
+      "otc-data-health-widget found - PASSED",
+      "otc-overall-health-badge text=OFFLINE - PASSED",
+      "otc-total-candles text='Total: 901 candles' - PASSED",
+      "otc-healthy-count=0, otc-stale-count=0, otc-offline-count=29 - PASSED",
+      "otc-health-refresh-btn present and clickable - PASSED",
+      "Symbol rows rendered (6 shown) e.g. otc-symbol-row-EURUSD_OTC - PASSED",
+      "4 widgets present (IQ720 + DecisionEngine + StrategyTracker + OTCHealth) - PASSED",
+      "Navigation to nav-mobile-trader - PASSED",
+      "Setup Guide tab: tm-install-modular-btn 'Install Modular Script' - PASSED",
+      "Setup Guide tab: tm-install-legacy-btn 'Install Legacy (Rollback)' - PASSED",
+      "RECOMMENDED and DEPRECATED badges visible - PASSED",
+      "Control Panel tab: tm-script-url contains 'pocket-option-auto-trader-modular.user.js' - PASSED",
+      "Control Panel tab: tm-copy-script-url-btn present - PASSED"
+    ]
+  },
+  "features_verified": {
+    "otc_candle_stats_endpoint": {
+      "endpoint": "GET /api/signals/otc-candle-stats",
+      "status": "WORKING",
+      "notes": "Returns total_candles=901, 29 symbols, overall_health=offline (as expected - no live scraper). All fields present: symbol, candle_count, last_scrape_age_seconds, recent_hour_count, ingestion_rate_per_min, gap_ratio, health."
+    },
+    "otc_data_health_widget": {
+      "status": "WORKING",
+      "notes": "Renders on dashboard with overall badge, total candle count, healthy/stale/offline counts, 6 per-symbol rows with ingestion bars, refresh button. Polls every 10s."
+    },
+    "4_widget_dashboard_grid": {
+      "status": "WORKING",
+      "notes": "lg:grid-cols-4 renders IQ720 | DecisionEngine | StrategyTracker | OTCHealth in a row, with SignalFeed full-width below."
+    },
+    "modular_script_promotion": {
+      "status": "WORKING",
+      "notes": "Step 3 promotes Modular with RECOMMENDED badge (indigo primary button) and deprecates Legacy with DEPRECATED badge (grayed/outlined)."
+    },
+    "control_panel_script_url": {
+      "status": "WORKING",
+      "notes": "tm-script-url displays 'https://momentum-trade-test.preview.emergentagent.com/pocket-option-auto-trader-modular.user.js', copy button uses modular URL."
+    },
+    "both_scripts_downloadable": {
+      "status": "WORKING",
+      "notes": "Legacy (316KB) and Modular (112KB) both served 200 with ==UserScript== headers."
+    }
+  }
+}

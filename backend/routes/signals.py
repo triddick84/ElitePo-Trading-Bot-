@@ -2,7 +2,7 @@
 from fastapi import APIRouter, HTTPException, Query, Request, Body, BackgroundTasks, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from typing import List, Dict, Any, Optional
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel, Field
 import logging
 import json
@@ -3828,35 +3828,106 @@ async def collect_otc_candles(
 
 @router.get("/signals/otc-candle-stats")
 async def get_otc_candle_stats():
-    """Get statistics on collected OTC candle data."""
+    """
+    Get statistics on collected OTC candle data with health/ingestion metrics.
+    Used by the OTC Data Health dashboard widget.
+    """
     try:
         collection = db["otc_candles_5s"]
-        
+
         pipeline = [
             {"$group": {
                 "_id": "$symbol",
                 "count": {"$sum": 1},
                 "oldest": {"$min": "$timestamp"},
-                "newest": {"$max": "$timestamp"}
+                "newest": {"$max": "$timestamp"},
+                "last_collected": {"$max": "$collected_at"}
             }},
             {"$sort": {"count": -1}}
         ]
-        
+
+        now = datetime.now(timezone.utc)
+        one_hour_ago = now - timedelta(hours=1)
+        one_hour_ago_iso = one_hour_ago.isoformat()
+
         stats = []
         async for doc in collection.aggregate(pipeline):
+            symbol = doc["_id"]
+
+            # Candles collected in the last hour (for ingestion rate)
+            recent_count = await collection.count_documents({
+                "symbol": symbol,
+                "collected_at": {"$gte": one_hour_ago_iso}
+            })
+
+            # Parse newest timestamp to compute last-scrape age
+            newest_ts = doc.get("last_collected") or doc.get("newest")
+            last_scrape_age = None
+            if newest_ts:
+                try:
+                    parsed = datetime.fromisoformat(str(newest_ts).replace("Z", "+00:00"))
+                    if parsed.tzinfo is None:
+                        parsed = parsed.replace(tzinfo=timezone.utc)
+                    last_scrape_age = int((now - parsed).total_seconds())
+                except Exception:
+                    last_scrape_age = None
+
+            # Health classification
+            # 5s candles: we expect ~12/min. Healthy = scraped in last 30s.
+            if last_scrape_age is None:
+                health = "unknown"
+            elif last_scrape_age <= 30:
+                health = "healthy"
+            elif last_scrape_age <= 300:
+                health = "stale"
+            else:
+                health = "offline"
+
+            # Ingestion rate per minute over the last hour
+            ingestion_rate = round(recent_count / 60.0, 2) if recent_count else 0.0
+
+            # Expected for 5s candles: 12/min. Gap ratio = actual / expected
+            expected_per_min = 12.0
+            gap_ratio = round(min(ingestion_rate / expected_per_min, 1.0), 2) if ingestion_rate else 0.0
+
             stats.append({
-                "symbol": doc["_id"],
+                "symbol": symbol,
                 "candle_count": doc["count"],
                 "oldest": doc.get("oldest"),
-                "newest": doc.get("newest")
+                "newest": doc.get("newest"),
+                "last_scrape_age_seconds": last_scrape_age,
+                "recent_hour_count": recent_count,
+                "ingestion_rate_per_min": ingestion_rate,
+                "gap_ratio": gap_ratio,
+                "health": health
             })
-        
+
         total = await collection.count_documents({})
-        
+
+        # Overall summary
+        healthy_count = sum(1 for s in stats if s["health"] == "healthy")
+        stale_count = sum(1 for s in stats if s["health"] == "stale")
+        offline_count = sum(1 for s in stats if s["health"] == "offline")
+
+        overall_health = "healthy"
+        if stats:
+            if healthy_count == 0 and (stale_count + offline_count) > 0:
+                overall_health = "offline" if offline_count >= stale_count else "stale"
+            elif offline_count > healthy_count:
+                overall_health = "degraded"
+
         return {
             "success": True,
             "total_candles": total,
-            "by_symbol": stats
+            "by_symbol": stats,
+            "overall_health": overall_health,
+            "summary": {
+                "total_symbols": len(stats),
+                "healthy": healthy_count,
+                "stale": stale_count,
+                "offline": offline_count
+            },
+            "server_time": now.isoformat()
         }
     except Exception as e:
         return {"success": False, "error": str(e)}

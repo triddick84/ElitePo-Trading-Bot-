@@ -39,6 +39,7 @@ import IQ720Widget from './IQ720Widget';
 import DecisionEngineWidget from './DecisionEngineWidget';
 import StrategyTrackerWidget from './StrategyTrackerWidget';
 import SignalFeedWidget from './SignalFeedWidget';
+import OTCDataHealthWidget from './OTCDataHealthWidget';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -753,10 +754,11 @@ const DashboardRestructured = ({
       </div>
 
       {/* AI Intelligence Widgets */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
         <IQ720Widget selectedAsset={config.selected_assets?.[0] || 'EURUSD'} />
         <DecisionEngineWidget />
         <StrategyTrackerWidget />
+        <OTCDataHealthWidget />
       </div>
 
       {/* Live Signal Feed */}

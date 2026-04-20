@@ -805,23 +805,28 @@ const TampermonkeyControlPanel = () => {
             </span>
           </div>
           <div className="mt-4 p-3 bg-slate-900 rounded-lg">
-            <p className="text-xs text-slate-400 mb-2">Script URL (copy for Tampermonkey):</p>
+            <p className="text-xs text-slate-400 mb-2">Script URL (copy for Tampermonkey) — <span className="text-indigo-400">Modular build recommended</span>:</p>
             <div className="flex items-center gap-2">
-              <code className="text-xs text-purple-400 break-all flex-1">
-                {API_BASE}/pocket-option-auto-trader.user.js
+              <code className="text-xs text-indigo-400 break-all flex-1" data-testid="tm-script-url">
+                {API_BASE}/pocket-option-auto-trader-modular.user.js
               </code>
               <Button 
                 size="sm" 
                 variant="outline" 
                 className="text-xs border-slate-600 shrink-0"
+                data-testid="tm-copy-script-url-btn"
                 onClick={() => {
-                  navigator.clipboard.writeText(`${API_BASE}/pocket-option-auto-trader.user.js`);
-                  alert('Script URL copied!');
+                  navigator.clipboard.writeText(`${API_BASE}/pocket-option-auto-trader-modular.user.js`);
+                  alert('Modular script URL copied!');
                 }}
               >
                 📋
               </Button>
             </div>
+            <p className="text-[10px] text-slate-500 mt-2">
+              Legacy monolithic URL (deprecated, rollback only):{' '}
+              <span className="font-mono text-slate-600">{API_BASE}/pocket-option-auto-trader.user.js</span>
+            </p>
           </div>
           
           {/* Features List */}
