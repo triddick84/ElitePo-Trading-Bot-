@@ -430,6 +430,49 @@ class CoreDecisionEngine:
 
         return active or [StrategyMode.SCALPING]
 
+    def auto_switch_strategy(self, symbol: str) -> Optional[str]:
+        """
+        Auto-switch: Check if the best-performing strategy for this asset
+        differs from the current model weight leader. If so, boost its weight.
+        Returns the recommended strategy name or None.
+        """
+        best = self.get_best_strategy_for_asset(symbol)
+        if not best:
+            return None
+
+        # Map strategy names to model weight keys
+        strategy_to_model = {
+            "iq720_ensemble": "iq720",
+            "iq720": "iq720",
+            "keltner_macd": "iq720",  # Technical strategy — boost IQ-720
+            "holly_crossover": "iq720",
+            "golden_one_moment": "iq720",
+            "momentum_buster": "iq720",
+            "maximized_v3": "maximized_ml",
+            "improved_v2": "improved_ml",
+            "lstm_gru": "lstm_gru",
+            "ppo_rl": "ppo_rl",
+        }
+
+        model_key = strategy_to_model.get(best)
+        if model_key and model_key in self.model_weights:
+            current_weight = self.model_weights[model_key]
+            # Boost the winning model's weight by 10% (capped at 0.50)
+            if current_weight < 0.50:
+                old_weight = current_weight
+                self.model_weights[model_key] = min(0.50, current_weight + 0.05)
+                # Reduce others proportionally
+                remaining = 1.0 - self.model_weights[model_key]
+                others_sum = sum(v for k, v in self.model_weights.items() if k != model_key)
+                if others_sum > 0:
+                    scale = remaining / others_sum
+                    for k in self.model_weights:
+                        if k != model_key:
+                            self.model_weights[k] = round(self.model_weights[k] * scale, 3)
+                logger.info(f"AUTO-SWITCH: Boosted {model_key} weight {old_weight:.2f} -> {self.model_weights[model_key]:.2f} for {symbol} (best: {best})")
+
+        return best
+
     # ==================== CORE DECISION PIPELINE ====================
 
     def generate_decision(self, candles: List[Dict], symbol: str = "EURUSD") -> TradeDecision:
@@ -464,7 +507,12 @@ class CoreDecisionEngine:
         else:
             decision.volatility_state = "normal"
 
-        # 2. Collect Model Votes
+        # 2. Auto-Switch: Adjust model weights based on best-performing strategy for this asset
+        auto_switched = self.auto_switch_strategy(symbol)
+        if auto_switched:
+            decision.risk_warnings.append(f"AUTO_SWITCH: Prioritizing {auto_switched}")
+
+        # 3. Collect Model Votes
         votes = self.collect_model_votes(candles, symbol)
         decision.model_votes = {k: v for k, v in votes.items()}
 

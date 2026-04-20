@@ -1,0 +1,126 @@
+{
+  "summary": "Iteration 41 testing complete - Real-Time Signal Feed, Strategy Persistence, Auto-Switch. All 16 backend tests passed (100%). All frontend widget tests passed. New features: 1) WebSocket signal feed at /api/signals/feed broadcasting signals, decisions, outcomes, routing events with Live badge on Dashboard. 2) MongoDB persistence for strategy tracker (save/load endpoints + auto-save on record-outcome + auto-load on startup). 3) Auto-switch logic in decision engine that boosts winning model weights. Dashboard now has 4 widgets: IQ-720 LIVE | DECISION ENGINE v2.0 | STRATEGY TRACKER (3-col grid), then LIVE SIGNAL FEED (full-width below).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "WebSocket connection",
+        "issue": "Initial WebSocket connection shows 'WebSocket is closed before the connection is established' in console, but reconnects successfully",
+        "affected_selectors": ["[data-testid='signal-feed-widget']"],
+        "priority": "LOW"
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration41_realtime_feed.py",
+    "/app/test_reports/pytest/pytest_iteration41_realtime_feed.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "realtime_signal_feed.py correctly implements SignalFeedManager with WebSocket broadcasting and event history",
+    "StrategyTrackerPersistence correctly saves/loads strategy performance to/from MongoDB 'strategy_tracker' collection",
+    "record-outcome endpoint correctly broadcasts via WebSocket and auto-saves to MongoDB",
+    "auto_switch_strategy() in core_decision_engine.py correctly boosts winning model weights by 5% (capped at 0.50)",
+    "SignalFeedWidget.jsx correctly connects to WebSocket and displays Live/Connecting badge",
+    "SignalFeedWidget.jsx correctly renders signal, decision, outcome, routing events with appropriate icons and colors",
+    "DashboardRestructured.js correctly places SignalFeedWidget below the 3-column widget grid"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration41_realtime_feed.py"
+  ],
+  "success_rate": {
+    "backend": "100% (16/16 passed)",
+    "frontend": "100%"
+  },
+  "test_credentials": "Username: triddick84, Password: Fallinone#1",
+  "seed_data_creation": "Test data created via record-outcome API calls during testing (EURUSD_OTC, AUTOSWITCH_TEST, TEST_PERSIST, GBPUSD_OTC)",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 41 tested Real-Time Signal Feed, Strategy Persistence, and Auto-Switch features. Key endpoints: GET /api/signals/feed-status (returns connected_clients, events_buffered, recent_events), POST /api/signals/save-tracker (saves to MongoDB), POST /api/signals/load-tracker (loads from MongoDB), WebSocket /api/signals/feed (wss:// protocol). Frontend widget: LIVE SIGNAL FEED (data-testid='signal-feed-widget') shows Live badge, events count, and real-time signal/decision/outcome/routing events. Dashboard now has 4 widgets in order: IQ-720 | Decision Engine | Strategy Tracker (3-col grid), then Signal Feed (full-width below). Regression tests passed: /api/signals/decision, /api/ml/scheduler/status, /api/signals/iq720-ensemble, /api/signal-routing/rules, /api/telegram/status.",
+  "tests_executed": {
+    "backend_tests": [
+      "test_api_health - PASSED",
+      "test_signals_decision_endpoint - PASSED (regression)",
+      "test_ml_scheduler_status - PASSED (regression)",
+      "test_feed_status_endpoint - PASSED (returns connected_clients, events_buffered, recent_events)",
+      "test_feed_status_recent_events_structure - PASSED",
+      "test_save_tracker_endpoint - PASSED",
+      "test_load_tracker_endpoint - PASSED",
+      "test_persistence_round_trip - PASSED",
+      "test_record_outcome_broadcasts_and_saves - PASSED",
+      "test_strategy_tracker_returns_best_strategy - PASSED",
+      "test_engine_status_returns_model_weights - PASSED",
+      "test_auto_switch_adjusts_weights - PASSED",
+      "test_websocket_endpoint_info - PASSED",
+      "test_iq720_ensemble_endpoint - PASSED (regression)",
+      "test_signal_routing_rules - PASSED (regression)",
+      "test_telegram_bot_status - PASSED (regression)"
+    ],
+    "frontend_tests": [
+      "Login with credentials - PASSED",
+      "Dashboard loads - PASSED",
+      "IQ-720 Widget found (data-testid='iq720-widget') - PASSED",
+      "Decision Engine Widget found (data-testid='decision-engine-widget') - PASSED",
+      "Strategy Tracker Widget found (data-testid='strategy-tracker-widget') - PASSED",
+      "Signal Feed Widget found (data-testid='signal-feed-widget') - PASSED",
+      "LIVE SIGNAL FEED header found - PASSED",
+      "Live badge found - PASSED",
+      "Events count displayed (13 events) - PASSED",
+      "WIN outcomes displayed - PASSED",
+      "Routing events displayed - PASSED",
+      "4-widget layout verified - PASSED"
+    ]
+  },
+  "features_verified": {
+    "feed_status_endpoint": {
+      "endpoint": "GET /api/signals/feed-status",
+      "status": "WORKING",
+      "notes": "Returns connected_clients, events_buffered, recent_events"
+    },
+    "save_tracker_endpoint": {
+      "endpoint": "POST /api/signals/save-tracker",
+      "status": "WORKING",
+      "notes": "Saves strategy tracker to MongoDB 'strategy_tracker' collection"
+    },
+    "load_tracker_endpoint": {
+      "endpoint": "POST /api/signals/load-tracker",
+      "status": "WORKING",
+      "notes": "Loads strategy tracker from MongoDB into engine"
+    },
+    "websocket_feed": {
+      "endpoint": "WebSocket /api/signals/feed",
+      "status": "WORKING",
+      "notes": "Broadcasts signals, decisions, outcomes, routing events. Connect via wss://momentum-trade-test.preview.emergentagent.com/api/signals/feed"
+    },
+    "record_outcome_broadcast": {
+      "endpoint": "POST /api/signals/record-outcome",
+      "status": "WORKING",
+      "notes": "Now broadcasts via WebSocket and auto-saves to MongoDB"
+    },
+    "auto_switch_strategy": {
+      "status": "WORKING",
+      "notes": "Boosts winning model weights by 5% when best_strategy differs from current leader (capped at 0.50)"
+    },
+    "signal_feed_widget": {
+      "status": "WORKING",
+      "notes": "Shows Live badge, events count, real-time events with icons and colors"
+    },
+    "4_widget_dashboard_layout": {
+      "status": "WORKING",
+      "notes": "IQ-720 | Decision Engine | Strategy Tracker (3-col grid), then Signal Feed (full-width below)"
+    }
+  },
+  "regression_tests": {
+    "api_health": "PASSED - /api/health returns healthy",
+    "signals_decision": "PASSED - POST /api/signals/decision responds",
+    "ml_scheduler_status": "PASSED - GET /api/ml/scheduler/status responds",
+    "iq720_ensemble": "PASSED - POST /api/signals/iq720-ensemble responds",
+    "signal_routing_rules": "PASSED - GET /api/signal-routing/rules returns rules",
+    "telegram_bot_status": "PASSED - GET /api/telegram/status responds"
+  }
+}

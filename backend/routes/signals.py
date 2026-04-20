@@ -1,5 +1,5 @@
 """Auto-extracted route module from server.py refactoring."""
-from fastapi import APIRouter, HTTPException, Query, Request, Body, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Query, Request, Body, BackgroundTasks, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
@@ -45,6 +45,7 @@ from pocket_option_client import get_pocket_option_client
 from routes import get_realtime_market_hub
 from signal_routing_service import get_signal_router
 from core_decision_engine import get_decision_engine
+from realtime_signal_feed import get_signal_feed, get_tracker_persistence
 from real_market_data_service import RealMarketDataService
 from platform_integrations import platform_integration
 from continuous_scanner import ContinuousMarketScanner
@@ -114,6 +115,14 @@ async def _route_and_dispatch(signal: Dict) -> Optional[Dict]:
                 dispatch_results["pocket_option"] = {"queued": True}
 
         routing["dispatch_results"] = dispatch_results
+
+        # Broadcast routing to WebSocket feed
+        try:
+            feed = get_signal_feed()
+            await feed.broadcast_routing(routing)
+        except Exception:
+            pass
+
         return routing
 
     except Exception as e:
@@ -3918,6 +3927,13 @@ async def get_ai_decision(
 
         decision = engine.generate_decision(candles, symbol)
 
+        # Broadcast decision via WebSocket
+        try:
+            feed = get_signal_feed()
+            await feed.broadcast_decision(decision.to_dict())
+        except Exception:
+            pass
+
         # Route if actionable
         routing = None
         if decision.action in ("CALL", "PUT") and decision.risk_check_passed:
@@ -3966,6 +3982,21 @@ async def record_trade_outcome(
     try:
         engine = get_decision_engine(db)
         engine.record_trade_result(symbol, direction, outcome, pnl, strategy)
+
+        # Broadcast outcome via WebSocket
+        try:
+            feed = get_signal_feed()
+            await feed.broadcast_outcome(symbol, direction, outcome, strategy)
+        except Exception:
+            pass
+
+        # Persist tracker to MongoDB
+        try:
+            persistence = get_tracker_persistence(db)
+            await persistence.save(engine)
+        except Exception:
+            pass
+
         return {
             "success": True,
             "performance": {
@@ -4000,5 +4031,63 @@ async def get_strategy_performance_tracker():
                 "sharpe_ratio": round(engine.performance.sharpe_ratio, 2),
             }
         }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+
+# ============================================================================
+# REAL-TIME SIGNAL FEED (WebSocket)
+# ============================================================================
+
+@router.websocket("/signals/feed")
+async def signal_feed_websocket(ws: WebSocket):
+    """
+    WebSocket endpoint for real-time signal feed.
+    Broadcasts: signals, decisions, outcomes, routing events.
+    Connect: ws://host/api/signals/feed
+    """
+    feed = get_signal_feed()
+    await feed.connect(ws)
+    try:
+        while True:
+            # Keep connection alive, accept pings
+            data = await ws.receive_text()
+            if data == "ping":
+                await ws.send_json({"type": "pong"})
+    except WebSocketDisconnect:
+        feed.disconnect(ws)
+    except Exception:
+        feed.disconnect(ws)
+
+
+@router.get("/signals/feed-status")
+async def get_signal_feed_status():
+    """Get real-time signal feed status."""
+    feed = get_signal_feed()
+    return {"success": True, **feed.get_status()}
+
+
+@router.post("/signals/load-tracker")
+async def load_strategy_tracker_from_db():
+    """Load persisted strategy tracker data from MongoDB into the engine."""
+    try:
+        engine = get_decision_engine(db)
+        persistence = get_tracker_persistence(db)
+        loaded = await persistence.load(engine)
+        return {"success": True, "assets_loaded": loaded, "message": f"Loaded {loaded} assets from MongoDB"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@router.post("/signals/save-tracker")
+async def save_strategy_tracker_to_db():
+    """Save current strategy tracker data to MongoDB."""
+    try:
+        engine = get_decision_engine(db)
+        persistence = get_tracker_persistence(db)
+        await persistence.save(engine)
+        count = len(engine.performance.strategy_performance)
+        return {"success": True, "assets_saved": count, "message": f"Saved {count} assets to MongoDB"}
     except Exception as e:
         return {"success": False, "error": str(e)}

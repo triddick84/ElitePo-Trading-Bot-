@@ -3736,10 +3736,21 @@ async def startup_event():
             
             # Initialize Market Regime Detector
             await initialize_regime_detector(db)
-            logger.info("📈 Market Regime Detector initialized")
+            logger.info("Market Regime Detector initialized")
+            
+            # Load persisted strategy tracker data
+            try:
+                from core_decision_engine import get_decision_engine
+                from realtime_signal_feed import get_tracker_persistence
+                engine = get_decision_engine(db)
+                persistence = get_tracker_persistence(db)
+                loaded = await persistence.load(engine)
+                logger.info(f"Strategy tracker loaded: {loaded} assets from MongoDB")
+            except Exception as e:
+                logger.warning(f"Strategy tracker load error: {e}")
             
             app_initialized = True
-            logger.info("✅ Application initialization complete")
+            logger.info("Application initialization complete")
         except Exception as e:
             logger.error(f"❌ Error during initialization: {e}")
             app_initialized = False
