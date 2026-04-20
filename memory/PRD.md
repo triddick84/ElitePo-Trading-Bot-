@@ -1,8 +1,21 @@
 # Elite Pocket Option Trading Bot - Product Requirements Document
 
-## Last Updated: April 14, 2026
+## Last Updated: April 20, 2026
 
 ## Current Status
+✅ **OTC Data Health Widget + Tampermonkey Legacy Deprecation (April 20, 2026 — Iteration 42)**
+- **P1 — OTC Data Health Widget**: New `OTCDataHealthWidget.jsx` added to Dashboard (4th card in the intelligence row)
+  - Polls `/api/signals/otc-candle-stats` every 10s
+  - Shows overall health badge (LIVE / STALE / OFFLINE / DEGRADED), total candle count, per-symbol rows
+  - Each symbol row displays: candle count, last-scrape age, ingestion bar (gap ratio), rate/min
+  - Backend endpoint enhanced with: `last_scrape_age_seconds`, `recent_hour_count`, `ingestion_rate_per_min`, `gap_ratio`, `health` (healthy/stale/offline), `overall_health`, `summary{healthy,stale,offline}`
+  - Health thresholds: ≤30s healthy, ≤300s stale, else offline
+- **P2 — Tampermonkey Legacy Deprecation**: Modular Webpack build (v8.8.1) is now the primary recommended script
+  - Mobile Auto-Trader Step 3: Modular card shows RECOMMENDED badge; Legacy card shows DEPRECATED badge with "Install Legacy (Rollback)" label
+  - TampermonkeyControlPanel info card: script URL now points to `pocket-option-auto-trader-modular.user.js`; legacy URL shown only as rollback footnote
+  - Both scripts still downloadable for backwards compatibility
+- **Tests**: 9/9 backend passed, all frontend checks passed (iteration_42)
+
 ✅ **Telegram Bot Integration Fix (April 15, 2026)**
 - **FIXED**: Missing imports in `routes/integrations.py` causing 500 errors on all `/telegram-bot/*` endpoints
 - Added: `get_telegram_bot`, `TelegramTradingSignal` from `telegram_bot_service`
