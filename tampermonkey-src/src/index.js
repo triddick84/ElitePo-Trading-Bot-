@@ -11,10 +11,16 @@ import { strategyManager } from './strategies/manager.js';
 import { tradeExecutor } from './trading/executor.js';
 import { smartInvert } from './trading/smartInvert.js';
 import { twentyOneSecondReversal } from './strategies/twentyOneSecondReversal.js';
+import { ssidBridge } from './trading/ssidBridge.js';
 import { scanMarkets } from './utils/api.js';
 import { get, post } from './utils/api.js';
 import { getCurrentAsset, getCurrentPrice, waitForElement } from './utils/dom.js';
 import { priceScraper } from './trading/priceScraper.js';
+
+// Install the SSID bridge IMMEDIATELY at module load — before any async init.
+// This wraps window.WebSocket so we can capture the first PO auth frame.
+// Must run before PO opens its trading socket.
+ssidBridge.install();
 
 class EliteTradingBot {
   constructor() {
@@ -309,5 +315,6 @@ window.eliteBotTradeExecutor = tradeExecutor;
 window.eliteBotSmartInvert = smartInvert;
 window.eliteBotPriceScraper = priceScraper;
 window.eliteBot21sReversal = twentyOneSecondReversal;
+window.eliteBotSsidBridge = ssidBridge;
 
 export default bot;

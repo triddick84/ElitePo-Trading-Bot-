@@ -40,6 +40,7 @@ import DecisionEngineWidget from './DecisionEngineWidget';
 import StrategyTrackerWidget from './StrategyTrackerWidget';
 import SignalFeedWidget from './SignalFeedWidget';
 import OTCDataHealthWidget from './OTCDataHealthWidget';
+import SSIDStatusWidget from './SSIDStatusWidget';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -759,6 +760,11 @@ const DashboardRestructured = ({
         <DecisionEngineWidget />
         <StrategyTrackerWidget />
         <OTCDataHealthWidget />
+      </div>
+
+      {/* SSID Bridge + future status row */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+        <SSIDStatusWidget />
       </div>
 
       {/* Live Signal Feed */}

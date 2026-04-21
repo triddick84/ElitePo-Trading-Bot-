@@ -2,7 +2,7 @@
 from fastapi import APIRouter, HTTPException, Query, Request, Body, BackgroundTasks
 from fastapi.responses import JSONResponse
 from typing import List, Dict, Any, Optional
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel, Field
 import logging
 import json
@@ -2754,4 +2754,240 @@ async def update_ssid_settings(
             "error": "SSID service not initialized. Start Telegram bot first."
         }
 
+
+
+
+# ============================================================================
+# SSID BRIDGE — auto-extracted SSID from Tampermonkey WebSocket interceptor
+# ============================================================================
+
+class PoSsidBridgePayload(BaseModel):
+    """Payload posted by the Tampermonkey SSID bridge."""
+    auth_message: str = Field(..., description='Full PO auth frame: 42["auth",{"session":"...","isDemo":1,"uid":...,"platform":1}]')
+    source: str = Field(default="tampermonkey", description="Where the SSID was captured")
+    ua: Optional[str] = Field(default=None, description="Browser user agent (for audit)")
+
+
+def _parse_auth_message(msg: str) -> Dict[str, Any]:
+    """Extract session/uid/isDemo from a PO auth frame. Raises ValueError on bad input."""
+    import re
+    if not msg or not msg.startswith('42["auth"'):
+        raise ValueError("auth_message must start with 42[\"auth\"")
+    m = re.search(r'42\["auth",(\{.*?\})\]', msg)
+    if not m:
+        raise ValueError("auth_message JSON payload not parseable")
+    try:
+        auth = json.loads(m.group(1))
+    except Exception as e:
+        raise ValueError(f"auth_message JSON invalid: {e}")
+    session = auth.get("session")
+    if not session or len(session) < 8:
+        raise ValueError("auth_message missing/invalid session")
+    return {
+        "session": session,
+        "uid": int(auth.get("uid") or 0),
+        "is_demo": bool(auth.get("isDemo", 1) == 1),
+        "platform": auth.get("platform", 1),
+    }
+
+
+@router.post("/po/ssid/update")
+async def po_ssid_bridge_update(payload: PoSsidBridgePayload):
+    """
+    Receive a fresh SSID captured by the Tampermonkey WebSocket interceptor.
+    Stores the full auth message and parsed fields into MongoDB (collection
+    `po_ssid_state`) with timestamp for expiry tracking (~1h lifetime).
+
+    This is idempotent — if the same session is received again within 5 min,
+    we only bump `last_seen_at` without re-writing.
+    """
+    try:
+        parsed = _parse_auth_message(payload.auth_message)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    now = datetime.now(timezone.utc)
+    coll = db["po_ssid_state"]
+    existing = await coll.find_one({"_id": "current"}, {"_id": 0})
+
+    # Idempotent skip if same session seen recently
+    if existing and existing.get("session") == parsed["session"]:
+        await coll.update_one(
+            {"_id": "current"},
+            {"$set": {
+                "last_seen_at": now.isoformat(),
+                "ua": payload.ua or existing.get("ua"),
+            }}
+        )
+        return {
+            "success": True,
+            "updated": False,
+            "message": "SSID unchanged",
+            "session_preview": parsed["session"][:10] + "...",
+            "extracted_at": existing.get("extracted_at"),
+            "last_seen_at": now.isoformat(),
+        }
+
+    # Otherwise upsert the new SSID
+    doc = {
+        "auth_message": payload.auth_message,
+        "session": parsed["session"],
+        "uid": parsed["uid"],
+        "is_demo": parsed["is_demo"],
+        "platform": parsed["platform"],
+        "source": payload.source,
+        "ua": payload.ua,
+        "extracted_at": now.isoformat(),
+        "last_seen_at": now.isoformat(),
+        # PO SSID typical lifetime ≈ 1h, we refresh well before that
+        "expires_at": (now + timedelta(hours=1)).isoformat(),
+    }
+    await coll.update_one({"_id": "current"}, {"$set": doc}, upsert=True)
+
+    # Also mirror to the historical audit log (capped at ~200 entries via TTL)
+    hist = db["po_ssid_history"]
+    try:
+        await hist.create_index("captured_at", expireAfterSeconds=30 * 86400)
+    except Exception:
+        pass
+    await hist.insert_one({
+        "session_preview": parsed["session"][:10] + "...",
+        "uid": parsed["uid"],
+        "is_demo": parsed["is_demo"],
+        "source": payload.source,
+        "captured_at": now.isoformat(),
+    })
+
+    logger.info(
+        f"🔐 PO SSID bridged from {payload.source} — uid={parsed['uid']} "
+        f"demo={parsed['is_demo']} session={parsed['session'][:10]}..."
+    )
+
+    return {
+        "success": True,
+        "updated": True,
+        "message": "SSID updated",
+        "session_preview": parsed["session"][:10] + "...",
+        "uid": parsed["uid"],
+        "is_demo": parsed["is_demo"],
+        "extracted_at": doc["extracted_at"],
+        "expires_at": doc["expires_at"],
+    }
+
+
+@router.get("/po/ssid/status")
+async def po_ssid_bridge_status():
+    """
+    Return the current bridged SSID status (no raw SSID exposed).
+    Used by the frontend SSID Status widget and by integrations that need
+    to know if a fresh SSID is available for WS trading.
+    """
+    try:
+        doc = await db["po_ssid_state"].find_one({"_id": "current"}, {"_id": 0, "auth_message": 0, "session": 0})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    if not doc:
+        return {
+            "success": True,
+            "has_ssid": False,
+            "health": "missing",
+            "message": "No SSID captured yet. Install the Tampermonkey script and open Pocket Option.",
+        }
+
+    now = datetime.now(timezone.utc)
+    extracted_at = doc.get("extracted_at")
+    last_seen_at = doc.get("last_seen_at") or extracted_at
+    expires_at = doc.get("expires_at")
+
+    def _parse_iso(s):
+        if not s:
+            return None
+        try:
+            return datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+        except Exception:
+            return None
+
+    exp_dt = _parse_iso(expires_at)
+    last_seen_dt = _parse_iso(last_seen_at)
+
+    age_seconds = None
+    expires_in_seconds = None
+    if last_seen_dt is not None:
+        age_seconds = int((now - last_seen_dt).total_seconds())
+    if exp_dt is not None:
+        expires_in_seconds = int((exp_dt - now).total_seconds())
+
+    # Health classification
+    if expires_in_seconds is not None and expires_in_seconds <= 0:
+        health = "expired"
+    elif expires_in_seconds is not None and expires_in_seconds < 600:  # <10 min
+        health = "expiring"
+    elif age_seconds is not None and age_seconds > 300:  # heartbeat older than 5 min
+        health = "stale"
+    else:
+        health = "healthy"
+
+    return {
+        "success": True,
+        "has_ssid": True,
+        "health": health,
+        "uid": doc.get("uid"),
+        "is_demo": doc.get("is_demo"),
+        "platform": doc.get("platform"),
+        "source": doc.get("source"),
+        "extracted_at": extracted_at,
+        "last_seen_at": last_seen_at,
+        "expires_at": expires_at,
+        "age_seconds": age_seconds,
+        "expires_in_seconds": expires_in_seconds,
+    }
+
+
+@router.post("/po/ssid/connect")
+async def po_ssid_bridge_connect():
+    """
+    Use the currently bridged SSID to open a direct WebSocket session to
+    Pocket Option via BinaryOptionsToolsV2 / pocketoptionapi_async.
+    Returns balance + connection status for verification.
+    """
+    doc = await db["po_ssid_state"].find_one({"_id": "current"}, {"_id": 0})
+    if not doc or not doc.get("auth_message"):
+        raise HTTPException(status_code=404, detail="No bridged SSID available. Wait for TM to capture one.")
+
+    session = doc.get("session")
+    uid = int(doc.get("uid") or 0)
+    is_demo = bool(doc.get("is_demo", True))
+
+    try:
+        from pocketoptionapi_async import AsyncPocketOptionClient
+        client = AsyncPocketOptionClient(
+            ssid=session,
+            is_demo=is_demo,
+            uid=uid,
+            enable_logging=False,
+        )
+        connected = await client.connect()
+        balance = None
+        if connected:
+            try:
+                balance = await client.get_balance()
+            except Exception:
+                balance = None
+        try:
+            await client.disconnect()
+        except Exception:
+            pass
+
+        return {
+            "success": bool(connected),
+            "connected": bool(connected),
+            "balance": balance,
+            "uid": uid,
+            "is_demo": is_demo,
+            "session_preview": (session or "")[:10] + "...",
+        }
+    except Exception as e:
+        logger.error(f"po/ssid/connect error: {e}")
+        return {"success": False, "connected": False, "error": str(e)}
 
