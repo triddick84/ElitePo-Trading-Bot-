@@ -29,7 +29,7 @@ import {
   getPayout,
 } from '../utils/dom.js';
 import { priceScraper } from '../trading/priceScraper.js';
-import { reportTrade } from '../utils/api.js';
+import { reportTrade, post, get as apiGet } from '../utils/api.js';
 
 const LOOP_INTERVAL_MS = 100;
 const FIRE_AT_MS_LEFT = 21_000;
@@ -61,6 +61,11 @@ class TwentyOneSecondReversal {
       toleranceMs: DEFAULT_TOLERANCE_MS,
       expirySeconds: 5,
       autoRotateOnWin: false,
+      // Execution mode: 'auto' (WS when bridge healthy, DOM fallback), 'ws' (force WS), 'dom' (force DOM)
+      executionMode: 'auto',
+      // Cache of last known SSID bridge health — refreshed by _checkBridgeHealth()
+      bridgeHealthy: false,
+      bridgeHealthCheckedAt: 0,
       rotationAssets: [
         'EURUSD_OTC', 'GBPUSD_OTC', 'USDJPY_OTC', 'AUDUSD_OTC',
         'EURJPY_OTC', 'GBPJPY_OTC', 'NZDUSD_OTC', 'USDCAD_OTC',
@@ -82,8 +87,13 @@ class TwentyOneSecondReversal {
       }
     } catch (_e) { /* ignore */ }
 
+    // Initial bridge health probe + periodic refresh (15s) so we know whether
+    // to use WS execution (<200ms) or fall back to DOM clicks.
+    this._checkBridgeHealth();
+    this.bridgeHealthIntervalId = setInterval(() => this._checkBridgeHealth(), 15_000);
+
     this.loopId = setInterval(() => this._tick(), LOOP_INTERVAL_MS);
-    success('[21s-Reversal] Enabled — firing on 1m candles @ 21s left (opposite direction, 5s expiry)');
+    success(`[21s-Reversal] Enabled — mode=${this.config.executionMode} (WS when bridge healthy)`);
   }
 
   disable() {
@@ -92,6 +102,10 @@ class TwentyOneSecondReversal {
     if (this.loopId) {
       clearInterval(this.loopId);
       this.loopId = null;
+    }
+    if (this.bridgeHealthIntervalId) {
+      clearInterval(this.bridgeHealthIntervalId);
+      this.bridgeHealthIntervalId = null;
     }
     log('[21s-Reversal] Disabled');
   }
@@ -250,55 +264,122 @@ class TwentyOneSecondReversal {
       return;
     }
 
-    // Try to auto-select 5s expiry if UI exposes it
+    // Try to auto-select 5s expiry if UI exposes it (needed for DOM fallback)
     this._trySetExpiry(this.config.expirySeconds);
-
-    info(`[21s-Reversal] Candle ${originalDirection} (body=${bodyBps.toFixed(2)}bps) → FIRE ${tradeDirection} on ${asset} @ $${amount} [5s]`);
 
     this.firedThisCandle = true;
     this.lastFireCandleTs = this.candleStartTs;
 
-    executeTrade(tradeDirection, amount).then((ok) => {
-      if (!ok) {
-        error('[21s-Reversal] Trade click failed');
-        return;
-      }
+    const fireTs = Date.now();
+    const msLeftAtFire = 60_000 - (fireTs - this.candleStartTs);
 
-      const fireTs = Date.now();
-      this.pendingResult = { asset, direction: tradeDirection, fireTs, candleTs: this.candleStartTs };
+    // Tag lastSignal so WIN/LOSS recording flows through strategy tracker with correct label
+    state.lastSignal = {
+      direction: tradeDirection,
+      symbol: asset,
+      confidence: 65,
+      strategy: '1m_21s_reversal',
+    };
+    this.pendingResult = { asset, direction: tradeDirection, fireTs, candleTs: this.candleStartTs };
 
-      // Tag lastSignal so WIN/LOSS recording flows through strategy tracker with correct label
-      state.lastSignal = {
-        direction: tradeDirection,
-        symbol: asset,
-        confidence: 65,
-        strategy: '1m_21s_reversal',
-      };
+    const statsRow = (this.assetStats[asset] = this.assetStats[asset] || { fires: 0, wins: 0, losses: 0, lastWinAt: 0 });
+    statsRow.fires++;
 
-      const s = (this.assetStats[asset] = this.assetStats[asset] || { fires: 0, wins: 0, losses: 0, lastWinAt: 0 });
-      s.fires++;
+    // Choose execution path
+    const useWs = this._shouldUseWs();
+    info(`[21s-Reversal] Candle ${originalDirection} (body=${bodyBps.toFixed(2)}bps) → FIRE ${tradeDirection} on ${asset} @ $${amount} [${this.config.expirySeconds}s] via ${useWs ? 'WS' : 'DOM'}`);
 
-      // Report fire to backend (fire-and-forget, tagged for strategy tracker)
-      reportTrade({
-        timestamp: new Date().toISOString(),
+    const executionPromise = useWs
+      ? this._executeViaWs(asset, tradeDirection, amount)
+      : this._executeViaDom(tradeDirection, amount);
+
+    executionPromise
+      .then((ok) => {
+        if (!ok && useWs) {
+          warn('[21s-Reversal] WS fire failed — falling back to DOM click');
+          return this._executeViaDom(tradeDirection, amount);
+        }
+        return ok;
+      })
+      .then((ok) => {
+        if (!ok) {
+          error('[21s-Reversal] All execution paths failed');
+          statsRow.fires = Math.max(0, statsRow.fires - 1);
+          return;
+        }
+
+        // Audit report (fire-and-forget) — tagged for strategy tracker
+        reportTrade({
+          timestamp: new Date().toISOString(),
+          asset,
+          direction: tradeDirection,
+          amount,
+          confidence: 65,
+          strategy: '1m_21s_reversal',
+          source: `21s-reversal-${useWs ? 'ws' : 'dom'}`,
+          payout,
+          wasInverted: false,
+          meta: {
+            candleStart: new Date(this.candleStartTs).toISOString(),
+            bodyBps: +bodyBps.toFixed(2),
+            fireAtMsLeft: msLeftAtFire,
+            expirySeconds: this.config.expirySeconds,
+            executionMode: useWs ? 'ws' : 'dom',
+          },
+        }).catch(() => { /* ignore */ });
+      })
+      .catch((e) => {
+        error(`[21s-Reversal] execution error: ${e.message}`);
+      });
+  }
+
+  _shouldUseWs() {
+    if (this.config.executionMode === 'dom') return false;
+    if (this.config.executionMode === 'ws') return true;
+    // auto: fast path — rely on last known bridge health (refreshed every 15s)
+    return !!this.config.bridgeHealthy;
+  }
+
+  async _executeViaWs(asset, direction, amount) {
+    try {
+      const resp = await post('/po/trade/ws-execute', {
         asset,
-        direction: tradeDirection,
+        direction,
         amount,
-        confidence: 65,
+        duration_seconds: this.config.expirySeconds,
+        wait_for_result: false,
         strategy: '1m_21s_reversal',
-        source: '21s-reversal',
-        payout,
-        wasInverted: false,
-        meta: {
-          candleStart: new Date(this.candleStartTs).toISOString(),
-          bodyBps: +bodyBps.toFixed(2),
-          fireAtMsLeft: 60_000 - (fireTs - this.candleStartTs),
-          expirySeconds: this.config.expirySeconds,
-        },
-      }).catch(() => { /* ignore */ });
-    }).catch((e) => {
-      error(`[21s-Reversal] executeTrade error: ${e.message}`);
-    });
+      });
+      if (resp && resp.success) {
+        success(`[21s-Reversal] WS trade placed: order_id=${resp.order_id || '?'} latency=${resp.latency_ms || '?'}ms`);
+        return true;
+      }
+      warn(`[21s-Reversal] WS trade rejected: ${(resp && resp.error) || 'unknown'}`);
+      return false;
+    } catch (e) {
+      warn(`[21s-Reversal] WS trade network error: ${e.message}`);
+      return false;
+    }
+  }
+
+  async _executeViaDom(direction, amount) {
+    try {
+      const ok = await executeTrade(direction, amount);
+      return !!ok;
+    } catch (e) {
+      error(`[21s-Reversal] DOM click error: ${e.message}`);
+      return false;
+    }
+  }
+
+  async _checkBridgeHealth() {
+    try {
+      const st = await apiGet('/po/ssid/status');
+      this.config.bridgeHealthy = !!(st && st.has_ssid && (st.health === 'healthy' || st.health === 'expiring'));
+      this.config.bridgeHealthCheckedAt = Date.now();
+    } catch (_e) {
+      this.config.bridgeHealthy = false;
+    }
   }
 
   // -- Helpers --------------------------------------------------------------

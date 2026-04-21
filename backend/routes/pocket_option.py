@@ -2992,3 +2992,67 @@ async def po_ssid_bridge_connect():
         logger.error(f"po/ssid/connect error: {e}")
         return {"success": False, "connected": False, "error": str(e)}
 
+
+
+# ============================================================================
+# DIRECT-WS TRADE EXECUTION (uses bridged SSID)
+# ============================================================================
+
+class PoWsTradeRequest(BaseModel):
+    """Direct-WS trade request — used by 21s Reversal and other low-latency strategies."""
+    asset: str = Field(..., description="Asset symbol, e.g. EURUSD_otc")
+    direction: str = Field(..., description="CALL or PUT")
+    amount: float = Field(..., gt=0, description="Trade amount in account currency")
+    duration_seconds: int = Field(..., ge=1, le=3600, description="Expiry in seconds (5 for scalps)")
+    wait_for_result: bool = Field(default=False, description="Block until WIN/LOSS resolved")
+    result_timeout: float = Field(default=30.0, description="Max seconds to wait for result")
+    strategy: Optional[str] = Field(default=None, description="Strategy name for audit logging")
+
+
+@router.post("/po/trade/ws-execute")
+async def po_ws_execute_trade(req: PoWsTradeRequest):
+    """
+    Place a binary-option trade via direct WebSocket using the bridged SSID.
+
+    Typical latency: 80-250ms (vs 800-2000ms for DOM-click execution).
+    Audits every call to the `po_ws_trades` collection for review.
+    """
+    from pocket_option_ws_executor import place_trade
+
+    result = await place_trade(
+        db,
+        asset=req.asset,
+        direction=req.direction,
+        amount=req.amount,
+        duration_seconds=req.duration_seconds,
+        wait_for_result=req.wait_for_result,
+        result_timeout=req.result_timeout,
+    )
+
+    # Audit log — fire and forget (don't block response on write)
+    try:
+        now = datetime.now(timezone.utc).isoformat()
+        await db["po_ws_trades"].insert_one({
+            "asset": req.asset,
+            "direction": req.direction.upper(),
+            "amount": req.amount,
+            "duration_seconds": req.duration_seconds,
+            "strategy": req.strategy,
+            "success": bool(result.get("success")),
+            "order_id": result.get("order_id"),
+            "latency_ms": result.get("latency_ms"),
+            "error": result.get("error"),
+            "placed_at": now,
+        })
+    except Exception as e:
+        logger.warning(f"po_ws_trades audit write failed: {e}")
+
+    return result
+
+
+@router.get("/po/trade/ws-status")
+async def po_ws_client_status():
+    """Return the cached direct-WS client connection state (for diagnostics)."""
+    from pocket_option_ws_executor import get_client_status
+    return await get_client_status(db)
+
