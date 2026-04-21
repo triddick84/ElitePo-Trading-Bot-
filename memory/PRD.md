@@ -3,6 +3,19 @@
 ## Last Updated: April 20, 2026
 
 ## Current Status
+✅ **21-Second Reversal Strategy + TM v8.9.0 (April 20, 2026 — Iteration 43)**
+- **New Strategy**: Timing-based contrarian on 1m candles
+  - Fires OPPOSITE trade (wick-ignored body direction) at ~21s-left on the current open 1m candle (±1s tolerance)
+  - 5s expiry (auto-selects closest PO offers)
+  - Skips exactly 1 candle after each fire (2-minute cooldown)
+  - Optional auto-rotate to next OTC asset after a win
+  - Filters out indecision candles (body < 0.8 bps of mid price)
+- **Backend**: `strategies/strategy_1m_21s_reversal.py` — registered as `1m_21s_reversal` (pandas DataFrame compatible for backtest/dashboard); available in `GET /api/strategies/available/1m` dropdown
+- **Tampermonkey (modular v8.9.0)**: New module `twentyOneSecondReversal.js` runs its own 100ms wall-clock loop, tracks live 1m OHLC from `getCurrentPrice()`, fires via `executeTrade()` when conditions match. Exposes `window.eliteBot21sReversal` for debug
+- **UI**: New `21S` panel button (purple pulsing) with live stats (`On 3/1 (75%)`); wired via `on21sReversalToggle` callback
+- **Mobile Auto-Trader**: Strategies card promotes it as first entry with ⭐⭐⭐ and '1m→5s exp' badge
+- **Tests**: 11/11 backend + frontend verified (iteration_43)
+
 ✅ **OTC Data Health Widget + Tampermonkey Legacy Deprecation (April 20, 2026 — Iteration 42)**
 - **P1 — OTC Data Health Widget**: New `OTCDataHealthWidget.jsx` added to Dashboard (4th card in the intelligence row)
   - Polls `/api/signals/otc-candle-stats` every 10s
