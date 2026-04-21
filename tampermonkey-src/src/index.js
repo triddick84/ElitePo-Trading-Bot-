@@ -324,4 +324,52 @@ window.eliteBot21sReversal = twentyOneSecondReversal;
 window.eliteBotSsidBridge = ssidBridge;
 window.eliteBotLivePrice = poLivePrice;
 
+// One-shot diagnostic — run in console and paste output if prices fail to flow
+window.eliteBotDiagnose = function () {
+  const out = {
+    version: CONFIG.BOT_VERSION,
+    url: window.location.href,
+    ssidBridge: {
+      installed: ssidBridge.installed,
+      pricesCaptured: ssidBridge.pricesCaptured,
+      lastAuthMessagePresent: !!ssidBridge.lastAuthMessage,
+    },
+    livePrice: {
+      latest: poLivePrice.getLatest(),
+      age_ms: poLivePrice.getLatestAge(),
+      all: poLivePrice.getAll(),
+    },
+    priceScraper: {
+      current: (function () { try { return priceScraper.getCurrentPrice(); } catch (e) { return `ERR: ${e.message}`; } })(),
+    },
+    domPrice: {
+      standard: (function () { try { return getCurrentPrice(); } catch (e) { return `ERR: ${e.message}`; } })(),
+    },
+    currentAsset: (function () { try { return getCurrentAsset(); } catch (e) { return `ERR: ${e.message}`; } })(),
+    forexLikeTextNodes: [],
+  };
+  // Find any text nodes with forex-like numbers for visibility
+  try {
+    const re = /^\d{1,7}\.\d{2,8}$/;
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    let n;
+    let count = 0;
+    while ((n = walker.nextNode()) && count < 20) {
+      const t = (n.nodeValue || '').trim();
+      if (re.test(t)) {
+        const el = n.parentElement;
+        out.forexLikeTextNodes.push({
+          text: t,
+          tag: el ? el.tagName : null,
+          cls: el ? (el.className || '').toString().slice(0, 80) : null,
+        });
+        count++;
+      }
+    }
+  } catch (e) { out.forexLikeTextNodes = `ERR: ${e.message}`; }
+  // Pretty print
+  console.log('%c[Elite Bot Diagnostic]', 'color: #a855f7; font-weight: bold', out);
+  return out;
+};
+
 export default bot;

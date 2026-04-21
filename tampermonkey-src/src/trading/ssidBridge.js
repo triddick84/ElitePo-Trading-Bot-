@@ -149,49 +149,55 @@ class SSIDBridge {
   _captureMessage(data) {
     if (!data) return;
 
-    // 1. Binary frames (Blob/ArrayBuffer/Uint8Array) — decode to text first
-    if (typeof data !== 'string') {
-      // For binary, we'd need async Blob.text() — skip unless already text.
-      // Most PO price frames come as text/JSON despite Socket.IO binary mode.
+    try {
+      // Text frames — direct handling
+      if (typeof data === 'string') {
+        if (data.length < 10) return;
+        this._tryExtractFromText(data);
+        return;
+      }
+
+      // ArrayBuffer — sync decode
       if (data instanceof ArrayBuffer) {
         try {
-          data = new TextDecoder('utf-8', { fatal: false }).decode(new Uint8Array(data));
-        } catch (_e) { return; }
-      } else if (data && typeof data.text === 'function') {
-        // Blob — defer async decode; drop for now (hot path)
-        return;
-      } else {
+          const text = new TextDecoder('utf-8', { fatal: false }).decode(new Uint8Array(data));
+          this._tryExtractFromText(text);
+        } catch (_e) { /* ignore */ }
         return;
       }
+
+      // Uint8Array / TypedArray
+      if (ArrayBuffer.isView && ArrayBuffer.isView(data)) {
+        try {
+          const text = new TextDecoder('utf-8', { fatal: false }).decode(data);
+          this._tryExtractFromText(text);
+        } catch (_e) { /* ignore */ }
+        return;
+      }
+
+      // Blob — async decode (most PO Socket.IO frames come through here!)
+      if (data && typeof data.arrayBuffer === 'function') {
+        data.arrayBuffer().then((buf) => {
+          try {
+            const text = new TextDecoder('utf-8', { fatal: false }).decode(new Uint8Array(buf));
+            this._tryExtractFromText(text);
+          } catch (_e) { /* ignore */ }
+        }).catch(() => { /* ignore */ });
+        return;
+      }
+    } catch (_e) { /* never break PO */ }
+  }
+
+  _tryExtractFromText(text) {
+    // Strip Engine.IO/Socket.IO numeric prefixes like "42"
+    let payload = text;
+    if (/^\d+/.test(text)) {
+      const braceIdx = text.indexOf('[');
+      const curlyIdx = text.indexOf('{');
+      const firstIdx = braceIdx === -1 ? curlyIdx : (curlyIdx === -1 ? braceIdx : Math.min(braceIdx, curlyIdx));
+      if (firstIdx > 0) payload = text.slice(firstIdx);
     }
-
-    // 2. Text frames — must look like Socket.IO event payload or JSON
-    if (data.length < 10) return;
-
-    // Try common PO payload shapes:
-    // - `42["updateStream",[[symbol, ts, price]]]`  or
-    // - `42["loadHistoryPeriod", {...}]`
-    // - Binary-encoded candle arrays embedded in the JSON
-    try {
-      // Fast-path: look for the common updateStream / changeSymbol pattern
-      if (data.indexOf('updateStream') !== -1 ||
-          data.indexOf('loadHistoryPeriod') !== -1 ||
-          data.indexOf('"symbol"') !== -1 ||
-          data.indexOf('price') !== -1) {
-        // Strip Socket.IO prefix `42`
-        let json = data;
-        if (/^\d+/.test(data)) {
-          const braceIdx = data.indexOf('[');
-          const curlyIdx = data.indexOf('{');
-          const firstIdx = braceIdx === -1 ? curlyIdx : (curlyIdx === -1 ? braceIdx : Math.min(braceIdx, curlyIdx));
-          if (firstIdx > 0) json = data.slice(firstIdx);
-        }
-
-        // Parse permissively — extract ANY forex-ish number from the payload
-        // (avoids brittle schema dependency on PO's exact frame format)
-        this._extractPricesFromText(json);
-      }
-    } catch (_e) { /* ignore */ }
+    this._extractPricesFromText(payload);
   }
 
   _extractPricesFromText(text) {

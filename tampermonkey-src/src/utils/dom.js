@@ -436,42 +436,58 @@ export function getCurrentPriceRobust() {
     }
   } catch (_e) { /* ignore */ }
 
-  // 4. Scan ALL visible text nodes for a forex-style price number (3-6 decimals).
-  //    This is the mobile PO fallback where prices are rendered as plain divs.
-  //    We prefer numbers with more decimal places (more likely to be actual prices
-  //    rather than account totals) and positions near the chart area.
+  // 4. Scan ALL text nodes (including Shadow DOM) for forex-style price numbers.
+  //    This is the mobile PO + canvas-chart fallback. Scores by decimal precision
+  //    (more decimals = more likely a live price vs. account balance).
   try {
-    const forexPattern = /^\d{1,6}\.\d{3,6}$/;
+    const forexPattern = /^\d{1,7}\.\d{2,8}$/;
     const candidates = [];
-    const walker = document.createTreeWalker(
-      document.body || document.documentElement,
-      NodeFilter.SHOW_TEXT,
-      {
-        acceptNode: (node) => {
-          const text = (node.nodeValue || '').trim();
-          return forexPattern.test(text) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
-        },
-      }
-    );
-    let node;
-    while ((node = walker.nextNode())) {
-      const text = (node.nodeValue || '').trim();
-      const v = parseFloat(text);
-      if (!inRange(v)) continue;
-      const parent = node.parentElement;
-      if (!parent) continue;
-      // Skip hidden elements
+    const scanRoot = (root) => {
+      if (!root) return;
       try {
-        const rect = parent.getBoundingClientRect();
-        if (rect.width === 0 || rect.height === 0) continue;
-        // Decimals = score boost (more precise = more likely a live price)
-        const decimals = (text.split('.')[1] || '').length;
-        candidates.push({ v, decimals, x: rect.left, y: rect.top, text });
+        const walker = document.createTreeWalker(
+          root,
+          NodeFilter.SHOW_TEXT,
+          {
+            acceptNode: (node) => {
+              const text = (node.nodeValue || '').trim();
+              return forexPattern.test(text) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+            },
+          }
+        );
+        let node;
+        while ((node = walker.nextNode())) {
+          const text = (node.nodeValue || '').trim();
+          const v = parseFloat(text);
+          if (!inRange(v)) continue;
+          const parent = node.parentElement;
+          if (!parent) continue;
+          const decimals = (text.split('.')[1] || '').length;
+          let x = 0;
+          let y = 0;
+          try {
+            const rect = parent.getBoundingClientRect();
+            x = rect.left;
+            y = rect.top;
+          } catch (_e) { /* ignore */ }
+          candidates.push({ v, decimals, x, y, text });
+        }
       } catch (_e) { /* ignore */ }
-    }
+
+      // Also traverse Shadow DOM roots
+      try {
+        const hosts = root.querySelectorAll ? root.querySelectorAll('*') : [];
+        for (const el of hosts) {
+          if (el.shadowRoot) scanRoot(el.shadowRoot);
+        }
+      } catch (_e) { /* ignore */ }
+    };
+
+    scanRoot(document.body || document.documentElement);
+
     if (candidates.length > 0) {
-      // Pick the one with most decimals, then the one highest on the page (chart area)
-      candidates.sort((a, b) => b.decimals - a.decimals || a.y - b.y);
+      // Prefer more decimals then uppermost-left (chart price axis region)
+      candidates.sort((a, b) => b.decimals - a.decimals || a.y - b.y || a.x - b.x);
       return candidates[0].v;
     }
   } catch (_e) { /* ignore */ }
