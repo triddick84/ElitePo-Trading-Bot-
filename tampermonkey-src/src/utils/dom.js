@@ -354,20 +354,80 @@ export function switchAsset(symbol) {
   return false;
 }
 
-export default {
-  waitForElement,
-  getCurrentAsset,
-  getCurrentPrice,
-  getPayout,
-  setTradeAmount,
-  clickCall,
-  clickPut,
-  executeTrade,
-  getFavorites,
-  switchAsset,
-  getAccountBalance,
-  scanDOMForTradeResult,
-};
+/**
+ * Get current price — ROBUST version.
+ * Tries the original selector-based method first, then falls back to:
+ *  - Chart SVG <text> labels (TradingView's rendering)
+ *  - Any visible element near the right edge of the chart with a forex-like number
+ *  - The latest data attribute on chart elements (data-price, data-value)
+ *  - Number scraping near the CALL/PUT button area
+ * Returns null only if absolutely nothing resembles a price.
+ * @returns {number|null}
+ */
+export function getCurrentPriceRobust() {
+  // 1. Standard selector-based
+  const p1 = getCurrentPrice();
+  if (p1 !== null) return p1;
+
+  const inRange = (n) => Number.isFinite(n) && n > 0.01 && n < 200000;
+
+  // 2. Data attributes (PO stores live price on some elements)
+  try {
+    const attrEls = document.querySelectorAll(
+      '[data-price], [data-current-price], [data-value], [data-last-price]'
+    );
+    for (const el of attrEls) {
+      for (const attr of ['data-price', 'data-current-price', 'data-value', 'data-last-price']) {
+        const v = parseFloat(el.getAttribute(attr));
+        if (inRange(v)) return v;
+      }
+    }
+  } catch (_e) { /* ignore */ }
+
+  // 3. Chart SVG text nodes (TradingView-style price axis)
+  try {
+    const svgTexts = document.querySelectorAll('svg text, svg tspan');
+    const candidates = [];
+    for (const t of svgTexts) {
+      const s = (t.textContent || '').trim();
+      const m = s.match(/^(\d{1,6}(?:\.\d{2,6})?)$/);
+      if (m) {
+        const v = parseFloat(m[1]);
+        if (inRange(v)) {
+          try {
+            const rect = t.getBoundingClientRect();
+            candidates.push({ v, x: rect.left, y: rect.top, w: rect.width });
+          } catch (_e) {
+            candidates.push({ v, x: 0, y: 0, w: 0 });
+          }
+        }
+      }
+    }
+    if (candidates.length > 0) {
+      // TradingView renders the live price at the rightmost text node of the price axis
+      candidates.sort((a, b) => b.x - a.x);
+      return candidates[0].v;
+    }
+  } catch (_e) { /* ignore */ }
+
+  // 4. Try trading panel's "last price" labels
+  try {
+    const nodes = document.querySelectorAll(
+      '[class*="rate"], [class*="quote"], [class*="tick"], [class*="trade"] [class*="value"]'
+    );
+    for (const el of nodes) {
+      if (!el || !el.offsetParent) continue;
+      const text = (el.textContent || '').trim();
+      const m = text.match(/(\d+\.\d{3,6})/);
+      if (m) {
+        const v = parseFloat(m[1]);
+        if (inRange(v)) return v;
+      }
+    }
+  } catch (_e) { /* ignore */ }
+
+  return null;
+}
 
 
 /**
@@ -469,3 +529,20 @@ export function scanDOMForTradeResult() {
 
   return null;
 }
+
+
+export default {
+  waitForElement,
+  getCurrentAsset,
+  getCurrentPrice,
+  getCurrentPriceRobust,
+  getPayout,
+  setTradeAmount,
+  clickCall,
+  clickPut,
+  executeTrade,
+  getFavorites,
+  switchAsset,
+  getAccountBalance,
+  scanDOMForTradeResult,
+};

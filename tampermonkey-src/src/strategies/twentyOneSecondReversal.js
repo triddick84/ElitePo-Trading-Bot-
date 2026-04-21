@@ -22,11 +22,13 @@ import { state } from '../core/state.js';
 import { log, success, warn, error, info } from '../core/logger.js';
 import {
   getCurrentPrice,
+  getCurrentPriceRobust,
   getCurrentAsset,
   executeTrade,
   switchAsset,
   getPayout,
 } from '../utils/dom.js';
+import { priceScraper } from '../trading/priceScraper.js';
 import { reportTrade } from '../utils/api.js';
 
 const LOOP_INTERVAL_MS = 100;
@@ -72,6 +74,14 @@ class TwentyOneSecondReversal {
     if (this.enabled) return;
     this.enabled = true;
     this._resetCandle(this._minuteOfNow());
+
+    // Ensure the shared price scraper is running — our primary price source
+    try {
+      if (!priceScraper.scrapeInterval) {
+        priceScraper.start(250); // faster poll for accurate 21s-left timing
+      }
+    } catch (_e) { /* ignore */ }
+
     this.loopId = setInterval(() => this._tick(), LOOP_INTERVAL_MS);
     success('[21s-Reversal] Enabled — firing on 1m candles @ 21s left (opposite direction, 5s expiry)');
   }
@@ -151,8 +161,18 @@ class TwentyOneSecondReversal {
         this._resetCandle(minute);
       }
 
-      // Update running OHLC
-      const price = getCurrentPrice();
+      // Update running OHLC — use multi-source price chain:
+      // 1) priceScraper cached last price (most reliable — running 500ms elsewhere)
+      // 2) getCurrentPrice (standard selectors)
+      // 3) getCurrentPriceRobust (SVG chart / data attrs / chart labels)
+      let price = null;
+      try { price = priceScraper.getCurrentPrice(); } catch (_e) { /* ignore */ }
+      if (!price || price <= 0) {
+        try { price = getCurrentPrice(); } catch (_e) { /* ignore */ }
+      }
+      if (!price || price <= 0) {
+        try { price = getCurrentPriceRobust(); } catch (_e) { /* ignore */ }
+      }
       if (price && price > 0) {
         if (this.candleOpen === null) {
           this.candleOpen = price;
@@ -180,7 +200,11 @@ class TwentyOneSecondReversal {
 
       // Inside the fire window — now verify we have data
       if (this.candleOpen === null || this.candleClose === null) {
-        this._logSkipOnce('nodata', `In fire window but no price data (getCurrentPrice returned ${price})`);
+        this._logSkipOnce(
+          'nodata',
+          `In fire window but no price yet (priceScraper + getCurrentPrice + robust all returned null). ` +
+          `Ensure a PO chart is visible and a currency pair is selected.`
+        );
         return;
       }
 
