@@ -5,8 +5,8 @@ const TerserPlugin = require('terser-webpack-plugin');
 const userscriptHeader = `// ==UserScript==
 // @name         Elite Pocket Option Trading Bot
 // @namespace    https://momentum-trade-test.preview.emergentagent.com
-// @version      8.8.0
-// @description  Elite AI-powered trading bot with IQ-720 Ensemble, Keltner-MACD 5s, smart inversion, and CYCLE mode
+// @version      8.9.0
+// @description  Elite AI-powered trading bot — 21s Reversal, IQ-720 Ensemble, Keltner-MACD 5s, smart inversion, CYCLE mode
 // @author       Elite Trading
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*

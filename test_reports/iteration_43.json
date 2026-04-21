@@ -1,0 +1,92 @@
+{
+  "summary": "Iteration 43 testing complete — 21-Second Reversal strategy (Strategy1m21sReversal) + Tampermonkey modular bundle v8.9.0. All 11 backend tests passed (100%). Frontend Mobile Auto-Trader page verified: Setup Guide tab shows '⭐⭐⭐ 21-Second Reversal' as FIRST entry in Local Signal Strategies (v8.9.0) card with '1m→5s exp' badge and full description; Step 3 Modular card has 'Modular v8.9.0' badge and mentions '21-Second Reversal'. Tampermonkey modular user script (123KB) and legacy (316KB) both served 200.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration43_21s_reversal.py",
+    "/app/test_reports/pytest/pytest_iteration43_21s_reversal.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Strategy1m21sReversal.generate_signal() correctly returns PUT for up-body (close>open), CALL for down-body, NEUTRAL for flat candles with 'Body too small' reason; confidence clamped 55-78%; all expected fields present (strategy, expiry_seconds=5, fire_at_seconds_remaining=21, cooldown_candles=1, body_ratio, body_bps).",
+    "strategy_registry successfully loads '1m_21s_reversal' (line 170-175) and execute_strategy() returns a valid dict; exception path also returns NEUTRAL with 'Strategy execution error'.",
+    "strategy_selection_service AVAILABLE_STRATEGIES['1m'] lists '1m_21s_reversal' as second entry (after default) with emoji '⭐⭐⭐ 21-Second Reversal' name, matching GET /api/strategies/available/1m payload.",
+    "twentyOneSecondReversal.js uses its own 100ms interval loop — independent of priceScraper chain — which is correct for timing precision. Cooldown via (minute - lastFireCandleTs) < 120_000 correctly skips exactly 1 candle (60s + 60s = 120s).",
+    "Minor: twentyOneSecondReversal constructs candle OHLC from getCurrentPrice() tick-by-tick — if price scraper returns 0 or NaN during the first seconds of a minute, candleOpen stays null; _tick() safely returns early. Robust.",
+    "Webpack bundle minifies 21_000→21e3, 60_000→6e4, 120_000→12e4, 0.8→.8 — verified all timing constants persist in the built bundle.",
+    "Non-blocking: in twentyOneSecondReversal.js _tick(), the cooldown check uses `minute - this.lastFireCandleTs < 120_000` which compares two wall-clock ms timestamps aligned to minute boundaries; 1-minute skip = exactly 60000ms gap, so the 120000ms threshold correctly requires 2 minute boundaries. Correct.",
+    "Non-blocking: onResultRecorded() timeout window of 30_000ms after fire is generous — if a trade takes >30s to resolve (PO rarely), rotation-on-win would miss attribution. Consider widening or hooking directly into trade result event."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration43_21s_reversal.py"
+  ],
+  "success_rate": {
+    "backend": "100% (11/11 passed)",
+    "frontend": "100%"
+  },
+  "test_credentials": "Username: triddick84, Password: Fallinone#1 (admin)",
+  "seed_data_creation": "None — synthetic single-row DataFrames constructed inline per problem statement (UP 1.08/1.0825/1.0795/1.0815, DOWN 1.0820/1.0822/1.0800/1.0805, FLAT 1.0800/1.0801/1.0799/1.0800).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 43 verified the new 21-Second Reversal strategy end-to-end. Backend entry point: strategies.strategy_1m_21s_reversal.strategy_1m_21s_reversal.generate_signal(df). Registry key: '1m_21s_reversal'. Available via GET /api/strategies/available/1m with id='1m_21s_reversal' and name containing '21-Second Reversal'. Tampermonkey: /pocket-option-auto-trader-modular.user.js v8.9.0 exposes window.eliteBot21sReversal (class instance with enable()/disable()/setConfig()/onResultRecorded()/getStats()). Panel button id 'r21s' toggles via on21sReversalToggle hook. Strategy fires OPPOSITE of body direction at 21s-left±1s on the live 1m candle, 5s expiry, skips 1 candle (120s cooldown), optional auto-rotate-on-win via 8 OTC asset pool. Minified timing constants in bundle: 21e3 (FIRE_AT_MS_LEFT), 6e4 (minute), 12e4 (cooldown), .8 (MIN_BODY_BPS). Strategies card location: Mobile Auto-Trader → Setup Guide tab → tm-strategies-card (NOT Control Panel tab — Control Panel uses TampermonkeyControlPanel component). Step 3 modular card: tm-install-modular-btn with RECOMMENDED badge + 'Modular v8.9.0'.",
+  "tests_executed": {
+    "backend_tests": [
+      "TestStrategyModuleDirect::test_up_candle_returns_put - PASSED",
+      "TestStrategyModuleDirect::test_down_candle_returns_call - PASSED",
+      "TestStrategyModuleDirect::test_flat_candle_returns_neutral - PASSED (reason='Body too small')",
+      "TestStrategyRegistryIntegration::test_registry_has_21s_reversal - PASSED",
+      "TestStrategyRegistryIntegration::test_registry_execute_up_to_put - PASSED",
+      "TestAvailableStrategiesAPI::test_available_1m_contains_21s_reversal - PASSED (name='⭐⭐⭐ 21-Second Reversal')",
+      "TestTampermonkeyAssets::test_modular_script_served_200 - PASSED",
+      "TestTampermonkeyAssets::test_legacy_script_served_200 - PASSED",
+      "TestTampermonkeyAssets::test_modular_version_is_8_9_0 - PASSED",
+      "TestTampermonkeyAssets::test_modular_contains_21s_logic_markers - PASSED (21s-Reversal, _attemptFire, _minuteOfNow, r21s, 1m_21s_reversal, on21sReversalToggle, eliteBot21sReversal)",
+      "TestTampermonkeyAssets::test_modular_contains_timing_constants - PASSED (21e3, 12e4, .8, rotationAssets)"
+    ],
+    "frontend_tests": [
+      "Login with triddick84/Fallinone#1 - PASSED",
+      "Navigate to nav-mobile-trader - PASSED",
+      "Setup Guide tab → tm-strategies-card title 'Local Signal Strategies (v8.9.0)' - PASSED",
+      "First grid entry = '⭐⭐⭐ 21-Second Reversal' with badge '1m→5s exp' and full description - PASSED",
+      "Step 3 Modular card contains 'Modular v8.9.0' and '21-Second Reversal' - PASSED"
+    ]
+  },
+  "features_verified": {
+    "backend_strategy_1m_21s_reversal": {
+      "status": "WORKING",
+      "notes": "UP body → PUT, DOWN body → CALL, flat → NEUTRAL with 'Body too small'. Returns all required fields including expiry_seconds=5, fire_at_seconds_remaining=21, cooldown_candles=1, body_ratio, body_bps, confidence ∈ [55,78]."
+    },
+    "strategy_registry_integration": {
+      "status": "WORKING",
+      "notes": "'1m_21s_reversal' loaded into registry at startup. execute_strategy() returns valid dict."
+    },
+    "api_strategies_available_1m": {
+      "endpoint": "GET /api/strategies/available/1m",
+      "status": "WORKING",
+      "notes": "Response list contains entry with id='1m_21s_reversal' and name='⭐⭐⭐ 21-Second Reversal'."
+    },
+    "tampermonkey_modular_bundle": {
+      "status": "WORKING",
+      "notes": "Served 200 at /pocket-option-auto-trader-modular.user.js. @version 8.9.0. Contains all expected markers: '21s-Reversal', '_attemptFire', '_minuteOfNow', 'r21s', '1m_21s_reversal', 'on21sReversalToggle', 'eliteBot21sReversal', 'rotationAssets'. Minified timing constants 21e3/6e4/12e4/.8 all present."
+    },
+    "tampermonkey_legacy_bundle": {
+      "status": "WORKING",
+      "notes": "Legacy script still served 200 for backwards compatibility."
+    },
+    "mobile_auto_trader_strategies_card": {
+      "status": "WORKING",
+      "notes": "tm-strategies-card in Setup Guide tab shows '⭐⭐⭐ 21-Second Reversal' as first entry with badge '1m→5s exp'. Title is 'Local Signal Strategies (v8.9.0)'."
+    },
+    "mobile_auto_trader_step3_modular": {
+      "status": "WORKING",
+      "notes": "Step 3 Modular card displays 'Modular v8.9.0' badge and description mentions '21-Second Reversal'."
+    }
+  }
+}

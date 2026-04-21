@@ -6,10 +6,11 @@
 import { CONFIG } from './core/config.js';
 import { state, setState, loadState, saveState, resetStats } from './core/state.js';
 import { log, info, warn, success, error } from './core/logger.js';
-import { createPanel, initPanelEvents, updateStatsDisplay, updateInvertDisplay, updateStatusDot, cleanupPanel, populateStrategies } from './ui/panel.js';
+import { createPanel, initPanelEvents, updateStatsDisplay, updateInvertDisplay, updateStatusDot, cleanupPanel, populateStrategies, update21sReversalDisplay } from './ui/panel.js';
 import { strategyManager } from './strategies/manager.js';
 import { tradeExecutor } from './trading/executor.js';
 import { smartInvert } from './trading/smartInvert.js';
+import { twentyOneSecondReversal } from './strategies/twentyOneSecondReversal.js';
 import { scanMarkets } from './utils/api.js';
 import { get, post } from './utils/api.js';
 import { getCurrentAsset, getCurrentPrice, waitForElement } from './utils/dom.js';
@@ -105,11 +106,27 @@ class EliteTradingBot {
       },
       onWin: () => {
         tradeExecutor.recordResult(true);
+        twentyOneSecondReversal.onResultRecorded(true);
         updateStatsDisplay();
+        if (twentyOneSecondReversal.isEnabled()) {
+          update21sReversalDisplay(true, twentyOneSecondReversal.getStats());
+        }
       },
       onLoss: () => {
         tradeExecutor.recordResult(false);
+        twentyOneSecondReversal.onResultRecorded(false);
         updateStatsDisplay();
+        if (twentyOneSecondReversal.isEnabled()) {
+          update21sReversalDisplay(true, twentyOneSecondReversal.getStats());
+        }
+      },
+      on21sReversalToggle: (enabled) => {
+        if (enabled) {
+          twentyOneSecondReversal.enable();
+        } else {
+          twentyOneSecondReversal.disable();
+        }
+        update21sReversalDisplay(enabled, enabled ? twentyOneSecondReversal.getStats() : null);
       },
       onAmountChange: (amount) => {
         tradeExecutor.setBaseAmount(amount);
@@ -258,6 +275,7 @@ class EliteTradingBot {
     this.stopScanning();
     this.stopDataCollection();
     priceScraper.stop();
+    twentyOneSecondReversal.disable();
     cleanupPanel();
     
     if (this.statsInterval) {
@@ -290,5 +308,6 @@ window.eliteBot = bot;
 window.eliteBotTradeExecutor = tradeExecutor;
 window.eliteBotSmartInvert = smartInvert;
 window.eliteBotPriceScraper = priceScraper;
+window.eliteBot21sReversal = twentyOneSecondReversal;
 
 export default bot;

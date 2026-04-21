@@ -56,6 +56,7 @@ class StrategySelectionService:
         ],
         '1m': [
             {'id': 'default', 'name': 'Default 1m Strategy', 'description': 'High Accuracy strategies (Triple Confirmation, Williams/MACD, Smart Money)'},
+            {'id': '1m_21s_reversal', 'name': '⭐⭐⭐ 21-Second Reversal', 'description': 'Timing contrarian — fires opposite 4-5s trade at 21s-left on 1m candle. Paired with Tampermonkey for precise execution.', 'win_rate': '65-78%'},
             {'id': 'turbo_precision_1m', 'name': '⭐⭐⭐ Turbo Precision 1m', 'description': 'RSI + Stochastic RSI + EMA Ribbon. 4+ confirmations. Highest accuracy.', 'win_rate': '75-85%'},
             {'id': '1m_momentum_exhaustion', 'name': '⭐⭐⭐ Momentum Exhaustion Reversal', 'description': 'RSI-2 + Stochastic + BB + Candlestick patterns. Catches reversals at momentum extremes.', 'win_rate': '70-75%'},
             {'id': '1m_quad_crossover', 'name': '⭐⭐ Quad SMA/EMA Crossover', 'description': '2/5/10 SMA + 20 EMA crossovers. 4 rule system with trend/counter-trend signals.', 'win_rate': '80-85%'},

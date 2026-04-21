@@ -177,6 +177,18 @@ function injectCSS() {
       box-shadow: 0 0 8px rgba(210,153,34,0.3) !important;
       animation: ${P}pulse 2s infinite !important;
     }
+    .${P}btn-r21s {
+      flex: 0 0 ${mobile ? 60 : 70}px !important;
+      background: linear-gradient(135deg, #4c1d95 0%, #6d28d9 100%) !important;
+      border-color: #7c3aed !important;
+      font-size: ${mobile ? 10 : 11}px !important;
+    }
+    .${P}btn-r21s.active {
+      background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%) !important;
+      border-color: #a855f7 !important;
+      box-shadow: 0 0 10px rgba(168,85,247,0.5) !important;
+      animation: ${P}pulse 1.5s infinite !important;
+    }
     .${P}invst {
       flex: 1 !important;
       font-size: ${mobile ? 9 : 10}px !important;
@@ -345,6 +357,10 @@ export function createPanel() {
           <button id="${P}auto" class="${P}btn">AUTO</button>
           <button id="${P}go" class="${P}btn ${P}btn-go">GO</button>
         </div>
+        <div class="${P}row">
+          <button id="${P}r21s" class="${P}btn ${P}btn-r21s" title="Fire opposite 5s trade at 21s-left on 1m candles">21S</button>
+          <span class="${P}invst" id="${P}r21st">Off</span>
+        </div>
         <div class="${P}stratrow">
           <span class="${P}stratlbl">Strategy:</span>
           <select id="${P}strat" class="${P}stratsel">
@@ -456,6 +472,16 @@ export function initPanelEvents(callbacks = {}) {
   q('win')?.addEventListener('click', () => callbacks.onWin?.());
   q('loss')?.addEventListener('click', () => callbacks.onLoss?.());
 
+  // 21s Reversal toggle
+  const r21sBtn = q('r21s');
+  if (r21sBtn) {
+    r21sBtn.addEventListener('click', () => {
+      const isActive = r21sBtn.classList.contains('active');
+      r21sBtn.classList.toggle('active');
+      callbacks.on21sReversalToggle?.(!isActive);
+    });
+  }
+
   // Strategy selector
   const stratSelect = q('strat');
   if (stratSelect) {
@@ -529,6 +555,27 @@ export function updateInvertDisplay(isInverted, reason) {
     st.textContent = isInverted ? (reason || 'Inverted') : 'Normal';
     if (isInverted) st.classList.add('on');
     else st.classList.remove('on');
+  }
+}
+
+export function update21sReversalDisplay(enabled, stats = null) {
+  const btn = q('r21s');
+  const st = q('r21st');
+  if (btn) {
+    if (enabled) btn.classList.add('active');
+    else btn.classList.remove('active');
+  }
+  if (st) {
+    if (!enabled) {
+      st.textContent = 'Off';
+      st.classList.remove('on');
+    } else if (stats) {
+      st.textContent = `On ${stats.wins}/${stats.losses} (${stats.winRate}%)`;
+      st.classList.add('on');
+    } else {
+      st.textContent = 'On';
+      st.classList.add('on');
+    }
   }
 }
 

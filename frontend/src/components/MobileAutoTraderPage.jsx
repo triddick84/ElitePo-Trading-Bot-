@@ -139,10 +139,10 @@ const MobileAutoTraderPage = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
                 <div className="p-3 bg-slate-900/60 rounded-lg border border-indigo-500/40 ring-1 ring-indigo-500/20">
                   <div className="flex items-center gap-2 mb-2">
-                    <Badge className="bg-indigo-600 text-white text-xs">Modular v8.8.1</Badge>
+                    <Badge className="bg-indigo-600 text-white text-xs">Modular v8.9.0</Badge>
                     <Badge className="bg-emerald-700 text-white text-[10px]">RECOMMENDED</Badge>
                   </div>
-                  <p className="text-xs text-slate-400 mb-2">Webpack-bundled modular build — 7 strategies, clean architecture, active maintenance</p>
+                  <p className="text-xs text-slate-400 mb-2">Webpack-bundled modular build — 7 strategies + <strong className="text-purple-300">21-Second Reversal</strong>, clean architecture, active maintenance</p>
                   <a href={modularScriptUrl} target="_blank" rel="noopener noreferrer">
                     <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 w-full" data-testid="tm-install-modular-btn">
                       Install Modular Script
@@ -273,12 +273,13 @@ const MobileAutoTraderPage = () => {
         {/* Strategies Available */}
         <Card className="bg-slate-800/50 border-slate-700 mt-6" data-testid="tm-strategies-card">
           <CardHeader>
-            <CardTitle className="text-white">Local Signal Strategies (v8.8.0)</CardTitle>
+            <CardTitle className="text-white">Local Signal Strategies (v8.9.0)</CardTitle>
             <CardDescription>These strategies run locally on the Pocket Option page using scraped OTC prices — no backend needed</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {[
+                { name: '⭐⭐⭐ 21-Second Reversal', desc: 'Fires OPPOSITE 5s trade at 21s-left on 1m candle. Wick-ignored body direction. 1-candle cooldown. Enable via "21S" button in TM panel.', badge: '1m→5s exp', color: 'bg-purple-600' },
                 { name: 'General Multi-Indicator', desc: 'RSI-2/14, MACD, Stochastic, Bollinger, EMA alignment, ADX, Candlestick patterns', badge: 'Primary', color: 'bg-purple-600' },
                 { name: 'Keltner-MACD 5s', desc: 'Keltner Channel (EMA20, ATR60, x4) + MACD (13/24/11) crossover for 5-second scalps', badge: '5s', color: 'bg-cyan-600' },
                 { name: 'IQ-720 Ensemble', desc: '8 weighted sub-strategies + market regime detection + session awareness + confidence calibration', badge: 'Advanced', color: 'bg-indigo-600' },

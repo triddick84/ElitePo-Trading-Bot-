@@ -165,6 +165,14 @@ class StrategyRegistry:
             from strategies.strategy_1h_daily_bias import strategy_1h_daily_bias
             self.strategies['1h_wyckoff'] = strategy_1h_wyckoff
             self.strategies['1h_daily_bias'] = strategy_1h_daily_bias
+
+            # 1m 21-Second Reversal (timing-based contrarian, paired with Tampermonkey)
+            try:
+                from strategies.strategy_1m_21s_reversal import strategy_1m_21s_reversal
+                self.strategies['1m_21s_reversal'] = strategy_1m_21s_reversal
+                logger.info("✅ Loaded 1m 21s Reversal Strategy (timing contrarian)")
+            except Exception as e:
+                logger.warning(f"Could not load 1m 21s Reversal: {e}")
             
             # Legacy strategies (keep for backward compatibility)
             self.strategies['enhanced_rsi_bb_volume'] = None  # Placeholder
