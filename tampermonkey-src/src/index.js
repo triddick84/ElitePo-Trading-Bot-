@@ -11,7 +11,7 @@ import { strategyManager } from './strategies/manager.js';
 import { tradeExecutor } from './trading/executor.js';
 import { smartInvert } from './trading/smartInvert.js';
 import { twentyOneSecondReversal } from './strategies/twentyOneSecondReversal.js';
-import { ssidBridge } from './trading/ssidBridge.js';
+import { ssidBridge, poLivePrice } from './trading/ssidBridge.js';
 import { scanMarkets } from './utils/api.js';
 import { get, post } from './utils/api.js';
 import { getCurrentAsset, getCurrentPrice, waitForElement } from './utils/dom.js';
@@ -322,5 +322,6 @@ window.eliteBotSmartInvert = smartInvert;
 window.eliteBotPriceScraper = priceScraper;
 window.eliteBot21sReversal = twentyOneSecondReversal;
 window.eliteBotSsidBridge = ssidBridge;
+window.eliteBotLivePrice = poLivePrice;
 
 export default bot;

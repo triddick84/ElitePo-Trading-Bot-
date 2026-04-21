@@ -6,7 +6,7 @@
 export const CONFIG = {
   // Bot Info
   BOT_NAME: 'Elite Pocket Option Trading Bot',
-  BOT_VERSION: '8.11.4',
+  BOT_VERSION: '8.12.0',
 
   // API Settings
   API_URL: 'https://momentum-trade-test.preview.emergentagent.com/api',

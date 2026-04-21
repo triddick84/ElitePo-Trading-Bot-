@@ -29,6 +29,7 @@ import {
   getPayout,
 } from '../utils/dom.js';
 import { priceScraper } from '../trading/priceScraper.js';
+import { poLivePrice } from '../trading/ssidBridge.js';
 import { reportTrade, post, get as apiGet } from '../utils/api.js';
 
 const LOOP_INTERVAL_MS = 100;
@@ -175,12 +176,23 @@ class TwentyOneSecondReversal {
         this._resetCandle(minute);
       }
 
-      // Update running OHLC — use multi-source price chain:
-      // 1) priceScraper cached last price (most reliable — running 500ms elsewhere)
-      // 2) getCurrentPrice (standard selectors)
-      // 3) getCurrentPriceRobust (SVG chart / data attrs / chart labels)
+      // Update running OHLC - multi-source price chain (ordered by reliability):
+      // 1) WS-captured live price (from PO's own socket frames — most accurate)
+      // 2) priceScraper cached last price (500ms interval, DOM-based)
+      // 3) getCurrentPrice (standard selectors)
+      // 4) getCurrentPriceRobust (TreeWalker / SVG / data-attrs)
       let price = null;
-      try { price = priceScraper.getCurrentPrice(); } catch (_e) { /* ignore */ }
+      try {
+        const wsPrice = poLivePrice.getLatest();
+        const wsAge = poLivePrice.getLatestAge();
+        // Only use WS price if fresh (captured within last 5 seconds)
+        if (wsPrice && wsAge !== null && wsAge < 5000) {
+          price = wsPrice;
+        }
+      } catch (_e) { /* ignore */ }
+      if (!price || price <= 0) {
+        try { price = priceScraper.getCurrentPrice(); } catch (_e) { /* ignore */ }
+      }
       if (!price || price <= 0) {
         try { price = getCurrentPrice(); } catch (_e) { /* ignore */ }
       }
@@ -214,10 +226,12 @@ class TwentyOneSecondReversal {
 
       // Inside the fire window — now verify we have data
       if (this.candleOpen === null || this.candleClose === null) {
+        const wsAge = poLivePrice.getLatestAge();
+        const wsLatest = poLivePrice.getLatest();
         this._logSkipOnce(
           'nodata',
-          `In fire window but no price yet (priceScraper + getCurrentPrice + robust all returned null). ` +
-          `Ensure a PO chart is visible and a currency pair is selected.`
+          `In fire window but no price yet. WS ticks captured: ${wsLatest ? `last=${wsLatest} age=${wsAge}ms` : 'none yet'}. ` +
+          `Ensure PO WS is connected and a currency pair is selected.`
         );
         return;
       }
