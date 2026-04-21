@@ -17,22 +17,54 @@ export function waitForElement(selector, timeout = 10000) {
       resolve(element);
       return;
     }
-    
-    const observer = new MutationObserver((mutations, obs) => {
-      const el = document.querySelector(selector);
-      if (el) {
-        obs.disconnect();
-        resolve(el);
+
+    let observer = null;
+    let timeoutId = null;
+    const cleanup = () => {
+      try { observer && observer.disconnect(); } catch (_e) { /* ignore */ }
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+
+    const startObserver = () => {
+      // documentElement is always present (even at @run-at document-start)
+      const target = document.documentElement || document;
+      observer = new MutationObserver(() => {
+        const el = document.querySelector(selector);
+        if (el) {
+          cleanup();
+          resolve(el);
+        }
+      });
+      try {
+        observer.observe(target, { childList: true, subtree: true });
+      } catch (e) {
+        // Extremely early — fall back to polling
+        const pollId = setInterval(() => {
+          const el = document.querySelector(selector);
+          if (el) {
+            clearInterval(pollId);
+            cleanup();
+            resolve(el);
+          }
+        }, 50);
+        timeoutId = setTimeout(() => {
+          clearInterval(pollId);
+          cleanup();
+          resolve(null);
+        }, timeout);
+        return;
       }
-    });
-    
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-    });
-    
-    setTimeout(() => {
-      observer.disconnect();
+    };
+
+    // If the DOM isn't even ready yet (@run-at document-start), wait for it.
+    if (!document.documentElement) {
+      document.addEventListener('readystatechange', startObserver, { once: true });
+    } else {
+      startObserver();
+    }
+
+    timeoutId = setTimeout(() => {
+      cleanup();
       resolve(null);
     }, timeout);
   });

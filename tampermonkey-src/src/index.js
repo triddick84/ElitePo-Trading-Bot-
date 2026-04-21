@@ -296,13 +296,19 @@ class EliteTradingBot {
 // Initialize bot
 const bot = new EliteTradingBot();
 
-(async function main() {
-  try {
-    await bot.init();
-  } catch (e) {
+function startBot() {
+  bot.init().catch((e) => {
     console.error(`[${CONFIG.BOT_NAME}] Failed to initialize:`, e);
-  }
-})();
+  });
+}
+
+// At @run-at document-start, DOM isn't ready yet.
+// Defer bot UI init until DOM is parsed so document.body exists.
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', startBot, { once: true });
+} else {
+  startBot();
+}
 
 // Cleanup on page unload
 window.addEventListener('beforeunload', () => {
