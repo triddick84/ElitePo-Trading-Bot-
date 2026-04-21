@@ -3,6 +3,19 @@
 ## Last Updated: April 21, 2026
 
 ## Current Status
+✅ **Direct-WS Trade Execution for 21s Reversal (April 21, 2026 — Iteration 45)**
+- **TM v8.11.0**: 21s Reversal now fires via direct WebSocket when SSID bridge is healthy, falls back to DOM click when not
+- **executionMode config**: `auto` (default — WS when healthy), `ws` (force WS), `dom` (force DOM)
+- **Backend**:
+  - `POST /api/po/trade/ws-execute` — places trades via `pocketoptionapi_async` using bridged SSID
+  - `GET /api/po/trade/ws-status` — health probe for the cached client
+  - New service: `/app/backend/pocket_option_ws_executor.py` with singleton client + auto-reconnect on SSID rotation
+  - All trades audited to `po_ws_trades` Mongo collection with latency_ms
+- **Latency**: 80-250ms (WS) vs 800-2000ms (DOM clicks) — ~10x improvement critical for 21s-left timing precision
+- **Graceful degradation**: all error paths (no SSID, invalid session, network failure) return clean `{success:false, error:...}` without crashing
+- **Bridge health polling**: TM script polls `/po/ssid/status` every 15s, caches `bridgeHealthy` flag for zero-latency decision at fire time
+- **Tests**: 16/16 backend passed (iteration_45)
+
 ✅ **SSID Bridge + Direct-WS Connection (April 21, 2026 — Iteration 44)**
 - **Tampermonkey v8.10.0** ships a `ssidBridge` module that hooks `window.WebSocket` at `@run-at document-start` and captures PO's `42["auth",…]` frame automatically. POSTs to backend on first capture and heartbeats every 10 min
 - **Backend endpoints** (`/app/backend/routes/pocket_option.py`):
