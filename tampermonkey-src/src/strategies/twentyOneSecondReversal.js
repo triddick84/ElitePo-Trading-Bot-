@@ -30,6 +30,7 @@ import {
 } from '../utils/dom.js';
 import { priceScraper } from '../trading/priceScraper.js';
 import { poLivePrice } from '../trading/ssidBridge.js';
+import { livePriceTracker } from '../trading/livePriceTracker.js';
 import { reportTrade, post, get as apiGet } from '../utils/api.js';
 
 const LOOP_INTERVAL_MS = 100;
@@ -87,6 +88,9 @@ class TwentyOneSecondReversal {
         priceScraper.start(250); // faster poll for accurate 21s-left timing
       }
     } catch (_e) { /* ignore */ }
+
+    // Start the change-detecting live price tracker
+    try { livePriceTracker.start(); } catch (_e) { /* ignore */ }
 
     // Initial bridge health probe + periodic refresh (15s) so we know whether
     // to use WS execution (<200ms) or fall back to DOM clicks.
@@ -177,19 +181,22 @@ class TwentyOneSecondReversal {
       }
 
       // Update running OHLC - multi-source price chain (ordered by reliability):
-      // 1) WS-captured live price (from PO's own socket frames — most accurate)
-      // 2) priceScraper cached last price (500ms interval, DOM-based)
-      // 3) getCurrentPrice (standard selectors)
-      // 4) getCurrentPriceRobust (TreeWalker / SVG / data-attrs)
+      // 1) WS-captured live price (from PO's own socket frames - most accurate)
+      // 2) livePriceTracker (DOM element that has been observed to CHANGE - skips static axis labels)
+      // 3) priceScraper cached last price (500ms interval, DOM-based)
+      // 4) getCurrentPrice (standard selectors)
+      // 5) getCurrentPriceRobust (TreeWalker/SVG - may pick static axis labels, last resort)
       let price = null;
       try {
         const wsPrice = poLivePrice.getLatest();
         const wsAge = poLivePrice.getLatestAge();
-        // Only use WS price if fresh (captured within last 5 seconds)
         if (wsPrice && wsAge !== null && wsAge < 5000) {
           price = wsPrice;
         }
       } catch (_e) { /* ignore */ }
+      if (!price || price <= 0) {
+        try { price = livePriceTracker.getLivePrice(); } catch (_e) { /* ignore */ }
+      }
       if (!price || price <= 0) {
         try { price = priceScraper.getCurrentPrice(); } catch (_e) { /* ignore */ }
       }
@@ -258,8 +265,16 @@ class TwentyOneSecondReversal {
     const bodyBps = mid > 0 ? (Math.abs(body) / mid) * 10_000 : 0;
 
     if (bodyBps < MIN_BODY_BPS) {
-      this._logSkipOnce('flat', `Indecision candle (body=${bodyBps.toFixed(2)}bps < ${MIN_BODY_BPS}bps threshold) — skip`);
-      this.firedThisCandle = true; // don't spam through the window
+      // If open == close exactly, likely we're reading a static axis label not a live price.
+      const isExactlyFlat = Math.abs(body) < 1e-9;
+      const lpStats = (function () { try { return livePriceTracker.getStats(); } catch (_e) { return {}; } })();
+      const wsLatest = poLivePrice.getLatest();
+      const wsAge = poLivePrice.getLatestAge();
+      const suffix = isExactlyFlat
+        ? ` [possible static label — WS:${wsLatest ? `${wsLatest}(${wsAge}ms)` : 'none'} LiveTrk:${lpStats.lastLivePrice || 'none'} tracked=${lpStats.trackedNodes || 0}]`
+        : '';
+      this._logSkipOnce('flat', `Indecision candle (body=${bodyBps.toFixed(2)}bps < ${MIN_BODY_BPS}bps threshold) — skip${suffix}`);
+      this.firedThisCandle = true;
       return;
     }
 

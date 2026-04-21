@@ -12,6 +12,7 @@ import { tradeExecutor } from './trading/executor.js';
 import { smartInvert } from './trading/smartInvert.js';
 import { twentyOneSecondReversal } from './strategies/twentyOneSecondReversal.js';
 import { ssidBridge, poLivePrice } from './trading/ssidBridge.js';
+import { livePriceTracker } from './trading/livePriceTracker.js';
 import { scanMarkets } from './utils/api.js';
 import { get, post } from './utils/api.js';
 import { getCurrentAsset, getCurrentPrice, waitForElement } from './utils/dom.js';
@@ -323,6 +324,7 @@ window.eliteBotPriceScraper = priceScraper;
 window.eliteBot21sReversal = twentyOneSecondReversal;
 window.eliteBotSsidBridge = ssidBridge;
 window.eliteBotLivePrice = poLivePrice;
+window.eliteBotLivePriceTracker = livePriceTracker;
 
 // One-shot diagnostic — run in console and paste output if prices fail to flow
 window.eliteBotDiagnose = function () {
@@ -339,6 +341,7 @@ window.eliteBotDiagnose = function () {
       age_ms: poLivePrice.getLatestAge(),
       all: poLivePrice.getAll(),
     },
+    livePriceTracker: (function () { try { return livePriceTracker.getStats(); } catch (e) { return `ERR: ${e.message}`; } })(),
     priceScraper: {
       current: (function () { try { return priceScraper.getCurrentPrice(); } catch (e) { return `ERR: ${e.message}`; } })(),
     },
