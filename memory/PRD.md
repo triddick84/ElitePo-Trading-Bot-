@@ -1,8 +1,18 @@
 # Elite Pocket Option Trading Bot - Product Requirements Document
 
-## Last Updated: April 20, 2026
+## Last Updated: April 21, 2026
 
 ## Current Status
+✅ **SSID Bridge + Direct-WS Connection (April 21, 2026 — Iteration 44)**
+- **Tampermonkey v8.10.0** ships a `ssidBridge` module that hooks `window.WebSocket` at `@run-at document-start` and captures PO's `42["auth",…]` frame automatically. POSTs to backend on first capture and heartbeats every 10 min
+- **Backend endpoints** (`/app/backend/routes/pocket_option.py`):
+  - `POST /api/po/ssid/update` — parses auth_message, stores in `po_ssid_state` (single-doc `_id='current'`), mirrors to `po_ssid_history` (30d TTL). Idempotent for same session
+  - `GET /api/po/ssid/status` — health classification (healthy/expiring/stale/expired/missing), never exposes raw session
+  - `POST /api/po/ssid/connect` — real-time WS handshake via `pocketoptionapi_async` to verify SSID; returns consistent `{success, connected, balance, uid, is_demo, error}` contract
+- **Frontend**: `SSIDStatusWidget` on dashboard shows CONNECTED/EXPIRING/EXPIRED badges, uid + demo/live, age + expires-in, "Verify WS Connection" button
+- **Unlocks**: direct-WS trading via `BinaryOptionsToolsV2` / `pocketoptionapi_async` — ~50-200ms trade latency (vs 800-2000ms for DOM clicks), authoritative server timestamps for the 21s Reversal strategy
+- **Tests**: 14/14 backend + frontend verified (iteration_44)
+
 ✅ **21-Second Reversal Strategy + TM v8.9.0 (April 20, 2026 — Iteration 43)**
 - **New Strategy**: Timing-based contrarian on 1m candles
   - Fires OPPOSITE trade (wick-ignored body direction) at ~21s-left on the current open 1m candle (±1s tolerance)

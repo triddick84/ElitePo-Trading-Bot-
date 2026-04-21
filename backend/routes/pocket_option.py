@@ -2986,6 +2986,7 @@ async def po_ssid_bridge_connect():
             "uid": uid,
             "is_demo": is_demo,
             "session_preview": (session or "")[:10] + "...",
+            "error": None if connected else "WS connect returned False — SSID may be expired or invalid",
         }
     except Exception as e:
         logger.error(f"po/ssid/connect error: {e}")
