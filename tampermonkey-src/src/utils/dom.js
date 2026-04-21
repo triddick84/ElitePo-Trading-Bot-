@@ -387,13 +387,8 @@ export function switchAsset(symbol) {
 }
 
 /**
- * Get current price — ROBUST version.
- * Tries the original selector-based method first, then falls back to:
- *  - Chart SVG <text> labels (TradingView's rendering)
- *  - Any visible element near the right edge of the chart with a forex-like number
- *  - The latest data attribute on chart elements (data-price, data-value)
- *  - Number scraping near the CALL/PUT button area
- * Returns null only if absolutely nothing resembles a price.
+ * Get current price - ROBUST version.
+ * Tries multiple detection strategies to handle desktop + mobile + layout updates.
  * @returns {number|null}
  */
 export function getCurrentPriceRobust() {
@@ -436,16 +431,55 @@ export function getCurrentPriceRobust() {
       }
     }
     if (candidates.length > 0) {
-      // TradingView renders the live price at the rightmost text node of the price axis
       candidates.sort((a, b) => b.x - a.x);
       return candidates[0].v;
     }
   } catch (_e) { /* ignore */ }
 
-  // 4. Try trading panel's "last price" labels
+  // 4. Scan ALL visible text nodes for a forex-style price number (3-6 decimals).
+  //    This is the mobile PO fallback where prices are rendered as plain divs.
+  //    We prefer numbers with more decimal places (more likely to be actual prices
+  //    rather than account totals) and positions near the chart area.
+  try {
+    const forexPattern = /^\d{1,6}\.\d{3,6}$/;
+    const candidates = [];
+    const walker = document.createTreeWalker(
+      document.body || document.documentElement,
+      NodeFilter.SHOW_TEXT,
+      {
+        acceptNode: (node) => {
+          const text = (node.nodeValue || '').trim();
+          return forexPattern.test(text) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+        },
+      }
+    );
+    let node;
+    while ((node = walker.nextNode())) {
+      const text = (node.nodeValue || '').trim();
+      const v = parseFloat(text);
+      if (!inRange(v)) continue;
+      const parent = node.parentElement;
+      if (!parent) continue;
+      // Skip hidden elements
+      try {
+        const rect = parent.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) continue;
+        // Decimals = score boost (more precise = more likely a live price)
+        const decimals = (text.split('.')[1] || '').length;
+        candidates.push({ v, decimals, x: rect.left, y: rect.top, text });
+      } catch (_e) { /* ignore */ }
+    }
+    if (candidates.length > 0) {
+      // Pick the one with most decimals, then the one highest on the page (chart area)
+      candidates.sort((a, b) => b.decimals - a.decimals || a.y - b.y);
+      return candidates[0].v;
+    }
+  } catch (_e) { /* ignore */ }
+
+  // 5. Class-pattern fallback (rate/quote/tick/value)
   try {
     const nodes = document.querySelectorAll(
-      '[class*="rate"], [class*="quote"], [class*="tick"], [class*="trade"] [class*="value"]'
+      '[class*="rate"], [class*="quote"], [class*="tick"], [class*="trade"] [class*="value"], [class*="price"]'
     );
     for (const el of nodes) {
       if (!el || !el.offsetParent) continue;
