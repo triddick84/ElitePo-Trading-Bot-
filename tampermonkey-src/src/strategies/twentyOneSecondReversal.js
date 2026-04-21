@@ -169,6 +169,7 @@ class TwentyOneSecondReversal {
 
       // Cooldown: must skip exactly 1 candle after a fire
       if (this.lastFireCandleTs > 0 && (minute - this.lastFireCandleTs) < 120_000) {
+        this._logSkipOnce('cooldown', `Cooldown active (${Math.round((120_000 - (minute - this.lastFireCandleTs)) / 1000)}s remaining)`);
         return;
       }
 
@@ -177,13 +178,24 @@ class TwentyOneSecondReversal {
       const tol = this.config.toleranceMs || DEFAULT_TOLERANCE_MS;
       if (Math.abs(msLeft - FIRE_AT_MS_LEFT) > tol) return;
 
-      // Must have enough data
-      if (this.candleOpen === null || this.candleClose === null) return;
+      // Inside the fire window — now verify we have data
+      if (this.candleOpen === null || this.candleClose === null) {
+        this._logSkipOnce('nodata', `In fire window but no price data (getCurrentPrice returned ${price})`);
+        return;
+      }
 
       this._attemptFire();
     } catch (e) {
       warn(`[21s-Reversal] tick error: ${e.message}`);
     }
+  }
+
+  _logSkipOnce(reasonKey, msg) {
+    // One log per candle per reason, to avoid spam but keep visibility
+    const key = `${this.candleStartTs}:${reasonKey}`;
+    if (this._loggedSkipKey === key) return;
+    this._loggedSkipKey = key;
+    log(`[21s-Reversal] ${msg}`);
   }
 
   _attemptFire() {
@@ -194,7 +206,9 @@ class TwentyOneSecondReversal {
     const bodyBps = mid > 0 ? (Math.abs(body) / mid) * 10_000 : 0;
 
     if (bodyBps < MIN_BODY_BPS) {
-      return; // flat/indecision — skip quietly
+      this._logSkipOnce('flat', `Indecision candle (body=${bodyBps.toFixed(2)}bps < ${MIN_BODY_BPS}bps threshold) — skip`);
+      this.firedThisCandle = true; // don't spam through the window
+      return;
     }
 
     const originalDirection = body > 0 ? 'UP' : 'DOWN';
@@ -202,12 +216,9 @@ class TwentyOneSecondReversal {
     const asset = getCurrentAsset() || 'UNKNOWN';
     const amount = state.moneyManagement.currentAmount;
 
-    // Pre-fire guards
-    if (!state.autoTradeEnabled) {
-      log(`[21s-Reversal] Would fire ${tradeDirection} on ${asset} (body=${body.toFixed(6)}, ${bodyBps.toFixed(2)}bps) — AUTO off`);
-      this.firedThisCandle = true; // still mark so we don't spam logs
-      return;
-    }
+    // NOTE: 21S toggle is self-authorizing — does NOT require the AUTO button.
+    // Enabling the 21S button IS explicit consent to execute trades.
+
     const payout = getPayout();
     if (payout && payout < CONFIG.MIN_PAYOUT) {
       warn(`[21s-Reversal] Payout ${payout}% below min ${CONFIG.MIN_PAYOUT}% — skip`);
