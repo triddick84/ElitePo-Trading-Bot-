@@ -187,59 +187,82 @@ class EliteTradingBot {
   }
   
   async executeSingleScan() {
-    log('Running single scan...');
-    await this.performScan();
+    info('[GO] Force scan triggered - generating signal NOW...');
+    await this.performScan({ force: true });
   }
-  
-  async performScan() {
+
+  async performScan(opts = {}) {
+    const isForce = !!opts.force;
     try {
       const asset = getCurrentAsset();
       if (!asset) {
-        warn('Could not detect current asset');
+        warn(isForce
+          ? '[GO] Could not detect current asset - is a pair selected in PO?'
+          : 'Could not detect current asset'
+        );
         return;
       }
-      
+
       // Try local signal generation first
       if (CONFIG.USE_LOCAL_SIGNALS) {
         const candles = priceScraper.getCandles(CONFIG.LOCAL_CANDLE_COUNT);
-        
+
         if (candles && candles.length >= 30) {
           const signal = strategyManager.analyze(candles);
-          
+
           if (signal) {
             signal.symbol = asset;
             signal.source = 'local';
-            
-            // Always store last signal for manual WIN/LOSS tracking
             state.lastSignal = { direction: signal.direction, symbol: asset, confidence: signal.confidence, strategy: signal.strategy };
-            
-            log(`Local signal: ${signal.direction} ${asset} @ ${signal.confidence}% [${signal.strategy}]`);
-            
-            if (state.autoTradeEnabled) {
-              await tradeExecutor.execute(signal, 'scan');
+
+            info(`[${isForce ? 'GO' : 'SCAN'}] Local signal: ${signal.direction} ${asset} @ ${signal.confidence}% [${signal.strategy}]`);
+
+            if (isForce || state.autoTradeEnabled) {
+              await tradeExecutor.execute(signal, isForce ? 'go-force' : 'scan');
             }
             return;
+          } else if (isForce) {
+            log(`[GO] Local candles OK (${candles.length}) but no local strategy produced a signal; trying backend API...`);
           }
+        } else if (isForce) {
+          log(`[GO] Only ${candles ? candles.length : 0} local candles available (need 30+); falling back to backend API scan...`);
         }
       }
-      
+
       // Fallback to API scan
+      if (isForce) {
+        log(`[GO] Querying backend API for ${asset} at min_confidence=${CONFIG.MIN_CONFIDENCE}%...`);
+      }
       const response = await scanMarkets([asset], CONFIG.MIN_CONFIDENCE);
-      
-      if (response.success && response.top_signals && response.top_signals.length > 0) {
-        const signal = response.top_signals[0];
-        
-        // Always store last signal for manual WIN/LOSS tracking
-        state.lastSignal = { direction: signal.direction, symbol: signal.symbol || asset, confidence: signal.confidence, strategy: signal.strategy || 'API' };
-        
-        log(`API signal: ${signal.direction} ${signal.symbol || asset} @ ${signal.confidence}%`);
-        
-        if (state.autoTradeEnabled) {
-          await tradeExecutor.execute(signal, 'scan');
+
+      if (!response) {
+        if (isForce) warn('[GO] Backend API returned no response (network/CORS issue?)');
+        return;
+      }
+      if (!response.success) {
+        if (isForce) warn(`[GO] Backend API rejected scan: ${response.error || 'unknown'}`);
+        return;
+      }
+      if (!response.top_signals || response.top_signals.length === 0) {
+        if (isForce) {
+          warn(`[GO] Backend API returned no signals (scanned=${response.scanned || 0}, min_conf=${CONFIG.MIN_CONFIDENCE}%). Try lowering MIN_CONFIDENCE or wait for higher confidence setup.`);
         }
+        return;
+      }
+
+      const signal = response.top_signals[0];
+      state.lastSignal = { direction: signal.direction, symbol: signal.symbol || asset, confidence: signal.confidence, strategy: signal.strategy || 'API' };
+
+      info(`[${isForce ? 'GO' : 'SCAN'}] API signal: ${signal.direction} ${signal.symbol || asset} @ ${signal.confidence}% [${signal.strategy || 'API'}]`);
+
+      if (isForce || state.autoTradeEnabled) {
+        await tradeExecutor.execute(signal, isForce ? 'go-force' : 'scan');
+      } else if (!state.autoTradeEnabled) {
+        log('(AUTO off - signal generated but not executed. Click AUTO or use GO for force-execute.)');
       }
     } catch (e) {
-      error(`Scan error: ${e.message}`);
+      error(`[${isForce ? 'GO' : 'Scan'}] error: ${e.message}`);
+      console.error('[Scan stack]', e);
     }
   }
   
