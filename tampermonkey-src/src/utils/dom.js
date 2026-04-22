@@ -71,10 +71,45 @@ export function waitForElement(selector, timeout = 10000) {
 }
 
 /**
+ * Normalize a PO asset name to the canonical backend format.
+ *   "USD/IDR OTC" -> "USDIDR_OTC"
+ *   "EUR/USD"     -> "EURUSD"
+ *   "USDIDR_otc"  -> "USDIDR_OTC"
+ */
+export function normalizeAssetName(raw) {
+  if (!raw) return raw;
+  let s = String(raw).trim().toUpperCase();
+  // Strip slashes, spaces, dashes
+  s = s.replace(/[\s\-/]+/g, '');
+  // Detect OTC suffix in any form ("OTC" at end with or without underscore)
+  let isOtc = false;
+  if (s.endsWith('OTC')) {
+    isOtc = true;
+    s = s.slice(0, -3).replace(/_+$/, '');
+  }
+  // Reapply canonical OTC suffix
+  if (isOtc) s = s + '_OTC';
+  return s;
+}
+
+/**
  * Get current asset from Pocket Option UI
- * @returns {string|null} Asset symbol
+ * @returns {string|null} Asset symbol (normalized: e.g. "USDIDR_OTC")
  */
 export function getCurrentAsset() {
+  const raw = _getCurrentAssetRaw();
+  return raw ? normalizeAssetName(raw) : null;
+}
+
+/**
+ * Get current asset as-displayed (UN-normalized, for UI/logs).
+ * @returns {string|null}
+ */
+export function getCurrentAssetRaw() {
+  return _getCurrentAssetRaw();
+}
+
+function _getCurrentAssetRaw() {
   // Method 1: Try specific selectors
   const selectors = [
     '.pair-title',
@@ -724,6 +759,8 @@ export function scanDOMForTradeResult() {
 export default {
   waitForElement,
   getCurrentAsset,
+  getCurrentAssetRaw,
+  normalizeAssetName,
   getCurrentPrice,
   getCurrentPriceRobust,
   getPayout,

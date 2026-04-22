@@ -110,8 +110,13 @@ export async function fetchSignal(symbol = null) {
  */
 export async function scanMarkets(assets, minConfidence = 65) {
   try {
+    // Guard: normalize + URL-encode each asset to avoid slashes/spaces breaking the URL
+    const safeAssets = (assets || [])
+      .filter(Boolean)
+      .map((a) => String(a).trim().replace(/[\s\-/]+/g, '').toUpperCase())
+      .map((a) => a.endsWith('OTC') && !a.endsWith('_OTC') ? a.slice(0, -3) + '_OTC' : a);
     const response = await get('/signals/scan-markets', {
-      assets: assets.join(','),
+      assets: safeAssets.join(','),
       min_confidence: minConfidence,
     });
     return response;
