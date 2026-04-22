@@ -261,25 +261,134 @@ export function setTradeAmount(amount) {
 }
 
 /**
+ * Strict CALL/PUT button matcher — avoids false positives like 'up'grade,
+ * s'up'port, drop'down', 'call' support, etc.
+ *
+ * A button qualifies as CALL/PUT if ANY of:
+ *  - Exact text match: "call", "put", "buy", "sell", "higher", "lower"
+ *  - Class contains a known PO indicator: btn-call, btn-put, call-btn, put-btn,
+ *    button--up, button--down, pay__button--call, pay__button--put
+ *  - data-testid / aria-label has an exact match
+ *  - Button is green (CALL) or red (PUT) AND has ▲/▼ arrow text
+ *
+ * Ignores anything in top-nav / header / sidebar.
+ */
+const CALL_CLASS_HINTS = [
+  'btn-call', 'btn_call', 'button-call', 'button_call',
+  'call-btn', 'call_btn', 'callbtn',
+  'button--up', 'button--green', 'pay__button--call',
+  'payout__button--call', 'trade-button--call', 'trade__button--call',
+];
+const PUT_CLASS_HINTS = [
+  'btn-put', 'btn_put', 'button-put', 'button_put',
+  'put-btn', 'put_btn', 'putbtn',
+  'button--down', 'button--red', 'pay__button--put',
+  'payout__button--put', 'trade-button--put', 'trade__button--put',
+];
+const CALL_TEXT_EXACT = new Set(['call', 'buy', 'higher', 'up ▲', '▲', 'higher ▲']);
+const PUT_TEXT_EXACT = new Set(['put', 'sell', 'lower', 'down ▼', '▼', 'lower ▼']);
+
+function _isInsideNav(el) {
+  try {
+    let cur = el;
+    for (let i = 0; i < 8 && cur; i++) {
+      const cls = ((cur.className || '') + '').toLowerCase();
+      const tag = (cur.tagName || '').toLowerCase();
+      if (tag === 'header' || tag === 'nav') return true;
+      if (/\b(header|navbar|nav-|top-menu|sidebar|footer|menu-item|menu_item)\b/.test(cls)) return true;
+      cur = cur.parentElement;
+    }
+  } catch (_e) { /* ignore */ }
+  return false;
+}
+
+function _findTradeButton(direction) {
+  const isCall = direction === 'CALL';
+  const classHints = isCall ? CALL_CLASS_HINTS : PUT_CLASS_HINTS;
+  const exactText = isCall ? CALL_TEXT_EXACT : PUT_TEXT_EXACT;
+
+  // 1. Strict class-based match (most reliable — PO's own class naming)
+  try {
+    for (const hint of classHints) {
+      const el = document.querySelector(`[class*="${hint}"]`);
+      if (el && el.offsetParent && !_isInsideNav(el)) {
+        return { el, reason: `class:${hint}` };
+      }
+    }
+  } catch (_e) { /* ignore */ }
+
+  // 2. data-testid / aria-label exact match
+  try {
+    const testIdSel = isCall
+      ? '[data-testid="call"],[data-testid="CALL"],[data-testid="buy"],[data-testid="higher"],[aria-label="CALL" i],[aria-label="Buy" i],[aria-label="Higher" i]'
+      : '[data-testid="put"],[data-testid="PUT"],[data-testid="sell"],[data-testid="lower"],[aria-label="PUT" i],[aria-label="Sell" i],[aria-label="Lower" i]';
+    const el = document.querySelector(testIdSel);
+    if (el && el.offsetParent && !_isInsideNav(el)) {
+      return { el, reason: 'testid/aria' };
+    }
+  } catch (_e) { /* ignore */ }
+
+  // 3. Strict text match inside an actionable element
+  try {
+    const buttons = document.querySelectorAll('button, .btn, [role="button"], [class*="btn"]:not(nav *):not(header *)');
+    for (const btn of buttons) {
+      if (!btn.offsetParent) continue;
+      if (_isInsideNav(btn)) continue;
+      const t = (btn.textContent || '').trim().toLowerCase();
+      if (t.length > 16) continue;  // buttons should be short
+      if (exactText.has(t)) return { el: btn, reason: `text:${t}` };
+    }
+  } catch (_e) { /* ignore */ }
+
+  // 4. Color-based fallback (green for CALL, red for PUT) restricted to trade area
+  try {
+    const tradeArea = document.querySelector(
+      '[class*="trade-control"],[class*="trading-panel"],[class*="pay"],[class*="payout"],[class*="deal"],[class*="bet"]'
+    );
+    if (tradeArea) {
+      const all = tradeArea.querySelectorAll('button, [role="button"], [class*="btn"]');
+      const wantColor = isCall ? 'green' : 'red';
+      for (const btn of all) {
+        if (!btn.offsetParent) continue;
+        const cls = ((btn.className || '') + '').toLowerCase();
+        if (cls.includes(wantColor)) return { el: btn, reason: `colour:${wantColor}` };
+        try {
+          const bg = (window.getComputedStyle(btn).backgroundColor || '').toLowerCase();
+          // Crude green/red detection from computed bg
+          const m = bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+          if (m) {
+            const r = +m[1], g = +m[2], b = +m[3];
+            if (isCall && g > 150 && g > r + 40 && g > b + 40) return { el: btn, reason: 'rgb:green' };
+            if (!isCall && r > 150 && r > g + 40 && r > b + 40) return { el: btn, reason: 'rgb:red' };
+          }
+        } catch (_e) { /* ignore */ }
+      }
+    }
+  } catch (_e) { /* ignore */ }
+
+  return null;
+}
+
+/**
  * Click CALL button
  * @returns {boolean} Success
  */
 export function clickCall() {
-  const buttons = document.querySelectorAll('button, .btn, [role="button"]');
-  for (const btn of buttons) {
-    const text = btn.textContent.toLowerCase();
-    const classes = btn.className.toLowerCase();
-    
-    if (text.includes('call') || text.includes('higher') || text.includes('up') ||
-        classes.includes('call') || classes.includes('green') || classes.includes('up')) {
-      btn.click();
-      log('Clicked CALL button');
-      return true;
-    }
+  const found = _findTradeButton('CALL');
+  if (!found) {
+    warn('CALL button not found (strict match). Try pointing bot at the Quick-Trade page or share a DOM dump.');
+    return false;
   }
-  
-  warn('CALL button not found');
-  return false;
+  try {
+    // Fire a full click sequence (some PO builds require pointer events)
+    found.el.focus && found.el.focus();
+    found.el.click();
+    log(`Clicked CALL button [${found.reason}]`);
+    return true;
+  } catch (e) {
+    warn(`CALL click failed: ${e.message}`);
+    return false;
+  }
 }
 
 /**
@@ -287,21 +396,20 @@ export function clickCall() {
  * @returns {boolean} Success
  */
 export function clickPut() {
-  const buttons = document.querySelectorAll('button, .btn, [role="button"]');
-  for (const btn of buttons) {
-    const text = btn.textContent.toLowerCase();
-    const classes = btn.className.toLowerCase();
-    
-    if (text.includes('put') || text.includes('lower') || text.includes('down') ||
-        classes.includes('put') || classes.includes('red') || classes.includes('down')) {
-      btn.click();
-      log('Clicked PUT button');
-      return true;
-    }
+  const found = _findTradeButton('PUT');
+  if (!found) {
+    warn('PUT button not found (strict match). Try pointing bot at the Quick-Trade page or share a DOM dump.');
+    return false;
   }
-  
-  warn('PUT button not found');
-  return false;
+  try {
+    found.el.focus && found.el.focus();
+    found.el.click();
+    log(`Clicked PUT button [${found.reason}]`);
+    return true;
+  } catch (e) {
+    warn(`PUT click failed: ${e.message}`);
+    return false;
+  }
 }
 
 /**
