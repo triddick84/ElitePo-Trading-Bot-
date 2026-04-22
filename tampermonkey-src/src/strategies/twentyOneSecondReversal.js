@@ -35,8 +35,9 @@ import { reportTrade, post, get as apiGet } from '../utils/api.js';
 
 const LOOP_INTERVAL_MS = 100;
 const FIRE_AT_MS_LEFT = 21_000;
-const DEFAULT_TOLERANCE_MS = 1_000; // ±1s around the 21s-left mark
-const MIN_BODY_BPS = 0.8;           // ignore indecision candles
+const DEFAULT_TOLERANCE_MS = 1_000;   // ±1s around the 21s-left mark
+const DEFAULT_MIN_BODY_BPS = 0.1;     // near-zero; strategy is timing-based, not body-filter
+const TICK_HISTORY_MAX = 120;         // 12s @ 100ms
 
 class TwentyOneSecondReversal {
   constructor() {
@@ -44,28 +45,36 @@ class TwentyOneSecondReversal {
     this.loopId = null;
 
     // Per-minute candle tracker
-    this.candleStartTs = 0; // wall-clock ms, aligned to minute
-    this.candleOpen = null; // first observed price in the current minute
+    this.candleStartTs = 0;
+    this.candleOpen = null;
     this.candleClose = null;
     this.candleHigh = null;
     this.candleLow = null;
 
+    // Intra-candle tick history for slope-based fallback when body is flat
+    this.tickHistory = []; // [{ ts, price }]
+
     // Fire tracking
-    this.firedThisCandle = false;     // already fired on current candle?
-    this.lastFireCandleTs = 0;        // ts of the candle we last fired on
-    this.pendingResult = null;        // { asset, direction, fireTs, candleTs }
+    this.firedThisCandle = false;
+    this.lastFireCandleTs = 0;
+    this.pendingResult = null;
 
     // Per-asset performance
-    this.assetStats = {}; // { [asset]: { fires, wins, losses, lastWinAt } }
+    this.assetStats = {};
 
-    // Config (user-tunable via panel)
+    // Config (user-tunable via panel / setConfig)
     this.config = {
       toleranceMs: DEFAULT_TOLERANCE_MS,
       expirySeconds: 5,
+      // Lowered from 0.8 → 0.1: most PO prices move <0.8 bps in 39s of a 1m candle.
+      // 0.1 bps means any detectable body → fire.
+      minBodyBps: DEFAULT_MIN_BODY_BPS,
+      // If candle body is below minBodyBps, use the recent-tick slope
+      // (last N seconds) to determine direction instead of skipping.
+      useSlopeFallback: true,
+      slopeWindowMs: 5_000,
       autoRotateOnWin: false,
-      // Execution mode: 'auto' (WS when bridge healthy, DOM fallback), 'ws' (force WS), 'dom' (force DOM)
       executionMode: 'auto',
-      // Cache of last known SSID bridge health — refreshed by _checkBridgeHealth()
       bridgeHealthy: false,
       bridgeHealthCheckedAt: 0,
       rotationAssets: [
@@ -215,6 +224,12 @@ class TwentyOneSecondReversal {
         this.candleClose = price;
         this.candleHigh = Math.max(this.candleHigh, price);
         this.candleLow = Math.min(this.candleLow, price);
+
+        // Record tick for slope fallback
+        this.tickHistory.push({ ts: now, price });
+        if (this.tickHistory.length > TICK_HISTORY_MAX) {
+          this.tickHistory.shift();
+        }
       }
 
       // Already fired on this candle? skip
@@ -264,8 +279,37 @@ class TwentyOneSecondReversal {
     const body = c - o;
     const bodyBps = mid > 0 ? (Math.abs(body) / mid) * 10_000 : 0;
 
-    if (bodyBps < MIN_BODY_BPS) {
-      // If open == close exactly, likely we're reading a static axis label not a live price.
+    let originalDirection;
+    let tradeDirection;
+    let reasonTag;
+
+    const threshold = this.config.minBodyBps;
+
+    if (bodyBps >= threshold) {
+      // Normal path: use candle body
+      originalDirection = body > 0 ? 'UP' : 'DOWN';
+      tradeDirection = body > 0 ? 'PUT' : 'CALL';
+      reasonTag = `body=${bodyBps.toFixed(2)}bps`;
+    } else if (this.config.useSlopeFallback) {
+      // Fallback: use recent tick slope over slopeWindowMs
+      const slope = this._computeRecentSlope(this.config.slopeWindowMs);
+      if (!slope || Math.abs(slope.bps) < 0.01) {
+        // Truly flat across both body AND recent slope — skip
+        const lpStats = (function () { try { return livePriceTracker.getStats(); } catch (_e) { return {}; } })();
+        const wsLatest = poLivePrice.getLatest();
+        const wsAge = poLivePrice.getLatestAge();
+        this._logSkipOnce(
+          'truly-flat',
+          `Flat body (${bodyBps.toFixed(2)}bps) + no recent slope — skip [WS:${wsLatest ? `${wsLatest}(${wsAge}ms)` : 'none'} LiveTrk:${lpStats.lastLivePrice || 'none'} tracked=${lpStats.trackedNodes || 0}]`
+        );
+        this.firedThisCandle = true;
+        return;
+      }
+      originalDirection = slope.delta > 0 ? 'UP-slope' : 'DOWN-slope';
+      tradeDirection = slope.delta > 0 ? 'PUT' : 'CALL';
+      reasonTag = `slope=${slope.bps.toFixed(2)}bps/${(this.config.slopeWindowMs / 1000)}s`;
+    } else {
+      // Old strict behavior — skip if body below threshold
       const isExactlyFlat = Math.abs(body) < 1e-9;
       const lpStats = (function () { try { return livePriceTracker.getStats(); } catch (_e) { return {}; } })();
       const wsLatest = poLivePrice.getLatest();
@@ -273,18 +317,13 @@ class TwentyOneSecondReversal {
       const suffix = isExactlyFlat
         ? ` [possible static label — WS:${wsLatest ? `${wsLatest}(${wsAge}ms)` : 'none'} LiveTrk:${lpStats.lastLivePrice || 'none'} tracked=${lpStats.trackedNodes || 0}]`
         : '';
-      this._logSkipOnce('flat', `Indecision candle (body=${bodyBps.toFixed(2)}bps < ${MIN_BODY_BPS}bps threshold) — skip${suffix}`);
+      this._logSkipOnce('flat', `Indecision candle (body=${bodyBps.toFixed(2)}bps < ${threshold}bps threshold) — skip${suffix}`);
       this.firedThisCandle = true;
       return;
     }
 
-    const originalDirection = body > 0 ? 'UP' : 'DOWN';
-    const tradeDirection = body > 0 ? 'PUT' : 'CALL';
     const asset = getCurrentAsset() || 'UNKNOWN';
     const amount = state.moneyManagement.currentAmount;
-
-    // NOTE: 21S toggle is self-authorizing — does NOT require the AUTO button.
-    // Enabling the 21S button IS explicit consent to execute trades.
 
     const payout = getPayout();
     if (payout && payout < CONFIG.MIN_PAYOUT) {
@@ -316,7 +355,7 @@ class TwentyOneSecondReversal {
 
     // Choose execution path
     const useWs = this._shouldUseWs();
-    info(`[21s-Reversal] Candle ${originalDirection} (body=${bodyBps.toFixed(2)}bps) → FIRE ${tradeDirection} on ${asset} @ $${amount} [${this.config.expirySeconds}s] via ${useWs ? 'WS' : 'DOM'}`);
+    info(`[21s-Reversal] ${originalDirection} (${reasonTag}) → FIRE ${tradeDirection} on ${asset} @ $${amount} [${this.config.expirySeconds}s] via ${useWs ? 'WS' : 'DOM'}`);
 
     const executionPromise = useWs
       ? this._executeViaWs(asset, tradeDirection, amount)
@@ -351,6 +390,7 @@ class TwentyOneSecondReversal {
           meta: {
             candleStart: new Date(this.candleStartTs).toISOString(),
             bodyBps: +bodyBps.toFixed(2),
+            reasonTag,
             fireAtMsLeft: msLeftAtFire,
             expirySeconds: this.config.expirySeconds,
             executionMode: useWs ? 'ws' : 'dom',
@@ -360,6 +400,20 @@ class TwentyOneSecondReversal {
       .catch((e) => {
         error(`[21s-Reversal] execution error: ${e.message}`);
       });
+  }
+
+  _computeRecentSlope(windowMs) {
+    if (!this.tickHistory || this.tickHistory.length < 2) return null;
+    const now = Date.now();
+    const cutoff = now - windowMs;
+    const window = this.tickHistory.filter((t) => t.ts >= cutoff);
+    if (window.length < 2) return null;
+    const first = window[0];
+    const last = window[window.length - 1];
+    const delta = last.price - first.price;
+    const mid = (first.price + last.price) / 2;
+    const bps = mid > 0 ? Math.abs(delta) / mid * 10_000 : 0;
+    return { delta, bps, samples: window.length };
   }
 
   _shouldUseWs() {
@@ -423,6 +477,7 @@ class TwentyOneSecondReversal {
     this.candleClose = null;
     this.candleHigh = null;
     this.candleLow = null;
+    this.tickHistory = [];
     this.firedThisCandle = false;
   }
 
