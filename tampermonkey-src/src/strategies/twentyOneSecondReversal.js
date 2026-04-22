@@ -66,13 +66,18 @@ class TwentyOneSecondReversal {
     this.config = {
       toleranceMs: DEFAULT_TOLERANCE_MS,
       expirySeconds: 5,
-      // Lowered from 0.8 → 0.1: most PO prices move <0.8 bps in 39s of a 1m candle.
-      // 0.1 bps means any detectable body → fire.
+      // minBodyBps: minimum body size (in bps of mid price) to consider candle directional.
+      // Set to 0 for "always fire" behaviour where even 1-pip bodies count.
       minBodyBps: DEFAULT_MIN_BODY_BPS,
-      // If candle body is below minBodyBps, use the recent-tick slope
-      // (last N seconds) to determine direction instead of skipping.
+      // If body filter rejects, use recent-tick slope to determine direction
       useSlopeFallback: true,
       slopeWindowMs: 5_000,
+      // alwaysFire: if true, at the 21s mark fire regardless of body/slope.
+      // Direction is picked from the most recent non-zero delta in tick history,
+      // or defaults to CALL if everything is perfectly flat.
+      // This is the recommended mode when you want to trust the timing edge
+      // and ignore the price-movement filter entirely.
+      alwaysFire: true,
       autoRotateOnWin: false,
       executionMode: 'auto',
       bridgeHealthy: false,
@@ -246,16 +251,26 @@ class TwentyOneSecondReversal {
       const tol = this.config.toleranceMs || DEFAULT_TOLERANCE_MS;
       if (Math.abs(msLeft - FIRE_AT_MS_LEFT) > tol) return;
 
-      // Inside the fire window — now verify we have data
+      // Inside the fire window - verify we have data
       if (this.candleOpen === null || this.candleClose === null) {
-        const wsAge = poLivePrice.getLatestAge();
+        // Try one last-ditch price fetch from WS bridge before giving up
         const wsLatest = poLivePrice.getLatest();
-        this._logSkipOnce(
-          'nodata',
-          `In fire window but no price yet. WS ticks captured: ${wsLatest ? `last=${wsLatest} age=${wsAge}ms` : 'none yet'}. ` +
-          `Ensure PO WS is connected and a currency pair is selected.`
-        );
-        return;
+        const wsAge = poLivePrice.getLatestAge();
+        if (this.config.alwaysFire && wsLatest && wsLatest > 0 && wsAge !== null && wsAge < 30_000) {
+          // alwaysFire: synthesize a candle from the latest WS tick so the fire can proceed
+          this.candleOpen = wsLatest;
+          this.candleClose = wsLatest;
+          this.candleHigh = wsLatest;
+          this.candleLow = wsLatest;
+          info(`[21s-Reversal] alwaysFire: synthesizing candle from last WS tick (${wsLatest}, age=${wsAge}ms)`);
+        } else {
+          this._logSkipOnce(
+            'nodata',
+            `In fire window but no price yet. WS ticks: ${wsLatest ? `last=${wsLatest} age=${wsAge}ms` : 'none yet'}. ` +
+            `Enable alwaysFire or ensure price flow.`
+          );
+          return;
+        }
       }
 
       this._attemptFire();
@@ -285,39 +300,44 @@ class TwentyOneSecondReversal {
 
     const threshold = this.config.minBodyBps;
 
-    if (bodyBps >= threshold) {
-      // Normal path: use candle body
+    if (bodyBps >= threshold && Math.abs(body) > 1e-9) {
+      // Path 1: Candle body is directional — use it
       originalDirection = body > 0 ? 'UP' : 'DOWN';
       tradeDirection = body > 0 ? 'PUT' : 'CALL';
-      reasonTag = `body=${bodyBps.toFixed(2)}bps`;
+      reasonTag = `body=${bodyBps.toFixed(3)}bps`;
     } else if (this.config.useSlopeFallback) {
-      // Fallback: use recent tick slope over slopeWindowMs
+      // Path 2: Try recent-tick slope
       const slope = this._computeRecentSlope(this.config.slopeWindowMs);
-      if (!slope || Math.abs(slope.bps) < 0.01) {
-        // Truly flat across both body AND recent slope — skip
-        const lpStats = (function () { try { return livePriceTracker.getStats(); } catch (_e) { return {}; } })();
-        const wsLatest = poLivePrice.getLatest();
-        const wsAge = poLivePrice.getLatestAge();
+      if (slope && Math.abs(slope.delta) > 1e-9) {
+        originalDirection = slope.delta > 0 ? 'UP-slope' : 'DOWN-slope';
+        tradeDirection = slope.delta > 0 ? 'PUT' : 'CALL';
+        reasonTag = `slope=${slope.bps.toFixed(3)}bps/${(this.config.slopeWindowMs / 1000)}s`;
+      } else if (this.config.alwaysFire) {
+        // Path 3: alwaysFire — scan ENTIRE tick history for any movement
+        const anyDelta = this._computeAnyDelta();
+        if (anyDelta && Math.abs(anyDelta.delta) > 1e-9) {
+          originalDirection = anyDelta.delta > 0 ? 'UP-hist' : 'DOWN-hist';
+          tradeDirection = anyDelta.delta > 0 ? 'PUT' : 'CALL';
+          reasonTag = `hist=${anyDelta.bps.toFixed(3)}bps(${anyDelta.samples}samples)`;
+        } else {
+          // Path 4: Absolutely no data — default to CALL (user can flip via INVERT)
+          originalDirection = 'FLAT';
+          tradeDirection = 'CALL';
+          reasonTag = 'flat-default-CALL';
+          warn('[21s-Reversal] ZERO price movement detected all candle - defaulting to CALL');
+        }
+      } else {
+        // alwaysFire disabled + no slope + flat body → skip
         this._logSkipOnce(
           'truly-flat',
-          `Flat body (${bodyBps.toFixed(2)}bps) + no recent slope — skip [WS:${wsLatest ? `${wsLatest}(${wsAge}ms)` : 'none'} LiveTrk:${lpStats.lastLivePrice || 'none'} tracked=${lpStats.trackedNodes || 0}]`
+          `Flat body + no slope - skip (set alwaysFire:true to fire anyway)`
         );
         this.firedThisCandle = true;
         return;
       }
-      originalDirection = slope.delta > 0 ? 'UP-slope' : 'DOWN-slope';
-      tradeDirection = slope.delta > 0 ? 'PUT' : 'CALL';
-      reasonTag = `slope=${slope.bps.toFixed(2)}bps/${(this.config.slopeWindowMs / 1000)}s`;
     } else {
       // Old strict behavior — skip if body below threshold
-      const isExactlyFlat = Math.abs(body) < 1e-9;
-      const lpStats = (function () { try { return livePriceTracker.getStats(); } catch (_e) { return {}; } })();
-      const wsLatest = poLivePrice.getLatest();
-      const wsAge = poLivePrice.getLatestAge();
-      const suffix = isExactlyFlat
-        ? ` [possible static label — WS:${wsLatest ? `${wsLatest}(${wsAge}ms)` : 'none'} LiveTrk:${lpStats.lastLivePrice || 'none'} tracked=${lpStats.trackedNodes || 0}]`
-        : '';
-      this._logSkipOnce('flat', `Indecision candle (body=${bodyBps.toFixed(2)}bps < ${threshold}bps threshold) — skip${suffix}`);
+      this._logSkipOnce('flat', `Body ${bodyBps.toFixed(3)}bps < ${threshold}bps threshold - skip`);
       this.firedThisCandle = true;
       return;
     }
@@ -327,7 +347,7 @@ class TwentyOneSecondReversal {
 
     const payout = getPayout();
     if (payout && payout < CONFIG.MIN_PAYOUT) {
-      warn(`[21s-Reversal] Payout ${payout}% below min ${CONFIG.MIN_PAYOUT}% — skip`);
+      warn(`[21s-Reversal] Payout ${payout}% below min ${CONFIG.MIN_PAYOUT}% - skip`);
       this.firedThisCandle = true;
       return;
     }
@@ -400,6 +420,22 @@ class TwentyOneSecondReversal {
       .catch((e) => {
         error(`[21s-Reversal] execution error: ${e.message}`);
       });
+  }
+
+  _computeAnyDelta() {
+    if (!this.tickHistory || this.tickHistory.length < 2) return null;
+    // Scan from most recent backwards for the first distinct price
+    const last = this.tickHistory[this.tickHistory.length - 1];
+    for (let i = this.tickHistory.length - 2; i >= 0; i--) {
+      const t = this.tickHistory[i];
+      if (Math.abs(t.price - last.price) > 1e-9) {
+        const delta = last.price - t.price;
+        const mid = (last.price + t.price) / 2;
+        const bps = mid > 0 ? Math.abs(delta) / mid * 10_000 : 0;
+        return { delta, bps, samples: this.tickHistory.length - i };
+      }
+    }
+    return null;
   }
 
   _computeRecentSlope(windowMs) {
