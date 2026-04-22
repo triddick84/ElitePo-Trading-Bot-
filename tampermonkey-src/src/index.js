@@ -6,7 +6,7 @@
 import { CONFIG } from './core/config.js';
 import { state, setState, loadState, saveState, resetStats } from './core/state.js';
 import { log, info, warn, success, error } from './core/logger.js';
-import { createPanel, initPanelEvents, updateStatsDisplay, updateInvertDisplay, updateStatusDot, cleanupPanel, populateStrategies, update21sReversalDisplay } from './ui/panel.js';
+import { createPanel, initPanelEvents, updateStatsDisplay, updateInvertDisplay, updateStatusDot, cleanupPanel, populateStrategies, update21sReversalDisplay, setToggleActive } from './ui/panel.js';
 import { strategyManager } from './strategies/manager.js';
 import { tradeExecutor } from './trading/executor.js';
 import { smartInvert } from './trading/smartInvert.js';
@@ -61,12 +61,28 @@ class EliteTradingBot {
     this.statsInterval = setInterval(() => {
       updateStatsDisplay();
     }, 1000);
+
+    // Periodic auto-save every 15s so stats/inversion/asset-history persist
+    // even if the user never clicks a toggle between reloads
+    this.autoSaveInterval = setInterval(() => {
+      try {
+        // Keep the 21S config mirror fresh in case it was tuned via console
+        if (twentyOneSecondReversal.config) {
+          state._twentyOneSConfig = { ...twentyOneSecondReversal.config };
+        }
+        state._twentyOneSEnabled = twentyOneSecondReversal.isEnabled();
+        saveState();
+      } catch (_e) { /* ignore */ }
+    }, 15_000);
     
     // Restore inversion display from saved state
     if (state.inversion.isInverted) {
       updateInvertDisplay(true, state.inversion.reason);
     }
-    
+
+    // Restore toggle states from saved state (persists across PO reloads)
+    this._restoreToggleStates();
+
     this.initialized = true;
     updateStatusDot('connected');
     success(`${CONFIG.BOT_NAME} initialized successfully`);
@@ -84,26 +100,31 @@ class EliteTradingBot {
     
     initPanelEvents({
       onScanToggle: (enabled) => {
+        state.scanEnabled = enabled;
         if (enabled) {
           this.startScanning();
         } else {
           this.stopScanning();
         }
+        saveState();
       },
       onAutoToggle: (enabled) => {
+        state.autoTradeEnabled = enabled;
         log(`Auto-trade ${enabled ? 'enabled' : 'disabled'}`);
+        saveState();
       },
       onGo: () => {
         this.executeSingleScan();
       },
       onInvertToggle: () => {
         smartInvert.manualToggle();
+        saveState();
       },
       onStrategyChange: async (strategyId) => {
         log(`Strategy changed to: ${strategyId}`);
-        // Apply locally in Tampermonkey
+        state._selectedStrategy = strategyId;
         strategyManager.applyAppSelection(strategyId);
-        // Also save to backend
+        saveState();
         try {
           await post('/strategies/select', { timeframe: '5s', strategy_id: strategyId });
           info(`Strategy "${strategyId}" synced to server`);
@@ -118,6 +139,7 @@ class EliteTradingBot {
         if (twentyOneSecondReversal.isEnabled()) {
           update21sReversalDisplay(true, twentyOneSecondReversal.getStats());
         }
+        saveState();
       },
       onLoss: () => {
         tradeExecutor.recordResult(false);
@@ -126,6 +148,7 @@ class EliteTradingBot {
         if (twentyOneSecondReversal.isEnabled()) {
           update21sReversalDisplay(true, twentyOneSecondReversal.getStats());
         }
+        saveState();
       },
       on21sReversalToggle: (enabled) => {
         if (enabled) {
@@ -133,10 +156,14 @@ class EliteTradingBot {
         } else {
           twentyOneSecondReversal.disable();
         }
+        state._twentyOneSEnabled = enabled;
+        state._twentyOneSConfig = { ...twentyOneSecondReversal.config };
         update21sReversalDisplay(enabled, enabled ? twentyOneSecondReversal.getStats() : null);
+        saveState();
       },
       onAmountChange: (amount) => {
         tradeExecutor.setBaseAmount(amount);
+        saveState();
       },
     });
   }
@@ -160,6 +187,40 @@ class EliteTradingBot {
       info(`Strategies loaded: ${strategies.length} available, active: ${selectedId}`);
     } catch (e) {
       warn(`Strategy load failed (using all): ${e.message}`);
+    }
+  }
+
+  /**
+   * Restore persisted toggle states after UI is ready.
+   * Runs after loadState() + createUI() so we can both read the saved values
+   * AND mutate the visual state of the newly-created buttons.
+   */
+  _restoreToggleStates() {
+    try {
+      // SCAN toggle
+      if (state.scanEnabled) {
+        setToggleActive('scan', true);
+        this.startScanning();
+        info('[Restore] SCAN was on before reload — resumed');
+      }
+
+      // AUTO toggle (state already set in loadState, just reflect visually)
+      if (state.autoTradeEnabled) {
+        setToggleActive('auto', true);
+        info('[Restore] AUTO was on before reload — resumed');
+      }
+
+      // 21S Reversal
+      if (state._twentyOneSConfig) {
+        twentyOneSecondReversal.setConfig(state._twentyOneSConfig);
+      }
+      if (state._twentyOneSEnabled) {
+        twentyOneSecondReversal.enable();
+        update21sReversalDisplay(true, twentyOneSecondReversal.getStats());
+        info('[Restore] 21S was on before reload — resumed with saved config');
+      }
+    } catch (e) {
+      warn(`[Restore] toggle state restoration failed: ${e.message}`);
     }
   }
   
@@ -302,17 +363,24 @@ class EliteTradingBot {
   }
   
   cleanup() {
+    // IMPORTANT: save state FIRST so if disable() resets anything, we still capture it
+    try {
+      if (twentyOneSecondReversal.config) {
+        state._twentyOneSConfig = { ...twentyOneSecondReversal.config };
+      }
+      state._twentyOneSEnabled = twentyOneSecondReversal.isEnabled();
+      saveState();
+    } catch (_e) { /* ignore */ }
+
     this.stopScanning();
     this.stopDataCollection();
     priceScraper.stop();
     twentyOneSecondReversal.disable();
     cleanupPanel();
-    
-    if (this.statsInterval) {
-      clearInterval(this.statsInterval);
-    }
-    
-    saveState();
+
+    if (this.statsInterval) clearInterval(this.statsInterval);
+    if (this.autoSaveInterval) clearInterval(this.autoSaveInterval);
+
     log('Bot cleanup complete');
   }
 }

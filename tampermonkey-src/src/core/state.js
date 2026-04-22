@@ -218,6 +218,18 @@ export function saveState() {
       ui: state.ui,
       inversion: state.inversion,
       assetHistory: state.assetHistory,
+      // Toggle states — user expects these to survive page reloads
+      toggles: {
+        scanEnabled: state.scanEnabled,
+        autoTradeEnabled: state.autoTradeEnabled,
+        dataCollectionEnabled: state.dataCollectionEnabled,
+        appSignalEnabled: state.appSignalEnabled,
+        twentyOneSEnabled: !!state._twentyOneSEnabled,
+      },
+      // 21S Reversal config (user-tuned thresholds must survive reload)
+      twentyOneSConfig: state._twentyOneSConfig || null,
+      // Selected strategy (from dropdown)
+      selectedStrategy: state._selectedStrategy || null,
     }));
   }
 }
@@ -236,6 +248,15 @@ export function loadState() {
         if (parsed.ui) state.ui = { ...state.ui, ...parsed.ui };
         if (parsed.inversion) state.inversion = { ...state.inversion, ...parsed.inversion };
         if (parsed.assetHistory) state.assetHistory = parsed.assetHistory;
+        if (parsed.toggles) {
+          state.scanEnabled = !!parsed.toggles.scanEnabled;
+          state.autoTradeEnabled = !!parsed.toggles.autoTradeEnabled;
+          state.dataCollectionEnabled = !!parsed.toggles.dataCollectionEnabled;
+          state.appSignalEnabled = !!parsed.toggles.appSignalEnabled;
+          state._twentyOneSEnabled = !!parsed.toggles.twentyOneSEnabled;
+        }
+        if (parsed.twentyOneSConfig) state._twentyOneSConfig = parsed.twentyOneSConfig;
+        if (parsed.selectedStrategy) state._selectedStrategy = parsed.selectedStrategy;
       }
     } catch (e) {
       console.error('Failed to load state:', e);

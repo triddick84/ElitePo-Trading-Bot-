@@ -579,6 +579,17 @@ export function update21sReversalDisplay(enabled, stats = null) {
   }
 }
 
+/**
+ * Set a toggle button's active class programmatically (without triggering the click callback).
+ * Used to restore persisted toggle states after page reload.
+ */
+export function setToggleActive(buttonId, active) {
+  const btn = q(buttonId);
+  if (!btn) return;
+  if (active) btn.classList.add('active');
+  else btn.classList.remove('active');
+}
+
 export function updateStatusDot(status) {
   const dot = q('dot');
   if (dot) dot.className = `${P}dot ${status}`;
