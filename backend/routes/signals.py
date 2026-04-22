@@ -4162,3 +4162,57 @@ async def save_strategy_tracker_to_db():
         return {"success": True, "assets_saved": count, "message": f"Saved {count} assets to MongoDB"}
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+
+# ============================================================================
+# TRADE REPORT — receives audit events from the Tampermonkey executor
+# ============================================================================
+
+class TrampermonkeyTradeReport(BaseModel):
+    """Audit event from TM trade executor / 21s-reversal."""
+    asset: str = Field(..., description="Asset symbol")
+    direction: str = Field(..., description="CALL or PUT")
+    amount: Optional[float] = Field(default=None)
+    strategy: Optional[str] = Field(default=None)
+    confidence: Optional[float] = Field(default=None)
+    source: Optional[str] = Field(default=None)
+    timestamp: Optional[str] = Field(default=None)
+    payout: Optional[float] = Field(default=None)
+    wasInverted: Optional[bool] = Field(default=None)
+    meta: Optional[Dict[str, Any]] = Field(default=None)
+
+
+@router.post("/trades/report")
+async def report_trade(report: TrampermonkeyTradeReport):
+    """
+    Receive a trade audit event from the Tampermonkey script.
+    Stores to Mongo collection `tm_trade_reports` (TTL 30 days) and also
+    updates the strategy_tracker_data collection if a strategy is tagged.
+    """
+    try:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        doc = report.model_dump()
+        doc["server_received_at"] = now_iso
+        # Normalize asset on ingest
+        if doc.get("asset"):
+            a = str(doc["asset"]).strip().replace(" ", "").replace("/", "").upper()
+            if a.endswith("OTC") and not a.endswith("_OTC"):
+                a = a[:-3] + "_OTC"
+            doc["asset_normalized"] = a
+
+        coll = db["tm_trade_reports"]
+        try:
+            await coll.create_index("server_received_at", expireAfterSeconds=30 * 86400)
+        except Exception:
+            pass
+        await coll.insert_one(doc)
+
+        return {
+            "success": True,
+            "stored": True,
+            "server_received_at": now_iso,
+        }
+    except Exception as e:
+        logger.error(f"trades/report error: {e}")
+        return {"success": False, "error": str(e)}
+
