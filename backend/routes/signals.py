@@ -4395,6 +4395,18 @@ async def force_generate_signal_v2(
             [f"{k}:{v.get('direction','?')}({v.get('confidence',0):.0f}%)" for k, v in top_components]
         ) or "no strong confluence — weak default"
 
+        # BETA flag: true only if ALL agreeing strategies are BETA (new
+        # strategies only — so WinRateWidget can track them separately).
+        signal_is_beta = bool(
+            agreeing_count > 0
+            and all(
+                v.get("beta", False)
+                for v in component_results.values()
+                if (v.get("direction") or "").upper() == direction
+                and float(v.get("confidence") or 0) >= 55
+            )
+        )
+
         signal = {
             "id": f"FORCE_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{a}",
             "symbol": a,
@@ -4407,6 +4419,7 @@ async def force_generate_signal_v2(
             "confluence_score": round(confluence_score, 3),
             "quality": quality,
             "agreeing_strategies": agreeing_count,
+            "beta": signal_is_beta,
             "components": component_results,
             "votes": {"call": round(votes_call, 2), "put": round(votes_put, 2)},
             "generated_at": datetime.now(timezone.utc).isoformat(),

@@ -3,6 +3,29 @@
 ## Last Updated: April 23, 2026
 
 ## Current Status
+✅ **Two New BETA Strategies + BETA Flag Pipeline — TM v8.20.0 (April 23, 2026, Iter 47)**
+- **Fibonacci Confluence (30s/1m/5m)** — `strategies/strategy_fibonacci_confluence.py`
+  - Rolling swing anchor (20/30/40 bars per TF) → Fib levels 23.6/38.2/50/61.8/78.6
+  - Requires 3 of 4 confirms: Fib-zone hit, reversal candle (engulfing/hammer/shooting star), EMA20 trend alignment, volume spike (>1.2x avg 20-bar)
+  - Confidence band 60-82%, depth-bonus for deeper retracements (61.8%=+6, 50%=+4)
+- **Triple Confirmation (30s/1m/5m)** — `strategies/strategy_triple_confirmation.py`
+  - Layer 1 — Trend (price vs EMA slow + EMA fast/slow alignment + OSMA/MACD-hist slope)
+  - Layer 2 — Zone (untapped pivot-based supply for PUT / demand for CALL)
+  - Layer 3 — Confirmation (reversal candle + Volume Oscillator > +15%)
+  - ALL THREE layers must agree; confidence 70-85%
+- **BETA propagation end-to-end**:
+  - Class-level `self.beta = True` + return-dict `'beta': True` on every signal path (including neutral)
+  - `strategy_registry.list_strategies()` surfaces `beta` field per strategy
+  - `strategy_selection_service.AVAILABLE_STRATEGIES` entries carry `beta:True` + [BETA] suffix in display name (3 new entries each under 30s/1m/5m)
+  - `/api/signals/force-generate-v2` component_results now carry per-strategy `beta` AND signal-level `beta` = True only if ALL directionally-agreeing strategies are BETA
+- **Tampermonkey mirrors**: `strategies/fibonacciConfluence.js` + `strategies/tripleConfirmation.js` — mathematical parity with backend, registered in `strategies/manager.js`, wired into APP_TO_LOCAL_MAP for strategy-select sync
+- **TM rebuild**: v8.20.0 deployed to `/frontend/public/pocket-option-auto-trader-modular.user.js`
+- **Tests**: 12/12 backend passed (iteration_47) — endpoints, component composition, signal.beta boolean, confidence clamps, registry execution, regression on /trades/report + /trades/outcome + /win-rate-stats
+
+### Verified Endpoints (Iter 47)
+- `GET /api/strategies/available/30s|1m|5m` — returns BETA strategies with `beta:true`
+- `POST /api/signals/force-generate-v2` — `signal.beta` always a boolean; 6 new BETA components present
+
 ✅ **Real-Accuracy Tracking Loop + Honest Confidence Tiers — TM v8.19.0 (April 23, 2026)**
 - **Tampermonkey `reportTradeOutcome()` helper** (`utils/api.js`): POSTs `{outcome, asset, strategy, profit}` to `/api/trades/outcome` after every recorded WIN/LOSS
 - **`recordResult()` now persists to backend** (`trading/executor.js`): every WIN/LOSS (manual panel click, 21s reversal, or cycle mode) syncs to Mongo so `/signals/win-rate-stats` reflects real rolling accuracy
