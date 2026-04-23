@@ -295,8 +295,47 @@ class EliteTradingBot {
   }
   
   async executeSingleScan() {
-    info('[GO] Force scan triggered - generating signal NOW...');
-    await this.performScan({ force: true });
+    info('[GO] Force scan triggered - generating HIGH-ACCURACY signal NOW...');
+    try {
+      const asset = getCurrentAsset();
+      if (!asset) {
+        warn('[GO] Could not detect current asset - is a pair selected in PO?');
+        return;
+      }
+
+      // Call the new force-generate-v2 endpoint — always returns a signal
+      log(`[GO] Calling force-generate-v2 for ${asset}...`);
+      const resp = await post(`/signals/force-generate-v2?asset=${encodeURIComponent(asset)}&expiry_seconds=60`, {});
+
+      if (!resp || !resp.signal) {
+        warn('[GO] force-generate returned no signal - falling back to standard scan');
+        await this.performScan({ force: true });
+        return;
+      }
+
+      const signal = resp.signal;
+      state.lastSignal = {
+        direction: signal.direction,
+        symbol: signal.symbol || asset,
+        confidence: signal.confidence,
+        strategy: signal.strategy,
+      };
+
+      info(
+        `[GO] SIGNAL: ${signal.direction} ${signal.symbol || asset} @ ${signal.confidence}% ` +
+        `| confluence=${signal.confluence_score} | components=${Object.keys(signal.components || {}).length} ` +
+        `| strategy=${signal.strategy}`
+      );
+      if (signal.reason) log(`[GO] Reason: ${signal.reason}`);
+
+      // Always execute via tradeExecutor in force mode (bypasses AUTO gate)
+      await tradeExecutor.execute(signal, 'go-force');
+    } catch (e) {
+      error(`[GO] force-generate error: ${e.message}`);
+      console.error('[GO stack]', e);
+      // Ultimate fallback — try the old scan path
+      try { await this.performScan({ force: true }); } catch (_e) { /* ignore */ }
+    }
   }
 
   async performScan(opts = {}) {
