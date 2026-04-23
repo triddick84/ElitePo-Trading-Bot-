@@ -1,9 +1,25 @@
 # Elite Pocket Option Trading Bot - Product Requirements Document
 
-## Last Updated: April 21, 2026
+## Last Updated: April 22, 2026
 
 ## Current Status
-✅ **Direct-WS Trade Execution for 21s Reversal (April 21, 2026 — Iteration 45)**
+✅ **Feature Parity Restore + Executor Audit — TM v8.18.0 (April 22, 2026)**
+- **CYCLE mode restored** (`cycleMode.js`): rotates through PO favorites, scans each, trades best signals, waits for WIN/LOSS before rotating, auto-blacklists assets after N consecutive losses
+- **APP signal poller** (`appSignalPoller.js`): polls `/api/signals/latest` every 5s, dedups by `signal_id`, auto-switches asset if target differs, executes via `tradeExecutor`
+- **Explicit A-INV toggle**: smart-invert logic now gated behind `state.autoInvertEnabled` — off = all signals fire as-is
+- **Executor audit chain**: every step now logs `[exec:source] ✓/✗ reason` — signal validation → canTrade → AUTO gate → invert → click → result. Silent failures eliminated
+- **Panel buttons**: new row with `CYCLE` / `APP` / `A-INV` (blue pulsing) + pre-existing `21S` row
+- **All toggles persist** via `saveState()` across PO reloads
+- **Backend**: `POST /api/trades/report` endpoint added (was 404'ing before) — audits to `tm_trade_reports` (30-day TTL)
+- Full toggle reference (all state restored on reload):
+  - SCAN, AUTO, A-INV, CYCLE, APP, 21S
+
+### Verified Endpoints
+- `GET /api/signals/scan-markets?assets=EURUSD_OTC` → 200 OK
+- `GET /api/signals/latest` → 200 OK (returns structured signal object)
+- `POST /api/trades/report` → 200 OK
+
+✅ **CALL/PUT strict selector — TM v8.17.0 (April 22, 2026)**
 - **TM v8.11.0**: 21s Reversal now fires via direct WebSocket when SSID bridge is healthy, falls back to DOM click when not
 - **executionMode config**: `auto` (default — WS when healthy), `ws` (force WS), `dom` (force DOM)
 - **Backend**:

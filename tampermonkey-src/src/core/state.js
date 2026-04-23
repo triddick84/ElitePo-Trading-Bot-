@@ -8,6 +8,8 @@ export const state = {
   appSignalEnabled: false,
   scanEnabled: false,
   autoTradeEnabled: false,
+  autoInvertEnabled: true,     // explicit toggle: when ON, smart-invert logic applies
+  cycleEnabled: false,         // CYCLE mode (rotate through favorites)
   dataCollectionEnabled: false,
   
   // Trading state
@@ -222,10 +224,14 @@ export function saveState() {
       toggles: {
         scanEnabled: state.scanEnabled,
         autoTradeEnabled: state.autoTradeEnabled,
+        autoInvertEnabled: state.autoInvertEnabled,
+        cycleEnabled: state.cycleEnabled,
         dataCollectionEnabled: state.dataCollectionEnabled,
         appSignalEnabled: state.appSignalEnabled,
         twentyOneSEnabled: !!state._twentyOneSEnabled,
       },
+      // Cycle mode config
+      cycleConfig: state._cycleConfig || null,
       // 21S Reversal config (user-tuned thresholds must survive reload)
       twentyOneSConfig: state._twentyOneSConfig || null,
       // Selected strategy (from dropdown)
@@ -251,10 +257,15 @@ export function loadState() {
         if (parsed.toggles) {
           state.scanEnabled = !!parsed.toggles.scanEnabled;
           state.autoTradeEnabled = !!parsed.toggles.autoTradeEnabled;
+          // autoInvert defaults to true if never saved
+          state.autoInvertEnabled = parsed.toggles.autoInvertEnabled !== undefined
+            ? !!parsed.toggles.autoInvertEnabled : true;
+          state.cycleEnabled = !!parsed.toggles.cycleEnabled;
           state.dataCollectionEnabled = !!parsed.toggles.dataCollectionEnabled;
           state.appSignalEnabled = !!parsed.toggles.appSignalEnabled;
           state._twentyOneSEnabled = !!parsed.toggles.twentyOneSEnabled;
         }
+        if (parsed.cycleConfig) state._cycleConfig = parsed.cycleConfig;
         if (parsed.twentyOneSConfig) state._twentyOneSConfig = parsed.twentyOneSConfig;
         if (parsed.selectedStrategy) state._selectedStrategy = parsed.selectedStrategy;
       }

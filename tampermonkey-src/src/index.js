@@ -13,6 +13,8 @@ import { smartInvert } from './trading/smartInvert.js';
 import { twentyOneSecondReversal } from './strategies/twentyOneSecondReversal.js';
 import { ssidBridge, poLivePrice } from './trading/ssidBridge.js';
 import { livePriceTracker } from './trading/livePriceTracker.js';
+import { cycleMode } from './trading/cycleMode.js';
+import { appSignalPoller } from './trading/appSignalPoller.js';
 import { scanMarkets } from './utils/api.js';
 import { get, post } from './utils/api.js';
 import { getCurrentAsset, getCurrentPrice, waitForElement } from './utils/dom.js';
@@ -165,6 +167,32 @@ class EliteTradingBot {
         tradeExecutor.setBaseAmount(amount);
         saveState();
       },
+
+      onCycleToggle: async (enabled) => {
+        state.cycleEnabled = enabled;
+        if (enabled) {
+          await cycleMode.start();
+        } else {
+          cycleMode.stop();
+        }
+        saveState();
+      },
+
+      onAppSignalToggle: (enabled) => {
+        state.appSignalEnabled = enabled;
+        if (enabled) {
+          appSignalPoller.start(5_000);
+        } else {
+          appSignalPoller.stop();
+        }
+        saveState();
+      },
+
+      onAutoInvertToggle: (enabled) => {
+        state.autoInvertEnabled = enabled;
+        log(`Auto-invert ${enabled ? 'ENABLED' : 'DISABLED'} - smart-invert decisions will ${enabled ? 'apply' : 'be bypassed'}`);
+        saveState();
+      },
     });
   }
   
@@ -204,10 +232,29 @@ class EliteTradingBot {
         info('[Restore] SCAN was on before reload — resumed');
       }
 
-      // AUTO toggle (state already set in loadState, just reflect visually)
+      // AUTO toggle
       if (state.autoTradeEnabled) {
         setToggleActive('auto', true);
         info('[Restore] AUTO was on before reload — resumed');
+      }
+
+      // AUTO-INVERT toggle (default ON if never saved)
+      if (state.autoInvertEnabled) {
+        setToggleActive('ainv', true);
+      }
+
+      // CYCLE toggle
+      if (state.cycleEnabled) {
+        setToggleActive('cycle', true);
+        cycleMode.start().catch(() => {});
+        info('[Restore] CYCLE was on before reload — resumed');
+      }
+
+      // APP signal poller toggle
+      if (state.appSignalEnabled) {
+        setToggleActive('app', true);
+        appSignalPoller.start(5_000);
+        info('[Restore] APP poller was on before reload — resumed');
       }
 
       // 21S Reversal
@@ -376,6 +423,8 @@ class EliteTradingBot {
     this.stopDataCollection();
     priceScraper.stop();
     twentyOneSecondReversal.disable();
+    cycleMode.stop();
+    appSignalPoller.stop();
     cleanupPanel();
 
     if (this.statsInterval) clearInterval(this.statsInterval);
@@ -416,6 +465,8 @@ window.eliteBot21sReversal = twentyOneSecondReversal;
 window.eliteBotSsidBridge = ssidBridge;
 window.eliteBotLivePrice = poLivePrice;
 window.eliteBotLivePriceTracker = livePriceTracker;
+window.eliteBotCycleMode = cycleMode;
+window.eliteBotAppSignal = appSignalPoller;
 
 // One-shot diagnostic — run in console and paste output if prices fail to flow
 window.eliteBotDiagnose = function () {

@@ -160,6 +160,8 @@ class SmartInvertEngine {
    * @returns {string} Possibly inverted direction
    */
   applyInversion(direction) {
+    // Respect the explicit AUTO-INVERT toggle. When off, bypass inversion entirely.
+    if (!state.autoInvertEnabled) return direction;
     if (!state.inversion.isInverted) return direction;
 
     const inverted = direction === 'CALL' ? 'PUT' : 'CALL';

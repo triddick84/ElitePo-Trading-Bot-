@@ -189,6 +189,17 @@ function injectCSS() {
       box-shadow: 0 0 10px rgba(168,85,247,0.5) !important;
       animation: ${P}pulse 1.5s infinite !important;
     }
+    .${P}btn-cycle, .${P}btn-app, .${P}btn-ainv {
+      font-size: ${mobile ? 10 : 11}px !important;
+      background: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 100%) !important;
+      border-color: #2563eb !important;
+    }
+    .${P}btn-cycle.active, .${P}btn-app.active, .${P}btn-ainv.active {
+      background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%) !important;
+      border-color: #60a5fa !important;
+      box-shadow: 0 0 10px rgba(59,130,246,0.5) !important;
+      animation: ${P}pulse 2s infinite !important;
+    }
     .${P}invst {
       flex: 1 !important;
       font-size: ${mobile ? 9 : 10}px !important;
@@ -358,6 +369,11 @@ export function createPanel() {
           <button id="${P}go" class="${P}btn ${P}btn-go">GO</button>
         </div>
         <div class="${P}row">
+          <button id="${P}cycle" class="${P}btn ${P}btn-cycle" title="Rotate through favorites, scan each, auto-trade best">CYCLE</button>
+          <button id="${P}app" class="${P}btn ${P}btn-app" title="Poll backend /signals/latest and auto-execute">APP</button>
+          <button id="${P}ainv" class="${P}btn ${P}btn-ainv" title="Enable smart auto-invert on loss streaks">A-INV</button>
+        </div>
+        <div class="${P}row">
           <button id="${P}r21s" class="${P}btn ${P}btn-r21s" title="Fire opposite 5s trade at 21s-left on 1m candles">21S</button>
           <span class="${P}invst" id="${P}r21st">Off</span>
         </div>
@@ -471,6 +487,36 @@ export function initPanelEvents(callbacks = {}) {
   q('inv')?.addEventListener('click', () => callbacks.onInvertToggle?.());
   q('win')?.addEventListener('click', () => callbacks.onWin?.());
   q('loss')?.addEventListener('click', () => callbacks.onLoss?.());
+
+  // CYCLE toggle
+  const cycleBtn = q('cycle');
+  if (cycleBtn) {
+    cycleBtn.addEventListener('click', () => {
+      const isActive = cycleBtn.classList.contains('active');
+      cycleBtn.classList.toggle('active');
+      callbacks.onCycleToggle?.(!isActive);
+    });
+  }
+
+  // APP signal poller toggle
+  const appBtn = q('app');
+  if (appBtn) {
+    appBtn.addEventListener('click', () => {
+      const isActive = appBtn.classList.contains('active');
+      appBtn.classList.toggle('active');
+      callbacks.onAppSignalToggle?.(!isActive);
+    });
+  }
+
+  // Auto-invert toggle
+  const ainvBtn = q('ainv');
+  if (ainvBtn) {
+    ainvBtn.addEventListener('click', () => {
+      const isActive = ainvBtn.classList.contains('active');
+      ainvBtn.classList.toggle('active');
+      callbacks.onAutoInvertToggle?.(!isActive);
+    });
+  }
 
   // 21s Reversal toggle
   const r21sBtn = q('r21s');

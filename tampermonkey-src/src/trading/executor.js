@@ -68,51 +68,57 @@ class TradeExecutor {
   /**
    * Execute a trade (with smart inversion applied)
    * @param {Object} signal - Signal to trade
-   * @param {string} source - 'scan' or 'app'
+   * @param {string} source - 'scan' | 'app' | 'cycle' | 'go-force' | '21s-reversal'
    * @returns {Promise<boolean>} Success
    */
   async execute(signal, source = 'scan') {
+    const force = source === 'go-force' || source === '21s-reversal';
+
+    // Audit: step 1 — signal validation
     if (!this.validateSignal(signal)) {
+      log(`[exec:${source}] ✗ signal validation failed`);
       return false;
     }
-    
-    if (!this.canTrade(source)) {
+    log(`[exec:${source}] ✓ signal validated (${signal.direction} ${signal.confidence}%)`);
+
+    // Audit: step 2 — trade cooldown/rate limits (skip when force)
+    if (!force && !this.canTrade(source)) {
+      log(`[exec:${source}] ✗ canTrade returned false (cooldown/rate limit)`);
       return false;
     }
-    
-    if (!state.autoTradeEnabled) {
-      log('Auto-trade disabled, signal received but not executed');
+    log(`[exec:${source}] ✓ canTrade check passed`);
+
+    // Audit: step 3 — AUTO gate (skip when force)
+    if (!force && !state.autoTradeEnabled) {
+      log(`[exec:${source}] ✗ AUTO is OFF — signal stored but not executed (click AUTO to enable)`);
       return false;
     }
-    
+
     try {
       const originalDirection = signal.direction.toUpperCase();
-      
-      // Apply smart inversion
       const direction = smartInvert.applyInversion(originalDirection);
-      
       const amount = state.moneyManagement.currentAmount;
       const asset = getCurrentAsset();
-      
+
       if (direction !== originalDirection) {
-        info(`Executing INVERTED ${direction} (original: ${originalDirection}) on ${asset} @ $${amount}`);
+        info(`[exec:${source}] INVERTING ${originalDirection} → ${direction} on ${asset} @ $${amount}`);
       } else {
-        log(`Executing ${direction} trade on ${asset} @ $${amount} (${signal.confidence}%)`);
+        log(`[exec:${source}] firing ${direction} on ${asset} @ $${amount} (${signal.confidence}%)`);
       }
-      
+
+      // Audit: step 4 — set amount + click
       setTradeAmount(amount);
       const executed = await executeTrade(direction, amount);
-      
+
       if (executed) {
         const now = Date.now();
         setState('lastTradeTime', now);
-        
-        if (source === 'scan') {
+        if (source === 'scan' || source === 'cycle') {
           setState('lastScanTradeTime', now);
         } else {
           setState('lastAppTradeTime', now);
         }
-        
+
         const trade = {
           timestamp: new Date().toISOString(),
           asset,
@@ -125,26 +131,25 @@ class TradeExecutor {
           payout: getPayout(),
           wasInverted: direction !== originalDirection,
         };
-        
+
         this.tradeHistory.push(trade);
         this.pendingTrades.push(trade);
-        
-        // Store as last trade for result matching
         state.lastTrade = trade;
-        
-        success(`Trade executed: ${direction} ${asset} @ $${amount}${trade.wasInverted ? ' [INVERTED]' : ''}`);
-        
+
+        success(`[exec:${source}] ✅ placed ${direction} ${asset} @ $${amount}${trade.wasInverted ? ' [INVERTED]' : ''}`);
+
         reportTrade(trade).catch(e => {
+          // Silent — /api/trades/report 404s here are non-fatal
           warn(`Failed to report trade: ${e.message}`);
         });
-        
+
         return true;
       } else {
-        error('Failed to execute trade - button click failed');
+        error(`[exec:${source}] ✗ executeTrade returned false — button click failed`);
         return false;
       }
     } catch (e) {
-      error(`Trade execution error: ${e.message}`);
+      error(`[exec:${source}] ✗ exception: ${e.message}`);
       return false;
     }
   }
