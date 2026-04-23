@@ -1,8 +1,24 @@
 # Elite Pocket Option Trading Bot - Product Requirements Document
 
-## Last Updated: April 22, 2026
+## Last Updated: April 23, 2026
 
 ## Current Status
+✅ **Real-Accuracy Tracking Loop + Honest Confidence Tiers — TM v8.19.0 (April 23, 2026)**
+- **Tampermonkey `reportTradeOutcome()` helper** (`utils/api.js`): POSTs `{outcome, asset, strategy, profit}` to `/api/trades/outcome` after every recorded WIN/LOSS
+- **`recordResult()` now persists to backend** (`trading/executor.js`): every WIN/LOSS (manual panel click, 21s reversal, or cycle mode) syncs to Mongo so `/signals/win-rate-stats` reflects real rolling accuracy
+- **NEW `_scheduleOutcomeResolution()` auto-resolver**: after each trade placement, snapshots balance, waits expiry+3s, scans DOM + balance delta, and auto-calls `recordResult` if user doesn't click manually. Skips if another handler (e.g. 21s reversal) already resolved
+- **Force-Generate-v2 tightened**: now emits `quality` tier (HIGH/MEDIUM/LOW) based on `agreeing_strategies` + `confluence_score`. Confidence clamped per tier — LOW ≤ 65%, MEDIUM ≤ 75%, HIGH ≤ 82%. No more misleading 85%+ when only 1-2 strategies voted
+- **Route handler renamed** `record_tm_trade_outcome` (was `record_trade_outcome` which shadowed another function in the same module)
+- **Orphan outcome path** now normalizes asset before insert (consistent `asset_normalized` field)
+- **Dashboard `WinRateWidget`** (already wired on `DashboardRestructured.js` row 769): polls `/api/signals/win-rate-stats` every 30s, shows last-50/100/500 rolling rates + STRONG/PROFITABLE/BREAK-EVEN/UNPROFITABLE badges
+- **Tests**: 13/13 backend passed (iteration_46) — force-generate-v2 quality tier, /trades/report, /trades/outcome (match + orphan + bad-outcome reject), /signals/win-rate-stats, full e2e flow
+
+### Verified Endpoints (Iteration 46)
+- `POST /api/signals/force-generate-v2` → returns {direction, confidence, quality, agreeing_strategies, confluence_score, components, votes}
+- `POST /api/trades/report` → audit event to `tm_trade_reports` (30d TTL)
+- `POST /api/trades/outcome` → matches latest pending trade or creates orphan row; normalizes asset
+- `GET /api/signals/win-rate-stats` → rolling last-50/100/500 + by_strategy breakdown
+
 ✅ **Feature Parity Restore + Executor Audit — TM v8.18.0 (April 22, 2026)**
 - **CYCLE mode restored** (`cycleMode.js`): rotates through PO favorites, scans each, trades best signals, waits for WIN/LOSS before rotating, auto-blacklists assets after N consecutive losses
 - **APP signal poller** (`appSignalPoller.js`): polls `/api/signals/latest` every 5s, dedups by `signal_id`, auto-switches asset if target differs, executes via `tradeExecutor`

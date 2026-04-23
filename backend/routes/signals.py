@@ -4499,7 +4499,7 @@ class TrampermonkeyOutcome(BaseModel):
 
 
 @router.post("/trades/outcome")
-async def record_trade_outcome(report: TrampermonkeyOutcome):
+async def record_tm_trade_outcome(report: TrampermonkeyOutcome):
     """
     Record the WIN/LOSS outcome for the most recent trade report that
     doesn't yet have an outcome. Updates in-place so /win-rate-stats
@@ -4510,21 +4510,26 @@ async def record_trade_outcome(report: TrampermonkeyOutcome):
         if outcome not in ("WIN", "LOSS"):
             return {"success": False, "error": "outcome must be WIN or LOSS"}
 
-        coll = db["tm_trade_reports"]
-        # Find the most recent trade without an outcome
-        query = {"outcome": {"$in": [None, ""]}}
+        # Normalize asset once (used in both match and orphan paths)
+        asset_normalized = None
         if report.asset:
             a = report.asset.strip().replace(" ", "").replace("/", "").upper()
             if a.endswith("OTC") and not a.endswith("_OTC"):
                 a = a[:-3] + "_OTC"
-            query["asset_normalized"] = a
+            asset_normalized = a
+
+        coll = db["tm_trade_reports"]
+        # Find the most recent trade without an outcome
+        query = {"outcome": {"$in": [None, ""]}}
+        if asset_normalized:
+            query["asset_normalized"] = asset_normalized
 
         doc = await coll.find_one(query, sort=[("server_received_at", -1)])
         if not doc:
             # No pending trade — just insert a standalone outcome entry
             await coll.insert_one({
                 "outcome": outcome,
-                "asset_normalized": report.asset,
+                "asset_normalized": asset_normalized,
                 "strategy": report.strategy,
                 "profit": report.profit,
                 "server_received_at": datetime.now(timezone.utc).isoformat(),
