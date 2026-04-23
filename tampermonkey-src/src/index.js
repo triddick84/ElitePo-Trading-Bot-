@@ -323,10 +323,14 @@ class EliteTradingBot {
 
       info(
         `[GO] SIGNAL: ${signal.direction} ${signal.symbol || asset} @ ${signal.confidence}% ` +
-        `| confluence=${signal.confluence_score} | components=${Object.keys(signal.components || {}).length} ` +
+        `[${signal.quality || 'N/A'}] | confluence=${signal.confluence_score} ` +
+        `| agreeing=${signal.agreeing_strategies || 0}/${Object.keys(signal.components || {}).length} ` +
         `| strategy=${signal.strategy}`
       );
       if (signal.reason) log(`[GO] Reason: ${signal.reason}`);
+      if (signal.quality === 'LOW') {
+        warn('[GO] LOW-quality signal — weak strategy participation. Consider passing.');
+      }
 
       // Always execute via tradeExecutor in force mode (bypasses AUTO gate)
       await tradeExecutor.execute(signal, 'go-force');

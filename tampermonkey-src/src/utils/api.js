@@ -180,6 +180,26 @@ export async function recordPremiumResult(symbol, direction, isWin, confidence =
   }
 }
 
+/**
+ * Report WIN/LOSS outcome for the most recent TM trade so backend
+ * /signals/win-rate-stats can compute real rolling accuracy.
+ * Matches the last trade report for the same asset that has no outcome yet.
+ * @param {Object} params
+ * @param {'WIN'|'LOSS'} params.outcome
+ * @param {string} [params.asset]
+ * @param {string} [params.strategy]
+ * @param {number} [params.profit]
+ * @returns {Promise<Object>}
+ */
+export async function reportTradeOutcome({ outcome, asset = null, strategy = null, profit = null }) {
+  try {
+    return await post('/trades/outcome', { outcome, asset, strategy, profit });
+  } catch (e) {
+    logError(`Failed to report trade outcome: ${e.message}`);
+    return { success: false, error: e.message };
+  }
+}
+
 export default {
   request,
   get,
@@ -189,4 +209,5 @@ export default {
   sendCandles,
   reportTrade,
   recordPremiumResult,
+  reportTradeOutcome,
 };

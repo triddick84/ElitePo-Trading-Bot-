@@ -1,0 +1,34 @@
+{
+  "summary": "Iteration 46 — Real-accuracy tracking loop. Validated force-generate-v2 quality tier + confidence clamps, /api/trades/report ingest, /api/trades/outcome WIN/LOSS matching + orphan path + bad-outcome rejection, /api/signals/win-rate-stats rolling buckets + by_strategy, and the full end-to-end flow (report→outcome→stats increments). 13/13 backend tests PASSED.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/trades/outcome", "issue": "Returns 200 with {success:false,error:'outcome must be WIN or LOSS'} for invalid outcome values instead of HTTP 400. Functionally correct (client can gate on success flag) but not REST-idiomatic."},
+      {"endpoint": "/api/trades/outcome (orphan path)", "issue": "When no pending trade matches and an orphan row is inserted, `asset_normalized` stores the raw (un-normalized) asset string — normalization only runs inside the match-query branch. Minor data-hygiene issue; does not affect win-rate math."},
+      {"endpoint": "/api/signals/win-rate-stats", "issue": "Query filter includes booleans and lowercase ('win','loss',True,False) for outcome, but /api/trades/outcome only writes upper-case WIN/LOSS. Legacy tolerance is fine; just note that _is_win treats bool True as WIN which could double-count if any legacy bool rows exist."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration46_trade_outcomes.py",
+    "/app/test_reports/pytest/pytest_iteration46.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/signals.py is 4554 lines — severely over the 700-line guideline. Split into signals_core.py, signals_force_generate.py, signals_trade_reports.py, signals_outcome.py.",
+    "Two functions named `record_trade_outcome` exist in the same module (lines 4045 and 4502). Python lets them coexist because FastAPI binds them by route object, but the second definition shadows the first in the module namespace and will break anyone importing it by name. Rename the /trades/outcome handler to e.g. `record_tm_trade_outcome`.",
+    "Confidence clamp logic (52 + 30*confluence) already ceilings at 82, so the MEDIUM<=75 and LOW<=65 tier clamps are what actually take effect. Good. But document that HIGH signals sit in the 68-82 band — UI should never show >82.",
+    "force-generate-v2 swallows all strategy/iq720 errors silently (continue / logger.debug). Good for resiliency but consider exposing a `strategy_errors_count` in the response for observability.",
+    "No TTL index guarantee — `create_index('server_received_at', expireAfterSeconds=30*86400)` is retried on every POST /trades/report. Move it to app startup (or an idempotent migration) to save a roundtrip per request.",
+    "/api/trades/outcome orphan path sets `asset_normalized` to the raw asset input (not normalized). Normalize before the insert to keep by_strategy/per-asset filtering consistent.",
+    "win-rate-stats filter `{'outcome': {'$in': ['WIN','LOSS','win','loss',True,False]}}` — `_is_win(bool)` returns bool directly, so legacy `False` values are losses and `True` are wins. Safe but brittle; prefer normalizing on write and filtering only on WIN/LOSS strings on read."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration46_trade_outcomes.py"],
+  "success_rate": {"backend": "100% (13/13)", "frontend": "not tested (skipped per request)"},
+  "test_credentials": "Not required — endpoints are public.",
+  "seed_data_creation": "Each test inserts TEST_-prefixed strategy rows into tm_trade_reports (strategy names like TEST_strat_*, TEST_match_*, TEST_orphan, TEST_e2e_*). These are auto-expired by the 30-day TTL index. Small footprint (~6-8 docs per full run).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All four endpoints (force-generate-v2, /trades/report, /trades/outcome, /signals/win-rate-stats) are green. The end-to-end flow is verified — a TEST_e2e_* strategy will show up in /signals/win-rate-stats by_strategy. For future iterations: (1) When a real Tampermonkey session is available, verify auto-outcome reporting by observing tm_trade_reports for wasInverted/payout fields and matching orphans vs. matched. (2) Consider a DELETE /api/trades/test-data endpoint for CI cleanup. (3) The two same-named `record_trade_outcome` functions in routes/signals.py should be renamed for maintainability.",
+  "rca of the issue": "N/A — no bugs found this iteration."
+}

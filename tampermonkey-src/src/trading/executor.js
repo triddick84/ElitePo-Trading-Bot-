@@ -6,8 +6,8 @@
 import { CONFIG } from '../core/config.js';
 import { state, setState, recordTradeResult, recordAssetResult, saveState } from '../core/state.js';
 import { log, success, error, warn, info } from '../core/logger.js';
-import { executeTrade, setTradeAmount, getCurrentAsset, getPayout } from '../utils/dom.js';
-import { reportTrade, recordPremiumResult } from '../utils/api.js';
+import { executeTrade, setTradeAmount, getCurrentAsset, getPayout, getAccountBalance, scanDOMForTradeResult } from '../utils/dom.js';
+import { reportTrade, recordPremiumResult, reportTradeOutcome } from '../utils/api.js';
 import { smartInvert } from './smartInvert.js';
 
 class TradeExecutor {
@@ -143,6 +143,13 @@ class TradeExecutor {
           warn(`Failed to report trade: ${e.message}`);
         });
 
+        // Kick off background outcome auto-resolver (balance-poll based).
+        // Detects WIN/LOSS ~expiry+3s after the trade and calls recordResult,
+        // which in turn posts to /api/trades/outcome so WinRateWidget can
+        // compute real rolling accuracy without user WIN/LOSS clicks.
+        const expirySeconds = Number(signal?.expiry_seconds) || 60;
+        this._scheduleOutcomeResolution(trade, expirySeconds).catch(() => { /* noop */ });
+
         return true;
       } else {
         error(`[exec:${source}] ✗ executeTrade returned false — button click failed`);
@@ -155,10 +162,67 @@ class TradeExecutor {
   }
   
   /**
+   * Schedule an outcome auto-resolver for a placed trade.
+   * Captures balance snapshots before/after expiry and triggers recordResult.
+   * Silently skips if another handler already resolved it (pendingTrades drained).
+   * @param {Object} trade - Trade record from execute()
+   * @param {number} expirySeconds - Expected trade expiry (default 60s)
+   */
+  async _scheduleOutcomeResolution(trade, expirySeconds = 60) {
+    // Avoid double-resolution if caller already records manually
+    trade._autoResolverArmed = true;
+
+    // Snapshot balance ~1.5s post click (after bet deducted)
+    await new Promise(r => setTimeout(r, 1500));
+    const preBalance = getAccountBalance();
+    trade._preBalance = preBalance;
+
+    // Wait expiry + safety buffer (3s)
+    const waitMs = (expirySeconds * 1000) + 3000;
+    await new Promise(r => setTimeout(r, waitMs));
+
+    // If user already clicked WIN/LOSS manually OR 21s reversal resolved it,
+    // pendingTrades no longer contains this trade.
+    const stillPending = this.pendingTrades.includes(trade);
+    if (!stillPending) return;
+
+    // Poll for up to 10s for a stable post-expiry balance
+    let isWin = null;
+    const start = Date.now();
+    while (Date.now() - start < 10000) {
+      const domResult = scanDOMForTradeResult();
+      if (domResult === true) { isWin = true; break; }
+      if (domResult === false) { isWin = false; break; }
+
+      const current = getAccountBalance();
+      if (current > 0 && preBalance > 0) {
+        if (current > preBalance) { isWin = true; break; }
+        // LOSS = balance unchanged (bet already deducted pre-expiry)
+        if (Math.abs(current - preBalance) < 0.01) { isWin = false; break; }
+      }
+      await new Promise(r => setTimeout(r, 500));
+    }
+
+    if (isWin === null) {
+      warn(`[auto-resolve] timed out on ${trade.asset} ${trade.direction} — skipping (record manually with WIN/LOSS buttons)`);
+      return;
+    }
+
+    // Remove from pending so recordResult sees the same trade object
+    const idx = this.pendingTrades.indexOf(trade);
+    if (idx >= 0) this.pendingTrades.splice(idx, 1);
+    // Re-prepend so recordResult still picks it up
+    this.pendingTrades.unshift(trade);
+
+    this.recordResult(isWin, { autoResolved: true });
+  }
+
+  /**
    * Record trade result with premium tracking and smart inversion evaluation
    * @param {boolean} isWin - Whether trade was won
+   * @param {Object} [opts] - optional tagging (e.g. auto-resolved)
    */
-  recordResult(isWin) {
+  recordResult(isWin, opts = {}) {
     // Core stats
     recordTradeResult(isWin);
     
@@ -168,13 +232,15 @@ class TradeExecutor {
     const asset = trade?.asset || lastSignal.symbol || getCurrentAsset() || 'UNKNOWN';
     const direction = trade?.direction || lastSignal.direction || 'UNKNOWN';
     const confidence = trade?.confidence || lastSignal.confidence || 0;
+    const strategy = trade?.strategy || lastSignal.strategy || 'Unknown';
     
     if (trade) {
       trade.result = isWin ? 'WIN' : 'LOSS';
       trade.resultTime = new Date().toISOString();
+      trade.autoResolved = !!opts.autoResolved;
     }
     
-    log(`Recording ${isWin ? 'WIN' : 'LOSS'}: ${asset} ${direction} (conf: ${confidence})`);
+    log(`Recording ${isWin ? 'WIN' : 'LOSS'}: ${asset} ${direction} (conf: ${confidence})${opts.autoResolved ? ' [auto]' : ''}`);
     
     // Record per-asset history (for smart inversion)
     recordAssetResult(asset, direction, isWin);
@@ -191,6 +257,22 @@ class TradeExecutor {
     }).catch(() => {
       // Silently fail - don't block trading
     });
+
+    // Post WIN/LOSS to /api/trades/outcome so the WinRate widget can compute
+    // real rolling accuracy (matches the most recent tm_trade_reports row).
+    const profit = trade
+      ? (isWin ? trade.amount * ((trade.payout || 80) / 100) : -trade.amount)
+      : null;
+    reportTradeOutcome({
+      outcome: isWin ? 'WIN' : 'LOSS',
+      asset,
+      strategy,
+      profit,
+    }).then(resp => {
+      if (resp && resp.success) {
+        log(`Outcome synced to backend${resp.matched_trade ? ` (matched ${resp.trade_strategy || 'trade'})` : ' (orphan)'}`);
+      }
+    }).catch(() => { /* silent */ });
     
     // Money management
     if (isWin) {

@@ -4354,6 +4354,24 @@ async def force_generate_signal_v2(
             # NO INFLATION — 82% is the realistic ceiling, anything higher is a lie.
             raw_confidence = 52.0 + (confluence_score * 30.0)
 
+        # Participation check — how many strategies agreed with the chosen direction?
+        # Filters out "rogue" 100% confluence where only 1 strategy voted.
+        agreeing_count = sum(
+            1 for v in component_results.values()
+            if (v.get("direction") or "").upper() == direction and float(v.get("confidence") or 0) >= 55
+        )
+
+        # Quality tier + confidence clamp based on participation
+        if agreeing_count >= 5 and confluence_score >= 0.65:
+            quality = "HIGH"
+        elif agreeing_count >= 3 and confluence_score >= 0.55:
+            quality = "MEDIUM"
+            raw_confidence = min(raw_confidence, 75.0)
+        else:
+            quality = "LOW"
+            # Weak participation → clamp confidence so the UI can't mislead
+            raw_confidence = min(raw_confidence, 65.0)
+
         # Pull active strategy as the attribution label
         try:
             from strategy_selection_service import strategy_selection_service
@@ -4381,8 +4399,10 @@ async def force_generate_signal_v2(
             "strategy": active_sid,
             "reason": reason_str,
             "expiry_seconds": expiry_seconds,
-            "analysis_type": "force_generate",
+            "analysis_type": "force_generate_v2",
             "confluence_score": round(confluence_score, 3),
+            "quality": quality,
+            "agreeing_strategies": agreeing_count,
             "components": component_results,
             "votes": {"call": round(votes_call, 2), "put": round(votes_put, 2)},
             "generated_at": datetime.now(timezone.utc).isoformat(),
