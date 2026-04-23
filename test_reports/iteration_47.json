@@ -1,0 +1,45 @@
+{
+  "summary": "Iteration 47 backend suite: tested the two new BETA strategies (Fibonacci Confluence + Triple Confirmation on 30s/1m/5m). 11/12 pytest cases pass. Only gap: signal.beta is NOT surfaced on /api/signals/force-generate-v2 (component.beta works, signal.beta is absent from the response).",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/signals/force-generate-v2",
+        "issue": "signal.beta is MISSING from the response. The review request mandates it be a boolean (true if all directionally-agreeing strategies are beta, else false). Currently component.beta is set per-strategy inside signal.components, but the top-level signal dict built at routes/signals.py ~L4398-4413 never adds a 'beta' key. Fix: after computing `agreeing_count`, aggregate whether ALL strategies in component_results whose direction == final direction have beta=True, then add `signal['beta'] = that_bool`.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration47_fib_triple_confirm.py",
+    "/app/test_reports/pytest/iteration47_results.xml"
+  ],
+  "action_items": [
+    "Add `signal['beta']` key in routes/signals.py force-generate-v2 (~L4398). Compute as: all(component_results[sid]['beta'] for sid in component_results if component_results[sid]['direction']==direction and component_results[sid]['confidence']>=55) — fall back to False when no agreeing strategies. Must always be bool, never None/missing."
+  ],
+  "critical_code_review_comments": [
+    "routes/signals.py force-generate-v2 (~L4398-4413): signal.beta is silently dropped. Review request line 3 explicitly requires it. This is the ONLY miss in the iteration 47 scope.",
+    "routes/signals.py is 4562 lines — exceeds the 700-line guideline. Consider splitting force-generate-v2, win-rate-stats, and trade-report handlers into submodules.",
+    "strategies/strategy_fibonacci_confluence.py and strategy_triple_confirmation.py both correctly set self.beta=True on the class and include 'beta': True in every generate_signal return path (including _neutral). Good.",
+    "strategy_registry.py L247 correctly exposes beta via list_strategies — this feeds /api/strategies/available.",
+    "strategy_selection_service.py AVAILABLE_STRATEGIES dict entries for all 6 new strategies have beta:True and carry the [BETA] suffix in display names — will show up correctly in WinRateWidget filters."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration47_fib_triple_confirm.py (new — 12 pytest cases)"
+  ],
+  "success_rate": {
+    "backend": "91.67% (11/12 pytest cases)",
+    "frontend": "not tested per review request (backend only)"
+  },
+  "test_credentials": "none — all endpoints public under /api/*",
+  "seed_data_creation": "Created 1 TEST_ITER47_* trade report via /api/trades/report and its outcome via /api/trades/outcome. No cleanup performed — test-prefixed so safe to leave or prune later.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "After E1 adds signal.beta in force-generate-v2, re-run `pytest /app/backend/tests/test_iteration47_fib_triple_confirm.py::test_force_generate_signal_beta_is_boolean -v` to confirm. The rest of the suite is stable and can serve as regression for iteration 48+. Note: the crafted synthetic DataFrame in _synthetic_downtrend_pullback_df confirms strategies CAN execute and return well-formed dicts, though on this particular data they return NEUTRAL (expected — real OHLC would be needed to trigger a directional signal, but the structural contract is what we validated).",
+  "rca of the issue": "E1's review request claimed routes/signals.py ~L4400 'now surfaces signal.beta and component.beta'. Inspection of L4398-4413 shows the signal dict is built with id/symbol/direction/confidence/strategy/reason/expiry_seconds/analysis_type/confluence_score/quality/agreeing_strategies/components/votes/generated_at — no `beta` key. component.beta IS correctly set at L4310 inside component_results. The aggregation step was simply never written. Mitigation: one-line addition after L4366 (agreeing_count computation): `signal_is_beta = bool(component_results) and all(v.get('beta', False) for v in component_results.values() if (v.get('direction') or '').upper() == direction and float(v.get('confidence') or 0) >= 55) and agreeing_count > 0` then include `'beta': signal_is_beta` in the signal dict at L4398."
+}

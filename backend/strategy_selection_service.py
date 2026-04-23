@@ -45,6 +45,8 @@ class StrategySelectionService:
             {'id': 'default', 'name': 'Default 30s Strategy', 'description': 'SuperTrend + MA Crossover'},
             {'id': 'holly_crossover_30s', 'name': '⭐⭐⭐ Holly Crossover 30s', 'description': 'EMA(12) x WMA(23) reversal crossover with S/R confirmation. Catches trend reversals.', 'win_rate': '75-85%'},
             {'id': 'golden_one_moment', 'name': '⭐⭐⭐ Golden One Moment', 'description': 'RSI(2) + Stochastic(4,3,3) mean reversion crossover. Precise 30s entries.', 'win_rate': '75-85%'},
+            {'id': '30s_fibonacci_confluence', 'name': '🆕 Fibonacci Confluence 30s [BETA]', 'description': 'Fib levels (23.6/38.2/50/61.8/78.6) + trend EMA + reversal candle + volume spike. 3/4 confirms required.', 'win_rate': '75%+ (target)', 'beta': True},
+            {'id': '30s_triple_confirmation', 'name': '🆕 Triple Confirmation 30s [BETA]', 'description': 'Supply/Demand zone + MA+OSMA trend + reversal candle + Volume Oscillator. All 3 layers must agree.', 'win_rate': '78%+ (target)', 'beta': True},
             {'id': 'dynamic_ema_rsi', 'name': '⭐ Dynamic EMA + RSI Zone', 'description': 'EMA(13)/EMA(50) with RSI(14) 45-55 zone. 1m expiry.', 'win_rate': '75-85%'},
             {'id': 'otc_reverse', 'name': '⭐ OTC Market Reverse', 'description': 'RSI(7) + EMA(21) for OTC markets. Inverse signals on 3 losses.', 'win_rate': '70-80%'},
             {'id': 'keltner_breakout', 'name': '⭐ Keltner Channel Breakout', 'description': 'EMA(20) + ATR(10) bands. Enter on breakout.', 'win_rate': '70-80%'},
@@ -57,6 +59,8 @@ class StrategySelectionService:
         '1m': [
             {'id': 'default', 'name': 'Default 1m Strategy', 'description': 'High Accuracy strategies (Triple Confirmation, Williams/MACD, Smart Money)'},
             {'id': '1m_21s_reversal', 'name': '⭐⭐⭐ 21-Second Reversal', 'description': 'Timing contrarian — fires opposite 4-5s trade at 21s-left on 1m candle. Paired with Tampermonkey for precise execution.', 'win_rate': '65-78%'},
+            {'id': '1m_fibonacci_confluence', 'name': '🆕 Fibonacci Confluence 1m [BETA]', 'description': 'Fib levels + EMA20 trend + engulfing/hammer candle + volume spike. 3/4 confirms required.', 'win_rate': '75%+ (target)', 'beta': True},
+            {'id': '1m_triple_confirmation', 'name': '🆕 Triple Confirmation 1m [BETA]', 'description': 'Supply/Demand zones + trend + reversal candle + Volume Oscillator. All 3 layers must agree.', 'win_rate': '78%+ (target)', 'beta': True},
             {'id': 'turbo_precision_1m', 'name': '⭐⭐⭐ Turbo Precision 1m', 'description': 'RSI + Stochastic RSI + EMA Ribbon. 4+ confirmations. Highest accuracy.', 'win_rate': '75-85%'},
             {'id': '1m_momentum_exhaustion', 'name': '⭐⭐⭐ Momentum Exhaustion Reversal', 'description': 'RSI-2 + Stochastic + BB + Candlestick patterns. Catches reversals at momentum extremes.', 'win_rate': '70-75%'},
             {'id': '1m_quad_crossover', 'name': '⭐⭐ Quad SMA/EMA Crossover', 'description': '2/5/10 SMA + 20 EMA crossovers. 4 rule system with trend/counter-trend signals.', 'win_rate': '80-85%'},
@@ -84,6 +88,8 @@ class StrategySelectionService:
         ],
         '5m': [
             {'id': 'default', 'name': 'Default 5m Strategy', 'description': 'Combined RSI + BB + MACD'},
+            {'id': '5m_fibonacci_confluence', 'name': '🆕 Fibonacci Confluence 5m [BETA]', 'description': 'Deeper Fib swings (40-bar lookback) + EMA20 trend + engulfing/hammer + volume. Best for 5m range-bound markets.', 'win_rate': '75%+ (target)', 'beta': True},
+            {'id': '5m_triple_confirmation', 'name': '🆕 Triple Confirmation 5m [BETA]', 'description': 'Supply/Demand zones + MACD/MA trend + reversal candle + Volume Oscillator. All 3 layers required.', 'win_rate': '78%+ (target)', 'beta': True},
             {'id': 'ema_pullback', 'name': '⭐ EMA Pullback Strategy', 'description': 'EMA(8)/EMA(21) pullback entries. Strong trend continuation.', 'win_rate': '75-85%'},
             {'id': 'ema_macd_trend', 'name': '⭐ EMA + MACD Trend', 'description': 'EMA(9)/EMA(21) crossover with MACD confirmation', 'win_rate': '75-85%'},
             {'id': 'vwap_momentum', 'name': '⭐ VWAP Momentum', 'description': 'Volume-weighted momentum with EMA(9)', 'win_rate': '70-75%'},

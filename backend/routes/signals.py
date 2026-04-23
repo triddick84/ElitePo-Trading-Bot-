@@ -4304,7 +4304,11 @@ async def force_generate_signal_v2(
                         votes_call += c / 100.0
                     elif d == "PUT":
                         votes_put += c / 100.0
-                    component_results[sid] = {"direction": d, "confidence": c}
+                    component_results[sid] = {
+                        "direction": d,
+                        "confidence": c,
+                        "beta": bool(getattr(strat, "beta", False) or res.get("beta", False)),
+                    }
                 except Exception:
                     continue
         except Exception as e:
@@ -4555,4 +4559,3 @@ async def record_tm_trade_outcome(report: TrampermonkeyOutcome):
     except Exception as e:
         logger.error(f"trades/outcome error: {e}")
         return {"success": False, "error": str(e)}
-

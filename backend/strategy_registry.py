@@ -173,6 +173,34 @@ class StrategyRegistry:
                 logger.info("✅ Loaded 1m 21s Reversal Strategy (timing contrarian)")
             except Exception as e:
                 logger.warning(f"Could not load 1m 21s Reversal: {e}")
+
+            # NEW (BETA): Fibonacci Confluence — 30s / 1m / 5m
+            try:
+                from strategies.strategy_fibonacci_confluence import (
+                    strategy_fibonacci_confluence_30s,
+                    strategy_fibonacci_confluence_1m,
+                    strategy_fibonacci_confluence_5m,
+                )
+                self.strategies['30s_fibonacci_confluence'] = strategy_fibonacci_confluence_30s
+                self.strategies['1m_fibonacci_confluence'] = strategy_fibonacci_confluence_1m
+                self.strategies['5m_fibonacci_confluence'] = strategy_fibonacci_confluence_5m
+                logger.info("✅ Loaded Fibonacci Confluence Strategy (30s/1m/5m, BETA)")
+            except Exception as e:
+                logger.warning(f"Could not load Fibonacci Confluence: {e}")
+
+            # NEW (BETA): Triple Confirmation — 30s / 1m / 5m
+            try:
+                from strategies.strategy_triple_confirmation import (
+                    strategy_triple_confirmation_30s,
+                    strategy_triple_confirmation_1m,
+                    strategy_triple_confirmation_5m,
+                )
+                self.strategies['30s_triple_confirmation'] = strategy_triple_confirmation_30s
+                self.strategies['1m_triple_confirmation'] = strategy_triple_confirmation_1m
+                self.strategies['5m_triple_confirmation'] = strategy_triple_confirmation_5m
+                logger.info("✅ Loaded Triple Confirmation Strategy (30s/1m/5m, BETA)")
+            except Exception as e:
+                logger.warning(f"Could not load Triple Confirmation: {e}")
             
             # Legacy strategies (keep for backward compatibility)
             self.strategies['enhanced_rsi_bb_volume'] = None  # Placeholder
@@ -215,7 +243,8 @@ class StrategyRegistry:
                 'name': name,
                 'display_name': strategy.name if hasattr(strategy, 'name') else name,
                 'timeframe': strategy.timeframe if hasattr(strategy, 'timeframe') else 'unknown',
-                'accuracy_target': strategy.accuracy_target if hasattr(strategy, 'accuracy_target') else 0
+                'accuracy_target': strategy.accuracy_target if hasattr(strategy, 'accuracy_target') else 0,
+                'beta': bool(getattr(strategy, 'beta', False)),
             }
             strategy_list.append(strategy_info)
         

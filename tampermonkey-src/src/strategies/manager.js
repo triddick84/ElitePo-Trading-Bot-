@@ -13,6 +13,8 @@ import { GoldenOneMomentStrategy } from './goldenOneMoment.js';
 import { EMA20PullbackReversalStrategy } from './ema20PullbackReversal.js';
 import { KeltnerMACDStrategy } from './keltnerMACD.js';
 import { IQ720EnsembleStrategy } from './iq720Ensemble.js';
+import { FibonacciConfluenceStrategy } from './fibonacciConfluence.js';
+import { TripleConfirmationStrategy } from './tripleConfirmation.js';
 import { get } from '../utils/api.js';
 
 /**
@@ -33,6 +35,13 @@ const APP_TO_LOCAL_MAP = {
   'momentum_buster_15s': 'Momentum Buster',
   'keltner_macd_5s': 'Keltner-MACD 5s',
   'iq720_ensemble': 'IQ-720 Ensemble',
+  // BETA (P0 — April 23, 2026)
+  '30s_fibonacci_confluence': 'Fibonacci Confluence',
+  '1m_fibonacci_confluence': 'Fibonacci Confluence',
+  '5m_fibonacci_confluence': 'Fibonacci Confluence',
+  '30s_triple_confirmation': 'Triple Confirmation',
+  '1m_triple_confirmation': 'Triple Confirmation',
+  '5m_triple_confirmation': 'Triple Confirmation',
 };
 
 class StrategyManager {
@@ -51,6 +60,9 @@ class StrategyManager {
     this.registerStrategy(new GoldenOneMomentStrategy());
     this.registerStrategy(new MomentumBusterStrategy());
     this.registerStrategy(new EMA20PullbackReversalStrategy());
+    // BETA strategies (tracked separately via WinRateWidget + signal.beta flag)
+    this.registerStrategy(new FibonacciConfluenceStrategy());
+    this.registerStrategy(new TripleConfirmationStrategy());
     
     log(`Initialized ${this.strategies.size} trading strategies`);
   }
