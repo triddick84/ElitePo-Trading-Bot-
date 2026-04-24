@@ -3,6 +3,16 @@
 ## Last Updated: April 23, 2026
 
 ## Current Status
+✅ **ML Feature Pipeline Expanded — 13 New Features (April 23, 2026, Iter 48)**
+- **`MLAccuracyTuner.extract_5s_features()` now emits 53 features** (was 40) — mirrors the new BETA strategies so when retraining is triggered, ML can learn which Fib levels and zones actually predict direction:
+  - `fib_impulse_up`, `fib_dist_{236,382,500,618,786}` (signed bps distance to each retracement level), `fib_nearest_bps`
+  - `supply_zone_bps`, `supply_zone_count`, `demand_zone_bps`, `demand_zone_count`
+  - `volume_osc` (percentage oscillator), `volume_spike` (binary > +15%)
+- **`SelectKBest(k=40)` → `k=50`** — gives new features headroom to make the cut
+- **`/api/ml/tuning-report` surfaces `tuning_config.new_features_apr23`** — visible in the AI Models UI tuning panel
+- **No retraining triggered** — per user direction, wiring only. When the next "Retrain" button is clicked (manual or scheduler), the new features enter training automatically
+- **Regression green**: 12/12 iter_47 backend tests pass, force-generate-v2 + win-rate-stats unaffected
+
 ✅ **Two New BETA Strategies + BETA Flag Pipeline — TM v8.20.0 (April 23, 2026, Iter 47)**
 - **Fibonacci Confluence (30s/1m/5m)** — `strategies/strategy_fibonacci_confluence.py`
   - Rolling swing anchor (20/30/40 bars per TF) → Fib levels 23.6/38.2/50/61.8/78.6

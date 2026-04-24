@@ -208,6 +208,77 @@ class MLAccuracyTuner:
             if rng > 0:
                 features['sr_position'] = (close[-1] - recent_low) / rng
 
+        # ------------------------------------------------------------
+        # NEW (Apr 23, 2026): Fibonacci-distance + Supply/Demand proximity
+        # + Volume Oscillator features — mirrors the new BETA strategies
+        # (Fibonacci Confluence + Triple Confirmation). Gives ML a chance
+        # to learn which Fib levels / zones actually predict direction.
+        # ------------------------------------------------------------
+
+        # Fibonacci distance features: how close is price to each of the 5
+        # classic retracement levels of the last 30-bar swing range?
+        # Output in BPS (basis points * 10,000) with sign (negative = below).
+        if len(close) >= 30:
+            swing_hi = np.max(high[-30:])
+            swing_lo = np.min(low[-30:])
+            rng_fib = swing_hi - swing_lo
+            if rng_fib > 0:
+                price = close[-1]
+                # Direction of the recent impulse: hi_idx vs lo_idx
+                hi_idx = int(np.argmax(high[-30:]))
+                lo_idx = int(np.argmin(low[-30:]))
+                impulse_up = lo_idx < hi_idx
+                features['fib_impulse_up'] = 1 if impulse_up else 0
+                for ratio in (0.236, 0.382, 0.500, 0.618, 0.786):
+                    if impulse_up:
+                        level = swing_hi - ratio * rng_fib
+                    else:
+                        level = swing_lo + ratio * rng_fib
+                    if level > 0:
+                        features[f'fib_dist_{int(ratio * 1000)}'] = (price - level) / level * 10_000
+                # Nearest-Fib level absolute distance in bps (always positive)
+                if f'fib_dist_{int(0.618 * 1000)}' in features:
+                    features['fib_nearest_bps'] = min(
+                        abs(features[f'fib_dist_{int(r * 1000)}'])
+                        for r in (0.236, 0.382, 0.500, 0.618, 0.786)
+                        if f'fib_dist_{int(r * 1000)}' in features
+                    )
+
+        # Supply / Demand proximity: BPS distance to the nearest pivot high
+        # (supply) and pivot low (demand) within the last 30 bars. Uses a
+        # 3-bar fractal window — cheap enough for per-bar extraction.
+        if len(close) >= 30:
+            window_h = high[-30:]
+            window_l = low[-30:]
+            pivot_highs, pivot_lows = [], []
+            for i in range(2, len(window_h) - 2):
+                if (window_h[i] > window_h[i - 1] and window_h[i] > window_h[i - 2]
+                        and window_h[i] > window_h[i + 1] and window_h[i] > window_h[i + 2]):
+                    pivot_highs.append(float(window_h[i]))
+                if (window_l[i] < window_l[i - 1] and window_l[i] < window_l[i - 2]
+                        and window_l[i] < window_l[i + 1] and window_l[i] < window_l[i + 2]):
+                    pivot_lows.append(float(window_l[i]))
+            price = close[-1]
+            if pivot_highs:
+                nearest_supply = min(pivot_highs, key=lambda p: abs(p - price))
+                features['supply_zone_bps'] = (price - nearest_supply) / nearest_supply * 10_000
+                features['supply_zone_count'] = len(pivot_highs)
+            if pivot_lows:
+                nearest_demand = min(pivot_lows, key=lambda p: abs(p - price))
+                features['demand_zone_bps'] = (price - nearest_demand) / nearest_demand * 10_000
+                features['demand_zone_count'] = len(pivot_lows)
+
+        # Volume Oscillator: (fast_ma − slow_ma) / slow_ma × 100. Confirms
+        # institutional participation. Requires a volume column.
+        if 'volume' in df.columns and len(close) >= 20:
+            vol = df['volume'].values[max(0, idx - 19):idx + 1]
+            if len(vol) >= 10 and vol.sum() > 0:
+                vol_fast = np.mean(vol[-5:])
+                vol_slow = np.mean(vol[-20:]) if len(vol) >= 20 else np.mean(vol)
+                if vol_slow > 0:
+                    features['volume_osc'] = (vol_fast - vol_slow) / vol_slow * 100.0
+                    features['volume_spike'] = 1 if features['volume_osc'] > 15.0 else 0
+
         # Hour/minute features
         try:
             ts = df['timestamp'].iloc[idx]
@@ -293,7 +364,7 @@ class MLAccuracyTuner:
             scaler = RobustScaler()
             X_scaled = scaler.fit_transform(X)
 
-            n_features = min(40, X.shape[1])
+            n_features = min(50, X.shape[1])
             selector = SelectKBest(mutual_info_classif, k=n_features)
             X_selected = selector.fit_transform(X_scaled, y)
 
@@ -377,8 +448,16 @@ class MLAccuracyTuner:
                 "tuning_config": {
                     "timeframe_thresholds": TIMEFRAME_THRESHOLDS,
                     "prediction_horizons": TIMEFRAME_HORIZONS,
-                    "feature_selection": "SelectKBest (mutual_info_classif, k=40)",
-                    "cross_validation": "TimeSeriesSplit (5 splits)"
+                    "feature_selection": "SelectKBest (mutual_info_classif, k=50)",
+                    "cross_validation": "TimeSeriesSplit (5 splits)",
+                    "new_features_apr23": [
+                        "fib_impulse_up", "fib_dist_236", "fib_dist_382",
+                        "fib_dist_500", "fib_dist_618", "fib_dist_786",
+                        "fib_nearest_bps",
+                        "supply_zone_bps", "supply_zone_count",
+                        "demand_zone_bps", "demand_zone_count",
+                        "volume_osc", "volume_spike",
+                    ],
                 },
                 "timestamp": datetime.now(timezone.utc).isoformat()
             }
