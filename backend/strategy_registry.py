@@ -174,6 +174,14 @@ class StrategyRegistry:
             except Exception as e:
                 logger.warning(f"Could not load 1m 21s Reversal: {e}")
 
+            # 1h 51-Second Reversal — fires every minute at :51 against 1H candle body
+            try:
+                from strategies.strategy_1h_51s_reversal import strategy_1h_51s_reversal
+                self.strategies['1h_51s_reversal'] = strategy_1h_51s_reversal
+                logger.info("✅ Loaded 1h 51s Reversal Strategy (1H chart, 5s expiry, asset rotation)")
+            except Exception as e:
+                logger.warning(f"Could not load 1h 51s Reversal: {e}")
+
             # NEW (BETA): Fibonacci Confluence — 30s / 1m / 5m
             try:
                 from strategies.strategy_fibonacci_confluence import (

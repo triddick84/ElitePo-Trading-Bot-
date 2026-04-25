@@ -3,6 +3,24 @@
 ## Last Updated: April 23, 2026
 
 ## Current Status
+✅ **1H 51-Second Reversal Strategy — TM v8.21.0 (April 23, 2026, Iter 49)**
+- New timing-based contrarian strategy paired with Tampermonkey
+  - **Backend**: `strategies/strategy_1h_51s_reversal.py` (registered as `1h_51s_reversal` in registry, evaluated by force-generate-v2)
+  - **Tampermonkey**: `strategies/oneHour51sReversal.js` runs its own 100ms wallclock loop, tracks the live 1H candle, fires every minute at the **:51 second** mark in the OPPOSITE direction of the candle's body, then **rotates to the next asset** in the configured pool (default: 8 OTC pairs)
+  - **5s expiry** (auto-selects PO offer when possible), **WS execution** when SSID bridge healthy, DOM fallback otherwise
+  - **Slope/history fallback** when 1H body is flat (`alwaysFire: true` by default)
+  - Once-per-minute cooldown — never double-fires the same minute
+- **Panel UI**: New `1H51` button (pink/magenta gradient, pulsing when active) below the `21S` row with live "On W/L (winRate%)" status
+- **Persistence**: `state._oneHour51sEnabled` + `_oneHour51sConfig` saved across PO reloads (mirrors 21S behavior)
+- **Win/Loss propagation**: WIN/LOSS panel buttons forward to `oneHour51sReversal.onResultRecorded()` for per-asset stats
+- **Debug handle**: `window.eliteBot1h51sReversal` exposed for console tuning
+
+### Verified
+- Strategy registry test: registered at `1h_51s_reversal`, returns correct PUT for UP body, CALL for DOWN body, NEUTRAL on flat
+- Live force-generate-v2: now evaluates 39 strategies (was 38), 1h_51s_reversal listed in components
+- Lint clean (Python + JS)
+- Iter 47 regression: 12/12 PASS
+
 ✅ **ML Feature Pipeline Expanded — 13 New Features (April 23, 2026, Iter 48)**
 - **`MLAccuracyTuner.extract_5s_features()` now emits 53 features** (was 40) — mirrors the new BETA strategies so when retraining is triggered, ML can learn which Fib levels and zones actually predict direction:
   - `fib_impulse_up`, `fib_dist_{236,382,500,618,786}` (signed bps distance to each retracement level), `fib_nearest_bps`

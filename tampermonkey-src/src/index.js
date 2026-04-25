@@ -6,11 +6,12 @@
 import { CONFIG } from './core/config.js';
 import { state, setState, loadState, saveState, resetStats } from './core/state.js';
 import { log, info, warn, success, error } from './core/logger.js';
-import { createPanel, initPanelEvents, updateStatsDisplay, updateInvertDisplay, updateStatusDot, cleanupPanel, populateStrategies, update21sReversalDisplay, setToggleActive } from './ui/panel.js';
+import { createPanel, initPanelEvents, updateStatsDisplay, updateInvertDisplay, updateStatusDot, cleanupPanel, populateStrategies, update21sReversalDisplay, update1h51sReversalDisplay, setToggleActive } from './ui/panel.js';
 import { strategyManager } from './strategies/manager.js';
 import { tradeExecutor } from './trading/executor.js';
 import { smartInvert } from './trading/smartInvert.js';
 import { twentyOneSecondReversal } from './strategies/twentyOneSecondReversal.js';
+import { oneHour51sReversal } from './strategies/oneHour51sReversal.js';
 import { ssidBridge, poLivePrice } from './trading/ssidBridge.js';
 import { livePriceTracker } from './trading/livePriceTracker.js';
 import { cycleMode } from './trading/cycleMode.js';
@@ -137,18 +138,26 @@ class EliteTradingBot {
       onWin: () => {
         tradeExecutor.recordResult(true);
         twentyOneSecondReversal.onResultRecorded(true);
+        oneHour51sReversal.onResultRecorded(true);
         updateStatsDisplay();
         if (twentyOneSecondReversal.isEnabled()) {
           update21sReversalDisplay(true, twentyOneSecondReversal.getStats());
+        }
+        if (oneHour51sReversal.isEnabled()) {
+          update1h51sReversalDisplay(true, oneHour51sReversal.getStats());
         }
         saveState();
       },
       onLoss: () => {
         tradeExecutor.recordResult(false);
         twentyOneSecondReversal.onResultRecorded(false);
+        oneHour51sReversal.onResultRecorded(false);
         updateStatsDisplay();
         if (twentyOneSecondReversal.isEnabled()) {
           update21sReversalDisplay(true, twentyOneSecondReversal.getStats());
+        }
+        if (oneHour51sReversal.isEnabled()) {
+          update1h51sReversalDisplay(true, oneHour51sReversal.getStats());
         }
         saveState();
       },
@@ -161,6 +170,17 @@ class EliteTradingBot {
         state._twentyOneSEnabled = enabled;
         state._twentyOneSConfig = { ...twentyOneSecondReversal.config };
         update21sReversalDisplay(enabled, enabled ? twentyOneSecondReversal.getStats() : null);
+        saveState();
+      },
+      on1h51sReversalToggle: (enabled) => {
+        if (enabled) {
+          oneHour51sReversal.enable();
+        } else {
+          oneHour51sReversal.disable();
+        }
+        state._oneHour51sEnabled = enabled;
+        state._oneHour51sConfig = { ...oneHour51sReversal.config };
+        update1h51sReversalDisplay(enabled, enabled ? oneHour51sReversal.getStats() : null);
         saveState();
       },
       onAmountChange: (amount) => {
@@ -265,6 +285,16 @@ class EliteTradingBot {
         twentyOneSecondReversal.enable();
         update21sReversalDisplay(true, twentyOneSecondReversal.getStats());
         info('[Restore] 21S was on before reload — resumed with saved config');
+      }
+
+      // 1H 51s Reversal
+      if (state._oneHour51sConfig) {
+        oneHour51sReversal.setConfig(state._oneHour51sConfig);
+      }
+      if (state._oneHour51sEnabled) {
+        oneHour51sReversal.enable();
+        update1h51sReversalDisplay(true, oneHour51sReversal.getStats());
+        info('[Restore] 1H51 was on before reload — resumed with saved config');
       }
     } catch (e) {
       warn(`[Restore] toggle state restoration failed: ${e.message}`);
@@ -459,6 +489,10 @@ class EliteTradingBot {
         state._twentyOneSConfig = { ...twentyOneSecondReversal.config };
       }
       state._twentyOneSEnabled = twentyOneSecondReversal.isEnabled();
+      if (oneHour51sReversal.config) {
+        state._oneHour51sConfig = { ...oneHour51sReversal.config };
+      }
+      state._oneHour51sEnabled = oneHour51sReversal.isEnabled();
       saveState();
     } catch (_e) { /* ignore */ }
 
@@ -466,6 +500,7 @@ class EliteTradingBot {
     this.stopDataCollection();
     priceScraper.stop();
     twentyOneSecondReversal.disable();
+    oneHour51sReversal.disable();
     cycleMode.stop();
     appSignalPoller.stop();
     cleanupPanel();
@@ -505,6 +540,7 @@ window.eliteBotTradeExecutor = tradeExecutor;
 window.eliteBotSmartInvert = smartInvert;
 window.eliteBotPriceScraper = priceScraper;
 window.eliteBot21sReversal = twentyOneSecondReversal;
+window.eliteBot1h51sReversal = oneHour51sReversal;
 window.eliteBotSsidBridge = ssidBridge;
 window.eliteBotLivePrice = poLivePrice;
 window.eliteBotLivePriceTracker = livePriceTracker;
