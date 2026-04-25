@@ -9,6 +9,7 @@ import { log, success, error, warn, info } from '../core/logger.js';
 import { executeTrade, setTradeAmount, getCurrentAsset, getPayout, getAccountBalance, scanDOMForTradeResult } from '../utils/dom.js';
 import { reportTrade, recordPremiumResult, reportTradeOutcome } from '../utils/api.js';
 import { smartInvert } from './smartInvert.js';
+import { tradeResultWatcher } from './tradeResultWatcher.js';
 
 class TradeExecutor {
   constructor() {
@@ -149,6 +150,12 @@ class TradeExecutor {
         // compute real rolling accuracy without user WIN/LOSS clicks.
         const expirySeconds = Number(signal?.expiry_seconds) || 60;
         this._scheduleOutcomeResolution(trade, expirySeconds).catch(() => { /* noop */ });
+
+        // Also arm the global trade-result watcher (mutation observer + balance
+        // delta + DOM scan triple-source). Whichever resolves first wins.
+        try {
+          tradeResultWatcher.armResolver({ ...trade, expirySeconds });
+        } catch (_e) { /* ignore */ }
 
         return true;
       } else {

@@ -6,9 +6,10 @@
 import { CONFIG } from './core/config.js';
 import { state, setState, loadState, saveState, resetStats } from './core/state.js';
 import { log, info, warn, success, error } from './core/logger.js';
-import { createPanel, initPanelEvents, updateStatsDisplay, updateInvertDisplay, updateStatusDot, cleanupPanel, populateStrategies, update21sReversalDisplay, set51sTimingSlider, setToggleActive } from './ui/panel.js';
+import { createPanel, initPanelEvents, updateStatsDisplay, updateInvertDisplay, updateStatusDot, cleanupPanel, populateStrategies, update21sReversalDisplay, set51sTimingSlider, updateActiveAsset, setToggleActive } from './ui/panel.js';
 import { strategyManager } from './strategies/manager.js';
 import { tradeExecutor } from './trading/executor.js';
+import { tradeResultWatcher } from './trading/tradeResultWatcher.js';
 import { smartInvert } from './trading/smartInvert.js';
 import { twentyOneSecondReversal } from './strategies/twentyOneSecondReversal.js';
 import { ssidBridge, poLivePrice } from './trading/ssidBridge.js';
@@ -56,6 +57,9 @@ class EliteTradingBot {
     
     // Start price scraper
     priceScraper.start(500);
+
+    // Enable global auto-WIN/LOSS detector (mutation-observer + balance-delta + DOM scan)
+    tradeResultWatcher.enable();
     
     // Sync strategy selection from app + populate dropdown
     await this.loadStrategies();
@@ -64,6 +68,23 @@ class EliteTradingBot {
     this.statsInterval = setInterval(() => {
       updateStatsDisplay();
     }, 1000);
+
+    // Active-asset indicator: refresh every 1.5s from current PO chart
+    this._fireCount = 0;
+    this.assetIndicatorInterval = setInterval(() => {
+      try {
+        const cur = getCurrentAsset();
+        if (cur) updateActiveAsset(cur, this._fireCount);
+      } catch (_e) { /* ignore */ }
+    }, 1_500);
+
+    // Allow tradeResultWatcher to bump the count on every arm (= every fire)
+    window.__eliteBotIncFireCount = (asset) => {
+      try {
+        this._fireCount = (this._fireCount || 0) + 1;
+        updateActiveAsset(asset || getCurrentAsset() || null, this._fireCount);
+      } catch (_e) { /* ignore */ }
+    };
 
     // Periodic auto-save every 15s so stats/inversion/asset-history persist
     // even if the user never clicks a toggle between reloads

@@ -333,6 +333,40 @@ function injectCSS() {
       border: 1px solid #21262d !important;
       border-radius: 6px !important;
     }
+    .${P}assetrow {
+      display: flex !important;
+      align-items: center !important;
+      gap: 6px !important;
+      padding: 4px 8px !important;
+      margin-bottom: ${mobile ? '6px' : '8px'} !important;
+      background: linear-gradient(90deg, rgba(34,197,94,0.08), rgba(34,197,94,0.02)) !important;
+      border: 1px solid rgba(34,197,94,0.25) !important;
+      border-left: 3px solid #22c55e !important;
+      border-radius: 6px !important;
+    }
+    .${P}assetlbl {
+      font-size: ${mobile ? 9 : 10}px !important;
+      color: #86efac !important;
+      font-weight: 700 !important;
+      letter-spacing: 0.5px !important;
+      flex: 0 0 auto !important;
+    }
+    .${P}assetval {
+      flex: 1 !important;
+      font-size: ${mobile ? 11 : 12}px !important;
+      color: #f0fdf4 !important;
+      font-weight: 700 !important;
+      font-variant-numeric: tabular-nums !important;
+      white-space: nowrap !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+    }
+    .${P}assetcount {
+      font-size: ${mobile ? 9 : 10}px !important;
+      color: #4ade80 !important;
+      flex: 0 0 auto !important;
+      font-variant-numeric: tabular-nums !important;
+    }
     .${P}stratlbl {
       font-size: ${mobile ? 9 : 10}px !important;
       color: #8b949e !important;
@@ -446,6 +480,11 @@ export function createPanel() {
             <option value="default">All Strategies</option>
             <option value="ema20_pullback_reversal">EMA 20 Pullback</option>
           </select>
+        </div>
+        <div class="${P}assetrow" data-testid="active-asset-indicator" title="Active asset and rotation count. Updates on every CYCLE switch / 51S fire.">
+          <span class="${P}assetlbl">ASSET</span>
+          <span class="${P}assetval" id="${P}asset">—</span>
+          <span class="${P}assetcount" id="${P}assetcnt">#0</span>
         </div>
         <div class="${P}row">
           <button id="${P}inv" class="${P}btn ${P}btn-inv">INVERT</button>
@@ -715,6 +754,24 @@ export function set51sTimingSlider(secondsLeft) {
   const v = Math.max(5, Math.min(55, parseInt(secondsLeft, 10) || 49));
   slider.value = String(v);
   if (valueEl) valueEl.textContent = `${v}s left`;
+}
+
+/**
+ * Update the active-asset indicator banner. Caller passes the symbol
+ * currently in focus (post normalisation) and an optional rotation count.
+ * @param {string|null} symbol e.g. "EURUSD_OTC"
+ * @param {number} [count]   total rotations / fires this session
+ */
+export function updateActiveAsset(symbol, count = null) {
+  const valEl = q('asset');
+  const cntEl = q('assetcnt');
+  if (valEl) {
+    valEl.textContent = symbol || '—';
+    valEl.style.color = symbol ? '#f0fdf4' : '#6b7280';
+  }
+  if (cntEl && count !== null && count !== undefined) {
+    cntEl.textContent = `#${count}`;
+  }
 }
 
 /**

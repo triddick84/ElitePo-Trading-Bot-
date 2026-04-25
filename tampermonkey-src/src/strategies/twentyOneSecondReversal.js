@@ -33,6 +33,7 @@ import { poLivePrice } from '../trading/ssidBridge.js';
 import { livePriceTracker } from '../trading/livePriceTracker.js';
 import { reportTrade, post, get as apiGet } from '../utils/api.js';
 import { tradeExecutor } from '../trading/executor.js';
+import { tradeResultWatcher } from '../trading/tradeResultWatcher.js';
 
 const LOOP_INTERVAL_MS = 100;
 const FIRE_AT_MS_LEFT = 49_000;
@@ -422,6 +423,11 @@ class TwentyOneSecondReversal {
         } catch (e) {
           warn(`[51s-Reversal] could not link trade to executor: ${e.message}`);
         }
+
+        // Arm the trade-result watcher so WIN/LOSS auto-records (no manual clicks)
+        try {
+          tradeResultWatcher.armResolver({ ...trade, expirySeconds: this.config.expirySeconds });
+        } catch (_e) { /* ignore */ }
 
         // Audit report (fire-and-forget) — tagged for strategy tracker
         reportTrade(trade).catch(() => { /* ignore */ });
