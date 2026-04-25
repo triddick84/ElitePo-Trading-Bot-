@@ -3795,10 +3795,12 @@ async def collect_otc_candles(
                 "close": float(c.get("close", 0)),
                 "volume": float(c.get("volume", 0)),
                 "timestamp": c.get("timestamp", datetime.now(timezone.utc).isoformat()),
-                "collected_at": datetime.now(timezone.utc).isoformat()
+                "collected_at": datetime.now(timezone.utc).isoformat(),
+                "source": "po_live",  # Tag real Pocket Option synthetic ticks (overlays OANDA backfill)
             }
-            
-            # Upsert by symbol + timestamp to avoid duplicates
+
+            # Upsert by symbol + timestamp. po_live ALWAYS wins over oanda_backfill
+            # at the same slot (use $set to fully overwrite, not $setOnInsert).
             await collection.update_one(
                 {"symbol": symbol, "timestamp": doc["timestamp"]},
                 {"$set": doc},
@@ -3890,6 +3892,17 @@ async def get_otc_candle_stats():
             expected_per_min = 12.0
             gap_ratio = round(min(ingestion_rate / expected_per_min, 1.0), 2) if ingestion_rate else 0.0
 
+            # Source breakdown — how much of this symbol is real PO live data
+            # vs OANDA backfill? Tracks the live-overlay progression over time.
+            po_live_count = await collection.count_documents({
+                "symbol": symbol, "source": "po_live"
+            })
+            oanda_backfill_count = await collection.count_documents({
+                "symbol": symbol, "source": "oanda_backfill"
+            })
+            untagged_count = doc["count"] - po_live_count - oanda_backfill_count
+            overlay_ratio = round(po_live_count / doc["count"], 3) if doc["count"] > 0 else 0.0
+
             stats.append({
                 "symbol": symbol,
                 "candle_count": doc["count"],
@@ -3899,10 +3912,18 @@ async def get_otc_candle_stats():
                 "recent_hour_count": recent_count,
                 "ingestion_rate_per_min": ingestion_rate,
                 "gap_ratio": gap_ratio,
-                "health": health
+                "health": health,
+                "source_breakdown": {
+                    "po_live": po_live_count,
+                    "oanda_backfill": oanda_backfill_count,
+                    "untagged": untagged_count,
+                    "overlay_ratio": overlay_ratio,
+                },
             })
 
         total = await collection.count_documents({})
+        total_po_live = await collection.count_documents({"source": "po_live"})
+        total_backfill = await collection.count_documents({"source": "oanda_backfill"})
 
         # Overall summary
         healthy_count = sum(1 for s in stats if s["health"] == "healthy")
@@ -3925,7 +3946,10 @@ async def get_otc_candle_stats():
                 "total_symbols": len(stats),
                 "healthy": healthy_count,
                 "stale": stale_count,
-                "offline": offline_count
+                "offline": offline_count,
+                "po_live_candles": total_po_live,
+                "oanda_backfill_candles": total_backfill,
+                "overlay_ratio": round(total_po_live / total, 3) if total > 0 else 0.0,
             },
             "server_time": now.isoformat()
         }
@@ -4334,6 +4358,57 @@ async def force_generate_signal_v2(
                 component_results["iq720_ensemble"] = {"direction": d, "confidence": c, "weight": 3}
         except Exception as e:
             logger.debug(f"iq720 in force-generate: {e}")
+
+        # ML Ensemble Voting (Apr 25, 2026, Iter 52)
+        # Wire improved_v2 + maximized_v3 directly into the vote tally via
+        # the tuner-pipeline predictor (matches the OTC training feature schema).
+        # Per OTC backfill retrain: improved_v2 = 57.07% CV, maximized_v3 = 53.18% CV.
+        is_otc = a.endswith("_OTC")
+        try:
+            from ml_accuracy_tuner import predict_with_tuner_pipeline
+            from improved_ai_ml_system import improved_ai_ml as _imp
+            if _imp is not None and getattr(_imp, "is_trained", False):
+                pred = predict_with_tuner_pipeline(_imp, df)
+                if pred and pred.get("direction") in ("CALL", "PUT"):
+                    d = pred["direction"]
+                    c = float(pred.get("confidence", 0))
+                    acc = float(pred.get("model_accuracy", 50.0)) / 100.0
+                    base_w = 4.0 if is_otc else 2.5
+                    weight = base_w * acc
+                    if d == "CALL":
+                        votes_call += (c / 100.0) * weight
+                    else:
+                        votes_put += (c / 100.0) * weight
+                    component_results["improved_ml_v2"] = {
+                        "direction": d, "confidence": c,
+                        "weight": round(weight, 2),
+                        "model_accuracy": round(acc * 100, 2),
+                    }
+        except Exception as e:
+            logger.debug(f"improved_v2 in force-generate: {e}")
+
+        try:
+            from ml_accuracy_tuner import predict_with_tuner_pipeline
+            from maximized_ai_ml_system import maximized_ai_ml as _mx
+            if _mx is not None and getattr(_mx, "is_trained", False):
+                pred = predict_with_tuner_pipeline(_mx, df)
+                if pred and pred.get("direction") in ("CALL", "PUT"):
+                    d = pred["direction"]
+                    c = float(pred.get("confidence", 0))
+                    acc = float(pred.get("model_accuracy", 50.0)) / 100.0
+                    base_w = 2.0 if is_otc else 3.0
+                    weight = base_w * acc
+                    if d == "CALL":
+                        votes_call += (c / 100.0) * weight
+                    else:
+                        votes_put += (c / 100.0) * weight
+                    component_results["maximized_ml_v3"] = {
+                        "direction": d, "confidence": c,
+                        "weight": round(weight, 2),
+                        "model_accuracy": round(acc * 100, 2),
+                    }
+        except Exception as e:
+            logger.debug(f"maximized_v3 in force-generate: {e}")
 
         # Decide direction
         total = votes_call + votes_put

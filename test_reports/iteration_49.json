@@ -1,0 +1,55 @@
+{
+  "summary": "Iteration 52 backend regression — 9/11 pytest cases PASS. P1 (live OTC overlay tagging + overlay_ratio) fully validated. P2 (improved_v2 + maximized_v3 wired into force-generate-v2 voting) is BROKEN: neither component appears in /api/signals/force-generate-v2 components for OTC or non-OTC. RCA: _save_model() on improved_ai_ml_system.py and maximized_ai_ml_system.py does NOT persist tuner_feature_names/tuner_selected_mask; on backend restart these attrs are lost, predict_with_tuner_pipeline silently returns None, ML votes never tally.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "/api/signals/force-generate-v2 (asset=*)",
+        "issue": "components.improved_ml_v2 and components.maximized_ml_v3 are MISSING entirely on both OTC (EURUSD_OTC) and non-OTC (EUR_USD) requests. Live backend does not include the new ML votes in the tally — P2 task is non-functional after process restart. predict_with_tuner_pipeline() returns None due to shape mismatch (scaler outputs 84 features, RandomForestClassifier expects 70 post-SelectKBest, but tuner_selected_mask is unavailable to slice the vector).",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "/api/signals/force-generate-v2",
+        "issue": "Per-component exception handler at routes/signals.py L4387,4410 logs at DEBUG level only. The shape-mismatch crash from predict_with_tuner_pipeline gets fully swallowed — no WARN/ERROR is emitted, which is why E1's curl-based smoke (run while attrs were still in memory) passed but post-restart fails silently. Suggest bump to logger.warning."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration52_overlay_ml_voting.py",
+    "/app/test_reports/pytest/iteration52_results.xml"
+  ],
+  "action_items": [
+    "Persist tuner pipeline metadata in pickle: in /app/backend/improved_ai_ml_system.py::_save_model (L654-663), add 'tuner_feature_names': getattr(self,'tuner_feature_names',None) and 'tuner_selected_mask': getattr(self,'tuner_selected_mask',None) to the dump dict.",
+    "Persist tuner pipeline metadata in pickle: same edit in /app/backend/maximized_ai_ml_system.py::_save_model (L876).",
+    "Restore in _load_model on both files: self.tuner_feature_names = data.get('tuner_feature_names'); self.tuner_selected_mask = data.get('tuner_selected_mask').",
+    "After fix, retrigger /api/ml/train-from-otc (or POST a small retrain) so the .pkl files get re-saved with the tuner metadata, then verify components.improved_ml_v2 and components.maximized_ml_v3 reappear in /api/signals/force-generate-v2.",
+    "Bump the two logger.debug calls in routes/signals.py L4387 and L4410 to logger.warning so silent ML-vote failures are visible in supervisor logs."
+  ],
+  "critical_code_review_comments": [
+    "ROOT-CAUSE BUG (P0): improved_ai_ml_system.py::_save_model L655-663 and maximized_ai_ml_system.py::_save_model L876+ DO NOT serialize the tuner_feature_names + tuner_selected_mask attributes that ml_accuracy_tuner.train_from_otc sets on the instance (ml_accuracy_tuner.py L669-670). On every backend restart those attrs vanish, predict_with_tuner_pipeline gets vec.shape=(1,84) into a model trained on 70 SelectKBest-selected features → 'X has 84 features, RandomForestClassifier is expecting 70' (verified locally). E1's curl validation worked only because it was on the SAME process that had just trained — a hot-reload or restart breaks the wire-up.",
+    "predict_with_tuner_pipeline (ml_accuracy_tuner.py L843-847) tries to pad/truncate vec to scaler.n_features_in_ but SelectKBest happens AFTER scaling — the truncation logic does not help when the model was fit on a SelectKBest-reduced subset. The mask is the only way to map 84→70, and it must be persisted.",
+    "Component exception handlers in routes/signals.py L4387 and L4410 use logger.debug — DEBUG level is suppressed in supervisor's default config so the silent ML failure was invisible. Promote to logger.warning at minimum.",
+    "safe_model_loader still emitted 'Blocked unsafe class: maximized_ai_ml_system.RegimeDetector' once during this session (backend.err.log 20:14ish) before the most recent retrain succeeded. Confirm RegimeDetector is in the SAFE_CLASSES allow-list — appears the iter-52 patch only re-enabled the class for some code paths.",
+    "improved_ai_ml_system.py is 736 lines — borderline against the 700-line guideline. maximized is even larger.",
+    "Test artifact created: 1 TEST_ITER52_*_OTC symbol with 5 po_live candles in otc_candles_5s. Easy to prune by `db.otc_candles_5s.delete_many({\"symbol\": /^TEST_ITER52/})`."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration52_overlay_ml_voting.py (new — 11 pytest cases)"
+  ],
+  "success_rate": {
+    "backend": "82% (9/11 pytest cases) — P1 overlay ✓ 3/3, regression ✓ 4/4, tuning-report ✓ 1/1, force-gen envelope ✓ 1/1, P2 ML voting ✗ 0/2",
+    "frontend": "not tested per review request (backend only)"
+  },
+  "test_credentials": "none — all endpoints public under /api/*",
+  "seed_data_creation": "Created 1 TEST_ITER52_*_OTC symbol with 5 po_live-tagged candles in otc_candles_5s for overlay & idempotency assertions. 1 TEST_ITER52_REG trade reported via /api/trades/report and /api/trades/outcome (regression suite).",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "After E1 fixes _save_model/_load_model in improved_ai_ml_system.py and maximized_ai_ml_system.py to persist tuner_feature_names + tuner_selected_mask AND retrains both models, re-run /app/backend/tests/test_iteration52_overlay_ml_voting.py — the two failing tests (TestForceGenerateV2MLVoting.test_force_generate_v2_otc_ml_components and test_force_generate_v2_non_otc_ml_components) should pass. Expected weights: OTC improved≈4.0×0.5781=2.31, maximized≈2.0×0.5304=1.06; non-OTC improved≈2.5×0.5781=1.45, maximized≈3.0×0.5304=1.59. P1 + regression are stable.",
+  "rca of the issue": "BUG: improved_ml_v2 + maximized_ml_v3 missing from force-generate-v2 components. REPRO: 1) Restart backend (sudo supervisorctl restart backend) after train-from-otc has run. 2) curl POST /api/signals/force-generate-v2?asset=EURUSD_OTC. 3) signal.components has neither improved_ml_v2 nor maximized_ml_v3. EVIDENCE: in-process Python with `from improved_ai_ml_system import improved_ai_ml as imp; print(hasattr(imp,'tuner_feature_names'))` returns False post-load. Manually feeding a 200-row OHLCV df through the predict path: feats=90 → vec=84 (truncated to scaler.n_features_in_) → Xs=(1,84) → predict_proba raises 'X has 84 features, RandomForestClassifier is expecting 70'. The trained model used SelectKBest k=70 (set in train_from_otc), but selector.get_support() mask is only stored on the in-memory ml_system instance and never written into the pickle by _save_model. ROOT CAUSE: pickle dump in improved_ai_ml_system.py::_save_model L655-663 and maximized_ai_ml_system.py::_save_model L876+ omits both tuner_feature_names and tuner_selected_mask. MITIGATION: add both keys to the pickle dict and read them back in _load_model. After fix, retrain both models so the .pkl is rewritten with the new keys."
+}

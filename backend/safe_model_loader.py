@@ -22,7 +22,7 @@ SAFE_CLASSES = {
     ('sklearn.preprocessing', '_data', 'StandardScaler'),
     ('sklearn.preprocessing', '_data', 'MinMaxScaler'),
     ('sklearn.preprocessing', '_label', 'LabelEncoder'),
-    ('sklearn.pipeline', 'Pipeline'),
+    ('sklearn.pipeline', '_pipeline', 'Pipeline'),
     ('numpy', 'ndarray'),
     ('numpy', 'dtype'),
     ('numpy.core.multiarray', '_reconstruct'),
@@ -54,20 +54,44 @@ class RestrictedUnpickler(pickle.Unpickler):
         # Allow numpy internals needed for array reconstruction
         if module.startswith('numpy'):
             return super().find_class(module, name)
-        
+
         # Allow sklearn internals for ML models
         if module.startswith('sklearn'):
             return super().find_class(module, name)
-        
-        # Allow basic builtins and collections
-        if (module, name) in {(m, n) for m, _, n in SAFE_CLASSES if _ == ''} or \
-           any(module == m and name == n for m, n in {(m, n) for m, _, n in SAFE_CLASSES}):
+
+        # Allow xgboost / lightgbm / pandas (needed for our trained ensembles)
+        if module.startswith(('xgboost', 'lightgbm', 'pandas')):
             return super().find_class(module, name)
-        
+
+        # sklearn ships some Cython-compiled loss classes from _loss._loss
+        # that get pickled as bare module '_loss'. Allow that prefix.
+        if module == '_loss' or module.startswith('_loss.'):
+            return super().find_class(module, name)
+
+        # Allow our own ML system modules — they carry helper classes
+        # (RegimeDetector, MLAccuracyTuner, etc.) that get pickled into
+        # the model bundle. Trusted because they live in /app/backend/.
+        if module in ('maximized_ai_ml_system', 'improved_ai_ml_system',
+                      'lstm_gru_system', 'rl_ppo_agent', 'ml_accuracy_tuner'):
+            return super().find_class(module, name)
+
+        # Match any (module, name) pair in SAFE_CLASSES — entries can be
+        # 2-tuples (module, name) or 3-tuples (module, submodule, name).
+        # Normalize on read so a malformed entry can't crash unpickling.
+        for entry in SAFE_CLASSES:
+            if len(entry) == 2:
+                m, n = entry
+            elif len(entry) == 3:
+                m, _, n = entry
+            else:
+                continue
+            if module == m and name == n:
+                return super().find_class(module, name)
+
         # Allow common safe modules
         if module in ('builtins', 'collections', 'datetime', 'copy_reg', 'copyreg', '_codecs'):
             return super().find_class(module, name)
-        
+
         raise pickle.UnpicklingError(
             f"Blocked unsafe class: {module}.{name}"
         )

@@ -664,6 +664,10 @@ class MLAccuracyTuner:
             ml_system.model_accuracy = cv_scores.mean()
             ml_system.scaler = scaler
             ml_system.last_training_time = datetime.now(timezone.utc)
+            # Persist tuner-pipeline metadata so predict_with_tuner_pipeline()
+            # can rebuild the EXACT feature vector at inference time.
+            ml_system.tuner_feature_names = feature_names
+            ml_system.tuner_selected_mask = selector.get_support().tolist() if hasattr(selector, 'get_support') else None
             ml_system._save_model()
 
             # Get selected feature names
@@ -784,3 +788,88 @@ def get_ml_tuner(db) -> MLAccuracyTuner:
     if _ml_tuner is None:
         _ml_tuner = MLAccuracyTuner(db)
     return _ml_tuner
+
+
+def predict_with_tuner_pipeline(ml_system, df: pd.DataFrame) -> Optional[Dict]:
+    """
+    Predict using a model that was trained via MLAccuracyTuner.train_from_otc().
+    Bypasses each system's native extract_features() (which produces a different
+    feature count). Uses extract_5s_features() so the input matches the trained
+    scaler's expected input shape.
+
+    Returns {direction, confidence, call_probability, put_probability, model_accuracy, source}
+    or None if the model isn't trained / df is too short.
+    """
+    if ml_system is None or not getattr(ml_system, "is_trained", False):
+        return None
+    if df is None or len(df) < 32:
+        return None
+
+    try:
+        # Use a stub tuner — extract_5s_features doesn't actually need db access
+        class _Stub:
+            def __getitem__(self, name): return None
+        tuner = MLAccuracyTuner(_Stub())
+
+        # Coerce to 5s-style frame: ensure timestamp column + numeric OHLCV
+        local = df.copy()
+        if "timestamp" not in local.columns:
+            local = local.reset_index().rename(columns={"index": "timestamp"})
+        for col in ("open", "high", "low", "close"):
+            if col not in local.columns:
+                return None
+
+        # Build the same 84/90-feature vector the trainer used at the LAST bar
+        feats = tuner.extract_5s_features(local, len(local) - 1)
+        if not feats:
+            return None
+
+        scaler = getattr(ml_system, "scaler", None)
+        if scaler is None:
+            return None
+
+        expected = getattr(scaler, "n_features_in_", None)
+
+        # Prefer the EXACT feature ordering used at training time
+        names = getattr(ml_system, "tuner_feature_names", None)
+        if names:
+            vec = np.array([feats.get(n, 0.0) for n in names], dtype=float)
+        else:
+            # Fallback: insertion-order, then pad/truncate to expected length
+            vec = np.array(list(feats.values()), dtype=float)
+
+        vec = np.nan_to_num(vec, nan=0.0, posinf=0.0, neginf=0.0)
+
+        if expected is not None:
+            if len(vec) > expected:
+                vec = vec[:expected]
+            elif len(vec) < expected:
+                vec = np.concatenate([vec, np.zeros(expected - len(vec))])
+
+        Xs = scaler.transform(vec.reshape(1, -1))
+
+        # If a SelectKBest mask was persisted, use it (matches training-time
+        # feature subset). Otherwise the model was fit on the post-scale
+        # vector directly.
+        mask = getattr(ml_system, "tuner_selected_mask", None)
+        if mask is not None and len(mask) == Xs.shape[1]:
+            Xs = Xs[:, np.array(mask, dtype=bool)]
+
+        proba = ml_system.model.predict_proba(Xs)[0]
+        # Class 1 = CALL, class 0 = PUT (consistent with train_from_otc labels)
+        call_p = float(proba[1])
+        put_p = float(proba[0])
+        direction = "CALL" if call_p >= put_p else "PUT"
+        confidence = max(call_p, put_p) * 100.0
+
+        return {
+            "direction": direction,
+            "confidence": round(confidence, 2),
+            "call_probability": round(call_p * 100, 2),
+            "put_probability": round(put_p * 100, 2),
+            "model_accuracy": round(getattr(ml_system, "model_accuracy", 0.5) * 100, 2),
+            "source": "tuner_pipeline",
+        }
+    except Exception as e:
+        logger.debug(f"predict_with_tuner_pipeline failed: {e}")
+        return None
