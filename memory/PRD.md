@@ -3,6 +3,20 @@
 ## Last Updated: April 25, 2026
 
 ## Current Status
+✅ **Live OTC Overlay + ML Ensemble Voting Wired into force-generate-v2 — Iter 52 (April 25, 2026)**
+- **P1 — Live OTC Overlay**: TM-collected candles via `POST /api/signals/collect-otc-candles` now tag every doc with `source: 'po_live'`. `$set` upsert on `(symbol, timestamp)` means po_live always wins over an earlier `oanda_backfill` row at the same slot — real PO ticks progressively replace synthetic backfill as the bot runs
+- **GET /api/signals/otc-candle-stats** now exposes `summary.po_live_candles`, `summary.oanda_backfill_candles`, `summary.overlay_ratio` plus per-symbol `source_breakdown` for live monitoring of the overlay progression
+- **P2 — ML Ensemble Voting**: `improved_v2` (57.10% CV) + `maximized_v3` (54.95% CV) now contribute votes to `/api/signals/force-generate-v2`:
+  - **OTC weighting** (improved dominates): improved_v2 base=4.0, maximized_v3 base=2.0
+  - **Non-OTC weighting** (maximized dominates on real forex): improved_v2 base=2.5, maximized_v3 base=3.0
+  - Each weight scaled by `model_accuracy / 100` so weak models contribute less. Verified: OTC improved.weight=2.28 (4.0×0.571), OTC maximized.weight=1.10 (2.0×0.5495); non-OTC improved=1.43, maximized=1.65
+- **3 critical bugs fixed during this iteration**:
+  1. **safe_model_loader.py**: broken `for m, _, n in SAFE_CLASSES` iteration (mixed 2-tuple/3-tuple set crashed unpickling) — replaced with safe length-checking loop, added allow-listed prefixes for `xgboost`, `lightgbm`, `pandas`, `_loss`, plus our own ML system modules
+  2. **improved_ai_ml_system._save_model + _load_model**: now persist `tuner_feature_names` (84) and `tuner_selected_mask` (k=70) into the pickle so `predict_with_tuner_pipeline` can rebuild the exact 84→70 feature vector after restart
+  3. **maximized_ai_ml_system._save_model + _load_model**: same fix
+- **Observability**: bumped silent `logger.debug` to `logger.warning` for ML voting failures so future shape-mismatch issues surface in supervisor logs
+- **Tests**: 11/11 PASS (`/app/test_reports/iteration_50.json`). Cold-restart verified — both models load with full tuner metadata; weights match `base_w × accuracy / 100` formula within ±0.01
+
 ✅ **OTC Backfill from OANDA + Full Retrain — Iter 51 (April 25, 2026)**
 - New endpoint: **`POST /api/ml/backfill-otc-from-oanda`** — auto-discovers OTC symbols below `target_count` and pulls OANDA S5 candles (5-second granularity, real forex underlying that PO synthetics track). 30 OTC pairs mapped to OANDA forex (`OTC_TO_OANDA` dict in `/app/backend/routes/ml.py`). Idempotent upsert keyed on `(symbol, timestamp)`; `source: 'oanda_backfill'` tag distinguishes backfilled from live TM-scraped rows. Exotics (SAR/UAH/MAD/YER/VND/COP/PHP/MYR/RUB/BRL/MXN/ARS/BHD/BDT) intentionally skipped — OANDA doesn't carry them
 - **OTC pool jumped 1,036 → 15,036 candles** (29 trainable symbols, was 2). One backfill call inserted 14,500 new rows.
