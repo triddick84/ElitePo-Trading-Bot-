@@ -64,6 +64,10 @@ class TwentyOneSecondReversal {
 
     // Config (user-tunable via panel / setConfig)
     this.config = {
+      // Trigger second — fires when 1m candle has THIS many ms remaining.
+      // 49_000 = fires at "49s left" (11s into the candle, ≈2s after :51 mark)
+      // Adjustable from the panel's timing slider (range 10s–55s).
+      fireAtMsLeft: FIRE_AT_MS_LEFT,
       toleranceMs: DEFAULT_TOLERANCE_MS,
       expirySeconds: 5,
       // minBodyBps: minimum body size (in bps of mid price) to consider candle directional.
@@ -72,7 +76,7 @@ class TwentyOneSecondReversal {
       // If body filter rejects, use recent-tick slope to determine direction
       useSlopeFallback: true,
       slopeWindowMs: 5_000,
-      // alwaysFire: if true, at the 51s mark fire regardless of body/slope.
+      // alwaysFire: if true, at the trigger mark fire regardless of body/slope.
       // Direction is picked from the most recent non-zero delta in tick history,
       // or defaults to CALL if everything is perfectly flat.
       // This is the recommended mode when you want to trust the timing edge
@@ -246,10 +250,11 @@ class TwentyOneSecondReversal {
         return;
       }
 
-      // Must be within the ±tolerance window around 51s-left
+      // Must be within the ±tolerance window around the configured trigger
       const msLeft = 60_000 - (now - minute);
       const tol = this.config.toleranceMs || DEFAULT_TOLERANCE_MS;
-      if (Math.abs(msLeft - FIRE_AT_MS_LEFT) > tol) return;
+      const fireAt = this.config.fireAtMsLeft || FIRE_AT_MS_LEFT;
+      if (Math.abs(msLeft - fireAt) > tol) return;
 
       // Inside the fire window - verify we have data
       if (this.candleOpen === null || this.candleClose === null) {

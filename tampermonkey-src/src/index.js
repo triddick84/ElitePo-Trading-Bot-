@@ -6,7 +6,7 @@
 import { CONFIG } from './core/config.js';
 import { state, setState, loadState, saveState, resetStats } from './core/state.js';
 import { log, info, warn, success, error } from './core/logger.js';
-import { createPanel, initPanelEvents, updateStatsDisplay, updateInvertDisplay, updateStatusDot, cleanupPanel, populateStrategies, update21sReversalDisplay, setToggleActive } from './ui/panel.js';
+import { createPanel, initPanelEvents, updateStatsDisplay, updateInvertDisplay, updateStatusDot, cleanupPanel, populateStrategies, update21sReversalDisplay, set51sTimingSlider, setToggleActive } from './ui/panel.js';
 import { strategyManager } from './strategies/manager.js';
 import { tradeExecutor } from './trading/executor.js';
 import { smartInvert } from './trading/smartInvert.js';
@@ -179,6 +179,13 @@ class EliteTradingBot {
         update21sReversalDisplay(enabled, enabled ? twentyOneSecondReversal.getStats() : null);
         saveState();
       },
+      on51sTimingChange: (secondsLeft) => {
+        const ms = Math.max(5_000, Math.min(55_000, secondsLeft * 1000));
+        twentyOneSecondReversal.setConfig({ fireAtMsLeft: ms });
+        state._twentyOneSConfig = { ...twentyOneSecondReversal.config };
+        info(`[51s] Timing changed → fire at ${secondsLeft}s left`);
+        saveState();
+      },
       onAmountChange: (amount) => {
         tradeExecutor.setBaseAmount(amount);
         saveState();
@@ -279,6 +286,11 @@ class EliteTradingBot {
       if (state._twentyOneSConfig) {
         twentyOneSecondReversal.setConfig(state._twentyOneSConfig);
       }
+      // Restore the timing slider visual to whatever was saved
+      try {
+        const savedMs = state._twentyOneSConfig?.fireAtMsLeft ?? 49_000;
+        set51sTimingSlider(Math.round(savedMs / 1000));
+      } catch (_e) { /* ignore */ }
       if (state._twentyOneSEnabled) {
         twentyOneSecondReversal.enable();
         update21sReversalDisplay(true, twentyOneSecondReversal.getStats());

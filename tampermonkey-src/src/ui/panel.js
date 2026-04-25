@@ -189,6 +189,64 @@ function injectCSS() {
       box-shadow: 0 0 10px rgba(168,85,247,0.5) !important;
       animation: ${P}pulse 1.5s infinite !important;
     }
+    .${P}timing-row {
+      display: flex !important;
+      align-items: center !important;
+      gap: 8px !important;
+      padding: 4px 6px !important;
+      background: rgba(124, 58, 237, 0.06) !important;
+      border-left: 2px solid #7c3aed !important;
+      border-radius: 4px !important;
+      margin-top: 2px !important;
+    }
+    .${P}timing-label {
+      font-size: ${mobile ? 9 : 10}px !important;
+      color: #c9b6ff !important;
+      flex: 0 0 auto !important;
+      white-space: nowrap !important;
+      font-weight: 600 !important;
+    }
+    .${P}timing-slider {
+      flex: 1 !important;
+      width: auto !important;
+      height: 14px !important;
+      -webkit-appearance: none !important;
+      appearance: none !important;
+      background: linear-gradient(90deg, #312e81 0%, #7c3aed 100%) !important;
+      border-radius: 4px !important;
+      outline: none !important;
+      cursor: pointer !important;
+      margin: 0 !important;
+    }
+    .${P}timing-slider::-webkit-slider-thumb {
+      -webkit-appearance: none !important;
+      appearance: none !important;
+      width: 14px !important;
+      height: 14px !important;
+      background: #f0abfc !important;
+      border: 2px solid #ffffff !important;
+      border-radius: 50% !important;
+      cursor: grab !important;
+      box-shadow: 0 0 4px rgba(168,85,247,0.8) !important;
+    }
+    .${P}timing-slider::-moz-range-thumb {
+      width: 14px !important;
+      height: 14px !important;
+      background: #f0abfc !important;
+      border: 2px solid #ffffff !important;
+      border-radius: 50% !important;
+      cursor: grab !important;
+      box-shadow: 0 0 4px rgba(168,85,247,0.8) !important;
+    }
+    .${P}timing-value {
+      flex: 0 0 auto !important;
+      font-size: ${mobile ? 10 : 11}px !important;
+      color: #f0abfc !important;
+      font-weight: 700 !important;
+      min-width: 32px !important;
+      text-align: right !important;
+      font-variant-numeric: tabular-nums !important;
+    }
     .${P}btn-cycle, .${P}btn-app, .${P}btn-ainv {
       font-size: ${mobile ? 10 : 11}px !important;
       background: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 100%) !important;
@@ -374,8 +432,13 @@ export function createPanel() {
           <button id="${P}ainv" class="${P}btn ${P}btn-ainv" title="Enable smart auto-invert on loss streaks">A-INV</button>
         </div>
         <div class="${P}row">
-          <button id="${P}r21s" class="${P}btn ${P}btn-r21s" title="Fire opposite 5s trade at 51s-left on 1m candles">51S</button>
+          <button id="${P}r21s" class="${P}btn ${P}btn-r21s" title="Fire opposite 5s trade at the configured trigger second on 1m candles">51S</button>
           <span class="${P}invst" id="${P}r21st">Off</span>
+        </div>
+        <div class="${P}timing-row" title="Drag to change which second of the 1m candle triggers the trade. 49 = fires 11s into candle (~2s after :51 mark). Range 5–55s remaining.">
+          <span class="${P}timing-label">Fire @</span>
+          <input id="${P}timing" data-testid="51s-timing-slider" class="${P}timing-slider" type="range" min="5" max="55" step="1" value="49" />
+          <span class="${P}timing-value" id="${P}timingv">49s left</span>
         </div>
         <div class="${P}stratrow">
           <span class="${P}stratlbl">Strategy:</span>
@@ -528,6 +591,21 @@ export function initPanelEvents(callbacks = {}) {
     });
   }
 
+  // Timing slider — adjusts which second of the 1m candle triggers the fire
+  const timingSlider = q('timing');
+  const timingValue = q('timingv');
+  if (timingSlider) {
+    const renderTiming = (v) => {
+      if (timingValue) timingValue.textContent = `${v}s left`;
+    };
+    renderTiming(timingSlider.value);
+    timingSlider.addEventListener('input', () => {
+      const v = parseInt(timingSlider.value, 10);
+      renderTiming(v);
+      callbacks.on51sTimingChange?.(v);
+    });
+  }
+
   // Strategy selector
   const stratSelect = q('strat');
   if (stratSelect) {
@@ -623,6 +701,20 @@ export function update21sReversalDisplay(enabled, stats = null) {
       st.classList.add('on');
     }
   }
+}
+
+/**
+ * Programmatic setter for the 51S timing slider so restore-on-reload
+ * can paint the saved value back onto the UI.
+ * @param {number} secondsLeft 5..55
+ */
+export function set51sTimingSlider(secondsLeft) {
+  const slider = q('timing');
+  const valueEl = q('timingv');
+  if (!slider) return;
+  const v = Math.max(5, Math.min(55, parseInt(secondsLeft, 10) || 49));
+  slider.value = String(v);
+  if (valueEl) valueEl.textContent = `${v}s left`;
 }
 
 /**

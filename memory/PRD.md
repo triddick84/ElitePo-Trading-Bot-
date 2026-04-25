@@ -3,7 +3,16 @@
 ## Last Updated: April 23, 2026
 
 ## Current Status
-✅ **Strategy Consolidation: Single 51S Button — TM v8.25.0 (April 23, 2026, Iter 54)**
+✅ **51S Timing Edge Slider — TM v8.26.0 (April 23, 2026, Iter 55)**
+- Added a 5–55 second range slider directly below the **51S** button on the bot panel
+- Drag-to-tune the trigger second with no rebuild required — strategy retunes via `twentyOneSecondReversal.setConfig({ fireAtMsLeft })` on every `input` event
+- Live value display: `Fire @ ___ 49s left` (purple gradient styling matching the 51S button)
+- `FIRE_AT_MS_LEFT` constant is now a fallback default only; `config.fireAtMsLeft` is the source of truth
+- Slider value persists with the rest of `_twentyOneSConfig` — restored visually on every page reload via new `set51sTimingSlider()` exported helper
+- New panel callback `on51sTimingChange(secondsLeft)` plumbed through `index.js`. Lint clean.
+- Default starts at 49s remaining (matches "2 seconds later than :51" from previous iteration)
+
+✅ **51 Seconds Strategy Fires 2s Later — TM v8.25.1 (April 23, 2026)**
 - Per user direction (option C): retime the 21S strategy to fire at 51 seconds remaining on 1m candles, then DELETE the candle-timer 51S entirely.
 - **`twentyOneSecondReversal.js`** — `FIRE_AT_MS_LEFT: 21_000 → 51_000`. All log strings updated `[21s]` → `[51s]`. Class name + state keys + strategy ID preserved for backward compat with existing GM storage and `tm_trade_reports` audit history.
 - **Deleted**: `/app/tampermonkey-src/src/strategies/oneHour51sReversal.js`. Removed all imports/handlers/restore-logic/save-load/cleanup/window-debug references from `index.js`, `panel.js`, `state.js`. Removed second panel button row + button styles.
