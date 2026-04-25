@@ -426,6 +426,40 @@ class OneHour51sReversal {
     return Math.floor(ts / HOUR_MS) * HOUR_MS;
   }
 
+  /**
+   * Probe PO's chart for the candle countdown timer. Logs the result
+   * loudly so the user knows immediately whether scraping works on
+   * their PO build.
+   */
+  _runCountdownDiagnostic() {
+    let attempts = 0;
+    const maxAttempts = 40;       // 4 seconds at 100ms
+    const probe = setInterval(() => {
+      attempts++;
+      const cd = getCandleCountdown();
+      if (cd) {
+        success(
+          `[1h-51s] ✓ Candle countdown LOCKED on chart: ${cd.minutes}:${String(cd.seconds).padStart(2, '0')} ` +
+          `(found after ${attempts * 100}ms) — strategy is ready to fire at MM:${FIRE_AT_COUNTDOWN_SECONDS}`
+        );
+        clearInterval(probe);
+        return;
+      }
+      if (attempts >= maxAttempts) {
+        clearInterval(probe);
+        warn(
+          `[1h-51s] ⚠ Could NOT detect 1H candle countdown on the chart after ${maxAttempts * 100}ms. ` +
+          `The strategy will keep retrying every tick, but you may need to share the inspector ` +
+          `output of PO's countdown element so we can lock in a selector.`
+        );
+        warn(
+          `[1h-51s] ⚠ Right-click the candle countdown text on the chart → Inspect → ` +
+          `share the element's class names. The bot will not fire until the countdown is detected.`
+        );
+      }
+    }, 100);
+  }
+
   _resetCandle(hourTs) {
     this.hourStartTs = hourTs;
     this.candleOpen = null;

@@ -3,6 +3,14 @@
 ## Last Updated: April 23, 2026
 
 ## Current Status
+✅ **1H 51s Reversal — Candle-Timer-Driven (No Wallclock) — TM v8.22.1 (April 23, 2026, Iter 50)**
+- Strategy now reads PO's chart **candle countdown timer directly** via DOM scrape (`getCandleCountdown()` in `utils/dom.js`) — fires when `countdown.seconds === 51`, debounced on `countdown.minutes`
+- **Self-diagnostic on enable()**: probes for 4 seconds after toggling 1H51 ON, logs `✓ Candle countdown LOCKED` with detected value, or `⚠ Could NOT detect` warning prompting user to share inspector output for selector tuning
+- All wallclock fire logic removed — no minute boundary math, no `Date.now() % 60`. Trigger source explicitly tagged in trade meta as `triggerSource: 'po-candle-countdown'`
+- Cooldown moved from `lastFireMinuteTs` (clock-based) → `lastFireCountdownMinute` (countdown-based)
+- Countdown scraper tries `[class*="countdown"]`, `[class*="chart-time"]`, `[class*="candle-timer"]`, `[class*="period-timer"]`, `[data-test*="timer"]` selectors first, then falls back to chart-container-anchored leaf elements matching `MM:SS` regex
+- Lint clean
+
 ✅ **1H 51-Second Reversal Strategy — TM v8.21.0 (April 23, 2026, Iter 49)**
 - New timing-based contrarian strategy paired with Tampermonkey
   - **Backend**: `strategies/strategy_1h_51s_reversal.py` (registered as `1h_51s_reversal` in registry, evaluated by force-generate-v2)
