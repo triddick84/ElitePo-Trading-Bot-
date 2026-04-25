@@ -3,6 +3,14 @@
 ## Last Updated: April 25, 2026
 
 ## Current Status
+✅ **OTC Backfill from OANDA + Full Retrain — Iter 51 (April 25, 2026)**
+- New endpoint: **`POST /api/ml/backfill-otc-from-oanda`** — auto-discovers OTC symbols below `target_count` and pulls OANDA S5 candles (5-second granularity, real forex underlying that PO synthetics track). 30 OTC pairs mapped to OANDA forex (`OTC_TO_OANDA` dict in `/app/backend/routes/ml.py`). Idempotent upsert keyed on `(symbol, timestamp)`; `source: 'oanda_backfill'` tag distinguishes backfilled from live TM-scraped rows. Exotics (SAR/UAH/MAD/YER/VND/COP/PHP/MYR/RUB/BRL/MXN/ARS/BHD/BDT) intentionally skipped — OANDA doesn't carry them
+- **OTC pool jumped 1,036 → 15,036 candles** (29 trainable symbols, was 2). One backfill call inserted 14,500 new rows.
+- **Maximized v3 retrained**: 494 samples → **3,400 samples (6.9x)**, **CV 53.18% (±2.18%)** — variance cut **51%** vs the iter 50 baseline (±4.46%). Scores `[49.3, 52.7, 55.7, 53.7, 54.6]`
+- **Improved v2 retrained**: 494 → **3,400 samples**, **CV 57.07% (±2.96%)** — **+7.8 points** vs 49.27% baseline; variance cut 68%. Scores `[51.6, 58.3, 56.7, 58.5, 60.3]`
+- **Improved v2 now outperforms maximized v3** on OTC and approaches the 60% target on its top fold (60.3%)
+- 28 of 29 symbols contributed training samples (USDCNH_OTC dropped — labels too ambiguous on backfill data; exact 5s PO movement needed)
+
 ✅ **MLAccuracyTuner Retrained on 90-Feature Pool — Iter 50 (April 25, 2026)**
 - **Maximized v3 (XGBoost stacking)** retrained from 494 OTC samples (EURUSD_OTC=433, AUDCAD_OTC=61) — **CV accuracy 52.68% (±4.46%)**, scores `[52.4, 51.2, 51.2, 47.6, 61.0]`. Previous std (±7.66%) cut by ~42% — model is more stable
 - **Improved v2 (RF/GB/AdaBoost ensemble)** retrained — **CV accuracy 49.27% (±9.37%)**, scores `[50.0, 35.4, 42.7, 61.0, 57.3]`

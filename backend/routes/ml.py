@@ -2200,6 +2200,139 @@ async def train_ml_from_otc_data(
     return result
 
 
+# ==================== OTC BACKFILL FROM OANDA (April 25, 2026) ====================
+
+# OTC pairs that map cleanly to an OANDA forex instrument (PO OTC = synthetic
+# forex priced from real underlying). Exotics (SAR/UAH/MAD/YER/VND/COP/PHP/MYR
+# /CNH/RUB/BRL/MXN/ARS/BHD/BDT) are skipped — OANDA doesn't carry them.
+OTC_TO_OANDA = {
+    "AUDCAD_OTC": "AUD_CAD", "AUDUSD_OTC": "AUD_USD", "AUDJPY_OTC": "AUD_JPY",
+    "AUDNZD_OTC": "AUD_NZD", "AUDCHF_OTC": "AUD_CHF",
+    "CADCHF_OTC": "CAD_CHF", "CADJPY_OTC": "CAD_JPY",
+    "CHFJPY_OTC": "CHF_JPY",
+    "EURAUD_OTC": "EUR_AUD", "EURCAD_OTC": "EUR_CAD", "EURCHF_OTC": "EUR_CHF",
+    "EURGBP_OTC": "EUR_GBP", "EURJPY_OTC": "EUR_JPY", "EURNZD_OTC": "EUR_NZD",
+    "EURUSD_OTC": "EUR_USD",
+    "GBPAUD_OTC": "GBP_AUD", "GBPCAD_OTC": "GBP_CAD", "GBPCHF_OTC": "GBP_CHF",
+    "GBPJPY_OTC": "GBP_JPY", "GBPNZD_OTC": "GBP_NZD", "GBPUSD_OTC": "GBP_USD",
+    "NZDCAD_OTC": "NZD_CAD", "NZDCHF_OTC": "NZD_CHF", "NZDJPY_OTC": "NZD_JPY",
+    "NZDUSD_OTC": "NZD_USD",
+    "USDCAD_OTC": "USD_CAD", "USDCHF_OTC": "USD_CHF", "USDCNH_OTC": "USD_CNH",
+    "USDJPY_OTC": "USD_JPY",
+}
+
+
+@router.post("/ml/backfill-otc-from-oanda")
+async def backfill_otc_from_oanda(
+    symbols: List[str] = Body(None, description="OTC symbols to backfill. None = auto-discover all under-200 mappable pairs."),
+    target_count: int = Body(500, description="Target candle count per symbol after backfill"),
+    granularity: str = Body("S5", description="OANDA granularity (S5 = 5-second candles)"),
+):
+    """
+    Backfill the otc_candles_5s collection using OANDA S5 forex candles for
+    OTC pairs that have a real-forex underlying. Existing TM-collected candles
+    are preserved (upsert on symbol+timestamp). Sets `source: 'oanda_backfill'`
+    on inserted rows so they can be distinguished from live TM scrapes.
+    """
+    if not enhanced_oanda or not enhanced_oanda.is_configured:
+        return {"success": False, "error": "OANDA not configured. Set OANDA_ACCESS_TOKEN + OANDA_ACCOUNT_ID."}
+
+    # 1) Discover symbols to backfill
+    if not symbols:
+        # Auto-discover: every OTC symbol with < target_count candles AND in mapping
+        pipeline = [{"$group": {"_id": "$symbol", "count": {"$sum": 1}}}]
+        existing_counts = {}
+        async for doc in db["otc_candles_5s"].aggregate(pipeline):
+            existing_counts[doc["_id"]] = doc["count"]
+        symbols = [
+            s for s in OTC_TO_OANDA
+            if existing_counts.get(s, 0) < target_count
+        ]
+
+    coll = db["otc_candles_5s"]
+    results = {}
+
+    for otc_sym in symbols:
+        oanda_pair = OTC_TO_OANDA.get(otc_sym)
+        if not oanda_pair:
+            results[otc_sym] = {"status": "skipped_no_mapping"}
+            continue
+
+        # 2) Fetch from OANDA in a thread (blocking sync API)
+        try:
+            df = await asyncio.to_thread(
+                enhanced_oanda.get_candles,
+                instrument=oanda_pair,
+                granularity=granularity,
+                count=target_count,
+            )
+        except Exception as e:
+            results[otc_sym] = {"status": "oanda_error", "error": str(e)}
+            continue
+
+        if df is None or df.empty:
+            results[otc_sym] = {"status": "no_data"}
+            continue
+
+        # 3) Upsert each candle. Index reset so timestamp is a column.
+        df = df.reset_index()
+        now_iso = datetime.now(timezone.utc).isoformat()
+        ops = []
+        for _, row in df.iterrows():
+            ts = row.get("timestamp")
+            if pd.isna(ts):
+                continue
+            ts_iso = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
+            doc = {
+                "symbol": otc_sym,
+                "timestamp": ts_iso,
+                "open": float(row["open"]),
+                "high": float(row["high"]),
+                "low": float(row["low"]),
+                "close": float(row["close"]),
+                "volume": int(row.get("volume", 0)),
+                "timeframe": "5s",
+                "source": "oanda_backfill",
+                "oanda_pair": oanda_pair,
+                "collected_at": now_iso,
+            }
+            ops.append(doc)
+
+        # Idempotent upsert: skip if (symbol, timestamp) already present
+        inserted = 0
+        for doc in ops:
+            r = await coll.update_one(
+                {"symbol": doc["symbol"], "timestamp": doc["timestamp"]},
+                {"$setOnInsert": doc},
+                upsert=True,
+            )
+            if r.upserted_id is not None:
+                inserted += 1
+
+        total_after = await coll.count_documents({"symbol": otc_sym})
+        results[otc_sym] = {
+            "status": "ok",
+            "oanda_pair": oanda_pair,
+            "fetched": len(ops),
+            "inserted_new": inserted,
+            "total_after": total_after,
+            "trainable": total_after >= 200,
+        }
+
+    summary = {
+        "total_symbols": len(results),
+        "succeeded": sum(1 for r in results.values() if r.get("status") == "ok"),
+        "newly_trainable": sum(
+            1 for r in results.values()
+            if r.get("status") == "ok" and r.get("trainable")
+            and r.get("inserted_new", 0) > 0
+        ),
+        "total_inserted": sum(r.get("inserted_new", 0) for r in results.values()),
+    }
+    return {"success": True, "results": results, "summary": summary,
+            "completed_at": datetime.now(timezone.utc).isoformat()}
+
+
 
 # ==================== AUTO-RETRAIN SCHEDULER ENDPOINTS ====================
 
