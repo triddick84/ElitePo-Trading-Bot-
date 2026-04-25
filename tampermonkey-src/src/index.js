@@ -69,14 +69,36 @@ class EliteTradingBot {
     // even if the user never clicks a toggle between reloads
     this.autoSaveInterval = setInterval(() => {
       try {
-        // Keep the 21S config mirror fresh in case it was tuned via console
+        // Keep config mirrors fresh in case they were tuned via console
         if (twentyOneSecondReversal.config) {
           state._twentyOneSConfig = { ...twentyOneSecondReversal.config };
         }
         state._twentyOneSEnabled = twentyOneSecondReversal.isEnabled();
+        if (oneHour51sReversal.config) {
+          state._oneHour51sConfig = { ...oneHour51sReversal.config };
+        }
+        state._oneHour51sEnabled = oneHour51sReversal.isEnabled();
         saveState();
       } catch (_e) { /* ignore */ }
     }, 15_000);
+
+    // Also save on every page-hide / before-unload — last line of defence
+    // when PO triggers a hard refresh or SPA navigation that bypasses our
+    // cleanup() handler.
+    const flushSave = () => {
+      try {
+        state._twentyOneSEnabled = twentyOneSecondReversal.isEnabled();
+        state._oneHour51sEnabled = oneHour51sReversal.isEnabled();
+        if (twentyOneSecondReversal.config) state._twentyOneSConfig = { ...twentyOneSecondReversal.config };
+        if (oneHour51sReversal.config) state._oneHour51sConfig = { ...oneHour51sReversal.config };
+        saveState();
+      } catch (_e) { /* ignore */ }
+    };
+    window.addEventListener('pagehide', flushSave, true);
+    window.addEventListener('beforeunload', flushSave, true);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') flushSave();
+    }, true);
     
     // Restore inversion display from saved state
     if (state.inversion.isInverted) {
@@ -244,37 +266,39 @@ class EliteTradingBot {
    * AND mutate the visual state of the newly-created buttons.
    */
   _restoreToggleStates() {
+    const restored = [];
     try {
       // SCAN toggle
       if (state.scanEnabled) {
         setToggleActive('scan', true);
         this.startScanning();
-        info('[Restore] SCAN was on before reload — resumed');
+        restored.push('SCAN');
       }
 
       // AUTO toggle
       if (state.autoTradeEnabled) {
         setToggleActive('auto', true);
-        info('[Restore] AUTO was on before reload — resumed');
+        restored.push('AUTO');
       }
 
       // AUTO-INVERT toggle (default ON if never saved)
       if (state.autoInvertEnabled) {
         setToggleActive('ainv', true);
+        restored.push('A-INV');
       }
 
       // CYCLE toggle
       if (state.cycleEnabled) {
         setToggleActive('cycle', true);
         cycleMode.start().catch(() => {});
-        info('[Restore] CYCLE was on before reload — resumed');
+        restored.push('CYCLE');
       }
 
       // APP signal poller toggle
       if (state.appSignalEnabled) {
         setToggleActive('app', true);
         appSignalPoller.start(5_000);
-        info('[Restore] APP poller was on before reload — resumed');
+        restored.push('APP');
       }
 
       // 21S Reversal
@@ -284,7 +308,7 @@ class EliteTradingBot {
       if (state._twentyOneSEnabled) {
         twentyOneSecondReversal.enable();
         update21sReversalDisplay(true, twentyOneSecondReversal.getStats());
-        info('[Restore] 21S was on before reload — resumed with saved config');
+        restored.push('21S');
       }
 
       // 1H 51s Reversal
@@ -294,7 +318,20 @@ class EliteTradingBot {
       if (state._oneHour51sEnabled) {
         oneHour51sReversal.enable();
         update1h51sReversalDisplay(true, oneHour51sReversal.getStats());
-        info('[Restore] 1H51 was on before reload — resumed with saved config');
+        restored.push('1H51');
+      }
+
+      // Loud, visible summary so any persistence gap is immediately obvious
+      if (restored.length > 0) {
+        const ageMin = state._lastSavedAt
+          ? Math.round((Date.now() - state._lastSavedAt) / 60000)
+          : '?';
+        success(
+          `[Restore] Re-activated ${restored.length} feature(s) from saved state ` +
+          `(saved ${ageMin}m ago): ${restored.join(', ')}`
+        );
+      } else {
+        info('[Restore] No previously-active features found in saved state');
       }
     } catch (e) {
       warn(`[Restore] toggle state restoration failed: ${e.message}`);

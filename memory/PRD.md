@@ -3,6 +3,15 @@
 ## Last Updated: April 23, 2026
 
 ## Current Status
+✅ **Full Settings Persistence Fix — TM v8.23.0 (April 23, 2026, Iter 51)**
+- **Root cause**: `_oneHour51sEnabled` + `_oneHour51sConfig` were missing from `state.js` `saveState()`/`loadState()` — the 1H51 feature was never wired into persistence even though restore code read them. Auto-save also only refreshed the 21S mirror.
+- **Fixed in `state.js`**: schema bumped to v2, now serializes 7 toggles (SCAN, AUTO, A-INV, CYCLE, APP, 21S, 1H51) + 3 configs (cycle, 21S, 1H51) + selectedStrategy + stats/money/inversion/assetHistory. Saves `_savedAt` for restore-age display.
+- **Fixed in `index.js`**:
+  - Auto-save (15s interval) now refreshes both 21S and 1H51 config mirrors before save
+  - Three new fallback save triggers: `pagehide`, `beforeunload`, `visibilitychange` (hidden) — covers PO's SPA refreshes, hard reloads, tab-close, app-switch
+  - `_restoreToggleStates()` now logs a loud green `[Restore] Re-activated N feature(s) from saved state (saved Xm ago): SCAN, 21S, 1H51, ...` summary — any persistence gap is now instantly visible in console
+- Lint clean
+
 ✅ **1H 51s Reversal — Candle-Timer-Driven (No Wallclock) — TM v8.22.1 (April 23, 2026, Iter 50)**
 - Strategy now reads PO's chart **candle countdown timer directly** via DOM scrape (`getCandleCountdown()` in `utils/dom.js`) — fires when `countdown.seconds === 51`, debounced on `countdown.minutes`
 - **Self-diagnostic on enable()**: probes for 4 seconds after toggling 1H51 ON, logs `✓ Candle countdown LOCKED` with detected value, or `⚠ Could NOT detect` warning prompting user to share inspector output for selector tuning
