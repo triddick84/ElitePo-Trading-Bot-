@@ -3,6 +3,14 @@
 ## Last Updated: April 23, 2026
 
 ## Current Status
+✅ **Strategy Consolidation: Single 51S Button — TM v8.25.0 (April 23, 2026, Iter 54)**
+- Per user direction (option C): retime the 21S strategy to fire at 51 seconds remaining on 1m candles, then DELETE the candle-timer 51S entirely.
+- **`twentyOneSecondReversal.js`** — `FIRE_AT_MS_LEFT: 21_000 → 51_000`. All log strings updated `[21s]` → `[51s]`. Class name + state keys + strategy ID preserved for backward compat with existing GM storage and `tm_trade_reports` audit history.
+- **Deleted**: `/app/tampermonkey-src/src/strategies/oneHour51sReversal.js`. Removed all imports/handlers/restore-logic/save-load/cleanup/window-debug references from `index.js`, `panel.js`, `state.js`. Removed second panel button row + button styles.
+- **Panel**: button label `21S` → `51S` (id `r21s` kept). Single button, single strategy. Fires opposite to 1m candle body at 51-seconds-remaining mark.
+- State schema bumped to v3 (no longer carries `oneHour51sEnabled`/`oneHour51sConfig`).
+- Lint clean, bundle size dropped 386 KiB → 352 KiB.
+
 ✅ **CRITICAL: Userscript Version Drift Bug Fixed — TM v8.24.0 (April 23, 2026, Iter 53)**
 - **Root cause discovered**: The Tampermonkey `@version` header in `webpack.config.js` was hardcoded to `8.18.0` and had not been updated since iter 47, even though `CONFIG.BOT_VERSION` was bumped through 8.19, 8.20, 8.21, 8.22, 8.23, 8.24. **Tampermonkey only re-installs when `@version` increases**, so the user has been running v8.18.0 for the past 6 iterations — none of the 1H51 strategy, 51S simplification, candle-timer trigger, or persistence fix were active in their browser
 - **Fix**: `/app/tampermonkey-src/version.txt` is now the single source of truth. `webpack.config.js` reads it via `fs.readFileSync` and injects it into BOTH the userscript `@version` header AND `CONFIG.BOT_VERSION` via `DefinePlugin(__SCRIPT_VERSION__)`. They can never drift again.

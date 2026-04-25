@@ -1,5 +1,5 @@
 /**
- * 21-Second Reversal Strategy (1-minute candles)
+ * 51-Second Reversal Strategy (1-minute candles)
  *
  * Timing-based contrarian strategy for Pocket Option short-expiry trades.
  *
@@ -7,7 +7,7 @@
  *  - Tracks the current LIVE 1m candle (open = first price seen at second 0,
  *    close = current price at fire moment, wick-ignored body direction).
  *  - Fires a trade in the OPPOSITE direction of the candle's body when the
- *    candle has ~21 seconds remaining (configurable tolerance window).
+ *    candle has ~51 seconds remaining (configurable tolerance window).
  *  - Trade expiry: auto-selects closest PO expiry (≈5s); user should preset
  *    PO expiry to 5s for best accuracy.
  *  - Cooldown: skips exactly 1 full candle after every fire.
@@ -34,8 +34,8 @@ import { livePriceTracker } from '../trading/livePriceTracker.js';
 import { reportTrade, post, get as apiGet } from '../utils/api.js';
 
 const LOOP_INTERVAL_MS = 100;
-const FIRE_AT_MS_LEFT = 21_000;
-const DEFAULT_TOLERANCE_MS = 1_000;   // ±1s around the 21s-left mark
+const FIRE_AT_MS_LEFT = 51_000;
+const DEFAULT_TOLERANCE_MS = 1_000;   // ±1s around the 51s-left mark
 const DEFAULT_MIN_BODY_BPS = 0.1;     // near-zero; strategy is timing-based, not body-filter
 const TICK_HISTORY_MAX = 120;         // 12s @ 100ms
 
@@ -72,7 +72,7 @@ class TwentyOneSecondReversal {
       // If body filter rejects, use recent-tick slope to determine direction
       useSlopeFallback: true,
       slopeWindowMs: 5_000,
-      // alwaysFire: if true, at the 21s mark fire regardless of body/slope.
+      // alwaysFire: if true, at the 51s mark fire regardless of body/slope.
       // Direction is picked from the most recent non-zero delta in tick history,
       // or defaults to CALL if everything is perfectly flat.
       // This is the recommended mode when you want to trust the timing edge
@@ -99,7 +99,7 @@ class TwentyOneSecondReversal {
     // Ensure the shared price scraper is running — our primary price source
     try {
       if (!priceScraper.scrapeInterval) {
-        priceScraper.start(250); // faster poll for accurate 21s-left timing
+        priceScraper.start(250); // faster poll for accurate 51s-left timing
       }
     } catch (_e) { /* ignore */ }
 
@@ -112,7 +112,7 @@ class TwentyOneSecondReversal {
     this.bridgeHealthIntervalId = setInterval(() => this._checkBridgeHealth(), 15_000);
 
     this.loopId = setInterval(() => this._tick(), LOOP_INTERVAL_MS);
-    success(`[21s-Reversal] Enabled — mode=${this.config.executionMode} (WS when bridge healthy)`);
+    success(`[51s-Reversal] Enabled — mode=${this.config.executionMode} (WS when bridge healthy)`);
   }
 
   disable() {
@@ -126,7 +126,7 @@ class TwentyOneSecondReversal {
       clearInterval(this.bridgeHealthIntervalId);
       this.bridgeHealthIntervalId = null;
     }
-    log('[21s-Reversal] Disabled');
+    log('[51s-Reversal] Disabled');
   }
 
   isEnabled() {
@@ -135,7 +135,7 @@ class TwentyOneSecondReversal {
 
   setConfig(partial = {}) {
     Object.assign(this.config, partial);
-    log(`[21s-Reversal] Config updated: ${JSON.stringify(this.config)}`);
+    log(`[51s-Reversal] Config updated: ${JSON.stringify(this.config)}`);
   }
 
   getStats() {
@@ -246,7 +246,7 @@ class TwentyOneSecondReversal {
         return;
       }
 
-      // Must be within the ±tolerance window around 21s-left
+      // Must be within the ±tolerance window around 51s-left
       const msLeft = 60_000 - (now - minute);
       const tol = this.config.toleranceMs || DEFAULT_TOLERANCE_MS;
       if (Math.abs(msLeft - FIRE_AT_MS_LEFT) > tol) return;
@@ -262,7 +262,7 @@ class TwentyOneSecondReversal {
           this.candleClose = wsLatest;
           this.candleHigh = wsLatest;
           this.candleLow = wsLatest;
-          info(`[21s-Reversal] alwaysFire: synthesizing candle from last WS tick (${wsLatest}, age=${wsAge}ms)`);
+          info(`[51s-Reversal] alwaysFire: synthesizing candle from last WS tick (${wsLatest}, age=${wsAge}ms)`);
         } else {
           this._logSkipOnce(
             'nodata',
@@ -275,7 +275,7 @@ class TwentyOneSecondReversal {
 
       this._attemptFire();
     } catch (e) {
-      warn(`[21s-Reversal] tick error: ${e.message}`);
+      warn(`[51s-Reversal] tick error: ${e.message}`);
     }
   }
 
@@ -284,7 +284,7 @@ class TwentyOneSecondReversal {
     const key = `${this.candleStartTs}:${reasonKey}`;
     if (this._loggedSkipKey === key) return;
     this._loggedSkipKey = key;
-    log(`[21s-Reversal] ${msg}`);
+    log(`[51s-Reversal] ${msg}`);
   }
 
   _attemptFire() {
@@ -324,7 +324,7 @@ class TwentyOneSecondReversal {
           originalDirection = 'FLAT';
           tradeDirection = 'CALL';
           reasonTag = 'flat-default-CALL';
-          warn('[21s-Reversal] ZERO price movement detected all candle - defaulting to CALL');
+          warn('[51s-Reversal] ZERO price movement detected all candle - defaulting to CALL');
         }
       } else {
         // alwaysFire disabled + no slope + flat body → skip
@@ -347,7 +347,7 @@ class TwentyOneSecondReversal {
 
     const payout = getPayout();
     if (payout && payout < CONFIG.MIN_PAYOUT) {
-      warn(`[21s-Reversal] Payout ${payout}% below min ${CONFIG.MIN_PAYOUT}% - skip`);
+      warn(`[51s-Reversal] Payout ${payout}% below min ${CONFIG.MIN_PAYOUT}% - skip`);
       this.firedThisCandle = true;
       return;
     }
@@ -375,7 +375,7 @@ class TwentyOneSecondReversal {
 
     // Choose execution path
     const useWs = this._shouldUseWs();
-    info(`[21s-Reversal] ${originalDirection} (${reasonTag}) → FIRE ${tradeDirection} on ${asset} @ $${amount} [${this.config.expirySeconds}s] via ${useWs ? 'WS' : 'DOM'}`);
+    info(`[51s-Reversal] ${originalDirection} (${reasonTag}) → FIRE ${tradeDirection} on ${asset} @ $${amount} [${this.config.expirySeconds}s] via ${useWs ? 'WS' : 'DOM'}`);
 
     const executionPromise = useWs
       ? this._executeViaWs(asset, tradeDirection, amount)
@@ -384,14 +384,14 @@ class TwentyOneSecondReversal {
     executionPromise
       .then((ok) => {
         if (!ok && useWs) {
-          warn('[21s-Reversal] WS fire failed — falling back to DOM click');
+          warn('[51s-Reversal] WS fire failed — falling back to DOM click');
           return this._executeViaDom(tradeDirection, amount);
         }
         return ok;
       })
       .then((ok) => {
         if (!ok) {
-          error('[21s-Reversal] All execution paths failed');
+          error('[51s-Reversal] All execution paths failed');
           statsRow.fires = Math.max(0, statsRow.fires - 1);
           return;
         }
@@ -404,7 +404,7 @@ class TwentyOneSecondReversal {
           amount,
           confidence: 65,
           strategy: '1m_21s_reversal',
-          source: `21s-reversal-${useWs ? 'ws' : 'dom'}`,
+          source: `51s-reversal-${useWs ? 'ws' : 'dom'}`,
           payout,
           wasInverted: false,
           meta: {
@@ -418,7 +418,7 @@ class TwentyOneSecondReversal {
         }).catch(() => { /* ignore */ });
       })
       .catch((e) => {
-        error(`[21s-Reversal] execution error: ${e.message}`);
+        error(`[51s-Reversal] execution error: ${e.message}`);
       });
   }
 
@@ -470,13 +470,13 @@ class TwentyOneSecondReversal {
         strategy: '1m_21s_reversal',
       });
       if (resp && resp.success) {
-        success(`[21s-Reversal] WS trade placed: order_id=${resp.order_id || '?'} latency=${resp.latency_ms || '?'}ms`);
+        success(`[51s-Reversal] WS trade placed: order_id=${resp.order_id || '?'} latency=${resp.latency_ms || '?'}ms`);
         return true;
       }
-      warn(`[21s-Reversal] WS trade rejected: ${(resp && resp.error) || 'unknown'}`);
+      warn(`[51s-Reversal] WS trade rejected: ${(resp && resp.error) || 'unknown'}`);
       return false;
     } catch (e) {
-      warn(`[21s-Reversal] WS trade network error: ${e.message}`);
+      warn(`[51s-Reversal] WS trade network error: ${e.message}`);
       return false;
     }
   }
@@ -486,7 +486,7 @@ class TwentyOneSecondReversal {
       const ok = await executeTrade(direction, amount);
       return !!ok;
     } catch (e) {
-      error(`[21s-Reversal] DOM click error: ${e.message}`);
+      error(`[51s-Reversal] DOM click error: ${e.message}`);
       return false;
     }
   }
@@ -546,10 +546,10 @@ class TwentyOneSecondReversal {
         return { asset: a, lastWinAt: s.lastWinAt || 0 };
       }).sort((x, y) => x.lastWinAt - y.lastWinAt);
       const next = ranked[0].asset;
-      log(`[21s-Reversal] Win on ${currentAsset} — rotating to ${next}`);
+      log(`[51s-Reversal] Win on ${currentAsset} — rotating to ${next}`);
       switchAsset(next);
     } catch (e) {
-      warn(`[21s-Reversal] rotation error: ${e.message}`);
+      warn(`[51s-Reversal] rotation error: ${e.message}`);
     }
   }
 }

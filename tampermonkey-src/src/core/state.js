@@ -229,18 +229,15 @@ export function saveState() {
         dataCollectionEnabled: state.dataCollectionEnabled,
         appSignalEnabled: state.appSignalEnabled,
         twentyOneSEnabled: !!state._twentyOneSEnabled,
-        oneHour51sEnabled: !!state._oneHour51sEnabled,
       },
       // Cycle mode config
       cycleConfig: state._cycleConfig || null,
-      // 21S Reversal config (user-tuned thresholds must survive reload)
+      // 51s Reversal config (user-tuned thresholds must survive reload)
       twentyOneSConfig: state._twentyOneSConfig || null,
-      // 1H 51s Reversal config (rotation pool, expiry etc.)
-      oneHour51sConfig: state._oneHour51sConfig || null,
       // Selected strategy (from dropdown)
       selectedStrategy: state._selectedStrategy || null,
       // Save schema version so future migrations can reset cleanly
-      _v: 2,
+      _v: 3,
       _savedAt: Date.now(),
     }));
   }
@@ -270,11 +267,9 @@ export function loadState() {
           state.dataCollectionEnabled = !!parsed.toggles.dataCollectionEnabled;
           state.appSignalEnabled = !!parsed.toggles.appSignalEnabled;
           state._twentyOneSEnabled = !!parsed.toggles.twentyOneSEnabled;
-          state._oneHour51sEnabled = !!parsed.toggles.oneHour51sEnabled;
         }
         if (parsed.cycleConfig) state._cycleConfig = parsed.cycleConfig;
         if (parsed.twentyOneSConfig) state._twentyOneSConfig = parsed.twentyOneSConfig;
-        if (parsed.oneHour51sConfig) state._oneHour51sConfig = parsed.oneHour51sConfig;
         if (parsed.selectedStrategy) state._selectedStrategy = parsed.selectedStrategy;
         // Expose meta for debug / restore log
         state._lastSavedAt = parsed._savedAt || null;

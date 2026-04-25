@@ -189,18 +189,6 @@ function injectCSS() {
       box-shadow: 0 0 10px rgba(168,85,247,0.5) !important;
       animation: ${P}pulse 1.5s infinite !important;
     }
-    .${P}btn-r1h51 {
-      flex: 0 0 ${mobile ? 60 : 70}px !important;
-      background: linear-gradient(135deg, #831843 0%, #be185d 100%) !important;
-      border-color: #ec4899 !important;
-      font-size: ${mobile ? 10 : 11}px !important;
-    }
-    .${P}btn-r1h51.active {
-      background: linear-gradient(135deg, #be185d 0%, #ec4899 100%) !important;
-      border-color: #f472b6 !important;
-      box-shadow: 0 0 10px rgba(244,114,182,0.5) !important;
-      animation: ${P}pulse 1.5s infinite !important;
-    }
     .${P}btn-cycle, .${P}btn-app, .${P}btn-ainv {
       font-size: ${mobile ? 10 : 11}px !important;
       background: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 100%) !important;
@@ -386,12 +374,8 @@ export function createPanel() {
           <button id="${P}ainv" class="${P}btn ${P}btn-ainv" title="Enable smart auto-invert on loss streaks">A-INV</button>
         </div>
         <div class="${P}row">
-          <button id="${P}r21s" class="${P}btn ${P}btn-r21s" title="Fire opposite 5s trade at 21s-left on 1m candles">21S</button>
+          <button id="${P}r21s" class="${P}btn ${P}btn-r21s" title="Fire opposite 5s trade at 51s-left on 1m candles">51S</button>
           <span class="${P}invst" id="${P}r21st">Off</span>
-        </div>
-        <div class="${P}row">
-          <button id="${P}r1h51" data-testid="r1h51-toggle-btn" class="${P}btn ${P}btn-r1h51" title="Monitor candle countdown — when seconds === 51, fire opposite to candle direction. Works on any timeframe (1m/5m/1h/etc).">51S</button>
-          <span class="${P}invst" id="${P}r1h51t">Off</span>
         </div>
         <div class="${P}stratrow">
           <span class="${P}stratlbl">Strategy:</span>
@@ -534,23 +518,13 @@ export function initPanelEvents(callbacks = {}) {
     });
   }
 
-  // 21s Reversal toggle
+  // 21s Reversal toggle (now fires at 51s-left)
   const r21sBtn = q('r21s');
   if (r21sBtn) {
     r21sBtn.addEventListener('click', () => {
       const isActive = r21sBtn.classList.contains('active');
       r21sBtn.classList.toggle('active');
       callbacks.on21sReversalToggle?.(!isActive);
-    });
-  }
-
-  // 1H 51s Reversal toggle
-  const r1h51Btn = q('r1h51');
-  if (r1h51Btn) {
-    r1h51Btn.addEventListener('click', () => {
-      const isActive = r1h51Btn.classList.contains('active');
-      r1h51Btn.classList.toggle('active');
-      callbacks.on1h51sReversalToggle?.(!isActive);
     });
   }
 
@@ -633,27 +607,6 @@ export function updateInvertDisplay(isInverted, reason) {
 export function update21sReversalDisplay(enabled, stats = null) {
   const btn = q('r21s');
   const st = q('r21st');
-  if (btn) {
-    if (enabled) btn.classList.add('active');
-    else btn.classList.remove('active');
-  }
-  if (st) {
-    if (!enabled) {
-      st.textContent = 'Off';
-      st.classList.remove('on');
-    } else if (stats) {
-      st.textContent = `On ${stats.wins}/${stats.losses} (${stats.winRate}%)`;
-      st.classList.add('on');
-    } else {
-      st.textContent = 'On';
-      st.classList.add('on');
-    }
-  }
-}
-
-export function update1h51sReversalDisplay(enabled, stats = null) {
-  const btn = q('r1h51');
-  const st = q('r1h51t');
   if (btn) {
     if (enabled) btn.classList.add('active');
     else btn.classList.remove('active');
