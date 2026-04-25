@@ -3,6 +3,12 @@
 ## Last Updated: April 25, 2026
 
 ## Current Status
+✅ **GO Button Confidence-Gate Fix — TM v8.33.0 (April 25, 2026, Iter 54)**
+- **Bug**: User reported "GO is not working" with log line `✗ signal validation failed`. Root cause: backend's `force-generate-v2` returns confidence in the realistic 52–82% band; for LOW-quality signals it caps at 65 but does NOT floor it — confidence often comes back at 58–62%. TM's `validateSignal()` rejects anything below `MIN_CONFIDENCE=65`, silently dropping the GO trade
+- **Fix**: `validateSignal(signal, { force })` now accepts a `force` flag. When called from GO (`source==='go-force'`) or 51S Reversal (`source==='21s-reversal'`), the `MIN_CONFIDENCE` gate is bypassed — the user explicitly asked to fire NOW. Direction validity and payout floor still enforced (guards against bad inputs / sub-65% payout markets)
+- Same fail-closed protections kept for SCAN / AUTO / CYCLE / APP paths — those still respect `MIN_CONFIDENCE=65`
+- TM userscript version bumped **8.32.0 → 8.33.0**, both legacy and modular `.user.js` rebuilt and deployed
+
 ✅ **51S Default-On — TM v8.32.0 (April 25, 2026, Iter 53)**
 - Per user: 51 Seconds Reversal strategy now defaults to **ACTIVE on every fresh script load**. User must press the `51S` button explicitly to deactivate
 - `state._twentyOneSEnabled: true` baked into the initial state object (`/app/tampermonkey-src/src/core/state.js`)

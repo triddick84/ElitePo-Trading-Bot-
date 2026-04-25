@@ -41,7 +41,9 @@ class TradeExecutor {
    * @param {Object} signal - Signal object
    * @returns {boolean}
    */
-  validateSignal(signal) {
+  validateSignal(signal, opts = {}) {
+    const { force = false } = opts;
+
     if (!signal) {
       warn('No signal provided');
       return false;
@@ -52,7 +54,12 @@ class TradeExecutor {
       return false;
     }
     
-    if (signal.confidence < CONFIG.MIN_CONFIDENCE) {
+    // Force mode (GO button / 51S reversal) bypasses confidence gate —
+    // the user explicitly asked to fire NOW. Backend's force-generate-v2
+    // returns confidence in 52–82% band which can dip below MIN_CONFIDENCE
+    // for LOW-quality signals; that's expected behaviour and shouldn't
+    // block an explicit user-triggered shot.
+    if (!force && signal.confidence < CONFIG.MIN_CONFIDENCE) {
       log(`Signal confidence ${signal.confidence}% below minimum ${CONFIG.MIN_CONFIDENCE}%`);
       return false;
     }
@@ -75,12 +82,12 @@ class TradeExecutor {
   async execute(signal, source = 'scan') {
     const force = source === 'go-force' || source === '21s-reversal';
 
-    // Audit: step 1 — signal validation
-    if (!this.validateSignal(signal)) {
+    // Audit: step 1 — signal validation (force mode skips MIN_CONFIDENCE gate)
+    if (!this.validateSignal(signal, { force })) {
       log(`[exec:${source}] ✗ signal validation failed`);
       return false;
     }
-    log(`[exec:${source}] ✓ signal validated (${signal.direction} ${signal.confidence}%)`);
+    log(`[exec:${source}] ✓ signal validated (${signal.direction} ${signal.confidence}%${force ? ' — force mode' : ''})`);
 
     // Audit: step 2 — trade cooldown/rate limits (skip when force)
     if (!force && !this.canTrade(source)) {
