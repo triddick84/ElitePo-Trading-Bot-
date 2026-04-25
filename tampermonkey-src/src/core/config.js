@@ -6,7 +6,9 @@
 export const CONFIG = {
   // Bot Info
   BOT_NAME: 'Elite Pocket Option Trading Bot',
-  BOT_VERSION: '8.24.0',
+  // Sourced from /app/tampermonkey-src/version.txt at build time so the
+  // @version in the userscript header and BOT_VERSION here can never drift.
+  BOT_VERSION: typeof __SCRIPT_VERSION__ !== 'undefined' ? __SCRIPT_VERSION__ : '0.0.0-dev',
 
   // API Settings
   API_URL: 'https://momentum-trade-test.preview.emergentagent.com/api',

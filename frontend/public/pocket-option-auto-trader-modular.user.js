@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Elite Pocket Option Trading Bot
 // @namespace    https://momentum-trade-test.preview.emergentagent.com
-// @version      8.18.0
-// @description  Elite AI-powered trading bot - CYCLE mode, APP signal poller, A-INV toggle, 21s Reversal via direct-WS, SSID Bridge
+// @version      8.24.0
+// @description  Elite AI-powered trading bot - CYCLE mode, APP signal poller, A-INV toggle, 21s + 51s Reversal via direct-WS, SSID Bridge, persistent settings
 // @author       Elite Trading
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*

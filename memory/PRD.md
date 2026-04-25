@@ -3,6 +3,12 @@
 ## Last Updated: April 23, 2026
 
 ## Current Status
+✅ **CRITICAL: Userscript Version Drift Bug Fixed — TM v8.24.0 (April 23, 2026, Iter 53)**
+- **Root cause discovered**: The Tampermonkey `@version` header in `webpack.config.js` was hardcoded to `8.18.0` and had not been updated since iter 47, even though `CONFIG.BOT_VERSION` was bumped through 8.19, 8.20, 8.21, 8.22, 8.23, 8.24. **Tampermonkey only re-installs when `@version` increases**, so the user has been running v8.18.0 for the past 6 iterations — none of the 1H51 strategy, 51S simplification, candle-timer trigger, or persistence fix were active in their browser
+- **Fix**: `/app/tampermonkey-src/version.txt` is now the single source of truth. `webpack.config.js` reads it via `fs.readFileSync` and injects it into BOTH the userscript `@version` header AND `CONFIG.BOT_VERSION` via `DefinePlugin(__SCRIPT_VERSION__)`. They can never drift again.
+- **One-time user action**: Open Tampermonkey dashboard → Update the script (or revisit install URL). v8.18.0 → v8.24.0 jump forces re-install; from then on every bump auto-installs.
+- All persistence (SCAN, AUTO, A-INV, CYCLE, APP, 21S, 51S) + all features added since iter 47 are now ACTUALLY in the user's browser
+
 ✅ **51s Reversal Strategy Simplified to Timeframe-Agnostic — TM v8.24.0 (April 23, 2026, Iter 52)**
 - **Removed all 1H-specific logic**: no more `_hourOfNow()`, hourly OHLC window, or `HOUR_MS` constant
 - **Now works on any chart timeframe** (1m/5m/15m/1H/etc) — the strategy just monitors the candle countdown and fires when seconds===51, opposite of current candle direction

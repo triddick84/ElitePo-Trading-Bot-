@@ -1,12 +1,23 @@
 const path = require('path');
+const fs = require('fs');
+const webpack = require('webpack');
 const TerserPlugin = require('terser-webpack-plugin');
+
+// Single source of truth for the userscript version.
+// IMPORTANT: This @version is what Tampermonkey checks to decide whether to
+// re-install the script. If this number doesn't increase, TM keeps serving
+// the old cached version and ALL bundle changes are invisible to the user.
+// Bump /app/tampermonkey-src/version.txt for every release.
+const SCRIPT_VERSION = fs
+  .readFileSync(path.resolve(__dirname, 'version.txt'), 'utf8')
+  .trim();
 
 // Userscript header - preserved at top of bundle
 const userscriptHeader = `// ==UserScript==
 // @name         Elite Pocket Option Trading Bot
 // @namespace    https://momentum-trade-test.preview.emergentagent.com
-// @version      8.18.0
-// @description  Elite AI-powered trading bot - CYCLE mode, APP signal poller, A-INV toggle, 21s Reversal via direct-WS, SSID Bridge
+// @version      ${SCRIPT_VERSION}
+// @description  Elite AI-powered trading bot - CYCLE mode, APP signal poller, A-INV toggle, 21s + 51s Reversal via direct-WS, SSID Bridge, persistent settings
 // @author       Elite Trading
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*
@@ -63,6 +74,13 @@ module.exports = {
       },
     ],
   },
+  plugins: [
+    // Inject the version from version.txt so config.js BOT_VERSION matches
+    // the @version in the userscript header. Single source of truth.
+    new webpack.DefinePlugin({
+      __SCRIPT_VERSION__: JSON.stringify(SCRIPT_VERSION),
+    }),
+  ],
   resolve: {
     extensions: ['.js'],
     alias: {
