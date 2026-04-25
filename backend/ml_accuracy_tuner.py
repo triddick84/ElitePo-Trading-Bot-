@@ -397,11 +397,11 @@ class MLAccuracyTuner:
 
             # 3 White Soldiers / 3 Black Crows
             three_white = (
-                c3 < o3 is False and c2 > o2 and pc > po and is_bull
+                c3 >= o3 and c2 > o2 and pc > po and is_bull
                 and c > pc > c2 and o > o2  # progressively higher closes
             )
             three_black = (
-                c2 < o2 and pc < po and is_bear
+                c3 <= o3 and c2 < o2 and pc < po and is_bear
                 and c < pc < c2 and o < o2
             )
             f['cdl_3_white_soldiers'] = 1 if three_white else 0

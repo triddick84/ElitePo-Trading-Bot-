@@ -1,8 +1,20 @@
 # Elite Pocket Option Trading Bot - Product Requirements Document
 
-## Last Updated: April 23, 2026
+## Last Updated: April 25, 2026
 
 ## Current Status
+✅ **AI Candlestick Patterns + Multi-Timeframe Fusion + Volume Validation — Iter 48 (April 25, 2026)**
+- **`MLAccuracyTuner.extract_5s_features()` now emits 90 features** (was 53) — adds 3 new feature groups inspired by behavioral-pattern AI candlestick analysis:
+  - **Candlestick Patterns (19 features)** — `cdl_engulfing_bull/bear/strength`, `cdl_hammer/inverted_hammer/hammer_strength`, `cdl_shooting_star/strength`, `cdl_doji/quality`, `cdl_pin_bar_bull/bear`, `cdl_marubozu_bull/bear`, `cdl_morning_star/evening_star`, `cdl_3_white_soldiers/3_black_crows`, `cdl_pattern_score` (signed aggregate)
+  - **Multi-Timeframe Fusion (14 features)** — Builds 15s + 1m aggregations from the 5s base series. RSI agreement (`mtf_rsi_5s_15s_align`, `mtf_rsi_5s_1m_align`, `mtf_rsi_15s/1m`), EMA trend alignment (`mtf_ema_align_5s_15s/1m`, `mtf_ema_trend_count`), MACD sign agreement (`mtf_macd_agreement`, `mtf_macd_sign_15s/1m`), momentum confluence (`mtf_momentum_score/15s/1m`), `mtf_trend_strength`
+  - **Volume Validation (4 features)** — `vol_spike_at_pattern` (pattern + 1.2x avg), `vol_climactic` (>2x avg), `vol_pattern_confirm` (pattern + rising vol), `vol_ratio_20`
+- **Continuous strength scores** (not just binary flags) for engulfing, hammer, shooting star, doji — gives ML gradient information instead of all-or-nothing
+- **`SelectKBest(k=50) → k=70`** — gives the new feature group headroom to make the cut
+- **`/api/ml/tuning-report`** now exposes `tuning_config.candlestick_mtf_apr24` with all 3 sub-groups, `k_bumped_to=70`, `added_on='2026-04-24'`
+- **Bug fixed**: 3-white-soldiers chained-comparison (`c3 < o3 is False`) — replaced with `c3 >= o3` to make pattern actually reachable
+- **No retraining triggered** — wiring only, per pattern with iter 48; next manual `/api/ml/clean-retrain` click engages all 90 features
+- **Tests**: 13/13 backend regression PASSED (iteration_48). Smoke unit test confirms 90 features, no NaN/Inf, `cdl_3_white_soldiers=1` on constructed bullish pattern with `pattern_score=3`
+
 ✅ **51S Timing Edge Slider — TM v8.26.0 (April 23, 2026, Iter 55)**
 - Added a 5–55 second range slider directly below the **51S** button on the bot panel
 - Drag-to-tune the trigger second with no rebuild required — strategy retunes via `twentyOneSecondReversal.setConfig({ fireAtMsLeft })` on every `input` event
