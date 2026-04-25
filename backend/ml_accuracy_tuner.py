@@ -279,6 +279,23 @@ class MLAccuracyTuner:
                     features['volume_osc'] = (vol_fast - vol_slow) / vol_slow * 100.0
                     features['volume_spike'] = 1 if features['volume_osc'] > 15.0 else 0
 
+        # ------------------------------------------------------------
+        # NEW (Apr 24, 2026): Advanced AI Candlestick Patterns +
+        # Multi-Timeframe Fusion + Volume Validation. Mirrors the
+        # behavioral-pattern paradigm — pattern strength, MTF context
+        # alignment, and volume-confirmed reversal logic.
+        # ------------------------------------------------------------
+        cdl_feats = self._extract_candlestick_patterns(open_p, high, low, close)
+        features.update(cdl_feats)
+
+        mtf_feats = self._extract_mtf_features(df, idx)
+        features.update(mtf_feats)
+
+        vol_feats = self._extract_volume_validation(
+            df, idx, cdl_feats.get('cdl_pattern_score', 0)
+        )
+        features.update(vol_feats)
+
         # Hour/minute features
         try:
             ts = df['timestamp'].iloc[idx]
@@ -293,6 +310,257 @@ class MLAccuracyTuner:
             features['minute_sin'] = 0
 
         return features
+
+    # ------------------------------------------------------------------
+    # AI Candlestick Pattern Extractor (Apr 24, 2026)
+    # ------------------------------------------------------------------
+    def _extract_candlestick_patterns(self, open_p, high, low, close) -> Dict:
+        """
+        Detect candlestick reversal/continuation patterns with continuous
+        strength scores rather than just binary flags. Returns up to 16
+        features. `open_p, high, low, close` are 1-D numpy arrays where the
+        last element is the current bar.
+        """
+        f = {}
+        if len(close) < 3:
+            return f
+
+        # Current bar
+        o, hi, lo, c = float(open_p[-1]), float(high[-1]), float(low[-1]), float(close[-1])
+        rng = hi - lo if (hi - lo) > 0 else 1e-9
+        body = abs(c - o)
+        body_ratio = body / rng
+        upper_wick = (hi - max(c, o)) / rng
+        lower_wick = (min(c, o) - lo) / rng
+        is_bull = c > o
+        is_bear = c < o
+
+        # Previous bar
+        po, pc = float(open_p[-2]), float(close[-2])
+        prev_body = abs(pc - po)
+        prev_bull = pc > po
+        prev_bear = pc < po
+
+        # 1) Engulfing
+        eng_bull = is_bull and prev_bear and c >= po and o <= pc and body > prev_body
+        eng_bear = is_bear and prev_bull and c <= po and o >= pc and body > prev_body
+        f['cdl_engulfing_bull'] = 1 if eng_bull else 0
+        f['cdl_engulfing_bear'] = 1 if eng_bear else 0
+        f['cdl_engulfing_strength'] = (body / prev_body) if (eng_bull or eng_bear) and prev_body > 0 else 0
+
+        # 2) Hammer / Inverted Hammer (small body, long lower wick)
+        hammer = body_ratio < 0.35 and lower_wick > 0.55 and upper_wick < 0.15
+        inv_hammer = body_ratio < 0.35 and upper_wick > 0.55 and lower_wick < 0.15
+        f['cdl_hammer'] = 1 if hammer else 0
+        f['cdl_inverted_hammer'] = 1 if inv_hammer else 0
+        f['cdl_hammer_strength'] = (lower_wick / max(body_ratio, 0.05)) if hammer else 0
+
+        # 3) Shooting Star (after up move, small body, long upper wick)
+        recent_up = len(close) >= 4 and close[-2] > close[-4]
+        shooting_star = inv_hammer and recent_up
+        f['cdl_shooting_star'] = 1 if shooting_star else 0
+        f['cdl_shooting_star_strength'] = upper_wick / max(body_ratio, 0.05) if shooting_star else 0
+
+        # 4) Doji (very small body, indecision)
+        is_doji = body_ratio < 0.10
+        f['cdl_doji'] = 1 if is_doji else 0
+        f['cdl_doji_quality'] = (1.0 - body_ratio) if is_doji else 0
+
+        # 5) Pin Bar — body in lower 1/3 (bull) or upper 1/3 (bear) of range
+        close_pos = (c - lo) / rng
+        f['cdl_pin_bar_bull'] = 1 if (lower_wick > 0.6 and close_pos > 0.6) else 0
+        f['cdl_pin_bar_bear'] = 1 if (upper_wick > 0.6 and close_pos < 0.4) else 0
+
+        # 6) Marubozu (body fills most of range, tiny wicks)
+        f['cdl_marubozu_bull'] = 1 if (body_ratio > 0.85 and is_bull) else 0
+        f['cdl_marubozu_bear'] = 1 if (body_ratio > 0.85 and is_bear) else 0
+
+        # 7) 3-bar patterns (Morning/Evening Star, 3 White Soldiers, 3 Black Crows)
+        if len(close) >= 4:
+            o2, c2 = float(open_p[-3]), float(close[-3])
+            o3, c3 = float(open_p[-4]), float(close[-4])
+            body2 = abs(c2 - o2)
+
+            # Morning Star: bear-big, small-doji, bull-big closing above mid of bar1
+            morning_star = (
+                c2 < o2 and body2 > rng * 0.5
+                and abs(pc - po) < body2 * 0.4
+                and is_bull and c > (o2 + c2) / 2
+            )
+            evening_star = (
+                c2 > o2 and body2 > rng * 0.5
+                and abs(pc - po) < body2 * 0.4
+                and is_bear and c < (o2 + c2) / 2
+            )
+            f['cdl_morning_star'] = 1 if morning_star else 0
+            f['cdl_evening_star'] = 1 if evening_star else 0
+
+            # 3 White Soldiers / 3 Black Crows
+            three_white = (
+                c3 < o3 is False and c2 > o2 and pc > po and is_bull
+                and c > pc > c2 and o > o2  # progressively higher closes
+            )
+            three_black = (
+                c2 < o2 and pc < po and is_bear
+                and c < pc < c2 and o < o2
+            )
+            f['cdl_3_white_soldiers'] = 1 if three_white else 0
+            f['cdl_3_black_crows'] = 1 if three_black else 0
+        else:
+            f['cdl_morning_star'] = 0
+            f['cdl_evening_star'] = 0
+            f['cdl_3_white_soldiers'] = 0
+            f['cdl_3_black_crows'] = 0
+
+        # Aggregate pattern score: positive=bullish, negative=bearish
+        bull_score = (
+            f['cdl_engulfing_bull'] * 2 + f['cdl_hammer'] + f['cdl_pin_bar_bull'] * 2
+            + f['cdl_marubozu_bull'] + f['cdl_morning_star'] * 3 + f['cdl_3_white_soldiers'] * 2
+        )
+        bear_score = (
+            f['cdl_engulfing_bear'] * 2 + f['cdl_shooting_star'] + f['cdl_pin_bar_bear'] * 2
+            + f['cdl_marubozu_bear'] + f['cdl_evening_star'] * 3 + f['cdl_3_black_crows'] * 2
+        )
+        f['cdl_pattern_score'] = bull_score - bear_score
+        return f
+
+    # ------------------------------------------------------------------
+    # Multi-Timeframe Fusion Extractor (Apr 24, 2026)
+    # ------------------------------------------------------------------
+    def _extract_mtf_features(self, df: pd.DataFrame, idx: int) -> Dict:
+        """
+        Build 15s and 1m aggregations from the 5s base series and emit
+        agreement/alignment features. 15s = group of 3 bars, 1m = 12 bars.
+        """
+        f = {}
+        if idx < 60:
+            return f
+
+        close = df['close'].values[:idx + 1]
+
+        def agg_close(window: int) -> np.ndarray:
+            # Take last bar of each window — fast proxy for higher-TF close
+            tail = close[-(window * 40):] if len(close) >= window * 40 else close
+            n = (len(tail) // window) * window
+            if n < window * 4:
+                return np.array([])
+            reshaped = tail[-n:].reshape(-1, window)
+            return reshaped[:, -1]
+
+        def rsi(arr, period=14):
+            if len(arr) < period + 1:
+                return 50.0
+            d = np.diff(arr[-(period + 1):])
+            g = np.mean([x for x in d if x > 0]) if any(x > 0 for x in d) else 0
+            ll = np.mean([-x for x in d if x < 0]) if any(x < 0 for x in d) else 0
+            rs_ = g / ll if ll > 0 else 100
+            return 100 - (100 / (1 + rs_))
+
+        def ema_dir(arr, fast=5, slow=13):
+            if len(arr) < slow + 1:
+                return 0
+            ef = pd.Series(arr).ewm(span=fast, adjust=False).mean().values[-1]
+            es = pd.Series(arr).ewm(span=slow, adjust=False).mean().values[-1]
+            return 1 if ef > es else (-1 if ef < es else 0)
+
+        def macd_sign(arr):
+            if len(arr) < 26:
+                return 0
+            ef = pd.Series(arr).ewm(span=12, adjust=False).mean().values[-1]
+            es = pd.Series(arr).ewm(span=26, adjust=False).mean().values[-1]
+            return 1 if ef > es else (-1 if ef < es else 0)
+
+        rsi_5s = rsi(close, 14)
+        ema_5s = ema_dir(close)
+        macd_5s = macd_sign(close)
+        mom_5s = (close[-1] - close[-6]) / close[-6] * 10000 if len(close) > 6 else 0
+
+        c15 = agg_close(3)
+        c1m = agg_close(12)
+
+        rsi_15s = rsi(c15, 14) if len(c15) >= 15 else rsi_5s
+        ema_15s = ema_dir(c15) if len(c15) >= 14 else ema_5s
+        macd_15s = macd_sign(c15) if len(c15) >= 26 else 0
+        rsi_1m = rsi(c1m, 14) if len(c1m) >= 15 else rsi_5s
+        ema_1m = ema_dir(c1m) if len(c1m) >= 14 else ema_5s
+        macd_1m = macd_sign(c1m) if len(c1m) >= 26 else 0
+
+        # RSI agreement: both above 50 or both below 50
+        f['mtf_rsi_5s_15s_align'] = 1 if (rsi_5s - 50) * (rsi_15s - 50) > 0 else 0
+        f['mtf_rsi_5s_1m_align'] = 1 if (rsi_5s - 50) * (rsi_1m - 50) > 0 else 0
+        f['mtf_rsi_1m'] = rsi_1m
+        f['mtf_rsi_15s'] = rsi_15s
+
+        # EMA trend agreement
+        f['mtf_ema_align_5s_15s'] = 1 if (ema_5s == ema_15s and ema_5s != 0) else 0
+        f['mtf_ema_align_5s_1m'] = 1 if (ema_5s == ema_1m and ema_5s != 0) else 0
+        f['mtf_ema_trend_count'] = (1 if ema_5s > 0 else 0) + (1 if ema_15s > 0 else 0) + (1 if ema_1m > 0 else 0)
+
+        # MACD sign agreement (count of TFs in same direction as 5s)
+        macd_dir = 1 if macd_5s > 0 else (-1 if macd_5s < 0 else 0)
+        f['mtf_macd_agreement'] = sum(
+            1 for s in (macd_5s, macd_15s, macd_1m) if s == macd_dir and s != 0
+        )
+        f['mtf_macd_sign_15s'] = macd_15s
+        f['mtf_macd_sign_1m'] = macd_1m
+
+        # Momentum confluence: signed score combining 5s mom + 15s mom + 1m mom
+        mom_15s = ((c15[-1] - c15[-4]) / c15[-4] * 10000) if len(c15) >= 4 and c15[-4] > 0 else 0
+        mom_1m = ((c1m[-1] - c1m[-4]) / c1m[-4] * 10000) if len(c1m) >= 4 and c1m[-4] > 0 else 0
+        f['mtf_momentum_score'] = (mom_5s + mom_15s + mom_1m) / 3.0
+        f['mtf_momentum_15s'] = mom_15s
+        f['mtf_momentum_1m'] = mom_1m
+
+        # Trend strength: how many TFs (out of 3) agree on direction
+        dirs = []
+        for d in (ema_5s, ema_15s, ema_1m):
+            if d > 0:
+                dirs.append(1)
+            elif d < 0:
+                dirs.append(-1)
+            else:
+                dirs.append(0)
+        non_zero = [d for d in dirs if d != 0]
+        if non_zero:
+            f['mtf_trend_strength'] = abs(sum(non_zero)) / len(non_zero)
+        else:
+            f['mtf_trend_strength'] = 0
+        return f
+
+    # ------------------------------------------------------------------
+    # Volume Validation Extractor (Apr 24, 2026)
+    # ------------------------------------------------------------------
+    def _extract_volume_validation(self, df: pd.DataFrame, idx: int, pattern_score: float) -> Dict:
+        """
+        Confirm candlestick patterns with volume context. Returns 4 flags
+        gauging whether pattern + volume agree (institutional confirmation).
+        """
+        f = {}
+        if 'volume' not in df.columns or idx < 20:
+            return f
+
+        vol = df['volume'].values[max(0, idx - 19):idx + 1]
+        if vol.sum() <= 0 or len(vol) < 10:
+            return f
+
+        avg20 = float(np.mean(vol[-20:])) if len(vol) >= 20 else float(np.mean(vol))
+        cur_vol = float(vol[-1])
+        vol_ratio = cur_vol / avg20 if avg20 > 0 else 1.0
+
+        # Volume spike at pattern: pattern fired AND vol > 1.2x avg
+        f['vol_spike_at_pattern'] = 1 if (abs(pattern_score) > 0 and vol_ratio > 1.2) else 0
+
+        # Climactic volume: cur > 2x avg-20 (capitulation/exhaustion)
+        f['vol_climactic'] = 1 if vol_ratio > 2.0 else 0
+
+        # Pattern+volume confirmation: bull pattern with rising volume OR bear with rising
+        prev_vol = float(vol[-2]) if len(vol) >= 2 else cur_vol
+        rising = cur_vol > prev_vol
+        f['vol_pattern_confirm'] = 1 if (abs(pattern_score) > 0 and rising) else 0
+
+        # Volume ratio (continuous) — useful for ML
+        f['vol_ratio_20'] = vol_ratio
+        return f
 
     async def train_from_otc(self, ml_system, symbols: List[str] = None,
                               min_samples: int = 200) -> Dict:
@@ -364,7 +632,7 @@ class MLAccuracyTuner:
             scaler = RobustScaler()
             X_scaled = scaler.fit_transform(X)
 
-            n_features = min(50, X.shape[1])
+            n_features = min(70, X.shape[1])
             selector = SelectKBest(mutual_info_classif, k=n_features)
             X_selected = selector.fit_transform(X_scaled, y)
 
@@ -448,7 +716,7 @@ class MLAccuracyTuner:
                 "tuning_config": {
                     "timeframe_thresholds": TIMEFRAME_THRESHOLDS,
                     "prediction_horizons": TIMEFRAME_HORIZONS,
-                    "feature_selection": "SelectKBest (mutual_info_classif, k=50)",
+                    "feature_selection": "SelectKBest (mutual_info_classif, k=70)",
                     "cross_validation": "TimeSeriesSplit (5 splits)",
                     "new_features_apr23": [
                         "fib_impulse_up", "fib_dist_236", "fib_dist_382",
@@ -458,6 +726,34 @@ class MLAccuracyTuner:
                         "demand_zone_bps", "demand_zone_count",
                         "volume_osc", "volume_spike",
                     ],
+                    "candlestick_mtf_apr24": {
+                        "candlestick_patterns": [
+                            "cdl_engulfing_bull", "cdl_engulfing_bear", "cdl_engulfing_strength",
+                            "cdl_hammer", "cdl_inverted_hammer", "cdl_hammer_strength",
+                            "cdl_shooting_star", "cdl_shooting_star_strength",
+                            "cdl_doji", "cdl_doji_quality",
+                            "cdl_pin_bar_bull", "cdl_pin_bar_bear",
+                            "cdl_marubozu_bull", "cdl_marubozu_bear",
+                            "cdl_morning_star", "cdl_evening_star",
+                            "cdl_3_white_soldiers", "cdl_3_black_crows",
+                            "cdl_pattern_score",
+                        ],
+                        "multi_timeframe_fusion": [
+                            "mtf_rsi_5s_15s_align", "mtf_rsi_5s_1m_align",
+                            "mtf_rsi_15s", "mtf_rsi_1m",
+                            "mtf_ema_align_5s_15s", "mtf_ema_align_5s_1m",
+                            "mtf_ema_trend_count",
+                            "mtf_macd_agreement", "mtf_macd_sign_15s", "mtf_macd_sign_1m",
+                            "mtf_momentum_score", "mtf_momentum_15s", "mtf_momentum_1m",
+                            "mtf_trend_strength",
+                        ],
+                        "volume_validation": [
+                            "vol_spike_at_pattern", "vol_climactic",
+                            "vol_pattern_confirm", "vol_ratio_20",
+                        ],
+                        "k_bumped_to": 70,
+                        "added_on": "2026-04-24",
+                    },
                 },
                 "timestamp": datetime.now(timezone.utc).isoformat()
             }

@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 48 backend regression — Apr 24, 2026 candlestick + MTF + volume validation feature group + SelectKBest k=70 bump. 13/13 pytest cases PASSED. Endpoint surface, unit-level feature extraction, and prior-iteration regression all green.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration48_candlestick_mtf.py",
+    "/app/test_reports/pytest/iteration48_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "ml_accuracy_tuner.py is 772 lines — borderline against the 700-line guideline. As more feature groups land, consider splitting candlestick / MTF / volume helpers into a feature_extractors/ submodule.",
+    "_extract_candlestick_patterns at L399-401: the boolean expression `c3 < o3 is False` is hard to read (chained `is` interacts oddly with comparison). Prefer `(c3 >= o3)` for clarity. Functionally evaluates correctly here because Python parses `c3 < o3 is False` as `(c3 < o3) and (o3 is False)` — `o3` is a float so this is always False, meaning the three-white-soldiers pattern can NEVER fire. This is a likely bug introduced with the new code: pattern flag will always be 0. Suggest E1 rewrite to `c3 >= o3 and c2 > o2 and pc > po and is_bull and c > pc > c2 and o > o2` or drop the c3 condition if intent was 'no requirement on bar -4'.",
+    "_extract_mtf_features L443: `tail = close[-(window * 40):]` caps history at 40 buckets — fine for 15s (120 bars) and 1m (480 bars). With idx=75 only 76 bars are available, so 1m aggregation returns at most 6 buckets, which is below the rsi(period=14) and macd(26) thresholds. The fallback paths (`if len(c1m) >= 15 ... else rsi_5s`) handle this correctly so no NaN, but downstream `mtf_macd_sign_1m` returns 0 silently. Fine in current spec but worth noting that real lift from the 1m timeframe needs ≥312 bars to engage the macd signals.",
+    "extract_5s_features still ignores the `timestamp` column for the new feature groups; if the caller passes a df without timestamp the hour_sin/hour_cos block falls back to 0 (already handled). Good defensive default.",
+    "/api/ml/tuning-report does not currently surface the *count* of total selected features (only k_bumped_to=70). Minor: add `total_feature_pool` int alongside `k_bumped_to` for observability.",
+    "No regression on iteration 47's signal.beta — TestSignalsRegression.test_force_generate_v2_envelope confirms `signal.beta` is present and a bool."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration48_candlestick_mtf.py (new — 13 pytest cases)"
+  ],
+  "success_rate": {
+    "backend": "100% (13/13 pytest cases)",
+    "frontend": "not tested per review request (backend only)"
+  },
+  "test_credentials": "none — all endpoints public under /api/*",
+  "seed_data_creation": "Created 1 TEST_ITER48_* trade report via /api/trades/report and recorded its WIN outcome via /api/trades/outcome. Strategy-tagged for easy pruning.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iteration 48 wiring fully validated: tuning-report exposes candlestick_mtf_apr24 with the exact 19/14/4 sub-group counts, k=70 bump, added_on=2026-04-24. extract_5s_features produces 90 features at idx=75 on synthetic 80-bar OHLCV, includes cdl_/mtf_/vol_/fib_ keys, no NaN/Inf. All four regression endpoints (force-generate-v2, win-rate-stats, trades/report, trades/outcome) remain 200 OK. NOTE for next iteration: the 3-white-soldiers detector at ml_accuracy_tuner.py L399-401 has a logic bug (`c3 < o3 is False`) that makes the pattern unreachable — flag for E1 to fix in a future iteration; not in scope for iteration 48 wiring.",
+  "rca of the issue": "No active bugs in iteration 48 scope. The 3-white-soldiers chained-comparison issue at L399-401 is pre-existing-style code (could have been introduced with this PR per file references). It does not break tests because the pattern silently stays at 0; ML training will simply receive a constant-zero feature for that one pattern. Mitigation: replace `c3 < o3 is False and c2 > o2 ...` with `c3 >= o3 and c2 > o2 ...`."
+}
