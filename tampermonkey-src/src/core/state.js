@@ -11,6 +11,8 @@ export const state = {
   autoInvertEnabled: true,     // explicit toggle: when ON, smart-invert logic applies
   cycleEnabled: false,         // CYCLE mode (rotate through favorites)
   dataCollectionEnabled: false,
+  // 51S Reversal: ON by default. User can deactivate via the 51S panel button.
+  _twentyOneSEnabled: true,
   
   // Trading state
   lastTradeTime: 0,
@@ -266,7 +268,10 @@ export function loadState() {
           state.cycleEnabled = !!parsed.toggles.cycleEnabled;
           state.dataCollectionEnabled = !!parsed.toggles.dataCollectionEnabled;
           state.appSignalEnabled = !!parsed.toggles.appSignalEnabled;
-          state._twentyOneSEnabled = !!parsed.toggles.twentyOneSEnabled;
+          // 51S defaults to true if never saved (fresh install) or undefined.
+          // Explicitly stored false is preserved (user deactivated it on purpose).
+          state._twentyOneSEnabled = parsed.toggles.twentyOneSEnabled !== undefined
+            ? !!parsed.toggles.twentyOneSEnabled : true;
         }
         if (parsed.cycleConfig) state._cycleConfig = parsed.cycleConfig;
         if (parsed.twentyOneSConfig) state._twentyOneSConfig = parsed.twentyOneSConfig;

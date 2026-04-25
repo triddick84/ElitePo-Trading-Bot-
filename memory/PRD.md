@@ -3,6 +3,13 @@
 ## Last Updated: April 25, 2026
 
 ## Current Status
+✅ **51S Default-On — TM v8.32.0 (April 25, 2026, Iter 53)**
+- Per user: 51 Seconds Reversal strategy now defaults to **ACTIVE on every fresh script load**. User must press the `51S` button explicitly to deactivate
+- `state._twentyOneSEnabled: true` baked into the initial state object (`/app/tampermonkey-src/src/core/state.js`)
+- `loadState()` updated: same pattern as `autoInvertEnabled` — if `parsed.toggles.twentyOneSEnabled === undefined` (fresh install / older saved-state schema), defaults to **true**. If user had previously saved `false` (explicitly deactivated), that choice is preserved across reloads
+- `_restoreToggleStates()` already auto-calls `twentyOneSecondReversal.enable()` + `update21sReversalDisplay(true)` when state flag is truthy → button paints active and strategy starts ticking immediately
+- TM userscript version bumped **8.31.0 → 8.32.0**, both `pocket-option-auto-trader.user.js` and `…-modular.user.js` rebuilt and deployed to `/frontend/public/`
+
 ✅ **Live OTC Overlay + ML Ensemble Voting Wired into force-generate-v2 — Iter 52 (April 25, 2026)**
 - **P1 — Live OTC Overlay**: TM-collected candles via `POST /api/signals/collect-otc-candles` now tag every doc with `source: 'po_live'`. `$set` upsert on `(symbol, timestamp)` means po_live always wins over an earlier `oanda_backfill` row at the same slot — real PO ticks progressively replace synthetic backfill as the bot runs
 - **GET /api/signals/otc-candle-stats** now exposes `summary.po_live_candles`, `summary.oanda_backfill_candles`, `summary.overlay_ratio` plus per-symbol `source_breakdown` for live monitoring of the overlay progression
