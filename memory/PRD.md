@@ -3,6 +3,14 @@
 ## Last Updated: April 23, 2026
 
 ## Current Status
+✅ **51s Reversal Strategy Simplified to Timeframe-Agnostic — TM v8.24.0 (April 23, 2026, Iter 52)**
+- **Removed all 1H-specific logic**: no more `_hourOfNow()`, hourly OHLC window, or `HOUR_MS` constant
+- **Now works on any chart timeframe** (1m/5m/15m/1H/etc) — the strategy just monitors the candle countdown and fires when seconds===51, opposite of current candle direction
+- **New-candle detection via countdown jump-up**: when `cd.totalSeconds` rises by ≥3s (e.g. 0:01→4:59), captures current price as candle open + bumps `candleEpoch`
+- **Cooldown key changed**: `(candleEpoch, cd.minutes)` — fires exactly once per `:51` countdown slot per candle, naturally adapts to timeframe (1 fire/min on 1m, 5 fires per 5m candle, 60 fires per 1H candle)
+- Button label: `1H51` → `51S`. Tooltip updated. Console logs prefixed `[51s]`
+- Lint clean
+
 ✅ **Full Settings Persistence Fix — TM v8.23.0 (April 23, 2026, Iter 51)**
 - **Root cause**: `_oneHour51sEnabled` + `_oneHour51sConfig` were missing from `state.js` `saveState()`/`loadState()` — the 1H51 feature was never wired into persistence even though restore code read them. Auto-save also only refreshed the 21S mirror.
 - **Fixed in `state.js`**: schema bumped to v2, now serializes 7 toggles (SCAN, AUTO, A-INV, CYCLE, APP, 21S, 1H51) + 3 configs (cycle, 21S, 1H51) + selectedStrategy + stats/money/inversion/assetHistory. Saves `_savedAt` for restore-age display.
