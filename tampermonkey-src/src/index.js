@@ -6,7 +6,7 @@
 import { CONFIG } from './core/config.js';
 import { state, setState, loadState, saveState, resetStats } from './core/state.js';
 import { log, info, warn, success, error } from './core/logger.js';
-import { createPanel, initPanelEvents, updateStatsDisplay, updateInvertDisplay, updateStatusDot, cleanupPanel, populateStrategies, update21sReversalDisplay, set51sTimingSlider, updateActiveAsset, setToggleActive } from './ui/panel.js';
+import { createPanel, initPanelEvents, updateStatsDisplay, updateInvertDisplay, updateStatusDot, cleanupPanel, populateStrategies, update21sReversalDisplay, set51sTimingSlider, updateActiveAsset, setToggleActive, setSignalPreview } from './ui/panel.js';
 import { strategyManager } from './strategies/manager.js';
 import { tradeExecutor } from './trading/executor.js';
 import { tradeResultWatcher } from './trading/tradeResultWatcher.js';
@@ -77,6 +77,10 @@ class EliteTradingBot {
         if (cur) updateActiveAsset(cur, this._fireCount);
       } catch (_e) { /* ignore */ }
     }, 1_500);
+
+    // Live signal-quality preview poller — gives the user a "should I press
+    // GO?" cue right above the GO button (Iter 55, Apr 25, 2026).
+    this.startSignalPreview();
 
     // Allow tradeResultWatcher to bump the count on every arm (= every fire)
     window.__eliteBotIncFireCount = (asset) => {
@@ -358,6 +362,57 @@ class EliteTradingBot {
     updateStatusDot('connected');
     log('Scanning stopped');
   }
+
+  /**
+   * Live signal-quality preview poller (Apr 25, 2026, Iter 55).
+   * Polls /signals/force-generate-v2 every 8s for the current asset and
+   * paints quality + direction + confidence into the preview row above
+   * GO so the user can decide whether it's worth pulling the trigger.
+   */
+  startSignalPreview() {
+    if (this.previewInterval) return;
+    const POLL_MS = 8000;
+    let inFlight = false;
+
+    const tick = async () => {
+      if (inFlight) return;  // skip overlapping requests
+      const asset = getCurrentAsset();
+      if (!asset) {
+        setSignalPreview({ error: 'no asset' });
+        return;
+      }
+      inFlight = true;
+      try {
+        const resp = await post(`/signals/force-generate-v2?asset=${encodeURIComponent(asset)}&expiry_seconds=60`, {});
+        const sig = resp?.signal;
+        if (sig) {
+          setSignalPreview({
+            direction: sig.direction,
+            confidence: sig.confidence,
+            quality: sig.quality,
+            agreeing: sig.agreeing_strategies,
+          });
+        } else {
+          setSignalPreview({ error: 'no signal' });
+        }
+      } catch (e) {
+        setSignalPreview({ error: 'offline' });
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    // Kick off immediately, then on interval
+    tick();
+    this.previewInterval = setInterval(tick, POLL_MS);
+  }
+
+  stopSignalPreview() {
+    if (this.previewInterval) {
+      clearInterval(this.previewInterval);
+      this.previewInterval = null;
+    }
+  }
   
   async executeSingleScan() {
     info('[GO] Force scan triggered - generating HIGH-ACCURACY signal NOW...');
@@ -539,6 +594,8 @@ class EliteTradingBot {
 
     if (this.statsInterval) clearInterval(this.statsInterval);
     if (this.autoSaveInterval) clearInterval(this.autoSaveInterval);
+    if (this.assetIndicatorInterval) clearInterval(this.assetIndicatorInterval);
+    this.stopSignalPreview();
 
     log('Bot cleanup complete');
   }

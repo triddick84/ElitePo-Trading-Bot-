@@ -3,6 +3,19 @@
 ## Last Updated: April 25, 2026
 
 ## Current Status
+✅ **Live Signal-Quality Preview Bar — TM v8.34.0 (April 25, 2026, Iter 55)**
+- Compact one-row preview indicator added directly **under the SCAN/AUTO/GO row**, polled every 8s. Shows: `Live ▮▮▮▮  HIGH ▲ CALL 78% · 6 strats`
+- **Color-coded by quality**:
+  - HIGH = green left-border + green bar fill (`#22c55e`)
+  - MEDIUM = amber (`#d29922`)
+  - LOW = red (`#f85149`)
+  - Idle / no asset / network error = grey
+- **Bar fill** maps confidence linearly across the realistic 50–82% band (signals never go below 52 by design, so 50% = 0% fill, 82% = full)
+- **Polling**: calls `/signals/force-generate-v2?asset=<current_asset>` every 8s. `inFlight` flag prevents overlap if a slow response is in transit. Pauses gracefully when asset is undetectable
+- **Lifecycle**: starts on bot init, stops on `cleanup()`. Asset-indicator clearInterval was also missing from cleanup → fixed in same patch
+- Has `data-testid="signal-quality-preview"` for testing
+- TM userscript version bumped **8.33.0 → 8.34.0**, both legacy and modular `.user.js` rebuilt and deployed
+
 ✅ **GO Button Confidence-Gate Fix — TM v8.33.0 (April 25, 2026, Iter 54)**
 - **Bug**: User reported "GO is not working" with log line `✗ signal validation failed`. Root cause: backend's `force-generate-v2` returns confidence in the realistic 52–82% band; for LOW-quality signals it caps at 65 but does NOT floor it — confidence often comes back at 58–62%. TM's `validateSignal()` rejects anything below `MIN_CONFIDENCE=65`, silently dropping the GO trade
 - **Fix**: `validateSignal(signal, { force })` now accepts a `force` flag. When called from GO (`source==='go-force'`) or 51S Reversal (`source==='21s-reversal'`), the `MIN_CONFIDENCE` gate is bypassed — the user explicitly asked to fire NOW. Direction validity and payout floor still enforced (guards against bad inputs / sub-65% payout markets)

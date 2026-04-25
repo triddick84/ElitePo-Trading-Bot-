@@ -367,6 +367,66 @@ function injectCSS() {
       flex: 0 0 auto !important;
       font-variant-numeric: tabular-nums !important;
     }
+    .${P}qualrow {
+      display: flex !important;
+      align-items: center !important;
+      gap: 6px !important;
+      padding: 3px 8px !important;
+      margin-bottom: ${mobile ? '6px' : '8px'} !important;
+      background: rgba(0,0,0,0.3) !important;
+      border: 1px solid #21262d !important;
+      border-left: 3px solid #484f58 !important;
+      border-radius: 6px !important;
+      transition: border-color 0.3s, background 0.3s !important;
+    }
+    .${P}qualrow.high {
+      border-left-color: #22c55e !important;
+      background: linear-gradient(90deg, rgba(34,197,94,0.10), rgba(34,197,94,0.02)) !important;
+    }
+    .${P}qualrow.medium {
+      border-left-color: #d29922 !important;
+      background: linear-gradient(90deg, rgba(210,153,34,0.10), rgba(210,153,34,0.02)) !important;
+    }
+    .${P}qualrow.low {
+      border-left-color: #f85149 !important;
+      background: linear-gradient(90deg, rgba(248,81,73,0.08), rgba(248,81,73,0.02)) !important;
+    }
+    .${P}quallbl {
+      font-size: ${mobile ? 9 : 10}px !important;
+      color: #8b949e !important;
+      font-weight: 700 !important;
+      letter-spacing: 0.5px !important;
+      flex: 0 0 auto !important;
+      text-transform: uppercase !important;
+    }
+    .${P}qualbar {
+      flex: 0 0 60px !important;
+      height: 6px !important;
+      background: rgba(255,255,255,0.06) !important;
+      border-radius: 3px !important;
+      overflow: hidden !important;
+      position: relative !important;
+    }
+    .${P}qualfill {
+      display: block !important;
+      height: 100% !important;
+      width: 0% !important;
+      background: #484f58 !important;
+      transition: width 0.4s, background 0.3s !important;
+    }
+    .${P}qualrow.high .${P}qualfill { background: #22c55e !important; }
+    .${P}qualrow.medium .${P}qualfill { background: #d29922 !important; }
+    .${P}qualrow.low .${P}qualfill { background: #f85149 !important; }
+    .${P}qualval {
+      flex: 1 !important;
+      font-size: ${mobile ? 10 : 11}px !important;
+      color: #e6edf3 !important;
+      font-weight: 700 !important;
+      font-variant-numeric: tabular-nums !important;
+      white-space: nowrap !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+    }
     .${P}stratlbl {
       font-size: ${mobile ? 9 : 10}px !important;
       color: #8b949e !important;
@@ -459,6 +519,11 @@ export function createPanel() {
           <button id="${P}scan" class="${P}btn">SCAN</button>
           <button id="${P}auto" class="${P}btn">AUTO</button>
           <button id="${P}go" class="${P}btn ${P}btn-go">GO</button>
+        </div>
+        <div class="${P}qualrow" id="${P}qualrow" data-testid="signal-quality-preview" title="Live signal preview from backend (refreshes every 8s). Tells you whether it's worth pulling GO right now.">
+          <span class="${P}quallbl">Live</span>
+          <span class="${P}qualbar" id="${P}qualbar"><span class="${P}qualfill" id="${P}qualfill"></span></span>
+          <span class="${P}qualval" id="${P}qualval">…polling</span>
         </div>
         <div class="${P}row">
           <button id="${P}cycle" class="${P}btn ${P}btn-cycle" title="Rotate through favorites, scan each, auto-trade best">CYCLE</button>
@@ -772,6 +837,47 @@ export function updateActiveAsset(symbol, count = null) {
   if (cntEl && count !== null && count !== undefined) {
     cntEl.textContent = `#${count}`;
   }
+}
+
+/**
+ * Update the live signal-quality preview row (under the GO button).
+ * Polled every 8s by index.js — gives the user a "should I press GO?" cue.
+ *
+ * @param {Object|null} info - {direction, confidence, quality, agreeing} or null on error
+ */
+export function setSignalPreview(info) {
+  const row = q('qualrow');
+  const fill = q('qualfill');
+  const valEl = q('qualval');
+  if (!row || !valEl) return;
+
+  // Reset classes
+  row.classList.remove('high', 'medium', 'low');
+
+  if (!info || !info.direction) {
+    valEl.textContent = info?.error || '—';
+    if (fill) fill.style.width = '0%';
+    return;
+  }
+
+  const conf = Number(info.confidence) || 0;
+  const quality = (info.quality || 'LOW').toUpperCase();
+  const dir = (info.direction || '').toUpperCase();
+  const dirArrow = dir === 'CALL' ? '▲' : (dir === 'PUT' ? '▼' : '');
+  const agreeing = info.agreeing != null ? ` · ${info.agreeing} strats` : '';
+
+  // Map quality → CSS class
+  if (quality === 'HIGH') row.classList.add('high');
+  else if (quality === 'MEDIUM') row.classList.add('medium');
+  else row.classList.add('low');
+
+  if (fill) {
+    // Bar fill: 50% conf = 0% bar, 82% conf = 100% bar (52–82% realistic band)
+    const pct = Math.max(0, Math.min(100, ((conf - 50) / 32) * 100));
+    fill.style.width = `${pct}%`;
+  }
+
+  valEl.textContent = `${quality} ${dirArrow} ${dir} ${conf.toFixed(0)}%${agreeing}`;
 }
 
 /**
