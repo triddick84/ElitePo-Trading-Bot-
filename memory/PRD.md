@@ -3,6 +3,12 @@
 ## Last Updated: April 25, 2026
 
 ## Current Status
+✅ **51S Default-On — One-Time Migration v8.35.0 (April 25, 2026, Iter 56)**
+- **User feedback**: 51S Reversal still loaded as OFF on the user's setup despite Iter 53's `_twentyOneSEnabled: true` default. Root cause: the user (or their browser) had previously persisted `twentyOneSEnabled: false` in `botState` from an older build where 51S defaulted to off. Iter 53's "default to true if undefined" logic preserved that old `false` (which is the correct behavior for explicit user choices, but here it was a stale artifact)
+- **Fix**: bumped state schema version `_v: 3 → 4`. `loadState()` now performs a one-time migration: if loaded `_v < 4`, force `_twentyOneSEnabled = true` regardless of saved value. After this migration the user's explicit deactivate-clicks are honored permanently (subsequent saves carry `_v: 4` so the migration runs exactly once per script-version-bump)
+- Compiled bundle confirms `_twentyOneSEnabled=n<4||(void 0===e.toggles.twentyOneSEnabled||!!e.toggles.twentyOneSEnabled)` — short-circuits to true when loaded schema is below 4, otherwise honors saved value
+- TM userscript version bumped **8.34.0 → 8.35.0**
+
 ✅ **Live Signal-Quality Preview Bar — TM v8.34.0 (April 25, 2026, Iter 55)**
 - Compact one-row preview indicator added directly **under the SCAN/AUTO/GO row**, polled every 8s. Shows: `Live ▮▮▮▮  HIGH ▲ CALL 78% · 6 strats`
 - **Color-coded by quality**:

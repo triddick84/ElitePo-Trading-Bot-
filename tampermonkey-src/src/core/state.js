@@ -239,7 +239,7 @@ export function saveState() {
       // Selected strategy (from dropdown)
       selectedStrategy: state._selectedStrategy || null,
       // Save schema version so future migrations can reset cleanly
-      _v: 3,
+      _v: 4,
       _savedAt: Date.now(),
     }));
   }
@@ -254,6 +254,7 @@ export function loadState() {
       const saved = GM_getValue('botState', null);
       if (saved) {
         const parsed = JSON.parse(saved);
+        const loadedVersion = parsed._v || 1;
         if (parsed.stats) state.stats = { ...state.stats, ...parsed.stats };
         if (parsed.moneyManagement) state.moneyManagement = { ...state.moneyManagement, ...parsed.moneyManagement };
         if (parsed.ui) state.ui = { ...state.ui, ...parsed.ui };
@@ -268,17 +269,23 @@ export function loadState() {
           state.cycleEnabled = !!parsed.toggles.cycleEnabled;
           state.dataCollectionEnabled = !!parsed.toggles.dataCollectionEnabled;
           state.appSignalEnabled = !!parsed.toggles.appSignalEnabled;
-          // 51S defaults to true if never saved (fresh install) or undefined.
-          // Explicitly stored false is preserved (user deactivated it on purpose).
-          state._twentyOneSEnabled = parsed.toggles.twentyOneSEnabled !== undefined
-            ? !!parsed.toggles.twentyOneSEnabled : true;
+          // 51S Reversal — one-time migration (schema < 4): force ON regardless
+          // of saved value, so users with stale `false` from older builds get
+          // the new "default ON" experience. After this migration the user's
+          // explicit deactivate clicks are honored permanently.
+          if (loadedVersion < 4) {
+            state._twentyOneSEnabled = true;
+          } else {
+            state._twentyOneSEnabled = parsed.toggles.twentyOneSEnabled !== undefined
+              ? !!parsed.toggles.twentyOneSEnabled : true;
+          }
         }
         if (parsed.cycleConfig) state._cycleConfig = parsed.cycleConfig;
         if (parsed.twentyOneSConfig) state._twentyOneSConfig = parsed.twentyOneSConfig;
         if (parsed.selectedStrategy) state._selectedStrategy = parsed.selectedStrategy;
         // Expose meta for debug / restore log
         state._lastSavedAt = parsed._savedAt || null;
-        state._stateSchemaVersion = parsed._v || 1;
+        state._stateSchemaVersion = loadedVersion;
       }
     } catch (e) {
       console.error('Failed to load state:', e);
