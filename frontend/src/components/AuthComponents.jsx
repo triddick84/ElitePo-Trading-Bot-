@@ -180,7 +180,7 @@ export const LoginPage = ({ onClose }) => {
           <div className="flex justify-center mb-2">
             <Shield className="w-12 h-12 text-purple-500" />
           </div>
-          <CardTitle className="text-2xl text-white">GPT Signal Bot</CardTitle>
+          <CardTitle className="text-2xl text-white">AI's Elite PO Traders Bot</CardTitle>
           <CardDescription>Sign in to access your trading dashboard</CardDescription>
         </CardHeader>
         <CardContent>

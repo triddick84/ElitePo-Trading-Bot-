@@ -14,10 +14,10 @@ const SCRIPT_VERSION = fs
 
 // Userscript header - preserved at top of bundle
 const userscriptHeader = `// ==UserScript==
-// @name         Elite Pocket Option Trading Bot
+// @name         AI's Elite PO Traders Bot
 // @namespace    https://momentum-trade-test.preview.emergentagent.com
 // @version      ${SCRIPT_VERSION}
-// @description  Elite AI-powered trading bot - CYCLE mode, APP signal poller, A-INV toggle, 21s + 51s Reversal via direct-WS, SSID Bridge, persistent settings
+// @description  AI's Elite PO Traders Bot - CYCLE mode, APP signal poller, A-INV toggle, 21s + 51s Reversal via direct-WS, SSID Bridge, persistent settings
 // @author       Elite Trading
 // @match        *://*.pocketoption.com/*
 // @match        *://pocketoption.com/*

@@ -1,5 +1,5 @@
 /*
- * Elite Pocket Option Trading Bot v8.0.0
+ * AI's Elite PO Traders Bot v8.0.0
  * Main entry point - coordinates all modules
  */
 

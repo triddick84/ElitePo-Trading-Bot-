@@ -1,5 +1,5 @@
 /**
- * UI Panel Component - Elite Pocket Option Trading Bot
+ * UI Panel Component - AI's Elite PO Traders Bot
  * 
  * Mobile + Desktop compatible.
  * Uses direct DOM injection with !important inline styles.
@@ -443,7 +443,7 @@ export function createPanel() {
   panelEl = document.createElement('div');
   panelEl.id = `${P}host`;
 
-  const titleShort = isMobile() ? 'Elite Bot' : CONFIG.BOT_NAME;
+  const titleShort = isMobile() ? 'AI Elite Bot' : CONFIG.BOT_NAME;
 
   panelEl.innerHTML = `
     <div id="${P}panel">

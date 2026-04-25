@@ -1,11 +1,11 @@
 /**
- * Configuration module for Elite Pocket Option Trading Bot
+ * Configuration module for AI's Elite PO Traders Bot
  * Central configuration for all bot settings
  */
 
 export const CONFIG = {
   // Bot Info
-  BOT_NAME: 'Elite Pocket Option Trading Bot',
+  BOT_NAME: "AI's Elite PO Traders Bot",
   // Sourced from /app/tampermonkey-src/version.txt at build time so the
   // @version in the userscript header and BOT_VERSION here can never drift.
   BOT_VERSION: typeof __SCRIPT_VERSION__ !== 'undefined' ? __SCRIPT_VERSION__ : '0.0.0-dev',

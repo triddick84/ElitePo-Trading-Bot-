@@ -118,7 +118,7 @@ function ProtectedApp() {
             <div className="w-20 h-20 bg-gradient-to-br from-purple-600 to-purple-800 rounded-2xl flex items-center justify-center shadow-lg mx-auto mb-4">
               <span className="text-4xl">🤖</span>
             </div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-purple-600 bg-clip-text text-transparent">GPT Signal Bot</h1>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-purple-600 bg-clip-text text-transparent">AI's Elite PO Traders Bot</h1>
             <p className="text-slate-500 mt-2">AI-Powered Trading System</p>
           </div>
           <LoginPage />
@@ -197,7 +197,7 @@ function ProtectedApp() {
       <div className="min-h-screen bg-[#0a0a0f] trading-grid flex items-center justify-center">
         <div className="text-center space-y-4">
           <div className="animate-spin w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full mx-auto glow-purple"></div>
-          <p className="text-slate-300 text-lg font-medium">Loading GPT Signal Bot...</p>
+          <p className="text-slate-300 text-lg font-medium">Loading AI's Elite PO Traders Bot...</p>
           <p className="text-slate-500 text-sm">Initializing trading systems...</p>
         </div>
       </div>
@@ -216,7 +216,7 @@ function ProtectedApp() {
                   <span className="text-white font-bold text-lg">🤖</span>
                 </div>
                 <div>
-                  <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-purple-600 bg-clip-text text-transparent">GPT Signal Bot</h1>
+                  <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-purple-600 bg-clip-text text-transparent">AI's Elite PO Traders Bot</h1>
                   <p className="text-slate-500 text-sm">AI-Powered Trading System • Real Market Data</p>
                 </div>
               </div>

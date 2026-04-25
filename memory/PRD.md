@@ -3,6 +3,14 @@
 ## Last Updated: April 25, 2026
 
 ## Current Status
+✅ **App Rename — TM v8.31.0 (April 25, 2026, Iter 49)**
+- Application rebranded from `GPT Signal Bot` / `Elite Pocket Option Trading Bot` → **`AI's Elite PO Traders Bot`**
+- Updated locations:
+  - Frontend: `index.html` `<title>`, `App.js` (header + loading screen + sidebar — 3 instances), `AuthComponents.jsx` (login card title), `SettingsPage.jsx` (Telegram test message), `PocketOptionPage.jsx` (page subtitle)
+  - Tampermonkey: `webpack.config.js` `@name` + `@description`, `core/config.js` `BOT_NAME`, `ui/panel.js` mobile short label (now `AI Elite Bot`), index.js + panel.js header comments
+- TM userscript version bumped `8.30.0 → 8.31.0` (forces TM auto-reinstall). Both `pocket-option-auto-trader.user.js` and `pocket-option-auto-trader-modular.user.js` rebuilt + copied to `frontend/public/`
+- Verified via screenshot: login screen now shows "AI's Elite PO Traders Bot" both in the page brand header and the sign-in card title
+
 ✅ **AI Candlestick Patterns + Multi-Timeframe Fusion + Volume Validation — Iter 48 (April 25, 2026)**
 - **`MLAccuracyTuner.extract_5s_features()` now emits 90 features** (was 53) — adds 3 new feature groups inspired by behavioral-pattern AI candlestick analysis:
   - **Candlestick Patterns (19 features)** — `cdl_engulfing_bull/bear/strength`, `cdl_hammer/inverted_hammer/hammer_strength`, `cdl_shooting_star/strength`, `cdl_doji/quality`, `cdl_pin_bar_bull/bear`, `cdl_marubozu_bull/bear`, `cdl_morning_star/evening_star`, `cdl_3_white_soldiers/3_black_crows`, `cdl_pattern_score` (signed aggregate)

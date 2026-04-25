@@ -515,7 +515,7 @@ const SettingsPage = () => {
   const testTelegram = async () => {
     try {
       const response = await axios.post(`${API}/telegram-bot/send`, {
-        message: '🧪 Test message from GPT Signal Bot settings!'
+        message: '🧪 Test message from AI\'s Elite PO Traders Bot settings!'
       });
       if (response.data?.success) {
         toast.success('Test message sent to Telegram!');

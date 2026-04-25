@@ -499,7 +499,7 @@ const PocketOptionPage = () => {
             <span className="text-4xl">⚙️</span>
             Pocket Option Integration
           </h1>
-          <p className="text-slate-400 mt-1">Elite Pocket Option Trading Bot v8.4 - AI-Powered Automation</p>
+          <p className="text-slate-400 mt-1">AI's Elite PO Traders Bot v8.4 - AI-Powered Automation</p>
         </div>
         <Button 
           onClick={fetchAllStatus}
