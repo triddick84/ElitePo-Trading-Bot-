@@ -34,8 +34,8 @@ import { livePriceTracker } from '../trading/livePriceTracker.js';
 import { reportTrade, post, get as apiGet } from '../utils/api.js';
 
 const LOOP_INTERVAL_MS = 100;
-const FIRE_AT_MS_LEFT = 51_000;
-const DEFAULT_TOLERANCE_MS = 1_000;   // ±1s around the 51s-left mark
+const FIRE_AT_MS_LEFT = 49_000;
+const DEFAULT_TOLERANCE_MS = 1_000;   // ±1s around the 49s-left mark (fires ~2s after the :51 mark)
 const DEFAULT_MIN_BODY_BPS = 0.1;     // near-zero; strategy is timing-based, not body-filter
 const TICK_HISTORY_MAX = 120;         // 12s @ 100ms
 
