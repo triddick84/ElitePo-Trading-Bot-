@@ -573,14 +573,45 @@ export function getFavorites() {
  */
 export function switchAsset(symbol) {
   const target = (symbol || '').toUpperCase().replace(/_OTC$/, '');
-  // Build text variants we'll match against: "EUR/USD OTC", "EURUSD OTC", "EURUSD"
+  // Build text variants we'll match against
   const variants = new Set();
   variants.add(target);
   if (target.length === 6) variants.add(`${target.slice(0, 3)}/${target.slice(3)}`);
   variants.add(`${target} OTC`);
   if (target.length === 6) variants.add(`${target.slice(0, 3)}/${target.slice(3)} OTC`);
 
-  // Try clicking on favorites bar — same broader selector set as getFavorites
+  // Walk up to find a clickable ancestor (the React click handler is rarely
+  // bound to the deep text element).
+  const findClickableParent = (el) => {
+    let cur = el;
+    for (let i = 0; i < 6 && cur; i++) {
+      const role = cur.getAttribute && cur.getAttribute('role');
+      const tag = cur.tagName;
+      const cls = (cur.className || '').toString();
+      if (
+        tag === 'A' || tag === 'BUTTON' || tag === 'LI' ||
+        role === 'button' || role === 'tab' ||
+        /asset-item|favorit|symbol-item|pair-item/i.test(cls)
+      ) return cur;
+      cur = cur.parentElement;
+    }
+    return el;
+  };
+
+  // Real React-friendly click: dispatch mousedown → mouseup → click with bubbles
+  const reactClick = (target) => {
+    if (!target) return;
+    const opts = { bubbles: true, cancelable: true, view: window, button: 0 };
+    try {
+      target.dispatchEvent(new MouseEvent('mousedown', opts));
+      target.dispatchEvent(new MouseEvent('mouseup', opts));
+      target.dispatchEvent(new MouseEvent('click', opts));
+    } catch (_e) {
+      try { target.click(); } catch (_e2) { /* last resort */ }
+    }
+  };
+
+  const before = getCurrentAsset();
   const favSelectors = [
     '.favorites-panel .asset-item',
     '.favorites .pair-item',
@@ -589,16 +620,27 @@ export function switchAsset(symbol) {
     '.assets-block__favorites .asset-item',
     '.assets-bar .asset-item',
     '[class*="favorit"][class*="asset"]',
+    '[class*="favorit"][class*="symbol"]',
     '[class*="assets-favorit"] li',
+    '[class*="assets-favorit"] [class*="text"]',
   ];
+
   for (const sel of favSelectors) {
     const els = document.querySelectorAll(sel);
     for (const el of els) {
       const t = (el.textContent || '').trim().toUpperCase();
       for (const v of variants) {
         if (t.includes(v)) {
-          el.click();
+          const target = findClickableParent(el);
+          reactClick(target);
           log(`Switched to asset: ${symbol} (matched '${v}' in '${sel}')`);
+          // Post-click sanity-check: schedule a 1s verification
+          setTimeout(() => {
+            const after = getCurrentAsset();
+            if (after === before) {
+              warn(`switchAsset: clicked '${v}' but current asset still '${after}' — React handler may have rejected synthetic event. Try clicking it manually once to re-prime.`);
+            }
+          }, 1_000);
           return true;
         }
       }
@@ -606,18 +648,18 @@ export function switchAsset(symbol) {
   }
 
   // Try search
-  const searchInput = document.querySelector('.asset-search input, [data-testid="asset-search"]');
+  const searchInput = document.querySelector('.asset-search input, [data-testid="asset-search"], input[placeholder*="search" i]');
   if (searchInput) {
     searchInput.value = target;
     searchInput.dispatchEvent(new Event('input', { bubbles: true }));
     setTimeout(() => {
-      const result = document.querySelector('.search-results .asset-item');
-      if (result) result.click();
+      const result = document.querySelector('.search-results .asset-item, [class*="search-result"] [class*="item"]');
+      if (result) reactClick(findClickableParent(result));
     }, 500);
     return true;
   }
 
-  warn(`Could not switch to asset: ${symbol}`);
+  warn(`Could not switch to asset: ${symbol} (no selector matched and no search input found)`);
   return false;
 }
 
