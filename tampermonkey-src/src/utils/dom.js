@@ -471,60 +471,152 @@ export function executeTrade(direction, amount = null) {
  * Get favorites bar assets
  * @returns {string[]} Array of asset symbols
  */
+/**
+ * Scrape the favorites bar / favorites panel for the asset symbols the user
+ * has pinned. Falls through multiple selector families because Pocket Option
+ * has rewritten this part of the UI several times.
+ *
+ * Strategy:
+ *   1. Try known class names (legacy + current)
+ *   2. Try a structural scan: the favorites container is usually the topmost
+ *      horizontal asset bar; symbols look like "EUR/USD OTC" or "GBPJPY"
+ *   3. De-duplicate and normalize to the underscore-OTC format the rest of
+ *      the codebase uses.
+ *
+ * Returns an array of normalized symbols, e.g. ["EURUSD_OTC", "GBPJPY_OTC"].
+ */
 export function getFavorites() {
   const favorites = [];
-  const selectors = [
+  const seen = new Set();
+
+  const pushSymbol = (raw) => {
+    if (!raw) return;
+    const cleaned = raw
+      .replace(/\d+%/g, '')              // strip payout % numbers
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!cleaned) return;
+    // Normalize: "EUR/USD OTC" → "EURUSD_OTC", "GBPJPY OTC" → "GBPJPY_OTC"
+    const normalized = normalizeAssetName(cleaned);
+    if (!normalized || seen.has(normalized)) return;
+    // Sanity check: must have at least 6 letters before _OTC suffix or be
+    // a recognised crypto/index/commodity code (≥3 chars)
+    const symPart = normalized.replace(/_OTC$/, '');
+    if (symPart.length < 3 || /[^A-Z0-9]/.test(symPart)) return;
+    seen.add(normalized);
+    favorites.push(normalized);
+  };
+
+  // 1. Known selector families — try each in order
+  const SELECTOR_GROUPS = [
     '.favorites-panel .asset-item',
     '.favorites .pair-item',
     '[data-testid="favorite-asset"]',
+    '.assets-block__favorites .symbol',
+    '.assets-block__favorites [class*="symbol"]',
+    '.assets-bar .asset-item',
+    '.assets-bar [class*="favorite"]',
+    '[class*="favorit"][class*="asset"]',
+    '[class*="favorit"][class*="symbol"]',
+    '[class*="assets-favorit"] [class*="symbol"]',
+    '[class*="assets-favorit"] [class*="text"]',
+    '[class*="assets-favorit"] li',
+    'header [class*="symbol"]',
+    '[class*="header"] [class*="symbol"]',
+    'div[class*="symbols"] [class*="item"]',
   ];
-  
-  for (const selector of selectors) {
-    const items = document.querySelectorAll(selector);
-    items.forEach(item => {
-      const text = item.textContent.trim();
-      if (text) {
-        favorites.push(text.replace(/[\/\s-]/g, '').toUpperCase());
-      }
+
+  for (const sel of SELECTOR_GROUPS) {
+    const items = document.querySelectorAll(sel);
+    if (!items || items.length === 0) continue;
+    items.forEach((el) => {
+      const txt = el.textContent || '';
+      pushSymbol(txt);
     });
-    
-    if (favorites.length > 0) break;
+    if (favorites.length > 0) {
+      // log(`[favorites] selector '${sel}' returned ${favorites.length} symbols`);
+      break;
+    }
   }
-  
+
+  // 2. Structural fallback: walk leaf elements at the top of the page that
+  //    look like asset-symbol labels.
+  if (favorites.length === 0) {
+    try {
+      const candidates = document.querySelectorAll('div, span, li, button, a');
+      const symbolRe = /^([A-Z]{2,4}\/?[A-Z]{2,4})(\s+OTC)?\b/;
+      let scanned = 0;
+      for (const el of candidates) {
+        if (scanned > 800) break;       // bound work — large pages
+        scanned++;
+        if (el.children.length > 0) continue;  // leaf only
+        const txt = (el.textContent || '').trim();
+        if (!txt || txt.length > 18) continue;
+        if (symbolRe.test(txt)) {
+          pushSymbol(txt);
+          if (favorites.length >= 12) break;
+        }
+      }
+      if (favorites.length > 0) {
+        log(`[favorites] structural fallback picked up ${favorites.length} symbols`);
+      }
+    } catch (_e) { /* ignore */ }
+  }
+
   return favorites;
 }
 
 /**
- * Switch to a different asset
- * @param {string} symbol - Asset symbol
+ * Switch to a different asset (clicks favorites bar or uses search).
+ * @param {string} symbol - normalized asset (e.g. "EURUSD_OTC")
  * @returns {boolean} Success
  */
 export function switchAsset(symbol) {
-  // Try clicking on favorites bar
-  const favorites = document.querySelectorAll('.favorites-panel .asset-item, .favorites .pair-item');
-  for (const fav of favorites) {
-    if (fav.textContent.includes(symbol.replace('_otc', '').replace('_', '/'))) {
-      fav.click();
-      log(`Switched to asset: ${symbol}`);
-      return true;
+  const target = (symbol || '').toUpperCase().replace(/_OTC$/, '');
+  // Build text variants we'll match against: "EUR/USD OTC", "EURUSD OTC", "EURUSD"
+  const variants = new Set();
+  variants.add(target);
+  if (target.length === 6) variants.add(`${target.slice(0, 3)}/${target.slice(3)}`);
+  variants.add(`${target} OTC`);
+  if (target.length === 6) variants.add(`${target.slice(0, 3)}/${target.slice(3)} OTC`);
+
+  // Try clicking on favorites bar — same broader selector set as getFavorites
+  const favSelectors = [
+    '.favorites-panel .asset-item',
+    '.favorites .pair-item',
+    '[data-testid="favorite-asset"]',
+    '.assets-block__favorites [class*="symbol"]',
+    '.assets-block__favorites .asset-item',
+    '.assets-bar .asset-item',
+    '[class*="favorit"][class*="asset"]',
+    '[class*="assets-favorit"] li',
+  ];
+  for (const sel of favSelectors) {
+    const els = document.querySelectorAll(sel);
+    for (const el of els) {
+      const t = (el.textContent || '').trim().toUpperCase();
+      for (const v of variants) {
+        if (t.includes(v)) {
+          el.click();
+          log(`Switched to asset: ${symbol} (matched '${v}' in '${sel}')`);
+          return true;
+        }
+      }
     }
   }
-  
+
   // Try search
   const searchInput = document.querySelector('.asset-search input, [data-testid="asset-search"]');
   if (searchInput) {
-    searchInput.value = symbol.replace('_otc', '').replace('_', '/');
+    searchInput.value = target;
     searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-    
-    // Wait for results and click first match
     setTimeout(() => {
       const result = document.querySelector('.search-results .asset-item');
       if (result) result.click();
     }, 500);
-    
     return true;
   }
-  
+
   warn(`Could not switch to asset: ${symbol}`);
   return false;
 }

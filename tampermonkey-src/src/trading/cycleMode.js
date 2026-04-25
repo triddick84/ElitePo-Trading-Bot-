@@ -77,7 +77,8 @@ class CycleMode {
     while (this.running && !this.abortRequested) {
       const favorites = this._getActiveFavorites();
       if (!favorites || favorites.length === 0) {
-        warn('[CYCLE] no favorites detected — add some in Pocket Option first. Retrying in 10s.');
+        warn('[CYCLE] no favorites detected — add some in Pocket Option first. Retrying in 10s. ' +
+          '(Diagnostic: open browser console and run `eliteBotDom.getFavorites()` to test the scraper.)');
         await this._sleep(10_000);
         continue;
       }

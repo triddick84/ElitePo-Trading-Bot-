@@ -18,6 +18,7 @@ import { appSignalPoller } from './trading/appSignalPoller.js';
 import { scanMarkets } from './utils/api.js';
 import { get, post } from './utils/api.js';
 import { getCurrentAsset, getCurrentPrice, waitForElement } from './utils/dom.js';
+import * as domUtils from './utils/dom.js';
 import { priceScraper } from './trading/priceScraper.js';
 
 // Install the SSID bridge IMMEDIATELY at module load — before any async init.
@@ -413,6 +414,8 @@ class EliteTradingBot {
 
             if (isForce || state.autoTradeEnabled) {
               await tradeExecutor.execute(signal, isForce ? 'go-force' : 'scan');
+            } else if (!state.autoTradeEnabled) {
+              warn(`[SCAN] Local signal ${signal.direction} ${asset} @ ${signal.confidence}% generated but AUTO is OFF — no trade placed. Enable AUTO to let SCAN fire trades.`);
             }
             return;
           } else if (isForce) {
@@ -452,7 +455,7 @@ class EliteTradingBot {
       if (isForce || state.autoTradeEnabled) {
         await tradeExecutor.execute(signal, isForce ? 'go-force' : 'scan');
       } else if (!state.autoTradeEnabled) {
-        log('(AUTO off - signal generated but not executed. Click AUTO or use GO for force-execute.)');
+        warn(`[SCAN] Signal generated but AUTO is OFF — no trade placed. Click the AUTO button to let SCAN actually fire trades. (Or use GO for one-shot force-execute.)`);
       }
     } catch (e) {
       error(`[${isForce ? 'GO' : 'Scan'}] error: ${e.message}`);
@@ -553,6 +556,7 @@ window.eliteBotLivePrice = poLivePrice;
 window.eliteBotLivePriceTracker = livePriceTracker;
 window.eliteBotCycleMode = cycleMode;
 window.eliteBotAppSignal = appSignalPoller;
+window.eliteBotDom = domUtils;
 
 // One-shot diagnostic — run in console and paste output if prices fail to flow
 window.eliteBotDiagnose = function () {
