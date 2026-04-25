@@ -881,7 +881,10 @@ class MaximizedAIMLSystem:
                     'feature_importances': self.feature_importances,
                     'regime_detector': self.regime_detector,
                     'trained_at': self.last_training_time.isoformat() if self.last_training_time else None,
-                    'version': '3.0.0'
+                    'version': '3.0.0',
+                    # Tuner pipeline metadata (Iter 52)
+                    'tuner_feature_names': getattr(self, 'tuner_feature_names', None),
+                    'tuner_selected_mask': getattr(self, 'tuner_selected_mask', None),
                 }, f)
             
             logger.info("💾 Maximized model v3.0 saved")
@@ -903,6 +906,9 @@ class MaximizedAIMLSystem:
                 self.feature_names = data['feature_names']
                 self.feature_importances = data.get('feature_importances', {})
                 self.regime_detector = data.get('regime_detector', RegimeDetector())
+                # Tuner pipeline metadata (Iter 52)
+                self.tuner_feature_names = data.get('tuner_feature_names')
+                self.tuner_selected_mask = data.get('tuner_selected_mask')
                 
                 if data.get('trained_at'):
                     self.last_training_time = datetime.fromisoformat(data['trained_at'])

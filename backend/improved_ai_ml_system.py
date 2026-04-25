@@ -659,7 +659,12 @@ class ImprovedAIMLSystem:
                     'feature_names': self.feature_names,
                     'feature_importances': self.feature_importances,
                     'trained_at': self.last_training_time.isoformat() if self.last_training_time else None,
-                    'version': '2.0.0'
+                    'version': '2.0.0',
+                    # Tuner-pipeline metadata (Apr 25, 2026, Iter 52) — required so
+                    # predict_with_tuner_pipeline can reconstruct the EXACT feature
+                    # vector + SelectKBest mask after a process restart.
+                    'tuner_feature_names': getattr(self, 'tuner_feature_names', None),
+                    'tuner_selected_mask': getattr(self, 'tuner_selected_mask', None),
                 }, f)
             
             logger.info(f"💾 Improved model saved to {self.model_path}")
@@ -680,6 +685,9 @@ class ImprovedAIMLSystem:
                 self.model_accuracy = data['accuracy']
                 self.feature_names = data['feature_names']
                 self.feature_importances = data.get('feature_importances', {})
+                # Tuner pipeline metadata (Iter 52)
+                self.tuner_feature_names = data.get('tuner_feature_names')
+                self.tuner_selected_mask = data.get('tuner_selected_mask')
                 
                 if data.get('trained_at'):
                     self.last_training_time = datetime.fromisoformat(data['trained_at'])

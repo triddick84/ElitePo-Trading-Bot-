@@ -4385,7 +4385,7 @@ async def force_generate_signal_v2(
                         "model_accuracy": round(acc * 100, 2),
                     }
         except Exception as e:
-            logger.debug(f"improved_v2 in force-generate: {e}")
+            logger.warning(f"improved_v2 ML voting in force-generate-v2 failed: {e}")
 
         try:
             from ml_accuracy_tuner import predict_with_tuner_pipeline
@@ -4408,7 +4408,7 @@ async def force_generate_signal_v2(
                         "model_accuracy": round(acc * 100, 2),
                     }
         except Exception as e:
-            logger.debug(f"maximized_v3 in force-generate: {e}")
+            logger.warning(f"maximized_v3 ML voting in force-generate-v2 failed: {e}")
 
         # Decide direction
         total = votes_call + votes_put
