@@ -756,6 +756,80 @@ export function scanDOMForTradeResult() {
 }
 
 
+/**
+ * Scrape the candle-countdown timer from Pocket Option's chart UI.
+ * PO renders the "MM:SS" remaining for the active candle in a small label
+ * near the price line / chart timer.
+ *
+ * Returns { totalSeconds, minutes, seconds } or null if not parseable.
+ *
+ * Selectors tried (in priority order):
+ *   - elements bearing "countdown" / "timer" / "expiration" classes
+ *   - any text node directly matching /^\s*\d{1,2}:\d{2}\s*$/ that lives
+ *     near the chart canvas (filters out unrelated mm:ss text elsewhere)
+ */
+export function getCandleCountdown() {
+  try {
+    const SELECTORS = [
+      '[class*="countdown" i]',
+      '[class*="chart-time" i]',
+      '[class*="candle-timer" i]',
+      '[class*="period-timer" i]',
+      '[data-test*="timer" i]',
+    ];
+    const re = /^\s*(\d{1,2}):(\d{2})\s*$/;
+
+    for (const sel of SELECTORS) {
+      const els = document.querySelectorAll(sel);
+      for (const el of els) {
+        const txt = (el.textContent || '').trim();
+        const m = txt.match(re);
+        if (m) {
+          const minutes = parseInt(m[1], 10);
+          const seconds = parseInt(m[2], 10);
+          if (seconds < 60 && minutes < 60) {
+            return { totalSeconds: minutes * 60 + seconds, minutes, seconds };
+          }
+        }
+      }
+    }
+
+    // Fallback: scan all spans/divs that look chart-adjacent
+    const candidates = document.querySelectorAll('span, div');
+    for (const el of candidates) {
+      // Cheap filter: must have only digits + colon
+      const txt = (el.textContent || '').trim();
+      if (!txt || txt.length > 6 || !txt.includes(':')) continue;
+      const m = txt.match(re);
+      if (m) {
+        const minutes = parseInt(m[1], 10);
+        const seconds = parseInt(m[2], 10);
+        // Must be at most an hour countdown
+        if (seconds < 60 && minutes <= 60) {
+          // Filter further — only keep elements that are likely chart timer
+          // (avoid e.g. order-history "00:43" labels). Heuristic: must be a
+          // leaf-ish element (no children) within the chart container.
+          if (el.children.length === 0) {
+            // Walk up looking for chart container clue
+            let p = el.parentElement;
+            for (let i = 0; i < 5 && p; i++) {
+              const cls = (p.className || '').toString().toLowerCase();
+              if (cls.includes('chart') || cls.includes('countdown') || cls.includes('timer')) {
+                return { totalSeconds: minutes * 60 + seconds, minutes, seconds };
+              }
+              p = p.parentElement;
+            }
+          }
+        }
+      }
+    }
+  } catch (e) {
+    /* fail silently — caller decides fallback */
+  }
+  return null;
+}
+
+
 export default {
   waitForElement,
   getCurrentAsset,
@@ -772,4 +846,5 @@ export default {
   switchAsset,
   getAccountBalance,
   scanDOMForTradeResult,
+  getCandleCountdown,
 };

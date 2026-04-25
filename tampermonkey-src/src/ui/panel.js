@@ -390,7 +390,7 @@ export function createPanel() {
           <span class="${P}invst" id="${P}r21st">Off</span>
         </div>
         <div class="${P}row">
-          <button id="${P}r1h51" data-testid="r1h51-toggle-btn" class="${P}btn ${P}btn-r1h51" title="At every minute :51s, fire opposite 5s trade vs current 1H candle, then rotate asset">1H51</button>
+          <button id="${P}r1h51" data-testid="r1h51-toggle-btn" class="${P}btn ${P}btn-r1h51" title="Reads PO 1H candle countdown timer. When countdown shows MM:51 (every minute), fire opposite 5s trade vs 1H body, then rotate asset.">1H51</button>
           <span class="${P}invst" id="${P}r1h51t">Off</span>
         </div>
         <div class="${P}stratrow">

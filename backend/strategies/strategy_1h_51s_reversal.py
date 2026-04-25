@@ -7,10 +7,12 @@ trade expiries.
 Mechanism (Tampermonkey side does the actual timing — backend exposes a
 stateless evaluation for backtest/dashboard parity):
   - Evaluate the OPEN 1H candle (the most recent bar in the supplied DataFrame).
-  - At every minute's :51-second wallclock mark, fire a 5-second trade in the
-    OPPOSITE direction of that 1H candle's body (close vs. open, wicks ignored).
+  - Every minute, when the 1H candle's COUNTDOWN timer reads MM:51 remaining
+    (e.g. 59:51, 58:51, 57:51, ...), fire a 5-second trade in the OPPOSITE
+    direction of that 1H candle's body (close vs. open, wicks ignored).
+  - 1H candles start at the top of the hour, so countdown :51 == wallclock :09.
   - After firing, the executor rotates to the NEXT asset and waits for the
-    next :51 mark.
+    next countdown :51 mark (60 fires per 1H candle, one per minute).
 
 Backend signal:
   - direction = PUT if 1H body is UP, CALL if DOWN, NEUTRAL on flat body.
@@ -78,7 +80,8 @@ class Strategy1h51sReversal:
             'strategy': self.name,
             'timeframe': self.timeframe,
             'expiry_seconds': 5,
-            'fire_at_seconds_in_minute': 51,
+            'fire_at_countdown_seconds': 51,
+            'fire_at_wallclock_seconds': 9,  # equivalent: 60 - 51
             'rotate_after_fire': True,
             'body_ratio': round(body_ratio, 3),
             'body_bps': round(body_bps, 2),

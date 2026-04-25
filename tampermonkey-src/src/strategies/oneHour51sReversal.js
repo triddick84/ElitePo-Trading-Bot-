@@ -1,20 +1,24 @@
 /**
  * 1-Hour 51-Second Reversal Strategy
  *
- * Fires every minute at the :51-second wallclock mark, in the OPPOSITE
- * direction of the OPEN 1-hour candle's body. After each fire, rotates to
- * the next asset in the configured pool and waits for the next :51 mark.
+ * Fires every minute when the **1H candle's COUNTDOWN timer** reads `MM:51`
+ * remaining (e.g. 59:51, 58:51, 57:51, ..., 00:51) — in the OPPOSITE
+ * direction of the candle's body. After each fire, rotates to the next
+ * asset in the configured pool and waits for the next `:51` mark.
+ *
+ * Trigger source:
+ *   - Reads PO's chart countdown directly via DOM (`getCandleCountdown()`).
+ *   - The strategy fires when the countdown's seconds digits === 51.
+ *   - No reliance on local clock for fire timing — PO server time wins.
  *
  * Mechanism:
- *   - Tracks the current LIVE 1-hour candle (open = first price seen this
+ *   - Tracks the open 1H candle locally (open = first observed price this
  *     hour, close = current price at fire moment).
- *   - At wallclock seconds === 51 (within ±tolerance), evaluates the candle's
- *     body direction and fires the opposite side as a 5-second trade.
- *   - Once-per-minute cooldown: never double-fires within the same minute.
+ *   - When countdown shows seconds === 51 (debounced once per minute),
+ *     evaluate body direction and fire 5s trade in the opposite direction.
  *   - Rotates to the next asset on every fire.
  *
- * Independent 100ms loop (timing precision matters), separate from the
- * shared price scraper / strategy manager.
+ * Independent 100ms loop — strict timing precision.
  */
 
 import { CONFIG } from '../core/config.js';
@@ -27,6 +31,7 @@ import {
   executeTrade,
   switchAsset,
   getPayout,
+  getCandleCountdown,
 } from '../utils/dom.js';
 import { priceScraper } from '../trading/priceScraper.js';
 import { poLivePrice } from '../trading/ssidBridge.js';
@@ -34,10 +39,9 @@ import { livePriceTracker } from '../trading/livePriceTracker.js';
 import { reportTrade, post, get as apiGet } from '../utils/api.js';
 
 const LOOP_INTERVAL_MS = 100;
-const FIRE_AT_SECOND = 51;
-const DEFAULT_TOLERANCE_MS = 800;     // ±0.8s around the :51 mark
+// Fire when the 1H candle countdown's seconds digits === FIRE_AT_COUNTDOWN_SECONDS
+const FIRE_AT_COUNTDOWN_SECONDS = 51;
 const HOUR_MS = 3_600_000;
-const MINUTE_MS = 60_000;
 const TICK_HISTORY_MAX = 600;          // 60s @ 100ms
 
 class OneHour51sReversal {
@@ -52,8 +56,9 @@ class OneHour51sReversal {
     this.candleHigh = null;
     this.candleLow = null;
 
-    // Per-minute fire tracking — keyed by minute timestamp
-    this.lastFireMinuteTs = 0;
+    // Last-fired countdown minute (the minutes part of MM:51) — debounce
+    // so we don't double-fire while countdown remains in the :51 window.
+    this.lastFireCountdownMinute = -1;
 
     // Asset rotation index
     this.assetRotationIdx = 0;
@@ -66,15 +71,19 @@ class OneHour51sReversal {
     this.tickHistory = [];
 
     this.config = {
-      toleranceMs: DEFAULT_TOLERANCE_MS,
       expirySeconds: 5,
-      // Always fire at :51 even if body is flat (uses last-tick slope as fallback)
+      // Always fire when countdown hits :51 even if body is flat
+      // (uses last-tick slope as fallback)
       alwaysFire: true,
       // After every fire, rotate to next asset (per user spec)
       rotateAfterFire: true,
       executionMode: 'auto',   // auto | ws | dom
       bridgeHealthy: false,
       bridgeHealthCheckedAt: 0,
+      // Allow ± this many seconds around 51 in case the countdown is read
+      // mid-tick (e.g. transitioning from :52 → :51 → :50). Defaults to 0
+      // since DOM countdown is sampled at 100ms.
+      countdownToleranceSec: 0,
       rotationAssets: [
         'EURUSD_OTC', 'GBPUSD_OTC', 'USDJPY_OTC', 'AUDUSD_OTC',
         'EURJPY_OTC', 'GBPJPY_OTC', 'NZDUSD_OTC', 'USDCAD_OTC',
@@ -98,7 +107,7 @@ class OneHour51sReversal {
     this.bridgeHealthIntervalId = setInterval(() => this._checkBridgeHealth(), 15_000);
 
     this.loopId = setInterval(() => this._tick(), LOOP_INTERVAL_MS);
-    success(`[1h-51s] Enabled — fires every minute at :${FIRE_AT_SECOND}s, rotates after each fire`);
+    success(`[1h-51s] Enabled — fires when 1H candle countdown shows MM:${FIRE_AT_COUNTDOWN_SECONDS}, rotates after each fire`);
   }
 
   disable() {
@@ -146,8 +155,12 @@ class OneHour51sReversal {
       const now = Date.now();
       const hour = this._hourOfNow(now);
 
-      // 1H candle rollover
-      if (hour !== this.hourStartTs) this._resetCandle(hour);
+      // 1H candle rollover (still tracked locally for OHLC body computation)
+      if (hour !== this.hourStartTs) {
+        this._resetCandle(hour);
+        // Reset countdown debounce on rollover
+        this.lastFireCountdownMinute = -1;
+      }
 
       // Update running 1H OHLC from best available price source
       let price = null;
@@ -174,14 +187,21 @@ class OneHour51sReversal {
         if (this.tickHistory.length > TICK_HISTORY_MAX) this.tickHistory.shift();
       }
 
-      // Cooldown: max once per minute
-      const minuteTs = Math.floor(now / MINUTE_MS) * MINUTE_MS;
-      if (minuteTs === this.lastFireMinuteTs) return;
+      // Read PO's candle countdown timer directly from the chart UI
+      const cd = getCandleCountdown();
+      if (!cd) {
+        this._logSkipOnce('nocd', '[1h-51s] Candle countdown not visible on chart yet — waiting for it to render');
+        return;
+      }
 
-      // Are we in the :51-second fire window?
-      const msIntoMinute = now - minuteTs;
-      const targetMs = FIRE_AT_SECOND * 1000;
-      if (Math.abs(msIntoMinute - targetMs) > this.config.toleranceMs) return;
+      // Per spec: fire when seconds digits === 51
+      const tol = this.config.countdownToleranceSec || 0;
+      const inWindow = Math.abs(cd.seconds - FIRE_AT_COUNTDOWN_SECONDS) <= tol;
+      if (!inWindow) return;
+
+      // Debounce: don't fire twice while still within the same MM:51 window
+      // (countdown ticks every 1s so :51 appears once per minute)
+      if (cd.minutes === this.lastFireCountdownMinute) return;
 
       // Verify we have data
       if (this.candleOpen === null || this.candleClose === null) {
@@ -194,26 +214,25 @@ class OneHour51sReversal {
           this.candleLow = wsLatest;
           info(`[1h-51s] alwaysFire: synthesizing from last WS tick (${wsLatest}, age=${wsAge}ms)`);
         } else {
-          this._logSkipOnce(minuteTs, 'nodata', `In :${FIRE_AT_SECOND}s window but no price yet — skip this minute`);
-          this.lastFireMinuteTs = minuteTs;  // burn the slot to prevent retry spam
+          this._logSkipOnce(`nodata-${cd.minutes}`, `Countdown ${cd.minutes}:${FIRE_AT_COUNTDOWN_SECONDS} but no price yet — skip`);
+          this.lastFireCountdownMinute = cd.minutes;
           return;
         }
       }
 
-      this._attemptFire(minuteTs);
+      this._attemptFire(cd.minutes);
     } catch (e) {
       warn(`[1h-51s] tick error: ${e.message}`);
     }
   }
 
-  _logSkipOnce(minuteTs, reasonKey, msg) {
-    const key = `${minuteTs}:${reasonKey}`;
-    if (this._loggedSkipKey === key) return;
-    this._loggedSkipKey = key;
+  _logSkipOnce(reasonKey, msg) {
+    if (this._loggedSkipKey === reasonKey) return;
+    this._loggedSkipKey = reasonKey;
     log(`[1h-51s] ${msg}`);
   }
 
-  _attemptFire(minuteTs) {
+  _attemptFire(countdownMinute) {
     const o = this.candleOpen;
     const c = this.candleClose;
     const mid = (o + c) / 2;
@@ -247,8 +266,8 @@ class OneHour51sReversal {
           reasonTag = 'flat-default-CALL';
         }
       } else {
-        this._logSkipOnce(minuteTs, 'flat', `Flat candle - skip (set alwaysFire:true)`);
-        this.lastFireMinuteTs = minuteTs;
+        this._logSkipOnce(`flat-${countdownMinute}`, `Flat candle - skip (set alwaysFire:true)`);
+        this.lastFireCountdownMinute = countdownMinute;
         return;
       }
     }
@@ -259,13 +278,13 @@ class OneHour51sReversal {
     const payout = getPayout();
     if (payout && payout < CONFIG.MIN_PAYOUT) {
       warn(`[1h-51s] Payout ${payout}% below min ${CONFIG.MIN_PAYOUT}% — skip`);
-      this.lastFireMinuteTs = minuteTs;
+      this.lastFireCountdownMinute = countdownMinute;
       return;
     }
 
     this._trySetExpiry(this.config.expirySeconds);
 
-    this.lastFireMinuteTs = minuteTs;
+    this.lastFireCountdownMinute = countdownMinute;
     const fireTs = Date.now();
 
     state.lastSignal = {
@@ -280,7 +299,7 @@ class OneHour51sReversal {
     statsRow.fires++;
 
     const useWs = this._shouldUseWs();
-    info(`[1h-51s] ${originalDirection} (${reasonTag}) → FIRE ${tradeDirection} on ${asset} @ $${amount} [${this.config.expirySeconds}s] via ${useWs ? 'WS' : 'DOM'}`);
+    info(`[1h-51s] countdown=${countdownMinute}:${FIRE_AT_COUNTDOWN_SECONDS} ${originalDirection} (${reasonTag}) → FIRE ${tradeDirection} on ${asset} @ $${amount} [${this.config.expirySeconds}s] via ${useWs ? 'WS' : 'DOM'}`);
 
     const executionPromise = useWs
       ? this._executeViaWs(asset, tradeDirection, amount)
@@ -316,7 +335,8 @@ class OneHour51sReversal {
             hourStart: new Date(this.hourStartTs).toISOString(),
             bodyBps: +bodyBps.toFixed(2),
             reasonTag,
-            fireAtSecond: FIRE_AT_SECOND,
+            countdownAt: `${countdownMinute}:${FIRE_AT_COUNTDOWN_SECONDS}`,
+            triggerSource: 'po-candle-countdown',
             expirySeconds: this.config.expirySeconds,
             executionMode: useWs ? 'ws' : 'dom',
           },
