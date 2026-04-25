@@ -32,6 +32,7 @@ import { priceScraper } from '../trading/priceScraper.js';
 import { poLivePrice } from '../trading/ssidBridge.js';
 import { livePriceTracker } from '../trading/livePriceTracker.js';
 import { reportTrade, post, get as apiGet } from '../utils/api.js';
+import { tradeExecutor } from '../trading/executor.js';
 
 const LOOP_INTERVAL_MS = 100;
 const FIRE_AT_MS_LEFT = 49_000;
@@ -241,20 +242,17 @@ class TwentyOneSecondReversal {
         }
       }
 
-      // Already fired on this candle? skip
-      if (this.firedThisCandle) return;
-
-      // Cooldown: must skip exactly 1 candle after a fire
-      if (this.lastFireCandleTs > 0 && (minute - this.lastFireCandleTs) < 120_000) {
-        this._logSkipOnce('cooldown', `Cooldown active (${Math.round((120_000 - (minute - this.lastFireCandleTs)) / 1000)}s remaining)`);
-        return;
-      }
-
-      // Must be within the ±tolerance window around the configured trigger
+      // Compute time-left in current candle
       const msLeft = 60_000 - (now - minute);
       const tol = this.config.toleranceMs || DEFAULT_TOLERANCE_MS;
       const fireAt = this.config.fireAtMsLeft || FIRE_AT_MS_LEFT;
+
+      // Within tolerance — fire (no cooldown; user wants every :51 mark)
       if (Math.abs(msLeft - fireAt) > tol) return;
+
+      // Per-fire debounce so we don't fire 10x within the ±1s tolerance window
+      // on a single candle. Reset on candle rollover (line ~512).
+      if (this.firedThisCandle) return;
 
       // Inside the fire window - verify we have data
       if (this.candleOpen === null || this.candleClose === null) {
@@ -401,26 +399,32 @@ class TwentyOneSecondReversal {
           return;
         }
 
-        // Audit report (fire-and-forget) — tagged for strategy tracker
-        reportTrade({
+        // Build a trade record (matches tradeExecutor schema) and push it
+        // onto the executor's pending queue. This is what auto-invert reads
+        // when the user clicks WIN/LOSS so it can correctly attribute the
+        // result to THIS 51S trade (not a stale scan/cycle one).
+        const trade = {
           timestamp: new Date().toISOString(),
           asset,
           direction: tradeDirection,
+          originalDirection,         // pre-invert original — for asset-history tracking
           amount,
           confidence: 65,
           strategy: '1m_21s_reversal',
           source: `51s-reversal-${useWs ? 'ws' : 'dom'}`,
           payout,
-          wasInverted: false,
-          meta: {
-            candleStart: new Date(this.candleStartTs).toISOString(),
-            bodyBps: +bodyBps.toFixed(2),
-            reasonTag,
-            fireAtMsLeft: msLeftAtFire,
-            expirySeconds: this.config.expirySeconds,
-            executionMode: useWs ? 'ws' : 'dom',
-          },
-        }).catch(() => { /* ignore */ });
+          wasInverted: false,        // 51S makes its own direction call; not invertible by SmartInvert pre-trade
+        };
+        try {
+          tradeExecutor.tradeHistory.push(trade);
+          tradeExecutor.pendingTrades.push(trade);
+          state.lastTrade = trade;
+        } catch (e) {
+          warn(`[51s-Reversal] could not link trade to executor: ${e.message}`);
+        }
+
+        // Audit report (fire-and-forget) — tagged for strategy tracker
+        reportTrade(trade).catch(() => { /* ignore */ });
       })
       .catch((e) => {
         error(`[51s-Reversal] execution error: ${e.message}`);

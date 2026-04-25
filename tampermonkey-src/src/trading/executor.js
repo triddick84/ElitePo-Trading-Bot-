@@ -242,9 +242,21 @@ class TradeExecutor {
     
     log(`Recording ${isWin ? 'WIN' : 'LOSS'}: ${asset} ${direction} (conf: ${confidence})${opts.autoResolved ? ' [auto]' : ''}`);
     
-    // Record per-asset history (for smart inversion)
-    recordAssetResult(asset, direction, isWin);
-    
+    // Record per-asset history (for smart inversion).
+    // Use originalDirection so consecutive-loss tracking attributes losses
+    // to the SIGNAL's direction (not the post-invert direction we actually fired).
+    // Fixes auto-invert "not recognising wins/losses" reported by user.
+    const trackingDirection = trade?.originalDirection || direction;
+    recordAssetResult(asset, trackingDirection, isWin);
+
+    // Trigger an evaluation — checks consecutive same-direction losses
+    // and flips smart-invert state when threshold is hit.
+    try {
+      smartInvert.evaluateInversion(asset);
+    } catch (e) {
+      warn(`smartInvert.evaluateInversion error: ${e.message}`);
+    }
+
     // Record inverted result tracking
     smartInvert.recordInvertedResult(isWin);
     
