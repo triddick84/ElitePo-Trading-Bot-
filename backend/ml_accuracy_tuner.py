@@ -431,8 +431,19 @@ class MLAccuracyTuner:
         """
         Build 15s and 1m aggregations from the 5s base series and emit
         agreement/alignment features. 15s = group of 3 bars, 1m = 12 bars.
+        Always returns the same 14 keys (zero-filled when history is short)
+        so the feature pool stays stable across samples.
         """
-        f = {}
+        # Default zero-filled dict — keeps schema stable for SelectKBest
+        f = {
+            'mtf_rsi_5s_15s_align': 0, 'mtf_rsi_5s_1m_align': 0,
+            'mtf_rsi_15s': 50.0, 'mtf_rsi_1m': 50.0,
+            'mtf_ema_align_5s_15s': 0, 'mtf_ema_align_5s_1m': 0,
+            'mtf_ema_trend_count': 0,
+            'mtf_macd_agreement': 0, 'mtf_macd_sign_15s': 0, 'mtf_macd_sign_1m': 0,
+            'mtf_momentum_score': 0.0, 'mtf_momentum_15s': 0.0, 'mtf_momentum_1m': 0.0,
+            'mtf_trend_strength': 0,
+        }
         if idx < 60:
             return f
 
@@ -534,8 +545,12 @@ class MLAccuracyTuner:
         """
         Confirm candlestick patterns with volume context. Returns 4 flags
         gauging whether pattern + volume agree (institutional confirmation).
+        Always returns the same 4 keys (zero-filled on missing volume).
         """
-        f = {}
+        f = {
+            'vol_spike_at_pattern': 0, 'vol_climactic': 0,
+            'vol_pattern_confirm': 0, 'vol_ratio_20': 1.0,
+        }
         if 'volume' not in df.columns or idx < 20:
             return f
 

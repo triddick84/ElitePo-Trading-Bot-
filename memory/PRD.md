@@ -3,6 +3,16 @@
 ## Last Updated: April 25, 2026
 
 ## Current Status
+✅ **MLAccuracyTuner Retrained on 90-Feature Pool — Iter 50 (April 25, 2026)**
+- **Maximized v3 (XGBoost stacking)** retrained from 494 OTC samples (EURUSD_OTC=433, AUDCAD_OTC=61) — **CV accuracy 52.68% (±4.46%)**, scores `[52.4, 51.2, 51.2, 47.6, 61.0]`. Previous std (±7.66%) cut by ~42% — model is more stable
+- **Improved v2 (RF/GB/AdaBoost ensemble)** retrained — **CV accuracy 49.27% (±9.37%)**, scores `[50.0, 35.4, 42.7, 61.0, 57.3]`
+- **34/37 new features selected** by SelectKBest top-70:
+  - 16/19 candlestick, 14/14 MTF, 4/4 volume validation, 7/7 Fibonacci
+- **9 new features rank in the top 30 most-informative** (mutual_info score):
+  `mtf_momentum_15s` (#13), `mtf_ema_align_5s_1m` (#16), `cdl_doji` (#18), `cdl_shooting_star_strength` (#19), `cdl_hammer_strength` (#20), `mtf_momentum_score` (#22), `vol_ratio_20` (#23), `mtf_rsi_1m` (#26), `cdl_3_black_crows` (#30)
+- **Bug fixed in `_extract_mtf_features` + `_extract_volume_validation`**: both now return their fixed schema (zero-filled defaults) when history is short, instead of an empty `{}`. Without this fix the feature-name dictionary locked on the first sample and all 14 MTF features were silently dropped from the pool. Pool size jumped 76→90 after fix
+- Both models persisted (`maximized_ai_ml._save_model()` / `improved_ai_ml._save_model()`); `/api/ml/tuning-report` reflects new accuracy + last_trained timestamps
+
 ✅ **App Rename — TM v8.31.0 (April 25, 2026, Iter 49)**
 - Application rebranded from `GPT Signal Bot` / `Elite Pocket Option Trading Bot` → **`AI's Elite PO Traders Bot`**
 - Updated locations:
