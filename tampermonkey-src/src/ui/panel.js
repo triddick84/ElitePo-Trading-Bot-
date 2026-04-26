@@ -446,6 +446,45 @@ function injectCSS() {
       border-color: #58a6ff !important;
       color: #e6edf3 !important;
     }
+    /* Reset-to-defaults button (Iter 58) */
+    .${P}resetbtn {
+      width: 100% !important;
+      margin-top: ${mobile ? '6px' : '8px'} !important;
+      padding: ${mobile ? '5px' : '4px'} !important;
+      border: 1px solid rgba(248,81,73,0.3) !important;
+      border-radius: 4px !important;
+      background: rgba(248,81,73,0.06) !important;
+      color: #f85149 !important;
+      font-size: ${mobile ? 10 : 10}px !important;
+      font-weight: 700 !important;
+      cursor: pointer !important;
+      letter-spacing: 0.5px !important;
+      transition: all 0.15s !important;
+      -webkit-tap-highlight-color: transparent !important;
+    }
+    .${P}resetbtn:hover, .${P}resetbtn:active {
+      background: rgba(248,81,73,0.15) !important;
+      border-color: #f85149 !important;
+    }
+    /* Click-to-fire when quality is HIGH (Iter 58) */
+    .${P}qualrow.high {
+      cursor: pointer !important;
+    }
+    .${P}qualrow.high:hover {
+      filter: brightness(1.15) !important;
+    }
+    .${P}qualrow.high::after {
+      content: '↩ tap to fire GO' !important;
+      position: absolute !important;
+      right: 6px !important;
+      top: 50% !important;
+      transform: translateY(-50%) !important;
+      font-size: ${mobile ? 8 : 9}px !important;
+      color: rgba(34,197,94,0.65) !important;
+      font-weight: 600 !important;
+      pointer-events: none !important;
+    }
+    .${P}qualrow { position: relative !important; }
     .${P}qualrow {
       display: flex !important;
       align-items: center !important;
@@ -660,6 +699,7 @@ export function createPanel() {
         </div>
         <div class="${P}loghdr" id="${P}logtog">Log <span id="${P}arrow">&#9660;</span></div>
         <div class="${P}logbox" id="${P}log"></div>
+        <button class="${P}resetbtn" id="${P}resetbtn" data-testid="reset-defaults-btn" title="Wipe saved settings and reload — restores recommended defaults (51S on, A-INV on, AUTO/SCAN/CYCLE off, base $1)">⟳ RESET TO DEFAULTS</button>
       </div>
     </div>
   `;
@@ -723,6 +763,41 @@ export function initPanelEvents(callbacks = {}) {
       const wasHidden = advanced.classList.contains('hidden');
       advanced.classList.toggle('hidden');
       moreBtn.textContent = wasHidden ? '▴ HIDE' : '▾ MORE';
+    });
+  }
+
+  // RESET TO DEFAULTS — wipe saved botState + reload (Iter 58)
+  const resetBtn = q('resetbtn');
+  if (resetBtn) {
+    resetBtn.addEventListener('click', () => {
+      const ok = window.confirm(
+        'Reset all bot settings to defaults?\n\n' +
+        'This wipes saved toggles, stats, and history.\n' +
+        'You will keep: trade history reports already sent to backend.\n' +
+        'Page will reload immediately after reset.'
+      );
+      if (!ok) return;
+      try {
+        if (typeof GM_setValue !== 'undefined') GM_setValue('botState', null);
+      } catch (_e) { /* ignore */ }
+      try {
+        // Best-effort clear of any stray local persistence
+        localStorage.removeItem('botState');
+      } catch (_e) { /* ignore */ }
+      callbacks.onReset?.();
+      setTimeout(() => window.location.reload(), 200);
+    });
+  }
+
+  // CLICK-TO-FIRE: tapping the live preview row when quality === HIGH
+  // is equivalent to pressing GO (Iter 58). Lower-quality previews are
+  // non-clickable (cursor stays default, no fire).
+  const qualRow = q('qualrow');
+  if (qualRow) {
+    qualRow.addEventListener('click', () => {
+      if (qualRow.classList.contains('high')) {
+        callbacks.onGo?.();
+      }
     });
   }
 

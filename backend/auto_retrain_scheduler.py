@@ -34,8 +34,22 @@ class AutoRetrainScheduler:
             "use_oanda_data": True,
             "timeframes": ["S5", "M1"],
             "symbols_oanda": ["EUR_USD", "GBP_USD", "USD_JPY", "AUD_USD", "EUR_JPY"],
-            "symbols_otc": ["EURUSD_OTC"],
+            # Iter 58: full mappable OTC pool — matches the OANDA backfill set
+            "symbols_otc": [
+                "AUDCAD_OTC", "EURUSD_OTC", "CADJPY_OTC", "NZDJPY_OTC",
+                "USDCNH_OTC", "EURGBP_OTC", "GBPJPY_OTC", "CADCHF_OTC",
+                "EURNZD_OTC", "USDCHF_OTC", "EURJPY_OTC", "AUDUSD_OTC",
+                "NZDUSD_OTC", "AUDCHF_OTC", "USDCAD_OTC", "USDJPY_OTC",
+                "EURCHF_OTC", "CHFJPY_OTC", "EURAUD_OTC", "AUDJPY_OTC",
+                "GBPAUD_OTC", "GBPNZD_OTC", "EURCAD_OTC", "GBPCAD_OTC",
+                "GBPUSD_OTC", "AUDNZD_OTC", "NZDCAD_OTC", "NZDCHF_OTC",
+                "GBPCHF_OTC",
+            ],
             "min_otc_candles": 200,
+            # London-Open overlay-aware backfill (Iter 58, Apr 25, 2026):
+            # at the 08:00 UTC slot, top up under-target OTC pairs from
+            # OANDA before retraining. Live PO ticks always overlay.
+            "london_overlay_backfill": True,
         }
         self._last_retrain: Optional[datetime] = None
         self._retrain_history: list = []
@@ -160,13 +174,27 @@ class AutoRetrainScheduler:
             from enhanced_oanda_service import enhanced_oanda
             from ml_accuracy_tuner import get_ml_tuner
 
+            # Step 0 (Iter 58): Overlay-aware backfill — only at London Open.
+            # Top up under-target OTC pairs from OANDA so the pool is fresh
+            # for retrain. Live PO ticks (source='po_live') always overlay
+            # OANDA backfill at the same (symbol, timestamp) slot.
+            if self._config.get("london_overlay_backfill") and start.hour == 8:
+                try:
+                    inserted = await self._overlay_backfill(target_count=500)
+                    result["overlay_backfill"] = inserted
+                    logger.info(f"Overlay backfill inserted {inserted.get('total_inserted', 0)} rows across {inserted.get('newly_trainable', 0)} newly-trainable pairs")
+                except Exception as e:
+                    logger.warning(f"Overlay backfill error: {e}")
+                    result["overlay_backfill_error"] = str(e)
+
             # Step 1: Train from OTC data if available and configured
             if self._config["use_otc_data"]:
                 try:
                     tuner = get_ml_tuner(self.db)
-                    otc_stats = await tuner.get_otc_training_data(self._config["symbols_otc"][0] if self._config["symbols_otc"] else None)
+                    sample_sym = self._config["symbols_otc"][0] if self._config["symbols_otc"] else None
+                    otc_df = await tuner.get_otc_training_data(sample_sym) if sample_sym else None
 
-                    if len(otc_stats) >= self._config["min_otc_candles"]:
+                    if otc_df is not None and len(otc_df) >= self._config["min_otc_candles"]:
                         # Import ML systems
                         try:
                             from server import maximized_ai_ml, improved_ai_ml
@@ -178,7 +206,7 @@ class AutoRetrainScheduler:
                             otc_result = await tuner.train_from_otc(
                                 ml_system=maximized_ai_ml,
                                 symbols=self._config["symbols_otc"],
-                                min_samples=50
+                                min_samples=500
                             )
                             if otc_result.get("success"):
                                 result["models_trained"].append({
@@ -186,7 +214,21 @@ class AutoRetrainScheduler:
                                     "accuracy": otc_result.get("cv_accuracy"),
                                     "samples": otc_result.get("total_samples")
                                 })
-                                logger.info(f"OTC retrain: {otc_result.get('cv_accuracy')}% accuracy")
+                                logger.info(f"OTC retrain (maximized): {otc_result.get('cv_accuracy')}% accuracy")
+
+                        if improved_ai_ml:
+                            otc_result_imp = await tuner.train_from_otc(
+                                ml_system=improved_ai_ml,
+                                symbols=self._config["symbols_otc"],
+                                min_samples=500
+                            )
+                            if otc_result_imp.get("success"):
+                                result["models_trained"].append({
+                                    "model": "improved_v2_otc",
+                                    "accuracy": otc_result_imp.get("cv_accuracy"),
+                                    "samples": otc_result_imp.get("total_samples")
+                                })
+                                logger.info(f"OTC retrain (improved): {otc_result_imp.get('cv_accuracy')}% accuracy")
 
                 except Exception as e:
                     logger.warning(f"OTC retrain error: {e}")
@@ -253,6 +295,92 @@ class AutoRetrainScheduler:
         return {
             "success": True,
             "result": self._retrain_history[-1] if self._retrain_history else {}
+        }
+
+    async def _overlay_backfill(self, target_count: int = 500) -> Dict:
+        """
+        London-Open overlay-aware backfill (Apr 25, 2026, Iter 58).
+        Calls the same backfill logic as POST /api/ml/backfill-otc-from-oanda
+        but inline (no HTTP round-trip). Auto-discovers OTC symbols below
+        target_count, tags inserted rows with source='oanda_backfill'.
+        Idempotent: po_live overlay rows are never overwritten.
+        """
+        from enhanced_oanda_service import enhanced_oanda
+        from routes.ml import OTC_TO_OANDA
+        import pandas as pd
+
+        if not enhanced_oanda or not getattr(enhanced_oanda, "is_configured", False):
+            return {"status": "skipped", "reason": "OANDA not configured"}
+
+        coll = self.db["otc_candles_5s"]
+
+        # Find OTC pairs under target
+        existing_counts: Dict[str, int] = {}
+        async for d in coll.aggregate([{"$group": {"_id": "$symbol", "count": {"$sum": 1}}}]):
+            existing_counts[d["_id"]] = d["count"]
+
+        symbols = [
+            s for s in OTC_TO_OANDA
+            if existing_counts.get(s, 0) < target_count
+        ]
+
+        total_inserted = 0
+        newly_trainable = 0
+        now_iso = datetime.now(timezone.utc).isoformat()
+
+        for otc_sym in symbols:
+            oanda_pair = OTC_TO_OANDA.get(otc_sym)
+            if not oanda_pair:
+                continue
+            try:
+                df = await asyncio.to_thread(
+                    enhanced_oanda.get_candles,
+                    instrument=oanda_pair,
+                    granularity="S5",
+                    count=target_count,
+                )
+                if df is None or df.empty:
+                    continue
+                df = df.reset_index()
+                inserted_for_sym = 0
+                for _, row in df.iterrows():
+                    ts = row.get("timestamp")
+                    if pd.isna(ts):
+                        continue
+                    ts_iso = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
+                    doc = {
+                        "symbol": otc_sym,
+                        "timestamp": ts_iso,
+                        "open": float(row["open"]),
+                        "high": float(row["high"]),
+                        "low": float(row["low"]),
+                        "close": float(row["close"]),
+                        "volume": int(row.get("volume", 0)),
+                        "timeframe": "5s",
+                        "source": "oanda_backfill",
+                        "oanda_pair": oanda_pair,
+                        "collected_at": now_iso,
+                    }
+                    # $setOnInsert: never overwrite po_live overlay rows
+                    r = await coll.update_one(
+                        {"symbol": otc_sym, "timestamp": ts_iso},
+                        {"$setOnInsert": doc},
+                        upsert=True,
+                    )
+                    if r.upserted_id is not None:
+                        inserted_for_sym += 1
+                total_inserted += inserted_for_sym
+                total_after = await coll.count_documents({"symbol": otc_sym})
+                if total_after >= 200 and inserted_for_sym > 0:
+                    newly_trainable += 1
+            except Exception as e:
+                logger.debug(f"backfill {otc_sym}: {e}")
+
+        return {
+            "status": "ok",
+            "total_inserted": total_inserted,
+            "newly_trainable": newly_trainable,
+            "scanned_symbols": len(symbols),
         }
 
 

@@ -3,6 +3,22 @@
 ## Last Updated: April 25, 2026
 
 ## Current Status
+✅ **3 Improvements Bundle — TM v8.37.0 + Backend (April 25, 2026, Iter 58)**
+
+### Reset to Defaults Button (TM)
+- Added `⟳ RESET TO DEFAULTS` button at the bottom of the panel (under the log). One click → confirm dialog → wipes `botState` from GM storage + localStorage → 200ms reload. Brings the bot back to recommended defaults: **51S on, A-INV on, AUTO/SCAN/CYCLE/APP off, base $1**. Has `data-testid="reset-defaults-btn"`. Styled red-tinted to signal "destructive action"
+
+### Click-to-Fire Quality Preview (TM)
+- The live preview row is now **clickable when quality is HIGH** — tap to fire GO instantly. MEDIUM/LOW previews stay non-clickable (cursor stays default). Visual cue: green-tinted bar + `↩ tap to fire GO` text appears on the right edge when HIGH. Same `force=true` semantics as the GO button (bypasses MIN_CONFIDENCE gate). Fast mobile-friendly trigger when conditions are right
+- TM userscript version bumped **8.36.0 → 8.37.0**
+
+### Scheduled Overlay-Aware Retrain (Backend)
+- Auto-retrain scheduler now **auto-starts 90s after backend boot** (`server.py` startup event). Runs daily at **08:00 UTC (London Open)** + **13:00 UTC (NY Open)**, Mon–Fri, with a 4-hour `min_hours_between_retrain` cooldown
+- New **London-Open overlay-aware backfill step**: at the 08:00 UTC slot, calls inline `_overlay_backfill(target_count=500)` to top up under-target OTC pairs from OANDA. Uses `$setOnInsert` so live PO ticks (`source='po_live'`) are NEVER overwritten — backfill only fills holes
+- Retrains both **maximized_v3 + improved_v2** on the full 29-pair OTC pool (was 1 pair, was only training maximized). `min_samples` raised from 50 → 500 to match the larger pool
+- New endpoints already wired (from Iter 51): `GET /api/ml/scheduler/status`, `POST /api/ml/scheduler/start|stop|trigger`, `PUT /api/ml/scheduler/config`
+- Scheduler status verified: `running: true` after backend boot
+
 ✅ **Tampermonkey Panel UI Redesign — TM v8.36.0 (April 25, 2026, Iter 57)**
 - **Top status strip** (always visible above the body): 5-cell grid showing `SCAN · AUTO · A-INV · 51S · CYCLE` with green LED dot + green text + green border on whichever toggles are ON, grey otherwise. Auto-refreshes every 1s from live state. Has `data-testid="status-strip"`
 - **LED dots on every button**: small circle in the top-left corner of every `.btn` — green-glowing when active, dim grey when off. No more guessing what's on

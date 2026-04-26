@@ -3775,6 +3775,20 @@ async def startup_event():
             await asyncio.sleep(3600)
     
     asyncio.create_task(ai_learning_scheduler())
+
+    # Auto-Retrain Scheduler — auto-start (Iter 58, Apr 25, 2026)
+    async def start_retrain_scheduler():
+        """Auto-start the OTC retrain scheduler 90s after boot."""
+        await asyncio.sleep(90)  # Let DB warm up
+        try:
+            from auto_retrain_scheduler import get_retrain_scheduler
+            sched = get_retrain_scheduler(db)
+            sched.start()
+            logger.info(f"🔄 Auto-retrain scheduler started: hours={sched._config['retrain_hours_utc']}, london_overlay={sched._config.get('london_overlay_backfill')}")
+        except Exception as e:
+            logger.error(f"Failed to start auto-retrain scheduler: {e}")
+
+    asyncio.create_task(start_retrain_scheduler())
     
     # Return immediately so server can start accepting health checks
     logger.info("⚡ Server startup complete - initialization running in background")
