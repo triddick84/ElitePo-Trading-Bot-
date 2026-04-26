@@ -3,6 +3,15 @@
 ## Last Updated: April 25, 2026
 
 ## Current Status
+✅ **Tampermonkey Panel UI Redesign — TM v8.36.0 (April 25, 2026, Iter 57)**
+- **Top status strip** (always visible above the body): 5-cell grid showing `SCAN · AUTO · A-INV · 51S · CYCLE` with green LED dot + green text + green border on whichever toggles are ON, grey otherwise. Auto-refreshes every 1s from live state. Has `data-testid="status-strip"`
+- **LED dots on every button**: small circle in the top-left corner of every `.btn` — green-glowing when active, dim grey when off. No more guessing what's on
+- **All pulsing/flashing animations removed** from active toggles. The connection-status dot keeps a subtle pulse only when actively scanning. Active = solid color, inactive = grey, no animation
+- **Compact mode (MORE/HIDE button)**: CYCLE, APP, 51S timing slider, strategy picker, and invert-status text are now collapsed by default behind a `▾ MORE` button. Default view shows only the essentials: SCAN/AUTO/GO, the live preview bar, 51S/A-INV/INVERT, asset row, stats, WIN/LOSS, money management. Click MORE to expand the advanced panel
+- **Layout regrouped**: row 1 = primary triggers (SCAN/AUTO/GO), row 2 = quality preview bar, row 3 = active toggles + manual override (51S/A-INV/INVERT), row 4 = asset indicator, row 5 = MORE button → advanced collapsibles, then stats / WIN-LOSS / MM / log
+- 51S status text now reads `51S: Off` / `51S: On 12/8 (60%)` and invert status reads `Invert: Normal` / `Invert: 3 losses on EURUSD` for clarity when both labels are visible
+- TM userscript version bumped **8.35.0 → 8.36.0**
+
 ✅ **51S Default-On — One-Time Migration v8.35.0 (April 25, 2026, Iter 56)**
 - **User feedback**: 51S Reversal still loaded as OFF on the user's setup despite Iter 53's `_twentyOneSEnabled: true` default. Root cause: the user (or their browser) had previously persisted `twentyOneSEnabled: false` in `botState` from an older build where 51S defaulted to off. Iter 53's "default to true if undefined" logic preserved that old `false` (which is the correct behavior for explicit user choices, but here it was a stale artifact)
 - **Fix**: bumped state schema version `_v: 3 → 4`. `loadState()` now performs a one-time migration: if loaded `_v < 4`, force `_twentyOneSEnabled = true` regardless of saved value. After this migration the user's explicit deactivate-clicks are honored permanently (subsequent saves carry `_v: 4` so the migration runs exactly once per script-version-bump)

@@ -161,6 +161,25 @@ function injectCSS() {
       border-color: #58a6ff !important;
       box-shadow: 0 0 8px rgba(56,139,253,0.3) !important;
     }
+    /* LED indicator on every button — small green dot when active, grey when off */
+    .${P}btn { position: relative !important; }
+    .${P}btn::before {
+      content: '' !important;
+      position: absolute !important;
+      top: 4px !important;
+      left: 4px !important;
+      width: 6px !important;
+      height: 6px !important;
+      border-radius: 50% !important;
+      background: rgba(255,255,255,0.10) !important;
+      border: 1px solid rgba(0,0,0,0.4) !important;
+      transition: background 0.2s, box-shadow 0.2s !important;
+      pointer-events: none !important;
+    }
+    .${P}btn.active::before {
+      background: #3fb950 !important;
+      box-shadow: 0 0 4px rgba(63,185,80,0.7) !important;
+    }
     .${P}btn-go {
       background: linear-gradient(135deg, #238636 0%, #2ea043 100%) !important;
       border-color: #3fb950 !important;
@@ -175,7 +194,6 @@ function injectCSS() {
       background: linear-gradient(135deg, #9e6a03 0%, #d29922 100%) !important;
       border-color: #d29922 !important;
       box-shadow: 0 0 8px rgba(210,153,34,0.3) !important;
-      animation: ${P}pulse 2s infinite !important;
     }
     .${P}btn-r21s {
       flex: 0 0 ${mobile ? 60 : 70}px !important;
@@ -187,7 +205,6 @@ function injectCSS() {
       background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%) !important;
       border-color: #a855f7 !important;
       box-shadow: 0 0 10px rgba(168,85,247,0.5) !important;
-      animation: ${P}pulse 1.5s infinite !important;
     }
     .${P}timing-row {
       display: flex !important;
@@ -256,7 +273,6 @@ function injectCSS() {
       background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%) !important;
       border-color: #60a5fa !important;
       box-shadow: 0 0 10px rgba(59,130,246,0.5) !important;
-      animation: ${P}pulse 2s infinite !important;
     }
     .${P}invst {
       flex: 1 !important;
@@ -366,6 +382,69 @@ function injectCSS() {
       color: #4ade80 !important;
       flex: 0 0 auto !important;
       font-variant-numeric: tabular-nums !important;
+    }
+    /* Status strip — top-of-panel always-visible state summary (Iter 57) */
+    .${P}strip {
+      display: grid !important;
+      grid-template-columns: repeat(${mobile ? 4 : 5}, 1fr) !important;
+      gap: 4px !important;
+      padding: 6px 8px !important;
+      background: rgba(0,0,0,0.4) !important;
+      border-bottom: 1px solid #21262d !important;
+    }
+    .${P}stripcell {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      gap: 4px !important;
+      padding: 3px 4px !important;
+      background: rgba(255,255,255,0.02) !important;
+      border: 1px solid rgba(255,255,255,0.05) !important;
+      border-radius: 4px !important;
+      font-size: ${mobile ? 9 : 10}px !important;
+      font-weight: 700 !important;
+      color: #8b949e !important;
+      letter-spacing: 0.5px !important;
+      transition: color 0.2s, border-color 0.2s, background 0.2s !important;
+    }
+    .${P}stripcell.on {
+      color: #3fb950 !important;
+      border-color: rgba(63,185,80,0.4) !important;
+      background: rgba(63,185,80,0.08) !important;
+    }
+    .${P}stripled {
+      width: 6px !important;
+      height: 6px !important;
+      border-radius: 50% !important;
+      background: rgba(255,255,255,0.10) !important;
+      flex: 0 0 auto !important;
+      transition: background 0.2s, box-shadow 0.2s !important;
+    }
+    .${P}stripcell.on .${P}stripled {
+      background: #3fb950 !important;
+      box-shadow: 0 0 3px rgba(63,185,80,0.7) !important;
+    }
+    /* Compact-mode collapsibles (Iter 57) */
+    .${P}advanced { display: block !important; }
+    .${P}advanced.hidden { display: none !important; }
+    .${P}morebtn {
+      width: 100% !important;
+      padding: ${mobile ? '5px' : '4px'} !important;
+      border: 1px dashed #30363d !important;
+      border-radius: 4px !important;
+      background: transparent !important;
+      color: #8b949e !important;
+      font-size: ${mobile ? 10 : 10}px !important;
+      font-weight: 600 !important;
+      cursor: pointer !important;
+      letter-spacing: 0.5px !important;
+      transition: all 0.15s !important;
+      margin-bottom: ${mobile ? '6px' : '8px'} !important;
+      -webkit-tap-highlight-color: transparent !important;
+    }
+    .${P}morebtn:hover, .${P}morebtn:active {
+      border-color: #58a6ff !important;
+      color: #e6edf3 !important;
     }
     .${P}qualrow {
       display: flex !important;
@@ -514,6 +593,13 @@ export function createPanel() {
           <button class="${P}minbtn" id="${P}minbtn">_</button>
         </div>
       </div>
+      <div class="${P}strip" id="${P}strip" data-testid="status-strip" title="Live state of all toggles. Green dot = ON, grey = OFF.">
+        <div class="${P}stripcell" id="${P}stripscan"><span class="${P}stripled"></span><span>SCAN</span></div>
+        <div class="${P}stripcell" id="${P}stripauto"><span class="${P}stripled"></span><span>AUTO</span></div>
+        <div class="${P}stripcell" id="${P}stripainv"><span class="${P}stripled"></span><span>A-INV</span></div>
+        <div class="${P}stripcell" id="${P}strip51s"><span class="${P}stripled"></span><span>51S</span></div>
+        <div class="${P}stripcell" id="${P}stripcycle"><span class="${P}stripled"></span><span>CYCLE</span></div>
+      </div>
       <div class="${P}body" id="${P}body">
         <div class="${P}row">
           <button id="${P}scan" class="${P}btn">SCAN</button>
@@ -526,34 +612,35 @@ export function createPanel() {
           <span class="${P}qualval" id="${P}qualval">…polling</span>
         </div>
         <div class="${P}row">
-          <button id="${P}cycle" class="${P}btn ${P}btn-cycle" title="Rotate through favorites, scan each, auto-trade best">CYCLE</button>
-          <button id="${P}app" class="${P}btn ${P}btn-app" title="Poll backend /signals/latest and auto-execute">APP</button>
-          <button id="${P}ainv" class="${P}btn ${P}btn-ainv" title="Enable smart auto-invert on loss streaks">A-INV</button>
-        </div>
-        <div class="${P}row">
           <button id="${P}r21s" class="${P}btn ${P}btn-r21s" title="Fire opposite 5s trade at the configured trigger second on 1m candles">51S</button>
-          <span class="${P}invst" id="${P}r21st">Off</span>
-        </div>
-        <div class="${P}timing-row" title="Drag to change which second of the 1m candle triggers the trade. 49 = fires 11s into candle (~2s after :51 mark). Range 5–55s remaining.">
-          <span class="${P}timing-label">Fire @</span>
-          <input id="${P}timing" data-testid="51s-timing-slider" class="${P}timing-slider" type="range" min="5" max="55" step="1" value="49" />
-          <span class="${P}timing-value" id="${P}timingv">49s left</span>
-        </div>
-        <div class="${P}stratrow">
-          <span class="${P}stratlbl">Strategy:</span>
-          <select id="${P}strat" class="${P}stratsel">
-            <option value="default">All Strategies</option>
-            <option value="ema20_pullback_reversal">EMA 20 Pullback</option>
-          </select>
+          <button id="${P}ainv" class="${P}btn ${P}btn-ainv" title="Enable smart auto-invert on loss streaks">A-INV</button>
+          <button id="${P}inv" class="${P}btn ${P}btn-inv">INVERT</button>
         </div>
         <div class="${P}assetrow" data-testid="active-asset-indicator" title="Active asset and rotation count. Updates on every CYCLE switch / 51S fire.">
           <span class="${P}assetlbl">ASSET</span>
           <span class="${P}assetval" id="${P}asset">—</span>
           <span class="${P}assetcount" id="${P}assetcnt">#0</span>
         </div>
-        <div class="${P}row">
-          <button id="${P}inv" class="${P}btn ${P}btn-inv">INVERT</button>
-          <span class="${P}invst" id="${P}invst">Normal</span>
+        <button class="${P}morebtn" id="${P}moretog" data-testid="more-toggle" title="Show/hide advanced toggles (CYCLE, APP, 51S timing, strategy picker)">▾ MORE</button>
+        <div class="${P}advanced hidden" id="${P}advanced">
+          <div class="${P}row">
+            <button id="${P}cycle" class="${P}btn ${P}btn-cycle" title="Rotate through favorites, scan each, auto-trade best">CYCLE</button>
+            <button id="${P}app" class="${P}btn ${P}btn-app" title="Poll backend /signals/latest and auto-execute">APP</button>
+          </div>
+          <div class="${P}invst" id="${P}r21st" style="padding:2px 6px !important;">51S: Off</div>
+          <div class="${P}timing-row" title="Drag to change which second of the 1m candle triggers the trade. 49 = fires 11s into candle (~2s after :51 mark). Range 5–55s remaining.">
+            <span class="${P}timing-label">Fire @</span>
+            <input id="${P}timing" data-testid="51s-timing-slider" class="${P}timing-slider" type="range" min="5" max="55" step="1" value="49" />
+            <span class="${P}timing-value" id="${P}timingv">49s left</span>
+          </div>
+          <div class="${P}stratrow">
+            <span class="${P}stratlbl">Strategy:</span>
+            <select id="${P}strat" class="${P}stratsel">
+              <option value="default">All Strategies</option>
+              <option value="ema20_pullback_reversal">EMA 20 Pullback</option>
+            </select>
+          </div>
+          <div class="${P}invst" id="${P}invst" style="padding:2px 6px !important;">Invert: Normal</div>
         </div>
         <div class="${P}stats">
           <div class="${P}stat"><span class="${P}stlbl">W/L</span><span class="${P}stval" id="${P}wl">0/0</span></div>
@@ -625,6 +712,17 @@ export function initPanelEvents(callbacks = {}) {
     minBtn.addEventListener('click', () => {
       body.classList.toggle('collapsed');
       minBtn.textContent = body.classList.contains('collapsed') ? '+' : '_';
+    });
+  }
+
+  // MORE — show/hide advanced toggles (CYCLE/APP/51S timing/strategy/invert status)
+  const moreBtn = q('moretog');
+  const advanced = q('advanced');
+  if (moreBtn && advanced) {
+    moreBtn.addEventListener('click', () => {
+      const wasHidden = advanced.classList.contains('hidden');
+      advanced.classList.toggle('hidden');
+      moreBtn.textContent = wasHidden ? '▴ HIDE' : '▾ MORE';
     });
   }
 
@@ -780,7 +878,7 @@ export function updateInvertDisplay(isInverted, reason) {
   }
 
   if (st) {
-    st.textContent = isInverted ? (reason || 'Inverted') : 'Normal';
+    st.textContent = isInverted ? `Invert: ${reason || 'Inverted'}` : 'Invert: Normal';
     if (isInverted) st.classList.add('on');
     else st.classList.remove('on');
   }
@@ -795,13 +893,13 @@ export function update21sReversalDisplay(enabled, stats = null) {
   }
   if (st) {
     if (!enabled) {
-      st.textContent = 'Off';
+      st.textContent = '51S: Off';
       st.classList.remove('on');
     } else if (stats) {
-      st.textContent = `On ${stats.wins}/${stats.losses} (${stats.winRate}%)`;
+      st.textContent = `51S: On ${stats.wins}/${stats.losses} (${stats.winRate}%)`;
       st.classList.add('on');
     } else {
-      st.textContent = 'On';
+      st.textContent = '51S: On';
       st.classList.add('on');
     }
   }
@@ -878,6 +976,28 @@ export function setSignalPreview(info) {
   }
 
   valEl.textContent = `${quality} ${dirArrow} ${dir} ${conf.toFixed(0)}%${agreeing}`;
+}
+
+/**
+ * Refresh the top-of-panel status strip with the current toggle states.
+ * Called by index.js after every toggle click + on a 1s heartbeat.
+ *
+ * @param {Object} flags - {scan, auto, ainv, r21s, cycle} booleans
+ */
+export function updateStatusStrip(flags = {}) {
+  const map = {
+    stripscan: !!flags.scan,
+    stripauto: !!flags.auto,
+    stripainv: !!flags.ainv,
+    strip51s: !!flags.r21s,
+    stripcycle: !!flags.cycle,
+  };
+  for (const [id, on] of Object.entries(map)) {
+    const el = q(id);
+    if (!el) continue;
+    if (on) el.classList.add('on');
+    else el.classList.remove('on');
+  }
 }
 
 /**

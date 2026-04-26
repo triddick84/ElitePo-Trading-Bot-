@@ -6,7 +6,7 @@
 import { CONFIG } from './core/config.js';
 import { state, setState, loadState, saveState, resetStats } from './core/state.js';
 import { log, info, warn, success, error } from './core/logger.js';
-import { createPanel, initPanelEvents, updateStatsDisplay, updateInvertDisplay, updateStatusDot, cleanupPanel, populateStrategies, update21sReversalDisplay, set51sTimingSlider, updateActiveAsset, setToggleActive, setSignalPreview } from './ui/panel.js';
+import { createPanel, initPanelEvents, updateStatsDisplay, updateInvertDisplay, updateStatusDot, cleanupPanel, populateStrategies, update21sReversalDisplay, set51sTimingSlider, updateActiveAsset, setToggleActive, setSignalPreview, updateStatusStrip } from './ui/panel.js';
 import { strategyManager } from './strategies/manager.js';
 import { tradeExecutor } from './trading/executor.js';
 import { tradeResultWatcher } from './trading/tradeResultWatcher.js';
@@ -67,6 +67,16 @@ class EliteTradingBot {
     // Start stats update interval
     this.statsInterval = setInterval(() => {
       updateStatsDisplay();
+      // Refresh status strip from live state every second — cheap, idempotent
+      try {
+        updateStatusStrip({
+          scan: state.scanEnabled,
+          auto: state.autoTradeEnabled,
+          ainv: state.autoInvertEnabled,
+          r21s: !!state._twentyOneSEnabled,
+          cycle: state.cycleEnabled,
+        });
+      } catch (_e) { /* ignore */ }
     }, 1000);
 
     // Active-asset indicator: refresh every 1.5s from current PO chart
