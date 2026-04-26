@@ -3,6 +3,14 @@
 ## Last Updated: April 25, 2026
 
 ## Current Status
+✅ **Drag-Handle Panel Resize — TM v8.38.0 (April 25, 2026, Iter 59)**
+- New **bottom-right resize grip** on the panel — diagonal stripe pattern in muted grey, turns blue on hover, brighter blue while actively dragging. `data-testid="resize-handle"` for tests
+- **Mobile-friendly**: handles both `mousedown/move/up` AND `touchstart/move/end`. `touch-action: none` prevents iOS Safari from scrolling the page while you're dragging. `passive: false` so `preventDefault()` works on touch
+- **Width bounds**: clamped to `180–600px` with `90vw` max from CSS so it never overflows on narrow viewports
+- **Persistence**: final width saved to GM storage as `${P}panelW` on every drag-end. `createPanel()` reads it back on next load (validates within `180–600px` bounds before applying) — your custom width survives reloads
+- **Drag direction**: panel is anchored at `right: 5px` (top-right of viewport), so the grip on the bottom-right grows the panel by extending leftward. Math is `width = startW - dx` so dragging RIGHT widens, dragging LEFT shrinks (intuitive once you try it once)
+- TM userscript version bumped **8.37.0 → 8.38.0**
+
 ✅ **3 Improvements Bundle — TM v8.37.0 + Backend (April 25, 2026, Iter 58)**
 
 ### Reset to Defaults Button (TM)

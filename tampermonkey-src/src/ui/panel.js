@@ -42,6 +42,7 @@ function injectCSS() {
       pointer-events: auto !important;
       width: ${W}px !important;
       max-width: 90vw !important;
+      min-width: 180px !important;
       transform: none !important;
       font-family: -apple-system, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
       font-size: ${FONT}px !important;
@@ -49,6 +50,41 @@ function injectCSS() {
       color: #e6edf3 !important;
       box-sizing: border-box !important;
       -webkit-tap-highlight-color: transparent !important;
+    }
+    /* Resize handle (Iter 59) — bottom-right corner grip for panel width */
+    .${P}resize {
+      position: absolute !important;
+      bottom: 0 !important;
+      right: 0 !important;
+      width: ${mobile ? 22 : 16}px !important;
+      height: ${mobile ? 22 : 16}px !important;
+      cursor: nwse-resize !important;
+      z-index: 10 !important;
+      background:
+        linear-gradient(135deg, transparent 0%, transparent 50%,
+        rgba(139,148,158,0.5) 50%, rgba(139,148,158,0.5) 60%,
+        transparent 60%, transparent 70%,
+        rgba(139,148,158,0.5) 70%, rgba(139,148,158,0.5) 80%,
+        transparent 80%) !important;
+      border-bottom-right-radius: ${mobile ? 8 : 12}px !important;
+      touch-action: none !important;
+      -webkit-tap-highlight-color: transparent !important;
+    }
+    .${P}resize:hover {
+      background:
+        linear-gradient(135deg, transparent 0%, transparent 50%,
+        #58a6ff 50%, #58a6ff 60%,
+        transparent 60%, transparent 70%,
+        #58a6ff 70%, #58a6ff 80%,
+        transparent 80%) !important;
+    }
+    .${P}resize.active {
+      background:
+        linear-gradient(135deg, transparent 0%, transparent 50%,
+        #3b82f6 50%, #3b82f6 60%,
+        transparent 60%, transparent 70%,
+        #3b82f6 70%, #3b82f6 80%,
+        transparent 80%) !important;
     }
     #${P}host * {
       box-sizing: border-box !important;
@@ -67,6 +103,7 @@ function injectCSS() {
       overflow: hidden !important;
       -webkit-user-select: none !important;
       touch-action: none !important;
+      position: relative !important;
     }
     .${P}header {
       display: flex !important;
@@ -701,10 +738,21 @@ export function createPanel() {
         <div class="${P}logbox" id="${P}log"></div>
         <button class="${P}resetbtn" id="${P}resetbtn" data-testid="reset-defaults-btn" title="Wipe saved settings and reload — restores recommended defaults (51S on, A-INV on, AUTO/SCAN/CYCLE off, base $1)">⟳ RESET TO DEFAULTS</button>
       </div>
+      <div class="${P}resize" id="${P}resize" data-testid="resize-handle" title="Drag to resize panel width. Saved across reloads."></div>
     </div>
   `;
 
   startWatchdog();
+  // Restore saved width (Iter 59) — applied after innerHTML is set so the
+  // rule wins over the CSS default. Validates within sane bounds.
+  try {
+    if (typeof GM_getValue !== 'undefined') {
+      const savedW = parseInt(GM_getValue(`${P}panelW`, '0'), 10);
+      if (savedW >= 180 && savedW <= 600) {
+        panelEl.style.setProperty('width', `${savedW}px`, 'important');
+      }
+    }
+  } catch (_e) { /* ignore */ }
   console.log('[Elite Bot] Panel created');
   return panelEl;
 }
@@ -799,6 +847,57 @@ export function initPanelEvents(callbacks = {}) {
         callbacks.onGo?.();
       }
     });
+  }
+
+  // RESIZE handle (Iter 59) — drag bottom-right corner to widen/narrow.
+  // Mobile-friendly: full pointer + touch event support, persists to GM.
+  const resizeEl = q('resize');
+  const hostEl = document.getElementById(`${P}host`);
+  if (resizeEl && hostEl) {
+    let resizing = false;
+    let startX = 0;
+    let startW = 0;
+
+    const getX = (ev) => (ev.touches && ev.touches[0]) ? ev.touches[0].clientX : ev.clientX;
+
+    const onDown = (ev) => {
+      resizing = true;
+      resizeEl.classList.add('active');
+      startX = getX(ev);
+      startW = hostEl.getBoundingClientRect().width;
+      ev.preventDefault();
+      ev.stopPropagation();
+    };
+
+    const onMove = (ev) => {
+      if (!resizing) return;
+      const dx = getX(ev) - startX;
+      // Drag-from-bottom-right widens when going RIGHT but the panel is
+      // anchored at right:5px, so increasing width pushes left. Compensate
+      // by inverting dx so dragging right grows the panel.
+      const newW = Math.max(180, Math.min(600, startW - dx));
+      hostEl.style.setProperty('width', `${newW}px`, 'important');
+      ev.preventDefault();
+    };
+
+    const onUp = () => {
+      if (!resizing) return;
+      resizing = false;
+      resizeEl.classList.remove('active');
+      try {
+        if (typeof GM_setValue !== 'undefined') {
+          const finalW = Math.round(hostEl.getBoundingClientRect().width);
+          GM_setValue(`${P}panelW`, String(finalW));
+        }
+      } catch (_e) { /* ignore */ }
+    };
+
+    resizeEl.addEventListener('mousedown', onDown);
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    resizeEl.addEventListener('touchstart', onDown, { passive: false });
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onUp);
   }
 
   // Scan
