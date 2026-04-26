@@ -3,6 +3,15 @@
 ## Last Updated: April 25, 2026
 
 ## Current Status
+✅ **51S Always-On at Startup (Hard Lock) — TM v8.39.0 (April 25, 2026, Iter 60)**
+- **User feedback**: 51S still loading as OFF on user's setup despite Iter 56's schema migration. Root cause: the user's saved botState has `_v: 4` and `twentyOneSEnabled: false` (saved AFTER the v3→v4 migration ran on a previous load), so the migration no longer fires and `false` is honored
+- **Final fix**: 51S is now **unconditionally forced to `true` at every page load**. Mid-session deactivation via the button still works (the in-memory flag flips, the strategy stops firing, button paints inactive) — but the next reload always brings it back ON. Three layers of belt-and-braces:
+  1. `state.js` initial default: `_twentyOneSEnabled: true`
+  2. `loadState()`: ignores any saved `twentyOneSEnabled` value, always sets `state._twentyOneSEnabled = true`
+  3. `_restoreToggleStates()` in `index.js`: unconditionally calls `twentyOneSecondReversal.enable()` + `update21sReversalDisplay(true)` regardless of state flag (so even if a corrupt state somehow set it false, the strategy still boots active)
+- Verified in compiled bundle: zero ternaries remain checking the saved value — only `_twentyOneSEnabled=!0` assignments
+- TM userscript version bumped **8.38.0 → 8.39.0**
+
 ✅ **Drag-Handle Panel Resize — TM v8.38.0 (April 25, 2026, Iter 59)**
 - New **bottom-right resize grip** on the panel — diagonal stripe pattern in muted grey, turns blue on hover, brighter blue while actively dragging. `data-testid="resize-handle"` for tests
 - **Mobile-friendly**: handles both `mousedown/move/up` AND `touchstart/move/end`. `touch-action: none` prevents iOS Safari from scrolling the page while you're dragging. `passive: false` so `preventDefault()` works on touch

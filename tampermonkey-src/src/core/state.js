@@ -269,16 +269,12 @@ export function loadState() {
           state.cycleEnabled = !!parsed.toggles.cycleEnabled;
           state.dataCollectionEnabled = !!parsed.toggles.dataCollectionEnabled;
           state.appSignalEnabled = !!parsed.toggles.appSignalEnabled;
-          // 51S Reversal — one-time migration (schema < 4): force ON regardless
-          // of saved value, so users with stale `false` from older builds get
-          // the new "default ON" experience. After this migration the user's
-          // explicit deactivate clicks are honored permanently.
-          if (loadedVersion < 4) {
-            state._twentyOneSEnabled = true;
-          } else {
-            state._twentyOneSEnabled = parsed.toggles.twentyOneSEnabled !== undefined
-              ? !!parsed.toggles.twentyOneSEnabled : true;
-          }
+          // 51S Reversal — ALWAYS ENABLED AT STARTUP (Iter 60).
+          // Per user requirement: this strategy must be active on every fresh
+          // page load regardless of what was previously saved. Mid-session
+          // deactivation via the button still works (and is honored within
+          // the running session) but never persists past a reload.
+          state._twentyOneSEnabled = true;
         }
         if (parsed.cycleConfig) state._cycleConfig = parsed.cycleConfig;
         if (parsed.twentyOneSConfig) state._twentyOneSConfig = parsed.twentyOneSConfig;
