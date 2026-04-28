@@ -599,13 +599,50 @@ export function switchAsset(symbol) {
   };
 
   // Real React-friendly click: dispatch mousedown → mouseup → click with bubbles
+  // PLUS direct React Fiber onClick invocation (Iter 61) — bypasses React's
+  // synthetic event filter that rejects bot-dispatched events. This is the
+  // canonical "click defeats React" workaround used by automation libraries.
   const reactClick = (target) => {
     if (!target) return;
+
+    // 1) Direct fiber onClick (most reliable on React 16+ apps like PocketOption)
+    let fiberClicked = false;
+    try {
+      const propsKey = Object.keys(target).find(k => k.startsWith('__reactProps$'));
+      const fiberKey = Object.keys(target).find(k => k.startsWith('__reactFiber$'));
+      let onClickFn = null;
+      if (propsKey && target[propsKey] && typeof target[propsKey].onClick === 'function') {
+        onClickFn = target[propsKey].onClick;
+      } else if (fiberKey) {
+        // Walk up the fiber tree looking for a stateNode with onClick
+        let fiber = target[fiberKey];
+        for (let i = 0; i < 6 && fiber; i++) {
+          if (fiber.memoizedProps && typeof fiber.memoizedProps.onClick === 'function') {
+            onClickFn = fiber.memoizedProps.onClick;
+            break;
+          }
+          fiber = fiber.return;
+        }
+      }
+      if (onClickFn) {
+        const fakeEvent = {
+          target, currentTarget: target,
+          preventDefault: () => {}, stopPropagation: () => {},
+          nativeEvent: new MouseEvent('click', { bubbles: true }),
+          type: 'click', button: 0, buttons: 1,
+          clientX: 0, clientY: 0, isTrusted: true,
+        };
+        onClickFn(fakeEvent);
+        fiberClicked = true;
+      }
+    } catch (_e) { /* fall through to dispatchEvent path */ }
+
+    // 2) Always also dispatch native events for any non-React listeners + visual feedback
     const opts = { bubbles: true, cancelable: true, view: window, button: 0 };
     try {
       target.dispatchEvent(new MouseEvent('mousedown', opts));
       target.dispatchEvent(new MouseEvent('mouseup', opts));
-      target.dispatchEvent(new MouseEvent('click', opts));
+      if (!fiberClicked) target.dispatchEvent(new MouseEvent('click', opts));
     } catch (_e) {
       try { target.click(); } catch (_e2) { /* last resort */ }
     }
@@ -634,13 +671,22 @@ export function switchAsset(symbol) {
           const target = findClickableParent(el);
           reactClick(target);
           log(`Switched to asset: ${symbol} (matched '${v}' in '${sel}')`);
-          // Post-click sanity-check: schedule a 1s verification
+          // Post-click sanity-check: schedule a 1.5s verification with retry
           setTimeout(() => {
             const after = getCurrentAsset();
             if (after === before) {
-              warn(`switchAsset: clicked '${v}' but current asset still '${after}' — React handler may have rejected synthetic event. Try clicking it manually once to re-prime.`);
+              // First synthetic click didn't take. Try the deeper text element
+              // directly + scroll into view (some PO themes lazy-render).
+              try { el.scrollIntoView?.({ block: 'center', inline: 'center' }); } catch (_e) {}
+              reactClick(el);
+              setTimeout(() => {
+                const after2 = getCurrentAsset();
+                if (after2 === before) {
+                  warn(`switchAsset: '${v}' click not registering after retry. PO may require manual re-prime click. Current: ${after2}`);
+                }
+              }, 800);
             }
-          }, 1_000);
+          }, 1_500);
           return true;
         }
       }

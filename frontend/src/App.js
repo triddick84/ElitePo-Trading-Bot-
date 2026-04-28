@@ -11,6 +11,7 @@ import DashboardRestructured from "./components/DashboardRestructured";
 import TelegramBotPage from "./components/TelegramBotPage";
 import StrategyBuilder from "./components/StrategyBuilder";
 import AIMLModelsPage from "./components/AIMLModelsPage";
+import MLLabPage from "./components/MLLabPage";
 import PerformancePage from "./components/PerformancePage";
 import SettingsPage from "./components/SettingsPage";
 import PocketOptionPage from "./components/PocketOptionPage";
@@ -145,6 +146,7 @@ function ProtectedApp() {
     { id: "signal-routing", label: "Signal Routing", icon: "🔀" },
     { id: "strategies", label: "Strategies", icon: "🎯" },
     { id: "ai-models", label: "AI Models", icon: "🧠" },
+    { id: "ml-lab", label: "ML Lab", icon: "🧪" },
     { id: "performance", label: "Performance", icon: "📈" },
     { id: "settings", label: "Settings", icon: "⚙️" }
   ];
@@ -175,6 +177,8 @@ function ProtectedApp() {
         return <StrategyBuilder />;
       case "ai-models":
         return <AIMLModelsPage />;
+      case "ml-lab":
+        return <MLLabPage />;
       case "performance":
         return <PerformancePage />;
       case "settings":

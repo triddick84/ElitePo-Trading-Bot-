@@ -20,6 +20,130 @@ import { toast } from 'sonner';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
+const TM_SCRIPT_URL = `${BACKEND_URL}/pocket-option-auto-trader.user.js`;
+const TM_VERSION = '8.40.0';
+
+// TM Script Install & Live Status Card (Iter 61)
+const TMScriptStatusCard = () => {
+  const [stats, setStats] = useState(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    let cancel = false;
+    const tick = async () => {
+      try {
+        const r = await axios.get(`${API}/signals/otc-candle-stats`).then(r => r.data);
+        if (!cancel) setStats(r);
+      } catch (_e) { /* keep prior */ }
+    };
+    tick();
+    const id = setInterval(tick, 15_000);
+    return () => { cancel = true; clearInterval(id); };
+  }, []);
+
+  const overlay = stats?.summary?.overlay_ratio || 0;
+  const overlayPct = (overlay * 100).toFixed(1);
+  const liveCandles = stats?.summary?.po_live_candles || 0;
+  const totalSyms = stats?.summary?.total_symbols || 0;
+  const healthy = stats?.summary?.healthy || 0;
+  const lastSeen = stats?.by_symbol?.length
+    ? Math.min(...stats.by_symbol.filter(s => s.last_scrape_age_seconds != null).map(s => s.last_scrape_age_seconds))
+    : null;
+  const isLive = lastSeen !== null && lastSeen < 120;
+
+  const copyUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(TM_SCRIPT_URL);
+      setCopied(true);
+      toast.success('✅ TM script URL copied');
+      setTimeout(() => setCopied(false), 2500);
+    } catch (_e) {
+      toast.error('Copy failed — paste manually');
+    }
+  };
+
+  return (
+    <Card className="bg-slate-900/70 border-slate-700 p-6" data-testid="tm-script-status-card">
+      <div className="flex items-start justify-between gap-4 flex-wrap mb-6">
+        <div className="flex items-center gap-3">
+          <span className="text-3xl">🔌</span>
+          <div>
+            <h2 className="text-xl font-bold text-white">Tampermonkey Script</h2>
+            <p className="text-slate-400 text-sm">
+              Latest version: <span className="font-mono text-cyan-400">v{TM_VERSION}</span>
+              {isLive ? (
+                <span className="ml-3 inline-flex items-center gap-1.5 text-green-400 text-xs">
+                  <span className="w-2 h-2 rounded-full bg-green-400"></span>
+                  LIVE — last tick {lastSeen}s ago
+                </span>
+              ) : (
+                <span className="ml-3 inline-flex items-center gap-1.5 text-slate-500 text-xs">
+                  <span className="w-2 h-2 rounded-full bg-slate-500"></span>
+                  OFFLINE
+                </span>
+              )}
+            </p>
+          </div>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <Button
+            onClick={() => window.open(TM_SCRIPT_URL, '_blank')}
+            className="bg-purple-600 hover:bg-purple-500"
+            data-testid="install-tm-btn"
+          >
+            ⬇ Install / Update Script
+          </Button>
+          <Button onClick={copyUrl} variant="outline" className="border-slate-600">
+            {copied ? '✓ Copied' : '📋 Copy URL'}
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div className="bg-slate-950/60 border border-slate-800 rounded-lg p-3">
+          <div className="text-xs text-slate-500 uppercase">Live Overlay</div>
+          <div className="text-2xl font-bold text-green-400 font-mono">{overlayPct}%</div>
+          <div className="text-xs text-slate-500 mt-0.5">{liveCandles.toLocaleString()} live ticks</div>
+        </div>
+        <div className="bg-slate-950/60 border border-slate-800 rounded-lg p-3">
+          <div className="text-xs text-slate-500 uppercase">Symbols Tracked</div>
+          <div className="text-2xl font-bold text-cyan-400 font-mono">{totalSyms}</div>
+          <div className="text-xs text-slate-500 mt-0.5">{healthy} healthy</div>
+        </div>
+        <div className="bg-slate-950/60 border border-slate-800 rounded-lg p-3">
+          <div className="text-xs text-slate-500 uppercase">Last Tick</div>
+          <div className="text-2xl font-bold text-amber-400 font-mono">
+            {lastSeen !== null ? `${lastSeen}s` : '—'}
+          </div>
+          <div className="text-xs text-slate-500 mt-0.5">ago</div>
+        </div>
+        <div className="bg-slate-950/60 border border-slate-800 rounded-lg p-3">
+          <div className="text-xs text-slate-500 uppercase">Pool Total</div>
+          <div className="text-2xl font-bold text-purple-400 font-mono">
+            {(stats?.total_candles || 0).toLocaleString()}
+          </div>
+          <div className="text-xs text-slate-500 mt-0.5">5s candles</div>
+        </div>
+      </div>
+
+      <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-4 space-y-3">
+        <div className="text-sm font-semibold text-white">🚀 Quick Install</div>
+        <ol className="text-sm text-slate-300 space-y-1.5 list-decimal list-inside">
+          <li>Install <a href="https://www.tampermonkey.net/" target="_blank" rel="noreferrer" className="text-cyan-400 underline">Tampermonkey</a> in your browser (Chrome / Firefox / Edge / Safari)</li>
+          <li>Click <span className="font-bold text-purple-400">Install / Update Script</span> above — Tampermonkey will pop up</li>
+          <li>Click <span className="font-mono text-green-400">Install</span> in the Tampermonkey dialog</li>
+          <li>Open <a href="https://pocketoption.com" target="_blank" rel="noreferrer" className="text-cyan-400 underline">pocketoption.com</a> and sign in. The bot panel will appear in the top-right corner</li>
+          <li>Bot panel auto-updates whenever a new version ships — green dot = LIVE</li>
+        </ol>
+      </div>
+
+      <div className="bg-amber-900/10 border border-amber-700/40 rounded-lg p-3 mt-3 text-xs text-amber-300">
+        💡 <strong>Always-on defaults:</strong> 51S Reversal and Auto-Invert (A-INV) are now hard-locked ON at every page load.
+        Click them mid-session to disable for that session, but they'll re-enable on the next reload.
+      </div>
+    </Card>
+  );
+};
 
 // Bridge Script Guide Component
 const BridgeScriptGuide = ({ isOpen, onClose }) => {
@@ -530,6 +654,10 @@ const PocketOptionPage = () => {
           </div>
         </div>
       </Card>
+
+      {/* TM Script Install + Live Status (Iter 61) */}
+      <TMScriptStatusCard />
+
 
       {/* Connection Status Banner */}
       <Card className={`p-6 ${isDemo ? 'bg-gradient-to-r from-blue-900/50 to-purple-900/50 border-blue-500/50' : 'bg-gradient-to-r from-emerald-900/50 to-teal-900/50 border-emerald-500/50'}`}>
