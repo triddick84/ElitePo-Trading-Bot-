@@ -3,6 +3,32 @@
 ## Last Updated: April 25, 2026
 
 ## Current Status
+✅ **CYCLE Fiber-Click Bypass + ML Lab Page + TM Status Card — TM v8.40.0 + Backend (April 25, 2026, Iter 61)**
+
+### CYCLE Bug Fix (TM v8.40.0)
+- **Bug**: `switchAsset: clicked 'EUR/JPY' but current asset still 'USDCLP_OTC' — synthetic event. Try clicking it manually once to re-prime.` PocketOption's React event handler was rejecting bot-dispatched MouseEvents. Result: CYCLE could not switch between favorites
+- **Fix**: `reactClick()` in `/app/tampermonkey-src/src/utils/dom.js` now does **React Fiber traversal** as the primary path — finds `__reactProps$xxx` or walks up `__reactFiber$xxx` looking for an `onClick` handler with non-null `memoizedProps`, then invokes it directly with a synthetic-like event object. Falls back to native `dispatchEvent` for any non-React listeners + visual feedback. This is the canonical "click defeats React" workaround used by automation libraries
+- **Plus retry logic**: if first click doesn't switch the asset within 1.5s, `scrollIntoView` + `reactClick` on the deeper text element + 0.8s second verification. Eliminates the "manual re-prime" requirement entirely
+- TM userscript bumped **8.39.0 → 8.40.0**
+
+### Unified ML Lab Page (`/ml-lab`)
+- **New page** `/app/frontend/src/components/MLLabPage.jsx` — 480 lines, single-page hub with **5 model tabs** (Improved v2 · Maximized v3 · LSTM/GRU · PPO RL · Ensemble)
+- **Per-tab content**: status card (CV accuracy, last trained, pool size, feature pool), feature groups card (Recharts BarChart of cdl/mtf/vol/fib counts + first-8 feature names per group), backtest panel (asset Select, days input, Run button → Recharts equity-curve AreaChart)
+- **Top widgets**: Header w/ live scheduler running indicator + Refresh button. Pool Health card showing total candles / trainable symbols / live overlay % / min samples
+- **Bottom widgets**: Scheduled Retrain History line chart (last 10 runs from `scheduler.retrain_history`) + Recent Backtest Win Rates bar chart (last 20 from `/api/backtest/history`)
+- All cards have `data-testid` for tests. Uses `recharts` (newly added via yarn)
+- Wired into App.js sidebar nav as `🧪 ML Lab` between AI Models and Performance
+
+### Pocket Option Page TMScriptStatusCard
+- New top card on the existing PocketOption page showing TM v8.40.0 install button (data-testid='install-tm-btn'), Copy URL button, **live overlay metrics** (overlay %, healthy symbols, last tick age, total pool), 5-step quick-install guide, and a 51S/A-INV always-on note
+- Auto-refreshes every 15s from `/api/signals/otc-candle-stats`. Live/Offline indicator based on latest tick age <120s
+
+### Quick Win Bonus
+- **Eliminated recurring log pollution**: stray `maximized_ai_ml.predict()` call in `routes/signals.py` L2264 was passing 97 raw features into a 90-feature RobustScaler every signal validation. Replaced with `predict_with_tuner_pipeline()` from iter 52 — clean logs
+
+### Tests
+- **8/8 backend pytest PASS + 100% frontend pass** (`/app/test_reports/iteration_51.json`). Test file: `/app/backend/tests/test_iteration61_ml_lab.py`. All 13 critical data-testids present, no console errors, tab switching works, recharts rendered
+
 ✅ **51S Always-On at Startup (Hard Lock) — TM v8.39.0 (April 25, 2026, Iter 60)**
 - **User feedback**: 51S still loading as OFF on user's setup despite Iter 56's schema migration. Root cause: the user's saved botState has `_v: 4` and `twentyOneSEnabled: false` (saved AFTER the v3→v4 migration ran on a previous load), so the migration no longer fires and `false` is honored
 - **Final fix**: 51S is now **unconditionally forced to `true` at every page load**. Mid-session deactivation via the button still works (the in-memory flag flips, the strategy stops firing, button paints inactive) — but the next reload always brings it back ON. Three layers of belt-and-braces:

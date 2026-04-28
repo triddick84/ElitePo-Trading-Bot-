@@ -2256,12 +2256,18 @@ async def scan_markets_for_signals(
                     ml_confidence = 0
                     try:
                         from maximized_ai_ml_system import maximized_ai_ml
+                        from ml_accuracy_tuner import predict_with_tuner_pipeline
                         if maximized_ai_ml and maximized_ai_ml.is_trained:
                             ml_df = pd.DataFrame(candles)
                             for col in ['open', 'high', 'low', 'close']:
                                 if col in ml_df.columns:
                                     ml_df[col] = pd.to_numeric(ml_df[col], errors='coerce')
-                            ml_pred = maximized_ai_ml.predict(ml_df)
+                            # Iter 61 fix: use tuner-pipeline predictor so the
+                            # feature vector matches the trained scaler shape
+                            # (84/90 features). Eliminates the recurring
+                            # "X has 97 features but RobustScaler expects 90"
+                            # log pollution.
+                            ml_pred = predict_with_tuner_pipeline(maximized_ai_ml, ml_df)
                             if ml_pred:
                                 ml_confidence = ml_pred.get('confidence', 0)
                                 ml_direction = ml_pred.get('direction', '')
