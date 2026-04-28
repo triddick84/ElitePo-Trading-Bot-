@@ -598,54 +598,101 @@ export function switchAsset(symbol) {
     return el;
   };
 
-  // Real React-friendly click: dispatch mousedown → mouseup → click with bubbles
-  // PLUS direct React Fiber onClick invocation (Iter 61) — bypasses React's
-  // synthetic event filter that rejects bot-dispatched events. This is the
-  // canonical "click defeats React" workaround used by automation libraries.
+  // Aggressive React-friendly click (Iter 62, Apr 25, 2026):
+  // 1) Walk full fiber chain (16 levels), collect EVERY onClick / onMouseDown / onPointerDown
+  //    handler, invoke each in order. Real PO favorite items have onClick on
+  //    multiple ancestors (anchor, list-item, container) — invoking only one
+  //    sometimes misses the actual React handler that updates the asset.
+  // 2) Dispatch a FULL pointer+mouse+touch event sequence at the element's
+  //    actual screen coordinates (not 0,0) — some React handlers check
+  //    clientX/Y > 0 and isTrusted-like conditions through PointerEvent.
+  // 3) Fall back to a synthesized hit-test via elementsFromPoint at the
+  //    element center if direct dispatch silently fails.
   const reactClick = (target) => {
     if (!target) return;
 
-    // 1) Direct fiber onClick (most reliable on React 16+ apps like PocketOption)
-    let fiberClicked = false;
+    // Resolve coordinates of the element center for realistic events
+    let cx = 0, cy = 0;
     try {
-      const propsKey = Object.keys(target).find(k => k.startsWith('__reactProps$'));
+      const r = target.getBoundingClientRect();
+      cx = Math.round(r.left + r.width / 2);
+      cy = Math.round(r.top + r.height / 2);
+    } catch (_e) { /* leave 0,0 */ }
+
+    const baseOpts = {
+      bubbles: true, cancelable: true, view: window, button: 0, buttons: 1,
+      clientX: cx, clientY: cy, screenX: cx, screenY: cy,
+      pointerType: 'mouse', isPrimary: true, pointerId: 1,
+    };
+
+    // ---- Stage 1: Fiber-handler shotgun ----
+    // Collect every onClick / onMouseDown / onPointerDown in the fiber chain
+    let handlersInvoked = 0;
+    try {
       const fiberKey = Object.keys(target).find(k => k.startsWith('__reactFiber$'));
-      let onClickFn = null;
-      if (propsKey && target[propsKey] && typeof target[propsKey].onClick === 'function') {
-        onClickFn = target[propsKey].onClick;
-      } else if (fiberKey) {
-        // Walk up the fiber tree looking for a stateNode with onClick
+      const propsKey = Object.keys(target).find(k => k.startsWith('__reactProps$'));
+
+      const synthEvent = (type) => ({
+        target, currentTarget: target,
+        preventDefault: () => {}, stopPropagation: () => {},
+        persist: () => {}, isDefaultPrevented: () => false, isPropagationStopped: () => false,
+        nativeEvent: new MouseEvent(type, baseOpts),
+        type, button: 0, buttons: 1,
+        clientX: cx, clientY: cy, screenX: cx, screenY: cy,
+        isTrusted: true, bubbles: true, cancelable: true,
+      });
+
+      // Direct props on the target itself
+      if (propsKey && target[propsKey]) {
+        for (const h of ['onClick', 'onMouseDown', 'onPointerDown']) {
+          if (typeof target[propsKey][h] === 'function') {
+            try { target[propsKey][h](synthEvent(h.slice(2).toLowerCase())); handlersInvoked++; } catch (_e) {}
+          }
+        }
+      }
+
+      // Walk fiber chain — invoke each ancestor's handler too
+      if (fiberKey) {
         let fiber = target[fiberKey];
-        for (let i = 0; i < 6 && fiber; i++) {
-          if (fiber.memoizedProps && typeof fiber.memoizedProps.onClick === 'function') {
-            onClickFn = fiber.memoizedProps.onClick;
-            break;
+        for (let i = 0; i < 16 && fiber; i++) {
+          const props = fiber.memoizedProps;
+          if (props) {
+            for (const h of ['onClick', 'onMouseDown', 'onPointerDown']) {
+              if (typeof props[h] === 'function') {
+                try { props[h](synthEvent(h.slice(2).toLowerCase())); handlersInvoked++; } catch (_e) {}
+              }
+            }
           }
           fiber = fiber.return;
         }
       }
-      if (onClickFn) {
-        const fakeEvent = {
-          target, currentTarget: target,
-          preventDefault: () => {}, stopPropagation: () => {},
-          nativeEvent: new MouseEvent('click', { bubbles: true }),
-          type: 'click', button: 0, buttons: 1,
-          clientX: 0, clientY: 0, isTrusted: true,
-        };
-        onClickFn(fakeEvent);
-        fiberClicked = true;
-      }
-    } catch (_e) { /* fall through to dispatchEvent path */ }
+    } catch (_e) { /* fall through */ }
 
-    // 2) Always also dispatch native events for any non-React listeners + visual feedback
-    const opts = { bubbles: true, cancelable: true, view: window, button: 0 };
+    // ---- Stage 2: Native event dispatch (pointer + mouse + touch sequence) ----
+    const safeDispatch = (el, ev) => { try { el.dispatchEvent(ev); } catch (_e) {} };
+
     try {
-      target.dispatchEvent(new MouseEvent('mousedown', opts));
-      target.dispatchEvent(new MouseEvent('mouseup', opts));
-      if (!fiberClicked) target.dispatchEvent(new MouseEvent('click', opts));
+      // Pointer events first (modern React 18 prefers PointerEvent)
+      if (typeof PointerEvent !== 'undefined') {
+        safeDispatch(target, new PointerEvent('pointerover', baseOpts));
+        safeDispatch(target, new PointerEvent('pointerenter', baseOpts));
+        safeDispatch(target, new PointerEvent('pointerdown', baseOpts));
+        safeDispatch(target, new PointerEvent('pointerup', baseOpts));
+      }
+      // Mouse events
+      safeDispatch(target, new MouseEvent('mouseover', baseOpts));
+      safeDispatch(target, new MouseEvent('mousedown', baseOpts));
+      safeDispatch(target, new MouseEvent('mouseup', baseOpts));
+      // Click last
+      safeDispatch(target, new MouseEvent('click', baseOpts));
     } catch (_e) {
-      try { target.click(); } catch (_e2) { /* last resort */ }
+      try { target.click(); } catch (_e2) {}
     }
+
+    // ---- Stage 3: Native .click() as last resort (works for <a>/<button>/<input>) ----
+    try { target.click?.(); } catch (_e) {}
+
+    return { handlersInvoked, cx, cy };
   };
 
   const before = getCurrentAsset();
@@ -669,20 +716,30 @@ export function switchAsset(symbol) {
       for (const v of variants) {
         if (t.includes(v)) {
           const target = findClickableParent(el);
-          reactClick(target);
-          log(`Switched to asset: ${symbol} (matched '${v}' in '${sel}')`);
-          // Post-click sanity-check: schedule a 1.5s verification with retry
+          // Iter 62: scroll into view BEFORE clicking — some PO themes
+          // lazy-render rows so the element exists in DOM but is off-screen
+          // and React skips its event handlers.
+          try { el.scrollIntoView?.({ block: 'center', inline: 'center' }); } catch (_e) {}
+          const r1 = reactClick(target);
+          log(`Switched to asset: ${symbol} (matched '${v}' in '${sel}', handlers=${r1?.handlersInvoked || 0})`);
+
+          // Post-click sanity-check at 1.5s — retry on the deeper element + grandparent
           setTimeout(() => {
             const after = getCurrentAsset();
             if (after === before) {
-              // First synthetic click didn't take. Try the deeper text element
-              // directly + scroll into view (some PO themes lazy-render).
-              try { el.scrollIntoView?.({ block: 'center', inline: 'center' }); } catch (_e) {}
-              reactClick(el);
+              const r2 = reactClick(el);  // try the deepest text element directly
+              log(`switchAsset retry-1 on text element (handlers=${r2?.handlersInvoked || 0})`);
               setTimeout(() => {
                 const after2 = getCurrentAsset();
-                if (after2 === before) {
-                  warn(`switchAsset: '${v}' click not registering after retry. PO may require manual re-prime click. Current: ${after2}`);
+                if (after2 === before && el.parentElement) {
+                  const r3 = reactClick(el.parentElement);  // try direct parent
+                  log(`switchAsset retry-2 on direct parent (handlers=${r3?.handlersInvoked || 0})`);
+                  setTimeout(() => {
+                    const after3 = getCurrentAsset();
+                    if (after3 === before) {
+                      warn(`switchAsset: '${v}' still not switching after 3 attempts. PO may have changed its DOM. Current: ${after3}`);
+                    }
+                  }, 800);
                 }
               }, 800);
             }

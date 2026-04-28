@@ -3,6 +3,16 @@
 ## Last Updated: April 25, 2026
 
 ## Current Status
+✅ **CYCLE Click v2 — Aggressive Multi-Handler Fiber Walk — TM v8.41.0 (April 25, 2026, Iter 62)**
+- **User feedback**: clicks still not registering on PocketOption favorites despite the iter 61 React Fiber bypass. Hypothesis: PO has onClick / onMouseDown / onPointerDown handlers on **multiple ancestor levels** of the favorite item, and invoking only the first found `onClick` was missing the actual asset-switch handler higher up the tree
+- **Three new aggressive layers**:
+  1. **Fiber-handler shotgun**: walk full 16-level fiber chain (was 6), collect EVERY `onClick`, `onMouseDown`, `onPointerDown` handler at every level, invoke each one in order. Same shotgun on the target's `__reactProps$` directly
+  2. **Full event sequence dispatch**: native `pointerover → pointerenter → pointerdown → pointerup → mouseover → mousedown → mouseup → click` (modern React 18 prefers PointerEvent over MouseEvent). All events use real `clientX/Y/screenX/Y` from the element's bounding rect instead of `0,0` (some handlers gate on `clientX > 0`)
+  3. **Native `target.click()`** as final last-resort
+- **Plus 3-stage retry**: scroll-into-view first, then if first click misses asset switch within 1.5s, retry on the deepest text element; if still missed at 2.3s, retry on the direct `parentElement`. `handlersInvoked` count logged at each stage so you can see how many React handlers actually fired
+- Verified in compiled bundle: `PointerEvent`, `onMouseDown`, `onPointerDown`, `pointerover`, `handlersInvoked`, 16-level fiber walk all present
+- TM userscript bumped **8.40.0 → 8.41.0**
+
 ✅ **CYCLE Fiber-Click Bypass + ML Lab Page + TM Status Card — TM v8.40.0 + Backend (April 25, 2026, Iter 61)**
 
 ### CYCLE Bug Fix (TM v8.40.0)
