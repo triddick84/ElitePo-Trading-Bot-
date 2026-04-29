@@ -580,22 +580,46 @@ export function switchAsset(symbol) {
   variants.add(`${target} OTC`);
   if (target.length === 6) variants.add(`${target.slice(0, 3)}/${target.slice(3)} OTC`);
 
-  // Walk up to find a clickable ancestor (the React click handler is rarely
-  // bound to the deep text element).
+  // Walk up to find a clickable ancestor, preferring elements that have a
+  // React __reactProps$ onClick (Iter 63) — favorite slot tiles in PO have
+  // the actual handler on the OUTER tile div, not the inner text element.
   const findClickableParent = (el) => {
     let cur = el;
-    for (let i = 0; i < 6 && cur; i++) {
-      const role = cur.getAttribute && cur.getAttribute('role');
-      const tag = cur.tagName;
-      const cls = (cur.className || '').toString();
-      if (
-        tag === 'A' || tag === 'BUTTON' || tag === 'LI' ||
-        role === 'button' || role === 'tab' ||
-        /asset-item|favorit|symbol-item|pair-item/i.test(cls)
-      ) return cur;
+    let bestReactTarget = null;     // highest-up element with a React onClick
+    let bestStructuralTarget = el;  // first ancestor matching tag/role/class
+    let foundStructural = false;
+
+    for (let i = 0; i < 12 && cur; i++) {
+      // 1) React-handler match (best candidate — explicit onClick on this DOM node)
+      try {
+        const propsKey = Object.keys(cur).find(k => k.startsWith('__reactProps$'));
+        if (propsKey && cur[propsKey] && (
+          typeof cur[propsKey].onClick === 'function' ||
+          typeof cur[propsKey].onMouseDown === 'function' ||
+          typeof cur[propsKey].onPointerDown === 'function'
+        )) {
+          // Always prefer the OUTERMOST React-handler element within 12 levels
+          bestReactTarget = cur;
+        }
+      } catch (_e) { /* ignore */ }
+
+      // 2) Structural match (fallback for non-React listeners or asset slots)
+      if (!foundStructural) {
+        const role = cur.getAttribute && cur.getAttribute('role');
+        const tag = cur.tagName;
+        const cls = (cur.className || '').toString();
+        if (
+          tag === 'A' || tag === 'BUTTON' || tag === 'LI' ||
+          role === 'button' || role === 'tab' ||
+          /asset-item|favorit|symbol-item|pair-item|tabs__item|asset-slot|asset-tab|active-asset|trading-pair|chart-tab/i.test(cls)
+        ) {
+          bestStructuralTarget = cur;
+          foundStructural = true;
+        }
+      }
       cur = cur.parentElement;
     }
-    return el;
+    return bestReactTarget || bestStructuralTarget;
   };
 
   // Aggressive React-friendly click (Iter 62, Apr 25, 2026):
@@ -697,6 +721,18 @@ export function switchAsset(symbol) {
 
   const before = getCurrentAsset();
   const favSelectors = [
+    // PO's "Asset Slot Tiles" at the top of the page (Iter 63 fix).
+    // Each tile is the 5-second chart preview with X / pair / % / mini-chart.
+    // Multiple class-name variants observed across PO themes.
+    '.assets-block__active .assets-block__item',
+    '.assets-block__item',
+    '[class*="active-assets"] [class*="item"]',
+    '[class*="assets-block"] [class*="item"]',
+    '[class*="trading-pairs"] [class*="item"]',
+    '[class*="tabs__item"]',
+    'a[class*="asset-tab"]',
+    'div[class*="chart-tab"]',
+    // Older / favorites panel
     '.favorites-panel .asset-item',
     '.favorites .pair-item',
     '[data-testid="favorite-asset"]',
@@ -750,20 +786,79 @@ export function switchAsset(symbol) {
     }
   }
 
-  // Try search
-  const searchInput = document.querySelector('.asset-search input, [data-testid="asset-search"], input[placeholder*="search" i]');
-  if (searchInput) {
-    searchInput.value = target;
-    searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-    setTimeout(() => {
-      const result = document.querySelector('.search-results .asset-item, [class*="search-result"] [class*="item"]');
-      if (result) reactClick(findClickableParent(result));
-    }, 500);
-    return true;
-  }
+  // Iter 63: Robust dropdown-search fallback (when symbol not in slot tiles)
+  // Two-step: (1) click the asset-name header to open picker, (2) type and click result
+  const tryDropdownSearch = () => {
+    // Find the live asset name in the chart header (e.g. "AUDUSD OTC ▼")
+    const headerSelectors = [
+      '.asset-name', '.current-symbol', '[class*="symbol-name"]',
+      '[class*="asset-name"]', '[class*="active-symbol"]',
+      '[class*="chart-header"] [class*="symbol"]',
+    ];
+    let header = null;
+    for (const s of headerSelectors) {
+      const el = document.querySelector(s);
+      if (el) { header = el; break; }
+    }
+    if (header) {
+      reactClick(findClickableParent(header));
+      log(`Opened asset picker via header click`);
+    }
 
-  warn(`Could not switch to asset: ${symbol} (no selector matched and no search input found)`);
-  return false;
+    // Wait for dropdown then search
+    setTimeout(() => {
+      const searchInput = document.querySelector(
+        '.asset-search input, [data-testid="asset-search"], ' +
+        'input[placeholder*="search" i], input[placeholder*="Search" i], ' +
+        '.modal input[type="text"], .picker input[type="text"]'
+      );
+      if (!searchInput) {
+        warn(`No asset-search input found after opening picker`);
+        return;
+      }
+      // Set value via native setter so React picks it up
+      try {
+        const proto = Object.getPrototypeOf(searchInput);
+        const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+        if (setter) setter.call(searchInput, target);
+        else searchInput.value = target;
+      } catch (_e) {
+        searchInput.value = target;
+      }
+      searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+      searchInput.dispatchEvent(new Event('change', { bubbles: true }));
+      log(`Typed '${target}' into asset search`);
+
+      // Click the first matching result after a short delay
+      setTimeout(() => {
+        const resultSelectors = [
+          '.search-results .asset-item',
+          '[class*="search-result"] [class*="item"]',
+          '[class*="picker"] [class*="item"]',
+          '[class*="dropdown"] [class*="asset"]',
+          '[class*="modal"] [class*="row"]',
+          '[class*="picker"] [class*="row"]',
+        ];
+        for (const rs of resultSelectors) {
+          const results = document.querySelectorAll(rs);
+          for (const r of results) {
+            const txt = (r.textContent || '').trim().toUpperCase();
+            for (const v of variants) {
+              if (txt.includes(v)) {
+                reactClick(findClickableParent(r));
+                log(`Clicked picker result for ${v}`);
+                return;
+              }
+            }
+          }
+        }
+        warn(`No picker result matched ${variants.join('/')}`);
+      }, 500);
+    }, 350);
+  };
+
+  tryDropdownSearch();
+  return true;
 }
 
 /**

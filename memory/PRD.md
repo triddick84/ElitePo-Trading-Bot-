@@ -3,6 +3,14 @@
 ## Last Updated: April 25, 2026
 
 ## Current Status
+✅ **CYCLE Click v3 — Asset Slot Selectors + React-Aware Parent + Dropdown Fallback — TM v8.42.0 (April 25, 2026, Iter 63)**
+- **Root cause** (revealed by user screenshots): the "favorites" at the top of PocketOption are actually **asset-slot tiles** (X / pair / % / mini-chart), not the typical favorites bar I was targeting. Plus some attempted assets (e.g. KES/USD) weren't even visible in the slots. Iter 62's aggressive shotgun was firing on the wrong DOM elements
+- **Three new fixes**:
+  1. **`findClickableParent` is now React-aware**: walks up to 12 levels and prefers the OUTERMOST element that has a `__reactProps$.onClick` (or onMouseDown / onPointerDown). Falls back to structural matching only if no React handler is found in the chain. Fixes the "stops at the inner text element" bug
+  2. **New selectors for PO's asset-slot tiles**: `.assets-block__active .assets-block__item`, `[class*="active-assets"] [class*="item"]`, `[class*="trading-pairs"] [class*="item"]`, `[class*="tabs__item"]`, `a[class*="asset-tab"]`, `div[class*="chart-tab"]`. Now matches the chart-tile layout shown in the screenshots
+  3. **Robust dropdown-search fallback**: when the symbol isn't in any visible slot tile, opens the asset-name dropdown picker (clicks `.asset-name` / `[class*="symbol-name"]` / `[class*="active-symbol"]`), then types into the search input using the React-friendly native value setter, then clicks the first matching result. Handles the "asset not in favorites" case that was 3-attempt-failing on KES/USD
+- TM userscript bumped **8.41.0 → 8.42.0**
+
 ✅ **CYCLE Click v2 — Aggressive Multi-Handler Fiber Walk — TM v8.41.0 (April 25, 2026, Iter 62)**
 - **User feedback**: clicks still not registering on PocketOption favorites despite the iter 61 React Fiber bypass. Hypothesis: PO has onClick / onMouseDown / onPointerDown handlers on **multiple ancestor levels** of the favorite item, and invoking only the first found `onClick` was missing the actual asset-switch handler higher up the tree
 - **Three new aggressive layers**:
