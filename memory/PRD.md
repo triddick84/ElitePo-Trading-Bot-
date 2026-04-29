@@ -3,6 +3,23 @@
 ## Last Updated: April 25, 2026
 
 ## Current Status
+✅ **Trade-Amount Input + CYCLE Fixes — TM v8.43.0 (April 25, 2026, Iter 64)**
+
+### Trade Amount Input
+- **Bug from screenshot**: log shows `Trade amount input not found`. Old code only tried 3 selectors (`input.amount-input`, `[data-testid="trade-amount"]`, `.deal-amount input`) — none of which match PO's current `.input-control__input` layout
+- **Fix**: `setTradeAmount()` now tries **15 selectors** ordered by specificity, with smart filtering:
+  - Skips invisible / disabled / readOnly inputs
+  - Skips the bot's own `el-bot-amt` input (avoids self-reference)
+  - Skips inputs with `placeholder/aria-label` containing "time/expir/second/minute" (excludes the expiry-time input)
+  - Heuristic: existing value must be in money range (1–100,000)
+- Added `input-control__input`, `[class*="amount"] input`, `[class*="invest"] input`, `[class*="bet"] input`, `input[type="number"]` (generic fallback)
+- React-friendly: uses native value setter from `Object.getPrototypeOf(input)` so React's state machine picks up the change. Dispatches `input → change → blur` (was missing blur, which some PO themes need to commit the value)
+
+### CYCLE Stage-4 SPA Router Fallback
+- Screenshot also showed `handlers=0` on retry-2 — meaning PO's asset slot tiles use **NEITHER** React onClick handlers NOR delegated event listeners we can reach via Fiber
+- Hypothesis: tiles might be `<a href="?asset=X">` SPA links. Added **Stage 4** to `reactClick()`: walk up 8 levels looking for any `<a>` with `href`, and call its native `click()` — which triggers PO's SPA router directly (bypasses React events entirely)
+- TM userscript bumped **8.42.0 → 8.43.0**
+
 ✅ **CYCLE Click v3 — Asset Slot Selectors + React-Aware Parent + Dropdown Fallback — TM v8.42.0 (April 25, 2026, Iter 63)**
 - **Root cause** (revealed by user screenshots): the "favorites" at the top of PocketOption are actually **asset-slot tiles** (X / pair / % / mini-chart), not the typical favorites bar I was targeting. Plus some attempted assets (e.g. KES/USD) weren't even visible in the slots. Iter 62's aggressive shotgun was firing on the wrong DOM elements
 - **Three new fixes**:

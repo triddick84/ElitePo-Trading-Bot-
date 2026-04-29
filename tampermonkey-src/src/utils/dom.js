@@ -274,23 +274,69 @@ export function getPayout() {
  * @returns {boolean} Success
  */
 export function setTradeAmount(amount) {
-  const input = document.querySelector('input.amount-input, [data-testid="trade-amount"], .deal-amount input');
+  // Iter 64: cast a much wider net — PO uses many class variants across themes
+  // and mobile/desktop layouts. Selector list ordered by specificity.
+  const selectors = [
+    'input.amount-input',
+    '[data-testid="trade-amount"]',
+    '.deal-amount input',
+    // Modern PO layouts (April 2026)
+    'input.input-control__input',
+    'input[class*="amount"]',
+    'input[class*="invest"]',
+    'input[class*="bet"]',
+    'input[class*="deal"]',
+    '[class*="amount"] input[type="text"]',
+    '[class*="amount"] input[type="number"]',
+    '[class*="invest"] input',
+    '[class*="bet"] input',
+    '[class*="deal"] input',
+    '[class*="trade"] input[type="number"]',
+    // Generic — the trade amount input is usually the numeric one nearest the BUY/SELL buttons
+    'input[type="number"]',
+  ];
+
+  let input = null;
+  for (const sel of selectors) {
+    const candidates = document.querySelectorAll(sel);
+    for (const cand of candidates) {
+      // Must be visible
+      if (!cand.offsetParent || cand.disabled || cand.readOnly) continue;
+      // Skip the bot's OWN amount input (lives inside the panel host)
+      if (cand.closest('[id^="el-bot-"]')) continue;
+      // Skip TIME/expiry inputs (often a sibling)
+      const ph = (cand.placeholder || '').toLowerCase();
+      const aria = (cand.getAttribute('aria-label') || '').toLowerCase();
+      if (/time|expir|second|hour|minute|sec|min/.test(ph + ' ' + aria)) continue;
+      // Heuristic: existing value should look like a money amount (1–10000)
+      const v = parseFloat(cand.value);
+      if (Number.isFinite(v) && (v < 1 || v > 100000)) continue;
+      input = cand;
+      break;
+    }
+    if (input) break;
+  }
+
   if (!input) {
-    warn('Trade amount input not found');
+    warn(`Trade amount input not found (tried ${selectors.length} selectors)`);
     return false;
   }
-  
-  // Clear and set new value
-  input.value = '';
-  input.focus();
-  
-  // Dispatch events to trigger React updates
-  const setValue = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-  setValue.call(input, amount.toString());
-  
-  input.dispatchEvent(new Event('input', { bubbles: true }));
-  input.dispatchEvent(new Event('change', { bubbles: true }));
-  
+
+  // Set value via React-friendly native setter
+  try {
+    input.focus();
+    const proto = Object.getPrototypeOf(input);
+    const setValue = Object.getOwnPropertyDescriptor(proto, 'value')?.set
+                  || Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    setValue.call(input, amount.toString());
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    input.dispatchEvent(new Event('blur', { bubbles: true }));
+  } catch (e) {
+    warn(`setTradeAmount native setter failed: ${e.message}`);
+    return false;
+  }
+
   log(`Set trade amount: $${amount}`);
   return true;
 }
@@ -715,6 +761,22 @@ export function switchAsset(symbol) {
 
     // ---- Stage 3: Native .click() as last resort (works for <a>/<button>/<input>) ----
     try { target.click?.(); } catch (_e) {}
+
+    // ---- Stage 4 (Iter 64): href-based SPA navigation ----
+    // PO's asset slot tiles MAY be <a href="?asset=X"> — if so, the cleanest
+    // way to switch is to navigate via the existing SPA router. Walk up
+    // looking for any <a> with an href, and call its native click() which
+    // PO's router will pick up.
+    try {
+      let cur = target;
+      for (let i = 0; i < 8 && cur; i++) {
+        if (cur.tagName === 'A' && cur.href) {
+          cur.click();  // native HTMLAnchorElement.click() — triggers SPA routing
+          break;
+        }
+        cur = cur.parentElement;
+      }
+    } catch (_e) {}
 
     return { handlersInvoked, cx, cy };
   };
