@@ -3,6 +3,16 @@
 ## Last Updated: April 25, 2026
 
 ## Current Status
+✅ **Manual Trade Amount — Bot No Longer Auto-Sets Amount — TM v8.44.0 (April 25, 2026, Iter 65)**
+- **Per user request**: bot must NOT change the trade-amount input. User sets the amount manually in PO's UI; bot only clicks CALL / PUT
+- **Removed `setTradeAmount()` from the execute path** in two places:
+  1. `executor.js` L118: deleted the explicit `setTradeAmount(amount)` call before `executeTrade()`
+  2. `dom.js` `executeTrade()`: removed the inline `setTradeAmount` call. Function signature updated to take only `direction`; the `amount` parameter is now ignored (defensive — in case any other caller passes it)
+- **Internal MM tracker still works**: `state.moneyManagement.currentAmount` is still used for win/loss stats display and step calculations, just doesn't drive PO's UI anymore
+- **Panel label updated**: `$` → `MM $` with tooltip "Bot's internal MM tracker — for stats only. Set actual trade amount manually in Pocket Option's UI." Makes the role of the input crystal-clear
+- **Logs updated**: `firing CALL on EURUSD_OTC (62%, using manual PO amount)` instead of `firing CALL on EURUSD_OTC @ $5 (62%)`. No more "Trade amount input not found" warnings — that path is dead code now
+- TM userscript bumped **8.43.0 → 8.44.0**
+
 ✅ **Trade-Amount Input + CYCLE Fixes — TM v8.43.0 (April 25, 2026, Iter 64)**
 
 ### Trade Amount Input

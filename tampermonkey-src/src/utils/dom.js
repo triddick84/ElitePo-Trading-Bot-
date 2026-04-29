@@ -499,12 +499,14 @@ export function clickPut() {
  * @param {number} amount - Trade amount (optional)
  * @returns {boolean} Success
  */
-export function executeTrade(direction, amount = null) {
-  if (amount) {
-    setTradeAmount(amount);
-  }
-  
-  // Small delay to let amount update
+/**
+ * Execute a trade on Pocket Option.
+ * Iter 65: amount parameter intentionally ignored — user sets the trade
+ * amount manually in PO's UI. The bot only clicks CALL / PUT.
+ * @param {string} direction - 'CALL' or 'PUT'
+ * @returns {boolean} Success
+ */
+export function executeTrade(direction /* , amount = null */) {
   return new Promise((resolve) => {
     setTimeout(() => {
       const success = direction.toUpperCase() === 'CALL' ? clickCall() : clickPut();

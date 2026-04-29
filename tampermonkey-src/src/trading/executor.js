@@ -105,18 +105,23 @@ class TradeExecutor {
     try {
       const originalDirection = signal.direction.toUpperCase();
       const direction = smartInvert.applyInversion(originalDirection);
-      const amount = state.moneyManagement.currentAmount;
       const asset = getCurrentAsset();
 
       if (direction !== originalDirection) {
-        info(`[exec:${source}] INVERTING ${originalDirection} → ${direction} on ${asset} @ $${amount}`);
+        info(`[exec:${source}] INVERTING ${originalDirection} → ${direction} on ${asset} (using manual PO amount)`);
       } else {
-        log(`[exec:${source}] firing ${direction} on ${asset} @ $${amount} (${signal.confidence}%)`);
+        log(`[exec:${source}] firing ${direction} on ${asset} (${signal.confidence}%, using manual PO amount)`);
       }
 
-      // Audit: step 4 — set amount + click
-      setTradeAmount(amount);
-      const executed = await executeTrade(direction, amount);
+      // Audit: step 4 — click only. Iter 65: trade amount is set MANUALLY in
+      // PO's UI by the user. The bot no longer overwrites it. This avoids:
+      //   1) DOM-mismatch warnings ("Trade amount input not found")
+      //   2) Accidentally placing a wrong-sized trade if PO renames the input
+      //   3) Money-management sliders fighting the user's intent
+      // The internal `state.moneyManagement.currentAmount` is still tracked
+      // for win/loss stats display, but it doesn't drive the UI anymore.
+      const amount = state.moneyManagement.currentAmount;  // for logs/reports only
+      const executed = await executeTrade(direction);
 
       if (executed) {
         const now = Date.now();

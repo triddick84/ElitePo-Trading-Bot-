@@ -728,8 +728,8 @@ export function createPanel() {
           <button id="${P}win" class="${P}btn ${P}btn-win">WIN</button>
           <button id="${P}loss" class="${P}btn ${P}btn-loss">LOSS</button>
         </div>
-        <div class="${P}mmrow">
-          <span class="${P}mmlbl">$</span>
+        <div class="${P}mmrow" title="Bot's internal MM tracker — for stats only. Set actual trade amount manually in Pocket Option's UI.">
+          <span class="${P}mmlbl">MM $</span>
           <input type="number" id="${P}amt" class="${P}mminp" value="1" min="1" max="1000">
           <span class="${P}mmlbl">Step:</span>
           <span id="${P}step">0</span>
