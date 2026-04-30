@@ -236,10 +236,16 @@ class PPOAgent:
 
         env = TradingEnvironment(features, closes)
 
-        if self.actor is None or self.state_dim != env.state_dim:
+        # Iter 66: if incoming feature dim differs from saved model's state_dim,
+        # rebuild from scratch and DO NOT reload old weights (which would have
+        # the wrong shape and crash on first forward pass).
+        dim_changed = self.state_dim is not None and self.state_dim != env.state_dim
+        if self.actor is None or dim_changed:
+            if dim_changed:
+                logger.info(f"PPO rebuild: state_dim {self.state_dim} → {env.state_dim} (feature count changed). Starting fresh.")
             self._build(env.state_dim)
-            # Try loading saved models
-            if self.state_dim == env.state_dim:
+            # Only try loading when the dim actually matched (fresh process boot)
+            if not dim_changed:
                 self._try_load()
 
         episode_rewards = []

@@ -3,6 +3,20 @@
 ## Last Updated: April 25, 2026
 
 ## Current Status
+✅ **PPO RL + LSTM/GRU Hooked into OTC Tuner Pipeline — Backend (April 25, 2026, Iter 66)**
+- **Two new helper functions** in `/app/backend/ml_accuracy_tuner.py`:
+  - `train_lstm_gru_from_otc(db, lstm_system, symbols, epochs)` — pulls raw OHLCV from all symbols, concatenates into a `candles: List[Dict]` array, calls `LSTMGRUSystem.train()`. Smoke test: 1,181 candles from EURUSD + AUDCAD → val_acc 36% at 3 epochs
+  - `train_ppo_from_otc(db, ppo_agent, symbols, n_episodes)` — extracts the SAME 90-feature vector via `extract_5s_features()` so PPO sees candlestick + MTF + volume features. Aligns closes with feature rows. Smoke test: 1,121 samples × 90 features → avg_wr 28% at 2 episodes
+- **Unified endpoint**: `POST /api/ml/train-from-otc` now accepts `model: "maximized" | "improved" | "lstm_gru" | "ppo_rl"`. ML Lab's Retrain Now button wired for all 4 (plus "ensemble" which triggers scheduler)
+- **`/api/ml/tuning-report` now surfaces all 4 models** with `is_trained`, `accuracy`, `last_trained`, and model-specific counts (samples/episodes)
+- **PPO bug fix**: `train()` was reloading old-dim weights after rebuild, crashing with "expected shape=(None,262), found shape=(1,1802)". Fixed by skipping `_try_load()` when `state_dim` changes
+- **safe_model_loader**: added allow-list entry for `hmmlearn.*` (GaussianHMM inside maximized_v3's RegimeDetector was blocked after last restart, breaking the maximized model load)
+- **All 4 models now trained end-to-end through the same OTC pool**:
+  - maximized_v3 → 52.54% CV
+  - improved_v2 → 56.86% CV
+  - lstm_gru → 36.09% val_acc (low because smoke test used 3 epochs)
+  - ppo_rl → 28.02% avg_wr (low because smoke test used 2 episodes)
+
 ✅ **Manual Trade Amount — Bot No Longer Auto-Sets Amount — TM v8.44.0 (April 25, 2026, Iter 65)**
 - **Per user request**: bot must NOT change the trade-amount input. User sets the amount manually in PO's UI; bot only clicks CALL / PUT
 - **Removed `setTradeAmount()` from the execute path** in two places:

@@ -75,6 +75,10 @@ class RestrictedUnpickler(pickle.Unpickler):
                       'lstm_gru_system', 'rl_ppo_agent', 'ml_accuracy_tuner'):
             return super().find_class(module, name)
 
+        # Allow hmmlearn (regime-detection HMM models)
+        if module.startswith('hmmlearn'):
+            return super().find_class(module, name)
+
         # Match any (module, name) pair in SAFE_CLASSES — entries can be
         # 2-tuples (module, name) or 3-tuples (module, submodule, name).
         # Normalize on read so a malformed entry can't crash unpickling.

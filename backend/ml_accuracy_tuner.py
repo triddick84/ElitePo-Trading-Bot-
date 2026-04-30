@@ -790,6 +790,93 @@ def get_ml_tuner(db) -> MLAccuracyTuner:
     return _ml_tuner
 
 
+async def train_lstm_gru_from_otc(db, lstm_system, symbols: List[str] = None, epochs: int = 30) -> Dict:
+    """
+    Feed the OTC candle pool through LSTMGRUSystem.train() (Iter 66, Apr 25, 2026).
+    LSTM needs `candles: List[Dict]` so we pull raw OHLCV rows and concatenate.
+    """
+    tuner = get_ml_tuner(db)
+    symbols = symbols or ['EURUSD_OTC', 'AUDCAD_OTC', 'GBPJPY_OTC']
+    all_candles = []
+    per_sym_counts = {}
+
+    for sym in symbols:
+        df = await tuner.get_otc_training_data(sym, limit=10000)
+        if df is None or df.empty:
+            per_sym_counts[sym] = 0
+            continue
+        records = df.to_dict('records')
+        all_candles.extend(records)
+        per_sym_counts[sym] = len(records)
+
+    if len(all_candles) < 200:
+        return {
+            "success": False,
+            "error": f"Insufficient OTC data: {len(all_candles)} candles (need 200)",
+            "symbols_checked": per_sym_counts,
+        }
+
+    result = lstm_system.train(all_candles, epochs=epochs, batch_size=32)
+    result["source"] = "otc_candles_5s"
+    result["total_candles"] = len(all_candles)
+    result["symbols"] = per_sym_counts
+    result["trained_at"] = datetime.now(timezone.utc).isoformat()
+    return result
+
+
+async def train_ppo_from_otc(db, ppo_agent, symbols: List[str] = None, n_episodes: int = 20) -> Dict:
+    """
+    Feed the OTC candle pool through PPOAgent.train() (Iter 66, Apr 25, 2026).
+    PPO needs (features: np.ndarray, closes: np.ndarray). We extract features
+    via the same MLAccuracyTuner.extract_5s_features() so PPO sees the EXACT
+    same 84/90-feature vector the sklearn models train on — ensuring the RL
+    agent benefits from the candlestick + MTF + volume features.
+    """
+    tuner = get_ml_tuner(db)
+    symbols = symbols or ['EURUSD_OTC', 'AUDCAD_OTC', 'GBPJPY_OTC']
+    all_features, all_closes, per_sym_counts = [], [], {}
+    feat_names = None
+
+    for sym in symbols:
+        df = await tuner.get_otc_training_data(sym, limit=5000)
+        if df is None or df.empty:
+            per_sym_counts[sym] = 0
+            continue
+        closes = df['close'].astype(float).values
+        sym_features = []
+        for idx in range(30, len(df)):
+            feats = tuner.extract_5s_features(df, idx)
+            if not feats:
+                continue
+            if feat_names is None:
+                feat_names = list(feats.keys())
+            sym_features.append([feats.get(n, 0.0) for n in feat_names])
+        if sym_features:
+            per_sym_counts[sym] = len(sym_features)
+            all_features.extend(sym_features)
+            # Align closes with features (features start at idx=30)
+            all_closes.extend(closes[30:30 + len(sym_features)].tolist())
+
+    if len(all_features) < 200:
+        return {
+            "success": False,
+            "error": f"Insufficient OTC data: {len(all_features)} feature rows (need 200)",
+            "symbols_checked": per_sym_counts,
+        }
+
+    features_arr = np.nan_to_num(
+        np.array(all_features, dtype=np.float32), nan=0.0, posinf=0.0, neginf=0.0
+    )
+    closes_arr = np.array(all_closes, dtype=np.float32)
+    result = ppo_agent.train(features_arr, closes_arr, n_episodes=n_episodes)
+    result["source"] = "otc_candles_5s"
+    result["total_samples"] = len(all_features)
+    result["symbols"] = per_sym_counts
+    result["trained_at"] = datetime.now(timezone.utc).isoformat()
+    result["feature_count"] = len(feat_names or [])
+    return result
+
+
 def predict_with_tuner_pipeline(ml_system, df: pd.DataFrame) -> Optional[Dict]:
     """
     Predict using a model that was trained via MLAccuracyTuner.train_from_otc().

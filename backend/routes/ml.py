@@ -2172,21 +2172,66 @@ async def get_ml_tuning_report():
             "last_trained": improved_ai_ml.last_training_time.isoformat() if improved_ai_ml.last_training_time else None
         }
 
+    # Iter 66: include LSTM/GRU + PPO RL statuses so they surface in the ML Lab
+    try:
+        from lstm_gru_system import lstm_gru_system
+        if lstm_gru_system is not None:
+            hist = getattr(lstm_gru_system, 'training_history', {}) or {}
+            model_status["lstm_gru"] = {
+                "is_trained": bool(getattr(lstm_gru_system, 'is_trained', False)),
+                "accuracy": round(float(getattr(lstm_gru_system, 'accuracy', 0) or 0), 2),
+                "last_trained": hist.get('trained_at'),
+                "samples": hist.get('samples', 0),
+            }
+    except Exception as e:
+        logger.debug(f"lstm_gru status probe: {e}")
+
+    try:
+        from rl_ppo_agent import ppo_agent
+        if ppo_agent is not None:
+            model_status["ppo_rl"] = {
+                "is_trained": bool(getattr(ppo_agent, 'is_trained', False)),
+                "accuracy": round(float(getattr(ppo_agent, 'accuracy', 0) or 0), 2),
+                "last_trained": (ppo_agent.training_stats or {}).get('trained_at') if hasattr(ppo_agent, 'training_stats') else None,
+                "episodes": (ppo_agent.training_stats or {}).get('total_episodes', 0) if hasattr(ppo_agent, 'training_stats') else 0,
+            }
+    except Exception as e:
+        logger.debug(f"ppo_rl status probe: {e}")
+
     report["model_status"] = model_status
     return report
 
 
 @router.post("/ml/train-from-otc")
 async def train_ml_from_otc_data(
-    model: str = Body("maximized", description="Which model: maximized or improved"),
+    model: str = Body("maximized", description="Which model: maximized, improved, lstm_gru, or ppo_rl"),
     symbols: List[str] = Body(None, description="OTC symbols to train on"),
-    min_samples: int = Body(200, description="Minimum samples required")
+    min_samples: int = Body(200, description="Minimum samples required"),
+    epochs: int = Body(30, description="Epochs for LSTM/GRU"),
+    n_episodes: int = Body(20, description="Episodes for PPO RL"),
 ):
     """
     Train ML model using accumulated OTC 5-second candle data.
-    Uses adaptive thresholds, 5s-optimized features, and feature selection.
+    Supports all 4 models:
+      - maximized / improved → sklearn stacking + MLAccuracyTuner feature pipeline
+      - lstm_gru → Keras sequence model (Iter 66)
+      - ppo_rl   → PPO reinforcement learner (Iter 66)
     """
     tuner = get_ml_tuner(db)
+
+    if model == "lstm_gru":
+        from lstm_gru_system import lstm_gru_system
+        from ml_accuracy_tuner import train_lstm_gru_from_otc
+        if lstm_gru_system is None:
+            return {"success": False, "error": "lstm_gru_system not available (TensorFlow missing?)"}
+        return await train_lstm_gru_from_otc(db, lstm_gru_system, symbols=symbols, epochs=epochs)
+
+    if model == "ppo_rl":
+        from rl_ppo_agent import ppo_agent
+        from ml_accuracy_tuner import train_ppo_from_otc
+        if ppo_agent is None:
+            return {"success": False, "error": "ppo_agent not available (TensorFlow missing?)"}
+        return await train_ppo_from_otc(db, ppo_agent, symbols=symbols, n_episodes=n_episodes)
 
     target_system = maximized_ai_ml if model == "maximized" else improved_ai_ml
     if target_system is None:

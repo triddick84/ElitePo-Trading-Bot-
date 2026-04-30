@@ -99,6 +99,40 @@ export default function MLLabPage() {
         } else {
           toast.error(`Retrain failed: ${r.error || "unknown"}`);
         }
+      } else if (modelId === "lstm_gru") {
+        toast.info("LSTM/GRU training started — this can take 1–2 minutes");
+        const r = await fetch(`${API}/ml/train-from-otc`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: "lstm_gru",
+            symbols,
+            epochs: 20,
+          }),
+        }).then((res) => res.json());
+        if (r.success) {
+          toast.success(`LSTM/GRU trained → ${r.val_accuracy}% val acc on ${r.total_candles} candles`);
+          refreshAll();
+        } else {
+          toast.error(`LSTM/GRU train failed: ${r.error || "unknown"}`);
+        }
+      } else if (modelId === "ppo_rl") {
+        toast.info("PPO RL training started — this can take 2–3 minutes");
+        const r = await fetch(`${API}/ml/train-from-otc`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: "ppo_rl",
+            symbols,
+            n_episodes: 15,
+          }),
+        }).then((res) => res.json());
+        if (r.success) {
+          toast.success(`PPO RL trained → ${(r.avg_win_rate || 0).toFixed(1)}% avg win rate on ${r.total_samples} samples`);
+          refreshAll();
+        } else {
+          toast.error(`PPO train failed: ${r.error || "unknown"}`);
+        }
       } else if (modelId === "ensemble") {
         const r = await fetch(`${API}/ml/scheduler/trigger`, { method: "POST" }).then((res) => res.json());
         if (r.success) {
@@ -108,7 +142,7 @@ export default function MLLabPage() {
           toast.warning(r.message || "Retrain queued");
         }
       } else {
-        toast.info(`${modelId} doesn't have an OTC-tuner training path yet — use Backtest tab to evaluate`);
+        toast.error(`Unknown model: ${modelId}`);
       }
     } catch (e) {
       toast.error("Retrain error: " + e.message);
