@@ -3,6 +3,17 @@
 ## Last Updated: May 2, 2026
 
 ## Current Status
+✅ **TM v8.52.0 — Time Strategy Works On All Chart Timeframes (May 2, 2026)**
+- **Issue**: Time Strategy was hardcoded to 1-minute candles (`Math.floor(ts / 60_000)`, `msLeft = 60_000 - ...`). On S5 / S15 / S30 / M5 / M15 / M30 / H1 charts, wall-clock math was computing wrong candle boundaries and the strategy never fired at the user's trigger second.
+- **Fix in `/app/tampermonkey-src/src/utils/dom.js`**: New `getChartTimeframe()` utility auto-detects PO's active timeframe label (`S5`, `S15`, `S30`, `M1`, `M5`, `M15`, `M30`, `H1`, `H4`, `D1`) via multiple selector patterns. Returns `{label, seconds}`.
+- **Fix in `/app/tampermonkey-src/src/strategies/twentyOneSecondReversal.js`**:
+  - New `_getCandlePeriodSeconds()` dynamically reads the current timeframe (2s cache). Defaults to 60s if DOM read fails.
+  - `_minuteOfNow()` generalized to aligned period boundaries (works for any period that divides an hour cleanly: 5s, 15s, 30s, 60s, 300s, 900s, 1800s, 3600s).
+  - Trigger second auto-clamped to `[1, period-1]` — prevents "fire at 49s left" on a 5s candle (which is impossible).
+  - `TRIGGER HIT` log now includes the timeframe: `tf=M5 po=294s+wall=295s target=294s fired=false`.
+- **Panel UI update**: Live-countdown row now shows the auto-detected timeframe as a blue pill (`M1 / M5 / S15 / …`) and formats long countdowns as `m:ss` (e.g. `4:23` for M5). Helps user confirm the strategy is working on their chosen chart.
+- TM userscript bumped **8.51.0 → 8.52.0**
+
 ✅ **TM v8.51.0 — Time Strategy OR'd Triggers + Live Countdown Readout + "Time Strategy" Label (May 2, 2026)**
 - **Bug fix — Time Strategy not firing at all after v8.50.0**: The previous version required an exact PO-countdown match (±1s). When PO's countdown DOM selector doesn't match the user's theme OR returned a wrong timer value (e.g. expiry "0:05" instead of candle remaining), `poSecondsLeft` was set to a value that never matched the configured trigger, so `inWindow` stayed false forever → no fire.
 - **Fix in `/app/tampermonkey-src/src/strategies/twentyOneSecondReversal.js` `_tick()`**:

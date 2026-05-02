@@ -521,6 +521,14 @@ function injectCSS() {
       color: #f0abfc !important;
       font-weight: 700 !important;
     }
+    .${P}timetfval {
+      color: #79c0ff !important;
+      font-weight: 700 !important;
+      background: rgba(88,166,255,0.10) !important;
+      padding: 1px 4px !important;
+      border-radius: 3px !important;
+      font-variant-numeric: tabular-nums !important;
+    }
     .${P}timesep { color: #30363d !important; }
     .${P}timestatus {
       flex: 1 !important;
@@ -808,11 +816,13 @@ export function createPanel() {
         <div class="${P}stripcell" id="${P}strip51s" title="Time Strategy toggle — fires at a fixed second of every 1m candle"><span class="${P}stripled"></span><span>TIME STRAT</span></div>
         <div class="${P}stripcell" id="${P}stripcycle"><span class="${P}stripled"></span><span>CYCLE</span></div>
       </div>
-      <div class="${P}timerow" id="${P}timerow" data-testid="live-candle-timer" title="Live PO candle countdown and Time Strategy trigger status. Updates every 500ms.">
+      <div class="${P}timerow" id="${P}timerow" data-testid="live-candle-timer" title="Live PO candle countdown and Time Strategy trigger status. Works on any chart timeframe (S5, S15, M1, M5, etc). Updates every 500ms.">
         <span class="${P}timelbl">PO</span>
         <span class="${P}timeval" id="${P}timeval">—</span>
         <span class="${P}timesep">·</span>
-        <span class="${P}timelbl">target</span>
+        <span class="${P}timetfval" id="${P}timetfval" title="Current chart timeframe auto-detected from PO UI">M1</span>
+        <span class="${P}timesep">·</span>
+        <span class="${P}timelbl">@</span>
         <span class="${P}timetrg" id="${P}timetrg">—</span>
         <span class="${P}timestatus" id="${P}timestatus">off</span>
       </div>
@@ -1251,6 +1261,7 @@ export function updateLiveCountdown(info) {
   const valEl = q('timeval');
   const trgEl = q('timetrg');
   const statusEl = q('timestatus');
+  const tfEl = q('timetfval');
   if (!valEl) return;
 
   if (!info || !info.enabled) {
@@ -1258,6 +1269,7 @@ export function updateLiveCountdown(info) {
     valEl.classList.remove('hit', 'stale');
     valEl.classList.add('offline');
     if (trgEl) trgEl.textContent = '—';
+    if (tfEl) tfEl.textContent = info?.timeframeLabel || 'M1';
     if (statusEl) {
       statusEl.textContent = 'off';
       statusEl.classList.remove('armed', 'firing', 'cooldown');
@@ -1270,18 +1282,30 @@ export function updateLiveCountdown(info) {
   const hasPo = info.poSecondsLeft != null;
 
   valEl.classList.remove('offline', 'hit', 'stale');
+
+  // Format: for >60s show "m:ss", otherwise "Ns"
+  const fmt = (s) => {
+    if (s >= 60) {
+      const m = Math.floor(s / 60);
+      const sec = s % 60;
+      return `${m}:${String(sec).padStart(2, '0')}`;
+    }
+    return `${s}s`;
+  };
+
   if (!hasPo) {
     valEl.classList.add('stale');
-    valEl.textContent = `${src}s*`;   // asterisk = wall-clock fallback
+    valEl.textContent = `${fmt(src)}*`;   // asterisk = wall-clock fallback
   } else {
     // Flash green inside the trigger window (±2s of target)
     if (Math.abs(src - info.triggerSec) <= 2) {
       valEl.classList.add('hit');
     }
-    valEl.textContent = `${src}s`;
+    valEl.textContent = fmt(src);
   }
 
-  if (trgEl) trgEl.textContent = `${info.triggerSec}s`;
+  if (trgEl) trgEl.textContent = fmt(info.triggerSec);
+  if (tfEl) tfEl.textContent = info.timeframeLabel || 'M1';
 
   if (statusEl) {
     statusEl.classList.remove('armed', 'firing', 'cooldown');

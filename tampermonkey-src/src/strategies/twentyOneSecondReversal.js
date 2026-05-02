@@ -28,6 +28,7 @@ import {
   switchAsset,
   getPayout,
   getCandleCountdown,
+  getChartTimeframe,
 } from '../utils/dom.js';
 import { priceScraper } from '../trading/priceScraper.js';
 import { poLivePrice } from '../trading/ssidBridge.js';
@@ -147,13 +148,18 @@ class TwentyOneSecondReversal {
    */
   getLiveCountdown() {
     const now = Date.now();
+    const periodSec = this._getCandlePeriodSeconds(now);
+    const tfLabel = this._getCandlePeriodLabel();
     const minute = this._minuteOfNow(now);
-    const wallSecLeft = Math.round((60_000 - (now - minute)) / 1000);
-    const triggerSec = Math.round((this.config.fireAtMsLeft || FIRE_AT_MS_LEFT) / 1000);
+    const wallSecLeft = Math.round(((periodSec * 1000) - (now - minute)) / 1000);
+    const triggerSecRaw = Math.round((this.config.fireAtMsLeft || FIRE_AT_MS_LEFT) / 1000);
+    const triggerSec = Math.max(1, Math.min(periodSec - 1, triggerSecRaw));
     return {
       poSecondsLeft: this._livePoSecondsLeft,
       wallSecondsLeft: wallSecLeft,
       triggerSec,
+      periodSec,
+      timeframeLabel: tfLabel,
       enabled: this.enabled,
       firedThisCandle: this.firedThisCandle,
     };
@@ -302,8 +308,16 @@ class TwentyOneSecondReversal {
       // ±2s — we fire. Previously v8.50.0 required an exact PO-countdown
       // match (±1s) which silently failed when PO's countdown DOM selector
       // didn't match the user's theme.
-      const triggerSec = Math.round((this.config.fireAtMsLeft || FIRE_AT_MS_LEFT) / 1000);
-      const msLeft = 60_000 - (now - minute);
+      //
+      // v8.52.0: Timing now uses the CURRENT chart timeframe (not hardcoded
+      // 60s). Works on S5 / S15 / S30 / M1 / M5 / M15 / M30 / H1 / H4 / D1.
+      const periodSec = this._getCandlePeriodSeconds(now);
+      const tfLabel = this._getCandlePeriodLabel();
+      const triggerSecRaw = Math.round((this.config.fireAtMsLeft || FIRE_AT_MS_LEFT) / 1000);
+      // Clamp trigger to a valid second within the current candle period
+      const triggerSec = Math.max(1, Math.min(periodSec - 1, triggerSecRaw));
+      const periodMs = periodSec * 1000;
+      const msLeft = periodMs - (now - minute);
       const wallSecLeft = Math.round(msLeft / 1000);
 
       let inWindow = false;
@@ -321,7 +335,7 @@ class TwentyOneSecondReversal {
       // no spam outside. Lets the user confirm the trigger is being met.
       if (inWindow && this._windowLoggedGen !== this._candleGen) {
         this._windowLoggedGen = this._candleGen;
-        info(`[Time-Reversal] TRIGGER HIT — ${matchSource} target=${triggerSec}s fired=${this.firedThisCandle}`);
+        info(`[Time-Reversal] TRIGGER HIT — tf=${tfLabel} ${matchSource} target=${triggerSec}s fired=${this.firedThisCandle}`);
       }
       if (!inWindow) return;
 
@@ -602,8 +616,36 @@ class TwentyOneSecondReversal {
 
   // -- Helpers --------------------------------------------------------------
 
+  /**
+   * v8.52.0: Dynamic candle period. Reads the chart's current timeframe
+   * from PO's UI (M1 / M5 / S15 / etc.) and caches for 2s. Falls back to
+   * 60s (M1) if PO's UI label can't be read.
+   */
+  _getCandlePeriodSeconds(ts = Date.now()) {
+    const cache = this._tfCache;
+    if (cache && (ts - cache.at) < 2000) return cache.seconds;
+    let seconds = 60;
+    let label = 'M1';
+    try {
+      const tf = getChartTimeframe();
+      if (tf && tf.seconds >= 5 && tf.seconds <= 86400) {
+        seconds = tf.seconds;
+        label = tf.label;
+      }
+    } catch (_e) { /* ignore */ }
+    this._tfCache = { at: ts, seconds, label };
+    return seconds;
+  }
+
+  _getCandlePeriodLabel() {
+    return (this._tfCache && this._tfCache.label) || 'M1';
+  }
+
+  // Aligned to local-clock period boundaries. Works for any period that
+  // divides an hour cleanly (5s, 15s, 30s, 60s, 300s, 900s, 1800s, 3600s).
   _minuteOfNow(ts = Date.now()) {
-    return Math.floor(ts / 60_000) * 60_000;
+    const periodMs = this._getCandlePeriodSeconds(ts) * 1000;
+    return Math.floor(ts / periodMs) * periodMs;
   }
 
   _resetCandle(minuteTs) {

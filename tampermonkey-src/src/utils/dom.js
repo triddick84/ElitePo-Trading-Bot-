@@ -1268,6 +1268,78 @@ export function getCandleCountdown() {
   return null;
 }
 
+/**
+ * v8.52.0 — Read the current chart timeframe from PO's UI.
+ *
+ * PO shows the timeframe label like "M1", "M5", "S5", "S15", "S30",
+ * "H1", etc. near the chart. This function scans for those label
+ * patterns and returns the candle period in seconds.
+ *
+ * Returns { label, seconds } or null if not detectable.
+ *
+ * Supported labels:
+ *   Sn  (seconds): S5=5, S15=15, S30=30
+ *   Mn  (minutes): M1=60, M5=300, M15=900, M30=1800
+ *   Hn  (hours):   H1=3600, H4=14400
+ *   Dn  (days):    D1=86400
+ */
+export function getChartTimeframe() {
+  try {
+    // Common PO timeframe-button/badge selectors (multiple themes)
+    const SEL = [
+      '[class*="timeframe"] [class*="active"]',
+      '[class*="chart-timeframe"] .active',
+      '[class*="period-switcher"] .active',
+      '[class*="period"] [class*="selected"]',
+      '[class*="period"] [class*="active"]',
+      '[class*="chart-type"] .active',
+      '.timeframes-list .active',
+      '.chart-header [class*="period"]',
+      'button[class*="period"][class*="active"]',
+    ];
+    const LABEL_RE = /^\s*([SMHD])\s*(\d{1,3})\s*$/i;
+
+    for (const s of SEL) {
+      const els = document.querySelectorAll(s);
+      for (const el of els) {
+        if (!el || !el.offsetParent) continue;
+        const txt = (el.textContent || '').trim();
+        const m = txt.match(LABEL_RE);
+        if (m) {
+          const unit = m[1].toUpperCase();
+          const num = parseInt(m[2], 10);
+          const mult = { S: 1, M: 60, H: 3600, D: 86400 }[unit] || 60;
+          return { label: `${unit}${num}`, seconds: num * mult };
+        }
+      }
+    }
+
+    // Fallback: scan compact badges anywhere in the chart area matching
+    // pattern "M1" / "S5" / "H4" etc. Limit to small leaf elements so we
+    // don't confuse with an arbitrary "M5" somewhere in copy.
+    const leaves = document.querySelectorAll('button, span, div');
+    for (const el of leaves) {
+      if (!el || !el.offsetParent) continue;
+      if (el.children.length > 1) continue;
+      const txt = (el.textContent || '').trim();
+      if (!txt || txt.length > 5) continue;
+      const m = txt.match(LABEL_RE);
+      if (!m) continue;
+      const unit = m[1].toUpperCase();
+      const num = parseInt(m[2], 10);
+      // Only accept if element has active-styling class hints (avoid
+      // false positives from inactive timeframe buttons).
+      const cls = ((el.className || '') + '').toLowerCase();
+      const parentCls = ((el.parentElement?.className || '') + '').toLowerCase();
+      if (/\b(active|selected|current)\b/.test(cls + ' ' + parentCls)) {
+        const mult = { S: 1, M: 60, H: 3600, D: 86400 }[unit] || 60;
+        return { label: `${unit}${num}`, seconds: num * mult };
+      }
+    }
+  } catch (_e) { /* ignore */ }
+  return null;
+}
+
 
 /**
  * v8.45.0 — Picker-based favorites discovery & switching.
@@ -1709,4 +1781,5 @@ export default {
   getAccountBalance,
   scanDOMForTradeResult,
   getCandleCountdown,
+  getChartTimeframe,
 };
