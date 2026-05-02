@@ -3,6 +3,14 @@
 ## Last Updated: May 2, 2026
 
 ## Current Status
+✅ **TM v8.49.0 — Real PO Clock for Time Strategy + Hard Click Blocklist (May 2, 2026)**
+- **Time Strategy clock drift (root cause)**: The strategy was using wall-clock math (`60_000 - (now - minute)`) to compute `msLeft` but PO's server-time candles can drift ±2s against local time. When the drift put the trigger-second outside the ±1s tolerance window, the whole candle was skipped silently.
+  - **Fix in `_tick()`**: Reads `getCandleCountdown()` from PO's chart UI as the primary timing source. Falls back to wall-clock math only if the DOM reader fails. Also uses the countdown's "3s → 58s" jump to detect new-candle rollover, so `firedThisCandle` resets when PO says a new candle started (not when wall-clock rolls).
+  - **Fix for no-price-data case**: If the strategy hits the fire window with no price data and WS bridge silent, it now synthesizes a flat candle and fires CALL fallback when `alwaysFire=true` (was: silent skip). Strategy is timing-based so missing price signal shouldn't block the trigger.
+- **CYCLE clicking TOP UP (root cause)**: Even with the v8.47.0 strict header matcher, edge cases in fallback paths could still land on header chrome. Added a belt-and-braces SAFETY NET at the click site itself.
+  - **Fix**: `_reactClickEl()` and the internal `reactClick()` inside `switchAsset()` now hard-block clicks when the target OR any ancestor within 4 levels contains text matching `TOP UP | DEPOSIT | WITHDRAW | PROFILE | ACCOUNT | CASHIER | WALLET | LOGOUT` (or class hints `topup | deposit | user-menu | profile-menu`). Logs `[safe-click] BLOCKED…` so the user can see which element was refused.
+- TM userscript bumped **8.48.0 → 8.49.0**
+
 ✅ **TM v8.48.0 — Time Strategy fires on EVERY candle (May 2, 2026)**
 - **Bug**: Time Strategy silently skipped whole candles when (a) candle body < threshold, (b) slope fallback returned flat, or (c) payout < `MIN_PAYOUT`. Each skip set `firedThisCandle = true`, meaning no retry inside the tolerance window — one failed tick killed the whole candle's fire.
 - **Fix in `/app/tampermonkey-src/src/strategies/twentyOneSecondReversal.js` `_attemptFire()`**:

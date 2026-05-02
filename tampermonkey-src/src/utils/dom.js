@@ -683,6 +683,31 @@ export function switchAsset(symbol) {
   const reactClick = (target) => {
     if (!target) return;
 
+    // v8.49.0: Same hard safety net as _reactClickEl — block clicks on
+    // TOP UP / DEPOSIT / PROFILE / wallet chrome. This path is used by
+    // switchAsset's slot-tile match and retry logic.
+    const FORBIDDEN_RE = /\b(TOP[\s-]?UP|DEPOSIT|WITHDRAW|TOPUP|PROFILE|ACCOUNT|SIGN\s*OUT|LOGOUT|CASHIER|WALLET)\b/i;
+    try {
+      let cur = target;
+      for (let i = 0; i < 4 && cur; i++) {
+        const txt = (cur.textContent || '').trim();
+        if (txt.length > 0 && txt.length < 60 && FORBIDDEN_RE.test(txt)) {
+          warn(`[switchAsset] BLOCKED forbidden click: "${txt.slice(0, 40)}"`);
+          return;
+        }
+        cur = cur.parentElement;
+      }
+      let cur2 = target;
+      for (let i = 0; i < 6 && cur2; i++) {
+        const cls = ((cur2.className || '') + '').toLowerCase();
+        if (/\b(topup|top-up|deposit|withdraw|cashier|wallet|user-menu|profile-menu)\b/.test(cls)) {
+          warn(`[switchAsset] BLOCKED — ancestor class: "${cls.slice(0, 40)}"`);
+          return;
+        }
+        cur2 = cur2.parentElement;
+      }
+    } catch (_e) { /* ignore */ }
+
     // Resolve coordinates of the element center for realistic events
     let cx = 0, cy = 0;
     try {
@@ -1353,6 +1378,33 @@ function _findClickableAncestor(el) {
 
 function _reactClickEl(target) {
   if (!target) return;
+  // v8.49.0: Hard safety net — refuse to click any element (or any ancestor
+  // within 4 levels) whose text matches the "forbidden chrome" blocklist.
+  // Prevents CYCLE/picker fallbacks from accidentally opening the TOP UP
+  // modal, triggering a deposit, clicking the profile/avatar menu, etc.
+  const FORBIDDEN_RE = /\b(TOP[\s-]?UP|DEPOSIT|WITHDRAW|TOP\s*UP|TOPUP|PROFILE|ACCOUNT|SIGN\s*OUT|LOGOUT|LOG\s*OUT|CASHIER|WALLET)\b/i;
+  try {
+    let cur = target;
+    for (let i = 0; i < 4 && cur; i++) {
+      const txt = (cur.textContent || '').trim();
+      if (txt.length > 0 && txt.length < 60 && FORBIDDEN_RE.test(txt)) {
+        warn(`[safe-click] BLOCKED click on forbidden element: "${txt.slice(0, 40)}"`);
+        return;
+      }
+      cur = cur.parentElement;
+    }
+    // Also block based on ancestor class hints
+    let cur2 = target;
+    for (let i = 0; i < 6 && cur2; i++) {
+      const cls = ((cur2.className || '') + '').toLowerCase();
+      if (/\b(topup|top-up|deposit|withdraw|cashier|wallet|user-menu|profile-menu)\b/.test(cls)) {
+        warn(`[safe-click] BLOCKED click — ancestor has forbidden class: "${cls.slice(0, 40)}"`);
+        return;
+      }
+      cur2 = cur2.parentElement;
+    }
+  } catch (_e) { /* ignore */ }
+
   let cx = 0, cy = 0;
   try {
     const r = target.getBoundingClientRect();

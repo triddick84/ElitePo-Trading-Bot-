@@ -27,6 +27,7 @@ import {
   executeTrade,
   switchAsset,
   getPayout,
+  getCandleCountdown,
 } from '../utils/dom.js';
 import { priceScraper } from '../trading/priceScraper.js';
 import { poLivePrice } from '../trading/ssidBridge.js';
@@ -254,8 +255,30 @@ class TwentyOneSecondReversal {
         }
       }
 
-      // Compute time-left in current candle
-      const msLeft = 60_000 - (now - minute);
+      // v8.49.0: Time-left computation — prefer PO's REAL candle countdown
+      // (read from the chart-header ⏱ element). Wall-clock math was drifting
+      // against PO's server-time candles (±2s skew) causing the strategy to
+      // miss the trigger second on many candles. The countdown returns
+      // { totalSeconds } where totalSeconds = seconds left in THIS candle.
+      let msLeft;
+      let usingPoClock = false;
+      try {
+        const cd = getCandleCountdown();
+        if (cd && typeof cd.totalSeconds === 'number' && cd.totalSeconds >= 0 && cd.totalSeconds <= 60) {
+          msLeft = cd.totalSeconds * 1000;
+          usingPoClock = true;
+          // Candle rollover detection via countdown jump: totalSeconds
+          // jumps from low → high (e.g. 3s → 58s) → new candle started
+          const lastCd = this._lastCountdown || 0;
+          if (cd.totalSeconds > lastCd + 5 && lastCd <= 3) {
+            this._resetCandle(minute);
+          }
+          this._lastCountdown = cd.totalSeconds;
+        }
+      } catch (_e) { /* ignore */ }
+      if (!usingPoClock) {
+        msLeft = 60_000 - (now - minute);
+      }
       const tol = this.config.toleranceMs || DEFAULT_TOLERANCE_MS;
       const fireAt = this.config.fireAtMsLeft || FIRE_AT_MS_LEFT;
 
@@ -271,20 +294,27 @@ class TwentyOneSecondReversal {
         // Try one last-ditch price fetch from WS bridge before giving up
         const wsLatest = poLivePrice.getLatest();
         const wsAge = poLivePrice.getLatestAge();
-        if (this.config.alwaysFire && wsLatest && wsLatest > 0 && wsAge !== null && wsAge < 30_000) {
-          // alwaysFire: synthesize a candle from the latest WS tick so the fire can proceed
+        if (wsLatest && wsLatest > 0 && wsAge !== null && wsAge < 30_000) {
+          // Synthesize a candle from the latest WS tick so the fire can proceed
           this.candleOpen = wsLatest;
           this.candleClose = wsLatest;
           this.candleHigh = wsLatest;
           this.candleLow = wsLatest;
-          info(`[51s-Reversal] alwaysFire: synthesizing candle from last WS tick (${wsLatest}, age=${wsAge}ms)`);
+          info(`[Time-Reversal] synthesizing candle from last WS tick (${wsLatest}, age=${wsAge}ms)`);
         } else {
-          this._logSkipOnce(
-            'nodata',
-            `In fire window but no price yet. WS ticks: ${wsLatest ? `last=${wsLatest} age=${wsAge}ms` : 'none yet'}. ` +
-            `Enable alwaysFire or ensure price flow.`
-          );
-          return;
+          // v8.49.0: even with NO price data, still fire if alwaysFire is on.
+          // Strategy is timing-based — never skip just because price signal
+          // is offline. Direction defaults to CALL (flip via INVERT/A-INV).
+          if (this.config.alwaysFire) {
+            this.candleOpen = this.candleClose = this.candleHigh = this.candleLow = 1;
+            warn(`[Time-Reversal] No price data — firing CALL fallback (alwaysFire)`);
+          } else {
+            this._logSkipOnce(
+              'nodata',
+              `In fire window but no price. Enable alwaysFire to fire anyway.`
+            );
+            return;
+          }
         }
       }
 
