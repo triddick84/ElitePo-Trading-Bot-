@@ -3,6 +3,12 @@
 ## Last Updated: May 2, 2026
 
 ## Current Status
+✅ **TM v8.54.0 — Time Strategy Signal Invert (May 2, 2026)**
+- **User request**: invert Time Strategy trade direction
+- **Implementation**: new `config.invertSignal: true` (default ON) in `/app/tampermonkey-src/src/strategies/twentyOneSecondReversal.js`. After the natural direction is resolved (body / slope / history), CALL↔PUT is swapped before execution and the reason tag shows `INV[CALL→PUT] body=0.32bps` for clear audit.
+- Previous behaviour (reversal of 1m body) can be restored by setting `window.eliteBot21sReversal.setConfig({invertSignal: false})` in the browser console.
+- TM userscript bumped **8.53.0 → 8.54.0**
+
 ✅ **TM v8.53.0 — Time Strategy Fires Exactly On Selected Second (May 2, 2026)**
 - **Issue**: After v8.51/52, the strategy fired up to 2 seconds early because `|poSecondsLeft - triggerSec| <= 2` allowed matches at target±2 (total 5-second window). User's original "on the exact time" behavior was lost.
 - **Fix in `_tick()`**: Tolerance tightened from ±2 → **exact match** on both sources. Fires ONLY when `poSecondsLeft === triggerSec` OR `wallSecExact === triggerSec`. With 100ms tick cadence we still have ~10 tick chances inside each integer-second window, so there's no risk of missing the window.

@@ -86,6 +86,12 @@ class TwentyOneSecondReversal {
       // This is the recommended mode when you want to trust the timing edge
       // and ignore the price-movement filter entirely.
       alwaysFire: true,
+      // v8.54.0: invertSignal — when true, swaps CALL ↔ PUT after the
+      // strategy has chosen its natural direction. Native strategy is
+      // contrarian (fires opposite of 1m body); with this ON, we flip
+      // once more so the trade ends up WITH the body/slope direction.
+      // User-requested default is true.
+      invertSignal: true,
       autoRotateOnWin: false,
       executionMode: 'auto',
       bridgeHealthy: false,
@@ -449,6 +455,17 @@ class TwentyOneSecondReversal {
       originalDirection = 'FLAT-below-threshold';
       tradeDirection = 'CALL';
       reasonTag = `body-below-threshold=${bodyBps.toFixed(3)}bps`;
+    }
+
+    // v8.54.0: Signal invert — per user request, flip CALL ↔ PUT before
+    // executing. The strategy's native direction is already a reversal of
+    // the 1m body (CALL on DOWN body, PUT on UP body). With invertSignal
+    // ON, we swap once more so the trade ends up in the SAME direction
+    // as the body/slope. Toggle via config.invertSignal.
+    if (this.config.invertSignal) {
+      const beforeInv = tradeDirection;
+      tradeDirection = tradeDirection === 'CALL' ? 'PUT' : 'CALL';
+      reasonTag = `INV[${beforeInv}→${tradeDirection}] ${reasonTag}`;
     }
 
     const asset = getCurrentAsset() || 'UNKNOWN';
