@@ -339,22 +339,24 @@ class TwentyOneSecondReversal {
           originalDirection = 'FLAT';
           tradeDirection = 'CALL';
           reasonTag = 'flat-default-CALL';
-          warn('[51s-Reversal] ZERO price movement detected all candle - defaulting to CALL');
+          warn('[Time-Reversal] ZERO price movement detected all candle - defaulting to CALL');
         }
       } else {
-        // alwaysFire disabled + no slope + flat body → skip
-        this._logSkipOnce(
-          'truly-flat',
-          `Flat body + no slope - skip (set alwaysFire:true to fire anyway)`
-        );
-        this.firedThisCandle = true;
-        return;
+        // v8.48.0: Never silently skip — user explicitly chose this trigger
+        // second, fire at it regardless of body/slope. Default to CALL and
+        // let INVERT/A-INV flip if needed.
+        originalDirection = 'FLAT';
+        tradeDirection = 'CALL';
+        reasonTag = 'flat-fallback-CALL';
+        warn('[Time-Reversal] Flat body + no slope - firing CALL as fallback (per always-fire policy)');
       }
     } else {
-      // Old strict behavior — skip if body below threshold
-      this._logSkipOnce('flat', `Body ${bodyBps.toFixed(3)}bps < ${threshold}bps threshold - skip`);
-      this.firedThisCandle = true;
-      return;
+      // v8.48.0: Body below threshold used to skip the whole candle. Now
+      // we honour the user's trigger second and fire CALL by default.
+      warn(`[Time-Reversal] Body ${bodyBps.toFixed(3)}bps < ${threshold}bps threshold - firing CALL fallback`);
+      originalDirection = 'FLAT-below-threshold';
+      tradeDirection = 'CALL';
+      reasonTag = `body-below-threshold=${bodyBps.toFixed(3)}bps`;
     }
 
     const asset = getCurrentAsset() || 'UNKNOWN';
@@ -362,9 +364,10 @@ class TwentyOneSecondReversal {
 
     const payout = getPayout();
     if (payout && payout < CONFIG.MIN_PAYOUT) {
-      warn(`[51s-Reversal] Payout ${payout}% below min ${CONFIG.MIN_PAYOUT}% - skip`);
-      this.firedThisCandle = true;
-      return;
+      // v8.48.0: payout gate is now a soft warning — the user's timing
+      // trigger is respected and we fire anyway. Previously this would
+      // silently skip the entire candle.
+      warn(`[Time-Reversal] Payout ${payout}% below min ${CONFIG.MIN_PAYOUT}% - firing anyway (always-fire policy)`);
     }
 
     // Try to auto-select 5s expiry if UI exposes it (needed for DOM fallback)

@@ -3,6 +3,16 @@
 ## Last Updated: May 2, 2026
 
 ## Current Status
+✅ **TM v8.48.0 — Time Strategy fires on EVERY candle (May 2, 2026)**
+- **Bug**: Time Strategy silently skipped whole candles when (a) candle body < threshold, (b) slope fallback returned flat, or (c) payout < `MIN_PAYOUT`. Each skip set `firedThisCandle = true`, meaning no retry inside the tolerance window — one failed tick killed the whole candle's fire.
+- **Fix in `/app/tampermonkey-src/src/strategies/twentyOneSecondReversal.js` `_attemptFire()`**:
+  - Body-below-threshold path: no longer skips; fires CALL fallback (user can flip with INVERT / A-INV)
+  - Flat body + no slope path: no longer skips; fires CALL fallback
+  - Payout-below-min gate: now a soft warning only, does not block the fire
+  - `firedThisCandle` is now only set AFTER a real fire, never on bail-outs
+- Net effect: when the user's chosen trigger second appears, the strategy fires on EVERY candle, with sensible direction fallbacks when price data is degraded
+- TM userscript bumped **8.47.0 → 8.48.0**
+
 ✅ **TM v8.47.0 — Strict Asset-Header Matcher (CYCLE no longer clicks balance/TOP UP) (May 2, 2026)**
 - **Root cause**: `_findAssetHeader()` used loose `[class*="symbol-name"]` / `[class*="asset-name"]` selectors that on PO's newer themes also matched the account-balance and TOP UP chrome at the top of the page. CYCLE's picker fallback was clicking those, opening the deposit modal instead of the asset picker.
 - **Fix in `/app/tampermonkey-src/src/utils/dom.js`**:
