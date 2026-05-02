@@ -487,6 +487,58 @@ function injectCSS() {
       background: #3fb950 !important;
       box-shadow: 0 0 3px rgba(63,185,80,0.7) !important;
     }
+    /* Live candle-timer readout (v8.51.0) */
+    .${P}timerow {
+      display: flex !important;
+      align-items: center !important;
+      gap: 4px !important;
+      padding: 4px 8px !important;
+      background: rgba(0,0,0,0.35) !important;
+      border-bottom: 1px solid #21262d !important;
+      font-size: ${mobile ? 9 : 10}px !important;
+      font-variant-numeric: tabular-nums !important;
+      color: #8b949e !important;
+      letter-spacing: 0.3px !important;
+    }
+    .${P}timelbl {
+      color: #6e7681 !important;
+      font-weight: 600 !important;
+      text-transform: uppercase !important;
+    }
+    .${P}timeval {
+      color: #58a6ff !important;
+      font-weight: 700 !important;
+      min-width: ${mobile ? 24 : 28}px !important;
+      text-align: right !important;
+    }
+    .${P}timeval.hit {
+      color: #3fb950 !important;
+      animation: ${P}hitflash 0.6s ease-out 1 !important;
+    }
+    .${P}timeval.stale { color: #d29922 !important; }
+    .${P}timeval.offline { color: #6e7681 !important; }
+    .${P}timetrg {
+      color: #f0abfc !important;
+      font-weight: 700 !important;
+    }
+    .${P}timesep { color: #30363d !important; }
+    .${P}timestatus {
+      flex: 1 !important;
+      text-align: right !important;
+      font-weight: 700 !important;
+      font-size: ${mobile ? 9 : 10}px !important;
+      color: #6e7681 !important;
+      letter-spacing: 0.5px !important;
+      text-transform: uppercase !important;
+    }
+    .${P}timestatus.armed { color: #3fb950 !important; }
+    .${P}timestatus.firing { color: #f85149 !important; animation: ${P}hitflash 0.6s ease-out infinite !important; }
+    .${P}timestatus.cooldown { color: #8b949e !important; }
+    @keyframes ${P}hitflash {
+      0%   { text-shadow: 0 0 0 rgba(63,185,80,0); }
+      50%  { text-shadow: 0 0 6px rgba(63,185,80,0.8); }
+      100% { text-shadow: 0 0 0 rgba(63,185,80,0); }
+    }
     /* Compact-mode collapsibles (Iter 57) */
     .${P}advanced { display: block !important; }
     .${P}advanced.hidden { display: none !important; }
@@ -753,8 +805,16 @@ export function createPanel() {
         <div class="${P}stripcell" id="${P}stripscan"><span class="${P}stripled"></span><span>SCAN</span></div>
         <div class="${P}stripcell" id="${P}stripauto"><span class="${P}stripled"></span><span>AUTO</span></div>
         <div class="${P}stripcell" id="${P}stripainv"><span class="${P}stripled"></span><span>A-INV</span></div>
-        <div class="${P}stripcell" id="${P}strip51s"><span class="${P}stripled"></span><span>TIME</span></div>
+        <div class="${P}stripcell" id="${P}strip51s" title="Time Strategy toggle — fires at a fixed second of every 1m candle"><span class="${P}stripled"></span><span>TIME STRAT</span></div>
         <div class="${P}stripcell" id="${P}stripcycle"><span class="${P}stripled"></span><span>CYCLE</span></div>
+      </div>
+      <div class="${P}timerow" id="${P}timerow" data-testid="live-candle-timer" title="Live PO candle countdown and Time Strategy trigger status. Updates every 500ms.">
+        <span class="${P}timelbl">PO</span>
+        <span class="${P}timeval" id="${P}timeval">—</span>
+        <span class="${P}timesep">·</span>
+        <span class="${P}timelbl">target</span>
+        <span class="${P}timetrg" id="${P}timetrg">—</span>
+        <span class="${P}timestatus" id="${P}timestatus">off</span>
       </div>
       <div class="${P}body" id="${P}body">
         <div class="${P}row">
@@ -776,7 +836,7 @@ export function createPanel() {
           <span class="${P}quallat" id="${P}quallat"></span>
         </div>
         <div class="${P}row">
-          <button id="${P}r21s" class="${P}btn ${P}btn-r21s" title="Time Strategy — fires opposite 5s trade at the configured trigger second on 1m candles">TIME</button>
+          <button id="${P}r21s" class="${P}btn ${P}btn-r21s" title="Time Strategy — fires an opposite 5s trade at a chosen second of every 1m candle">TIME STRAT</button>
           <button id="${P}ainv" class="${P}btn ${P}btn-ainv" title="Enable smart auto-invert on loss streaks">A-INV</button>
           <button id="${P}inv" class="${P}btn ${P}btn-inv">INVERT</button>
         </div>
@@ -1168,14 +1228,72 @@ export function update21sReversalDisplay(enabled, stats = null) {
   }
   if (st) {
     if (!enabled) {
-      st.textContent = 'Time: Off';
+      st.textContent = 'Time Strategy: Off';
       st.classList.remove('on');
     } else if (stats) {
-      st.textContent = `Time: On ${stats.wins}/${stats.losses} (${stats.winRate}%)`;
+      st.textContent = `Time Strategy: On ${stats.wins}/${stats.losses} (${stats.winRate}%)`;
       st.classList.add('on');
     } else {
-      st.textContent = 'Time: On';
+      st.textContent = 'Time Strategy: On';
       st.classList.add('on');
+    }
+  }
+}
+
+/**
+ * v8.51.0 — update the live candle-timer readout row (between the status
+ * strip and the main button row). Shows the PO countdown, the configured
+ * trigger second, and the current armed/firing/off state.
+ *
+ * @param {Object} info - {poSecondsLeft, wallSecondsLeft, triggerSec, enabled, firedThisCandle}
+ */
+export function updateLiveCountdown(info) {
+  const valEl = q('timeval');
+  const trgEl = q('timetrg');
+  const statusEl = q('timestatus');
+  if (!valEl) return;
+
+  if (!info || !info.enabled) {
+    valEl.textContent = '—';
+    valEl.classList.remove('hit', 'stale');
+    valEl.classList.add('offline');
+    if (trgEl) trgEl.textContent = '—';
+    if (statusEl) {
+      statusEl.textContent = 'off';
+      statusEl.classList.remove('armed', 'firing', 'cooldown');
+    }
+    return;
+  }
+
+  // Prefer PO countdown, fall back to wall-clock derived seconds-left
+  const src = info.poSecondsLeft != null ? info.poSecondsLeft : info.wallSecondsLeft;
+  const hasPo = info.poSecondsLeft != null;
+
+  valEl.classList.remove('offline', 'hit', 'stale');
+  if (!hasPo) {
+    valEl.classList.add('stale');
+    valEl.textContent = `${src}s*`;   // asterisk = wall-clock fallback
+  } else {
+    // Flash green inside the trigger window (±2s of target)
+    if (Math.abs(src - info.triggerSec) <= 2) {
+      valEl.classList.add('hit');
+    }
+    valEl.textContent = `${src}s`;
+  }
+
+  if (trgEl) trgEl.textContent = `${info.triggerSec}s`;
+
+  if (statusEl) {
+    statusEl.classList.remove('armed', 'firing', 'cooldown');
+    if (info.firedThisCandle) {
+      statusEl.textContent = 'cooldown';
+      statusEl.classList.add('cooldown');
+    } else if (Math.abs(src - info.triggerSec) <= 2) {
+      statusEl.textContent = 'firing';
+      statusEl.classList.add('firing');
+    } else {
+      statusEl.textContent = 'armed';
+      statusEl.classList.add('armed');
     }
   }
 }

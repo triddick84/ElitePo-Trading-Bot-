@@ -140,6 +140,25 @@ class TwentyOneSecondReversal {
     return this.enabled;
   }
 
+  /**
+   * Get the last-read PO countdown value (seconds left in current candle)
+   * and the wall-clock-derived value, plus the configured trigger second.
+   * Used by the panel to render the live Time Strategy readout.
+   */
+  getLiveCountdown() {
+    const now = Date.now();
+    const minute = this._minuteOfNow(now);
+    const wallSecLeft = Math.round((60_000 - (now - minute)) / 1000);
+    const triggerSec = Math.round((this.config.fireAtMsLeft || FIRE_AT_MS_LEFT) / 1000);
+    return {
+      poSecondsLeft: this._livePoSecondsLeft,
+      wallSecondsLeft: wallSecLeft,
+      triggerSec,
+      enabled: this.enabled,
+      firedThisCandle: this.firedThisCandle,
+    };
+  }
+
   setConfig(partial = {}) {
     Object.assign(this.config, partial);
     log(`[51s-Reversal] Config updated: ${JSON.stringify(this.config)}`);
@@ -217,6 +236,8 @@ class TwentyOneSecondReversal {
           poSecondsLeft = cd.totalSeconds;
         }
       } catch (_e) { /* ignore */ }
+      // v8.51.0: cache for UI readout (status strip shows live PO countdown)
+      this._livePoSecondsLeft = poSecondsLeft;
 
       // Candle rollover detection: prefer PO-countdown jump, fall back to
       // wall-clock minute change. Either resets the fired-flag so the
@@ -275,28 +296,32 @@ class TwentyOneSecondReversal {
         }
       }
 
-      // v8.50.0: Trigger match — compare PO-displayed countdown seconds
-      // DIRECTLY to the user's configured trigger second. No wall-clock
-      // math, no drift. If the countdown is unavailable, fall back to
-      // wall-clock (legacy) but widen the tolerance to ±2s to avoid miss.
+      // v8.51.0: Trigger match — use BOTH timing sources OR'd together so
+      // a single unreliable read never blocks a fire. Either (a) PO's DOM
+      // countdown matches within ±2s, OR (b) wall-clock math matches within
+      // ±2s — we fire. Previously v8.50.0 required an exact PO-countdown
+      // match (±1s) which silently failed when PO's countdown DOM selector
+      // didn't match the user's theme.
       const triggerSec = Math.round((this.config.fireAtMsLeft || FIRE_AT_MS_LEFT) / 1000);
+      const msLeft = 60_000 - (now - minute);
+      const wallSecLeft = Math.round(msLeft / 1000);
 
       let inWindow = false;
-      if (poSecondsLeft !== null) {
-        // Exact-match (±1s) against PO's actual countdown — the source of
-        // truth the user sees on-screen.
-        inWindow = Math.abs(poSecondsLeft - triggerSec) <= 1;
-      } else {
-        // Fallback: wall-clock math with widened ±2s tolerance.
-        const msLeft = 60_000 - (now - minute);
-        inWindow = Math.abs(msLeft - (triggerSec * 1000)) <= 2000;
+      let matchSource = '';
+      if (poSecondsLeft !== null && Math.abs(poSecondsLeft - triggerSec) <= 2) {
+        inWindow = true;
+        matchSource = `po=${poSecondsLeft}s`;
+      }
+      if (Math.abs(wallSecLeft - triggerSec) <= 2) {
+        inWindow = true;
+        matchSource = matchSource ? `${matchSource}+wall=${wallSecLeft}s` : `wall=${wallSecLeft}s`;
       }
 
       // One-shot per-candle fire log — only while INSIDE trigger window,
       // no spam outside. Lets the user confirm the trigger is being met.
-      if (inWindow && !this._windowLoggedGen) {
+      if (inWindow && this._windowLoggedGen !== this._candleGen) {
         this._windowLoggedGen = this._candleGen;
-        info(`[Time-Reversal] TRIGGER HIT — PO=${poSecondsLeft ?? 'n/a'}s target=${triggerSec}s fired=${this.firedThisCandle}`);
+        info(`[Time-Reversal] TRIGGER HIT — ${matchSource} target=${triggerSec}s fired=${this.firedThisCandle}`);
       }
       if (!inWindow) return;
 

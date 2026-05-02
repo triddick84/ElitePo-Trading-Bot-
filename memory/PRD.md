@@ -3,6 +3,16 @@
 ## Last Updated: May 2, 2026
 
 ## Current Status
+✅ **TM v8.51.0 — Time Strategy OR'd Triggers + Live Countdown Readout + "Time Strategy" Label (May 2, 2026)**
+- **Bug fix — Time Strategy not firing at all after v8.50.0**: The previous version required an exact PO-countdown match (±1s). When PO's countdown DOM selector doesn't match the user's theme OR returned a wrong timer value (e.g. expiry "0:05" instead of candle remaining), `poSecondsLeft` was set to a value that never matched the configured trigger, so `inWindow` stayed false forever → no fire.
+- **Fix in `/app/tampermonkey-src/src/strategies/twentyOneSecondReversal.js` `_tick()`**:
+  - Trigger match is now **OR'd** between two independent sources: (a) PO countdown (±2s) AND/OR (b) wall-clock math (±2s). Either match fires the trade. Previously only ONE path was taken, and if it was wrong, the candle was missed entirely.
+  - New `getLiveCountdown()` getter returns `{poSecondsLeft, wallSecondsLeft, triggerSec, enabled, firedThisCandle}` so the panel can render a live readout.
+  - `TRIGGER HIT` log now includes the match source (`po=49s`, `wall=50s`, or both) so the user can diagnose any mismatch instantly.
+- **Live candle-timer readout row** (new UI element between status strip and main buttons): `PO 42s · target 49s · armed / firing / cooldown / off`. Updates every 500ms. `hit` animation pulses green when inside the trigger window. Asterisk suffix (`42s*`) indicates wall-clock fallback is being used.
+- **Label polish — "TIME" → "Time Strategy"**: Strip cell now reads `TIME STRAT`, primary button reads `TIME STRAT`, status line reads `Time Strategy: On/Off`. Matches user's preferred naming everywhere visible.
+- TM userscript bumped **8.50.0 → 8.51.0**
+
 ✅ **TM v8.50.0 — Time Strategy Direct-Match to PO Countdown + Visible Trigger Log (May 2, 2026)**
 - **Root cause (still occurring after v8.49.0)**: The strategy was still computing `msLeft` and comparing to `fireAtMsLeft` with ±1s tolerance. Even with DOM countdown as the primary source, 100ms ticks + server-clock jitter occasionally missed the narrow window.
 - **Fix in `/app/tampermonkey-src/src/strategies/twentyOneSecondReversal.js` `_tick()`**:

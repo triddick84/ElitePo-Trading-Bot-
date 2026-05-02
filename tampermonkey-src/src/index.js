@@ -6,7 +6,7 @@
 import { CONFIG } from './core/config.js';
 import { state, setState, loadState, saveState, resetStats } from './core/state.js';
 import { log, info, warn, success, error } from './core/logger.js';
-import { createPanel, initPanelEvents, updateStatsDisplay, updateInvertDisplay, updateStatusDot, cleanupPanel, populateStrategies, update21sReversalDisplay, set51sTimingSlider, updateActiveAsset, setToggleActive, setSignalPreview, updateStatusStrip } from './ui/panel.js';
+import { createPanel, initPanelEvents, updateStatsDisplay, updateInvertDisplay, updateStatusDot, cleanupPanel, populateStrategies, update21sReversalDisplay, set51sTimingSlider, updateActiveAsset, setToggleActive, setSignalPreview, updateStatusStrip, updateLiveCountdown } from './ui/panel.js';
 import { strategyManager } from './strategies/manager.js';
 import { tradeExecutor } from './trading/executor.js';
 import { tradeResultWatcher } from './trading/tradeResultWatcher.js';
@@ -77,7 +77,13 @@ class EliteTradingBot {
           cycle: state.cycleEnabled,
         });
       } catch (_e) { /* ignore */ }
-    }, 1000);
+      // v8.51.0: Live PO candle-countdown readout in status strip so the
+      // user can visually confirm Time Strategy is reading PO's timer.
+      try {
+        const cd = twentyOneSecondReversal.getLiveCountdown?.();
+        if (cd) updateLiveCountdown(cd);
+      } catch (_e) { /* ignore */ }
+    }, 500);
 
     // Active-asset indicator: refresh every 1.5s from current PO chart
     this._fireCount = 0;
