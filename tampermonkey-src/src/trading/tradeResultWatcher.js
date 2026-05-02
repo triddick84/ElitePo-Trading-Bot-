@@ -103,6 +103,21 @@ class TradeResultWatcher {
     try {
       this.observer = new MutationObserver(() => {
         if (!this.armed || this.armed.resolved) return;
+
+        // v8.56.0: HARD expiry gate — never resolve a trade before its
+        // actual expiry. Previous versions let any DOM mutation (a prior
+        // trade's result animation, a toast, etc.) fire a premature
+        // WIN/LOSS, poisoning the auto-invert engine with outcomes from
+        // trades that hadn't closed yet.
+        const now = Date.now();
+        const expiryMs = (this.armed.trade.expirySeconds || 5) * 1000;
+        const tradeExpiresAt = this.armed.armedAt + expiryMs;
+        // Require a small grace period AFTER expiry before we trust any
+        // DOM/toast signal — PO sometimes refreshes the deals panel during
+        // placement and those mutations look like outcomes.
+        const MIN_GRACE_MS = 1_000;
+        if (now < tradeExpiresAt + MIN_GRACE_MS) return;
+
         // Throttle: scanDOMForTradeResult is ~10ms, can run on every batch
         const isWin = scanDOMForTradeResult();
         if (isWin === true) this._resolve(true, 'mutation-scan');

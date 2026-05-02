@@ -268,16 +268,21 @@ class TradeExecutor {
     const trackingDirection = trade?.originalDirection || direction;
     recordAssetResult(asset, trackingDirection, isWin);
 
+    // v8.56.0: CORRECT ORDER — first record the inverted result so
+    // `state.inversion.invertedTradeCount/Wins/Losses` are fresh before
+    // `evaluateInversion()` inspects them. Previously evaluate ran on
+    // stale counters and mis-decided whether to revert.
+    smartInvert.recordInvertedResult(isWin);
+
     // Trigger an evaluation — checks consecutive same-direction losses
-    // and flips smart-invert state when threshold is hit.
+    // and flips smart-invert state when threshold is hit. Runs ONCE (the
+    // duplicate call at the bottom of this function was removed in
+    // v8.56.0; the double-eval was causing rapid flip-flopping).
     try {
       smartInvert.evaluateInversion(asset);
     } catch (e) {
       warn(`smartInvert.evaluateInversion error: ${e.message}`);
     }
-
-    // Record inverted result tracking
-    smartInvert.recordInvertedResult(isWin);
     
     // Send to backend premium result tracker (fire-and-forget)
     recordPremiumResult(asset, direction, isWin, confidence).then(resp => {
@@ -326,10 +331,13 @@ class TradeExecutor {
     }
     
     log(`Trade result: ${isWin ? 'WIN' : 'LOSS'} | Streak: ${state.stats.currentStreak} | Profit: $${state.moneyManagement.totalProfit.toFixed(2)}`);
-    
-    // Evaluate smart inversion AFTER recording the result
-    smartInvert.evaluateInversion(asset);
-    
+
+    // v8.56.0: the previous duplicate `smartInvert.evaluateInversion(asset)`
+    // call that lived here has been removed. It was running AFTER money-
+    // management state had already been updated, re-triggering the flip
+    // logic with no new input — and on edge cases it toggled the invert
+    // state back and forth within the same tick.
+
     // Save state after each result
     saveState();
   }

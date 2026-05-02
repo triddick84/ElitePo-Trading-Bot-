@@ -3,7 +3,16 @@
 ## Last Updated: May 2, 2026
 
 ## Current Status
-✅ **TM v8.55.0 — BOTAI-Inspired Abstain Gate (win-rate booster) (May 2, 2026)**
+✅ **TM v8.56.0 — Auto-Invert Bug Fixes (premature W/L + double-eval) (May 2, 2026)**
+- **Bug 1 root cause — W/L counted before expiry**: `tradeResultWatcher`'s MutationObserver fired `scanDOMForTradeResult()` on ANY DOM mutation without checking whether the trade had actually expired. A prior trade's result animation, a toast, or any deals-panel refresh during placement could resolve the new armed trade instantly with the STALE outcome.
+- **Fix in `/app/tampermonkey-src/src/trading/tradeResultWatcher.js`**: MutationObserver now has a HARD expiry gate — requires `now >= armedAt + expirySeconds*1000 + 1000ms grace` before trusting any DOM signal. Poll loop already had this check; now both paths are consistent.
+- **Bug 2 root cause — A-INV not switching properly**: `executor.recordResult()` called `smartInvert.evaluateInversion()` TWICE (once before money-management updates, once after), and called `smartInvert.recordInvertedResult()` AFTER the first evaluation. Evaluate was inspecting stale `invertedTradeCount/Wins/Losses` counters and making wrong flip decisions.
+- **Fix in `/app/tampermonkey-src/src/trading/executor.js`**:
+  1. Reordered: `recordInvertedResult(isWin)` now runs BEFORE `evaluateInversion(asset)` so stats are fresh.
+  2. Removed the duplicate `smartInvert.evaluateInversion` call at the bottom of `recordResult`. Evaluation now runs exactly once per recorded outcome.
+- TM userscript bumped **8.55.0 → 8.56.0**
+
+✅ **TM v8.55.0 — BOTAI-Inspired Abstain Gate (May 2, 2026)**
 - Studied concepts from https://github.com/RafaelCartenet/BOTAI (Binary Options Trading AI, 2017) and ported the two highest-ROI ideas into our stack:
   1. **3-class tendency labeling** (UP / DOWN / EQUAL) — candles where `|close - open| < 0.05 bps` are labelled EQUAL and excluded from win-rate arithmetic so flat/tie candles don't wash the stats.
   2. **Confidence-threshold "Pass" action** — the bot abstains on trades whose confidence is below a per-asset tuned threshold. On a 0.80 payout, break-even is 55.6% win-rate; empirically this lifts live win-rate from ~53% to 60–68% at the cost of ~30-40% fewer trades.
