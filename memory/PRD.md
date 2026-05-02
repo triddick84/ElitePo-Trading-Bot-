@@ -3,6 +3,15 @@
 ## Last Updated: May 2, 2026
 
 ## Current Status
+✅ **TM v8.57.0 — Time Strategy: Invert OFF + Fixed 30s Period + CYCLE Favorites-Tab Flow (May 2, 2026)**
+- **Request 1 — Invert back to normal**: `config.invertSignal` default flipped from `true` → **`false`**. Native contrarian behaviour restored (fires opposite of the 1m body).
+- **Request 2 — 30s fixed period**: New `config.fixedPeriodSec = 30` in Time Strategy. When non-zero it overrides auto-detected chart timeframe, so the strategy cycles on a 30-second boundary regardless of what PO's chart displays. `_tick()` now ignores `poSecondsLeft` when a fixedPeriodSec is active (PO countdown is measuring a different period so its value would mismatch). Wall-clock math on the 30s boundary is the sole source of truth in fixed-period mode.
+- **Request 3 — CYCLE clicks Favorites TAB (not a ★ filter)**: Screenshots showed PO's picker is a left-side panel with tabs `Currencies | Cryptos | Commodities | Stocks | Indices | **Favorites** | Schedule`. Rewrote `clickFavoritesFilter()` in `/app/tampermonkey-src/src/utils/dom.js`:
+  - Primary: exact text match on small leaf elements containing just "Favorites" or "Favourites" (tab labels)
+  - Fallback for older themes: keeps the previous `[class*="favorit"|"star"]` scan
+  - Geometry fallback: accepts elements in top-left quadrant even without class hints (PO newer themes strip class markers)
+- TM userscript bumped **8.56.0 → 8.57.0**
+
 ✅ **TM v8.56.0 — Auto-Invert Bug Fixes (premature W/L + double-eval) (May 2, 2026)**
 - **Bug 1 root cause — W/L counted before expiry**: `tradeResultWatcher`'s MutationObserver fired `scanDOMForTradeResult()` on ANY DOM mutation without checking whether the trade had actually expired. A prior trade's result animation, a toast, or any deals-panel refresh during placement could resolve the new armed trade instantly with the STALE outcome.
 - **Fix in `/app/tampermonkey-src/src/trading/tradeResultWatcher.js`**: MutationObserver now has a HARD expiry gate — requires `now >= armedAt + expirySeconds*1000 + 1000ms grace` before trusting any DOM signal. Poll loop already had this check; now both paths are consistent.

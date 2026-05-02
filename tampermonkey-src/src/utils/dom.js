@@ -1572,14 +1572,54 @@ async function closeAssetPicker() {
 }
 
 /**
- * Click the ★ favorites filter inside the open asset picker. PO's picker
- * has either a star button next to the search input (mobile) or a tab in
- * the category row that filters to favorites only.
+ * Click the "Favorites" tab inside the open asset picker.
  *
- * Returns true if a star/favorites filter button was found & clicked.
+ * v8.57.0: Based on live PO screenshots, the picker is a left-side panel
+ * with tabs "Currencies / Cryptocurrencies / Commodities / Stocks /
+ * Indices / Favorites / Schedule". We match the tab by its EXACT text
+ * content "Favorites" (with a small icon sibling) — NOT by a star-filter
+ * button. Walks up to confirm the tab is inside an open picker container.
+ *
+ * Returns true if a Favorites tab was found & clicked.
  */
 async function clickFavoritesFilter() {
-  // Look for buttons with star/favorite/heart hints inside any open picker
+  // Primary: exact "Favorites" text match on small, visible elements
+  const clickables = document.querySelectorAll(
+    'button, [role="button"], [role="tab"], li, div, span, a'
+  );
+  for (const el of clickables) {
+    if (!el || !el.offsetParent) continue;
+    if (el.children.length > 3) continue;  // leaf-ish only (tab has icon + label)
+    const txt = (el.textContent || '').trim();
+    if (!txt || txt.length > 20) continue;
+    // Match "Favorites" or "Favourites" (both spellings), case-insensitive
+    if (!/^\s*Favou?rites\s*$/i.test(txt)) continue;
+    // Confirm inside an open picker context by walking ancestors
+    let cur = el;
+    let inPicker = false;
+    for (let i = 0; i < 15 && cur; i++) {
+      const c = ((cur.className || '') + '').toLowerCase();
+      if (/picker|modal|dropdown|currencies|assets-list|symbol-list|asset-select|categories/.test(c)) {
+        inPicker = true; break;
+      }
+      cur = cur.parentElement;
+    }
+    // Also accept elements that SIT IN the top-left corner even without
+    // matching class hints — PO's newer themes omit class markers.
+    if (!inPicker) {
+      try {
+        const r = el.getBoundingClientRect();
+        if (r.left < 400 && r.top < 800 && r.width < 320) inPicker = true;
+      } catch (_e) { /* ignore */ }
+    }
+    if (!inPicker) continue;
+    _reactClickEl(_findClickableAncestor(el));
+    log(`[picker] clicked Favorites TAB (text="${txt}")`);
+    await _sleep(350);
+    return true;
+  }
+
+  // Fallback: older themes with a class-hint-only favorites filter button
   const candidates = document.querySelectorAll(
     'button, [role="button"], [class*="favorit"], [class*="star"], svg, i'
   );
@@ -1587,11 +1627,7 @@ async function clickFavoritesFilter() {
     if (!el || !el.offsetParent) continue;
     const cls = ((el.className || '') + '').toLowerCase();
     const aria = (el.getAttribute && (el.getAttribute('aria-label') || '')).toLowerCase();
-    const dataAttr = (el.getAttribute && (el.getAttribute('data-tooltip') || el.getAttribute('title') || '')).toLowerCase();
-    // Must mention favorites/star and be inside a picker/modal context
-    const isStarish = /favorit|star|heart/.test(cls + ' ' + aria + ' ' + dataAttr);
-    if (!isStarish) continue;
-    // Walk up to confirm we're inside a picker
+    if (!/favorit|star|heart/.test(cls + ' ' + aria)) continue;
     let cur = el;
     let inPicker = false;
     for (let i = 0; i < 12 && cur; i++) {

@@ -87,11 +87,17 @@ class TwentyOneSecondReversal {
       // and ignore the price-movement filter entirely.
       alwaysFire: true,
       // v8.54.0: invertSignal — when true, swaps CALL ↔ PUT after the
-      // strategy has chosen its natural direction. Native strategy is
-      // contrarian (fires opposite of 1m body); with this ON, we flip
-      // once more so the trade ends up WITH the body/slope direction.
-      // User-requested default is true.
-      invertSignal: true,
+      // strategy has chosen its natural direction.
+      // v8.57.0: Default flipped back to FALSE per user request — the
+      // strategy's native contrarian behavior (fires opposite of 1m body)
+      // is the one the user wants.
+      invertSignal: false,
+      // v8.57.0: fixedPeriodSec — when set (>0), forces the Time Strategy
+      // candle period regardless of what PO's chart is currently showing.
+      // Set to 30 so the strategy always fires on a 30-second cycle even
+      // when PO is displaying M1/M5/S15 candles. Set to 0 to use the
+      // auto-detected chart timeframe (pre-v8.57.0 behaviour).
+      fixedPeriodSec: 30,
       autoRotateOnWin: false,
       executionMode: 'auto',
       bridgeHealthy: false,
@@ -326,13 +332,14 @@ class TwentyOneSecondReversal {
       const msLeft = periodMs - (now - minute);
       const wallSecLeft = Math.round(msLeft / 1000);
 
-      // v8.53.0: Tight exact-second match (±0, with 100ms tick cadence
-      // we already have 10 ticks inside each integer second). Previously
-      // ±2s was too generous and caused early-fires at target+2. User
-      // wants the trade fired ON the selected second.
       let inWindow = false;
       let matchSource = '';
-      if (poSecondsLeft !== null && poSecondsLeft === triggerSec) {
+      // v8.57.0: when a fixedPeriodSec override is active, PO's chart
+      // countdown is measuring a DIFFERENT candle period (e.g. M1) than
+      // our strategy period (30s), so its value is meaningless for our
+      // trigger. Only trust wall-clock math in that case.
+      const usingFixed = !!(this.config.fixedPeriodSec && this.config.fixedPeriodSec > 0);
+      if (!usingFixed && poSecondsLeft !== null && poSecondsLeft === triggerSec) {
         inWindow = true;
         matchSource = `po=${poSecondsLeft}s`;
       }
@@ -647,6 +654,12 @@ class TwentyOneSecondReversal {
    * 60s (M1) if PO's UI label can't be read.
    */
   _getCandlePeriodSeconds(ts = Date.now()) {
+    // v8.57.0: honour fixedPeriodSec override — when set, lock the candle
+    // period regardless of PO's chart timeframe. User set this to 30 so
+    // the Time Strategy fires on a fixed 30-second cycle.
+    if (this.config.fixedPeriodSec && this.config.fixedPeriodSec > 0) {
+      return this.config.fixedPeriodSec;
+    }
     const cache = this._tfCache;
     if (cache && (ts - cache.at) < 2000) return cache.seconds;
     let seconds = 60;
@@ -663,6 +676,10 @@ class TwentyOneSecondReversal {
   }
 
   _getCandlePeriodLabel() {
+    if (this.config.fixedPeriodSec && this.config.fixedPeriodSec > 0) {
+      const s = this.config.fixedPeriodSec;
+      return s < 60 ? `S${s}` : (s < 3600 ? `M${Math.round(s / 60)}` : `H${Math.round(s / 3600)}`);
+    }
     return (this._tfCache && this._tfCache.label) || 'M1';
   }
 
