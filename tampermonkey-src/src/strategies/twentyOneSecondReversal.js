@@ -206,18 +206,38 @@ class TwentyOneSecondReversal {
       const now = Date.now();
       const minute = this._minuteOfNow(now);
 
-      // Candle rollover
+      // v8.50.0: Candle rollover — prefer PO's own countdown (reads the
+      // chart ⏱ timer). A "new candle" is any moment the countdown jumps
+      // UP (e.g. 3s → 59s). Falls back to wall-clock minute rollover when
+      // the countdown DOM read fails.
+      let poSecondsLeft = null;
+      try {
+        const cd = getCandleCountdown();
+        if (cd && typeof cd.totalSeconds === 'number' && cd.totalSeconds >= 0 && cd.totalSeconds <= 60) {
+          poSecondsLeft = cd.totalSeconds;
+        }
+      } catch (_e) { /* ignore */ }
+
+      // Candle rollover detection: prefer PO-countdown jump, fall back to
+      // wall-clock minute change. Either resets the fired-flag so the
+      // strategy can fire the very next trigger.
+      let rolledOver = false;
+      if (poSecondsLeft !== null) {
+        const last = this._lastCountdown;
+        if (last != null && poSecondsLeft > last + 3) {
+          // PO countdown jumped up → new candle
+          rolledOver = true;
+        }
+        this._lastCountdown = poSecondsLeft;
+      }
       if (minute !== this.candleStartTs) {
-        // Candle closed — reset tracker
+        rolledOver = true;
+      }
+      if (rolledOver) {
         this._resetCandle(minute);
       }
 
       // Update running OHLC - multi-source price chain (ordered by reliability):
-      // 1) WS-captured live price (from PO's own socket frames - most accurate)
-      // 2) livePriceTracker (DOM element that has been observed to CHANGE - skips static axis labels)
-      // 3) priceScraper cached last price (500ms interval, DOM-based)
-      // 4) getCurrentPrice (standard selectors)
-      // 5) getCurrentPriceRobust (TreeWalker/SVG - may pick static axis labels, last resort)
       let price = null;
       try {
         const wsPrice = poLivePrice.getLatest();
@@ -255,38 +275,33 @@ class TwentyOneSecondReversal {
         }
       }
 
-      // v8.49.0: Time-left computation — prefer PO's REAL candle countdown
-      // (read from the chart-header ⏱ element). Wall-clock math was drifting
-      // against PO's server-time candles (±2s skew) causing the strategy to
-      // miss the trigger second on many candles. The countdown returns
-      // { totalSeconds } where totalSeconds = seconds left in THIS candle.
-      let msLeft;
-      let usingPoClock = false;
-      try {
-        const cd = getCandleCountdown();
-        if (cd && typeof cd.totalSeconds === 'number' && cd.totalSeconds >= 0 && cd.totalSeconds <= 60) {
-          msLeft = cd.totalSeconds * 1000;
-          usingPoClock = true;
-          // Candle rollover detection via countdown jump: totalSeconds
-          // jumps from low → high (e.g. 3s → 58s) → new candle started
-          const lastCd = this._lastCountdown || 0;
-          if (cd.totalSeconds > lastCd + 5 && lastCd <= 3) {
-            this._resetCandle(minute);
-          }
-          this._lastCountdown = cd.totalSeconds;
-        }
-      } catch (_e) { /* ignore */ }
-      if (!usingPoClock) {
-        msLeft = 60_000 - (now - minute);
+      // v8.50.0: Trigger match — compare PO-displayed countdown seconds
+      // DIRECTLY to the user's configured trigger second. No wall-clock
+      // math, no drift. If the countdown is unavailable, fall back to
+      // wall-clock (legacy) but widen the tolerance to ±2s to avoid miss.
+      const triggerSec = Math.round((this.config.fireAtMsLeft || FIRE_AT_MS_LEFT) / 1000);
+
+      let inWindow = false;
+      if (poSecondsLeft !== null) {
+        // Exact-match (±1s) against PO's actual countdown — the source of
+        // truth the user sees on-screen.
+        inWindow = Math.abs(poSecondsLeft - triggerSec) <= 1;
+      } else {
+        // Fallback: wall-clock math with widened ±2s tolerance.
+        const msLeft = 60_000 - (now - minute);
+        inWindow = Math.abs(msLeft - (triggerSec * 1000)) <= 2000;
       }
-      const tol = this.config.toleranceMs || DEFAULT_TOLERANCE_MS;
-      const fireAt = this.config.fireAtMsLeft || FIRE_AT_MS_LEFT;
 
-      // Within tolerance — fire (no cooldown; user wants every :51 mark)
-      if (Math.abs(msLeft - fireAt) > tol) return;
+      // One-shot per-candle fire log — only while INSIDE trigger window,
+      // no spam outside. Lets the user confirm the trigger is being met.
+      if (inWindow && !this._windowLoggedGen) {
+        this._windowLoggedGen = this._candleGen;
+        info(`[Time-Reversal] TRIGGER HIT — PO=${poSecondsLeft ?? 'n/a'}s target=${triggerSec}s fired=${this.firedThisCandle}`);
+      }
+      if (!inWindow) return;
 
-      // Per-fire debounce so we don't fire 10x within the ±1s tolerance window
-      // on a single candle. Reset on candle rollover (line ~512).
+      // Per-candle debounce so we don't fire 10x inside the ~2s window on
+      // a single candle. Reset on rollover (see _resetCandle).
       if (this.firedThisCandle) return;
 
       // Inside the fire window - verify we have data
@@ -574,6 +589,10 @@ class TwentyOneSecondReversal {
     this.candleLow = null;
     this.tickHistory = [];
     this.firedThisCandle = false;
+    // v8.50.0: candle-generation counter so TRIGGER-HIT logs fire exactly
+    // once per new candle (not on every 100ms tick inside the window)
+    this._candleGen = (this._candleGen || 0) + 1;
+    this._windowLoggedGen = null;
   }
 
   _trySetExpiry(seconds) {

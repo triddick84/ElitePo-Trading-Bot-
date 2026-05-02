@@ -3,6 +3,15 @@
 ## Last Updated: May 2, 2026
 
 ## Current Status
+✅ **TM v8.50.0 — Time Strategy Direct-Match to PO Countdown + Visible Trigger Log (May 2, 2026)**
+- **Root cause (still occurring after v8.49.0)**: The strategy was still computing `msLeft` and comparing to `fireAtMsLeft` with ±1s tolerance. Even with DOM countdown as the primary source, 100ms ticks + server-clock jitter occasionally missed the narrow window.
+- **Fix in `/app/tampermonkey-src/src/strategies/twentyOneSecondReversal.js` `_tick()`**:
+  - Trigger match is now a **direct integer comparison** against PO's displayed seconds: `|poSecondsLeft - triggerSec| <= 1`. No drift-prone math.
+  - Candle-generation counter (`_candleGen`) increments on rollover (detected via PO countdown jump 3s→59s OR wall-clock minute change). Replaces brittle `firedThisCandle` timing.
+  - Wall-clock fallback tolerance widened from ±1s to ±2s for when `getCandleCountdown()` can't read PO's DOM timer.
+  - **New TRIGGER HIT log** (once per candle, inside window): `[Time-Reversal] TRIGGER HIT — PO=49s target=49s fired=false` — user can now see in the panel log EXACTLY when the trigger fires and whether it was allowed or debounced.
+- TM userscript bumped **8.49.0 → 8.50.0**
+
 ✅ **TM v8.49.0 — Real PO Clock for Time Strategy + Hard Click Blocklist (May 2, 2026)**
 - **Time Strategy clock drift (root cause)**: The strategy was using wall-clock math (`60_000 - (now - minute)`) to compute `msLeft` but PO's server-time candles can drift ±2s against local time. When the drift put the trigger-second outside the ±1s tolerance window, the whole candle was skipped silently.
   - **Fix in `_tick()`**: Reads `getCandleCountdown()` from PO's chart UI as the primary timing source. Falls back to wall-clock math only if the DOM reader fails. Also uses the countdown's "3s → 58s" jump to detect new-candle rollover, so `firedThisCandle` resets when PO says a new candle started (not when wall-clock rolls).
