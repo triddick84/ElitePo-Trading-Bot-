@@ -809,10 +809,33 @@ export function switchAsset(symbol) {
     '[class*="assets-favorit"] [class*="text"]',
   ];
 
+  // v8.47.0: filter slot-tile candidates to avoid matching balance/topup
+  // chrome at the top of the page. A valid tile must:
+  //   - Not be inside the page header/nav/sidebar
+  //   - Not contain $/USD/EUR money strings
+  //   - Have text that LOOKS like a currency pair
+  const _SAFE_PAIR_RE = /([A-Z]{3,4}[/\s]?[A-Z]{3,4})/i;
+  const _isHeaderChrome = (el) => {
+    let cur = el;
+    for (let i = 0; i < 8 && cur; i++) {
+      const tag = (cur.tagName || '').toLowerCase();
+      const cls = ((cur.className || '') + '').toLowerCase();
+      if (tag === 'header' || tag === 'nav') return true;
+      if (/\b(top-?bar|topbar|header|navbar|user-menu|balance|topup|top-up|deposit|profile|account)\b/.test(cls)) return true;
+      cur = cur.parentElement;
+    }
+    return false;
+  };
+
   for (const sel of favSelectors) {
     const els = document.querySelectorAll(sel);
     for (const el of els) {
+      if (_isHeaderChrome(el)) continue;
       const t = (el.textContent || '').trim().toUpperCase();
+      if (!t || t.length > 80) continue;
+      // Must look like a currency pair somewhere; reject pure-money strings.
+      if (/\$\s?\d/.test(t) && !_SAFE_PAIR_RE.test(t)) continue;
+      if (/(TOP\s*UP|DEPOSIT|BALANCE|REAL|DEMO)/.test(t) && !_SAFE_PAIR_RE.test(t)) continue;
       for (const v of variants) {
         if (t.includes(v)) {
           const target = findClickableParent(el);
@@ -853,20 +876,15 @@ export function switchAsset(symbol) {
   // Iter 63: Robust dropdown-search fallback (when symbol not in slot tiles)
   // Two-step: (1) click the asset-name header to open picker, (2) type and click result
   const tryDropdownSearch = () => {
-    // Find the live asset name in the chart header (e.g. "AUDUSD OTC ▼")
-    const headerSelectors = [
-      '.asset-name', '.current-symbol', '[class*="symbol-name"]',
-      '[class*="asset-name"]', '[class*="active-symbol"]',
-      '[class*="chart-header"] [class*="symbol"]',
-    ];
-    let header = null;
-    for (const s of headerSelectors) {
-      const el = document.querySelector(s);
-      if (el) { header = el; break; }
-    }
+    // Find the live asset name in the chart header — uses the same strict
+    // _findAssetHeader as the picker helpers (v8.47.0). Avoids accidental
+    // clicks on the page-top balance / TOP UP / profile UI.
+    const header = _findAssetHeader();
     if (header) {
       reactClick(findClickableParent(header));
       log(`Opened asset picker via header click`);
+    } else {
+      warn(`Could not locate asset-name header (strict matcher) — picker fallback may fail`);
     }
 
     // Wait for dropdown then search
@@ -1240,16 +1258,78 @@ export function getCandleCountdown() {
 const _sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function _findAssetHeader() {
+  // v8.47.0: Strict matcher — text MUST look like a currency pair AND must
+  // NOT be inside the top header/nav (balance, TOP UP button, etc.).
+  // Earlier versions matched generic `[class*="symbol-name"]` selectors
+  // which on some PO themes bound to the account-balance label, causing
+  // CYCLE to "click" the TOP UP / balance area.
+  const PAIR_RE = /^([A-Z]{3,4}[/\s]?[A-Z]{3,4})(\s*OTC)?[\s▼▾▲↓]*$/i;
+  const COMPACT_RE = /^[A-Z]{6}(_OTC)?[\s▼▾▲↓]*$/i;
+
+  const isInsideTopNav = (el) => {
+    let cur = el;
+    for (let i = 0; i < 8 && cur; i++) {
+      const tag = (cur.tagName || '').toLowerCase();
+      const cls = ((cur.className || '') + '').toLowerCase();
+      if (tag === 'header' || tag === 'nav') return true;
+      if (/\b(top-?bar|topbar|header|navbar|user-menu|balance|topup|top-up|deposit|profile|account)\b/.test(cls)) return true;
+      cur = cur.parentElement;
+    }
+    return false;
+  };
+
+  const looksLikeMoney = (txt) => /\$|usd|eur|€|£|¥/i.test(txt) && /\d+\.\d+/.test(txt);
+  const looksLikePair = (txt) => PAIR_RE.test(txt) || COMPACT_RE.test(txt);
+
+  // Try priority selectors first — but every match is now validated against
+  // the text-content rules above before being accepted.
   const sels = [
-    '.asset-name', '.current-symbol', '[class*="symbol-name"]',
-    '[class*="asset-name"]', '[class*="active-symbol"]',
+    '.asset-name', '.current-symbol',
+    '[class*="active-symbol"]',
     '[class*="chart-header"] [class*="symbol"]',
+    '[class*="asset-name"]:not([class*="amount"]):not([class*="balance"])',
+    '[class*="symbol-name"]:not([class*="amount"]):not([class*="balance"])',
     '.pair-select__value',
   ];
   for (const s of sels) {
-    const el = document.querySelector(s);
-    if (el && el.offsetParent) return el;
+    const els = document.querySelectorAll(s);
+    for (const el of els) {
+      if (!el || !el.offsetParent) continue;
+      if (isInsideTopNav(el)) continue;
+      const txt = (el.textContent || '').trim();
+      if (!txt || txt.length > 24) continue;
+      if (looksLikeMoney(txt)) continue;
+      if (!looksLikePair(txt)) continue;
+      return el;
+    }
   }
+
+  // Fallback: scan leaf text nodes that look like a pair, in the upper-left
+  // chart region (top < 250px, left < 60% of viewport). This catches PO's
+  // newer layouts where the chart-header asset label has no class hint.
+  try {
+    const W = window.innerWidth || 1200;
+    const candidates = document.querySelectorAll('div, span, button, a');
+    for (const el of candidates) {
+      if (!el || !el.offsetParent) continue;
+      if (el.children.length > 2) continue;        // leaf-ish only
+      if (isInsideTopNav(el)) continue;
+      const txt = (el.textContent || '').trim();
+      if (!txt || txt.length > 24) continue;
+      if (looksLikeMoney(txt)) continue;
+      if (!looksLikePair(txt)) continue;
+      try {
+        const r = el.getBoundingClientRect();
+        // Must be near the top-left of the chart pane, not in the trade
+        // panel on the right or in the bottom mobile-trade row.
+        if (r.top < 60 || r.top > 350) continue;
+        if (r.left > W * 0.6) continue;
+        if (r.width < 40 || r.width > 260) continue;
+        return el;
+      } catch (_e) { /* ignore */ }
+    }
+  } catch (_e) { /* ignore */ }
+
   return null;
 }
 

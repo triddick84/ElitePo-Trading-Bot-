@@ -3,6 +3,15 @@
 ## Last Updated: May 2, 2026
 
 ## Current Status
+✅ **TM v8.47.0 — Strict Asset-Header Matcher (CYCLE no longer clicks balance/TOP UP) (May 2, 2026)**
+- **Root cause**: `_findAssetHeader()` used loose `[class*="symbol-name"]` / `[class*="asset-name"]` selectors that on PO's newer themes also matched the account-balance and TOP UP chrome at the top of the page. CYCLE's picker fallback was clicking those, opening the deposit modal instead of the asset picker.
+- **Fix in `/app/tampermonkey-src/src/utils/dom.js`**:
+  1. New `_findAssetHeader()` validates EVERY candidate with: text matches `XXX/XXX(_OTC)?` or `XXXXXX_OTC` regex AND text doesn't contain money pattern (`$\d+\.\d+`) AND element is NOT inside `header/nav/[topbar|navbar|balance|topup|profile|account]`.
+  2. Geometry-aware fallback: scans leaf elements for currency-pair text only in the upper-left chart region (top 60–350px, left < 60% of viewport).
+  3. `switchAsset()` slot-tile loop now also rejects elements containing `TOP UP / DEPOSIT / BALANCE / REAL / DEMO` text or money strings, and excludes anything inside header chrome.
+  4. `switchAsset()` dropdown-search fallback now uses the same strict `_findAssetHeader()` instead of its old loose selector array.
+- TM userscript bumped **8.46.0 → 8.47.0**
+
 ✅ **TM v8.46.0 — Faster, Richer Live GO Signal Preview (May 2, 2026)**
 - **Poll cadence 8s → 3s** with hard 5.5s abort on stuck requests
 - **Asset-change watcher** (250ms tick) triggers an immediate refetch when CYCLE rotates or user manually switches asset — no more 8s blank window
