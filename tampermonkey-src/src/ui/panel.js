@@ -547,6 +547,60 @@ function injectCSS() {
       font-weight: 600 !important;
       pointer-events: none !important;
     }
+    /* Fresh-update pulse (v8.46.0) — 1s flash on every successful poll */
+    @keyframes ${P}freshpulse {
+      0%   { box-shadow: 0 0 0 0 rgba(88,166,255,0.55); }
+      70%  { box-shadow: 0 0 0 6px rgba(88,166,255,0); }
+      100% { box-shadow: 0 0 0 0 rgba(88,166,255,0); }
+    }
+    .${P}qualrow.fresh {
+      animation: ${P}freshpulse 1s ease-out 1 !important;
+    }
+    /* Age pip (v8.46.0) — small dot showing data freshness in seconds */
+    .${P}qualage {
+      flex: 0 0 auto !important;
+      font-size: ${mobile ? 8 : 9}px !important;
+      font-variant-numeric: tabular-nums !important;
+      color: #6e7681 !important;
+      font-weight: 600 !important;
+      margin-left: 4px !important;
+      letter-spacing: 0.3px !important;
+    }
+    .${P}qualage.stale { color: #d29922 !important; }
+    .${P}qualage.veryold { color: #f85149 !important; }
+    /* Sub-row: ML count + strategies evaluated + vote ratio (v8.46.0) */
+    .${P}qualsub {
+      display: flex !important;
+      align-items: center !important;
+      gap: 4px !important;
+      padding: 0 8px 4px 8px !important;
+      margin-top: -4px !important;
+      margin-bottom: ${mobile ? '6px' : '8px'} !important;
+      background: rgba(0,0,0,0.18) !important;
+      border-left: 3px solid #21262d !important;
+      border-right: 1px solid #21262d !important;
+      border-bottom: 1px solid #21262d !important;
+      border-radius: 0 0 6px 6px !important;
+      font-size: ${mobile ? 8 : 9}px !important;
+      color: #8b949e !important;
+      letter-spacing: 0.3px !important;
+      min-height: ${mobile ? 14 : 12}px !important;
+    }
+    .${P}qualsub.high { border-left-color: #22c55e !important; }
+    .${P}qualsub.medium { border-left-color: #d29922 !important; }
+    .${P}qualsub.low { border-left-color: #f85149 !important; }
+    .${P}qualpill {
+      padding: 1px 5px !important;
+      border-radius: 3px !important;
+      background: rgba(255,255,255,0.05) !important;
+      font-weight: 700 !important;
+      font-variant-numeric: tabular-nums !important;
+    }
+    .${P}qualpill.ml { color: #58a6ff !important; background: rgba(88,166,255,0.08) !important; }
+    .${P}qualpill.strats { color: #a5d6ff !important; }
+    .${P}qualpill.votes { color: #c9b6ff !important; }
+    .${P}qualspacer { flex: 1 !important; }
+    .${P}quallat { color: #6e7681 !important; }
     .${P}qualrow { position: relative !important; }
     .${P}qualrow {
       display: flex !important;
@@ -708,10 +762,18 @@ export function createPanel() {
           <button id="${P}auto" class="${P}btn">AUTO</button>
           <button id="${P}go" class="${P}btn ${P}btn-go">GO</button>
         </div>
-        <div class="${P}qualrow" id="${P}qualrow" data-testid="signal-quality-preview" title="Live signal preview from backend (refreshes every 8s). Tells you whether it's worth pulling GO right now.">
+        <div class="${P}qualrow" id="${P}qualrow" data-testid="signal-quality-preview" title="Live signal preview from backend (refreshes every 3s). Tells you whether it's worth pulling GO right now.">
           <span class="${P}quallbl">Live</span>
           <span class="${P}qualbar" id="${P}qualbar"><span class="${P}qualfill" id="${P}qualfill"></span></span>
           <span class="${P}qualval" id="${P}qualval">…polling</span>
+          <span class="${P}qualage" id="${P}qualage" title="Data age in seconds since last successful refresh"></span>
+        </div>
+        <div class="${P}qualsub" id="${P}qualsub" data-testid="signal-quality-sub" title="Strategy & ML model participation in the current force-generated signal">
+          <span class="${P}qualpill ml" id="${P}qualml" style="display:none">·</span>
+          <span class="${P}qualpill strats" id="${P}qualstrats" style="display:none">·</span>
+          <span class="${P}qualpill votes" id="${P}qualvotes" style="display:none">·</span>
+          <span class="${P}qualspacer"></span>
+          <span class="${P}quallat" id="${P}quallat"></span>
         </div>
         <div class="${P}row">
           <button id="${P}r21s" class="${P}btn ${P}btn-r21s" title="Time Strategy — fires opposite 5s trade at the configured trigger second on 1m candles">TIME</button>
@@ -1152,22 +1214,37 @@ export function updateActiveAsset(symbol, count = null) {
 
 /**
  * Update the live signal-quality preview row (under the GO button).
- * Polled every 8s by index.js — gives the user a "should I press GO?" cue.
+ * Polled every 3s by index.js — gives the user a "should I press GO?" cue.
  *
- * @param {Object|null} info - {direction, confidence, quality, agreeing} or null on error
+ * @param {Object|null} info - {direction, confidence, quality, agreeing,
+ *                              mlCount, evaluated, votes, latencyMs,
+ *                              fresh, ageSec, error}
+ *                            or null on error
  */
 export function setSignalPreview(info) {
   const row = q('qualrow');
   const fill = q('qualfill');
   const valEl = q('qualval');
+  const ageEl = q('qualage');
+  const subEl = q('qualsub');
+  const mlEl = q('qualml');
+  const stratsEl = q('qualstrats');
+  const votesEl = q('qualvotes');
+  const latEl = q('quallat');
   if (!row || !valEl) return;
 
   // Reset classes
-  row.classList.remove('high', 'medium', 'low');
+  row.classList.remove('high', 'medium', 'low', 'fresh');
+  if (subEl) subEl.classList.remove('high', 'medium', 'low');
 
   if (!info || !info.direction) {
     valEl.textContent = info?.error || '—';
     if (fill) fill.style.width = '0%';
+    if (ageEl) ageEl.textContent = '';
+    if (mlEl) mlEl.style.display = 'none';
+    if (stratsEl) stratsEl.style.display = 'none';
+    if (votesEl) votesEl.style.display = 'none';
+    if (latEl) latEl.textContent = '';
     return;
   }
 
@@ -1178,9 +1255,9 @@ export function setSignalPreview(info) {
   const agreeing = info.agreeing != null ? ` · ${info.agreeing} strats` : '';
 
   // Map quality → CSS class
-  if (quality === 'HIGH') row.classList.add('high');
-  else if (quality === 'MEDIUM') row.classList.add('medium');
-  else row.classList.add('low');
+  if (quality === 'HIGH') { row.classList.add('high'); subEl?.classList.add('high'); }
+  else if (quality === 'MEDIUM') { row.classList.add('medium'); subEl?.classList.add('medium'); }
+  else { row.classList.add('low'); subEl?.classList.add('low'); }
 
   if (fill) {
     // Bar fill: 50% conf = 0% bar, 82% conf = 100% bar (52–82% realistic band)
@@ -1189,6 +1266,60 @@ export function setSignalPreview(info) {
   }
 
   valEl.textContent = `${quality} ${dirArrow} ${dir} ${conf.toFixed(0)}%${agreeing}`;
+
+  // Age pip — green pulse for fresh, gold for stale, red for very old
+  if (ageEl) {
+    const age = Number(info.ageSec || 0);
+    ageEl.classList.remove('stale', 'veryold');
+    if (age <= 1) ageEl.textContent = 'now';
+    else if (age <= 3) ageEl.textContent = `${age}s`;
+    else if (age <= 6) { ageEl.textContent = `${age}s`; ageEl.classList.add('stale'); }
+    else { ageEl.textContent = `${age}s`; ageEl.classList.add('veryold'); }
+  }
+
+  // Fresh-update pulse animation (re-trigger by removing/adding class)
+  if (info.fresh) {
+    // Force reflow to restart animation
+    row.classList.remove('fresh');
+    void row.offsetWidth;
+    row.classList.add('fresh');
+  }
+
+  // Sub-row: ML model count, strategies evaluated, vote ratio
+  if (mlEl) {
+    if (info.mlCount && info.mlCount > 0) {
+      mlEl.textContent = `${info.mlCount}ML✓`;
+      mlEl.style.display = '';
+    } else {
+      mlEl.style.display = 'none';
+    }
+  }
+  if (stratsEl) {
+    if (info.evaluated && info.evaluated > 0) {
+      stratsEl.textContent = `${info.agreeing || 0}/${info.evaluated}`;
+      stratsEl.style.display = '';
+    } else {
+      stratsEl.style.display = 'none';
+    }
+  }
+  if (votesEl) {
+    const v = info.votes;
+    if (v && (v.call != null || v.put != null)) {
+      const c = Number(v.call || 0).toFixed(1);
+      const p = Number(v.put || 0).toFixed(1);
+      votesEl.textContent = `▲${c} ▼${p}`;
+      votesEl.style.display = '';
+    } else {
+      votesEl.style.display = 'none';
+    }
+  }
+  if (latEl) {
+    if (info.latencyMs && info.latencyMs > 0) {
+      latEl.textContent = `${info.latencyMs}ms`;
+    } else {
+      latEl.textContent = '';
+    }
+  }
 }
 
 /**

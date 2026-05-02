@@ -391,53 +391,130 @@ class EliteTradingBot {
   }
 
   /**
-   * Live signal-quality preview poller (Apr 25, 2026, Iter 55).
-   * Polls /signals/force-generate-v2 every 8s for the current asset and
-   * paints quality + direction + confidence into the preview row above
-   * GO so the user can decide whether it's worth pulling the trigger.
+   * Live signal-quality preview poller (v8.46.0, May 2026).
+   * Polls /signals/force-generate-v2 every 3s for the current asset and
+   * paints quality + direction + confidence + ML/strategy participation
+   * into the preview row above GO so the user can decide whether it's
+   * worth pulling the trigger.
+   *
+   * v8.46.0 upgrades:
+   *  - Poll cadence 8s → 3s (debounced, skips overlapping requests)
+   *  - Surfaces ML model count + total strategies evaluated
+   *  - Asset-change watcher triggers an immediate refetch on switch
+   *  - Freshness pulse animation on every successful update
+   *  - Age ticker (visible between polls) shows data freshness
    */
   startSignalPreview() {
     if (this.previewInterval) return;
-    const POLL_MS = 8000;
+    const POLL_MS = 3000;
+    const ABORT_MS = 5500;     // give up if a request hangs longer than this
     let inFlight = false;
+    let lastAsset = null;
+    let lastUpdateTs = 0;
+    let lastSignal = null;
 
-    const tick = async () => {
+    const tick = async (reason = 'tick') => {
       if (inFlight) return;  // skip overlapping requests
       const asset = getCurrentAsset();
       if (!asset) {
         setSignalPreview({ error: 'no asset' });
         return;
       }
+      // Asset changed — invalidate preview immediately for visual feedback
+      if (asset !== lastAsset) {
+        lastAsset = asset;
+        lastSignal = null;
+        setSignalPreview({ direction: '', confidence: 0, quality: 'LOW', agreeing: 0, fresh: false, ageSec: 0 });
+      }
       inFlight = true;
+      const startedAt = Date.now();
+      // Hard timeout to avoid stuck in-flight blocking the next tick
+      const timeoutId = setTimeout(() => {
+        if (inFlight) { inFlight = false; }
+      }, ABORT_MS);
       try {
         const resp = await post(`/signals/force-generate-v2?asset=${encodeURIComponent(asset)}&expiry_seconds=60`, {});
         const sig = resp?.signal;
         if (sig) {
-          setSignalPreview({
+          // Count ML model contributions among components
+          let mlCount = 0;
+          try {
+            const comps = sig.components || {};
+            for (const k of Object.keys(comps)) {
+              const v = comps[k];
+              if (k.includes('ml') || k.includes('ML') || v?.model_accuracy != null) {
+                if ((v?.direction || '').toUpperCase() === sig.direction) mlCount++;
+              }
+            }
+          } catch (_e) { /* ignore */ }
+
+          const latencyMs = Date.now() - startedAt;
+          lastUpdateTs = Date.now();
+          lastSignal = {
             direction: sig.direction,
             confidence: sig.confidence,
             quality: sig.quality,
             agreeing: sig.agreeing_strategies,
-          });
+            mlCount,
+            evaluated: resp.strategies_evaluated || Object.keys(sig.components || {}).length,
+            votes: sig.votes,
+            latencyMs,
+            fresh: true,
+            ageSec: 0,
+          };
+          setSignalPreview(lastSignal);
         } else {
           setSignalPreview({ error: 'no signal' });
         }
       } catch (e) {
         setSignalPreview({ error: 'offline' });
       } finally {
+        clearTimeout(timeoutId);
         inFlight = false;
       }
     };
 
     // Kick off immediately, then on interval
-    tick();
-    this.previewInterval = setInterval(tick, POLL_MS);
+    tick('initial');
+    this.previewInterval = setInterval(() => tick('poll'), POLL_MS);
+
+    // Asset-change watcher — fires an extra refetch within ~250ms of any
+    // chart switch (CYCLE rotation, manual click, picker switch). Cheap
+    // string compare every 250ms.
+    this.previewAssetWatcher = setInterval(() => {
+      try {
+        const cur = getCurrentAsset();
+        if (cur && cur !== lastAsset) {
+          lastAsset = cur;
+          tick('asset-change');
+        }
+      } catch (_e) { /* ignore */ }
+    }, 250);
+
+    // Age ticker — refreshes the "fresh / Xs old" stamp every 1s without
+    // hitting the network. Lets the user see at a glance whether the
+    // displayed signal is stale.
+    this.previewAgeTicker = setInterval(() => {
+      if (!lastSignal || !lastUpdateTs) return;
+      const ageSec = Math.round((Date.now() - lastUpdateTs) / 1000);
+      lastSignal.ageSec = ageSec;
+      lastSignal.fresh = ageSec < 2;     // green pulse only for ~2s after update
+      setSignalPreview(lastSignal);
+    }, 1000);
   }
 
   stopSignalPreview() {
     if (this.previewInterval) {
       clearInterval(this.previewInterval);
       this.previewInterval = null;
+    }
+    if (this.previewAssetWatcher) {
+      clearInterval(this.previewAssetWatcher);
+      this.previewAssetWatcher = null;
+    }
+    if (this.previewAgeTicker) {
+      clearInterval(this.previewAgeTicker);
+      this.previewAgeTicker = null;
     }
   }
   

@@ -1,8 +1,16 @@
 # Elite Pocket Option Trading Bot - Product Requirements Document
 
-## Last Updated: May 1, 2026
+## Last Updated: May 2, 2026
 
 ## Current Status
+✅ **TM v8.46.0 — Faster, Richer Live GO Signal Preview (May 2, 2026)**
+- **Poll cadence 8s → 3s** with hard 5.5s abort on stuck requests
+- **Asset-change watcher** (250ms tick) triggers an immediate refetch when CYCLE rotates or user manually switches asset — no more 8s blank window
+- **Age ticker** updates the freshness stamp every second (`now`/`Xs`/stale=gold/very-old=red) without hitting the network
+- **Freshness pulse** — blue 1s flash on `qualrow` after every successful poll so the user can see updates land
+- **Sub-row pills** under preview: `NML✓` (ML model agreement count), `agreeing/total` strategies, `▲call ▼put` vote ratio, request latency in ms
+- All new selectors carry `data-testid` (`signal-quality-sub`) for testing
+
 ✅ **TM v8.45.0 — Picker-Based Favorites + Reset Stats + Time Strategy Rename (May 1, 2026)**
 - **CYCLE picker-based favorites discovery**: New `getFavoritesViaPicker()` in `/app/tampermonkey-src/src/utils/dom.js` opens PO's asset-picker dropdown (clicks chart-header asset name), clicks the ★ favorites filter, scrapes the visible rows, and returns normalized symbols. CycleMode calls this on `start()` and uses the result instead of the unreliable slot-tile bar scrape. Falls back to `getFavorites()` if picker can't be opened.
 - **Robust asset switching via picker**: New `switchAssetViaPicker()` opens picker, narrows to favorites, finds the matching row by normalized symbol or text, and clicks via React fiber walk. CycleMode escalates to this when slot-tile click leaves the asset unchanged after `_waitChartLoaded()`.
