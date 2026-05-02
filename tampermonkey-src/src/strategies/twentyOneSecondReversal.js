@@ -94,10 +94,9 @@ class TwentyOneSecondReversal {
       invertSignal: false,
       // v8.57.0: fixedPeriodSec — when set (>0), forces the Time Strategy
       // candle period regardless of what PO's chart is currently showing.
-      // Set to 30 so the strategy always fires on a 30-second cycle even
-      // when PO is displaying M1/M5/S15 candles. Set to 0 to use the
-      // auto-detected chart timeframe (pre-v8.57.0 behaviour).
-      fixedPeriodSec: 30,
+      // v8.58.0: Reverted to 60 per user request — 1-minute cycle, fires
+      // opposite to the current 1m candle direction (contrarian).
+      fixedPeriodSec: 60,
       autoRotateOnWin: false,
       executionMode: 'auto',
       bridgeHealthy: false,

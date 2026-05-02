@@ -3,6 +3,11 @@
 ## Last Updated: May 2, 2026
 
 ## Current Status
+✅ **TM v8.58.0 — Time Strategy Back to 1-min Contrarian (May 2, 2026)**
+- **Request**: revert Time Strategy back to a 1-min timeframe and fire opposite to current candle direction
+- **Change**: `config.fixedPeriodSec: 30 → 60` in `/app/tampermonkey-src/src/strategies/twentyOneSecondReversal.js`. Combined with `invertSignal: false` (already set in v8.57.0), the strategy now fires on a fixed 60-second cycle and applies the native contrarian direction: UP body → PUT, DOWN body → CALL (exactly opposite to the current 1m candle).
+- TM userscript bumped **8.57.0 → 8.58.0**
+
 ✅ **TM v8.57.0 — Time Strategy: Invert OFF + Fixed 30s Period + CYCLE Favorites-Tab Flow (May 2, 2026)**
 - **Request 1 — Invert back to normal**: `config.invertSignal` default flipped from `true` → **`false`**. Native contrarian behaviour restored (fires opposite of the 1m body).
 - **Request 2 — 30s fixed period**: New `config.fixedPeriodSec = 30` in Time Strategy. When non-zero it overrides auto-detected chart timeframe, so the strategy cycles on a 30-second boundary regardless of what PO's chart displays. `_tick()` now ignores `poSecondsLeft` when a fixedPeriodSec is active (PO countdown is measuring a different period so its value would mismatch). Wall-clock math on the 30s boundary is the sole source of truth in fixed-period mode.
