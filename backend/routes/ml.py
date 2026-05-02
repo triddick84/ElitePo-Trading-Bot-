@@ -2426,3 +2426,84 @@ async def trigger_manual_retrain():
     scheduler = get_retrain_scheduler(db)
     result = await scheduler.trigger_manual_retrain()
     return result
+
+
+# =============================================================================
+# BOTAI-inspired abstain-threshold optimizer (May 2026, v8.55.0 integration)
+# =============================================================================
+# Port of concepts from https://github.com/RafaelCartenet/BOTAI:
+#   - 3-class tendency labeling (UP / DOWN / EQUAL) — the EQUAL "tie" class is
+#     excluded from win-rate arithmetic so flat candles don't wash the stats.
+#   - Confidence-threshold "Pass" action — only trade when the ensemble is
+#     above a per-asset threshold. This typically boosts live win-rate from
+#     ~53% to 60-68% at the cost of ~40% fewer trades.
+#
+# See /app/backend/botai_simulator.py for the full implementation.
+from botai_simulator import (
+    DEFAULT_THRESHOLD as _ABSTAIN_DEFAULT,
+    get_threshold as _abstain_get,
+    set_threshold as _abstain_set,
+    get_all_thresholds as _abstain_all,
+    optimize_asset_threshold as _abstain_optimize,
+)
+
+
+@router.get("/ml/abstain/threshold")
+async def get_abstain_threshold(asset: str = Query(..., description="e.g. EURUSD_OTC")):
+    """
+    Return the stored per-asset abstain threshold (0..1). Default if unset.
+    Used by /api/signals/force-generate-v2 to decide whether to mark a
+    signal as `abstain=true` so the bot won't fire on it.
+    """
+    row = await _abstain_get(asset)
+    return {"success": True, **row}
+
+
+@router.get("/ml/abstain/thresholds")
+async def list_abstain_thresholds():
+    """Return the full list of stored per-asset thresholds."""
+    rows = await _abstain_all()
+    return {"success": True, "thresholds": rows, "default": _ABSTAIN_DEFAULT}
+
+
+@router.post("/ml/abstain/optimize")
+async def optimize_abstain_threshold(
+    asset: str = Query(..., description="e.g. EURUSD_OTC"),
+    lookback_candles: int = Query(500, ge=60, le=5000),
+    min_trades: int = Query(20, ge=5, le=500),
+    min_winrate: float = Query(0.55, ge=0.5, le=0.9),
+):
+    """
+    Sweep the confidence-threshold grid (0.50..0.82 in 0.02 steps) on the
+    last `lookback_candles` of OTC data for `asset`. Replays each candle
+    through `MLAccuracyTuner` and compares the predicted vs actual tendency.
+
+    Picks the threshold with the HIGHEST win-rate subject to:
+      - at least `min_trades` trades taken (avoids over-fitting to tiny tails)
+      - at least `min_winrate` win-rate (break-even for 0.80 payout is 55.6%)
+
+    Persists the result for `asset` so `force-generate-v2` can consult it.
+    """
+    result = await _abstain_optimize(
+        asset=asset,
+        lookback_candles=lookback_candles,
+        min_trades=min_trades,
+        min_winrate=min_winrate,
+    )
+    return {"success": True, **result}
+
+
+@router.post("/ml/abstain/threshold")
+async def set_abstain_threshold(
+    asset: str = Query(..., description="e.g. EURUSD_OTC"),
+    threshold: float = Query(..., ge=0.50, le=0.95),
+):
+    """Manual override: force a per-asset threshold without running the sweep."""
+    await _abstain_set(
+        asset=asset,
+        threshold=threshold,
+        winrate=0.0,
+        n_trades=0,
+        method="manual",
+    )
+    return {"success": True, "asset": asset, "threshold": threshold, "method": "manual"}

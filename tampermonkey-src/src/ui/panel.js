@@ -1409,6 +1409,15 @@ export function setSignalPreview(info) {
 
   valEl.textContent = `${quality} ${dirArrow} ${dir} ${conf.toFixed(0)}%${agreeing}`;
 
+  // v8.55.0: Abstain overlay — if the backend's confidence-threshold gate
+  // marked this signal as abstain, override the row look so the user
+  // instantly knows GO would refuse to fire.
+  if (info.abstain) {
+    row.classList.remove('high', 'medium', 'low');
+    row.classList.add('low');
+    valEl.textContent = `ABSTAIN · ${conf.toFixed(0)}% < ${info.abstainThreshold ?? '—'}%`;
+  }
+
   // Age pip — green pulse for fresh, gold for stale, red for very old
   if (ageEl) {
     const age = Number(info.ageSec || 0);

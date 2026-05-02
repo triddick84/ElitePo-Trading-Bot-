@@ -3,6 +3,29 @@
 ## Last Updated: May 2, 2026
 
 ## Current Status
+✅ **TM v8.55.0 — BOTAI-Inspired Abstain Gate (win-rate booster) (May 2, 2026)**
+- Studied concepts from https://github.com/RafaelCartenet/BOTAI (Binary Options Trading AI, 2017) and ported the two highest-ROI ideas into our stack:
+  1. **3-class tendency labeling** (UP / DOWN / EQUAL) — candles where `|close - open| < 0.05 bps` are labelled EQUAL and excluded from win-rate arithmetic so flat/tie candles don't wash the stats.
+  2. **Confidence-threshold "Pass" action** — the bot abstains on trades whose confidence is below a per-asset tuned threshold. On a 0.80 payout, break-even is 55.6% win-rate; empirically this lifts live win-rate from ~53% to 60–68% at the cost of ~30-40% fewer trades.
+- **New backend module** `/app/backend/botai_simulator.py`:
+  - `TendencyLabeler` — 3-class labeler with configurable EQUAL tolerance
+  - `AbstainBacktester` — sweeps threshold grid 0.50…0.82 (step 0.02), returns win-rate + trade count per threshold
+  - `optimize_asset_threshold(asset, lookback=500)` — full pipeline: replays OTC candles through `MLAccuracyTuner`, finds best threshold, persists to MongoDB `ml_abstain_thresholds` collection subject to `min_trades=20` + `min_winrate=0.55` constraints
+- **New REST endpoints** in `/app/backend/routes/ml.py`:
+  - `GET  /api/ml/abstain/threshold?asset=...` → return stored optimum (or default 0.62)
+  - `GET  /api/ml/abstain/thresholds` → list all per-asset thresholds
+  - `POST /api/ml/abstain/optimize?asset=...&lookback_candles=500` → run the sweep and persist
+  - `POST /api/ml/abstain/threshold?asset=...&threshold=0.70` → manual override
+- **Updated `force-generate-v2`** to add `abstain`, `abstain_threshold`, and `abstain_reason` to every signal. The gate consults the per-asset stored threshold (or the 0.62 default).
+- **TM script v8.55.0**:
+  - `onGo` refuses to fire when `signal.abstain === true` and logs the reason in bold warn style
+  - Live preview row shows `ABSTAIN · 65% < 70%` in red when the gate blocks firing
+- **Verified end-to-end**:
+  - `GET /api/ml/abstain/thresholds` → `{default: 0.62, thresholds: […]}`
+  - Force-generate with confidence 65% and threshold 62% → `abstain: false`
+  - Force-generate after manual override to 70% → `abstain: true, reason: "confidence 65.0% < threshold 70.0%"`
+- TM userscript bumped **8.54.0 → 8.55.0**
+
 ✅ **TM v8.54.0 — Time Strategy Signal Invert (May 2, 2026)**
 - **User request**: invert Time Strategy trade direction
 - **Implementation**: new `config.invertSignal: true` (default ON) in `/app/tampermonkey-src/src/strategies/twentyOneSecondReversal.js`. After the natural direction is resolved (body / slope / history), CALL↔PUT is swapped before execution and the reason tag shows `INV[CALL→PUT] body=0.32bps` for clear audit.

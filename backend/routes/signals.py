@@ -14,6 +14,12 @@ import numpy as np
 
 from routes import db, convert_numpy_types, logger
 
+# BOTAI-inspired abstain gate (v8.55.0)
+try:
+    from botai_simulator import DEFAULT_THRESHOLD as _ABSTAIN_GATE_DEFAULT
+except Exception:
+    _ABSTAIN_GATE_DEFAULT = 0.62
+
 # Import LSTM/GRU and PPO ML systems for advanced predictions
 try:
     from lstm_gru_system import lstm_gru_system, FeatureEngine
@@ -4505,6 +4511,29 @@ async def force_generate_signal_v2(
             "votes": {"call": round(votes_call, 2), "put": round(votes_put, 2)},
             "generated_at": datetime.now(timezone.utc).isoformat(),
         }
+
+        # -----------------------------------------------------------------
+        # BOTAI-inspired abstain gate (v8.55.0) — consult the stored per-
+        # asset optimum confidence threshold and mark the signal as
+        # `abstain=true` when raw_confidence is below it. The TM script
+        # refuses to fire trades on abstain=true signals. Tuned via
+        # POST /api/ml/abstain/optimize.
+        # -----------------------------------------------------------------
+        try:
+            from botai_simulator import get_threshold as _abstain_get_threshold
+            abstain_row = await _abstain_get_threshold(a)
+            thr_pct = float(abstain_row.get("threshold", 0.62)) * 100.0
+            signal["abstain_threshold"] = round(thr_pct, 1)
+            signal["abstain"] = bool(raw_confidence < thr_pct)
+            signal["abstain_reason"] = (
+                f"confidence {raw_confidence:.1f}% < threshold {thr_pct:.1f}% "
+                f"(tuned from {abstain_row.get('method', 'default')})"
+                if signal["abstain"] else None
+            )
+        except Exception as _abstain_err:
+            logger.warning(f"abstain gate error: {_abstain_err}")
+            signal["abstain"] = False
+            signal["abstain_threshold"] = _ABSTAIN_GATE_DEFAULT * 100.0
 
         return {
             "success": True,

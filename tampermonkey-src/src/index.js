@@ -467,6 +467,10 @@ class EliteTradingBot {
             latencyMs,
             fresh: true,
             ageSec: 0,
+            // v8.55.0: BOTAI-inspired abstain gate surfaced to the UI so
+            // the user sees at a glance when GO would refuse to fire.
+            abstain: sig.abstain === true,
+            abstainThreshold: sig.abstain_threshold,
           };
           setSignalPreview(lastSignal);
         } else {
@@ -560,6 +564,19 @@ class EliteTradingBot {
       if (signal.reason) log(`[GO] Reason: ${signal.reason}`);
       if (signal.quality === 'LOW') {
         warn('[GO] LOW-quality signal — weak strategy participation. Consider passing.');
+      }
+
+      // v8.55.0: BOTAI-inspired abstain gate. Backend's /api/ml/abstain/optimize
+      // has tuned a per-asset confidence threshold; any signal below it is
+      // marked `abstain=true` and we refuse to fire. Raises win-rate by
+      // trading only on high-confidence setups.
+      if (signal.abstain === true) {
+        warn(
+          `[GO] ABSTAIN — confidence ${signal.confidence}% < threshold ${signal.abstain_threshold}% ` +
+          `(${signal.abstain_reason || 'below-threshold'})`
+        );
+        warn('[GO] No trade fired. Use /api/ml/abstain/optimize to re-tune or /api/ml/abstain/threshold to override.');
+        return;
       }
 
       // Always execute via tradeExecutor in force mode (bypasses AUTO gate)
