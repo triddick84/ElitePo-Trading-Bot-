@@ -1226,6 +1226,338 @@ export function getCandleCountdown() {
 }
 
 
+/**
+ * v8.45.0 — Picker-based favorites discovery & switching.
+ *
+ * PO's mobile + recent desktop layouts hide favorites behind a dropdown
+ * picker that is only visible after clicking the asset-name header. The
+ * picker has a ★ filter button that narrows the list to user-favorited
+ * pairs. These helpers automate that flow so CYCLE mode can reliably
+ * find and switch through favorites even when the top "asset slot tiles"
+ * bar doesn't show every favorited pair.
+ */
+
+const _sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function _findAssetHeader() {
+  const sels = [
+    '.asset-name', '.current-symbol', '[class*="symbol-name"]',
+    '[class*="asset-name"]', '[class*="active-symbol"]',
+    '[class*="chart-header"] [class*="symbol"]',
+    '.pair-select__value',
+  ];
+  for (const s of sels) {
+    const el = document.querySelector(s);
+    if (el && el.offsetParent) return el;
+  }
+  return null;
+}
+
+function _findClickableAncestor(el) {
+  let cur = el;
+  for (let i = 0; i < 12 && cur; i++) {
+    try {
+      const propsKey = Object.keys(cur).find((k) => k.startsWith('__reactProps$'));
+      if (propsKey && cur[propsKey] && (
+        typeof cur[propsKey].onClick === 'function' ||
+        typeof cur[propsKey].onMouseDown === 'function' ||
+        typeof cur[propsKey].onPointerDown === 'function'
+      )) {
+        return cur;
+      }
+    } catch (_e) { /* ignore */ }
+    cur = cur.parentElement;
+  }
+  return el;
+}
+
+function _reactClickEl(target) {
+  if (!target) return;
+  let cx = 0, cy = 0;
+  try {
+    const r = target.getBoundingClientRect();
+    cx = Math.round(r.left + r.width / 2);
+    cy = Math.round(r.top + r.height / 2);
+  } catch (_e) { /* ignore */ }
+  const baseOpts = {
+    bubbles: true, cancelable: true, view: window, button: 0, buttons: 1,
+    clientX: cx, clientY: cy, screenX: cx, screenY: cy,
+    pointerType: 'mouse', isPrimary: true, pointerId: 1,
+  };
+
+  // Walk fiber chain — invoke each ancestor's React handler
+  try {
+    const fiberKey = Object.keys(target).find((k) => k.startsWith('__reactFiber$'));
+    const propsKey = Object.keys(target).find((k) => k.startsWith('__reactProps$'));
+    const synth = (type) => ({
+      target, currentTarget: target,
+      preventDefault: () => {}, stopPropagation: () => {},
+      persist: () => {}, isDefaultPrevented: () => false, isPropagationStopped: () => false,
+      nativeEvent: new MouseEvent(type, baseOpts),
+      type, button: 0, buttons: 1,
+      clientX: cx, clientY: cy, screenX: cx, screenY: cy,
+      isTrusted: true, bubbles: true, cancelable: true,
+    });
+    if (propsKey && target[propsKey]) {
+      for (const h of ['onClick', 'onMouseDown', 'onPointerDown']) {
+        if (typeof target[propsKey][h] === 'function') {
+          try { target[propsKey][h](synth(h.slice(2).toLowerCase())); } catch (_e) {}
+        }
+      }
+    }
+    if (fiberKey) {
+      let fiber = target[fiberKey];
+      for (let i = 0; i < 16 && fiber; i++) {
+        const props = fiber.memoizedProps;
+        if (props) {
+          for (const h of ['onClick', 'onMouseDown', 'onPointerDown']) {
+            if (typeof props[h] === 'function') {
+              try { props[h](synth(h.slice(2).toLowerCase())); } catch (_e) {}
+            }
+          }
+        }
+        fiber = fiber.return;
+      }
+    }
+  } catch (_e) { /* ignore */ }
+
+  const safe = (ev) => { try { target.dispatchEvent(ev); } catch (_e) {} };
+  try {
+    if (typeof PointerEvent !== 'undefined') {
+      safe(new PointerEvent('pointerover', baseOpts));
+      safe(new PointerEvent('pointerdown', baseOpts));
+      safe(new PointerEvent('pointerup', baseOpts));
+    }
+    safe(new MouseEvent('mouseover', baseOpts));
+    safe(new MouseEvent('mousedown', baseOpts));
+    safe(new MouseEvent('mouseup', baseOpts));
+    safe(new MouseEvent('click', baseOpts));
+  } catch (_e) {}
+  try { target.click?.(); } catch (_e) {}
+}
+
+/**
+ * Open the asset picker dropdown by clicking the chart-header asset name.
+ * Returns true if the picker is now open (best effort).
+ */
+async function openAssetPicker() {
+  const header = _findAssetHeader();
+  if (!header) {
+    warn('[picker] asset-name header not found');
+    return false;
+  }
+  _reactClickEl(_findClickableAncestor(header));
+  await _sleep(450);
+  // Heuristic check: dropdown root present?
+  const dropdown = document.querySelector(
+    '[class*="picker"], [class*="modal"], [class*="dropdown"][class*="asset"], ' +
+    '[class*="assets-list"], [class*="currencies"], [class*="symbol-list"]'
+  );
+  return !!dropdown;
+}
+
+/**
+ * Close any open asset picker dropdown by clicking outside (chart area).
+ */
+async function closeAssetPicker() {
+  // Send Escape — most React modals listen for this
+  try {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }));
+  } catch (_e) { /* ignore */ }
+  await _sleep(150);
+}
+
+/**
+ * Click the ★ favorites filter inside the open asset picker. PO's picker
+ * has either a star button next to the search input (mobile) or a tab in
+ * the category row that filters to favorites only.
+ *
+ * Returns true if a star/favorites filter button was found & clicked.
+ */
+async function clickFavoritesFilter() {
+  // Look for buttons with star/favorite/heart hints inside any open picker
+  const candidates = document.querySelectorAll(
+    'button, [role="button"], [class*="favorit"], [class*="star"], svg, i'
+  );
+  for (const el of candidates) {
+    if (!el || !el.offsetParent) continue;
+    const cls = ((el.className || '') + '').toLowerCase();
+    const aria = (el.getAttribute && (el.getAttribute('aria-label') || '')).toLowerCase();
+    const dataAttr = (el.getAttribute && (el.getAttribute('data-tooltip') || el.getAttribute('title') || '')).toLowerCase();
+    // Must mention favorites/star and be inside a picker/modal context
+    const isStarish = /favorit|star|heart/.test(cls + ' ' + aria + ' ' + dataAttr);
+    if (!isStarish) continue;
+    // Walk up to confirm we're inside a picker
+    let cur = el;
+    let inPicker = false;
+    for (let i = 0; i < 12 && cur; i++) {
+      const c = ((cur.className || '') + '').toLowerCase();
+      if (/picker|modal|dropdown|currencies|assets-list|symbol-list/.test(c)) {
+        inPicker = true; break;
+      }
+      cur = cur.parentElement;
+    }
+    if (!inPicker) continue;
+    _reactClickEl(_findClickableAncestor(el));
+    log(`[picker] clicked favorites filter (${cls.slice(0, 40)})`);
+    await _sleep(300);
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Read the visible asset rows inside the open asset picker dropdown.
+ * Returns [{symbol, el}] - el is the <li>/<div> row clickable.
+ */
+function readPickerItems() {
+  const items = [];
+  const seen = new Set();
+  const symbolRe = /([A-Z]{2,4}\/?[A-Z]{2,4})\b/i;
+
+  // Common dropdown row selectors
+  const ROW_SELECTORS = [
+    '[class*="picker"] [class*="row"]',
+    '[class*="picker"] [class*="item"]',
+    '[class*="modal"] [class*="row"]',
+    '[class*="dropdown"] [class*="row"]',
+    '[class*="dropdown"] [class*="asset"]',
+    '[class*="currencies"] [class*="item"]',
+    '[class*="currencies"] li',
+    '[class*="currencies"] [class*="row"]',
+    '[class*="symbol-list"] [class*="item"]',
+    '[class*="symbols-list"] [class*="item"]',
+    '[class*="assets-list"] [class*="item"]',
+  ];
+
+  for (const sel of ROW_SELECTORS) {
+    const els = document.querySelectorAll(sel);
+    if (!els.length) continue;
+    els.forEach((el) => {
+      if (!el || !el.offsetParent) return;
+      const txt = (el.textContent || '').trim();
+      const m = txt.match(symbolRe);
+      if (!m) return;
+      // Strip payout % numbers from match
+      const raw = m[0] + (txt.toUpperCase().includes('OTC') ? ' OTC' : '');
+      const normalized = normalizeAssetName(raw);
+      if (!normalized || seen.has(normalized)) return;
+      const symPart = normalized.replace(/_OTC$/, '');
+      if (symPart.length < 5 || /[^A-Z0-9]/.test(symPart)) return;
+      seen.add(normalized);
+      items.push({ symbol: normalized, el });
+    });
+    if (items.length) break;
+  }
+  return items;
+}
+
+/**
+ * Discover the user's favorited assets by:
+ *   1. Opening the asset picker (click chart header)
+ *   2. Clicking the ★ favorites filter inside the picker
+ *   3. Reading the visible rows
+ *   4. Closing the picker
+ *
+ * Async. Returns array of normalized symbols.
+ * Falls back to getFavorites() if picker can't be opened.
+ */
+export async function getFavoritesViaPicker() {
+  try {
+    const opened = await openAssetPicker();
+    if (!opened) {
+      log('[picker] picker did not open — falling back to bar scrape');
+      return getFavorites();
+    }
+    const filtered = await clickFavoritesFilter();
+    if (!filtered) {
+      log('[picker] favorites filter not found — using all picker rows');
+    }
+    await _sleep(250);
+    const items = readPickerItems();
+    log(`[picker] discovered ${items.length} favorites${filtered ? ' (★ filter ON)' : ''}`);
+    await closeAssetPicker();
+    if (items.length === 0) return getFavorites();
+    return items.map((it) => it.symbol);
+  } catch (e) {
+    warn(`[picker] discovery failed: ${e.message}`);
+    try { await closeAssetPicker(); } catch (_e) {}
+    return getFavorites();
+  }
+}
+
+/**
+ * Switch to an asset by opening the picker, optionally clicking the ★
+ * favorites filter, and clicking the row that matches `symbol`.
+ *
+ * This is the robust async fallback when slot-tile click fails. Returns
+ * true if a row was clicked (success isn't guaranteed — caller should
+ * verify via getCurrentAsset() afterwards).
+ */
+export async function switchAssetViaPicker(symbol) {
+  if (!symbol) return false;
+  const target = String(symbol).toUpperCase().replace(/_OTC$/, '');
+  const variants = new Set([
+    target,
+    `${target} OTC`,
+  ]);
+  if (target.length === 6) {
+    variants.add(`${target.slice(0, 3)}/${target.slice(3)}`);
+    variants.add(`${target.slice(0, 3)}/${target.slice(3)} OTC`);
+  }
+
+  try {
+    const opened = await openAssetPicker();
+    if (!opened) return false;
+    // Try favorites filter to narrow noise
+    await clickFavoritesFilter();
+    await _sleep(250);
+
+    const items = readPickerItems();
+    for (const it of items) {
+      if (it.symbol === normalizeAssetName(target) ||
+          it.symbol === normalizeAssetName(`${target} OTC`)) {
+        // Scroll into view first
+        try { it.el.scrollIntoView?.({ block: 'center', inline: 'center' }); } catch (_e) {}
+        _reactClickEl(_findClickableAncestor(it.el));
+        log(`[picker] clicked row for ${it.symbol}`);
+        await _sleep(400);
+        return true;
+      }
+    }
+
+    // Fallback: text-match scan inside dropdown
+    const dropdown = document.querySelector(
+      '[class*="picker"], [class*="modal"], [class*="dropdown"], ' +
+      '[class*="currencies"], [class*="assets-list"], [class*="symbol-list"]'
+    );
+    if (dropdown) {
+      const rows = dropdown.querySelectorAll('li, div, button, a, [role="row"], [role="option"]');
+      for (const r of rows) {
+        if (!r.offsetParent) continue;
+        const txt = (r.textContent || '').trim().toUpperCase();
+        for (const v of variants) {
+          if (txt.includes(v) && txt.length < 100) {
+            try { r.scrollIntoView?.({ block: 'center' }); } catch (_e) {}
+            _reactClickEl(_findClickableAncestor(r));
+            log(`[picker] text-matched row for ${v}`);
+            await _sleep(400);
+            return true;
+          }
+        }
+      }
+    }
+
+    warn(`[picker] no row matched ${target}`);
+    await closeAssetPicker();
+    return false;
+  } catch (e) {
+    warn(`[picker] switch failed: ${e.message}`);
+    try { await closeAssetPicker(); } catch (_e) {}
+    return false;
+  }
+}
+
 export default {
   waitForElement,
   getCurrentAsset,
@@ -1239,7 +1571,9 @@ export default {
   clickPut,
   executeTrade,
   getFavorites,
+  getFavoritesViaPicker,
   switchAsset,
+  switchAssetViaPicker,
   getAccountBalance,
   scanDOMForTradeResult,
   getCandleCountdown,

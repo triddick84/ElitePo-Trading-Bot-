@@ -329,6 +329,32 @@ function injectCSS() {
       border: 1px solid #21262d !important;
       border-radius: 6px !important;
       margin-bottom: ${mobile ? '6px' : '8px'} !important;
+      position: relative !important;
+    }
+    .${P}statsreset {
+      position: absolute !important;
+      top: 2px !important;
+      right: 2px !important;
+      width: ${mobile ? 16 : 14}px !important;
+      height: ${mobile ? 16 : 14}px !important;
+      border: none !important;
+      background: rgba(248,81,73,0.10) !important;
+      color: #f85149 !important;
+      border-radius: 3px !important;
+      cursor: pointer !important;
+      font-size: ${mobile ? 10 : 9}px !important;
+      font-weight: 700 !important;
+      line-height: 1 !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      padding: 0 !important;
+      -webkit-tap-highlight-color: transparent !important;
+      transition: all 0.15s !important;
+    }
+    .${P}statsreset:hover, .${P}statsreset:active {
+      background: rgba(248,81,73,0.30) !important;
+      color: #ffffff !important;
     }
     .${P}stat {
       text-align: center !important;
@@ -673,7 +699,7 @@ export function createPanel() {
         <div class="${P}stripcell" id="${P}stripscan"><span class="${P}stripled"></span><span>SCAN</span></div>
         <div class="${P}stripcell" id="${P}stripauto"><span class="${P}stripled"></span><span>AUTO</span></div>
         <div class="${P}stripcell" id="${P}stripainv"><span class="${P}stripled"></span><span>A-INV</span></div>
-        <div class="${P}stripcell" id="${P}strip51s"><span class="${P}stripled"></span><span>51S</span></div>
+        <div class="${P}stripcell" id="${P}strip51s"><span class="${P}stripled"></span><span>TIME</span></div>
         <div class="${P}stripcell" id="${P}stripcycle"><span class="${P}stripled"></span><span>CYCLE</span></div>
       </div>
       <div class="${P}body" id="${P}body">
@@ -688,7 +714,7 @@ export function createPanel() {
           <span class="${P}qualval" id="${P}qualval">…polling</span>
         </div>
         <div class="${P}row">
-          <button id="${P}r21s" class="${P}btn ${P}btn-r21s" title="Fire opposite 5s trade at the configured trigger second on 1m candles">51S</button>
+          <button id="${P}r21s" class="${P}btn ${P}btn-r21s" title="Time Strategy — fires opposite 5s trade at the configured trigger second on 1m candles">TIME</button>
           <button id="${P}ainv" class="${P}btn ${P}btn-ainv" title="Enable smart auto-invert on loss streaks">A-INV</button>
           <button id="${P}inv" class="${P}btn ${P}btn-inv">INVERT</button>
         </div>
@@ -703,7 +729,7 @@ export function createPanel() {
             <button id="${P}cycle" class="${P}btn ${P}btn-cycle" title="Rotate through favorites, scan each, auto-trade best">CYCLE</button>
             <button id="${P}app" class="${P}btn ${P}btn-app" title="Poll backend /signals/latest and auto-execute">APP</button>
           </div>
-          <div class="${P}invst" id="${P}r21st" style="padding:2px 6px !important;">51S: Off</div>
+          <div class="${P}invst" id="${P}r21st" style="padding:2px 6px !important;">Time: Off</div>
           <div class="${P}timing-row" title="Drag to change which second of the 1m candle triggers the trade. 49 = fires 11s into candle (~2s after :51 mark). Range 5–55s remaining.">
             <span class="${P}timing-label">Fire @</span>
             <input id="${P}timing" data-testid="51s-timing-slider" class="${P}timing-slider" type="range" min="5" max="55" step="1" value="49" />
@@ -719,6 +745,7 @@ export function createPanel() {
           <div class="${P}invst" id="${P}invst" style="padding:2px 6px !important;">Invert: Normal</div>
         </div>
         <div class="${P}stats">
+          <button id="${P}statsreset" class="${P}statsreset" data-testid="reset-stats-btn" title="Reset W/L counters, win rate, streak, and P/L (does not affect bot settings)">⟲</button>
           <div class="${P}stat"><span class="${P}stlbl">W/L</span><span class="${P}stval" id="${P}wl">0/0</span></div>
           <div class="${P}stat"><span class="${P}stlbl">Rate</span><span class="${P}stval" id="${P}rate">0%</span></div>
           <div class="${P}stat"><span class="${P}stlbl">Strk</span><span class="${P}stval" id="${P}streak">0</span></div>
@@ -927,6 +954,18 @@ export function initPanelEvents(callbacks = {}) {
   q('win')?.addEventListener('click', () => callbacks.onWin?.());
   q('loss')?.addEventListener('click', () => callbacks.onLoss?.());
 
+  // RESET STATS — wipe W/L counters, streak, P/L (v8.45.0)
+  q('statsreset')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const ok = window.confirm(
+      'Reset stats?\n\n' +
+      'This clears W/L counters, win rate, streak, and P/L.\n' +
+      'It does NOT affect bot toggles or saved settings.'
+    );
+    if (!ok) return;
+    callbacks.onResetStats?.();
+  });
+
   // CYCLE toggle
   const cycleBtn = q('cycle');
   if (cycleBtn) {
@@ -1067,13 +1106,13 @@ export function update21sReversalDisplay(enabled, stats = null) {
   }
   if (st) {
     if (!enabled) {
-      st.textContent = '51S: Off';
+      st.textContent = 'Time: Off';
       st.classList.remove('on');
     } else if (stats) {
-      st.textContent = `51S: On ${stats.wins}/${stats.losses} (${stats.winRate}%)`;
+      st.textContent = `Time: On ${stats.wins}/${stats.losses} (${stats.winRate}%)`;
       st.classList.add('on');
     } else {
-      st.textContent = '51S: On';
+      st.textContent = 'Time: On';
       st.classList.add('on');
     }
   }

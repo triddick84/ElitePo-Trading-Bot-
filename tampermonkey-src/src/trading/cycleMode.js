@@ -16,7 +16,7 @@
 
 import { log, info, warn, success, error } from '../core/logger.js';
 import { state } from '../core/state.js';
-import { getFavorites, switchAsset, getCurrentAsset } from '../utils/dom.js';
+import { getFavorites, getFavoritesViaPicker, switchAsset, switchAssetViaPicker, getCurrentAsset } from '../utils/dom.js';
 import { scanMarkets } from '../utils/api.js';
 import { tradeExecutor } from './executor.js';
 import { CONFIG } from '../core/config.js';
@@ -41,6 +41,8 @@ class CycleMode {
     this.lossStreaks = {};   // { [asset]: consecutive losses }
     this.skipList = new Set();
     this.config = { ...DEFAULTS };
+    this.discoveredFavorites = null;     // cached picker-discovered list
+    this.lastDiscoveryAt = 0;
   }
 
   isRunning() { return this.running; }
@@ -59,7 +61,22 @@ class CycleMode {
     this.abortRequested = false;
     this.startedAt = Date.now();
     this.cycleCount = 0;
-    success('[CYCLE] started — rotating through favorites');
+    success('[CYCLE] started — discovering favorites via picker…');
+    // Discover favorites via the asset picker dropdown ★ filter (v8.45.0).
+    // This is more reliable than scraping the slot-tile bar which only
+    // shows recently-active assets, not necessarily user favorites.
+    try {
+      const favs = await getFavoritesViaPicker();
+      if (favs && favs.length > 0) {
+        this.discoveredFavorites = favs;
+        this.lastDiscoveryAt = Date.now();
+        success(`[CYCLE] discovered ${favs.length} favorites: ${favs.join(', ')}`);
+      } else {
+        warn('[CYCLE] picker discovery returned 0 — will use bar-scrape fallback');
+      }
+    } catch (e) {
+      warn(`[CYCLE] picker discovery failed: ${e.message}`);
+    }
     // Run loop without awaiting (fire-and-forget)
     this._loop().catch((e) => {
       error(`[CYCLE] loop crashed: ${e.message}`);
@@ -94,12 +111,20 @@ class CycleMode {
         this.cycleCount++;
         info(`[CYCLE #${this.cycleCount}] → ${fav}`);
 
-        // 1. Switch asset (no-op if already current)
+        // 1. Switch asset (no-op if already current). Try slot-tile click first,
+        //    then picker-based switch if asset is still unchanged after 2s.
         try {
           const already = getCurrentAsset();
           if (!already || already !== fav) {
             switchAsset(fav);
             await this._waitChartLoaded();
+            // Verify switch — if unchanged, escalate to picker (v8.45.0)
+            const afterSlot = getCurrentAsset();
+            if (afterSlot && afterSlot !== fav) {
+              warn(`[CYCLE] slot-tile switch missed ${fav} (still ${afterSlot}) — trying picker`);
+              const picked = await switchAssetViaPicker(fav);
+              if (picked) await this._waitChartLoaded();
+            }
           }
         } catch (e) {
           warn(`[CYCLE] failed to switch to ${fav}: ${e.message} — skipping`);
@@ -158,6 +183,10 @@ class CycleMode {
 
   _getActiveFavorites() {
     try {
+      // Prefer picker-discovered list (v8.45.0). Re-discover once per 10 minutes.
+      if (this.discoveredFavorites && this.discoveredFavorites.length > 0) {
+        return this.discoveredFavorites.filter((a) => !this.skipList.has(a));
+      }
       const raw = getFavorites() || [];
       // Filter out blacklisted
       return raw.filter((a) => !this.skipList.has(a));

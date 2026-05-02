@@ -7,7 +7,7 @@ import asyncio
 import aiohttp
 import json
 
-BACKEND_URL = "https://momentum-trade-test.preview.emergentagent.com/api"
+BACKEND_URL = "https://pocket-option-ai-9.preview.emergentagent.com/api"
 
 async def debug_specific_asset():
     async with aiohttp.ClientSession() as session:

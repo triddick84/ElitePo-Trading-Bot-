@@ -161,6 +161,17 @@ class TwentyOneSecondReversal {
   }
 
   /**
+   * Reset the per-asset and pending-result counters (v8.45.0).
+   * Used by the "Reset Stats" button in the panel — wipes Time-strategy
+   * fire/win/loss history without disabling the strategy itself.
+   */
+  resetStats() {
+    this.assetStats = {};
+    this.pendingResult = null;
+    log('[Time-Reversal] stats reset');
+  }
+
+  /**
    * External hook: call when the trade executor records a result.
    * Matches by asset + direction + recent fire window.
    */

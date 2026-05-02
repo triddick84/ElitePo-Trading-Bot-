@@ -252,6 +252,21 @@ class EliteTradingBot {
         log(`Auto-invert ${enabled ? 'ENABLED' : 'DISABLED'} - smart-invert decisions will ${enabled ? 'apply' : 'be bypassed'}`);
         saveState();
       },
+
+      onResetStats: () => {
+        // Reset W/L counters, streak, P/L, and Time-strategy stats (v8.45.0)
+        resetStats();
+        state.moneyManagement.currentStep = 0;
+        state.moneyManagement.currentAmount = state.moneyManagement.baseAmount || 1;
+        state.moneyManagement.totalProfit = 0;
+        try { twentyOneSecondReversal.resetStats?.(); } catch (_e) { /* optional */ }
+        updateStatsDisplay();
+        if (twentyOneSecondReversal.isEnabled()) {
+          update21sReversalDisplay(true, twentyOneSecondReversal.getStats());
+        }
+        success('[STATS] Reset — W/L, rate, streak, P/L cleared');
+        saveState();
+      },
     });
   }
   

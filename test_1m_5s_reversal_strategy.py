@@ -11,7 +11,7 @@ import sys
 from datetime import datetime, timezone
 
 # Test configuration
-BACKEND_URL = "https://momentum-trade-test.preview.emergentagent.com/api"
+BACKEND_URL = "https://pocket-option-ai-9.preview.emergentagent.com/api"
 
 class ReversalStrategyTester:
     def __init__(self):

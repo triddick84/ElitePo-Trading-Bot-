@@ -1,8 +1,15 @@
 # Elite Pocket Option Trading Bot - Product Requirements Document
 
-## Last Updated: April 25, 2026
+## Last Updated: May 1, 2026
 
 ## Current Status
+✅ **TM v8.45.0 — Picker-Based Favorites + Reset Stats + Time Strategy Rename (May 1, 2026)**
+- **CYCLE picker-based favorites discovery**: New `getFavoritesViaPicker()` in `/app/tampermonkey-src/src/utils/dom.js` opens PO's asset-picker dropdown (clicks chart-header asset name), clicks the ★ favorites filter, scrapes the visible rows, and returns normalized symbols. CycleMode calls this on `start()` and uses the result instead of the unreliable slot-tile bar scrape. Falls back to `getFavorites()` if picker can't be opened.
+- **Robust asset switching via picker**: New `switchAssetViaPicker()` opens picker, narrows to favorites, finds the matching row by normalized symbol or text, and clicks via React fiber walk. CycleMode escalates to this when slot-tile click leaves the asset unchanged after `_waitChartLoaded()`.
+- **Reset Stats button**: Small ⟲ button at top-right of the stats card (`data-testid="reset-stats-btn"`). Wipes W/L counters, win rate, streak, P/L, and Time-strategy fire/win/loss history (`twentyOneSecondReversal.resetStats()`). Confirmation modal before reset. Does NOT affect bot toggles or saved settings.
+- **51S → Time Strategy rename (UI only)**: Status-strip cell now reads `TIME`, primary toggle button reads `TIME`, status line reads `Time: On/Off`. Internal state keys (`_twentyOneSEnabled`, `r21s` IDs, file names) unchanged so all downstream code still works.
+- TM userscript bumped **8.44.0 → 8.45.0**
+
 ✅ **PPO RL + LSTM/GRU Hooked into OTC Tuner Pipeline — Backend (April 25, 2026, Iter 66)**
 - **Two new helper functions** in `/app/backend/ml_accuracy_tuner.py`:
   - `train_lstm_gru_from_otc(db, lstm_system, symbols, epochs)` — pulls raw OHLCV from all symbols, concatenates into a `candles: List[Dict]` array, calls `LSTMGRUSystem.train()`. Smoke test: 1,181 candles from EURUSD + AUDCAD → val_acc 36% at 3 epochs
