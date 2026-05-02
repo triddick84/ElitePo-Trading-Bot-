@@ -3,6 +3,13 @@
 ## Last Updated: May 2, 2026
 
 ## Current Status
+✅ **TM v8.53.0 — Time Strategy Fires Exactly On Selected Second (May 2, 2026)**
+- **Issue**: After v8.51/52, the strategy fired up to 2 seconds early because `|poSecondsLeft - triggerSec| <= 2` allowed matches at target±2 (total 5-second window). User's original "on the exact time" behavior was lost.
+- **Fix in `_tick()`**: Tolerance tightened from ±2 → **exact match** on both sources. Fires ONLY when `poSecondsLeft === triggerSec` OR `wallSecExact === triggerSec`. With 100ms tick cadence we still have ~10 tick chances inside each integer-second window, so there's no risk of missing the window.
+- **Wall-clock rounding fix**: `wallSecExact = floor(msLeft/1000) + (msLeft%1000>0 ? 1 : 0)` — matches what PO visually displays as the "remaining seconds" count (e.g. msLeft=48,700 → shows 49, not 48).
+- Panel UI hit-flash animation retained at ±2 for a nice visual lead-in before the exact-second fire.
+- TM userscript bumped **8.52.0 → 8.53.0**
+
 ✅ **TM v8.52.0 — Time Strategy Works On All Chart Timeframes (May 2, 2026)**
 - **Issue**: Time Strategy was hardcoded to 1-minute candles (`Math.floor(ts / 60_000)`, `msLeft = 60_000 - ...`). On S5 / S15 / S30 / M5 / M15 / M30 / H1 charts, wall-clock math was computing wrong candle boundaries and the strategy never fired at the user's trigger second.
 - **Fix in `/app/tampermonkey-src/src/utils/dom.js`**: New `getChartTimeframe()` utility auto-detects PO's active timeframe label (`S5`, `S15`, `S30`, `M1`, `M5`, `M15`, `M30`, `H1`, `H4`, `D1`) via multiple selector patterns. Returns `{label, seconds}`.

@@ -320,15 +320,23 @@ class TwentyOneSecondReversal {
       const msLeft = periodMs - (now - minute);
       const wallSecLeft = Math.round(msLeft / 1000);
 
+      // v8.53.0: Tight exact-second match (±0, with 100ms tick cadence
+      // we already have 10 ticks inside each integer second). Previously
+      // ±2s was too generous and caused early-fires at target+2. User
+      // wants the trade fired ON the selected second.
       let inWindow = false;
       let matchSource = '';
-      if (poSecondsLeft !== null && Math.abs(poSecondsLeft - triggerSec) <= 2) {
+      if (poSecondsLeft !== null && poSecondsLeft === triggerSec) {
         inWindow = true;
         matchSource = `po=${poSecondsLeft}s`;
       }
-      if (Math.abs(wallSecLeft - triggerSec) <= 2) {
+      // Wall-clock match — also exact. Use floor(msLeft/1000) so the
+      // integer second is assigned to the "remaining seconds" display
+      // (matches what PO shows when msLeft=48,700 → shows "49s left").
+      const wallSecExact = Math.floor(msLeft / 1000) + (msLeft % 1000 > 0 ? 1 : 0);
+      if (wallSecExact === triggerSec) {
         inWindow = true;
-        matchSource = matchSource ? `${matchSource}+wall=${wallSecLeft}s` : `wall=${wallSecLeft}s`;
+        matchSource = matchSource ? `${matchSource}+wall=${wallSecExact}s` : `wall=${wallSecExact}s`;
       }
 
       // One-shot per-candle fire log — only while INSIDE trigger window,
