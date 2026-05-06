@@ -1,34 +1,47 @@
 /**
- * CYCLE Mode — Rotation scanner
+ * CYCLE Mode — Forex Payout Scanner (v8.59.0 rewrite)
  *
- * Iterates through the user's favorite assets on Pocket Option.
- * For each favorite:
- *   1. Click to switch the chart to that asset
- *   2. Wait for chart load (min 1.5s, max 6s)
- *   3. Run a signal scan
- *   4. If signal confidence ≥ MIN_CONFIDENCE and AUTO is on, place trade
- *   5. If waitForResult mode: wait for WIN/LOSS before rotating
- *      Otherwise: rotate after `perAssetMs` elapsed
- *   6. If any asset hits N consecutive losses, skip it for the rest of the session
+ * Rotates through a curated list of forex OTC pairs, switching the chart
+ * every 30 seconds. After each switch we check the current payout via the
+ * DOM scraper and SKIP any asset where the payout is below the configured
+ * threshold (default 85%). The mode is purely a scheduler — it does NOT
+ * fire trades itself. Combine with Time Strategy or AUTO mode to place
+ * actual orders on the currently-cycled asset.
  *
- * Controlled from the TM panel CYCLE button.
+ * Previously this mode rotated through user favorites and waited for trade
+ * results (replaced because the user wants every forex pair scanned at
+ * ≥85% payout, not just favorites).
  */
 
 import { log, info, warn, success, error } from '../core/logger.js';
-import { state } from '../core/state.js';
-import { getFavorites, getFavoritesViaPicker, switchAsset, switchAssetViaPicker, getCurrentAsset } from '../utils/dom.js';
-import { scanMarkets } from '../utils/api.js';
-import { tradeExecutor } from './executor.js';
-import { CONFIG } from '../core/config.js';
+import { switchAsset, switchAssetViaPicker, getCurrentAsset, getPayout } from '../utils/dom.js';
+
+/**
+ * Curated list of major + minor + exotic forex OTC pairs. Order matters
+ * only for first-pass scan; after a full cycle the order repeats.
+ * We include both `_OTC` and non-OTC variants so weekend/weekday works.
+ */
+const FOREX_POOL = [
+  // Majors
+  'EURUSD_OTC', 'GBPUSD_OTC', 'USDJPY_OTC', 'USDCHF_OTC', 'USDCAD_OTC',
+  'AUDUSD_OTC', 'NZDUSD_OTC',
+  // Crosses
+  'EURJPY_OTC', 'EURGBP_OTC', 'EURCHF_OTC', 'EURCAD_OTC', 'EURAUD_OTC',
+  'GBPJPY_OTC', 'GBPCHF_OTC', 'GBPCAD_OTC', 'GBPAUD_OTC', 'GBPNZD_OTC',
+  'AUDJPY_OTC', 'AUDCAD_OTC', 'AUDCHF_OTC', 'AUDNZD_OTC',
+  'NZDJPY_OTC', 'NZDCAD_OTC', 'NZDCHF_OTC',
+  'CADJPY_OTC', 'CADCHF_OTC', 'CHFJPY_OTC',
+  // Exotics
+  'USDZAR_OTC', 'USDTRY_OTC', 'USDMXN_OTC', 'USDSGD_OTC', 'USDNOK_OTC',
+  'USDSEK_OTC', 'USDBRL_OTC',
+  'EURNOK_OTC', 'EURSEK_OTC',
+];
 
 const DEFAULTS = {
-  perAssetMs: 60_000,         // budget per asset when NOT waiting for result
-  chartLoadMs: 1_800,         // wait after asset switch before scanning
-  maxChartLoadMs: 6_000,      // cap
-  waitForResult: true,        // pause rotation until WIN/LOSS recorded
-  resultTimeoutMs: 70_000,    // max wait for a result before moving on
-  maxConsecutiveLossesPerAsset: 3,
-  minConfidence: 65,
+  rotateEveryMs: 30_000,          // 30 seconds per asset (user request)
+  minPayoutPercent: 85,           // skip anything below this (user request)
+  chartLoadMs: 1_500,             // wait after switching before reading payout
+  payoutCheckTimeoutMs: 3_000,    // max time to wait for a readable payout
 };
 
 class CycleMode {
@@ -38,20 +51,15 @@ class CycleMode {
     this.currentAsset = null;
     this.startedAt = 0;
     this.cycleCount = 0;
-    this.lossStreaks = {};   // { [asset]: consecutive losses }
-    this.skipList = new Set();
+    this.skipThisPass = new Set();   // payout-below-threshold within this pass
     this.config = { ...DEFAULTS };
-    this.discoveredFavorites = null;     // cached picker-discovered list
-    this.lastDiscoveryAt = 0;
+    this.stats = { scanned: 0, eligible: 0, skipped_low_payout: 0, switch_failures: 0 };
   }
 
   isRunning() { return this.running; }
 
   setConfig(partial = {}) {
     Object.assign(this.config, partial);
-    if (this.config.minConfidence === undefined || this.config.minConfidence === null) {
-      this.config.minConfidence = CONFIG.MIN_CONFIDENCE || 65;
-    }
     log(`[CYCLE] config updated: ${JSON.stringify(this.config)}`);
   }
 
@@ -61,23 +69,11 @@ class CycleMode {
     this.abortRequested = false;
     this.startedAt = Date.now();
     this.cycleCount = 0;
-    success('[CYCLE] started — discovering favorites via picker…');
-    // Discover favorites via the asset picker dropdown ★ filter (v8.45.0).
-    // This is more reliable than scraping the slot-tile bar which only
-    // shows recently-active assets, not necessarily user favorites.
-    try {
-      const favs = await getFavoritesViaPicker();
-      if (favs && favs.length > 0) {
-        this.discoveredFavorites = favs;
-        this.lastDiscoveryAt = Date.now();
-        success(`[CYCLE] discovered ${favs.length} favorites: ${favs.join(', ')}`);
-      } else {
-        warn('[CYCLE] picker discovery returned 0 — will use bar-scrape fallback');
-      }
-    } catch (e) {
-      warn(`[CYCLE] picker discovery failed: ${e.message}`);
-    }
-    // Run loop without awaiting (fire-and-forget)
+    this.stats = { scanned: 0, eligible: 0, skipped_low_payout: 0, switch_failures: 0 };
+    success(
+      `[CYCLE] started — forex scanner @ ${this.config.rotateEveryMs/1000}s/asset, ` +
+      `min payout ${this.config.minPayoutPercent}%, pool=${FOREX_POOL.length}`
+    );
     this._loop().catch((e) => {
       error(`[CYCLE] loop crashed: ${e.message}`);
       this.running = false;
@@ -87,142 +83,94 @@ class CycleMode {
   stop() {
     if (!this.running) return;
     this.abortRequested = true;
-    log('[CYCLE] stop requested — finishing current iteration');
+    log('[CYCLE] stop requested — finishing current rotation');
   }
 
   async _loop() {
     while (this.running && !this.abortRequested) {
-      const favorites = this._getActiveFavorites();
-      if (!favorites || favorites.length === 0) {
-        warn('[CYCLE] no favorites detected — add some in Pocket Option first. Retrying in 10s. ' +
-          '(Diagnostic: open browser console and run `eliteBotDom.getFavorites()` to test the scraper.)');
-        await this._sleep(10_000);
-        continue;
-      }
+      // Clear the "skipped this pass" set on each full cycle — payouts
+      // can change mid-session.
+      this.skipThisPass.clear();
 
-      for (const fav of favorites) {
+      for (const asset of FOREX_POOL) {
         if (this.abortRequested) break;
-        if (this.skipList.has(fav)) {
-          log(`[CYCLE] skipping ${fav} (loss streak)`);
-          continue;
-        }
-
-        this.currentAsset = fav;
+        this.stats.scanned++;
+        this.currentAsset = asset;
         this.cycleCount++;
-        info(`[CYCLE #${this.cycleCount}] → ${fav}`);
 
-        // 1. Switch asset (no-op if already current). Try slot-tile click first,
-        //    then picker-based switch if asset is still unchanged after 2s.
+        info(`[CYCLE #${this.cycleCount}] → ${asset}`);
+
+        // 1. Switch asset. Prefer slot-tile click; fall back to picker.
+        let switched = false;
         try {
           const already = getCurrentAsset();
-          if (!already || already !== fav) {
-            switchAsset(fav);
-            await this._waitChartLoaded();
-            // Verify switch — if unchanged, escalate to picker (v8.45.0)
-            const afterSlot = getCurrentAsset();
-            if (afterSlot && afterSlot !== fav) {
-              warn(`[CYCLE] slot-tile switch missed ${fav} (still ${afterSlot}) — trying picker`);
-              const picked = await switchAssetViaPicker(fav);
-              if (picked) await this._waitChartLoaded();
+          if (already === asset) {
+            switched = true;
+          } else {
+            switchAsset(asset);
+            await this._sleep(this.config.chartLoadMs);
+            const after = getCurrentAsset();
+            if (after === asset) {
+              switched = true;
+            } else {
+              // Escalate to picker
+              const picked = await switchAssetViaPicker(asset);
+              if (picked) {
+                await this._sleep(this.config.chartLoadMs);
+                switched = getCurrentAsset() === asset;
+              }
             }
           }
         } catch (e) {
-          warn(`[CYCLE] failed to switch to ${fav}: ${e.message} — skipping`);
+          warn(`[CYCLE] switch error for ${asset}: ${e.message}`);
+        }
+
+        if (!switched) {
+          this.stats.switch_failures++;
+          log(`[CYCLE] ${asset} switch failed — skipping`);
           continue;
         }
 
         if (this.abortRequested) break;
 
-        // 2. Scan for signal
-        try {
-          const resp = await scanMarkets([fav], this.config.minConfidence);
-          const topSignal = resp && resp.success && resp.top_signals && resp.top_signals[0];
-          if (!topSignal) {
-            log(`[CYCLE] ${fav} no signal ≥${this.config.minConfidence}% — next`);
-            continue;
-          }
-
-          // 3. Trade execution
-          if (state.autoTradeEnabled) {
-            const ok = await tradeExecutor.execute(topSignal, 'cycle');
-            if (!ok) {
-              log(`[CYCLE] ${fav} trade not executed (validation/cooldown/auto off) — next`);
-              continue;
-            }
-
-            // 4. Wait for result if configured
-            if (this.config.waitForResult) {
-              const outcome = await this._waitForResult(topSignal.direction);
-              if (outcome === 'LOSS') {
-                this.lossStreaks[fav] = (this.lossStreaks[fav] || 0) + 1;
-                if (this.lossStreaks[fav] >= this.config.maxConsecutiveLossesPerAsset) {
-                  warn(`[CYCLE] ${fav} ${this.lossStreaks[fav]} losses in a row — skipping for rest of session`);
-                  this.skipList.add(fav);
-                }
-              } else if (outcome === 'WIN') {
-                this.lossStreaks[fav] = 0;
-              }
-            } else {
-              await this._sleep(this.config.perAssetMs);
-            }
-          } else {
-            log(`[CYCLE] ${fav} signal found but AUTO is off — not executing`);
-            await this._sleep(3_000);
-          }
-        } catch (e) {
-          warn(`[CYCLE] ${fav} scan/execute error: ${e.message}`);
+        // 2. Read payout & gate on ≥ minPayoutPercent
+        const payout = await this._readPayoutWithRetry();
+        if (payout === null) {
+          warn(`[CYCLE] ${asset} no payout reading — skipping`);
+          continue;
+        }
+        if (payout < this.config.minPayoutPercent) {
+          log(`[CYCLE] ${asset} payout ${payout}% < ${this.config.minPayoutPercent}% — SKIP`);
+          this.skipThisPass.add(asset);
+          this.stats.skipped_low_payout++;
+          // Spend a minimal dwell on skipped assets so the user can see
+          // the rotation moving, but advance faster than the full dwell.
+          await this._sleep(2_000);
+          continue;
         }
 
-        if (this.abortRequested) break;
+        // 3. Eligible — dwell for the full rotation period so other
+        // strategies (Time Strategy, AUTO scanner) can fire trades on
+        // this asset while it's current.
+        this.stats.eligible++;
+        success(`[CYCLE] ${asset} payout ${payout}% ✓ eligible — dwelling ${this.config.rotateEveryMs/1000}s`);
+        await this._sleep(this.config.rotateEveryMs);
       }
     }
     this.running = false;
     this.currentAsset = null;
-    log('[CYCLE] stopped');
+    log(`[CYCLE] stopped — scanned=${this.stats.scanned} eligible=${this.stats.eligible} skipped=${this.stats.skipped_low_payout}`);
   }
 
-  _getActiveFavorites() {
-    try {
-      // Prefer picker-discovered list (v8.45.0). Re-discover once per 10 minutes.
-      if (this.discoveredFavorites && this.discoveredFavorites.length > 0) {
-        return this.discoveredFavorites.filter((a) => !this.skipList.has(a));
-      }
-      const raw = getFavorites() || [];
-      // Filter out blacklisted
-      return raw.filter((a) => !this.skipList.has(a));
-    } catch (_e) {
-      return [];
-    }
-  }
-
-  async _waitChartLoaded() {
+  /** Poll getPayout() until we get a real reading, or timeout. */
+  async _readPayoutWithRetry() {
     const start = Date.now();
-    // Basic wait — let PO render the new chart
-    await this._sleep(this.config.chartLoadMs);
-    // Optionally poll getCurrentPrice until it returns truthy, up to max
-    while (Date.now() - start < this.config.maxChartLoadMs) {
-      // Small additional wait if price isn't there yet
-      await this._sleep(300);
-      break;  // single poll is enough — price may be canvas-only
+    while (Date.now() - start < this.config.payoutCheckTimeoutMs) {
+      const p = getPayout();
+      if (typeof p === 'number' && p > 0 && p < 200) return p;
+      await this._sleep(250);
     }
-  }
-
-  async _waitForResult(tradeDirection) {
-    // Uses state.stats to detect W/L changes. Records a snapshot then waits
-    // for total to increment. Honors resultTimeoutMs.
-    const startWins = state.stats.wins;
-    const startLosses = state.stats.losses;
-    const start = Date.now();
-    const timeout = this.config.resultTimeoutMs;
-
-    while (Date.now() - start < timeout) {
-      if (this.abortRequested) return 'ABORT';
-      if (state.stats.wins > startWins) return 'WIN';
-      if (state.stats.losses > startLosses) return 'LOSS';
-      await this._sleep(500);
-    }
-    warn(`[CYCLE] result timeout after ${Math.round(timeout / 1000)}s on ${tradeDirection}`);
-    return 'TIMEOUT';
+    return null;
   }
 
   _sleep(ms) {
@@ -236,8 +184,10 @@ class CycleMode {
       cycleCount: this.cycleCount,
       startedAt: this.startedAt,
       uptimeMs: this.startedAt ? Date.now() - this.startedAt : 0,
-      skipList: Array.from(this.skipList),
-      lossStreaks: { ...this.lossStreaks },
+      skipThisPass: Array.from(this.skipThisPass),
+      pool: FOREX_POOL,
+      config: this.config,
+      stats: { ...this.stats },
     };
   }
 }

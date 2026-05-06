@@ -1,8 +1,31 @@
 # Elite Pocket Option Trading Bot - Product Requirements Document
 
-## Last Updated: May 2, 2026
+## Last Updated: May 3, 2026
 
 ## Current Status
+✅ **TM v8.59.0 — Time Strategy (multi-minute aware) + Forex Payout Cycle (May 3, 2026)**
+
+### Time Strategy Rewrite (per user requirement)
+- **Requirement**: Fire a trade OPPOSITE to the current candle color EVERY TIME PO's candle timer shows the selected seconds value, regardless of candle timeframe. On M3 candles → fire at 2:21, 1:21, 0:21. On M5 → at 4:21, 3:21, 2:21, 1:21, 0:21. Direction must ALWAYS be contrarian-to-color — auto-invert / INVERT toggles must not affect it.
+- **Fix in `/app/tampermonkey-src/src/strategies/twentyOneSecondReversal.js`**:
+  - `_tick()` now matches on `poSecondsLeft % 60 === triggerSec` (seconds-digit match) instead of a single per-candle match. Naturally supports M1/M3/M5/M15/H1 — any candle length gets N fires.
+  - New slot-key `${candleGen}:${minDigit}:${secDigit}` ensures each `XX:triggerSec` fires exactly once per candle-generation.
+  - REMOVED the `invertSignal` swap. Strategy direction is hard-locked to opposite-of-body (native contrarian behavior). Auto-invert and INVERT cannot alter it.
+  - Wall-clock fallback also updated: `60 - (floor(now/1000) % 60) === triggerSec` triggers a fire when PO countdown DOM is unreadable.
+
+### CYCLE Mode Rewrite (per user requirement)
+- **Requirement**: Rotate through ALL forex pairs every 30s; skip any asset currently <85% payout.
+- **New design in `/app/tampermonkey-src/src/trading/cycleMode.js`**:
+  - Hardcoded `FOREX_POOL` (37 pairs: majors + crosses + exotics with `_OTC` suffix)
+  - Rotates every `rotateEveryMs = 30_000`; dwells 2s on skipped assets (low payout) so the rotation keeps moving
+  - Uses `getPayout()` with 3s retry window after each switch; skips when `< minPayoutPercent = 85`
+  - Mode is a pure SCHEDULER — no trades fired from cycle itself; combine with Time Strategy or AUTO scanner to trade on the currently-cycled asset
+  - Stats tracked: `scanned / eligible / skipped_low_payout / switch_failures`
+- TM userscript bumped **8.58.0 → 8.59.0**
+
+## Backend fix (same cycle session)
+✅ **Backtest finds OTC data** — `historical_data_service.get_candles()` now falls back to `otc_candles_5s` collection (15k+ live-collected OTC rows across 50+ pairs) when the primary `historical_candles` comes up empty. Handles both ISO-string and UNIX-int timestamp formats. Resamples 5s → requested timeframe via pandas. Same path added to `backtesting_service.fetch_mongodb_data()`.
+
 ✅ **TM v8.58.0 — Time Strategy Back to 1-min Contrarian (May 2, 2026)**
 - **Request**: revert Time Strategy back to a 1-min timeframe and fire opposite to current candle direction
 - **Change**: `config.fixedPeriodSec: 30 → 60` in `/app/tampermonkey-src/src/strategies/twentyOneSecondReversal.js`. Combined with `invertSignal: false` (already set in v8.57.0), the strategy now fires on a fixed 60-second cycle and applies the native contrarian direction: UP body → PUT, DOWN body → CALL (exactly opposite to the current 1m candle).

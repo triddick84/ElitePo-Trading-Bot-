@@ -25,6 +25,7 @@ db = client[DB_NAME]
 
 # Collections
 historical_candles = db['historical_candles']
+otc_candles_5s = db['otc_candles_5s']   # v8.58.1: live-collected OTC data (5s granularity)
 data_imports = db['data_imports']
 backtest_results = db['backtest_results']
 
@@ -242,13 +243,145 @@ class HistoricalDataService:
         ).sort("timestamp", ASCENDING).limit(limit)
         
         candles = list(cursor)
-        
+
         if not candles:
+            # v8.58.1: Fall back to `otc_candles_5s` — live-collected OTC data
+            # that wasn't being used by the /backtest/run path. This collection
+            # stores data at 5s granularity; resample to the requested timeframe
+            # in-memory via pandas.
+            df_otc = self._fetch_from_otc_collection(
+                symbol=symbol,
+                timeframe=timeframe,
+                start_time=start_time,
+                end_time=end_time,
+                limit=limit,
+            )
+            if df_otc is not None and not df_otc.empty:
+                return df_otc
             return pd.DataFrame()
-        
+
         df = pd.DataFrame(candles)
         df['timestamp'] = pd.to_datetime(df['timestamp'], utc=True)
         return df
+
+    def _fetch_from_otc_collection(
+        self,
+        symbol: str,
+        timeframe: str,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None,
+        limit: int = 100_000,
+    ) -> Optional[pd.DataFrame]:
+        """
+        v8.58.1 OTC backfill fallback. `otc_candles_5s` stores 5s candles for
+        OTC pairs keyed on {symbol, timestamp (unix seconds)}. We resample to
+        the requested backtest timeframe using pandas.
+
+        Supported input timeframes: 5s / 15s / 30s / M1 / M5 / M15 / M30 /
+        H1 / H4 (output); always 5s on the source side.
+        """
+        try:
+            tf = (timeframe or "M1").upper()
+            # Normalise PO-style M1/M5 to pandas resample rules
+            rule_map = {
+                "5S": "5s", "15S": "15s", "30S": "30s",
+                "M1": "1min", "1M": "1min",
+                "M5": "5min", "5M": "5min",
+                "M15": "15min", "15M": "15min",
+                "M30": "30min", "30M": "30min",
+                "H1": "1h", "1H": "1h",
+                "H4": "4h", "4H": "4h",
+            }
+            rule = rule_map.get(tf, "1min")
+
+            # Symbol variants — otc_candles_5s uses e.g. EURUSD_OTC (uppercase)
+            sym_u = symbol.upper()
+            variants: List[str] = [sym_u]
+            if not sym_u.endswith("_OTC"):
+                variants.append(f"{sym_u}_OTC")
+            # dedupe preserving order
+            seen = set()
+            variants = [s for s in variants if not (s in seen or seen.add(s))]
+
+            # Build time window — otc_candles_5s was seen using ISO-string
+            # timestamps (v8.58.1). Build $or query that covers both int
+            # (unix seconds) and ISO-string representations so we work with
+            # any writer version of the OTC backfill pipeline.
+            time_clauses: List[Dict[str, Any]] = []
+            if start_time or end_time:
+                int_q: Dict[str, Any] = {}
+                str_q: Dict[str, Any] = {}
+                if start_time:
+                    int_q["$gte"] = int(start_time.timestamp())
+                    str_q["$gte"] = start_time.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+                if end_time:
+                    int_q["$lte"] = int(end_time.timestamp())
+                    str_q["$lte"] = end_time.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+                time_clauses = [{"timestamp": int_q}, {"timestamp": str_q}]
+
+            raw: List[Dict[str, Any]] = []
+            for sym in variants:
+                q: Dict[str, Any] = {"symbol": sym}
+                if time_clauses:
+                    q["$or"] = time_clauses
+                cursor = otc_candles_5s.find(
+                    q, {"_id": 0, "collected_at": 0, "timeframe": 0}
+                ).sort("timestamp", ASCENDING).limit(limit)
+                raw = list(cursor)
+                if raw and len(raw) >= 12:
+                    logger.info(f"otc_candles_5s: {len(raw)} @5s rows for {sym} — resampling to {tf}")
+                    break
+                # If time-filtered came up empty, retry with NO time filter
+                # (OTC data can be weeks old; better to return old data than
+                # none). Only do this for OTC-tagged requests.
+                if not raw and "_OTC" in sym:
+                    cursor2 = otc_candles_5s.find(
+                        {"symbol": sym}, {"_id": 0, "collected_at": 0, "timeframe": 0}
+                    ).sort("timestamp", DESCENDING).limit(limit)
+                    raw = list(cursor2)
+                    if raw and len(raw) >= 12:
+                        # Re-sort ascending for the resampler
+                        raw.sort(key=lambda d: d.get("timestamp", ""))
+                        logger.info(f"otc_candles_5s (untimed fallback): {len(raw)} @5s rows for {sym}")
+                        break
+
+            if not raw or len(raw) < 12:
+                return None
+
+            df5s = pd.DataFrame(raw)
+            # Timestamps may be strings or ints — handle both
+            if df5s["timestamp"].dtype == object:
+                # ISO string path
+                df5s["timestamp"] = pd.to_datetime(df5s["timestamp"], utc=True, errors="coerce")
+            else:
+                df5s["timestamp"] = pd.to_datetime(df5s["timestamp"], unit="s", utc=True)
+            df5s = df5s.dropna(subset=["timestamp"])
+            df5s = df5s.set_index("timestamp").sort_index()
+
+            # If already 5s, no resample needed
+            if rule == "5s":
+                agg = df5s
+            else:
+                agg = df5s.resample(rule).agg({
+                    "open": "first",
+                    "high": "max",
+                    "low": "min",
+                    "close": "last",
+                    "volume": "sum" if "volume" in df5s.columns else "last",
+                }).dropna(subset=["open", "high", "low", "close"])
+
+            if agg.empty or len(agg) < 5:
+                return None
+
+            out = agg.reset_index()
+            # Tag source so downstream callers know this came from OTC live data
+            out["source"] = "otc_candles_5s"
+            out["symbol"] = variants[0]
+            out["timeframe"] = timeframe
+            return out
+        except Exception as e:
+            logger.warning(f"[otc_candles_5s fallback] failed for {symbol}/{timeframe}: {e}")
+            return None
     
     def get_candles_for_backtest(
         self,

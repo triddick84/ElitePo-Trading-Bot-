@@ -313,55 +313,69 @@ class TwentyOneSecondReversal {
         }
       }
 
-      // v8.51.0: Trigger match — use BOTH timing sources OR'd together so
-      // a single unreliable read never blocks a fire. Either (a) PO's DOM
-      // countdown matches within ±2s, OR (b) wall-clock math matches within
-      // ±2s — we fire. Previously v8.50.0 required an exact PO-countdown
-      // match (±1s) which silently failed when PO's countdown DOM selector
-      // didn't match the user's theme.
+      // v8.59.0: REFACTOR — match on the SECONDS digit of PO's countdown,
+      // regardless of candle timeframe. User requirement: fire a trade
+      // OPPOSITE to the current candle color every time the candle timer
+      // shows the selected seconds value.
       //
-      // v8.52.0: Timing now uses the CURRENT chart timeframe (not hardcoded
-      // 60s). Works on S5 / S15 / S30 / M1 / M5 / M15 / M30 / H1 / H4 / D1.
-      const periodSec = this._getCandlePeriodSeconds(now);
-      const tfLabel = this._getCandlePeriodLabel();
-      const triggerSecRaw = Math.round((this.config.fireAtMsLeft || FIRE_AT_MS_LEFT) / 1000);
-      // Clamp trigger to a valid second within the current candle period
-      const triggerSec = Math.max(1, Math.min(periodSec - 1, triggerSecRaw));
-      const periodMs = periodSec * 1000;
-      const msLeft = periodMs - (now - minute);
-      const wallSecLeft = Math.round(msLeft / 1000);
+      // Behavior:
+      //   M1 candle + trigger=21 → fires once per candle at 0:21
+      //   M3 candle + trigger=21 → fires at 2:21, 1:21, 0:21 (3 times)
+      //   M5 candle + trigger=21 → fires at 4:21, 3:21, 2:21, 1:21, 0:21
+      //   S30 candle + trigger=21 → fires once per candle at 0:21 (if trigger < period)
+      //
+      // Direction is HARD-LOCKED to opposite-of-candle-color. Auto-invert /
+      // INVERT toggles never alter the Time Strategy's direction — the user
+      // explicitly wants the strategy to always fade the current candle.
+      const triggerSec = Math.max(1, Math.min(59, Math.round((this.config.fireAtMsLeft || FIRE_AT_MS_LEFT) / 1000)));
+
+      // poSecondsLeft is the TOTAL seconds left in the current PO candle.
+      // For a M3 candle showing "2:21", totalSeconds=141. The minutes
+      // digit is floor(141/60)=2, the seconds digit is 141%60=21. We fire
+      // whenever the SECONDS digit (141 % 60) matches triggerSec.
+      let secondsDigit = null;
+      let minutesDigit = null;
+      if (poSecondsLeft !== null && poSecondsLeft >= 0) {
+        secondsDigit = poSecondsLeft % 60;
+        minutesDigit = Math.floor(poSecondsLeft / 60);
+      }
+
+      // Build a unique "fire slot" key including the candle-generation
+      // counter so each XX:triggerSec moment fires exactly once AND new
+      // candles get fresh slots. Format: `gen:minDigit:secDigit`.
+      // e.g. "5:0:21" = candle generation 5, 0 minutes + 21 seconds left.
+      const fireKey = (secondsDigit !== null)
+        ? `${this._candleGen || 0}:${minutesDigit}:${secondsDigit}`
+        : null;
 
       let inWindow = false;
       let matchSource = '';
-      // v8.57.0: when a fixedPeriodSec override is active, PO's chart
-      // countdown is measuring a DIFFERENT candle period (e.g. M1) than
-      // our strategy period (30s), so its value is meaningless for our
-      // trigger. Only trust wall-clock math in that case.
-      const usingFixed = !!(this.config.fixedPeriodSec && this.config.fixedPeriodSec > 0);
-      if (!usingFixed && poSecondsLeft !== null && poSecondsLeft === triggerSec) {
+      if (secondsDigit !== null && secondsDigit === triggerSec && this._lastFireKey !== fireKey) {
         inWindow = true;
-        matchSource = `po=${poSecondsLeft}s`;
-      }
-      // Wall-clock match — also exact. Use floor(msLeft/1000) so the
-      // integer second is assigned to the "remaining seconds" display
-      // (matches what PO shows when msLeft=48,700 → shows "49s left").
-      const wallSecExact = Math.floor(msLeft / 1000) + (msLeft % 1000 > 0 ? 1 : 0);
-      if (wallSecExact === triggerSec) {
-        inWindow = true;
-        matchSource = matchSource ? `${matchSource}+wall=${wallSecExact}s` : `wall=${wallSecExact}s`;
+        matchSource = `po=${minutesDigit}:${secondsDigit}`;
       }
 
-      // One-shot per-candle fire log — only while INSIDE trigger window,
-      // no spam outside. Lets the user confirm the trigger is being met.
-      if (inWindow && this._windowLoggedGen !== this._candleGen) {
-        this._windowLoggedGen = this._candleGen;
-        info(`[Time-Reversal] TRIGGER HIT — tf=${tfLabel} ${matchSource} target=${triggerSec}s fired=${this.firedThisCandle}`);
+      // Wall-clock fallback: only used when PO countdown is unreadable.
+      // Uses 60s as the modulus so we still fire on every XX:triggerSec
+      // when the chart timeframe is hidden from us.
+      if (!inWindow && poSecondsLeft === null) {
+        const wallSecInMinute = 60 - (Math.floor(now / 1000) % 60);
+        const wallKey = `w:${Math.floor(now / 60000)}`;
+        if (wallSecInMinute === triggerSec && this._lastFireKey !== wallKey) {
+          inWindow = true;
+          matchSource = `wall=${wallSecInMinute}s(min=${Math.floor(now/60000)})`;
+          this._lastFireKey = wallKey;
+        }
+      }
+
+      // TRIGGER HIT log (emits once per slot, not every 100ms tick)
+      if (inWindow) {
+        info(`[Time-Reversal] TRIGGER HIT — ${matchSource} target=${triggerSec}s`);
       }
       if (!inWindow) return;
 
-      // Per-candle debounce so we don't fire 10x inside the ~2s window on
-      // a single candle. Reset on rollover (see _resetCandle).
-      if (this.firedThisCandle) return;
+      // Record the fire slot so we don't refire in the same second
+      if (fireKey) this._lastFireKey = fireKey;
 
       // Inside the fire window - verify we have data
       if (this.candleOpen === null || this.candleClose === null) {
@@ -463,16 +477,13 @@ class TwentyOneSecondReversal {
       reasonTag = `body-below-threshold=${bodyBps.toFixed(3)}bps`;
     }
 
-    // v8.54.0: Signal invert — per user request, flip CALL ↔ PUT before
-    // executing. The strategy's native direction is already a reversal of
-    // the 1m body (CALL on DOWN body, PUT on UP body). With invertSignal
-    // ON, we swap once more so the trade ends up in the SAME direction
-    // as the body/slope. Toggle via config.invertSignal.
-    if (this.config.invertSignal) {
-      const beforeInv = tradeDirection;
-      tradeDirection = tradeDirection === 'CALL' ? 'PUT' : 'CALL';
-      reasonTag = `INV[${beforeInv}→${tradeDirection}] ${reasonTag}`;
-    }
+    // v8.59.0: REMOVED the invertSignal swap per user request. The
+    // Time Strategy's direction must ALWAYS be the opposite of the
+    // current candle color (green → PUT, red → CALL). Auto-invert /
+    // INVERT toggles must NEVER flip this direction — the whole point
+    // of this strategy is to fade the current candle, every time.
+    // (Previous v8.54.0 added a global invertSignal flag that could
+    // flip the direction — explicitly bypassed now.)
 
     const asset = getCurrentAsset() || 'UNKNOWN';
     const amount = state.moneyManagement.currentAmount;
@@ -701,6 +712,11 @@ class TwentyOneSecondReversal {
     // once per new candle (not on every 100ms tick inside the window)
     this._candleGen = (this._candleGen || 0) + 1;
     this._windowLoggedGen = null;
+    // v8.59.0: clear the per-slot fire key so the first slot of the
+    // new candle is eligible to fire. Without this, M1 candles would
+    // only fire on the very first one after page load (the "0:21"
+    // key would be permanent).
+    this._lastFireKey = null;
   }
 
   _trySetExpiry(seconds) {

@@ -163,26 +163,32 @@ class HistoricalDataFetcher:
         """
         Fetch historical data from MongoDB historical_candles collection.
         This is the PRIMARY data source - uses REAL data collected from Pocket Option.
-        
+
+        v8.58.1: Also queries the `otc_candles_5s` collection (15k+ live-
+        collected OTC candles across 50+ pairs) when the requested symbol
+        ends with `_OTC` or the main `historical_candles` query returns
+        nothing. 5s candles are resampled in-memory to the requested
+        interval using pandas.
+
         Args:
-            symbol: Asset symbol (e.g., 'EURUSD', 'BTCUSD')
+            symbol: Asset symbol (e.g., 'EURUSD', 'EURUSD_OTC', 'BTCUSD')
             days: Number of days of data to fetch
             interval: Timeframe interval ('5s', '1m', '5m', '15m', '1h', etc.)
-        
+
         Returns:
             DataFrame with OHLCV data, or None if insufficient data
         """
         if self.db is None:
             logger.debug("MongoDB not available for historical data fetch")
             return None
-        
+
         try:
             # Calculate time range
             end_time = datetime.now(timezone.utc)
             start_time = end_time - timedelta(days=days)
             start_timestamp = int(start_time.timestamp())
             end_timestamp = int(end_time.timestamp())
-            
+
             # Map interval to timeframe format used in historical_candles
             timeframe_map = {
                 '1m': '1m', '5m': '5m', '15m': '15m', '30m': '30m',
@@ -190,19 +196,20 @@ class HistoricalDataFetcher:
                 '5s': '5s', '15s': '15s', '30s': '30s'
             }
             timeframe = timeframe_map.get(interval, '1m')
-            
-            # Normalize symbol - try multiple formats
+
+            # Normalize symbol — otc_candles_5s uses UPPERCASE with _OTC suffix,
+            # historical_candles uses lowercase _otc. Try both families.
+            sym_u = symbol.upper()
+            is_otc_request = '_OTC' in sym_u or '_otc' in symbol
+
+            # ============================================================
+            # Path A: historical_candles collection (legacy)
+            # ============================================================
             symbol_variants = [
-                symbol,
-                symbol.upper(),
-                symbol.upper().replace('_', ''),
-                f"{symbol}_otc",
-                f"{symbol.upper()}_otc",
-                f"{symbol}_regular",
-                f"{symbol.upper()}_regular"
+                symbol, sym_u, sym_u.replace('_', ''),
+                f"{symbol}_otc", f"{sym_u}_otc",
+                f"{symbol}_regular", f"{sym_u}_regular",
             ]
-            
-            # Query historical_candles collection
             candles = []
             for sym in symbol_variants:
                 query = {
@@ -210,20 +217,76 @@ class HistoricalDataFetcher:
                     "timeframe": timeframe,
                     "timestamp": {"$gte": start_timestamp, "$lte": end_timestamp}
                 }
-                
-                cursor = self.db.historical_candles.find(
-                    query, {"_id": 0}
-                ).sort("timestamp", 1)
-                
+                cursor = self.db.historical_candles.find(query, {"_id": 0}).sort("timestamp", 1)
                 candles = await cursor.to_list(length=50000)
-                if candles and len(candles) >= 100:  # Minimum 100 candles for backtesting
-                    logger.info(f"✅ MongoDB: Found {len(candles)} candles for {sym} ({timeframe})")
+                if candles and len(candles) >= 100:
+                    logger.info(f"✅ historical_candles: {len(candles)} for {sym} ({timeframe})")
                     break
-            
+
+            # ============================================================
+            # Path B (v8.58.1): otc_candles_5s collection (15k+ live OTC rows).
+            # Always try this for OTC requests, or when Path A came up empty.
+            # Data is at 5s granularity — resample to target interval.
+            # ============================================================
+            if (not candles or len(candles) < 100) and (is_otc_request or not candles):
+                otc_sym_variants = [
+                    sym_u, sym_u.replace('_OTC', '') + '_OTC',
+                    sym_u.replace('/', '') + '_OTC',
+                ]
+                # dedupe while preserving order
+                seen = set()
+                otc_sym_variants = [s for s in otc_sym_variants if s not in seen and not seen.add(s)]
+                for sym in otc_sym_variants:
+                    cursor = self.db.otc_candles_5s.find(
+                        {
+                            "symbol": sym,
+                            "timestamp": {"$gte": start_timestamp, "$lte": end_timestamp},
+                        },
+                        {"_id": 0, "symbol": 0, "collected_at": 0, "timeframe": 0},
+                    ).sort("timestamp", 1)
+                    raw = await cursor.to_list(length=200000)
+                    if not raw or len(raw) < 12:
+                        continue
+
+                    # If request is 5s, use raw; else resample via pandas
+                    if timeframe == '5s':
+                        candles = raw
+                        logger.info(f"✅ otc_candles_5s: {len(candles)} @ 5s for {sym} (raw)")
+                        break
+
+                    try:
+                        df5s = pd.DataFrame(raw)
+                        df5s['datetime'] = pd.to_datetime(df5s['timestamp'], unit='s')
+                        df5s = df5s.set_index('datetime').sort_index()
+                        rule_map = {
+                            '15s': '15s', '30s': '30s',
+                            '1m': '1min', '5m': '5min', '15m': '15min', '30m': '30min',
+                            '1h': '1h', '4h': '4h', '1d': '1d',
+                        }
+                        rule = rule_map.get(timeframe, '1min')
+                        agg = df5s.resample(rule).agg({
+                            'open': 'first',
+                            'high': 'max',
+                            'low': 'min',
+                            'close': 'last',
+                            'volume': 'sum',
+                        }).dropna(subset=['open', 'high', 'low', 'close'])
+                        if len(agg) < 50:
+                            continue
+                        agg = agg.reset_index()
+                        agg['timestamp'] = (agg['datetime'].astype('int64') // 10**9).astype(int)
+                        agg = agg.drop(columns=['datetime'])
+                        candles = agg.to_dict('records')
+                        logger.info(f"✅ otc_candles_5s resampled to {timeframe}: {len(candles)} for {sym}")
+                        break
+                    except Exception as e:
+                        logger.warning(f"otc_candles_5s resample failed for {sym}: {e}")
+                        continue
+
             if not candles or len(candles) < 100:
                 logger.debug(f"Insufficient MongoDB data for {symbol} ({timeframe}): {len(candles)} candles")
                 return None
-            
+
             # Convert to DataFrame
             df = pd.DataFrame(candles)
             
