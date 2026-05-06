@@ -1693,6 +1693,112 @@ function readPickerItems() {
 }
 
 /**
+ * v8.60.0 — Click the "Currencies" tab inside the open asset picker.
+ *
+ * Same pattern as `clickFavoritesFilter()` but matches the "Currencies"
+ * tab text. Used by CYCLE mode to surface the FULL currency-pair list
+ * (not just user favorites). Returns true on click.
+ */
+async function clickCurrenciesTab() {
+  const clickables = document.querySelectorAll(
+    'button, [role="button"], [role="tab"], li, div, span, a'
+  );
+  for (const el of clickables) {
+    if (!el || !el.offsetParent) continue;
+    if (el.children.length > 3) continue;
+    const txt = (el.textContent || '').trim();
+    if (!txt || txt.length > 22) continue;
+    if (!/^\s*Currenc(y|ies)\s*$/i.test(txt)) continue;
+    let cur = el;
+    let inPicker = false;
+    for (let i = 0; i < 15 && cur; i++) {
+      const c = ((cur.className || '') + '').toLowerCase();
+      if (/picker|modal|dropdown|asset-select|categories|tabs/.test(c)) {
+        inPicker = true; break;
+      }
+      cur = cur.parentElement;
+    }
+    if (!inPicker) {
+      try {
+        const r = el.getBoundingClientRect();
+        if (r.left < 400 && r.top < 800 && r.width < 320) inPicker = true;
+      } catch (_e) { /* ignore */ }
+    }
+    if (!inPicker) continue;
+    _reactClickEl(_findClickableAncestor(el));
+    log(`[picker] clicked Currencies TAB (text="${txt}")`);
+    await _sleep(350);
+    return true;
+  }
+  return false;
+}
+
+/**
+ * v8.60.0 — Read the currently visible asset rows inside the open picker
+ * AND parse each row's payout percentage from its visible text.
+ *
+ * Returns: [{symbol, payout, el}] where:
+ *   symbol  → normalised asset name like 'EURUSD_OTC'
+ *   payout  → integer percent (e.g. 92), or null if unparseable
+ *   el      → clickable row element
+ *
+ * Used by CYCLE to filter to ≥85% pairs without round-tripping through a
+ * second picker open.
+ */
+function readPickerItemsWithPayouts() {
+  const rows = readPickerItems();
+  const PAYOUT_RE = /\+?\s*(\d{1,3})\s*%/;
+  return rows.map((r) => {
+    let payout = null;
+    try {
+      const txt = (r.el?.textContent || '').trim();
+      const m = txt.match(PAYOUT_RE);
+      if (m) {
+        const v = parseInt(m[1], 10);
+        if (v >= 1 && v <= 100) payout = v;
+      }
+    } catch (_e) { /* ignore */ }
+    return { symbol: r.symbol, payout, el: r.el };
+  });
+}
+
+/**
+ * v8.60.0 — Pick assets from the OPEN asset picker. Helpers exported
+ * for cycleMode use.
+ */
+export async function openCurrenciesPicker() {
+  const opened = await openAssetPicker();
+  if (!opened) return false;
+  await _sleep(300);
+  const tabClicked = await clickCurrenciesTab();
+  if (!tabClicked) {
+    log('[picker] Currencies tab not found — using whatever tab is active');
+  }
+  await _sleep(300);
+  return true;
+}
+
+export function readCurrencyPairsWithPayouts() {
+  return readPickerItemsWithPayouts();
+}
+
+export async function clickPickerRowEl(el) {
+  if (!el) return false;
+  try { el.scrollIntoView?.({ block: 'center' }); } catch (_e) {}
+  _reactClickEl(_findClickableAncestor(el));
+  await _sleep(400);
+  return true;
+}
+
+/**
+ * Click the asset picker's CLOSE button or send Escape to dismiss it.
+ * Lighter-weight version of closeAssetPicker for the cycle mode.
+ */
+export async function dismissPicker() {
+  return closeAssetPicker();
+}
+
+/**
  * Discover the user's favorited assets by:
  *   1. Opening the asset picker (click chart header)
  *   2. Clicking the ★ favorites filter inside the picker

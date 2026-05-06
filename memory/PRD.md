@@ -3,6 +3,20 @@
 ## Last Updated: May 3, 2026
 
 ## Current Status
+✅ **TM v8.60.0 — CYCLE: All Currency Pairs ≥ 85% Payout, No Search-Box Spam (May 3, 2026)**
+- **Issue user reported**: cycle "constantly clicking the search window open" and "can't do anything with the window open" — slot-tile fallback `tryDropdownSearch` was opening the picker AND typing into the search input on every iteration, blocking manual interaction.
+- **Fix in `/app/tampermonkey-src/src/trading/cycleMode.js` (full rewrite)**:
+  - SINGLE picker workflow per asset switch — open → click "Currencies" tab → click target row. Picker auto-closes after the row click; we never touch the search box.
+  - **Discovery pass**: every 5 minutes (or on first start) opens picker, clicks Currencies tab, scrapes all visible rows with their displayed payouts, filters to FX pairs (`/^[A-Z]{3}[A-Z]{3}(_OTC)?$/`) where payout ≥ 85%, sorts best-first, closes picker. List is cached.
+  - **Rotation**: dwells the full 30s on each eligible pair without touching the picker — manual interaction is unblocked during dwell.
+  - **Live re-check**: post-switch payout is re-read; if it dropped below 85% the asset is skipped (no dwell) so we don't pin to a pair whose payout fell.
+  - No more hardcoded `FOREX_POOL`. The list comes from PO's actual Currencies tab → adapts to whatever pairs PO is currently offering at ≥85%.
+- **New helpers in `/app/tampermonkey-src/src/utils/dom.js`**:
+  - `clickCurrenciesTab()` — text-match the "Currencies" / "Currency" tab inside an open picker
+  - `readPickerItemsWithPayouts()` — combines `readPickerItems()` with regex payout extraction
+  - `openCurrenciesPicker()`, `readCurrencyPairsWithPayouts()`, `clickPickerRowEl()`, `dismissPicker()` — exported high-level helpers used by the new cycle mode
+- TM userscript bumped **8.59.0 → 8.60.0**
+
 ✅ **TM v8.59.0 — Time Strategy (multi-minute aware) + Forex Payout Cycle (May 3, 2026)**
 
 ### Time Strategy Rewrite (per user requirement)
