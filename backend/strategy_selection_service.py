@@ -18,6 +18,7 @@ class StrategySelectionService:
     AVAILABLE_STRATEGIES = {
         '5s': [
             {'id': 'default', 'name': 'Default 5s Strategy', 'description': 'Ultra Precision V2 with Bollinger Bands'},
+            {'id': '5s_heikin_fractal', 'name': '🆕 Heikin Ashi Fractal 5s', 'description': 'Single-indicator: Williams Fractal (period 3) on Heikin Ashi candles. Up fractal/red → BUY (CALL); down fractal/green → SELL (PUT). 5s expiry on 5s timeframe.', 'win_rate': '70-80% (target)', 'beta': True},
             {'id': 'ema20_pullback_reversal', 'name': 'EMA 20 Pullback Reversal', 'description': 'EMA 20 trend + RSI-2 + BB(5,2.5) + Stoch(3,1,1) pullback reversal. Best for 5s expiry on volatile OTC pairs.', 'win_rate': '80-90%'},
             {'id': 'holly_crossover_5s', 'name': 'Holly Crossover 5s', 'description': 'EMA(12) x WMA(23) reversal crossover with S/R confirmation. Catches trend reversals.', 'win_rate': '75-85%'},
             {'id': 'turbo_precision_5s', 'name': 'Turbo Precision 5s', 'description': 'RSI + Stochastic RSI + EMA Ribbon. 4+ confirmations. Highest accuracy.', 'win_rate': '75-85%'},
