@@ -3,6 +3,20 @@
 ## Last Updated: May 3, 2026
 
 ## Current Status
+✅ **Backend v8.62.0 — 5s Heikin Ashi Fractal Strategy (May 3, 2026)**
+- **User request**: build a focused 5-second strategy on Heikin Ashi candles using a single Williams Fractal indicator (period 3). Mapping: red signal (up fractal/peak) → BUY (CALL); green signal (down fractal/trough) → SELL (PUT). 5s expiry on 5s timeframe.
+- **New module** `/app/backend/strategies/strategy_5s_heikin_fractal.py`:
+  - `to_heikin_ashi(df)` — vectorised O(n) HA conversion with industry-standard seed `(open[0]+close[0])/2`
+  - `latest_fractal(highs, lows, period=3)` — Williams Fractal detector that confirms at index `len-1-period`. Returns `{kind, center_idx, center_value, dominance}` or None
+  - `Strategy5sHeikinFractal.generate_signal(df)` — runs HA → fractal → maps to direction with dominance-scaled confidence (55–82%)
+- **Registered** in `/app/backend/strategy_registry.py` as `5s_heikin_fractal`. Total strategies now **42** (was 41).
+- **Verified end-to-end** — synthetic OHLC with injected peak at idx 21 produces:
+  ```
+  Fractal: {kind: 'up', center_idx: 21, dominance: 0.001242}
+  Signal:  {direction: 'CALL', confidence: 82.0, fractal_color: 'RED', ...}
+  ```
+- The strategy participates in `force-generate-v2`'s ensemble vote like any other strategy. The user can also call it directly via the strategy selector.
+
 ✅ **Backend v8.61.0 — Signal Accuracy Boosters (MTF + Vol Regime + ML-Agreement) (May 3, 2026)**
 - **User issue**: 5s and 1m signals had low accuracy — pipeline accepted weak confluence as HIGH/MEDIUM, no multi-timeframe verification, no volatility filter, ML-model agreement was nice-to-have rather than required.
 - **Fix in `/app/backend/routes/signals.py force_generate_v2`** — added three independent accuracy gates:

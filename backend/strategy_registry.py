@@ -54,6 +54,17 @@ class StrategyRegistry:
                 logger.info("Loaded EMA 20 Pullback Reversal Strategy for 5s")
             except Exception as e:
                 logger.warning(f"Could not load EMA 20 Pullback Reversal: {e}")
+
+            # NEW (v8.62.0): 5s Heikin Ashi Fractal Strategy — single-indicator
+            # contrarian strategy on Heikin Ashi candles, period-3 Williams
+            # Fractal. Up fractal (peak/red) → CALL; Down fractal (trough/
+            # green) → PUT. Designed for 5s expiry on 5s timeframe.
+            try:
+                from strategies.strategy_5s_heikin_fractal import strategy_5s_heikin_fractal
+                self.strategies['5s_heikin_fractal'] = strategy_5s_heikin_fractal
+                logger.info("✅ Loaded 5s Heikin Ashi Fractal Strategy")
+            except Exception as e:
+                logger.warning(f"Could not load 5s Heikin Ashi Fractal: {e}")
             
             # 15-second strategies
             from strategies.strategy_15s_ema_crossover import strategy_15s_ema_crossover
