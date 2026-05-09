@@ -4452,16 +4452,148 @@ async def force_generate_signal_v2(
             if (v.get("direction") or "").upper() == direction and float(v.get("confidence") or 0) >= 55
         )
 
-        # Quality tier + confidence clamp based on participation
-        if agreeing_count >= 5 and confluence_score >= 0.65:
+        # =====================================================================
+        # ACCURACY BOOSTER PIPELINE (v8.61.0)
+        # =====================================================================
+        # Three independent gates designed to lift signal accuracy on 5s/1m:
+        #   (A) Multi-timeframe confluence (MTF) — verify the M1 direction
+        #       agrees with S5 and M5 short-window momentum. Each agreement
+        #       adds a confidence bonus; disagreement removes one.
+        #   (B) Volatility regime gate — using ATR(14) on M1, in dead-flat
+        #       markets we downgrade the signal one tier (true edge requires
+        #       movement). In extreme spikes we also downgrade (mean-reversion
+        #       risk).
+        #   (C) ML-agreement requirement — HIGH quality now requires at least
+        #       one of the four ML engines (Maximized v3, Improved v2, LSTM,
+        #       PPO) to agree with the chosen direction. Pure-strategy
+        #       confluence without ML support stays at MEDIUM.
+        # =====================================================================
+        mtf_bonus = 0.0
+        mtf_breakdown: Dict[str, Any] = {}
+        try:
+            import numpy as np
+            closes_m1 = df["close"].astype(float).values
+            # M1 momentum: last 3-bar change vs prior 3-bar change
+            if len(closes_m1) >= 8:
+                mom_recent = closes_m1[-1] - closes_m1[-3]
+                m1_dir = "CALL" if (mom_recent > 0) else ("PUT" if mom_recent < 0 else None)
+                mtf_breakdown["m1_recent_change"] = float(round(mom_recent, 6))
+                mtf_breakdown["m1_dir"] = m1_dir
+
+            # S5 (5-second) confluence — read from otc_candles_5s for OTC pairs
+            s5_dir = None
+            try:
+                if a.endswith("_OTC") and db is not None:
+                    cursor = db.otc_candles_5s.find(
+                        {"symbol": a},
+                        {"_id": 0, "close": 1, "timestamp": 1},
+                    ).sort("timestamp", -1).limit(36)  # last ~3 minutes of 5s candles
+                    s5_rows = await cursor.to_list(length=36)
+                    if len(s5_rows) >= 12:
+                        s5_closes = [float(r.get("close", 0)) for r in reversed(s5_rows)]
+                        s5_short = sum(s5_closes[-3:]) / 3 - sum(s5_closes[-9:-6]) / 3
+                        s5_dir = "CALL" if s5_short > 0 else ("PUT" if s5_short < 0 else None)
+                        mtf_breakdown["s5_short_change"] = float(round(s5_short, 6))
+                        mtf_breakdown["s5_dir"] = s5_dir
+            except Exception as _s5_err:
+                logger.debug(f"S5 MTF lookup failed for {a}: {_s5_err}")
+
+            # M5 confluence — resample M1 closes into 5m
+            m5_dir = None
+            if len(closes_m1) >= 30:
+                m5_closes = [float(np.mean(closes_m1[i:i+5])) for i in range(0, len(closes_m1) - 5, 5)]
+                if len(m5_closes) >= 4:
+                    m5_change = m5_closes[-1] - m5_closes[-3]
+                    m5_dir = "CALL" if m5_change > 0 else ("PUT" if m5_change < 0 else None)
+                    mtf_breakdown["m5_change"] = float(round(m5_change, 6))
+                    mtf_breakdown["m5_dir"] = m5_dir
+
+            # Score MTF agreement
+            mtf_agree = 0
+            mtf_disagree = 0
+            for tf_dir in [s5_dir, m5_dir]:
+                if tf_dir is None:
+                    continue
+                if tf_dir == direction:
+                    mtf_agree += 1
+                else:
+                    mtf_disagree += 1
+            # Each agreeing TF: +3% confidence (max +6%)
+            # Each disagreeing TF: -2% confidence (max -4%)
+            mtf_bonus = (mtf_agree * 3.0) - (mtf_disagree * 2.0)
+            mtf_breakdown["agree"] = mtf_agree
+            mtf_breakdown["disagree"] = mtf_disagree
+            mtf_breakdown["bonus"] = mtf_bonus
+        except Exception as e:
+            logger.warning(f"MTF confluence calc failed for {a}: {e}")
+
+        # ---------------------------------------------------------------------
+        # (B) Volatility regime gate using ATR(14)
+        # ---------------------------------------------------------------------
+        atr_pct = 0.0
+        vol_regime = "normal"
+        try:
+            import numpy as np
+            highs = df["high"].astype(float).values
+            lows = df["low"].astype(float).values
+            closes_arr = df["close"].astype(float).values
+            if len(closes_arr) >= 15:
+                tr = np.maximum.reduce([
+                    highs[1:] - lows[1:],
+                    np.abs(highs[1:] - closes_arr[:-1]),
+                    np.abs(lows[1:] - closes_arr[:-1]),
+                ])
+                atr14 = float(np.mean(tr[-14:]))
+                last_close = float(closes_arr[-1])
+                if last_close > 0:
+                    atr_pct = atr14 / last_close * 100  # ATR as % of price
+                # Dead-flat threshold (typical FX M1 ATR is ~0.005–0.04%)
+                if atr_pct < 0.003:
+                    vol_regime = "dead_flat"
+                elif atr_pct > 0.20:
+                    vol_regime = "spike"
+        except Exception as e:
+            logger.debug(f"ATR vol regime calc failed for {a}: {e}")
+
+        # ---------------------------------------------------------------------
+        # (C) ML-agreement check for HIGH quality
+        # ---------------------------------------------------------------------
+        ml_keys = {"maximized_ml_v3", "improved_v2", "lstm_gru", "ppo_rl"}
+        ml_agree_count = sum(
+            1 for k, v in component_results.items()
+            if k in ml_keys and (v.get("direction") or "").upper() == direction
+            and float(v.get("confidence") or 0) >= 55
+        )
+
+        # Apply MTF bonus to raw confidence (bounded)
+        raw_confidence = max(50.0, min(85.0, raw_confidence + mtf_bonus))
+
+        # =====================================================================
+        # TIGHTENED QUALITY TIERS (v8.61.0)
+        # =====================================================================
+        # HIGH:   ≥6 agreeing strategies AND confluence ≥0.70 AND ≥1 ML agrees
+        # MEDIUM: ≥4 agreeing strategies AND confluence ≥0.60 (no ML required)
+        # LOW:    everything else
+        # =====================================================================
+        if agreeing_count >= 6 and confluence_score >= 0.70 and ml_agree_count >= 1:
             quality = "HIGH"
-        elif agreeing_count >= 3 and confluence_score >= 0.55:
+        elif agreeing_count >= 4 and confluence_score >= 0.60:
             quality = "MEDIUM"
-            raw_confidence = min(raw_confidence, 75.0)
+            raw_confidence = min(raw_confidence, 76.0)
         else:
             quality = "LOW"
             # Weak participation → clamp confidence so the UI can't mislead
-            raw_confidence = min(raw_confidence, 65.0)
+            raw_confidence = min(raw_confidence, 64.0)
+
+        # Volatility-regime downgrade: dead-flat or spike markets are
+        # mean-reversion territory and our directional models lose edge.
+        if vol_regime in ("dead_flat", "spike"):
+            if quality == "HIGH":
+                quality = "MEDIUM"
+                raw_confidence = min(raw_confidence, 72.0)
+            elif quality == "MEDIUM":
+                quality = "LOW"
+                raw_confidence = min(raw_confidence, 60.0)
 
         # Pull active strategy as the attribution label
         try:
@@ -4510,6 +4642,12 @@ async def force_generate_signal_v2(
             "components": component_results,
             "votes": {"call": round(votes_call, 2), "put": round(votes_put, 2)},
             "generated_at": datetime.now(timezone.utc).isoformat(),
+            # v8.61.0 accuracy boosters — visible in API response so frontend
+            # / TM can surface them and you can audit signal quality.
+            "mtf_confluence": mtf_breakdown,
+            "ml_agree_count": ml_agree_count,
+            "vol_regime": vol_regime,
+            "atr_percent": round(atr_pct, 4),
         }
 
         # -----------------------------------------------------------------

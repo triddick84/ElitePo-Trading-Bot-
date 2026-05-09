@@ -3,6 +3,33 @@
 ## Last Updated: May 3, 2026
 
 ## Current Status
+✅ **Backend v8.61.0 — Signal Accuracy Boosters (MTF + Vol Regime + ML-Agreement) (May 3, 2026)**
+- **User issue**: 5s and 1m signals had low accuracy — pipeline accepted weak confluence as HIGH/MEDIUM, no multi-timeframe verification, no volatility filter, ML-model agreement was nice-to-have rather than required.
+- **Fix in `/app/backend/routes/signals.py force_generate_v2`** — added three independent accuracy gates:
+
+  **(A) Multi-Timeframe Confluence** (`mtf_confluence` field):
+  - S5 (5-second) momentum read from `otc_candles_5s` collection (last 36 candles ≈ 3 min)
+  - M5 (5-minute) momentum derived from M1 closes (5-bar resample)
+  - Each timeframe agreement: +3% confidence; each disagreement: -2% confidence (max ±6/-4)
+  - Returned in API response so frontend / TM can display
+
+  **(B) Volatility Regime Gate** (`vol_regime`, `atr_percent` fields):
+  - Computes ATR(14) on M1, expressed as % of price
+  - `dead_flat` (<0.003%) → downgrade quality one tier (no edge in flat markets)
+  - `spike` (>0.20%) → also downgrade (mean-reversion territory)
+  - `normal` → no penalty
+
+  **(C) ML-Agreement Requirement for HIGH** (`ml_agree_count` field):
+  - HIGH quality NOW requires ≥1 of `{maximized_ml_v3, improved_v2, lstm_gru, ppo_rl}` to agree with chosen direction
+  - Pure-strategy confluence without ML support stays at MEDIUM
+
+  **Tightened tiers**:
+  - HIGH: ≥6 agreeing strategies AND confluence ≥0.70 AND ≥1 ML agrees (was ≥5 / ≥0.65 / no ML req)
+  - MEDIUM: ≥4 agreeing strategies AND confluence ≥0.60 (was ≥3 / ≥0.55), confidence cap 76% (was 75%)
+  - LOW: everything else, confidence cap 64% (was 65%)
+
+- **End-to-end verified**: `force-generate-v2` returns full breakdown including `mtf_confluence: {s5_dir, m5_dir, agree, disagree, bonus}`, `vol_regime`, `atr_percent`, `ml_agree_count`. Confirmed downgrade logic with a flat-market test asset.
+
 ✅ **TM v8.60.0 — CYCLE: All Currency Pairs ≥ 85% Payout, No Search-Box Spam (May 3, 2026)**
 - **Issue user reported**: cycle "constantly clicking the search window open" and "can't do anything with the window open" — slot-tile fallback `tryDropdownSearch` was opening the picker AND typing into the search input on every iteration, blocking manual interaction.
 - **Fix in `/app/tampermonkey-src/src/trading/cycleMode.js` (full rewrite)**:
