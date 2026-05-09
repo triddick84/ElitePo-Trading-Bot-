@@ -135,3 +135,59 @@ def test_strategy_abstain_endpoints():
     )
     body = r.json()
     assert any(t["strategy_id"] == sid and t["asset"] == asset for t in body["thresholds"])
+
+
+def test_force_generate_v2_uses_strategy_specific_threshold():
+    """
+    Live wiring check: /api/signals/force-generate-v2 must consult the
+    (strategy, asset) threshold first via get_effective_threshold, surface
+    `abstain_source` in the response, and report 'strategy' when a per-
+    strategy override exists for the chosen strategy.
+    """
+    asset = "AUDCAD_OTC"
+
+    # Baseline — no override → must report 'default' (or 'asset' if a
+    # legacy asset row exists for AUDCAD_OTC). Either way, 'strategy' is
+    # only achievable AFTER we set a strategy-level row for the chosen sid.
+    r = requests.post(
+        f"{API}/signals/force-generate-v2",
+        params={"asset": asset},
+        timeout=30,
+    )
+    assert r.status_code == 200
+    sig = r.json().get("signal", {})
+    assert "abstain_source" in sig, "abstain_source field missing from signal"
+    assert sig["abstain_source"] in ("default", "asset"), (
+        f"unexpected baseline source: {sig['abstain_source']}"
+    )
+    chosen_sid = sig.get("strategy")
+    assert chosen_sid, "force-generate-v2 must report a chosen strategy id"
+
+    # Now plant a strategy-level override for that exact (sid, asset)
+    requests.post(
+        f"{API}/ml/abstain/strategy-threshold",
+        params={"strategy_id": chosen_sid, "asset": asset, "threshold": 0.85},
+        timeout=10,
+    )
+    try:
+        # Re-fire — abstain_source MUST flip to 'strategy'
+        r = requests.post(
+            f"{API}/signals/force-generate-v2",
+            params={"asset": asset},
+            timeout=30,
+        )
+        sig2 = r.json().get("signal", {})
+        # The chosen strategy may differ between runs (ensemble can pick
+        # a different active_sid), so only assert when the same sid wins.
+        if sig2.get("strategy") == chosen_sid:
+            assert sig2["abstain_source"] == "strategy", (
+                f"expected 'strategy' source after override, got {sig2['abstain_source']}"
+            )
+            assert sig2["abstain_threshold"] == 85.0
+    finally:
+        # Cleanup — remove the test row so we don't pollute the live config
+        from pymongo import MongoClient
+        client = MongoClient("mongodb://localhost:27017")
+        client["trading_bot_db"]["ml_abstain_strategy_thresholds"].delete_one(
+            {"strategy_id": chosen_sid, "asset": asset}
+        )

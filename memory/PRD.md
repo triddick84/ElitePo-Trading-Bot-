@@ -3,6 +3,22 @@
 ## Last Updated: May 9, 2026
 
 ## Current Status
+✅ **Iteration 53c — Strategy-Aware Abstain Wired Into Live Signal Pipeline (May 9, 2026)**
+
+The strategy-aware abstain optimizer (Iter 53b) was previously a standalone REST endpoint set — tunings were stored in MongoDB but the live signal pipeline still used asset-only thresholds. This iteration **wires the precedence resolver directly into the abstain gate** so trades fire/abstain based on the most specific tuning available.
+
+- **`routes/signals.py force_generate_v2` abstain gate** — switched from `get_threshold(asset)` to `get_effective_threshold(strategy_id=active_sid, asset)`. The chosen `active_sid` (the strategy that won the ensemble vote) drives the lookup. Resolution precedence:
+  1. **(strategy, asset)** — most specific
+  2. **(asset)** — fall back to ensemble-wide tuning
+  3. **DEFAULT_THRESHOLD** (0.62) — global default
+- **API response now includes `abstain_source`** — exposes which level supplied the threshold for full auditability. Frontend / TM can surface it.
+- **Updated `abstain_reason` text** — now reads `confidence X% < threshold Y% (source=strategy, method=manual)` instead of the old `(tuned from manual)` format.
+- **Verified live**:
+  - No tuning → `abstain_source: default` @ 62%
+  - Asset-only override → `abstain_source: asset` @ tuned value
+  - Strategy + asset → `abstain_source: strategy` @ most-specific value (correct precedence)
+- **Tests**: `test_force_generate_v2_uses_strategy_specific_threshold` added to `test_iter53_followups.py`. **All 5 tests passing in 3.5s.**
+
 ✅ **Iteration 53b — Strategy-Aware Abstain Optimizer + Refactor Cleanup (May 9, 2026)**
 
 ### P2 fixes
