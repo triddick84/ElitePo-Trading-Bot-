@@ -348,3 +348,208 @@ async def optimize_asset_threshold(
         "fallback_used": best.get("fallback", False),
         "tuned_at": datetime.now(timezone.utc).isoformat(),
     }
+
+
+# -----------------------------------------------------------------------------
+# STRATEGY-AWARE THRESHOLDS (Iter 53 — May 9, 2026)
+# -----------------------------------------------------------------------------
+# Different strategies have different confidence-calibration characteristics —
+# what works as a 62% threshold for the ensemble may be too tight or too loose
+# for, say, 5s_heikin_fractal or holly_crossover_15s. This block stores and
+# tunes per-(strategy, asset) thresholds independently.
+#
+# Storage shape (collection `ml_abstain_strategy_thresholds`):
+#   { strategy_id: '5s_heikin_fractal', asset: 'EURUSD_OTC',
+#     threshold: 0.66, winrate: 0.71, n_trades: 92, ... }
+#
+# Lookup precedence at signal time (intended caller responsibility):
+#   1. (strategy, asset)   ← most specific
+#   2. (asset)             ← falls back to ensemble-wide tuning
+#   3. DEFAULT_THRESHOLD   ← global default
+# -----------------------------------------------------------------------------
+
+_STRATEGY_SETTINGS_COLL = "ml_abstain_strategy_thresholds"
+
+
+async def get_strategy_threshold(strategy_id: str, asset: str) -> Dict[str, Any]:
+    """Return stored per-(strategy, asset) threshold or DEFAULT."""
+    db = _get_db()
+    row = await db[_STRATEGY_SETTINGS_COLL].find_one(
+        {"strategy_id": strategy_id, "asset": asset}, {"_id": 0}
+    )
+    if row:
+        return row
+    return {
+        "strategy_id": strategy_id,
+        "asset": asset,
+        "threshold": DEFAULT_THRESHOLD,
+        "winrate": 0.0,
+        "n_trades": 0,
+        "tuned_at": None,
+        "method": "default",
+    }
+
+
+async def get_all_strategy_thresholds(strategy_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    """List stored per-strategy thresholds, optionally filtered by strategy."""
+    db = _get_db()
+    query: Dict[str, Any] = {}
+    if strategy_id:
+        query["strategy_id"] = strategy_id
+    cursor = db[_STRATEGY_SETTINGS_COLL].find(query, {"_id": 0})
+    return await cursor.to_list(length=2000)
+
+
+async def set_strategy_threshold(
+    strategy_id: str,
+    asset: str,
+    threshold: float,
+    winrate: float,
+    n_trades: int,
+    method: str = "abstain-sweep-strategy",
+    extra: Optional[Dict[str, Any]] = None,
+) -> None:
+    db = _get_db()
+    doc = {
+        "strategy_id": strategy_id,
+        "asset": asset,
+        "threshold": float(threshold),
+        "winrate": float(winrate),
+        "n_trades": int(n_trades),
+        "tuned_at": datetime.now(timezone.utc).isoformat(),
+        "method": method,
+    }
+    if extra:
+        doc.update(extra)
+    await db[_STRATEGY_SETTINGS_COLL].update_one(
+        {"strategy_id": strategy_id, "asset": asset},
+        {"$set": doc},
+        upsert=True,
+    )
+
+
+async def build_strategy_prediction_pairs(
+    strategy_id: str,
+    asset: str,
+    lookback_candles: int = 500,
+) -> List[Dict[str, Any]]:
+    """
+    Replay `lookback_candles` of `asset` through the named strategy via
+    strategy_registry and emit {predicted, actual, confidence} pairs.
+    Falls back to empty list if strategy/data unavailable.
+    """
+    import pandas as pd
+
+    db = _get_db()
+    cursor = db["otc_candles_5s"].find(
+        {"symbol": asset}, {"_id": 0}
+    ).sort("timestamp", 1).limit(lookback_candles + 60)
+    candles = await cursor.to_list(length=lookback_candles + 60)
+    if len(candles) < 60:
+        return []
+
+    try:
+        from strategy_registry import strategy_registry
+    except Exception as e:
+        logger.warning(f"[strategy-abstain] registry unavailable: {e}")
+        return []
+
+    strategy = strategy_registry.get_strategy(strategy_id)
+    if strategy is None:
+        logger.warning(f"[strategy-abstain] strategy '{strategy_id}' not found")
+        return []
+
+    labeler = TendencyLabeler()
+    pairs: List[Dict[str, Any]] = []
+
+    # Use ≥50 bars of history for the rolling window
+    for i in range(50, len(candles) - 1):
+        window = candles[max(0, i - 50): i + 1]
+        try:
+            df = pd.DataFrame(window)
+            for col in ("open", "high", "low", "close", "volume"):
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors="coerce")
+            pred = strategy.generate_signal(df) if hasattr(strategy, "generate_signal") else None
+            if not pred:
+                continue
+            direction = (pred.get("direction") or "").upper()
+            if direction not in ("CALL", "PUT"):
+                continue
+            predicted = TendencyLabeler.UP if direction == "CALL" else TendencyLabeler.DOWN
+            confidence = float(pred.get("confidence") or 0.0)
+        except Exception:
+            continue
+
+        cur = candles[i]
+        nxt = candles[i + 1]
+        actual = labeler.label(cur.get("close", 0.0), nxt.get("close", 0.0))
+        pairs.append({
+            "predicted": predicted,
+            "actual": actual,
+            "confidence": confidence,
+        })
+    return pairs
+
+
+async def optimize_strategy_threshold(
+    strategy_id: str,
+    asset: str,
+    lookback_candles: int = 500,
+    min_trades: int = 20,
+    min_winrate: float = 0.55,
+) -> Dict[str, Any]:
+    """
+    Per-strategy variant of `optimize_asset_threshold`. Replays the named
+    strategy through historical OTC candles, sweeps confidence thresholds,
+    persists the best (strategy, asset) result.
+    """
+    pairs = await build_strategy_prediction_pairs(strategy_id, asset, lookback_candles)
+    if not pairs:
+        logger.warning(f"[strategy-abstain] no pairs for {strategy_id}@{asset}")
+        return {
+            "strategy_id": strategy_id,
+            "asset": asset,
+            "threshold": DEFAULT_THRESHOLD,
+            "winrate": 0.0,
+            "n_trades": 0,
+            "pairs_count": 0,
+            "fallback_used": True,
+            "reason": "no prediction pairs (strategy may not fire on this asset, or insufficient candles)",
+        }
+
+    bt = AbstainBacktester(pairs)
+    best = bt.optimize(min_trades=min_trades, min_winrate=min_winrate)
+    await set_strategy_threshold(
+        strategy_id=strategy_id,
+        asset=asset,
+        threshold=best["threshold"],
+        winrate=best["winrate"],
+        n_trades=best["n_trades"],
+        method="abstain-sweep-strategy",
+        extra={"grid": best["grid"], "pairs_count": len(pairs)},
+    )
+    return {
+        "strategy_id": strategy_id,
+        "asset": asset,
+        **best,
+        "pairs_count": len(pairs),
+        "fallback_used": best.get("fallback", False),
+        "tuned_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+async def get_effective_threshold(strategy_id: Optional[str], asset: str) -> Dict[str, Any]:
+    """
+    Resolution helper: pick the most specific stored threshold for a
+    (strategy, asset) pair. Falls back to (asset)-only, then DEFAULT.
+    Returns { threshold, source: 'strategy' | 'asset' | 'default', detail: ... }.
+    """
+    if strategy_id:
+        row = await get_strategy_threshold(strategy_id, asset)
+        if row.get("method") != "default":
+            return {**row, "source": "strategy"}
+    asset_row = await get_threshold(asset)
+    if asset_row.get("method") != "default":
+        return {**asset_row, "source": "asset"}
+    return {**asset_row, "source": "default"}

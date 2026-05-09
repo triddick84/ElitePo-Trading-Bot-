@@ -2530,7 +2530,11 @@ async def test_custom_strategy(
         if not strategy:
             raise HTTPException(status_code=404, detail="Strategy not found")
         
-        # Get market data for testing
+        # Get market data for testing (lazy imports — match style used in fast-supertrend route)
+        from real_market_data_service import RealMarketDataService
+        from trading_models import AssetType
+        from custom_strategy_executor import get_strategy_executor
+        
         market_service = RealMarketDataService()
         market_data = await market_service.get_market_data(asset, AssetType.FOREX)
         

@@ -2450,6 +2450,11 @@ from botai_simulator import (
     set_threshold as _abstain_set,
     get_all_thresholds as _abstain_all,
     optimize_asset_threshold as _abstain_optimize,
+    get_strategy_threshold as _abstain_get_strategy,
+    set_strategy_threshold as _abstain_set_strategy,
+    get_all_strategy_thresholds as _abstain_all_strategy,
+    optimize_strategy_threshold as _abstain_optimize_strategy,
+    get_effective_threshold as _abstain_effective,
 )
 
 
@@ -2512,3 +2517,93 @@ async def set_abstain_threshold(
         method="manual",
     )
     return {"success": True, "asset": asset, "threshold": threshold, "method": "manual"}
+
+
+# ============================================================================
+# STRATEGY-AWARE ABSTAIN ENDPOINTS (Iter 53 — May 9, 2026)
+# Tunes per-(strategy, asset) thresholds independently. Different strategies
+# have different confidence calibrations, so the optimal "Pass" threshold for
+# the global ensemble may not match e.g. 5s_heikin_fractal or holly_crossover.
+# ============================================================================
+
+@router.get("/ml/abstain/strategy-threshold")
+async def get_strategy_abstain_threshold(
+    strategy_id: str = Query(..., description="e.g. 5s_heikin_fractal"),
+    asset: str = Query(..., description="e.g. EURUSD_OTC"),
+):
+    """Return the stored per-(strategy, asset) abstain threshold."""
+    row = await _abstain_get_strategy(strategy_id, asset)
+    return {"success": True, **row}
+
+
+@router.get("/ml/abstain/strategy-thresholds")
+async def list_strategy_abstain_thresholds(
+    strategy_id: Optional[str] = Query(None, description="Optional filter by strategy"),
+):
+    """List stored per-(strategy, asset) thresholds, optionally filtered."""
+    rows = await _abstain_all_strategy(strategy_id)
+    return {"success": True, "thresholds": rows, "default": _ABSTAIN_DEFAULT}
+
+
+@router.post("/ml/abstain/optimize-strategy")
+async def optimize_strategy_abstain_threshold(
+    strategy_id: str = Query(..., description="e.g. 5s_heikin_fractal"),
+    asset: str = Query(..., description="e.g. EURUSD_OTC"),
+    lookback_candles: int = Query(500, ge=60, le=5000),
+    min_trades: int = Query(20, ge=5, le=500),
+    min_winrate: float = Query(0.55, ge=0.5, le=0.9),
+):
+    """
+    Sweep confidence thresholds for the named strategy on the given asset.
+    Replays the strategy via `strategy_registry` against historical OTC
+    candles, tuning the threshold that maximises win-rate subject to
+    `min_trades` and `min_winrate` constraints. Persists the optimum.
+
+    See /api/ml/abstain/optimize for the asset-only variant (uses ensemble).
+    """
+    result = await _abstain_optimize_strategy(
+        strategy_id=strategy_id,
+        asset=asset,
+        lookback_candles=lookback_candles,
+        min_trades=min_trades,
+        min_winrate=min_winrate,
+    )
+    return {"success": True, **result}
+
+
+@router.post("/ml/abstain/strategy-threshold")
+async def set_strategy_abstain_threshold(
+    strategy_id: str = Query(..., description="e.g. 5s_heikin_fractal"),
+    asset: str = Query(..., description="e.g. EURUSD_OTC"),
+    threshold: float = Query(..., ge=0.50, le=0.95),
+):
+    """Manual override: force a per-(strategy, asset) threshold."""
+    await _abstain_set_strategy(
+        strategy_id=strategy_id,
+        asset=asset,
+        threshold=threshold,
+        winrate=0.0,
+        n_trades=0,
+        method="manual",
+    )
+    return {
+        "success": True,
+        "strategy_id": strategy_id,
+        "asset": asset,
+        "threshold": threshold,
+        "method": "manual",
+    }
+
+
+@router.get("/ml/abstain/effective-threshold")
+async def get_effective_abstain_threshold(
+    asset: str = Query(..., description="e.g. EURUSD_OTC"),
+    strategy_id: Optional[str] = Query(None, description="Optional strategy id for stricter lookup"),
+):
+    """
+    Resolve the most specific stored threshold for (strategy, asset). Falls
+    back to (asset)-only, then DEFAULT_THRESHOLD. Returns `source` indicating
+    which level supplied the value: 'strategy' | 'asset' | 'default'.
+    """
+    row = await _abstain_effective(strategy_id, asset)
+    return {"success": True, **row}

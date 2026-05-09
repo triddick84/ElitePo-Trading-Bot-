@@ -3,6 +3,33 @@
 ## Last Updated: May 9, 2026
 
 ## Current Status
+✅ **Iteration 53b — Strategy-Aware Abstain Optimizer + Refactor Cleanup (May 9, 2026)**
+
+### P2 fixes
+1. **`POST /api/custom-strategies/{id}/test`** no longer 500s. Added missing lazy imports (`RealMarketDataService`, `AssetType`, `get_strategy_executor`) inline in the handler — matches existing style. Endpoint now returns 200 with graceful error if no market data, 200 with signal if available.
+2. **Strategy auto-discovery**: `strategy_selection_service.py` now lazily merges any strategy from `strategy_registry.py` into the `AVAILABLE_STRATEGIES` UI list at first call. Curated entries (descriptions, win-rate badges) take precedence; only NEW strategies are auto-appended. Verified `5s_momentum_breakout`, `5s_price_action`, `5s_fast_supertrend_catch` etc. now visible. Future-proofs the "5s_heikin_fractal not showing up" issue we hit in the last fork.
+
+### P1 feature — Strategy-Aware Abstain Optimizer
+Extended BOTAI abstain logic from per-asset to per-(strategy, asset). Different strategies have different confidence calibrations, so the optimal "Pass" threshold for the global ensemble may differ from `5s_heikin_fractal` or `holly_crossover_15s`.
+
+- **`botai_simulator.py`** — added 6 new functions:
+  - `get_strategy_threshold(strategy_id, asset)` / `set_strategy_threshold(...)`
+  - `get_all_strategy_thresholds(strategy_id?)` — list with optional filter
+  - `build_strategy_prediction_pairs(strategy_id, asset, lookback)` — replays the strategy via `strategy_registry.get_strategy()` against `otc_candles_5s` history
+  - `optimize_strategy_threshold(strategy_id, asset, ...)` — full sweep + persist for that pair
+  - `get_effective_threshold(strategy_id, asset)` — precedence resolver: strategy → asset → DEFAULT
+- **`routes/ml.py`** — added 5 REST endpoints:
+  - `GET /api/ml/abstain/strategy-threshold?strategy_id=X&asset=Y`
+  - `GET /api/ml/abstain/strategy-thresholds?strategy_id=X` (optional filter, list)
+  - `POST /api/ml/abstain/strategy-threshold?strategy_id=X&asset=Y&threshold=Z` (manual override)
+  - `POST /api/ml/abstain/optimize-strategy?strategy_id=X&asset=Y&lookback_candles=400&min_trades=10&min_winrate=0.55` (auto-tune)
+  - `GET /api/ml/abstain/effective-threshold?strategy_id=X&asset=Y` (resolve precedence)
+- **MongoDB collection**: `ml_abstain_strategy_thresholds` (key: `{strategy_id, asset}`)
+- **Verified end-to-end**: 5s_heikin_fractal optimized on EURUSD_OTC (400 candles, 73 prediction pairs) → threshold = **0.58**, win-rate = **72.7%**, 22 trades.
+
+### Tests
+- `/app/backend/tests/test_iter53_followups.py` — 4 regression tests (custom-strategy /test endpoint, auto-discovery, fire-and-forget trigger, strategy abstain endpoints). **All passing in 1.52s.**
+
 ✅ **Iteration 53 — Ensemble Retrain Background Fix (May 9, 2026)**
 - **User issue**: "The ensemble won't train under ML training" — clicking the Ensemble model card's "Retrain Now" produced no result.
 - **Root cause**: `POST /api/ml/scheduler/trigger` synchronously awaited `_execute_retrain()` which takes ~120-150s. Kubernetes ingress kills connections at ~60s, so the frontend `fetch` failed before the (still-running) backend completed. Toast displayed nothing useful and user assumed nothing happened.

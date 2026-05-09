@@ -106,6 +106,54 @@ class StrategySelectionService:
         self.client = AsyncIOMotorClient(mongo_url)
         self.db = self.client[db_name]
         self.collection = self.db.strategy_selections
+        # Iter 53: lazily merge in any strategies registered in strategy_registry
+        # so newly-built strategies automatically appear in the UI dropdown
+        # (prevents the "not showing up" issue we hit with 5s_heikin_fractal).
+        self._auto_discovered = False
+    
+    def _auto_discover_from_registry(self):
+        """
+        Append any strategy_registry strategies missing from the curated
+        AVAILABLE_STRATEGIES list. Curated entries (with descriptions /
+        win-rate badges) always take precedence; this only adds NEW ones.
+        Idempotent — runs at most once per process.
+        """
+        if self._auto_discovered:
+            return
+        self._auto_discovered = True
+        try:
+            from strategy_registry import strategy_registry
+        except Exception as e:
+            logger.warning(f"Could not import strategy_registry for auto-discovery: {e}")
+            return
+        
+        added = 0
+        for name, strat in strategy_registry.strategies.items():
+            if strat is None:
+                continue
+            tf = getattr(strat, 'timeframe', None)
+            if not tf or tf not in self.AVAILABLE_STRATEGIES:
+                continue
+            existing_ids = {s['id'] for s in self.AVAILABLE_STRATEGIES[tf]}
+            if name in existing_ids:
+                continue
+            display_name = getattr(strat, 'name', name)
+            acc = getattr(strat, 'accuracy_target', None)
+            beta = bool(getattr(strat, 'beta', False))
+            entry = {
+                'id': name,
+                'name': display_name if not beta else f'🆕 {display_name} [BETA]',
+                'description': getattr(strat, 'description', f'Auto-discovered: {display_name}'),
+            }
+            if acc:
+                entry['win_rate'] = f'{acc}% (target)' if isinstance(acc, (int, float)) else str(acc)
+            if beta:
+                entry['beta'] = True
+            self.AVAILABLE_STRATEGIES[tf].append(entry)
+            added += 1
+        
+        if added:
+            logger.info(f"✨ Auto-discovered {added} strategies from registry into selection UI")
         
     async def get_selected_strategies(self) -> Dict[str, str]:
         """
@@ -177,10 +225,12 @@ class StrategySelectionService:
     
     def get_available_strategies(self, timeframe: str) -> List[Dict]:
         """Get all available strategies for a timeframe"""
+        self._auto_discover_from_registry()
         return self.AVAILABLE_STRATEGIES.get(timeframe, [])
     
     def get_all_available_strategies(self) -> Dict[str, List[Dict]]:
         """Get all available strategies for all timeframes"""
+        self._auto_discover_from_registry()
         return self.AVAILABLE_STRATEGIES
 
 
