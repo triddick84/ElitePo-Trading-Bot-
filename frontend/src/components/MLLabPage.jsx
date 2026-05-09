@@ -134,13 +134,35 @@ export default function MLLabPage() {
           toast.error(`PPO train failed: ${r.error || "unknown"}`);
         }
       } else if (modelId === "ensemble") {
+        toast.info("Ensemble retrain started — runs in background (2–5 min). Polling for completion...");
         const r = await fetch(`${API}/ml/scheduler/trigger`, { method: "POST" }).then((res) => res.json());
-        if (r.success) {
-          toast.success("Full retrain triggered (all models)");
-          refreshAll();
-        } else {
+        if (!r.success && !r.accepted) {
           toast.warning(r.message || "Retrain queued");
+          return;
         }
+        // Poll scheduler status until manual_in_progress turns false
+        const startCount = schedulerStatus?.retrain_count ?? 0;
+        let elapsed = 0;
+        const pollInterval = 5000; // 5s
+        const maxWait = 6 * 60 * 1000; // 6 min
+        while (elapsed < maxWait) {
+          await new Promise((res) => setTimeout(res, pollInterval));
+          elapsed += pollInterval;
+          try {
+            const s = await fetch(`${API}/ml/scheduler/status`).then((res) => res.json());
+            if (s.success && !s.manual_in_progress && (s.retrain_count ?? 0) > startCount) {
+              const last = (s.recent_history || []).slice(-1)[0];
+              const trained = last?.models_trained?.length || 0;
+              toast.success(`Ensemble retrain complete — ${trained} models trained in ${last?.duration_seconds?.toFixed(0) || "?"}s`);
+              refreshAll();
+              return;
+            }
+          } catch (_pollErr) {
+            // ignore transient poll errors, keep waiting
+          }
+        }
+        toast.warning("Retrain still running after 6 min — check ML Lab status panel for results");
+        refreshAll();
       } else {
         toast.error(`Unknown model: ${modelId}`);
       }

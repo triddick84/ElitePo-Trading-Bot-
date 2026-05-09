@@ -25,6 +25,8 @@ class AutoRetrainScheduler:
         self.db = db
         self._task: Optional[asyncio.Task] = None
         self._running = False
+        self._manual_task: Optional[asyncio.Task] = None
+        self._manual_started_at: Optional[datetime] = None
         self._config = {
             "enabled": True,
             "retrain_hours_utc": [8, 13],  # London open, NY open
@@ -85,13 +87,18 @@ class AutoRetrainScheduler:
 
     def get_status(self) -> Dict:
         """Get scheduler status."""
+        manual_in_progress = (
+            self._manual_task is not None and not self._manual_task.done()
+        )
         return {
             "running": self.is_running,
             "config": self._config,
             "last_retrain": self._last_retrain.isoformat() if self._last_retrain else None,
             "next_scheduled": self._next_scheduled,
             "retrain_count": len(self._retrain_history),
-            "recent_history": self._retrain_history[-5:]
+            "recent_history": self._retrain_history[-5:],
+            "manual_in_progress": manual_in_progress,
+            "manual_started_at": self._manual_started_at.isoformat() if (manual_in_progress and self._manual_started_at) else None,
         }
 
     def _get_next_retrain_time(self) -> Optional[datetime]:
@@ -295,6 +302,46 @@ class AutoRetrainScheduler:
         return {
             "success": True,
             "result": self._retrain_history[-1] if self._retrain_history else {}
+        }
+
+    def trigger_manual_retrain_async(self) -> Dict:
+        """
+        Fire-and-forget manual retrain. Returns immediately so frontend / ingress
+        proxies don't time out (the actual retrain takes 2-5 min). Status visible
+        via GET /api/ml/scheduler/status (manual_in_progress flag).
+        """
+        if self._manual_task is not None and not self._manual_task.done():
+            return {
+                "success": False,
+                "accepted": False,
+                "message": "Manual retrain already in progress",
+                "started_at": self._manual_started_at.isoformat() if self._manual_started_at else None,
+            }
+
+        if self._last_retrain:
+            hours_since = (datetime.now(timezone.utc) - self._last_retrain).total_seconds() / 3600
+            if hours_since < 0.5:
+                return {
+                    "success": False,
+                    "accepted": False,
+                    "message": f"Cooldown: last retrain was {hours_since:.1f}h ago (min 0.5h)",
+                }
+
+        async def _bg():
+            try:
+                await self._execute_retrain()
+            except Exception as e:
+                logger.exception(f"Manual retrain background task failed: {e}")
+            finally:
+                self._manual_started_at = None
+
+        self._manual_started_at = datetime.now(timezone.utc)
+        self._manual_task = asyncio.create_task(_bg())
+        return {
+            "success": True,
+            "accepted": True,
+            "message": "Manual retrain started in background — poll /api/ml/scheduler/status for progress",
+            "started_at": self._manual_started_at.isoformat(),
         }
 
     async def _overlay_backfill(self, target_count: int = 500) -> Dict:

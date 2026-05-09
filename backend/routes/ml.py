@@ -2422,9 +2422,14 @@ async def update_scheduler_config(config: dict = Body(...)):
 
 @router.post("/ml/scheduler/trigger")
 async def trigger_manual_retrain():
-    """Trigger an immediate retrain (manual override, respects 30min cooldown)."""
+    """
+    Trigger an immediate retrain (manual override, respects 30min cooldown).
+    Returns immediately (202-style accepted) so callers don't hit ingress timeouts.
+    Poll GET /api/ml/scheduler/status — `manual_in_progress` flag flips false
+    once finished and `recent_history[-1]` carries the result.
+    """
     scheduler = get_retrain_scheduler(db)
-    result = await scheduler.trigger_manual_retrain()
+    result = scheduler.trigger_manual_retrain_async()
     return result
 
 

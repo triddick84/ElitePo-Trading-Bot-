@@ -3,6 +3,15 @@
 ## Last Updated: May 9, 2026
 
 ## Current Status
+✅ **Iteration 53 — Ensemble Retrain Background Fix (May 9, 2026)**
+- **User issue**: "The ensemble won't train under ML training" — clicking the Ensemble model card's "Retrain Now" produced no result.
+- **Root cause**: `POST /api/ml/scheduler/trigger` synchronously awaited `_execute_retrain()` which takes ~120-150s. Kubernetes ingress kills connections at ~60s, so the frontend `fetch` failed before the (still-running) backend completed. Toast displayed nothing useful and user assumed nothing happened.
+- **Fix**:
+  - `auto_retrain_scheduler.py` — added `_manual_task` and `_manual_started_at` instance state, plus `trigger_manual_retrain_async()` which runs `_execute_retrain()` via `asyncio.create_task()` and returns immediately with `accepted: true`. Idempotent: rejects when already running. Cooldown (30 min) preserved. `get_status()` now exposes `manual_in_progress` + `manual_started_at`.
+  - `routes/ml.py` — `POST /api/ml/scheduler/trigger` now calls the async-fire-and-forget version. Returns in ~2ms.
+  - `MLLabPage.jsx runRetrain('ensemble')` — shows "Ensemble retrain started — runs in background" toast, then polls `/ml/scheduler/status` every 5s for up to 6 minutes, surfaces final accuracy/duration when `manual_in_progress` flips false and `retrain_count` increments.
+- **Verified end-to-end**: trigger → 1.6ms response, status flips correctly, completes in 126s with 3 models trained (maximized_v3_otc 53.7%, improved_v2_otc 57.1%, maximized_v3_oanda success).
+
 ✅ **Iteration 52 — Pocket Option Native Indicator Pack (May 9, 2026)**
 - **User request**: "research for a list online of all pocket option trading indicators and integrate all indicators that pocket option trading has to offer. These need to be added to strategy builder as well."
 - **Researched and added 19 PO-native indicators** to the Strategy Builder (frontend dropdown + backend executor + indicator registry):
