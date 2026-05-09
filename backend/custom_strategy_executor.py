@@ -189,6 +189,80 @@ class IndicatorCalculator:
                 result = self._calculate_donchian(highs, lows, parameters.get("period", 20))
                 return result.get(output, result.get("middle"))
             
+            elif indicator == "WMA":
+                return self._calculate_wma(closes, parameters.get("period", 14))
+            
+            elif indicator == "VWAP":
+                return self._calculate_vwap(highs, lows, closes, volumes)
+            
+            elif indicator == "STANDARD_DEVIATION":
+                return self._calculate_stddev(closes, parameters.get("period", 20))
+            
+            elif indicator == "AROON":
+                result = self._calculate_aroon(highs, lows, parameters.get("period", 25))
+                return result.get(output, result.get("oscillator"))
+            
+            elif indicator == "AWESOME_OSCILLATOR":
+                return self._calculate_ao(
+                    highs, lows,
+                    parameters.get("fast_period", 5),
+                    parameters.get("slow_period", 34)
+                )
+            
+            elif indicator == "DEMARKER":
+                return self._calculate_demarker(highs, lows, parameters.get("period", 14))
+            
+            elif indicator == "OSMA":
+                return self._calculate_osma(
+                    closes,
+                    parameters.get("fast_period", 12),
+                    parameters.get("slow_period", 26),
+                    parameters.get("signal_period", 9)
+                )
+            
+            elif indicator == "VORTEX":
+                result = self._calculate_vortex(highs, lows, closes, parameters.get("period", 14))
+                return result.get(output, result.get("vi_plus"))
+            
+            elif indicator == "ENVELOPES":
+                result = self._calculate_envelopes(
+                    closes,
+                    parameters.get("period", 14),
+                    parameters.get("deviation", 0.1)
+                )
+                return result.get(output, result.get("middle"))
+            
+            elif indicator == "ALLIGATOR":
+                result = self._calculate_alligator(
+                    highs, lows,
+                    parameters.get("jaws_period", 13),
+                    parameters.get("teeth_period", 8),
+                    parameters.get("lips_period", 5)
+                )
+                return result.get(output, result.get("lips"))
+            
+            elif indicator == "FRACTAL":
+                result = self._calculate_fractal(highs, lows, parameters.get("period", 2))
+                return result.get(output, result.get("up_fractal"))
+            
+            elif indicator == "BULLS_POWER":
+                return self._calculate_bulls_power(highs, closes, parameters.get("period", 13))
+            
+            elif indicator == "BEARS_POWER":
+                return self._calculate_bears_power(lows, closes, parameters.get("period", 13))
+            
+            elif indicator == "ZIGZAG":
+                result = self._calculate_zigzag(
+                    highs, lows,
+                    parameters.get("depth", 12),
+                    parameters.get("deviation", 5.0)
+                )
+                return result.get(output, result.get("last_pivot"))
+            
+            elif indicator == "HEIKIN_ASHI":
+                result = self._calculate_heikin_ashi(opens, highs, lows, closes)
+                return result.get(output, result.get("ha_close"))
+            
             else:
                 logger.warning(f"Unknown indicator: {indicator}")
                 return None
@@ -457,6 +531,217 @@ class IndicatorCalculator:
         middle = (upper + lower) / 2
         
         return {"upper": upper, "middle": middle, "lower": lower}
+    
+    # ============================================================
+    # POCKET OPTION NATIVE INDICATORS
+    # ============================================================
+    
+    def _calculate_wma(self, prices: List[float], period: int) -> float:
+        """Calculate Weighted Moving Average"""
+        if len(prices) < period:
+            return np.mean(prices) if prices else 0.0
+        recent = prices[-period:]
+        weights = np.arange(1, period + 1)
+        return float(np.sum(np.array(recent) * weights) / weights.sum())
+    
+    def _calculate_vwap(self, highs: List[float], lows: List[float],
+                        closes: List[float], volumes: List[float]) -> float:
+        """Calculate Volume Weighted Average Price (session-cumulative)"""
+        if not closes or not volumes:
+            return closes[-1] if closes else 0.0
+        n = min(len(closes), len(volumes), len(highs), len(lows))
+        if n == 0:
+            return 0.0
+        typical = [(highs[i] + lows[i] + closes[i]) / 3 for i in range(n)]
+        cum_pv = sum(typical[i] * volumes[i] for i in range(n))
+        cum_v = sum(volumes[:n])
+        return cum_pv / cum_v if cum_v > 0 else closes[-1]
+    
+    def _calculate_stddev(self, prices: List[float], period: int) -> float:
+        """Calculate Standard Deviation"""
+        if len(prices) < period:
+            return 0.0
+        return float(np.std(prices[-period:], ddof=0))
+    
+    def _calculate_aroon(self, highs: List[float], lows: List[float], period: int) -> Dict[str, float]:
+        """Calculate Aroon Up/Down/Oscillator"""
+        if len(highs) < period + 1:
+            return {"aroon_up": 50.0, "aroon_down": 50.0, "oscillator": 0.0}
+        recent_h = highs[-(period + 1):]
+        recent_l = lows[-(period + 1):]
+        # bars since highest high / lowest low
+        idx_high = period - int(np.argmax(recent_h))
+        idx_low = period - int(np.argmin(recent_l))
+        aroon_up = ((period - idx_high) / period) * 100
+        aroon_down = ((period - idx_low) / period) * 100
+        return {
+            "aroon_up": aroon_up,
+            "aroon_down": aroon_down,
+            "oscillator": aroon_up - aroon_down
+        }
+    
+    def _calculate_demarker(self, highs: List[float], lows: List[float], period: int) -> float:
+        """Calculate DeMarker indicator (0-1)"""
+        if len(highs) < period + 1:
+            return 0.5
+        de_max = []
+        de_min = []
+        for i in range(-period, 0):
+            de_max.append(max(highs[i] - highs[i - 1], 0))
+            de_min.append(max(lows[i - 1] - lows[i], 0))
+        sum_max = sum(de_max)
+        sum_min = sum(de_min)
+        denom = sum_max + sum_min
+        if denom == 0:
+            return 0.5
+        return sum_max / denom
+    
+    def _calculate_osma(self, prices: List[float], fast: int, slow: int, signal: int) -> float:
+        """Calculate OsMA (MACD - Signal Line)"""
+        macd_data = self._calculate_macd(prices, fast, slow, signal)
+        return macd_data.get("histogram", 0.0)
+    
+    def _calculate_vortex(self, highs: List[float], lows: List[float],
+                          closes: List[float], period: int) -> Dict[str, float]:
+        """Calculate Vortex Indicator"""
+        if len(closes) < period + 1:
+            return {"vi_plus": 1.0, "vi_minus": 1.0}
+        vm_plus_sum = 0.0
+        vm_minus_sum = 0.0
+        tr_sum = 0.0
+        for i in range(-period, 0):
+            vm_plus_sum += abs(highs[i] - lows[i - 1])
+            vm_minus_sum += abs(lows[i] - highs[i - 1])
+            tr = max(
+                highs[i] - lows[i],
+                abs(highs[i] - closes[i - 1]),
+                abs(lows[i] - closes[i - 1])
+            )
+            tr_sum += tr
+        if tr_sum == 0:
+            return {"vi_plus": 1.0, "vi_minus": 1.0}
+        return {
+            "vi_plus": vm_plus_sum / tr_sum,
+            "vi_minus": vm_minus_sum / tr_sum
+        }
+    
+    def _calculate_envelopes(self, prices: List[float], period: int,
+                             deviation: float) -> Dict[str, float]:
+        """Calculate Envelopes (% deviation around SMA)"""
+        middle = self._calculate_sma(prices, period)
+        dev = middle * (deviation / 100.0)
+        return {
+            "upper": middle + dev,
+            "middle": middle,
+            "lower": middle - dev
+        }
+    
+    def _calculate_alligator(self, highs: List[float], lows: List[float],
+                             jaws: int, teeth: int, lips: int) -> Dict[str, float]:
+        """Calculate Bill Williams Alligator (SMMA on median price)"""
+        if not highs or not lows:
+            return {"jaws": 0.0, "teeth": 0.0, "lips": 0.0}
+        median = [(h + l) / 2 for h, l in zip(highs, lows)]
+        return {
+            "jaws": self._smma(median, jaws),
+            "teeth": self._smma(median, teeth),
+            "lips": self._smma(median, lips)
+        }
+    
+    def _smma(self, prices: List[float], period: int) -> float:
+        """Smoothed Moving Average (used by Alligator)"""
+        if len(prices) < period:
+            return float(np.mean(prices)) if prices else 0.0
+        # Initial SMMA = SMA
+        smma = float(np.mean(prices[:period]))
+        # Apply recursive smoothing
+        for price in prices[period:]:
+            smma = (smma * (period - 1) + price) / period
+        return smma
+    
+    def _calculate_fractal(self, highs: List[float], lows: List[float],
+                           period: int) -> Dict[str, float]:
+        """Williams Fractal: bar is up-fractal if highest in 2*period+1 window"""
+        n = 2 * period + 1
+        if len(highs) < n:
+            return {"up_fractal": 0.0, "down_fractal": 0.0, "last_pivot": 0.0}
+        # Check the bar at position -(period+1) (center of last full window)
+        center_idx = -(period + 1)
+        center_high = highs[center_idx]
+        center_low = lows[center_idx]
+        window_h = highs[-n:]
+        window_l = lows[-n:]
+        is_up_fractal = 1.0 if center_high == max(window_h) else 0.0
+        is_down_fractal = 1.0 if center_low == min(window_l) else 0.0
+        return {
+            "up_fractal": is_up_fractal,
+            "down_fractal": is_down_fractal,
+            "last_pivot": center_high if is_up_fractal else (center_low if is_down_fractal else 0.0)
+        }
+    
+    def _calculate_bulls_power(self, highs: List[float], closes: List[float],
+                               period: int) -> float:
+        """Bulls Power = High - EMA(close)"""
+        if not highs:
+            return 0.0
+        ema = self._calculate_ema(closes, period)
+        return highs[-1] - ema
+    
+    def _calculate_bears_power(self, lows: List[float], closes: List[float],
+                               period: int) -> float:
+        """Bears Power = Low - EMA(close)"""
+        if not lows:
+            return 0.0
+        ema = self._calculate_ema(closes, period)
+        return lows[-1] - ema
+    
+    def _calculate_zigzag(self, highs: List[float], lows: List[float],
+                          depth: int, deviation: float) -> Dict[str, float]:
+        """Simplified ZigZag - returns last detected pivot"""
+        if len(highs) < depth + 1:
+            return {"last_pivot": 0.0, "is_high": 0.0, "is_low": 0.0}
+        recent_h = highs[-depth:]
+        recent_l = lows[-depth:]
+        last_high = max(recent_h)
+        last_low = min(recent_l)
+        # Check if current bar is a pivot
+        cur_h = highs[-1]
+        cur_l = lows[-1]
+        is_high = 1.0 if cur_h == last_high else 0.0
+        is_low = 1.0 if cur_l == last_low else 0.0
+        # Apply deviation filter
+        range_pct = ((last_high - last_low) / last_low * 100) if last_low > 0 else 0
+        if range_pct < deviation:
+            is_high = is_low = 0.0
+        return {
+            "last_pivot": last_high if is_high else (last_low if is_low else 0.0),
+            "is_high": is_high,
+            "is_low": is_low
+        }
+    
+    def _calculate_heikin_ashi(self, opens: List[float], highs: List[float],
+                                lows: List[float], closes: List[float]) -> Dict[str, float]:
+        """Calculate latest Heikin Ashi candle (HA) values"""
+        if not closes or not opens or not highs or not lows:
+            return {"ha_open": 0.0, "ha_high": 0.0, "ha_low": 0.0, "ha_close": 0.0, "is_green": 0.0}
+        # HA Close = (O+H+L+C)/4
+        ha_close = (opens[-1] + highs[-1] + lows[-1] + closes[-1]) / 4
+        # HA Open = (prev_HA_Open + prev_HA_Close)/2  (use raw OHLC for first bar)
+        if len(opens) >= 2:
+            prev_ha_close = (opens[-2] + highs[-2] + lows[-2] + closes[-2]) / 4
+            prev_ha_open = (opens[-2] + closes[-2]) / 2  # simplified seed
+            ha_open = (prev_ha_open + prev_ha_close) / 2
+        else:
+            ha_open = (opens[-1] + closes[-1]) / 2
+        ha_high = max(highs[-1], ha_open, ha_close)
+        ha_low = min(lows[-1], ha_open, ha_close)
+        return {
+            "ha_open": ha_open,
+            "ha_high": ha_high,
+            "ha_low": ha_low,
+            "ha_close": ha_close,
+            "is_green": 1.0 if ha_close > ha_open else 0.0
+        }
 
 
 class CustomStrategyExecutor:

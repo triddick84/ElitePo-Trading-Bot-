@@ -370,6 +370,343 @@ const INDICATOR_TEMPLATES = {
       { id: 'cloud_turns_bearish', label: 'Cloud turns bearish (red)', signal: 'PUT', description: 'Future trend bearish' },
     ]
   },
+
+  // ============================================================
+  // POCKET OPTION NATIVE INDICATORS
+  // ============================================================
+
+  // Alligator (Bill Williams)
+  ALLIGATOR: {
+    name: 'Alligator (Bill Williams)',
+    category: 'trend',
+    icon: '🐊',
+    description: 'Three smoothed MAs (Jaws/Teeth/Lips) - PO native trend filter',
+    parameters: {
+      jaws_period: { label: 'Jaws Period', type: 'number', default: 13, min: 5, max: 50 },
+      jaws_shift: { label: 'Jaws Shift', type: 'number', default: 8, min: 0, max: 20 },
+      teeth_period: { label: 'Teeth Period', type: 'number', default: 8, min: 3, max: 30 },
+      teeth_shift: { label: 'Teeth Shift', type: 'number', default: 5, min: 0, max: 20 },
+      lips_period: { label: 'Lips Period', type: 'number', default: 5, min: 2, max: 20 },
+      lips_shift: { label: 'Lips Shift', type: 'number', default: 3, min: 0, max: 20 }
+    },
+    conditions: [
+      { id: 'awake_bullish', label: 'Alligator awake (bullish: Lips > Teeth > Jaws)', signal: 'CALL', description: 'Strong uptrend confirmed by Alligator alignment' },
+      { id: 'awake_bearish', label: 'Alligator awake (bearish: Lips < Teeth < Jaws)', signal: 'PUT', description: 'Strong downtrend confirmed by Alligator alignment' },
+      { id: 'lips_crosses_above_teeth', label: 'Lips crosses above Teeth (early bullish)', signal: 'CALL', description: 'First sign of awakening uptrend' },
+      { id: 'lips_crosses_below_teeth', label: 'Lips crosses below Teeth (early bearish)', signal: 'PUT', description: 'First sign of awakening downtrend' },
+      { id: 'sleeping', label: 'Alligator sleeping (lines intertwined)', signal: 'NEUTRAL', description: 'No trend - skip trades' },
+    ]
+  },
+
+  // Awesome Oscillator
+  AWESOME_OSCILLATOR: {
+    name: 'Awesome Oscillator (AO)',
+    category: 'momentum',
+    icon: '💥',
+    description: 'Momentum histogram (5 vs 34 SMA of midpoint) - PO native',
+    parameters: {
+      fast_period: { label: 'Fast Period', type: 'number', default: 5, min: 2, max: 50 },
+      slow_period: { label: 'Slow Period', type: 'number', default: 34, min: 10, max: 100 }
+    },
+    conditions: [
+      { id: 'crosses_above_zero', label: 'AO crosses above zero', signal: 'CALL', description: 'Bullish momentum shift' },
+      { id: 'crosses_below_zero', label: 'AO crosses below zero', signal: 'PUT', description: 'Bearish momentum shift' },
+      { id: 'twin_peaks_bullish', label: 'Twin Peaks bullish (saucer)', signal: 'CALL', description: 'Bullish saucer pattern below zero' },
+      { id: 'twin_peaks_bearish', label: 'Twin Peaks bearish (saucer)', signal: 'PUT', description: 'Bearish saucer pattern above zero' },
+      { id: 'green_above_zero', label: 'Green bar above zero', signal: 'CALL', description: 'Strong bullish momentum building' },
+      { id: 'red_below_zero', label: 'Red bar below zero', signal: 'PUT', description: 'Strong bearish momentum building' },
+    ]
+  },
+
+  // Williams Fractal
+  FRACTAL: {
+    name: 'Fractal (Bill Williams)',
+    category: 'pattern',
+    icon: '🔻',
+    description: '5-bar reversal pattern - PO native chart marker',
+    parameters: {
+      period: { label: 'Period (each side)', type: 'number', default: 2, min: 1, max: 5 }
+    },
+    conditions: [
+      { id: 'up_fractal_formed', label: 'Up Fractal formed (resistance)', signal: 'PUT', description: 'High point - potential reversal down' },
+      { id: 'down_fractal_formed', label: 'Down Fractal formed (support)', signal: 'CALL', description: 'Low point - potential reversal up' },
+      { id: 'breaks_up_fractal', label: 'Price breaks above Up Fractal', signal: 'CALL', description: 'Bullish breakout above resistance' },
+      { id: 'breaks_down_fractal', label: 'Price breaks below Down Fractal', signal: 'PUT', description: 'Bearish breakdown below support' },
+    ]
+  },
+
+  // DeMarker
+  DEMARKER: {
+    name: 'DeMarker (DeM)',
+    category: 'momentum',
+    icon: '📐',
+    description: 'Oscillator (0-1) for overbought/oversold - PO native',
+    parameters: {
+      period: { label: 'Period', type: 'number', default: 14, min: 5, max: 50 },
+      overbought: { label: 'Overbought', type: 'number', default: 0.7, min: 0.5, max: 0.95, step: 0.05 },
+      oversold: { label: 'Oversold', type: 'number', default: 0.3, min: 0.05, max: 0.5, step: 0.05 }
+    },
+    conditions: [
+      { id: 'enters_oversold', label: 'DeMarker enters oversold (<0.3)', signal: 'CALL', description: 'Reversal up imminent' },
+      { id: 'enters_overbought', label: 'DeMarker enters overbought (>0.7)', signal: 'PUT', description: 'Reversal down imminent' },
+      { id: 'crosses_above_oversold', label: 'DeMarker crosses above oversold', signal: 'CALL', description: 'Confirmed bullish reversal' },
+      { id: 'crosses_below_overbought', label: 'DeMarker crosses below overbought', signal: 'PUT', description: 'Confirmed bearish reversal' },
+    ]
+  },
+
+  // Donchian Channel
+  DONCHIAN_CHANNEL: {
+    name: 'Donchian Channel',
+    category: 'volatility',
+    icon: '📦',
+    description: 'Highest high / lowest low channel - PO native breakout',
+    parameters: {
+      period: { label: 'Period', type: 'number', default: 20, min: 5, max: 100 }
+    },
+    conditions: [
+      { id: 'price_breaks_upper', label: 'Price breaks above Upper Band', signal: 'CALL', description: 'Bullish breakout - new high' },
+      { id: 'price_breaks_lower', label: 'Price breaks below Lower Band', signal: 'PUT', description: 'Bearish breakdown - new low' },
+      { id: 'price_touches_lower', label: 'Price touches Lower Band (reversal)', signal: 'CALL', description: 'Mean reversion bounce' },
+      { id: 'price_touches_upper', label: 'Price touches Upper Band (reversal)', signal: 'PUT', description: 'Mean reversion drop' },
+    ]
+  },
+
+  // Envelopes
+  ENVELOPES: {
+    name: 'Envelopes',
+    category: 'volatility',
+    icon: '✉️',
+    description: 'Percent-deviation channel around MA - PO native',
+    parameters: {
+      period: { label: 'MA Period', type: 'number', default: 14, min: 5, max: 100 },
+      deviation: { label: 'Deviation %', type: 'number', default: 0.1, min: 0.05, max: 5.0, step: 0.05 }
+    },
+    conditions: [
+      { id: 'price_breaks_upper', label: 'Price breaks above Upper Envelope', signal: 'CALL', description: 'Bullish breakout' },
+      { id: 'price_breaks_lower', label: 'Price breaks below Lower Envelope', signal: 'PUT', description: 'Bearish breakdown' },
+      { id: 'price_touches_upper', label: 'Price touches Upper (bounce)', signal: 'PUT', description: 'Reversal down from upper band' },
+      { id: 'price_touches_lower', label: 'Price touches Lower (bounce)', signal: 'CALL', description: 'Reversal up from lower band' },
+    ]
+  },
+
+  // OsMA (Moving Average of Oscillator)
+  OSMA: {
+    name: 'OsMA (MA of Oscillator)',
+    category: 'momentum',
+    icon: '🌊',
+    description: 'MACD - Signal Line difference (histogram) - PO native',
+    parameters: {
+      fast_period: { label: 'Fast EMA', type: 'number', default: 12, min: 1, max: 50 },
+      slow_period: { label: 'Slow EMA', type: 'number', default: 26, min: 1, max: 100 },
+      signal_period: { label: 'Signal SMA', type: 'number', default: 9, min: 1, max: 30 }
+    },
+    conditions: [
+      { id: 'crosses_above_zero', label: 'OsMA crosses above zero', signal: 'CALL', description: 'Bullish momentum acceleration' },
+      { id: 'crosses_below_zero', label: 'OsMA crosses below zero', signal: 'PUT', description: 'Bearish momentum acceleration' },
+      { id: 'increasing_above_zero', label: 'OsMA increasing above zero', signal: 'CALL', description: 'Strong bullish momentum' },
+      { id: 'decreasing_below_zero', label: 'OsMA decreasing below zero', signal: 'PUT', description: 'Strong bearish momentum' },
+    ]
+  },
+
+  // Aroon
+  AROON: {
+    name: 'Aroon',
+    category: 'trend',
+    icon: '🏹',
+    description: 'Time since highest high/lowest low - PO native trend',
+    parameters: {
+      period: { label: 'Period', type: 'number', default: 25, min: 5, max: 100 }
+    },
+    conditions: [
+      { id: 'aroon_up_crosses_above_down', label: 'Aroon Up crosses above Aroon Down', signal: 'CALL', description: 'Trend changes bullish' },
+      { id: 'aroon_down_crosses_above_up', label: 'Aroon Down crosses above Aroon Up', signal: 'PUT', description: 'Trend changes bearish' },
+      { id: 'aroon_up_above_70', label: 'Aroon Up above 70 (strong uptrend)', signal: 'CALL', description: 'Confirmed strong uptrend' },
+      { id: 'aroon_down_above_70', label: 'Aroon Down above 70 (strong downtrend)', signal: 'PUT', description: 'Confirmed strong downtrend' },
+    ]
+  },
+
+  // Vortex
+  VORTEX: {
+    name: 'Vortex Indicator (VI)',
+    category: 'trend',
+    icon: '🌀',
+    description: 'VI+/VI- crossovers identify trend reversals',
+    parameters: {
+      period: { label: 'Period', type: 'number', default: 14, min: 5, max: 50 }
+    },
+    conditions: [
+      { id: 'vi_plus_crosses_above_minus', label: 'VI+ crosses above VI-', signal: 'CALL', description: 'Bullish trend reversal' },
+      { id: 'vi_minus_crosses_above_plus', label: 'VI- crosses above VI+', signal: 'PUT', description: 'Bearish trend reversal' },
+      { id: 'vi_plus_dominant', label: 'VI+ dominant (uptrend)', signal: 'CALL', description: 'Sustained uptrend' },
+      { id: 'vi_minus_dominant', label: 'VI- dominant (downtrend)', signal: 'PUT', description: 'Sustained downtrend' },
+    ]
+  },
+
+  // ROC
+  ROC: {
+    name: 'ROC (Rate of Change)',
+    category: 'momentum',
+    icon: '📈',
+    description: 'Speed of price change - PO native',
+    parameters: {
+      period: { label: 'Period', type: 'number', default: 9, min: 1, max: 50 }
+    },
+    conditions: [
+      { id: 'crosses_above_zero', label: 'ROC crosses above zero', signal: 'CALL', description: 'Bullish momentum starts' },
+      { id: 'crosses_below_zero', label: 'ROC crosses below zero', signal: 'PUT', description: 'Bearish momentum starts' },
+      { id: 'strongly_positive', label: 'ROC strongly positive (>1%)', signal: 'CALL', description: 'Strong bullish momentum' },
+      { id: 'strongly_negative', label: 'ROC strongly negative (<-1%)', signal: 'PUT', description: 'Strong bearish momentum' },
+    ]
+  },
+
+  // OBV
+  OBV: {
+    name: 'OBV (On-Balance Volume)',
+    category: 'volume',
+    icon: '📊',
+    description: 'Cumulative volume flow - PO native',
+    parameters: {},
+    conditions: [
+      { id: 'rising', label: 'OBV rising (volume confirms uptrend)', signal: 'CALL', description: 'Buying pressure dominant' },
+      { id: 'falling', label: 'OBV falling (volume confirms downtrend)', signal: 'PUT', description: 'Selling pressure dominant' },
+      { id: 'bullish_divergence', label: 'OBV bullish divergence (price down, OBV up)', signal: 'CALL', description: 'Hidden bullish - reversal up' },
+      { id: 'bearish_divergence', label: 'OBV bearish divergence (price up, OBV down)', signal: 'PUT', description: 'Hidden bearish - reversal down' },
+    ]
+  },
+
+  // MFI
+  MFI: {
+    name: 'MFI (Money Flow Index)',
+    category: 'volume',
+    icon: '💰',
+    description: 'Volume-weighted RSI (0-100) - PO native',
+    parameters: {
+      period: { label: 'Period', type: 'number', default: 14, min: 5, max: 50 },
+      overbought: { label: 'Overbought', type: 'number', default: 80, min: 60, max: 95 },
+      oversold: { label: 'Oversold', type: 'number', default: 20, min: 5, max: 40 }
+    },
+    conditions: [
+      { id: 'crosses_above_oversold', label: 'MFI crosses above oversold (20)', signal: 'CALL', description: 'Volume-confirmed bullish reversal' },
+      { id: 'crosses_below_overbought', label: 'MFI crosses below overbought (80)', signal: 'PUT', description: 'Volume-confirmed bearish reversal' },
+      { id: 'above_50', label: 'MFI above 50 (bullish flow)', signal: 'CALL', description: 'Net buying pressure' },
+      { id: 'below_50', label: 'MFI below 50 (bearish flow)', signal: 'PUT', description: 'Net selling pressure' },
+    ]
+  },
+
+  // VWAP
+  VWAP: {
+    name: 'VWAP',
+    category: 'volume',
+    icon: '⚖️',
+    description: 'Volume Weighted Average Price - PO native',
+    parameters: {},
+    conditions: [
+      { id: 'price_crosses_above', label: 'Price crosses above VWAP', signal: 'CALL', description: 'Bullish - above fair value' },
+      { id: 'price_crosses_below', label: 'Price crosses below VWAP', signal: 'PUT', description: 'Bearish - below fair value' },
+      { id: 'price_above', label: 'Price above VWAP', signal: 'CALL', description: 'Bullish bias - institutional buying' },
+      { id: 'price_below', label: 'Price below VWAP', signal: 'PUT', description: 'Bearish bias - institutional selling' },
+    ]
+  },
+
+  // Standard Deviation
+  STANDARD_DEVIATION: {
+    name: 'Standard Deviation',
+    category: 'volatility',
+    icon: '📏',
+    description: 'Volatility measure - PO native',
+    parameters: {
+      period: { label: 'Period', type: 'number', default: 20, min: 5, max: 100 }
+    },
+    conditions: [
+      { id: 'expanding', label: 'StdDev expanding (rising volatility)', signal: 'NEUTRAL', description: 'Big move incoming' },
+      { id: 'contracting', label: 'StdDev contracting (falling volatility)', signal: 'NEUTRAL', description: 'Squeeze - breakout pending' },
+    ]
+  },
+
+  // WMA
+  WMA: {
+    name: 'WMA (Weighted Moving Average)',
+    category: 'trend',
+    icon: '📊',
+    description: 'Linearly-weighted MA - PO native',
+    parameters: {
+      period: { label: 'Period', type: 'number', default: 14, min: 1, max: 200 }
+    },
+    conditions: [
+      { id: 'price_crosses_above', label: 'Price crosses above WMA', signal: 'CALL', description: 'Bullish crossover' },
+      { id: 'price_crosses_below', label: 'Price crosses below WMA', signal: 'PUT', description: 'Bearish crossover' },
+      { id: 'price_above', label: 'Price above WMA', signal: 'CALL', description: 'Uptrend filter' },
+      { id: 'price_below', label: 'Price below WMA', signal: 'PUT', description: 'Downtrend filter' },
+    ]
+  },
+
+  // Bulls Power
+  BULLS_POWER: {
+    name: 'Bulls Power',
+    category: 'momentum',
+    icon: '🐂',
+    description: 'High - EMA(13) - measures buying pressure',
+    parameters: {
+      period: { label: 'EMA Period', type: 'number', default: 13, min: 5, max: 50 }
+    },
+    conditions: [
+      { id: 'crosses_above_zero', label: 'Bulls Power crosses above zero', signal: 'CALL', description: 'Bulls take control' },
+      { id: 'rising_above_zero', label: 'Bulls Power rising above zero', signal: 'CALL', description: 'Strengthening bullish pressure' },
+      { id: 'crosses_below_zero', label: 'Bulls Power crosses below zero', signal: 'PUT', description: 'Bulls lose control' },
+    ]
+  },
+
+  // Bears Power
+  BEARS_POWER: {
+    name: 'Bears Power',
+    category: 'momentum',
+    icon: '🐻',
+    description: 'Low - EMA(13) - measures selling pressure',
+    parameters: {
+      period: { label: 'EMA Period', type: 'number', default: 13, min: 5, max: 50 }
+    },
+    conditions: [
+      { id: 'crosses_above_zero', label: 'Bears Power crosses above zero', signal: 'CALL', description: 'Bears lose control' },
+      { id: 'crosses_below_zero', label: 'Bears Power crosses below zero', signal: 'PUT', description: 'Bears take control' },
+      { id: 'falling_below_zero', label: 'Bears Power falling below zero', signal: 'PUT', description: 'Strengthening bearish pressure' },
+    ]
+  },
+
+  // ZigZag
+  ZIGZAG: {
+    name: 'ZigZag',
+    category: 'pattern',
+    icon: '⚡',
+    description: 'Filters minor price movements - PO native',
+    parameters: {
+      depth: { label: 'Depth', type: 'number', default: 12, min: 3, max: 50 },
+      deviation: { label: 'Deviation %', type: 'number', default: 5, min: 1, max: 20 },
+      backstep: { label: 'Backstep', type: 'number', default: 3, min: 1, max: 10 }
+    },
+    conditions: [
+      { id: 'new_swing_high', label: 'New swing high formed', signal: 'PUT', description: 'Potential reversal down' },
+      { id: 'new_swing_low', label: 'New swing low formed', signal: 'CALL', description: 'Potential reversal up' },
+      { id: 'higher_high', label: 'Higher high (uptrend confirmed)', signal: 'CALL', description: 'Bullish swing structure' },
+      { id: 'lower_low', label: 'Lower low (downtrend confirmed)', signal: 'PUT', description: 'Bearish swing structure' },
+    ]
+  },
+
+  // Heikin Ashi
+  HEIKIN_ASHI: {
+    name: 'Heikin Ashi',
+    category: 'pattern',
+    icon: '🕯️',
+    description: 'Smoothed candles - PO native chart type',
+    parameters: {},
+    conditions: [
+      { id: 'green_candle', label: 'HA candle turns green', signal: 'CALL', description: 'Bullish trend candle' },
+      { id: 'red_candle', label: 'HA candle turns red', signal: 'PUT', description: 'Bearish trend candle' },
+      { id: 'three_green', label: '3 consecutive green HA candles', signal: 'CALL', description: 'Strong bullish trend' },
+      { id: 'three_red', label: '3 consecutive red HA candles', signal: 'PUT', description: 'Strong bearish trend' },
+      { id: 'green_no_lower_wick', label: 'Green HA with no lower wick', signal: 'CALL', description: 'Very strong bullish momentum' },
+      { id: 'red_no_upper_wick', label: 'Red HA with no upper wick', signal: 'PUT', description: 'Very strong bearish momentum' },
+    ]
+  },
 };
 
 // Timeframe options

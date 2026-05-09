@@ -417,7 +417,97 @@ AVAILABLE_INDICATORS = {
         "name": "Heikin Ashi",
         "category": IndicatorCategory.CUSTOM,
         "parameters": {},
-        "outputs": ["ha_open", "ha_high", "ha_low", "ha_close"]
+        "outputs": ["ha_open", "ha_high", "ha_low", "ha_close", "is_green"]
+    },
+    
+    # Pocket Option native indicators
+    "ALLIGATOR": {
+        "name": "Alligator (Bill Williams)",
+        "category": IndicatorCategory.TREND,
+        "parameters": {
+            "jaws_period": {"type": "int", "default": 13, "min": 5, "max": 50, "description": "Jaws period"},
+            "teeth_period": {"type": "int", "default": 8, "min": 3, "max": 30, "description": "Teeth period"},
+            "lips_period": {"type": "int", "default": 5, "min": 2, "max": 20, "description": "Lips period"}
+        },
+        "outputs": ["jaws", "teeth", "lips"]
+    },
+    "AWESOME_OSCILLATOR": {
+        "name": "Awesome Oscillator (AO)",
+        "category": IndicatorCategory.MOMENTUM,
+        "parameters": {
+            "fast_period": {"type": "int", "default": 5, "min": 2, "max": 50, "description": "Fast period"},
+            "slow_period": {"type": "int", "default": 34, "min": 10, "max": 100, "description": "Slow period"}
+        },
+        "outputs": ["value"]
+    },
+    "FRACTAL": {
+        "name": "Williams Fractal",
+        "category": IndicatorCategory.PATTERN,
+        "parameters": {
+            "period": {"type": "int", "default": 2, "min": 1, "max": 5, "description": "Fractal period (each side)"}
+        },
+        "outputs": ["up_fractal", "down_fractal", "last_pivot"]
+    },
+    "DEMARKER": {
+        "name": "DeMarker",
+        "category": IndicatorCategory.MOMENTUM,
+        "parameters": {
+            "period": {"type": "int", "default": 14, "min": 5, "max": 50, "description": "Period"}
+        },
+        "outputs": ["value"]
+    },
+    "ENVELOPES": {
+        "name": "Envelopes",
+        "category": IndicatorCategory.VOLATILITY,
+        "parameters": {
+            "period": {"type": "int", "default": 14, "min": 5, "max": 100, "description": "MA period"},
+            "deviation": {"type": "float", "default": 0.1, "min": 0.05, "max": 5.0, "description": "Deviation %"}
+        },
+        "outputs": ["upper", "middle", "lower"]
+    },
+    "OSMA": {
+        "name": "OsMA (MA of Oscillator)",
+        "category": IndicatorCategory.MOMENTUM,
+        "parameters": {
+            "fast_period": {"type": "int", "default": 12, "min": 1, "max": 50, "description": "Fast EMA"},
+            "slow_period": {"type": "int", "default": 26, "min": 1, "max": 100, "description": "Slow EMA"},
+            "signal_period": {"type": "int", "default": 9, "min": 1, "max": 30, "description": "Signal SMA"}
+        },
+        "outputs": ["value"]
+    },
+    "VORTEX": {
+        "name": "Vortex Indicator",
+        "category": IndicatorCategory.TREND,
+        "parameters": {
+            "period": {"type": "int", "default": 14, "min": 5, "max": 50, "description": "Period"}
+        },
+        "outputs": ["vi_plus", "vi_minus"]
+    },
+    "BULLS_POWER": {
+        "name": "Bulls Power",
+        "category": IndicatorCategory.MOMENTUM,
+        "parameters": {
+            "period": {"type": "int", "default": 13, "min": 5, "max": 50, "description": "EMA Period"}
+        },
+        "outputs": ["value"]
+    },
+    "BEARS_POWER": {
+        "name": "Bears Power",
+        "category": IndicatorCategory.MOMENTUM,
+        "parameters": {
+            "period": {"type": "int", "default": 13, "min": 5, "max": 50, "description": "EMA Period"}
+        },
+        "outputs": ["value"]
+    },
+    "ZIGZAG": {
+        "name": "ZigZag",
+        "category": IndicatorCategory.PATTERN,
+        "parameters": {
+            "depth": {"type": "int", "default": 12, "min": 3, "max": 50, "description": "Depth"},
+            "deviation": {"type": "float", "default": 5.0, "min": 1.0, "max": 20.0, "description": "Deviation %"},
+            "backstep": {"type": "int", "default": 3, "min": 1, "max": 10, "description": "Backstep"}
+        },
+        "outputs": ["last_pivot", "is_high", "is_low"]
     }
 }
 
