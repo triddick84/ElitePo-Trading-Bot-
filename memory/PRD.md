@@ -1,8 +1,19 @@
 # Elite Pocket Option Trading Bot - Product Requirements Document
 
-## Last Updated: May 9, 2026
+## Last Updated: May 10, 2026
 
 ## Current Status
+✅ **Iteration 53d — Login Hang Fix + Retrain Hard Timeout (May 10, 2026)**
+
+**Issue**: User reported "stuck on login screen". Backend was running per supervisor but unresponsive to all requests.
+
+**Root cause**: A previous fire-and-forget retrain task (Iter 53) had a stuck joblib subprocess (PPO rebuild from 262 → 1682 features after model change). PID 97 pinned at 89% CPU for 18+ minutes, blocking the FastAPI event loop indirectly via shared multiprocessing resources.
+
+**Fix**:
+- Killed stuck subprocesses + restarted backend → login now responds in 127ms ✅
+- **Added 10-min hard timeout** to `trigger_manual_retrain_async()` via `asyncio.wait_for(...)` so a stuck training task is auto-cancelled before it can pin CPU forever. Failure is logged in `_retrain_history` with `status: "timeout"`. The timeout is conservative (historical retrain ~2-3 min) but short enough to keep the server snappy if anything hangs.
+- Verified login works end-to-end via public URL after fix.
+
 ✅ **Iteration 53c — Strategy-Aware Abstain Wired Into Live Signal Pipeline (May 9, 2026)**
 
 The strategy-aware abstain optimizer (Iter 53b) was previously a standalone REST endpoint set — tunings were stored in MongoDB but the live signal pipeline still used asset-only thresholds. This iteration **wires the precedence resolver directly into the abstain gate** so trades fire/abstain based on the most specific tuning available.

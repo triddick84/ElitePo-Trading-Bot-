@@ -309,6 +309,9 @@ class AutoRetrainScheduler:
         Fire-and-forget manual retrain. Returns immediately so frontend / ingress
         proxies don't time out (the actual retrain takes 2-5 min). Status visible
         via GET /api/ml/scheduler/status (manual_in_progress flag).
+
+        Hard timeout: 10 min. If the training subprocess hangs (e.g. PPO rebuild,
+        joblib worker stuck), the task is cancelled to keep the server responsive.
         """
         if self._manual_task is not None and not self._manual_task.done():
             return {
@@ -329,7 +332,21 @@ class AutoRetrainScheduler:
 
         async def _bg():
             try:
-                await self._execute_retrain()
+                # Hard ceiling so a stuck sklearn/joblib subprocess can't pin
+                # CPU forever. 10 min is well over the historical average
+                # (~2-3 min for full ensemble retrain) but well below the
+                # length where a user assumes the server is down.
+                await asyncio.wait_for(self._execute_retrain(), timeout=600)
+            except asyncio.TimeoutError:
+                logger.error(
+                    "Manual retrain background task exceeded 10-min timeout — cancelled"
+                )
+                self._retrain_history.append({
+                    "started_at": self._manual_started_at.isoformat() if self._manual_started_at else None,
+                    "status": "timeout",
+                    "completed_at": datetime.now(timezone.utc).isoformat(),
+                    "error": "exceeded 10-min hard timeout",
+                })
             except Exception as e:
                 logger.exception(f"Manual retrain background task failed: {e}")
             finally:
