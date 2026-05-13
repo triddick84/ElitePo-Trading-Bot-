@@ -3,6 +3,50 @@
 ## Last Updated: May 13, 2026
 
 ## Current Status
+✅ **Iteration 55 — Signal Latency Monitoring + Auto-Abstain (May 13, 2026)**
+
+**User goal**: "Make sure latency is being monitored and adjusted as signals are being generated also." (Option D — full observability + auto-abstain.)
+
+### Backend
+- **`latency_monitor.py`** (new) — `LatencyTracker` context manager that records each phase of signal generation (`otc_fetch`, `ml_prediction`, `strategy_eval`, `abstain_gate`) and total wall-clock time. Per-timeframe budgets enforce auto-abstain on stale data:
+  - 5s → 1500ms · 15s → 3000ms · 30s → 5000ms · 1m → 8000ms · 5m → 15000ms
+- **MongoDB collections** — `signal_latency_log` (server-side per-signal report) + `signal_latency_log_client` (TM-reported network RTT, DOM click lag, exec lag). Auto-trims to 10k entries.
+- **`force-generate-v2` wired** with the tracker around OTC fetch, ML prediction, and abstain gate. Every signal now carries:
+  ```
+  latency: { total_ms, budget_ms, exceeded, headroom_ms, phases: {...} }
+  ```
+- **Latency-aware auto-abstain** — if `total_ms > budget_ms`, the signal flips to `abstain=true` with `abstain_source="latency"` and reason `"stale_data_high_latency"`. TM script refuses to fire. Existing confidence-based abstain reasons preserved when both fire.
+- **5 new endpoints**:
+  - `POST /api/signals/latency-report` — TM panel pushes back network RTT + DOM click lag + exec lag
+  - `GET /api/signals/latency-stats?asset=&strategy=&timeframe=&since_minutes=` — mean/p50/p95/p99/max + per-phase means + exceeded count
+  - `GET /api/signals/latency-health` — last 5 min coloured status (green/yellow/red/grey)
+  - `GET /api/signals/latency-budgets` — per-timeframe budgets for UI display
+  - (Implicit) `latency` field on every `force-generate-v2` response
+
+### Frontend
+- **`MLLabPage.jsx LatencyHealthCard`** — colour-coded chip (green/yellow/red/grey) at the top of ML Lab. Renders:
+  - mean (5m), p50/p95/p99 (60m), exceeded-budget count
+  - per-phase mean bars (slowest first — pin-points OTC fetch vs ML inference vs abstain bottleneck)
+  - auto-refreshes with the rest of the dashboard every 30s
+
+### Verified end-to-end
+- Trigger response time: ~200-300ms total
+- Phase breakdown live: `otc_fetch ~75ms, ml_prediction ~57ms, abstain_gate ~1ms`
+- Budget headroom: ~96% on 1m signals, ~87% on 5s signals
+- Health: green / healthy
+- Auto-abstain unit-tested via direct LatencyTracker manipulation
+
+### Tests
+`/app/backend/tests/test_iter55_latency.py` — 6 regression tests:
+- latency block surfaces on every signal
+- budgets endpoint returns correct mapping
+- health chip cycles through valid states
+- stats aggregate w/ percentile invariants
+- client latency report stores correctly
+- auto-abstain LatencyTracker overflow check
+
+**All 11 tests (Iter 53 + 55) pass in 4.12s.**
+
 ✅ **Iteration 54 — Real-Trade-Outcome ML Training (May 13, 2026)**
 
 **User goal**: "Make sure models are trained on precise entry times and best trading entry points — improve quality of accuracy and confidence."

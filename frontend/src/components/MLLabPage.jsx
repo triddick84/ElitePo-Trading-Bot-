@@ -49,21 +49,27 @@ export default function MLLabPage() {
   const [backtestResult, setBacktestResult] = useState(null);
   const [backtestHistory, setBacktestHistory] = useState([]);
   const [assets, setAssets] = useState({ forex: [], crypto: [], stocks: [] });
+  const [latencyHealth, setLatencyHealth] = useState(null);
+  const [latencyStats, setLatencyStats] = useState(null);
 
   const refreshAll = async () => {
     try {
-      const [tr, ss, ot, btH, ass] = await Promise.all([
+      const [tr, ss, ot, btH, ass, lh, lst] = await Promise.all([
         fetch(`${API}/ml/tuning-report`).then((r) => r.json()),
         fetch(`${API}/ml/scheduler/status`).then((r) => r.json()),
         fetch(`${API}/signals/otc-candle-stats`).then((r) => r.json()).catch(() => null),
         fetch(`${API}/backtest/history`).then((r) => r.json()).catch(() => ({ results: [] })),
         fetch(`${API}/backtest/assets`).then((r) => r.json()).catch(() => ({ assets: {} })),
+        fetch(`${API}/signals/latency-health`).then((r) => r.json()).catch(() => null),
+        fetch(`${API}/signals/latency-stats?since_minutes=60`).then((r) => r.json()).catch(() => null),
       ]);
       setTuningReport(tr);
       setSchedulerStatus(ss);
       setOtcStats(ot);
       setBacktestHistory(btH.results || []);
       setAssets(ass.assets || {});
+      setLatencyHealth(lh);
+      setLatencyStats(lst);
       setLoading(false);
     } catch (e) {
       toast.error("Failed to load ML lab data: " + e.message);
@@ -264,6 +270,7 @@ export default function MLLabPage() {
     <div className="p-6 space-y-6" data-testid="ml-lab-page">
       <Header schedulerStatus={schedulerStatus} otcStats={otcStats} onRefresh={refreshAll} />
       <PoolHealthCard otcStats={otcStats} tuningReport={tuningReport} />
+      <LatencyHealthCard health={latencyHealth} stats={latencyStats} />
 
       <Tabs value={tab} onValueChange={setTab} className="space-y-4">
         <TabsList className="grid grid-cols-5 bg-slate-900 border border-slate-800" data-testid="ml-model-tabs">
@@ -379,6 +386,93 @@ function Stat({ label, value, hint }) {
       <div className="text-2xl font-bold font-mono text-slate-100 mt-1">{value}</div>
       {hint && <div className="text-xs text-slate-500 mt-1">{hint}</div>}
     </div>
+  );
+}
+
+/* ---------- LATENCY HEALTH CARD (Iter 55) ---------- */
+function LatencyHealthCard({ health, stats }) {
+  // Colour mapping for the health chip
+  const chipColour = {
+    green: "bg-green-500/15 text-green-300 border-green-500/40",
+    yellow: "bg-amber-500/15 text-amber-300 border-amber-500/40",
+    red: "bg-red-500/20 text-red-300 border-red-500/50",
+    grey: "bg-slate-700/40 text-slate-400 border-slate-600",
+  }[health?.color || "grey"];
+
+  const phases = stats?.stats?.phase_means_ms || {};
+  const phaseEntries = Object.entries(phases).sort((a, b) => b[1] - a[1]);
+
+  return (
+    <Card className="bg-slate-900 border-slate-800" data-testid="latency-health-card">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between gap-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Activity className="w-4 h-4 text-purple-400" /> Signal Latency Health
+            <Badge variant="outline" className={`uppercase ml-2 ${chipColour}`} data-testid="latency-health-chip">
+              {health?.status || "no data"}
+            </Badge>
+          </CardTitle>
+          <span className="text-xs text-slate-500">
+            {health?.count ?? 0} signals · last {health?.window_minutes ?? 5}m
+          </span>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <Stat
+            label="Mean (last 5m)"
+            value={`${(health?.mean_ms ?? 0).toFixed(0)}ms`}
+            hint={`exceeded ${((health?.exceeded_rate ?? 0) * 100).toFixed(1)}% of budget`}
+          />
+          <Stat
+            label="p50"
+            value={stats?.stats ? `${stats.stats.p50_ms.toFixed(0)}ms` : "—"}
+            hint="last 60m"
+          />
+          <Stat
+            label="p95"
+            value={stats?.stats ? `${stats.stats.p95_ms.toFixed(0)}ms` : "—"}
+            hint="last 60m"
+          />
+          <Stat
+            label="p99"
+            value={stats?.stats ? `${stats.stats.p99_ms.toFixed(0)}ms` : "—"}
+            hint="last 60m"
+          />
+          <Stat
+            label="Stale-data abstains"
+            value={stats?.stats?.exceeded_count ?? 0}
+            hint={`of ${stats?.count ?? 0} signals (60m)`}
+          />
+        </div>
+        {phaseEntries.length > 0 && (
+          <div>
+            <div className="text-xs text-slate-500 uppercase tracking-wider mb-2">
+              Per-phase mean (slowest first)
+            </div>
+            <div className="space-y-1">
+              {phaseEntries.map(([name, ms]) => (
+                <div key={name} className="flex items-center gap-3" data-testid={`latency-phase-${name}`}>
+                  <span className="text-sm text-slate-300 w-32 font-mono">{name}</span>
+                  <div className="flex-1 bg-slate-800 rounded h-2 overflow-hidden">
+                    <div
+                      className="h-2 bg-purple-500"
+                      style={{ width: `${Math.min(100, (ms / 500) * 100)}%` }}
+                    />
+                  </div>
+                  <span className="text-sm font-mono text-slate-400 w-16 text-right">{ms.toFixed(0)}ms</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {(!stats || stats.count === 0) && (
+          <div className="text-sm text-slate-500 italic">
+            No signals generated yet — trigger a force-generate-v2 call to start populating stats.
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

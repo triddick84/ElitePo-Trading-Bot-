@@ -4282,6 +4282,24 @@ async def force_generate_signal_v2(
     Returns a signal with HONEST confidence (55-90% typical, no artificial boost)
     plus a full reasoning breakdown so you can see WHY it decided CALL vs PUT.
     """
+    # Iter 55: latency tracker — instruments OTC fetch, ML, strategy eval,
+    # abstain gate. Auto-abstains if total signal-gen latency exceeds the
+    # per-timeframe budget (1500ms for 5s, 8000ms for 1m, etc.) so we never
+    # fire trades on stale market data.
+    from latency_monitor import LatencyTracker, log_latency_fire_and_forget
+    # Infer timeframe label from expiry_seconds for budget lookup
+    if expiry_seconds <= 7:
+        _tf_label = "5s"
+    elif expiry_seconds <= 20:
+        _tf_label = "15s"
+    elif expiry_seconds <= 45:
+        _tf_label = "30s"
+    elif expiry_seconds <= 90:
+        _tf_label = "1m"
+    else:
+        _tf_label = "5m"
+    _latency = LatencyTracker(asset=asset, timeframe=_tf_label)
+    
     try:
         # Normalize asset
         a = asset.strip().replace(" ", "").replace("/", "").upper()
@@ -4295,7 +4313,8 @@ async def force_generate_signal_v2(
 
         candles_1m_df = None
         try:
-            candles_1m_df = enhanced_oanda.get_candles(oanda_symbol, "M1", 100)
+            with _latency.phase("otc_fetch"):
+                candles_1m_df = enhanced_oanda.get_candles(oanda_symbol, "M1", 100)
         except Exception as e:
             logger.warning(f"force-generate enhanced_oanda fetch failed for {oanda_symbol}: {e}")
 
@@ -4380,7 +4399,8 @@ async def force_generate_signal_v2(
             from ml_accuracy_tuner import predict_with_tuner_pipeline
             from improved_ai_ml_system import improved_ai_ml as _imp
             if _imp is not None and getattr(_imp, "is_trained", False):
-                pred = predict_with_tuner_pipeline(_imp, df)
+                with _latency.phase("ml_prediction"):
+                    pred = predict_with_tuner_pipeline(_imp, df)
                 if pred and pred.get("direction") in ("CALL", "PUT"):
                     d = pred["direction"]
                     c = float(pred.get("confidence", 0))
@@ -4403,7 +4423,8 @@ async def force_generate_signal_v2(
             from ml_accuracy_tuner import predict_with_tuner_pipeline
             from maximized_ai_ml_system import maximized_ai_ml as _mx
             if _mx is not None and getattr(_mx, "is_trained", False):
-                pred = predict_with_tuner_pipeline(_mx, df)
+                with _latency.phase("ml_prediction"):
+                    pred = predict_with_tuner_pipeline(_mx, df)
                 if pred and pred.get("direction") in ("CALL", "PUT"):
                     d = pred["direction"]
                     c = float(pred.get("confidence", 0))
@@ -4662,7 +4683,8 @@ async def force_generate_signal_v2(
         # -----------------------------------------------------------------
         try:
             from botai_simulator import get_effective_threshold as _abstain_resolve
-            abstain_row = await _abstain_resolve(active_sid, a)
+            with _latency.phase("abstain_gate"):
+                abstain_row = await _abstain_resolve(active_sid, a)
             thr_pct = float(abstain_row.get("threshold", 0.62)) * 100.0
             signal["abstain_threshold"] = round(thr_pct, 1)
             signal["abstain_source"] = abstain_row.get("source", "default")
@@ -4678,6 +4700,47 @@ async def force_generate_signal_v2(
             signal["abstain"] = False
             signal["abstain_threshold"] = _ABSTAIN_GATE_DEFAULT * 100.0
             signal["abstain_source"] = "default"
+
+        # -----------------------------------------------------------------
+        # Iter 55: latency-aware auto-abstain. If the server-side signal
+        # generation exceeds the per-timeframe budget, the market may have
+        # already moved beyond the trade direction — mark the signal as
+        # stale so the TM panel refuses to fire it. Always logged + visible
+        # in the API response under signal.latency.
+        # -----------------------------------------------------------------
+        _latency.annotate(
+            confidence=round(raw_confidence, 2),
+            direction=direction,
+            quality=quality,
+            strategy=active_sid,
+        )
+        _lat_report = _latency.finalize()
+        signal["latency"] = {
+            "total_ms": _lat_report["total_ms"],
+            "budget_ms": _lat_report["budget_ms"],
+            "exceeded": _lat_report["exceeded"],
+            "headroom_ms": _lat_report["headroom_ms"],
+            "phases": _lat_report["phases"],
+        }
+        if _lat_report["exceeded"]:
+            # Don't override an existing strategy/confidence abstain — preserve
+            # the more informative reason. But if the signal was passing the
+            # confidence gate, fail it here on staleness.
+            if not signal.get("abstain"):
+                signal["abstain"] = True
+                signal["abstain_source"] = "latency"
+                signal["abstain_reason"] = (
+                    f"stale_data_high_latency — total {_lat_report['total_ms']:.0f}ms "
+                    f"exceeded {_lat_report['budget_ms']}ms budget for {_tf_label}"
+                )
+            else:
+                # Already abstaining — append latency note
+                signal["abstain_reason"] = (
+                    (signal.get("abstain_reason") or "")
+                    + f" | also: latency {_lat_report['total_ms']:.0f}ms > {_lat_report['budget_ms']}ms"
+                )
+        # Fire-and-forget MongoDB log (every signal, not just abstained ones)
+        log_latency_fire_and_forget(_lat_report)
 
         return {
             "success": True,
@@ -4759,6 +4822,81 @@ async def get_rolling_win_rate():
     except Exception as e:
         logger.error(f"win-rate-stats error: {e}")
         return {"success": False, "error": str(e)}
+
+
+# ============================================================================
+# LATENCY MONITORING ENDPOINTS (Iter 55 — May 13, 2026)
+# ============================================================================
+
+class ClientLatencyReport(BaseModel):
+    signal_id: Optional[str] = Field(default=None)
+    network_rtt_ms: Optional[float] = Field(default=None, description="Server→browser round-trip per browser clock")
+    dom_click_lag_ms: Optional[float] = Field(default=None, description="Signal received → DOM click fired")
+    exec_lag_ms: Optional[float] = Field(default=None, description="DOM click → PO confirms trade open")
+    asset: Optional[str] = Field(default=None)
+    strategy: Optional[str] = Field(default=None)
+    notes: Optional[str] = Field(default=None)
+
+
+@router.post("/signals/latency-report")
+async def post_client_latency_report(report: ClientLatencyReport):
+    """
+    Endpoint for the Tampermonkey panel to push back execution-side
+    latency measurements (network RTT, DOM click lag, PO execution lag).
+    Lets us join server-side signal generation with end-to-end performance.
+    """
+    from latency_monitor import report_client_latency
+    return await report_client_latency(
+        signal_id=report.signal_id,
+        network_rtt_ms=report.network_rtt_ms,
+        dom_click_lag_ms=report.dom_click_lag_ms,
+        exec_lag_ms=report.exec_lag_ms,
+        asset=report.asset,
+        strategy=report.strategy,
+        notes=report.notes,
+    )
+
+
+@router.get("/signals/latency-stats")
+async def get_latency_stats_endpoint(
+    asset: Optional[str] = Query(None, description="Filter by asset (e.g. EURUSD_OTC)"),
+    strategy: Optional[str] = Query(None, description="Filter by strategy id"),
+    timeframe: Optional[str] = Query(None, description="Filter by timeframe (5s/15s/30s/1m/5m)"),
+    since_minutes: int = Query(60, ge=1, le=1440, description="Lookback window in minutes"),
+):
+    """
+    Aggregated server-side signal-generation latency stats over the
+    requested window. Returns mean/p50/p95/p99/max + exceeded-budget count
+    + per-phase means. Drives the MLLab "Latency Health" panel and lets
+    the user pin down which phase (OTC fetch, ML, abstain) is slow.
+    """
+    from latency_monitor import get_latency_stats
+    return {
+        "success": True,
+        **await get_latency_stats(
+            asset=asset, strategy=strategy, timeframe=timeframe, since_minutes=since_minutes
+        ),
+    }
+
+
+@router.get("/signals/latency-health")
+async def get_latency_health_endpoint():
+    """
+    Snapshot health check (last 5 minutes). Colour-coded status the TM
+    panel + MLLab chip render directly: green (<5% exceeded), yellow
+    (5-20%), red (≥20%), grey (no data).
+    """
+    from latency_monitor import get_latency_health
+    return {"success": True, **await get_latency_health()}
+
+
+@router.get("/signals/latency-budgets")
+async def get_latency_budgets():
+    """Current per-timeframe latency budgets (ms) for client-side display."""
+    from latency_monitor import LATENCY_BUDGETS_MS
+    return {"success": True, "budgets_ms": LATENCY_BUDGETS_MS}
+
+
 
 
 
