@@ -6,9 +6,10 @@ Applies adaptive labeling thresholds, feature selection, and hyperparameter tuni
 """
 
 import logging
+import asyncio
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
@@ -697,6 +698,318 @@ class MLAccuracyTuner:
             import traceback
             traceback.print_exc()
             return {"success": False, "error": str(e)}
+    async def train_from_trade_reports(
+        self,
+        ml_system,
+        min_samples: int = 50,
+        symbols: Optional[List[str]] = None,
+        max_age_days: int = 90,
+        oanda_fallback: bool = True,
+    ) -> Dict:
+        """
+        Train ML model using REAL Tampermonkey trade outcomes (Iter 54).
+
+        For each closed trade in `tm_trade_reports` with outcome WIN/LOSS:
+          1. Locate the OTC candle window at the trade's entry timestamp
+             (or fetch OANDA S5 backfill on demand when OTC pool is stale)
+          2. Extract the same 5s feature vector the live predictor uses
+          3. Derive the ground-truth label from the OUTCOME, not synthetic
+             next-candle direction:
+                WIN  + CALL → label 1 (CALL was correct → market went UP)
+                WIN  + PUT  → label 0 (PUT  was correct → market went DOWN)
+                LOSS + CALL → label 0 (CALL lost → market actually went DOWN)
+                LOSS + PUT  → label 1 (PUT  lost → market actually went UP)
+
+        This trains the model on REAL trades you actually took — calibration is
+        grounded in market outcomes that paid out (or didn't), not next-candle
+        proxy labels. Sharpens accuracy/confidence on the same setups the bot
+        will see live.
+        """
+        if not ML_AVAILABLE:
+            return {"success": False, "error": "ML libraries not available"}
+
+        try:
+            reports_coll = self.db["tm_trade_reports"]
+            
+            # 1) Pull closed trades within max_age_days, optionally per-symbol
+            from datetime import timedelta
+            cutoff = (datetime.now(timezone.utc) - timedelta(days=max_age_days)).isoformat()
+            query: Dict[str, Any] = {
+                "outcome": {"$in": ["WIN", "LOSS", "win", "loss"]},
+                "server_received_at": {"$gte": cutoff},
+            }
+            if symbols:
+                query["asset_normalized"] = {"$in": symbols}
+            
+            reports = await reports_coll.find(query, {"_id": 0}).sort("server_received_at", 1).to_list(length=20000)
+            if not reports:
+                return {
+                    "success": False,
+                    "error": "No closed trade reports in window. Run the Tampermonkey bot to accumulate WIN/LOSS outcomes.",
+                    "total_samples": 0,
+                }
+            
+            # 2) Group by symbol for efficient candle fetch. Track weekend
+            # trades separately — OANDA forex is closed on Sat/Sun so those
+            # PO OTC trades can't be matched to real market candles. Real-
+            # outcome training therefore only learns from weekday entries
+            # (still a strong signal — same indicators, same execution path).
+            symbol_groups: Dict[str, List[Dict]] = {}
+            weekend_skipped = 0
+            for r in reports:
+                sym = r.get("asset_normalized") or r.get("asset")
+                if not sym:
+                    continue
+                ts_raw = r.get("server_received_at") or r.get("timestamp")
+                if ts_raw:
+                    try:
+                        ts_parsed = pd.to_datetime(ts_raw, errors="coerce", utc=True)
+                        if not pd.isna(ts_parsed) and ts_parsed.dayofweek >= 5:  # Sat=5, Sun=6
+                            weekend_skipped += 1
+                            continue
+                    except Exception:
+                        pass
+                symbol_groups.setdefault(sym, []).append(r)
+            
+            all_features: List[List[float]] = []
+            all_labels: List[int] = []
+            feature_names: Optional[List[str]] = None
+            symbol_stats: Dict[str, Any] = {}
+            outcome_counts = {"WIN_CALL": 0, "WIN_PUT": 0, "LOSS_CALL": 0, "LOSS_PUT": 0}
+            unmatched = 0  # trades without nearby candle window
+            oanda_fallback_used = 0  # trades resolved via OANDA backfill
+            
+            # OANDA fallback setup (lazy)
+            oanda_service = None
+            oanda_map = None
+            if oanda_fallback:
+                try:
+                    from enhanced_oanda_service import enhanced_oanda
+                    from routes.ml import OTC_TO_OANDA
+                    if enhanced_oanda and getattr(enhanced_oanda, "is_configured", False):
+                        oanda_service = enhanced_oanda
+                        oanda_map = OTC_TO_OANDA
+                        logger.info("[real-trade-train] OANDA fallback enabled")
+                except Exception as e:
+                    logger.warning(f"[real-trade-train] OANDA fallback unavailable: {e}")
+            
+            for sym, sym_reports in symbol_groups.items():
+                # Pull all OTC candles for this symbol (oldest first)
+                df = await self.get_otc_training_data(sym, limit=20000)
+                has_otc = not df.empty and len(df) >= 31
+                if has_otc:
+                    df = df.reset_index(drop=True)
+                    if "timestamp" not in df.columns:
+                        has_otc = False
+                    else:
+                        df["_ts"] = pd.to_datetime(df["timestamp"], errors="coerce", utc=True)
+                
+                # OANDA fallback: ONE batched fetch covering all this symbol's trades.
+                # Cap the window so we don't pull excessive batches (>30 days
+                # would mean many thousand S5 batches and might rate-limit).
+                oanda_df = None
+                if oanda_service and oanda_map and sym in oanda_map:
+                    try:
+                        from datetime import timedelta as _td
+                        sym_ts = []
+                        for r in sym_reports:
+                            tsr = r.get("server_received_at") or r.get("timestamp")
+                            if tsr:
+                                ts_parsed = pd.to_datetime(tsr, errors="coerce", utc=True)
+                                if not pd.isna(ts_parsed):
+                                    sym_ts.append(ts_parsed)
+                        if sym_ts:
+                            ts_min = min(sym_ts)
+                            ts_max = max(sym_ts)
+                            # Cap window to 30 days (typical max_age_days range)
+                            if (ts_max - ts_min) > _td(days=30):
+                                ts_min = ts_max - _td(days=30)
+                            window_start = (ts_min - _td(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                            window_end = (ts_max + _td(minutes=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                            oanda_pair = oanda_map[sym]
+                            ohlc = await asyncio.to_thread(
+                                oanda_service.get_candles_large,
+                                instrument=oanda_pair,
+                                granularity="S5",
+                                from_time=window_start,
+                                to_time=window_end,
+                            )
+                            if ohlc is not None and not ohlc.empty:
+                                ohlc = ohlc.reset_index()
+                                for col in ('open', 'high', 'low', 'close', 'volume'):
+                                    if col in ohlc.columns:
+                                        ohlc[col] = pd.to_numeric(ohlc[col], errors='coerce')
+                                ohlc = ohlc.dropna(subset=['open', 'high', 'low', 'close']).reset_index(drop=True)
+                                if len(ohlc) >= 31:
+                                    ohlc["_ts"] = pd.to_datetime(ohlc["timestamp"], errors="coerce", utc=True)
+                                    oanda_df = ohlc
+                                    logger.info(
+                                        f"[real-trade-train] {sym}: OANDA fetched {len(ohlc)} S5 candles "
+                                        f"covering {window_start} → {window_end}"
+                                    )
+                    except Exception as oe:
+                        logger.warning(f"[real-trade-train] OANDA batch fetch failed for {sym}: {oe}")
+                
+                matched = 0
+                fallback_used_this_sym = 0
+                for r in sym_reports:
+                    trade_ts_raw = r.get("server_received_at") or r.get("timestamp")
+                    if not trade_ts_raw:
+                        unmatched += 1
+                        continue
+                    try:
+                        trade_ts = pd.to_datetime(trade_ts_raw, errors="coerce", utc=True)
+                        if pd.isna(trade_ts):
+                            unmatched += 1
+                            continue
+                    except Exception:
+                        unmatched += 1
+                        continue
+                    
+                    feats = None
+                    # Try OTC pool first
+                    if has_otc:
+                        deltas = (df["_ts"] - trade_ts).dt.total_seconds()
+                        # Allow the candle to be up to 5 minutes before trade
+                        eligible = (deltas <= 0) & (deltas >= -300)
+                        if eligible.any():
+                            idx = int(deltas[eligible].abs().idxmin())
+                            if idx >= 30:
+                                feats = self.extract_5s_features(df, idx)
+                    
+                    # Fall back to OANDA S5 batch
+                    if feats is None and oanda_df is not None:
+                        deltas = (oanda_df["_ts"] - trade_ts).dt.total_seconds()
+                        eligible = (deltas <= 0) & (deltas >= -300)
+                        if eligible.any():
+                            idx = int(deltas[eligible].abs().idxmin())
+                            if idx >= 30:
+                                feats = self.extract_5s_features(oanda_df, idx)
+                                if feats is not None:
+                                    oanda_fallback_used += 1
+                                    fallback_used_this_sym += 1
+                    
+                    if feats is None:
+                        unmatched += 1
+                        continue
+                    
+                    if feature_names is None:
+                        feature_names = list(feats.keys())
+                    feat_vec = [feats.get(fn, 0) for fn in feature_names]
+                    
+                    # Derive ground-truth label from REAL outcome
+                    direction = (r.get("direction") or "").upper()
+                    outcome = (r.get("outcome") or "").upper()
+                    if direction == "CALL" and outcome == "WIN":
+                        label = 1
+                        outcome_counts["WIN_CALL"] += 1
+                    elif direction == "PUT" and outcome == "WIN":
+                        label = 0
+                        outcome_counts["WIN_PUT"] += 1
+                    elif direction == "CALL" and outcome == "LOSS":
+                        label = 0  # CALL lost → actual move was DOWN
+                        outcome_counts["LOSS_CALL"] += 1
+                    elif direction == "PUT" and outcome == "LOSS":
+                        label = 1  # PUT lost → actual move was UP
+                        outcome_counts["LOSS_PUT"] += 1
+                    else:
+                        unmatched += 1
+                        continue
+                    
+                    all_features.append(feat_vec)
+                    all_labels.append(label)
+                    matched += 1
+                
+                symbol_stats[sym] = {
+                    "trades": len(sym_reports),
+                    "matched": matched,
+                    "unmatched": len(sym_reports) - matched,
+                    "oanda_fallback": fallback_used_this_sym,
+                }
+                logger.info(
+                    f"[real-trade-train] {sym}: matched {matched}/{len(sym_reports)} "
+                    f"(OANDA fallback: {fallback_used_this_sym})"
+                )
+            
+            if len(all_features) < min_samples:
+                return {
+                    "success": False,
+                    "error": (
+                        f"Insufficient matched samples: {len(all_features)} (need {min_samples}). "
+                        f"Either too few WIN/LOSS reports, or trade timestamps don't align with "
+                        f"otc_candles_5s history and OANDA fallback is unavailable / unfunded."
+                    ),
+                    "total_samples": len(all_features),
+                    "symbol_stats": symbol_stats,
+                    "outcome_counts": outcome_counts,
+                    "unmatched": unmatched,
+                    "oanda_fallback_used": oanda_fallback_used,
+                }
+            
+            X = np.array(all_features, dtype=float)
+            y = np.array(all_labels)
+            X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
+            
+            logger.info(f"[real-trade-train] {len(X)} samples ({X.shape[1]} features). "
+                        f"Class dist CALL={int(sum(y))}, PUT={int(len(y) - sum(y))}")
+            
+            scaler = RobustScaler()
+            X_scaled = scaler.fit_transform(X)
+            n_features = min(70, X.shape[1])
+            selector = SelectKBest(mutual_info_classif, k=n_features)
+            X_selected = selector.fit_transform(X_scaled, y)
+            
+            # Cross-validate (TimeSeriesSplit; n_splits ≤ samples/10 to keep folds valid)
+            n_splits = max(2, min(5, len(X) // 10))
+            tscv = TimeSeriesSplit(n_splits=n_splits)
+            cv_scores = cross_val_score(ml_system.model, X_selected, y, cv=tscv, scoring="accuracy", n_jobs=-1)
+            
+            ml_system.model.fit(X_selected, y)
+            ml_system.is_trained = True
+            ml_system.model_accuracy = float(cv_scores.mean())
+            ml_system.scaler = scaler
+            ml_system.last_training_time = datetime.now(timezone.utc)
+            ml_system.tuner_feature_names = feature_names
+            ml_system.tuner_selected_mask = (
+                selector.get_support().tolist() if hasattr(selector, "get_support") else None
+            )
+            try:
+                ml_system._save_model()
+            except Exception as save_err:
+                logger.warning(f"[real-trade-train] _save_model failed: {save_err}")
+            
+            selected_names: List[str] = []
+            if feature_names:
+                mask = selector.get_support()
+                selected_names = [feature_names[i] for i in range(len(feature_names)) if i < len(mask) and mask[i]]
+            
+            return {
+                "success": True,
+                "source": "tm_trade_reports",
+                "method": "real-outcome-grounded",
+                "total_samples": len(X),
+                "features_used": n_features,
+                "features_total": X.shape[1],
+                "selected_features": selected_names[:15],
+                "cv_accuracy": round(float(cv_scores.mean()) * 100, 2),
+                "cv_std": round(float(cv_scores.std()) * 100, 2),
+                "cv_scores": [round(float(s) * 100, 2) for s in cv_scores.tolist()],
+                "n_splits": n_splits,
+                "class_distribution": {"CALL": int(sum(y)), "PUT": int(len(y) - sum(y))},
+                "outcome_counts": outcome_counts,
+                "symbol_stats": symbol_stats,
+                "unmatched_trades": unmatched,
+                "weekend_trades_skipped": weekend_skipped,
+                "oanda_fallback_used": oanda_fallback_used,
+                "max_age_days": max_age_days,
+                "trained_at": datetime.now(timezone.utc).isoformat(),
+            }
+        
+        except Exception as e:
+            logger.exception(f"[real-trade-train] error: {e}")
+            return {"success": False, "error": str(e)}
+
+
 
     async def get_tuning_report(self) -> Dict:
         """Generate a report on current ML model accuracy and OTC data availability."""

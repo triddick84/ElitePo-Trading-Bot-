@@ -2245,6 +2245,165 @@ async def train_ml_from_otc_data(
     return result
 
 
+@router.post("/ml/train-from-trades")
+async def train_ml_from_real_trades(
+    model: str = Body("maximized", description="Which sklearn ML system: maximized or improved"),
+    symbols: Optional[List[str]] = Body(None, description="Optional OTC symbols filter; null = all"),
+    min_samples: int = Body(50, description="Minimum matched (trade, candle window) samples"),
+    max_age_days: int = Body(90, description="Only use trades closed within the last N days"),
+):
+    """
+    Train an ML model using REAL Tampermonkey trade outcomes as ground truth
+    labels (Iter 54). Pulls every closed trade from `tm_trade_reports` within
+    `max_age_days`, locates the OTC candle window at the trade entry, extracts
+    features at THAT moment, and labels by actual WIN/LOSS rather than the
+    synthetic "next candle direction" used by /ml/train-from-otc.
+
+    Fire-and-forget: returns immediately with `accepted: true`. Poll
+    GET /api/ml/train-from-trades/status for the final result. Necessary
+    because OANDA fallback fetches + sklearn cross-val can take 1-3 min for
+    large windows — bypasses Kubernetes ingress timeout.
+
+    Why this matters: the live bot fires at a specific instant and the market
+    pays out (or doesn't) on the candle close. Training on the synthetic
+    next-candle proxy ignores micro-timing, slippage, and execution latency —
+    real-outcome training grounds confidence/accuracy in the same conditions
+    the bot will face live. Pairs perfectly with the BOTAI abstain gate.
+    """
+    global _REAL_TRADE_TRAIN_STATUS
+    if _REAL_TRADE_TRAIN_STATUS.get("in_progress"):
+        return {
+            "success": False,
+            "accepted": False,
+            "message": "Real-trade training already in progress",
+            "started_at": _REAL_TRADE_TRAIN_STATUS.get("started_at"),
+        }
+    
+    tuner = get_ml_tuner(db)
+    target_system = maximized_ai_ml if model == "maximized" else improved_ai_ml
+    if target_system is None:
+        return {"success": False, "error": f"ML system '{model}' not available"}
+
+    async def _bg():
+        global _REAL_TRADE_TRAIN_STATUS
+        try:
+            result = await asyncio.wait_for(
+                tuner.train_from_trade_reports(
+                    ml_system=target_system,
+                    symbols=symbols,
+                    min_samples=min_samples,
+                    max_age_days=max_age_days,
+                ),
+                timeout=600,  # 10-min hard ceiling
+            )
+            _REAL_TRADE_TRAIN_STATUS = {
+                "in_progress": False,
+                "started_at": _REAL_TRADE_TRAIN_STATUS.get("started_at"),
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "result": result,
+            }
+        except asyncio.TimeoutError:
+            logger.error("Real-trade training exceeded 10-min timeout — cancelled")
+            _REAL_TRADE_TRAIN_STATUS = {
+                "in_progress": False,
+                "started_at": _REAL_TRADE_TRAIN_STATUS.get("started_at"),
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "result": {"success": False, "error": "training exceeded 10-min hard timeout"},
+            }
+        except Exception as e:
+            logger.exception(f"Real-trade training crashed: {e}")
+            _REAL_TRADE_TRAIN_STATUS = {
+                "in_progress": False,
+                "started_at": _REAL_TRADE_TRAIN_STATUS.get("started_at"),
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "result": {"success": False, "error": str(e)},
+            }
+    
+    _REAL_TRADE_TRAIN_STATUS = {
+        "in_progress": True,
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "completed_at": None,
+        "result": None,
+    }
+    asyncio.create_task(_bg())
+    return {
+        "success": True,
+        "accepted": True,
+        "message": "Real-trade training started — poll /api/ml/train-from-trades/status for progress",
+        "started_at": _REAL_TRADE_TRAIN_STATUS["started_at"],
+    }
+
+
+# In-memory status of the last real-trade training run
+_REAL_TRADE_TRAIN_STATUS: Dict[str, Any] = {
+    "in_progress": False,
+    "started_at": None,
+    "completed_at": None,
+    "result": None,
+}
+
+
+@router.get("/ml/train-from-trades/status")
+async def get_real_trade_training_status():
+    """Poll status of the most recent /api/ml/train-from-trades trigger."""
+    return {"success": True, **_REAL_TRADE_TRAIN_STATUS}
+
+
+@router.get("/ml/trade-reports/stats")
+async def get_trade_reports_training_stats():
+    """
+    Diagnostic: how many closed Tampermonkey trade outcomes exist per symbol
+    + outcome split, and what max_age_days windows are viable for real-trade
+    training. Drives the MLLab UI "Train from Real Trades" button.
+    """
+    coll = db["tm_trade_reports"]
+    pipeline = [
+        {"$match": {"outcome": {"$in": ["WIN", "LOSS", "win", "loss"]}}},
+        {"$group": {
+            "_id": {"asset": "$asset_normalized", "outcome": {"$toUpper": "$outcome"}},
+            "n": {"$sum": 1},
+        }},
+    ]
+    raw = await coll.aggregate(pipeline).to_list(length=2000)
+    by_symbol: Dict[str, Dict[str, int]] = {}
+    total_win = 0
+    total_loss = 0
+    for row in raw:
+        sym = row["_id"].get("asset") or "UNKNOWN"
+        out = row["_id"].get("outcome", "")
+        by_symbol.setdefault(sym, {"WIN": 0, "LOSS": 0})
+        by_symbol[sym][out] = row["n"]
+        if out == "WIN":
+            total_win += row["n"]
+        elif out == "LOSS":
+            total_loss += row["n"]
+    
+    # Windowed counts
+    from datetime import timedelta
+    now = datetime.now(timezone.utc)
+    windows = {}
+    for days in (7, 30, 90):
+        cutoff = (now - timedelta(days=days)).isoformat()
+        windows[f"last_{days}d"] = await coll.count_documents({
+            "outcome": {"$in": ["WIN", "LOSS", "win", "loss"]},
+            "server_received_at": {"$gte": cutoff},
+        })
+    
+    return {
+        "success": True,
+        "total_closed_trades": total_win + total_loss,
+        "total_wins": total_win,
+        "total_losses": total_loss,
+        "by_symbol": [
+            {"symbol": s, "win": v["WIN"], "loss": v["LOSS"], "total": v["WIN"] + v["LOSS"]}
+            for s, v in sorted(by_symbol.items(), key=lambda kv: -(kv[1]["WIN"] + kv[1]["LOSS"]))
+        ],
+        "windows": windows,
+        "min_samples_for_training": 50,
+        "ready": (total_win + total_loss) >= 50,
+    }
+
+
 # ==================== OTC BACKFILL FROM OANDA (April 25, 2026) ====================
 
 # OTC pairs that map cleanly to an OANDA forex instrument (PO OTC = synthetic

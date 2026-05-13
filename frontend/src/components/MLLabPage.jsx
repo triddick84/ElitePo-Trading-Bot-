@@ -173,6 +173,60 @@ export default function MLLabPage() {
     }
   };
 
+  const runRealTradeTraining = async (modelId) => {
+    // Iter 54: train on actual TM trade outcomes (REAL W/L) instead of
+    // synthetic next-candle labels. Fire-and-forget with status polling.
+    setRetraining({ ...retraining, [`${modelId}_real`]: true });
+    try {
+      const trigger = await fetch(`${API}/ml/train-from-trades`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: modelId === "improved_v2" ? "improved" : "maximized",
+          min_samples: 30,
+          max_age_days: 30,
+        }),
+      }).then((res) => res.json());
+      if (!trigger.success && !trigger.accepted) {
+        toast.warning(trigger.message || trigger.error || "Real-trade training queued");
+        return;
+      }
+      toast.info(
+        "Real-trade training started — pulling OANDA backfill for trade windows (1-3 min)…"
+      );
+      const pollInterval = 6000;
+      const maxWait = 8 * 60 * 1000;
+      let elapsed = 0;
+      while (elapsed < maxWait) {
+        await new Promise((res) => setTimeout(res, pollInterval));
+        elapsed += pollInterval;
+        try {
+          const s = await fetch(`${API}/ml/train-from-trades/status`).then((res) => res.json());
+          if (s.success && !s.in_progress && s.result) {
+            const res = s.result;
+            if (res.success) {
+              toast.success(
+                `Trained on ${res.total_samples} real trades → ${res.cv_accuracy}% CV ` +
+                `(±${res.cv_std}%). ${res.weekend_trades_skipped || 0} weekend trades skipped.`
+              );
+            } else {
+              toast.error(`Real-trade training failed: ${res.error}`);
+            }
+            refreshAll();
+            return;
+          }
+        } catch (_e) {
+          // ignore transient poll errors
+        }
+      }
+      toast.warning("Real-trade training still running after 8 min — check status panel.");
+    } catch (e) {
+      toast.error("Real-trade training error: " + e.message);
+    } finally {
+      setRetraining({ ...retraining, [`${modelId}_real`]: false });
+    }
+  };
+
   const runBacktest = async () => {
     setBacktestRunning(true);
     setBacktestResult(null);
@@ -226,7 +280,13 @@ export default function MLLabPage() {
               model={m}
               tuningReport={tuningReport}
               onRetrain={() => runRetrain(m.id)}
+              onRealTradeRetrain={
+                m.id === "improved_v2" || m.id === "maximized_v3"
+                  ? () => runRealTradeTraining(m.id)
+                  : null
+              }
               retraining={retraining[m.id]}
+              retrainingReal={retraining[`${m.id}_real`]}
             />
             <FeatureGroupsCard model={m} tuningReport={tuningReport} />
             <BacktestPanel
@@ -323,7 +383,7 @@ function Stat({ label, value, hint }) {
 }
 
 /* ---------- MODEL CARD ---------- */
-function ModelCard({ model, tuningReport, onRetrain, retraining }) {
+function ModelCard({ model, tuningReport, onRetrain, onRealTradeRetrain, retraining, retrainingReal }) {
   const status = tuningReport?.model_status?.[model.id];
   const trained = !!status?.is_trained;
   const acc = status?.accuracy || 0;
@@ -351,22 +411,43 @@ function ModelCard({ model, tuningReport, onRetrain, retraining }) {
             </CardTitle>
             <CardDescription className="mt-1">{model.desc}</CardDescription>
           </div>
-          <Button
-            onClick={onRetrain}
-            disabled={retraining}
-            className="bg-purple-600 hover:bg-purple-500"
-            data-testid={`retrain-btn-${model.id}`}
-          >
-            {retraining ? (
-              <>
-                <RotateCw className="w-4 h-4 mr-2 animate-spin" /> Training…
-              </>
-            ) : (
-              <>
-                <RotateCw className="w-4 h-4 mr-2" /> Retrain Now
-              </>
+          <div className="flex flex-col gap-2 items-end">
+            <Button
+              onClick={onRetrain}
+              disabled={retraining || retrainingReal}
+              className="bg-purple-600 hover:bg-purple-500"
+              data-testid={`retrain-btn-${model.id}`}
+            >
+              {retraining ? (
+                <>
+                  <RotateCw className="w-4 h-4 mr-2 animate-spin" /> Training…
+                </>
+              ) : (
+                <>
+                  <RotateCw className="w-4 h-4 mr-2" /> Retrain Now
+                </>
+              )}
+            </Button>
+            {onRealTradeRetrain && (
+              <Button
+                onClick={onRealTradeRetrain}
+                disabled={retraining || retrainingReal}
+                variant="outline"
+                size="sm"
+                className="border-emerald-600 text-emerald-300 hover:bg-emerald-900/30"
+                data-testid={`real-trade-retrain-btn-${model.id}`}
+                title="Train on REAL Tampermonkey W/L outcomes (last 30 days). Pulls OANDA backfill for each trade timestamp. ~1-3 min."
+              >
+                {retrainingReal ? (
+                  <>
+                    <RotateCw className="w-3 h-3 mr-1 animate-spin" /> Training on real trades…
+                  </>
+                ) : (
+                  <>🎯 Train from Real Trades</>
+                )}
+              </Button>
             )}
-          </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">

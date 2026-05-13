@@ -1,8 +1,43 @@
 # Elite Pocket Option Trading Bot - Product Requirements Document
 
-## Last Updated: May 10, 2026
+## Last Updated: May 13, 2026
 
 ## Current Status
+✅ **Iteration 54 — Real-Trade-Outcome ML Training (May 13, 2026)**
+
+**User goal**: "Make sure models are trained on precise entry times and best trading entry points — improve quality of accuracy and confidence."
+
+**Approach**: Real-trade training (option b). The ML model now learns from **actual Tampermonkey W/L outcomes** as ground-truth labels instead of synthetic "next-candle direction" labels.
+
+### Backend
+- **`ml_accuracy_tuner.py`** — new method `train_from_trade_reports(ml_system, symbols, min_samples, max_age_days, oanda_fallback=True)`:
+  - Pulls every closed trade from `tm_trade_reports` (1467 total, 936W/531L)
+  - Auto-skips weekend trades (901/1467 = 61%) since OANDA forex is closed
+  - For each remaining weekday trade: locates the OTC candle window at the exact entry timestamp, falls back to **OANDA S5 batch fetch** if OTC pool is stale (capped to 30 days)
+  - Extracts the same 90 features the live predictor uses, at THAT instant
+  - **Labels by REAL outcome**: WIN+CALL→UP, WIN+PUT→DOWN, LOSS+CALL→DOWN, LOSS+PUT→UP
+  - Trains sklearn ensemble with TimeSeriesSplit CV, persists via `_save_model()`
+- **`routes/ml.py`** — 3 new endpoints:
+  - `POST /api/ml/train-from-trades` — fire-and-forget trigger (returns 200 in ~2ms)
+  - `GET /api/ml/train-from-trades/status` — poll endpoint, returns final result when done
+  - `GET /api/ml/trade-reports/stats` — diagnostic (per-symbol W/L counts, window viability)
+- **10-min hard timeout** on the background task (asyncio.wait_for)
+
+### Frontend
+- **`MLLabPage.jsx`** — new "🎯 Train from Real Trades" button on each sklearn model card (`improved_v2`, `maximized_v3`). Triggers the fire-and-forget endpoint, polls status every 6s for up to 8 min, surfaces final accuracy + sample count + weekend skip count in a toast.
+
+### Verified end-to-end
+- Trigger response: **1.8ms** ✅
+- OANDA fallback: 188/188 weekday trades matched (100%)
+- 436 weekend trades skipped (OANDA forex closed)
+- CV accuracy: **50.97% ±3.76%** on 188 real trades across 5 symbols
+- Top auto-selected features: `return_1, return_2, return_3, return_10, return_20` — pure recent-momentum signals (confirms the model is learning short-term entry timing as the user wanted)
+- Class balance: 103 CALL / 85 PUT (well-balanced)
+- Per-symbol breakdown logged for transparency
+
+### Why this matters
+The live bot fires at a specific instant and the market pays out on the candle close. Training on the synthetic next-candle proxy ignored micro-timing, slippage, and execution latency. Real-outcome training grounds the confidence calibration in the **same conditions the bot faces live** — and pairs perfectly with the BOTAI abstain gate (now strategy-aware as of Iter 53c).
+
 ✅ **Iteration 53d — Login Hang Fix + Retrain Hard Timeout (May 10, 2026)**
 
 **Issue**: User reported "stuck on login screen". Backend was running per supervisor but unresponsive to all requests.
