@@ -483,6 +483,28 @@ async def start_auto_signal_generation():
 
 
 
+
+@router.post("/signals/scan/stop")
+async def stop_continuous_scan():
+    """
+    Iter 56: Abort the continuous scanner if it's running. The dashboard
+    "Stop Scan" button posts here. Idempotent — returns success even when
+    no scan is active.
+    """
+    stopped = continuous_scanner.stop_scan()
+    return {
+        "success": True,
+        "was_running": bool(stopped),
+        "message": "Continuous scan stopped" if stopped else "No active scan to stop",
+    }
+
+
+@router.get("/signals/scan/status")
+async def get_scan_status():
+    """Get continuous scanner state (used by dashboard / TM diagnostics)."""
+    return {"success": True, **continuous_scanner.get_status()}
+
+
 @router.post("/signals/auto-generate/enhanced")
 async def enhanced_auto_generate(
     scan_all_assets: bool = False,
@@ -544,32 +566,50 @@ async def enhanced_auto_generate(
             )
             return result
         else:
-            # Single-pass scan (legacy behavior)
+            # Single-pass scan — Iter 56 rewire: use the same force-generate-v2
+            # pipeline the rest of the system uses (ML ensemble vote, abstain
+            # gate, latency tracking, MTF confluence). The legacy
+            # generate_force_signal() returned malformed signals (direction
+            # "SELL" instead of "CALL/PUT", probability vs confidence unit
+            # mismatch) and produced 0 hits from 23 scanned assets.
             generated_signals = []
+            scanned = 0
+            abstained = 0
             for asset_id in assets_to_scan[:20]:  # Limit to 20 assets to avoid timeout
                 try:
-                    # Parse asset (format: SYMBOL_market)
-                    if '_' in asset_id:
-                        symbol, market_type = asset_id.rsplit('_', 1)
-                    else:
-                        symbol, market_type = asset_id, 'regular'
+                    scanned += 1
+                    # Normalize asset to OTC convention used by force-generate-v2
+                    a = asset_id.strip().replace(" ", "").replace("/", "")
+                    # _otc → _OTC; bare OTC suffix → _OTC
+                    if a.lower().endswith("_otc"):
+                        a = a[:-4] + "_OTC"
+                    elif a.upper().endswith("OTC") and not a.endswith("_OTC"):
+                        a = a[:-3] + "_OTC"
+                    a = a.upper() if a.endswith("_OTC") else a
                     
-                    # Generate signal for this asset
-                    signal_result = await force_signal_generator.generate_force_signal(
-                        asset_symbol=symbol,
-                        market_type=market_type,
-                        selected_timeframe='1m',
-                        selected_strategy='enhanced_rsi_bb_volume',
-                        force_signal=False  # Don't force, only generate if conditions met
+                    # Reuse the force-generate-v2 implementation directly
+                    sig_resp = await force_generate_signal_v2(
+                        asset=a,
+                        expiry_seconds=60,
+                        preferred_direction=None,
                     )
+                    signal = sig_resp.get("signal") if isinstance(sig_resp, dict) else None
+                    if not signal:
+                        continue
                     
-                    # Check if signal meets accuracy threshold
-                    if signal_result.get('signal') and signal_result['signal'].get('probability', 0) >= min_accuracy:
-                        generated_signals.append(signal_result['signal'])
-                        
-                        # Stop if we've reached max signals
-                        if len(generated_signals) >= max_signals:
-                            break
+                    # Skip if abstain (low confidence, stale, etc.)
+                    if signal.get("abstain"):
+                        abstained += 1
+                        continue
+                    
+                    confidence = float(signal.get("confidence") or 0.0)
+                    # min_accuracy is expressed as percentage (e.g. 70 = 70%)
+                    if confidence < float(min_accuracy):
+                        continue
+                    
+                    generated_signals.append(signal)
+                    if len(generated_signals) >= max_signals:
+                        break
                             
                 except Exception as e:
                     logging.error(f"Error generating signal for {asset_id}: {e}")
@@ -577,9 +617,14 @@ async def enhanced_auto_generate(
             
             return {
                 "success": True,
-                "message": f"Generated {len(generated_signals)} signals from {len(assets_to_scan)} assets scanned",
+                "message": (
+                    f"Generated {len(generated_signals)} signals from {scanned} assets scanned"
+                    + (f" ({abstained} abstained on low confidence)" if abstained else "")
+                ),
                 "signals": generated_signals,
-                "assets_scanned": len(assets_to_scan)
+                "assets_scanned": scanned,
+                "abstained_count": abstained,
+                "min_confidence_threshold": min_accuracy,
             }
         
     except Exception as e:
@@ -632,7 +677,10 @@ async def get_auto_signal_generation_status():
 # ============================================================================
 
 @router.get("/signals/latest")
-async def get_latest_signal(use_enhanced: bool = Query(True, description="Use enhanced AI signal if no recent signal")):
+async def get_latest_signal(
+    symbol: Optional[str] = Query(None, description="Optional symbol filter (e.g. EURUSD_OTC)"),
+    use_enhanced: bool = Query(True, description="Use enhanced AI signal if no recent signal"),
+):
     """
     Get the most recent trading signal for the auto-trader userscript
     
@@ -640,12 +688,33 @@ async def get_latest_signal(use_enhanced: bool = Query(True, description="Use en
     the user's mobile device (Kiwi Browser) to auto-execute trades.
     
     Returns the latest signal if it was generated within the last 5 minutes.
+    If `symbol` is given, returns only signals matching that asset (lets the
+    TM poller stay on one asset without picking up signals for others).
     If use_enhanced=True and no recent signal exists, generates a new one.
     """
     try:
-        # Get the most recent signal from database (check trading_signals collection)
+        # Build query — optionally filter by symbol
+        # Iter 56: TM script passes ?symbol=X to scope to the current asset.
+        # Match against both `symbol` and `asset` fields since force-generate-v2
+        # writes `symbol` while legacy writers may use `asset`.
+        query: Dict[str, Any] = {}
+        if symbol:
+            sym = symbol.strip().upper()
+            if sym.endswith("OTC") and not sym.endswith("_OTC"):
+                sym = sym[:-3] + "_OTC"
+            # Normalised variants
+            sym_no_otc = sym.replace("_OTC", "").replace("OTC", "")
+            query = {
+                "$or": [
+                    {"symbol": sym},
+                    {"asset": sym},
+                    {"symbol": sym_no_otc},
+                    {"asset": sym_no_otc},
+                ]
+            }
+        
         latest_signal = await db.trading_signals.find_one(
-            {},
+            query,
             {"_id": 0},
             sort=[("timestamp", -1)]
         )
@@ -679,20 +748,32 @@ async def get_latest_signal(use_enhanced: bool = Query(True, description="Use en
         # If signal is stale and enhanced mode is enabled, generate new signal
         if signal_is_stale and use_enhanced and enhanced_oanda.is_configured:
             try:
-                # Get the default trading asset from config
-                config_doc = await db.trading_configurations.find_one({"user_id": "default_user"})
-                default_asset = "EUR_USD"
-                if config_doc and config_doc.get('selected_assets'):
-                    # Get first selected asset, convert to OANDA format
-                    first_asset = config_doc['selected_assets'][0]
-                    if '_' not in first_asset:
-                        # Convert EURUSD to EUR_USD
-                        if len(first_asset) == 6:
-                            default_asset = f"{first_asset[:3]}_{first_asset[3:]}"
-                        else:
-                            default_asset = first_asset.replace("_OTC", "").replace("-", "_")
+                # Iter 56: honour the `symbol` filter when generating a fresh
+                # signal. Previously this fell back to the configured default
+                # asset regardless of what the caller asked for — so a TM
+                # poller asking for GBPUSD_OTC would get AUDUSD back.
+                if symbol:
+                    # Use the supplied symbol, converted to OANDA format
+                    raw_sym = symbol.strip().upper().replace("_OTC", "").replace("OTC", "")
+                    if "_" not in raw_sym and len(raw_sym) == 6:
+                        default_asset = f"{raw_sym[:3]}_{raw_sym[3:]}"
                     else:
-                        default_asset = first_asset.replace("_OTC", "")
+                        default_asset = raw_sym
+                else:
+                    # Get the default trading asset from config
+                    config_doc = await db.trading_configurations.find_one({"user_id": "default_user"})
+                    default_asset = "EUR_USD"
+                    if config_doc and config_doc.get('selected_assets'):
+                        # Get first selected asset, convert to OANDA format
+                        first_asset = config_doc['selected_assets'][0]
+                        if '_' not in first_asset:
+                            # Convert EURUSD to EUR_USD
+                            if len(first_asset) == 6:
+                                default_asset = f"{first_asset[:3]}_{first_asset[3:]}"
+                            else:
+                                default_asset = first_asset.replace("_OTC", "").replace("-", "_")
+                        else:
+                            default_asset = first_asset.replace("_OTC", "")
                 
                 # Generate enhanced signal
                 trend_signal = enhanced_oanda.generate_trend_signal(default_asset, "M1")
@@ -4741,6 +4822,38 @@ async def force_generate_signal_v2(
                 )
         # Fire-and-forget MongoDB log (every signal, not just abstained ones)
         log_latency_fire_and_forget(_lat_report)
+        
+        # Iter 56: persist the signal to trading_signals so the Tampermonkey
+        # poller (`GET /api/signals/latest?symbol=X`) and the dashboard
+        # signal feed pick it up. Without this, force-generate-v2 was a
+        # write-only endpoint and the TM script kept showing stale signals.
+        try:
+            persist_doc = {
+                "id": signal.get("id"),
+                "symbol": signal.get("symbol"),
+                "asset": signal.get("symbol"),  # alias for legacy consumers
+                "direction": signal.get("direction"),
+                "confidence": signal.get("confidence"),
+                "probability": signal.get("confidence"),  # legacy alias
+                "strategy": signal.get("strategy"),
+                "timestamp": signal.get("generated_at") or datetime.now(timezone.utc).isoformat(),
+                "expiry_seconds": signal.get("expiry_seconds"),
+                "expiration_minutes": max(1, int((signal.get("expiry_seconds") or 60) / 60)),
+                "analysis_type": signal.get("analysis_type"),
+                "abstain": signal.get("abstain"),
+                "abstain_threshold": signal.get("abstain_threshold"),
+                "abstain_source": signal.get("abstain_source"),
+                "abstain_reason": signal.get("abstain_reason"),
+                "latency": signal.get("latency"),
+                "confluence_score": signal.get("confluence_score"),
+                "quality": signal.get("quality"),
+                "components": signal.get("components"),
+                "source": "force-generate-v2",
+            }
+            persist_doc = {k: v for k, v in persist_doc.items() if v is not None}
+            await db.trading_signals.insert_one({**persist_doc})
+        except Exception as _pe:
+            logger.debug(f"force-generate-v2 persist failed: {_pe}")
 
         return {
             "success": True,

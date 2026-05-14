@@ -1,8 +1,37 @@
 # Elite Pocket Option Trading Bot - Product Requirements Document
 
-## Last Updated: May 13, 2026
+## Last Updated: May 14, 2026
 
 ## Current Status
+✅ **Iteration 56 — Dashboard ↔ TM Script Signal Chain Fixed (May 14, 2026)**
+
+**User issue**: "On the dashboard, need to test and make sure the scan all assets and generate signals features are working properly and in-line with the Tampermonkey script to place trades."
+
+### Bugs found
+1. **`/auto-generate/enhanced` single-pass returned 0 signals from 23 scanned assets** — was calling the legacy `generate_force_signal()` which returned `direction: "SELL"` (wrong — TM expects CALL/PUT), `probability` vs `confidence` unit mismatch (0-1 vs 0-100), and missing fields (`strategy=None, confidence=None`).
+2. **`force-generate-v2` didn't persist signals** to `trading_signals` collection — write-only endpoint. TM poller never saw v2 signals.
+3. **`/signals/latest` ignored the `symbol` query param** — TM poller asking for `GBPUSD_OTC` could get back `AUDUSD_OTC` from a different asset.
+4. **Stale-signal auto-gen fallback** ignored the `symbol` filter too — returned a different asset entirely.
+5. **No stop endpoint for the continuous scanner** — a hung scan locked all subsequent calls with "Scanner already running" until backend restart.
+
+### Fixes
+- **`routes/signals.py auto-generate/enhanced` single-pass branch** rewired to call `force_generate_signal_v2()` per asset. Now returns signals with proper CALL/PUT direction, real confidence, strategy, abstain flag, latency block. Filters by confidence threshold (percentage units, not 0-1).
+- **`force-generate-v2` writes to `trading_signals`** after each generation — full schema including latency + abstain + confluence. TM poller now sees v2 signals.
+- **`/signals/latest?symbol=X`** matches both `symbol` and `asset` fields with OTC normalisation (`EURUSD_OTC` ↔ `EURUSD`).
+- **Stale-signal auto-gen** honours the requested symbol — generates fresh signal for THAT asset, not the configured default.
+- **New endpoints**: `POST /api/signals/scan/stop` (release scanner lock) + `GET /api/signals/scan/status` (diagnostic).
+
+### Verified end-to-end (Dashboard → DB → TM)
+- `force-generate-v2 EURUSD_OTC` → persists with id `FORCE_…_EURUSD_OTC` ✅
+- TM `GET /signals/latest?symbol=EURUSD_OTC` → returns same id, same direction, same confidence, same latency block ✅
+- TM `GET /signals/latest?symbol=GBPUSD_OTC` → returns GBPUSD signal, not stale AUDUSD ✅
+- Scan All Assets → 5 valid signals (CALL/PUT 64-73% conf), all persisted, all TM-pollable per-symbol ✅
+
+### Tests
+`/app/backend/tests/test_iter56_dashboard_tm_chain.py` — 6 regression tests covering all 5 bugs + idempotent stop endpoint.
+
+**All 17 tests (Iter 53 + 55 + 56) pass in 60s.**
+
 ✅ **Iteration 55 — Signal Latency Monitoring + Auto-Abstain (May 13, 2026)**
 
 **User goal**: "Make sure latency is being monitored and adjusted as signals are being generated also." (Option D — full observability + auto-abstain.)
