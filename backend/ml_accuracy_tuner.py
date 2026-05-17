@@ -644,25 +644,63 @@ class MLAccuracyTuner:
             logger.info(f"OTC Training: {len(X)} samples, {X.shape[1]} features")
             logger.info(f"Class dist: CALL={sum(y)}, PUT={len(y) - sum(y)}")
 
-            # Feature selection — keep top features
+            # Iter 57 — TEMPORAL OUT-OF-SAMPLE HOLD-OUT (anti-overfit)
+            # Switch Markets best practice: "Always validate your strategy on
+            # out-of-sample data". Reserve the FINAL 15% of samples (chrono-
+            # logical) as a held-out test set the model never sees during
+            # training/CV. This gives an honest read on overfitting:
+            #   - cv_accuracy >> test_accuracy → model memorised training data
+            #   - cv_accuracy ≈ test_accuracy → genuine generalisation
+            # Order is preserved across get_otc_training_data() so the split
+            # is truly forward-walking.
+            test_fraction = 0.15
+            test_size = max(1, int(len(X) * test_fraction))
+            X_train, X_test = X[:-test_size], X[-test_size:]
+            y_train, y_test = y[:-test_size], y[-test_size:]
+            logger.info(
+                f"OTC split → train={len(X_train)} | test (hold-out, never seen by CV)={len(X_test)}"
+            )
+
+            # Feature selection — fit on TRAIN ONLY (test must remain unseen)
             scaler = RobustScaler()
-            X_scaled = scaler.fit_transform(X)
+            X_train_scaled = scaler.fit_transform(X_train)
+            X_test_scaled = scaler.transform(X_test)
 
             n_features = min(70, X.shape[1])
             selector = SelectKBest(mutual_info_classif, k=n_features)
-            X_selected = selector.fit_transform(X_scaled, y)
+            X_train_selected = selector.fit_transform(X_train_scaled, y_train)
+            X_test_selected = selector.transform(X_test_scaled)
 
-            # Cross-validate
+            # Cross-validate on training portion only
             tscv = TimeSeriesSplit(n_splits=5)
-            cv_scores = cross_val_score(ml_system.model, X_selected, y, cv=tscv, scoring='accuracy', n_jobs=-1)
+            cv_scores = cross_val_score(ml_system.model, X_train_selected, y_train, cv=tscv, scoring='accuracy', n_jobs=-1)
 
             logger.info(f"OTC CV scores: {cv_scores}")
-            logger.info(f"OTC Mean accuracy: {cv_scores.mean():.4f} (+/- {cv_scores.std() * 2:.4f})")
+            logger.info(f"OTC Mean CV accuracy: {cv_scores.mean():.4f} (+/- {cv_scores.std() * 2:.4f})")
 
-            # Train final model
-            ml_system.model.fit(X_selected, y)
+            # Train final model on full training portion
+            ml_system.model.fit(X_train_selected, y_train)
+            
+            # Score on the held-out test set — this is the honest accuracy
+            train_score = ml_system.model.score(X_train_selected, y_train)
+            test_score = ml_system.model.score(X_test_selected, y_test)
+            overfit_gap = train_score - test_score
+            overfit_warning = overfit_gap > 0.10  # >10% drop = clear overfitting
+
+            logger.info(
+                f"OTC train_acc={train_score:.4f} | test_acc={test_score:.4f} | gap={overfit_gap:.4f}"
+                + (" ⚠️ OVERFIT" if overfit_warning else " ✓")
+            )
+
+            # Now refit on ALL data (train+test) so production predictions use
+            # everything we know. The test score above is what we REPORT, but
+            # the deployed model uses every sample available.
+            X_all_scaled = scaler.fit_transform(X)
+            X_all_selected = selector.fit_transform(X_all_scaled, y)
+            ml_system.model.fit(X_all_selected, y)
             ml_system.is_trained = True
-            ml_system.model_accuracy = cv_scores.mean()
+            # Use the honest hold-out score as the published accuracy, not CV
+            ml_system.model_accuracy = test_score
             ml_system.scaler = scaler
             ml_system.last_training_time = datetime.now(timezone.utc)
             # Persist tuner-pipeline metadata so predict_with_tuner_pipeline()
@@ -682,12 +720,20 @@ class MLAccuracyTuner:
                 "success": True,
                 "source": "otc_candles_5s",
                 "total_samples": len(X),
+                "train_samples": len(X_train),
+                "test_samples": len(X_test),
                 "features_used": n_features,
                 "features_total": X.shape[1],
                 "selected_features": selected_names[:15],
                 "cv_accuracy": round(cv_scores.mean() * 100, 2),
                 "cv_std": round(cv_scores.std() * 100, 2),
                 "cv_scores": [round(s * 100, 2) for s in cv_scores.tolist()],
+                # Iter 57 — true out-of-sample test scores
+                "train_accuracy": round(train_score * 100, 2),
+                "test_accuracy": round(test_score * 100, 2),
+                "overfit_gap": round(overfit_gap * 100, 2),
+                "overfit_warning": overfit_warning,
+                "headline_accuracy": round(test_score * 100, 2),
                 "class_distribution": {"CALL": int(sum(y)), "PUT": int(len(y) - sum(y))},
                 "symbol_stats": symbol_stats,
                 "trained_at": datetime.now(timezone.utc).isoformat()
@@ -953,20 +999,46 @@ class MLAccuracyTuner:
             logger.info(f"[real-trade-train] {len(X)} samples ({X.shape[1]} features). "
                         f"Class dist CALL={int(sum(y))}, PUT={int(len(y) - sum(y))}")
             
+            # Iter 57 — out-of-sample hold-out (anti-overfit). Same logic as
+            # train_from_otc: reserve the final 15% chronologically as a test
+            # set the model never sees during training/CV. Reports an honest
+            # `test_accuracy` and an `overfit_warning` when train-test gap
+            # exceeds 10%.
+            test_fraction = 0.15
+            test_size = max(1, int(len(X) * test_fraction))
+            X_train, X_test = X[:-test_size], X[-test_size:]
+            y_train, y_test = y[:-test_size], y[-test_size:]
+            
             scaler = RobustScaler()
-            X_scaled = scaler.fit_transform(X)
+            X_train_scaled = scaler.fit_transform(X_train)
+            X_test_scaled = scaler.transform(X_test)
             n_features = min(70, X.shape[1])
             selector = SelectKBest(mutual_info_classif, k=n_features)
-            X_selected = selector.fit_transform(X_scaled, y)
+            X_train_selected = selector.fit_transform(X_train_scaled, y_train)
+            X_test_selected = selector.transform(X_test_scaled)
             
             # Cross-validate (TimeSeriesSplit; n_splits ≤ samples/10 to keep folds valid)
-            n_splits = max(2, min(5, len(X) // 10))
+            n_splits = max(2, min(5, len(X_train) // 10))
             tscv = TimeSeriesSplit(n_splits=n_splits)
-            cv_scores = cross_val_score(ml_system.model, X_selected, y, cv=tscv, scoring="accuracy", n_jobs=-1)
+            cv_scores = cross_val_score(ml_system.model, X_train_selected, y_train, cv=tscv, scoring="accuracy", n_jobs=-1)
             
-            ml_system.model.fit(X_selected, y)
+            ml_system.model.fit(X_train_selected, y_train)
+            train_score = ml_system.model.score(X_train_selected, y_train)
+            test_score = ml_system.model.score(X_test_selected, y_test) if len(X_test) > 0 else 0.0
+            overfit_gap = train_score - test_score
+            overfit_warning = overfit_gap > 0.10
+            
+            logger.info(
+                f"[real-trade-train] train_acc={train_score:.4f} | test_acc={test_score:.4f} | "
+                f"gap={overfit_gap:.4f}" + (" ⚠️ OVERFIT" if overfit_warning else " ✓")
+            )
+            
+            # Refit on all data for production
+            X_all_scaled = scaler.fit_transform(X)
+            X_all_selected = selector.fit_transform(X_all_scaled, y)
+            ml_system.model.fit(X_all_selected, y)
             ml_system.is_trained = True
-            ml_system.model_accuracy = float(cv_scores.mean())
+            ml_system.model_accuracy = float(test_score)
             ml_system.scaler = scaler
             ml_system.last_training_time = datetime.now(timezone.utc)
             ml_system.tuner_feature_names = feature_names
@@ -988,6 +1060,8 @@ class MLAccuracyTuner:
                 "source": "tm_trade_reports",
                 "method": "real-outcome-grounded",
                 "total_samples": len(X),
+                "train_samples": len(X_train),
+                "test_samples": len(X_test),
                 "features_used": n_features,
                 "features_total": X.shape[1],
                 "selected_features": selected_names[:15],
@@ -995,6 +1069,12 @@ class MLAccuracyTuner:
                 "cv_std": round(float(cv_scores.std()) * 100, 2),
                 "cv_scores": [round(float(s) * 100, 2) for s in cv_scores.tolist()],
                 "n_splits": n_splits,
+                # Iter 57 — out-of-sample metrics
+                "train_accuracy": round(train_score * 100, 2),
+                "test_accuracy": round(test_score * 100, 2),
+                "overfit_gap": round(overfit_gap * 100, 2),
+                "overfit_warning": overfit_warning,
+                "headline_accuracy": round(test_score * 100, 2),
                 "class_distribution": {"CALL": int(sum(y)), "PUT": int(len(y) - sum(y))},
                 "outcome_counts": outcome_counts,
                 "symbol_stats": symbol_stats,
