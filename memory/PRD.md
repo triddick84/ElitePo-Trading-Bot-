@@ -3,6 +3,34 @@
 ## Last Updated: May 17, 2026
 
 ## Current Status
+✅ **Iteration 57 — Out-of-Sample (OOS) Validation UI + Persistence (May 17, 2026)**
+
+User asked: "research online ... and implement anything you think will help improve the overall accuracy" — specifically calling out anti-overfit validation.
+
+### Backend (`ml_accuracy_tuner.py` + `routes/ml.py`)
+- `train_from_otc` and `train_from_trade_reports` already reserved the **final 15% chronologically** as a held-out OOS test set (Iter 57 backend was in place). This iteration **persists** the OOS metrics on the ml_system instance so they survive between retrains:
+  - `ml_system.tuner_oos_metrics = { cv_accuracy, cv_std, train_accuracy, test_accuracy, overfit_gap, overfit_warning, train_samples, test_samples, source, trained_at }`
+- `/api/ml/tuning-report` `model_status[id]` now exposes a new `oos` block carrying all of the above so the UI can render after page reload (not only fresh-from-toast).
+- Overfit warning fires when `train_accuracy - test_accuracy > 10%`.
+
+### Frontend (`MLLabPage.jsx`)
+- **ModelCard** now shows **two accuracy stats side-by-side**:
+  - `OOS Accuracy` chip (`data-testid="oos-accuracy-{id}"`) — honest held-out score, hint `Held-out · N samples`
+  - `CV Accuracy` chip (`data-testid="cv-accuracy-{id}"`) — TimeSeriesSplit CV mean, hint `±std% TSCV`
+- New **red overfit warning badge** (`data-testid="overfit-badge-{id}"`) — `⚠ overfit risk · gap X%`, hover tooltip explains the gap and suggests remediation. Surfaces in the card title next to the "trained" badge.
+- Retrain toasts now include the OOS read: `improved_v2 retrained → 55.84% CV (±4.4%) · OOS 61.18% ⚠ overfit gap 36.8%`. Real-trade training toast updated the same way.
+
+### Verified end-to-end
+- Browser screenshot: Improved v2 card shows `OOS Accuracy 61.18%` (green) · `CV Accuracy 55.84%` (green) · `⚠ overfit risk · gap 36.8%` (red) — exposes a real overfit on the AdaBoost ensemble that previously went silent under CV-only reporting. User now has explicit, actionable signal.
+- 3 new regression tests in `/app/backend/tests/test_iter57_oos_validation.py`:
+  - `test_train_from_otc_returns_oos_fields` — schema invariant on result dict (all OOS keys present, 15% hold-out math, overfit_warning is bool, headline = test_accuracy)
+  - `test_ml_system_persists_oos_metrics` — `ml_system.tuner_oos_metrics` populated post-train
+  - `test_tuning_report_exposes_oos_block` — `/api/ml/tuning-report` returns `model_status.<id>.oos`
+- **All 25 tests (Iter 53 + 55 + 56 + 56c + 57) pass in 95.7s.**
+
+### Why this matters
+The previous UI only displayed a single "CV Accuracy" stat — which on highly flexible ensembles (AdaBoost + GB + RF) can mask severe memorisation. The OOS hold-out gives an honest, forward-walking estimate of what win-rate the bot will see live, and the red overfit badge surfaces the gap automatically. Pairs perfectly with the BOTAI abstain gate: low-OOS / high-CV models get auto-throttled by the per-asset confidence threshold.
+
 ✅ **Iteration 56c — TM Script Latency Report Wiring (May 17, 2026)**
 
 User asked to wire the TM script to POST back `network_rtt_ms`/`exec_lag_ms` via `/api/signals/latency-report`.

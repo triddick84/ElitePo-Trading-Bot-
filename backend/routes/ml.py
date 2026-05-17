@@ -2163,13 +2163,17 @@ async def get_ml_tuning_report():
             "is_trained": maximized_ai_ml.is_trained,
             "accuracy": round(maximized_ai_ml.model_accuracy * 100, 2) if maximized_ai_ml.model_accuracy else 0,
             "features": maximized_ai_ml.selected_feature_count if hasattr(maximized_ai_ml, 'selected_feature_count') else 0,
-            "last_trained": maximized_ai_ml.last_training_time.isoformat() if maximized_ai_ml.last_training_time else None
+            "last_trained": maximized_ai_ml.last_training_time.isoformat() if maximized_ai_ml.last_training_time else None,
+            # Iter 57 — OOS overfit-detection block (may be None if model was
+            # trained before OOS support landed; UI handles null gracefully).
+            "oos": getattr(maximized_ai_ml, "tuner_oos_metrics", None),
         }
     if improved_ai_ml:
         model_status["improved_v2"] = {
             "is_trained": improved_ai_ml.is_trained,
             "accuracy": round(improved_ai_ml.model_accuracy * 100, 2) if improved_ai_ml.model_accuracy else 0,
-            "last_trained": improved_ai_ml.last_training_time.isoformat() if improved_ai_ml.last_training_time else None
+            "last_trained": improved_ai_ml.last_training_time.isoformat() if improved_ai_ml.last_training_time else None,
+            "oos": getattr(improved_ai_ml, "tuner_oos_metrics", None),
         }
 
     # Iter 66: include LSTM/GRU + PPO RL statuses so they surface in the ML Lab

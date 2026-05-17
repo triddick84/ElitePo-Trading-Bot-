@@ -707,6 +707,20 @@ class MLAccuracyTuner:
             # can rebuild the EXACT feature vector at inference time.
             ml_system.tuner_feature_names = feature_names
             ml_system.tuner_selected_mask = selector.get_support().tolist() if hasattr(selector, 'get_support') else None
+            # Iter 57 — persist OOS metrics on the ml_system so get_tuning_report()
+            # can surface them back to the UI between training runs.
+            ml_system.tuner_oos_metrics = {
+                "cv_accuracy": round(cv_scores.mean() * 100, 2),
+                "cv_std": round(cv_scores.std() * 100, 2),
+                "train_accuracy": round(train_score * 100, 2),
+                "test_accuracy": round(test_score * 100, 2),
+                "overfit_gap": round(overfit_gap * 100, 2),
+                "overfit_warning": bool(overfit_warning),
+                "train_samples": int(len(X_train)),
+                "test_samples": int(len(X_test)),
+                "trained_at": datetime.now(timezone.utc).isoformat(),
+                "source": "otc_candles_5s",
+            }
             ml_system._save_model()
 
             # Get selected feature names
@@ -1045,6 +1059,19 @@ class MLAccuracyTuner:
             ml_system.tuner_selected_mask = (
                 selector.get_support().tolist() if hasattr(selector, "get_support") else None
             )
+            # Iter 57 — persist OOS metrics for tuning-report surface-up
+            ml_system.tuner_oos_metrics = {
+                "cv_accuracy": round(float(cv_scores.mean()) * 100, 2),
+                "cv_std": round(float(cv_scores.std()) * 100, 2),
+                "train_accuracy": round(train_score * 100, 2),
+                "test_accuracy": round(test_score * 100, 2),
+                "overfit_gap": round(overfit_gap * 100, 2),
+                "overfit_warning": bool(overfit_warning),
+                "train_samples": int(len(X_train)),
+                "test_samples": int(len(X_test)),
+                "trained_at": datetime.now(timezone.utc).isoformat(),
+                "source": "tm_trade_reports",
+            }
             try:
                 ml_system._save_model()
             except Exception as save_err:

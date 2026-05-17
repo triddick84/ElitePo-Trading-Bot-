@@ -100,7 +100,10 @@ export default function MLLabPage() {
           }),
         }).then((res) => res.json());
         if (r.success) {
-          toast.success(`${modelId} retrained → ${r.cv_accuracy}% CV (±${r.cv_std}%)`);
+          // Iter 57 — surface OOS + overfit warning when present
+          const oos = r.test_accuracy != null ? ` · OOS ${r.test_accuracy}%` : "";
+          const warn = r.overfit_warning ? ` ⚠ overfit gap ${r.overfit_gap}%` : "";
+          toast.success(`${modelId} retrained → ${r.cv_accuracy}% CV (±${r.cv_std}%)${oos}${warn}`);
           refreshAll();
         } else {
           toast.error(`Retrain failed: ${r.error || "unknown"}`);
@@ -211,9 +214,11 @@ export default function MLLabPage() {
           if (s.success && !s.in_progress && s.result) {
             const res = s.result;
             if (res.success) {
+              const oos = res.test_accuracy != null ? ` · OOS ${res.test_accuracy}%` : "";
+              const warn = res.overfit_warning ? ` ⚠ overfit gap ${res.overfit_gap}%` : "";
               toast.success(
-                `Trained on ${res.total_samples} real trades → ${res.cv_accuracy}% CV ` +
-                `(±${res.cv_std}%). ${res.weekend_trades_skipped || 0} weekend trades skipped.`
+                `Trained on ${res.total_samples} real trades → ${res.cv_accuracy}% CV` +
+                `${oos}${warn} (±${res.cv_std}%). ${res.weekend_trades_skipped || 0} weekend trades skipped.`
               );
             } else {
               toast.error(`Real-trade training failed: ${res.error}`);
@@ -484,13 +489,22 @@ function ModelCard({ model, tuningReport, onRetrain, onRealTradeRetrain, retrain
   const lastTrained = status?.last_trained;
   const lastAgo = lastTrained ? Math.round((Date.now() - new Date(lastTrained).getTime()) / 60000) : null;
   const accColor = acc >= 55 ? "text-green-400" : acc >= 50 ? "text-amber-400" : "text-red-400";
+  // Iter 57 — OOS (out-of-sample) metrics for overfit detection
+  const oos = status?.oos || null;
+  const oosAcc = oos?.test_accuracy ?? null;
+  const cvAcc = oos?.cv_accuracy ?? null;
+  const overfitGap = oos?.overfit_gap ?? null;
+  const overfitWarning = !!oos?.overfit_warning;
+  const oosAccColor = oosAcc == null
+    ? "text-slate-500"
+    : oosAcc >= 55 ? "text-green-400" : oosAcc >= 50 ? "text-amber-400" : "text-red-400";
 
   return (
     <Card className="bg-slate-900 border-slate-800" data-testid={`model-card-${model.id}`}>
       <CardHeader>
         <div className="flex items-start justify-between gap-4">
           <div>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 flex-wrap">
               <span className="w-3 h-3 rounded-full" style={{ background: model.color }}></span>
               {model.name}
               {trained ? (
@@ -500,6 +514,15 @@ function ModelCard({ model, tuningReport, onRetrain, onRealTradeRetrain, retrain
               ) : (
                 <Badge variant="outline" className="text-slate-500">
                   not trained
+                </Badge>
+              )}
+              {overfitWarning && (
+                <Badge
+                  className="bg-red-500/20 text-red-300 border-red-500/40"
+                  data-testid={`overfit-badge-${model.id}`}
+                  title={`Train accuracy is ${overfitGap?.toFixed?.(1) ?? "?"}% higher than the held-out OOS accuracy — model may have memorised training data. Consider regularisation or more samples.`}
+                >
+                  <AlertTriangle className="w-3 h-3 mr-1" /> overfit risk · gap {overfitGap?.toFixed?.(1)}%
                 </Badge>
               )}
             </CardTitle>
@@ -545,13 +568,25 @@ function ModelCard({ model, tuningReport, onRetrain, onRealTradeRetrain, retrain
         </div>
       </CardHeader>
       <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Stat label="CV Accuracy" value={<span className={accColor}>{acc.toFixed(2)}%</span>} />
-        <Stat label="Last trained" value={lastAgo !== null ? `${lastAgo}m ago` : "—"} />
         <Stat
-          label="Pool size"
-          value={(tuningReport?.otc_data?.total_candles || 0).toLocaleString()}
-          hint="OTC candles"
+          label="OOS Accuracy"
+          value={
+            <span className={oosAccColor} data-testid={`oos-accuracy-${model.id}`}>
+              {oosAcc != null ? `${oosAcc.toFixed(2)}%` : `${acc.toFixed(2)}%`}
+            </span>
+          }
+          hint={oosAcc != null ? `Held-out · ${oos?.test_samples || 0} samples` : "Honest hold-out"}
         />
+        <Stat
+          label="CV Accuracy"
+          value={
+            <span className={accColor} data-testid={`cv-accuracy-${model.id}`}>
+              {cvAcc != null ? `${cvAcc.toFixed(2)}%` : "—"}
+            </span>
+          }
+          hint={cvAcc != null && oos?.cv_std != null ? `±${oos.cv_std.toFixed(2)}% TSCV` : "TimeSeriesSplit"}
+        />
+        <Stat label="Last trained" value={lastAgo !== null ? `${lastAgo}m ago` : "—"} />
         <Stat
           label="Feature pool"
           value={`70 / ${tuningReport?.tuning_config?.candlestick_mtf_apr24 ? 90 : "?"}`}
