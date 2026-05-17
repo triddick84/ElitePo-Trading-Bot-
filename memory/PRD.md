@@ -1,8 +1,27 @@
 # Elite Pocket Option Trading Bot - Product Requirements Document
 
-## Last Updated: May 14, 2026
+## Last Updated: May 17, 2026
 
 ## Current Status
+✅ **Iteration 56b — TM Panel: abstain-source + server-latency chips (May 17, 2026)**
+
+User asked to surface `signal.latency` chip + `abstain_source` chip in the TM panel preview.
+
+### Tampermonkey Script (v8.60.0 → **v8.61.0**)
+- **`panel.js` HTML** — added two new chips in the `qualsub` row:
+  - `#qualabstainsrc` (data-testid `abstain-source-chip`) — shows the abstain-threshold tier and value: `STRAT@68%` (strategy-specific tuning, green), `ASSET@70%` (asset-only, blue), `DFLT@62%` (default, grey), or `LAT-STALE` (latency-budget exceeded, red).
+  - `#qualsrvlat` (data-testid `server-latency-chip`) — shows server-side signal-generation latency + % of timeframe budget consumed: `srv 234ms (16%)`. Coloured by bucket: green <60%, yellow 60-100%, red ≥100% (auto-abstain trigger).
+- **`panel.js` CSS** — bucket classes `src-strategy/asset/default/latency` + `lat-good/warn/bad` with matching tints.
+- **`panel.js setSignalPreview()`** — reads `info.abstainSource`, `info.serverLatencyMs`, `info.serverLatencyBudgetMs` and renders the chips with the right class/label.
+- **`index.js`** — maps `sig.abstain_source`, `sig.latency.total_ms`, `sig.latency.budget_ms` from the backend response into the `lastSignal` object so the panel can render them.
+- **Bumped** `version.txt` 8.60.0 → 8.61.0, rebuilt via `yarn webpack --mode production`, copied to `frontend/public/pocket-option-auto-trader.user.js` so the live install endpoint serves the new bundle.
+
+### Verified
+- Public URL serves v8.61.0 (was 8.60.0)
+- Both `abstain-source-chip` and `server-latency-chip` data-testids present in the production bundle (264KB)
+- All chip label strings (`STRAT@`, `ASSET@`, `DFLT@`, `LAT-STALE`) and CSS classes (`src-strategy`, `src-asset`, `src-default`, `src-latency`, `lat-good`, `lat-warn`, `lat-bad`) embedded
+- Existing 17 regression tests still passing in 60s
+
 ✅ **Iteration 56 — Dashboard ↔ TM Script Signal Chain Fixed (May 14, 2026)**
 
 **User issue**: "On the dashboard, need to test and make sure the scan all assets and generate signals features are working properly and in-line with the Tampermonkey script to place trades."

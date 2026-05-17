@@ -471,6 +471,13 @@ class EliteTradingBot {
             // the user sees at a glance when GO would refuse to fire.
             abstain: sig.abstain === true,
             abstainThreshold: sig.abstain_threshold,
+            // v8.61.0 / Iter 56b — abstain source (strategy > asset > default > latency)
+            // and server-side generation latency block (Iter 55). Coloured chips in
+            // the panel preview let the user inspect threshold tier + processing time
+            // at a glance.
+            abstainSource: sig.abstain_source,
+            serverLatencyMs: (sig.latency && sig.latency.total_ms) || null,
+            serverLatencyBudgetMs: (sig.latency && sig.latency.budget_ms) || null,
           };
           setSignalPreview(lastSignal);
         } else {

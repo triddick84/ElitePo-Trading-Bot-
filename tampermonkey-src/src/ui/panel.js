@@ -659,6 +659,17 @@ function injectCSS() {
     .${P}qualpill.ml { color: #58a6ff !important; background: rgba(88,166,255,0.08) !important; }
     .${P}qualpill.strats { color: #a5d6ff !important; }
     .${P}qualpill.votes { color: #c9b6ff !important; }
+    /* Iter 56b — abstain source chip (which threshold tier fired) */
+    .${P}qualpill.abstainsrc { background: rgba(255,255,255,0.04) !important; border: 1px solid rgba(255,255,255,0.12) !important; }
+    .${P}qualpill.abstainsrc.src-strategy { color: #6effa6 !important; border-color: rgba(110,255,166,0.4) !important; background: rgba(110,255,166,0.08) !important; }
+    .${P}qualpill.abstainsrc.src-asset    { color: #6bb5ff !important; border-color: rgba(107,181,255,0.4) !important; background: rgba(107,181,255,0.08) !important; }
+    .${P}qualpill.abstainsrc.src-default  { color: #b8b8b8 !important; }
+    .${P}qualpill.abstainsrc.src-latency  { color: #ff8a6e !important; border-color: rgba(255,138,110,0.5) !important; background: rgba(255,138,110,0.10) !important; }
+    /* Iter 56b — server latency chip (% of timeframe budget consumed) */
+    .${P}qualpill.srvlat { font-variant-numeric: tabular-nums !important; }
+    .${P}qualpill.srvlat.lat-good { color: #6effa6 !important; background: rgba(110,255,166,0.08) !important; }
+    .${P}qualpill.srvlat.lat-warn { color: #ffcc66 !important; background: rgba(255,204,102,0.10) !important; }
+    .${P}qualpill.srvlat.lat-bad  { color: #ff8a6e !important; background: rgba(255,138,110,0.14) !important; }
     .${P}qualspacer { flex: 1 !important; }
     .${P}quallat { color: #6e7681 !important; }
     .${P}qualrow { position: relative !important; }
@@ -842,8 +853,10 @@ export function createPanel() {
           <span class="${P}qualpill ml" id="${P}qualml" style="display:none">·</span>
           <span class="${P}qualpill strats" id="${P}qualstrats" style="display:none">·</span>
           <span class="${P}qualpill votes" id="${P}qualvotes" style="display:none">·</span>
+          <span class="${P}qualpill abstainsrc" id="${P}qualabstainsrc" data-testid="abstain-source-chip" style="display:none" title="Which level supplied the abstain threshold for this signal: strategy-specific tuning > asset tuning > default. Lets you see whether the gate is custom-calibrated (Iter 53c)."></span>
+          <span class="${P}qualpill srvlat" id="${P}qualsrvlat" data-testid="server-latency-chip" style="display:none" title="Server-side signal generation latency. Coloured by % of timeframe budget used (Iter 55). Red = approaching auto-abstain on stale data."></span>
           <span class="${P}qualspacer"></span>
-          <span class="${P}quallat" id="${P}quallat"></span>
+          <span class="${P}quallat" id="${P}quallat" title="End-to-end round-trip from the TM panel's clock"></span>
         </div>
         <div class="${P}row">
           <button id="${P}r21s" class="${P}btn ${P}btn-r21s" title="Time Strategy — fires an opposite 5s trade at a chosen second of every 1m candle">TIME STRAT</button>
@@ -1469,6 +1482,50 @@ export function setSignalPreview(info) {
       latEl.textContent = `${info.latencyMs}ms`;
     } else {
       latEl.textContent = '';
+    }
+  }
+  
+  // Iter 56b — abstain source chip (which threshold tier resolved the gate)
+  const abstainSrcEl = q('qualabstainsrc');
+  if (abstainSrcEl) {
+    abstainSrcEl.classList.remove('src-strategy', 'src-asset', 'src-default', 'src-latency');
+    const src = (info.abstainSource || '').toLowerCase();
+    const thr = info.abstainThreshold;
+    if (src && thr != null) {
+      const labels = {
+        strategy: `STRAT@${thr}%`,
+        asset:    `ASSET@${thr}%`,
+        default:  `DFLT@${thr}%`,
+        latency:  `LAT-STALE`,
+      };
+      abstainSrcEl.textContent = labels[src] || `${src.toUpperCase()}@${thr}%`;
+      abstainSrcEl.classList.add(`src-${src}`);
+      abstainSrcEl.style.display = '';
+    } else {
+      abstainSrcEl.style.display = 'none';
+    }
+  }
+  
+  // Iter 56b — server-side latency chip (% of timeframe budget consumed)
+  const srvLatEl = q('qualsrvlat');
+  if (srvLatEl) {
+    srvLatEl.classList.remove('lat-good', 'lat-warn', 'lat-bad');
+    const sm = Number(info.serverLatencyMs);
+    const bm = Number(info.serverLatencyBudgetMs);
+    if (sm > 0 && bm > 0) {
+      const pct = (sm / bm) * 100;
+      // Coloured bucket — keep in sync with the auto-abstain trigger (100% = stale)
+      if (pct >= 100) srvLatEl.classList.add('lat-bad');
+      else if (pct >= 60) srvLatEl.classList.add('lat-warn');
+      else srvLatEl.classList.add('lat-good');
+      srvLatEl.textContent = `srv ${sm.toFixed(0)}ms (${pct.toFixed(0)}%)`;
+      srvLatEl.style.display = '';
+    } else if (sm > 0) {
+      srvLatEl.classList.add('lat-good');
+      srvLatEl.textContent = `srv ${sm.toFixed(0)}ms`;
+      srvLatEl.style.display = '';
+    } else {
+      srvLatEl.style.display = 'none';
     }
   }
 }
