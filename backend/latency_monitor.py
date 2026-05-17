@@ -196,7 +196,8 @@ async def get_latency_stats(
 ) -> Dict[str, Any]:
     """
     Aggregate latency stats: count, mean, p50, p95, p99, max, per-phase mean,
-    exceeded count + rate. Filter by asset/strategy/timeframe/since.
+    exceeded count + rate. Includes client-side latency means (network RTT,
+    DOM click lag, exec lag) reported by the TM panel (Iter 56c).
     """
     db = _get_db()
     cutoff = datetime.now(timezone.utc) - timedelta(minutes=since_minutes)
@@ -210,12 +211,24 @@ async def get_latency_stats(
     
     cursor = db[LATENCY_COLL].find(query, {"_id": 0}).sort("_logged_at", -1).limit(5000)
     docs = await cursor.to_list(length=5000)
+    
+    # Iter 56c — pull TM-reported client latency for the same window
+    client_query: Dict[str, Any] = {"_logged_at": {"$gte": cutoff}}
+    if asset:
+        client_query["asset"] = asset
+    if strategy:
+        client_query["strategy"] = strategy
+    client_docs = await db[LATENCY_COLL + "_client"].find(
+        client_query, {"_id": 0}
+    ).limit(5000).to_list(length=5000)
+    
     if not docs:
         return {
             "count": 0,
             "since_minutes": since_minutes,
             "filter": {"asset": asset, "strategy": strategy, "timeframe": timeframe},
             "stats": None,
+            "client": _client_latency_summary(client_docs),
         }
     
     totals = sorted(d.get("total_ms", 0) for d in docs)
@@ -255,6 +268,33 @@ async def get_latency_stats(
             "exceeded_rate": round(exceeded / len(docs), 4),
             "phase_means_ms": phase_means,
         },
+        "client": _client_latency_summary(client_docs),
+    }
+
+
+def _client_latency_summary(client_docs: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Iter 56c — compact summary of TM-reported client-side timings."""
+    if not client_docs:
+        return {"count": 0, "network_rtt_mean_ms": None, "dom_click_lag_mean_ms": None,
+                "exec_lag_mean_ms": None, "notes_breakdown": {}}
+    
+    def _mean(values: List[float]) -> Optional[float]:
+        vs = [v for v in values if isinstance(v, (int, float))]
+        return round(sum(vs) / len(vs), 2) if vs else None
+    
+    notes_breakdown: Dict[str, int] = {}
+    for d in client_docs:
+        n = d.get("notes") or "unknown"
+        # Group by prefix (executed/gated/click-failed)
+        key = n.split(":", 1)[0]
+        notes_breakdown[key] = notes_breakdown.get(key, 0) + 1
+    
+    return {
+        "count": len(client_docs),
+        "network_rtt_mean_ms": _mean([d.get("network_rtt_ms") for d in client_docs]),
+        "dom_click_lag_mean_ms": _mean([d.get("dom_click_lag_ms") for d in client_docs]),
+        "exec_lag_mean_ms": _mean([d.get("exec_lag_ms") for d in client_docs]),
+        "notes_breakdown": notes_breakdown,
     }
 
 

@@ -90,9 +90,20 @@ export async function post(endpoint, data = {}) {
 export async function fetchSignal(symbol = null) {
   try {
     const params = symbol ? { symbol } : {};
+    // Iter 56c: capture client-side RTT so the poller can attribute network
+    // overhead vs server processing in latency reports.
+    const t0 = performance.now();
     const response = await get('/signals/latest', params);
-    
+    const rttMs = performance.now() - t0;
+
     if (response.success && response.signal) {
+      // Stash RTT on the signal (non-enumerable so it doesn't pollute downstream consumers)
+      try {
+        Object.defineProperty(response.signal, '_fetchRttMs', {
+          value: Math.round(rttMs * 100) / 100,
+          enumerable: false,
+        });
+      } catch (_e) { /* read-only signal? just skip */ }
       return response.signal;
     }
     return null;
@@ -200,6 +211,43 @@ export async function reportTradeOutcome({ outcome, asset = null, strategy = nul
   }
 }
 
+/**
+ * Report client-side execution latency for a signal (Iter 56c).
+ * Fire-and-forget; never throws — instrumentation must not impact trading.
+ * Server collects these into `signal_latency_log_client` for end-to-end analysis.
+ *
+ * @param {Object} timings
+ * @param {string|null} timings.signalId - Signal id (matched against server log)
+ * @param {string|null} timings.asset
+ * @param {string|null} timings.strategy
+ * @param {number|null} timings.networkRttMs - Polling request → response received
+ * @param {number|null} timings.domClickLagMs - Response received → DOM click dispatched
+ * @param {number|null} timings.execLagMs - DOM click → PO confirms trade open
+ * @param {string|null} timings.notes - Free-form tag (e.g. 'auto-skip-cooldown')
+ */
+export function reportLatency(timings) {
+  try {
+    if (!timings || typeof timings !== 'object') return;
+    const body = {
+      signal_id: timings.signalId ?? null,
+      asset: timings.asset ?? null,
+      strategy: timings.strategy ?? null,
+      network_rtt_ms: typeof timings.networkRttMs === 'number' ? timings.networkRttMs : null,
+      dom_click_lag_ms: typeof timings.domClickLagMs === 'number' ? timings.domClickLagMs : null,
+      exec_lag_ms: typeof timings.execLagMs === 'number' ? timings.execLagMs : null,
+      notes: timings.notes ?? null,
+    };
+    // Drop completely-empty reports (no metric to record)
+    if (body.network_rtt_ms == null && body.dom_click_lag_ms == null && body.exec_lag_ms == null) {
+      return;
+    }
+    // Fire-and-forget — no await, never throw on failure
+    post('/signals/latency-report', body).catch(() => { /* silent — non-essential */ });
+  } catch (_e) {
+    // Never let latency reporting break trading
+  }
+}
+
 export default {
   request,
   get,
@@ -210,4 +258,5 @@ export default {
   reportTrade,
   recordPremiumResult,
   reportTradeOutcome,
+  reportLatency,
 };

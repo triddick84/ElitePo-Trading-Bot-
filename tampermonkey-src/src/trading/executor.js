@@ -7,7 +7,7 @@ import { CONFIG } from '../core/config.js';
 import { state, setState, recordTradeResult, recordAssetResult, saveState } from '../core/state.js';
 import { log, success, error, warn, info } from '../core/logger.js';
 import { executeTrade, setTradeAmount, getCurrentAsset, getPayout, getAccountBalance, scanDOMForTradeResult } from '../utils/dom.js';
-import { reportTrade, recordPremiumResult, reportTradeOutcome } from '../utils/api.js';
+import { reportTrade, recordPremiumResult, reportTradeOutcome, reportLatency } from '../utils/api.js';
 import { smartInvert } from './smartInvert.js';
 import { tradeResultWatcher } from './tradeResultWatcher.js';
 
@@ -81,10 +81,24 @@ class TradeExecutor {
    */
   async execute(signal, source = 'scan') {
     const force = source === 'go-force' || source === '21s-reversal';
+    // Iter 56c — latency instrumentation. Captures DOM-click lag (from this
+    // entry point → actual click) and exec lag (click → DOM-confirmed trade).
+    // Posted fire-and-forget to /api/signals/latency-report.
+    const _execStartedAt = performance.now();
+    const _signalId = signal?.id || signal?.signal_id || null;
+    const _networkRttMs = (signal && typeof signal._fetchRttMs === 'number') ? signal._fetchRttMs : null;
 
     // Audit: step 1 — signal validation (force mode skips MIN_CONFIDENCE gate)
     if (!this.validateSignal(signal, { force })) {
       log(`[exec:${source}] ✗ signal validation failed`);
+      // Latency-report the gate rejection so we can see how often it fires
+      reportLatency({
+        signalId: _signalId,
+        asset: getCurrentAsset(),
+        strategy: signal?.strategy,
+        networkRttMs: _networkRttMs,
+        notes: `gated:${source}:validation`,
+      });
       return false;
     }
     log(`[exec:${source}] ✓ signal validated (${signal.direction} ${signal.confidence}%${force ? ' — force mode' : ''})`);
@@ -92,6 +106,13 @@ class TradeExecutor {
     // Audit: step 2 — trade cooldown/rate limits (skip when force)
     if (!force && !this.canTrade(source)) {
       log(`[exec:${source}] ✗ canTrade returned false (cooldown/rate limit)`);
+      reportLatency({
+        signalId: _signalId,
+        asset: getCurrentAsset(),
+        strategy: signal?.strategy,
+        networkRttMs: _networkRttMs,
+        notes: `gated:${source}:cooldown`,
+      });
       return false;
     }
     log(`[exec:${source}] ✓ canTrade check passed`);
@@ -121,7 +142,12 @@ class TradeExecutor {
       // The internal `state.moneyManagement.currentAmount` is still tracked
       // for win/loss stats display, but it doesn't drive the UI anymore.
       const amount = state.moneyManagement.currentAmount;  // for logs/reports only
+      // Iter 56c — measure DOM click latency precisely around executeTrade()
+      const _clickStartedAt = performance.now();
       const executed = await executeTrade(direction);
+      const _clickElapsedMs = performance.now() - _clickStartedAt;
+      // DOM click lag = time from execute() entry → click actually fired
+      const _domClickLagMs = _clickStartedAt - _execStartedAt;
 
       if (executed) {
         const now = Date.now();
@@ -156,6 +182,18 @@ class TradeExecutor {
           warn(`Failed to report trade: ${e.message}`);
         });
 
+        // Iter 56c — fire-and-forget latency report (success path).
+        // exec_lag_ms = how long executeTrade() took (click → DOM confirms).
+        reportLatency({
+          signalId: _signalId,
+          asset,
+          strategy: signal.strategy,
+          networkRttMs: _networkRttMs,
+          domClickLagMs: Math.round(_domClickLagMs * 100) / 100,
+          execLagMs: Math.round(_clickElapsedMs * 100) / 100,
+          notes: `executed:${source}${trade.wasInverted ? ':inverted' : ''}`,
+        });
+
         // Kick off background outcome auto-resolver (balance-poll based).
         // Detects WIN/LOSS ~expiry+3s after the trade and calls recordResult,
         // which in turn posts to /api/trades/outcome so WinRateWidget can
@@ -172,6 +210,17 @@ class TradeExecutor {
         return true;
       } else {
         error(`[exec:${source}] ✗ executeTrade returned false — button click failed`);
+        // Iter 56c — report failed-click latency so we can see if it's slow
+        // *and* failing, vs just failing
+        reportLatency({
+          signalId: _signalId,
+          asset,
+          strategy: signal.strategy,
+          networkRttMs: _networkRttMs,
+          domClickLagMs: Math.round(_domClickLagMs * 100) / 100,
+          execLagMs: Math.round(_clickElapsedMs * 100) / 100,
+          notes: `click-failed:${source}`,
+        });
         return false;
       }
     } catch (e) {

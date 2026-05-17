@@ -3,6 +3,41 @@
 ## Last Updated: May 17, 2026
 
 ## Current Status
+✅ **Iteration 56c — TM Script Latency Report Wiring (May 17, 2026)**
+
+User asked to wire the TM script to POST back `network_rtt_ms`/`exec_lag_ms` via `/api/signals/latency-report`.
+
+### Tampermonkey Script (v8.61.0 → **v8.62.0**)
+- **`utils/api.js fetchSignal`** — wraps the `/signals/latest` poll with `performance.now()` and stashes `_fetchRttMs` on the returned signal object (non-enumerable, so it doesn't pollute downstream consumers).
+- **`utils/api.js reportLatency`** — new fire-and-forget helper that POSTs to `/api/signals/latency-report` with `{signal_id, asset, strategy, network_rtt_ms, dom_click_lag_ms, exec_lag_ms, notes}`. Never throws — instrumentation must not impact trading. Drops empty reports (no metrics) before sending.
+- **`trading/executor.js execute()`** — instrumented with `performance.now()` timestamps around each phase:
+  - `dom_click_lag_ms` = time from `execute()` entry → `executeTrade()` invocation
+  - `exec_lag_ms` = time from click dispatched → DOM confirms trade open (return of `executeTrade()`)
+  - `network_rtt_ms` = pulled from `signal._fetchRttMs` set by `fetchSignal`
+  - Reports posted on **3 paths**: successful execution (`executed:scan/app/cycle`), gated rejection (`gated:source:reason`), and click-failed (`click-failed:source`)
+
+### Backend (Iter 55 → enhanced)
+- **`latency_monitor.get_latency_stats()`** now joins server-side server-side `signal_latency_log` with TM-reported `signal_latency_log_client` records and returns a new `client` block:
+  ```
+  client: {
+    count, network_rtt_mean_ms, dom_click_lag_mean_ms,
+    exec_lag_mean_ms, notes_breakdown: { executed: N, gated: N, ... }
+  }
+  ```
+- Filters (`asset`, `strategy`, `since_minutes`) apply consistently to both server and client docs.
+
+### Verified end-to-end
+- Public URL serves v8.62.0 with `reportLatency`, `networkRttMs`, `domClickLagMs`, `execLagMs`, `signals/latency-report` all present in production bundle
+- POST → MongoDB `signal_latency_log_client` insert verified
+- `/signals/latency-stats?since_minutes=60` returns unified server + client stats:
+  - server: count=18, mean=3097ms, p95=1010ms
+  - client: count=2, RTT=46.5ms, DOM=18.6ms, exec=231.5ms
+
+### Tests
+`/app/backend/tests/test_iter56c_latency_report.py` — 5 regression tests (TM payload storage, client block presence, empty-window safety, field round-trip, empty-payload tolerance).
+
+**All 22 tests (Iter 53 + 55 + 56 + 56b + 56c) pass in 60.8s.**
+
 ✅ **Iteration 56b — TM Panel: abstain-source + server-latency chips (May 17, 2026)**
 
 User asked to surface `signal.latency` chip + `abstain_source` chip in the TM panel preview.
