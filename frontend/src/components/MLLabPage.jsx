@@ -44,17 +44,20 @@ export default function MLLabPage() {
   const [otcStats, setOtcStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [retraining, setRetraining] = useState({});
-  const [backtest, setBacktest] = useState({ symbol: "EURUSD_OTC", days: 7, asset_class: "forex" });
+  const [backtest, setBacktest] = useState({ symbol: "EURUSD_OTC", days: 7, timeframe: "5s", asset_class: "forex_otc" });
   const [backtestRunning, setBacktestRunning] = useState(false);
   const [backtestResult, setBacktestResult] = useState(null);
   const [backtestHistory, setBacktestHistory] = useState([]);
   const [assets, setAssets] = useState({ forex: [], crypto: [], stocks: [] });
+  const [assetUniverse, setAssetUniverse] = useState(null);
   const [latencyHealth, setLatencyHealth] = useState(null);
   const [latencyStats, setLatencyStats] = useState(null);
+  const [guardrail, setGuardrail] = useState(null);
+  const [tournament, setTournament] = useState(null);
 
   const refreshAll = async () => {
     try {
-      const [tr, ss, ot, btH, ass, lh, lst] = await Promise.all([
+      const [tr, ss, ot, btH, ass, lh, lst, uni, gr, tour] = await Promise.all([
         fetch(`${API}/ml/tuning-report`).then((r) => r.json()),
         fetch(`${API}/ml/scheduler/status`).then((r) => r.json()),
         fetch(`${API}/signals/otc-candle-stats`).then((r) => r.json()).catch(() => null),
@@ -62,6 +65,9 @@ export default function MLLabPage() {
         fetch(`${API}/backtest/assets`).then((r) => r.json()).catch(() => ({ assets: {} })),
         fetch(`${API}/signals/latency-health`).then((r) => r.json()).catch(() => null),
         fetch(`${API}/signals/latency-stats?since_minutes=60`).then((r) => r.json()).catch(() => null),
+        fetch(`${API}/backtest/assets-universe`).then((r) => r.json()).catch(() => null),
+        fetch(`${API}/signals/latency-guardrail/status`).then((r) => r.json()).catch(() => null),
+        fetch(`${API}/ml/tournament/status`).then((r) => r.json()).catch(() => null),
       ]);
       setTuningReport(tr);
       setSchedulerStatus(ss);
@@ -70,6 +76,9 @@ export default function MLLabPage() {
       setAssets(ass.assets || {});
       setLatencyHealth(lh);
       setLatencyStats(lst);
+      setAssetUniverse(uni);
+      setGuardrail(gr?.guardrail || null);
+      setTournament(tour || null);
       setLoading(false);
     } catch (e) {
       toast.error("Failed to load ML lab data: " + e.message);
@@ -162,7 +171,12 @@ export default function MLLabPage() {
             if (s.success && !s.manual_in_progress && (s.retrain_count ?? 0) > startCount) {
               const last = (s.recent_history || []).slice(-1)[0];
               const trained = last?.models_trained?.length || 0;
-              toast.success(`Ensemble retrain complete — ${trained} models trained in ${last?.duration_seconds?.toFixed(0) || "?"}s`);
+              const agg = last?.aggregate_oos;
+              const oosStr = agg
+                ? ` · OOS ${agg.mean_oos_accuracy}% (min ${agg.min_oos_accuracy}, max ${agg.max_oos_accuracy})` +
+                  (agg.any_overfit ? ` ⚠ overfit detected` : "")
+                : "";
+              toast.success(`Ensemble retrain complete — ${trained} models trained in ${last?.duration_seconds?.toFixed(0) || "?"}s${oosStr}`);
               refreshAll();
               return;
             }
@@ -242,17 +256,63 @@ export default function MLLabPage() {
     setBacktestRunning(true);
     setBacktestResult(null);
     try {
+      // Iter 58 — pick the right strategy per active model tab
+      // and pull the correct timeframe based on the asset class (OTC ≥ 3s, regular ≥ M1).
+      const strategyMap = {
+        improved_v2: "hybrid",       // ensemble vote — closest to live behaviour
+        maximized_v3: "hybrid",
+        lstm_gru: "lstm_gru",
+        ppo_rl: "ppo_rl",
+        ensemble: "all",
+      };
+      const strat = strategyMap[tab] || "hybrid";
+      const isOtc = (backtest.symbol || "").toUpperCase().includes("_OTC");
+      const tf = backtest.timeframe || (isOtc ? "5s" : "M1");
+
       const r = await fetch(`${API}/backtest/run`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          strategy: "hybrid",
+          strategy: strat,
           symbol: backtest.symbol,
+          timeframe: tf,
           days: parseInt(backtest.days, 10),
         }),
       }).then((res) => res.json());
-      setBacktestResult(r);
-      toast.success(`Backtest complete: ${r.win_rate?.toFixed(1)}% win rate, ${r.total_signals} signals`);
+
+      // Backend returns { success, results: [ { strategy, metrics: {...} } ] }
+      // We unwrap the first result's metrics and surface them flat.
+      if (r && r.success && Array.isArray(r.results) && r.results.length > 0) {
+        // Prefer the result that actually has metrics; some entries may carry `error` only.
+        const withMetrics = r.results.find((x) => x.metrics) || r.results[0];
+        if (withMetrics.error) {
+          toast.error(`Backtest failed: ${withMetrics.error}`);
+          setBacktestResult({ error: withMetrics.error });
+        } else {
+          const m = withMetrics.metrics || {};
+          const flat = {
+            strategy: withMetrics.strategy,
+            win_rate: m.win_rate ?? 0,
+            total_signals: m.total_trades ?? 0,
+            profit_factor: m.profit_factor ?? 0,
+            total_return: m.total_return_pct ?? m.total_return ?? 0,
+            max_drawdown: m.max_drawdown_pct ?? m.max_drawdown ?? 0,
+            sharpe: m.sharpe_ratio ?? m.sharpe ?? 0,
+            equity_curve: m.equity_curve || [],
+            data_points: r.data_points,
+            symbol: r.symbol,
+            timeframe: r.timeframe,
+          };
+          setBacktestResult(flat);
+          toast.success(
+            `Backtest complete (${flat.strategy}): ${flat.win_rate.toFixed(1)}% win rate · ${flat.total_signals} trades · PF ${flat.profit_factor.toFixed(2)}`
+          );
+        }
+      } else {
+        const errMsg = r?.detail || r?.error || "Backtest returned no results";
+        toast.error(`Backtest failed: ${errMsg}`);
+        setBacktestResult({ error: errMsg });
+      }
       refreshAll();
     } catch (e) {
       toast.error("Backtest error: " + e.message);
@@ -276,6 +336,7 @@ export default function MLLabPage() {
       <Header schedulerStatus={schedulerStatus} otcStats={otcStats} onRefresh={refreshAll} />
       <PoolHealthCard otcStats={otcStats} tuningReport={tuningReport} />
       <LatencyHealthCard health={latencyHealth} stats={latencyStats} />
+      <GuardrailTournamentCard guardrail={guardrail} tournament={tournament} onRefresh={refreshAll} />
 
       <Tabs value={tab} onValueChange={setTab} className="space-y-4">
         <TabsList className="grid grid-cols-5 bg-slate-900 border border-slate-800" data-testid="ml-model-tabs">
@@ -304,6 +365,7 @@ export default function MLLabPage() {
             <BacktestPanel
               model={m}
               assets={assets}
+              universe={assetUniverse}
               backtest={backtest}
               setBacktest={setBacktest}
               onRun={runBacktest}
@@ -383,6 +445,121 @@ function PoolHealthCard({ otcStats, tuningReport }) {
     </Card>
   );
 }
+
+/* ---------- LATENCY GUARDRAIL + DAILY TOURNAMENT (Iter 58) ---------- */
+function GuardrailTournamentCard({ guardrail, tournament, onRefresh }) {
+  const tripped = !!guardrail?.tripped;
+  const ratio = guardrail?.ratio;
+  const cur = guardrail?.p95_current_ms;
+  const base = guardrail?.p95_baseline_ms;
+  const throttle = Math.round((guardrail?.throttle_fraction || 0) * 100);
+  const t = tournament?.tournament;
+  const weights = tournament?.cache || {};
+  const wrs = t?.model_winrates || {};
+
+  const runTournament = async () => {
+    try {
+      const r = await fetch(`${API}/ml/tournament/run`, { method: "POST" }).then((res) => res.json());
+      if (r.accepted) {
+        toast.info("Tournament running in background — refresh in ~30s for fresh weights.");
+        setTimeout(onRefresh, 30000);
+      } else {
+        toast.warning(r.message || "Tournament queued");
+      }
+    } catch (e) {
+      toast.error("Tournament trigger failed: " + e.message);
+    }
+  };
+
+  const guardrailColor = tripped ? "border-red-700 bg-red-950/30"
+    : (ratio && ratio > 1.5) ? "border-amber-700 bg-amber-950/20"
+    : "border-slate-800 bg-slate-900";
+
+  return (
+    <Card className={`${guardrailColor}`} data-testid="guardrail-tournament-card">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Activity className="w-4 h-4 text-fuchsia-400" /> Latency Guardrail · Daily Model Tournament
+          </CardTitle>
+          <Button size="sm" variant="outline" onClick={runTournament} data-testid="run-tournament-btn">
+            <PlayCircle className="w-3 h-3 mr-1" /> Run Tournament
+          </Button>
+        </div>
+        <CardDescription className="text-xs">
+          Auto-throttle trades when DOM exec lag spikes · Per-model vote multipliers from rolling win-rate
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Guardrail row */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <div className="text-xs text-slate-500 uppercase tracking-wider">Guardrail</div>
+            <div className="mt-1" data-testid="guardrail-state">
+              {tripped ? (
+                <Badge className="bg-red-500/20 text-red-300 border-red-500/40">
+                  <AlertTriangle className="w-3 h-3 mr-1" /> TRIPPED · throttling {throttle}%
+                </Badge>
+              ) : (
+                <Badge className="bg-green-500/20 text-green-400 border-green-500/40">
+                  <CheckCircle2 className="w-3 h-3 mr-1" /> OK
+                </Badge>
+              )}
+            </div>
+          </div>
+          <Stat
+            label="Exec lag p95 (5m)"
+            value={cur != null ? `${cur.toFixed(0)}ms` : "—"}
+            hint={base != null ? `baseline ${base.toFixed(0)}ms` : "needs ≥15 baseline samples"}
+          />
+          <Stat
+            label="Ratio (recent / baseline)"
+            value={ratio != null ? `${ratio.toFixed(2)}×` : "—"}
+            hint="trips at 2.0×, releases at 1.3×"
+          />
+          <Stat label="Trip / release count" value={`${guardrail?.trip_count || 0} / ${guardrail?.release_count || 0}`} />
+        </div>
+
+        {/* Tournament row */}
+        <div className="border-t border-slate-800 pt-4">
+          <div className="text-xs text-slate-500 uppercase tracking-wider mb-2">
+            Daily Tournament — vote multipliers from rolling win-rate
+            {t?.computed_at && (
+              <span className="ml-2 text-slate-400 normal-case font-normal">
+                · last run {new Date(t.computed_at).toLocaleString()}
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {["improved_v2", "maximized_v3", "lstm_gru", "ppo_rl"].map((mid) => {
+              const w = weights[mid] ?? 1.0;
+              const wr = wrs[mid];
+              const wColor = w > 1.15 ? "text-green-400" : w < 0.85 ? "text-red-400" : "text-slate-200";
+              return (
+                <div key={mid} data-testid={`tournament-model-${mid}`}>
+                  <div className="text-xs text-slate-500 uppercase tracking-wider">{mid}</div>
+                  <div className={`text-2xl font-bold font-mono ${wColor} mt-1`}>
+                    {Number(w).toFixed(2)}×
+                  </div>
+                  <div className="text-xs text-slate-500 mt-1">
+                    {wr != null ? `win-rate ${wr.toFixed(1)}%` : "no win-rate yet"}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {!t && (
+            <div className="text-xs text-slate-500 italic mt-2">
+              No tournament has run yet — multipliers default to 1.00×. Run a tournament or wait for the next auto-retrain to populate.
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+
 
 function Stat({ label, value, hint }) {
   return (
@@ -658,12 +835,21 @@ function FeatureGroupsCard({ model, tuningReport }) {
 }
 
 /* ---------- BACKTEST PANEL ---------- */
-function BacktestPanel({ model, assets, backtest, setBacktest, onRun, running, result, history }) {
-  const allAssets = useMemo(() => {
+function BacktestPanel({ model, assets, universe, backtest, setBacktest, onRun, running, result, history }) {
+  // Iter 58 — class-aware asset + timeframe selectors. Universe comes from
+  // /api/backtest/assets-universe (forex / forex_otc / commodities / crypto / indices).
+  const classes = universe?.classes || [];
+  const activeClass = classes.find((c) => c.id === backtest.asset_class) || classes[0];
+  const symbolList = activeClass?.symbols || [];
+  const timeframes = activeClass?.timeframes || ["5s", "M1"];
+
+  // Fallback when universe hasn't loaded yet
+  const fallbackSymbols = useMemo(() => {
     const otc = ["EURUSD_OTC", "AUDCAD_OTC", "CADJPY_OTC", "GBPJPY_OTC", "EURJPY_OTC", "USDCHF_OTC", "USDJPY_OTC"];
     const fx = assets?.forex || [];
     return [...new Set([...otc, ...fx])];
   }, [assets]);
+  const allSymbols = symbolList.length > 0 ? symbolList : fallbackSymbols;
 
   const equity = useMemo(() => {
     if (!result || !result.total_signals) return [];
@@ -678,6 +864,17 @@ function BacktestPanel({ model, assets, backtest, setBacktest, onRun, running, r
     return series;
   }, [result]);
 
+  const onClassChange = (newClassId) => {
+    const c = classes.find((x) => x.id === newClassId);
+    if (!c) return;
+    setBacktest({
+      ...backtest,
+      asset_class: newClassId,
+      symbol: c.symbols[0] || backtest.symbol,
+      timeframe: c.timeframes[0] || backtest.timeframe,
+    });
+  };
+
   return (
     <Card className="bg-slate-900 border-slate-800" data-testid={`backtest-panel-${model.id}`}>
       <CardHeader>
@@ -685,12 +882,25 @@ function BacktestPanel({ model, assets, backtest, setBacktest, onRun, running, r
           <PlayCircle className="w-4 h-4 text-cyan-400" /> Backtest {model.name}
         </CardTitle>
         <CardDescription>
-          Run a simulated trading session against historical OTC + OANDA data.
+          Run a simulated trading session against historical OTC + OANDA data. Regular markets ≥ 1m, OTC ≥ 3s.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className="col-span-2 md:col-span-1">
+            <Label className="text-xs text-slate-400">Class</Label>
+            <Select value={backtest.asset_class} onValueChange={onClassChange}>
+              <SelectTrigger className="bg-slate-950 border-slate-800" data-testid="backtest-class">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="max-h-72 bg-slate-950 border-slate-800">
+                {classes.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>{c.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="col-span-2 md:col-span-2">
             <Label className="text-xs text-slate-400">Asset</Label>
             <Select
               value={backtest.symbol}
@@ -700,8 +910,24 @@ function BacktestPanel({ model, assets, backtest, setBacktest, onRun, running, r
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="max-h-72 bg-slate-950 border-slate-800">
-                {allAssets.map((a) => (
+                {allSymbols.map((a) => (
                   <SelectItem key={a} value={a}>{a}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs text-slate-400">Timeframe</Label>
+            <Select
+              value={backtest.timeframe}
+              onValueChange={(v) => setBacktest({ ...backtest, timeframe: v })}
+            >
+              <SelectTrigger className="bg-slate-950 border-slate-800" data-testid="backtest-timeframe">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-slate-950 border-slate-800">
+                {timeframes.map((t) => (
+                  <SelectItem key={t} value={t}>{t}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -718,27 +944,31 @@ function BacktestPanel({ model, assets, backtest, setBacktest, onRun, running, r
               data-testid="backtest-days"
             />
           </div>
-          <div className="flex items-end">
-            <Button
-              onClick={onRun}
-              disabled={running}
-              className="w-full bg-cyan-600 hover:bg-cyan-500"
-              data-testid="run-backtest-btn"
-            >
-              {running ? (
-                <>
-                  <RotateCw className="w-4 h-4 mr-2 animate-spin" /> Running…
-                </>
-              ) : (
-                <>
-                  <PlayCircle className="w-4 h-4 mr-2" /> Run Backtest
-                </>
-              )}
-            </Button>
-          </div>
         </div>
+        <Button
+          onClick={onRun}
+          disabled={running}
+          className="w-full bg-cyan-600 hover:bg-cyan-500"
+          data-testid="run-backtest-btn"
+        >
+          {running ? (
+            <>
+              <RotateCw className="w-4 h-4 mr-2 animate-spin" /> Running…
+            </>
+          ) : (
+            <>
+              <PlayCircle className="w-4 h-4 mr-2" /> Run Backtest
+            </>
+          )}
+        </Button>
 
-        {result && (
+        {result && result.error && (
+          <div className="text-sm text-red-400 bg-red-900/20 border border-red-900/40 rounded p-3" data-testid="backtest-error">
+            {result.error}
+          </div>
+        )}
+
+        {result && !result.error && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-3 border-t border-slate-800">
               <Stat label="Win rate" value={`${(result.win_rate || 0).toFixed(1)}%`} />

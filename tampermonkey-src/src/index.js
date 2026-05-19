@@ -13,6 +13,7 @@ import { tradeResultWatcher } from './trading/tradeResultWatcher.js';
 import { smartInvert } from './trading/smartInvert.js';
 import { twentyOneSecondReversal } from './strategies/twentyOneSecondReversal.js';
 import { ssidBridge, poLivePrice } from './trading/ssidBridge.js';
+import { liveTickPoster } from './trading/liveTickPoster.js';
 import { livePriceTracker } from './trading/livePriceTracker.js';
 import { cycleMode } from './trading/cycleMode.js';
 import { appSignalPoller } from './trading/appSignalPoller.js';
@@ -26,6 +27,12 @@ import { priceScraper } from './trading/priceScraper.js';
 // This wraps window.WebSocket so we can capture the first PO auth frame.
 // Must run before PO opens its trading socket.
 ssidBridge.install();
+
+// Iter 58 — Live tick poster: subscribe to PO's WS price stream and
+// aggregate 5s OHLC candles, then POST to /api/signals/collect-otc-candles.
+// This keeps `otc_candles_5s.source='po_live'` fresh so ML training sees
+// the actual PO microstructure (spreads/liquidity differ from OANDA backfill).
+liveTickPoster.start();
 
 class EliteTradingBot {
   constructor() {
@@ -765,6 +772,7 @@ window.eliteBotPriceScraper = priceScraper;
 window.eliteBot21sReversal = twentyOneSecondReversal;
 window.eliteBotSsidBridge = ssidBridge;
 window.eliteBotLivePrice = poLivePrice;
+window.eliteBotLiveTickPoster = liveTickPoster;
 window.eliteBotLivePriceTracker = livePriceTracker;
 window.eliteBotCycleMode = cycleMode;
 window.eliteBotAppSignal = appSignalPoller;
@@ -785,6 +793,7 @@ window.eliteBotDiagnose = function () {
       age_ms: poLivePrice.getLatestAge(),
       all: poLivePrice.getAll(),
     },
+    liveTickPoster: (function () { try { return liveTickPoster.getStats(); } catch (e) { return `ERR: ${e.message}`; } })(),
     livePriceTracker: (function () { try { return livePriceTracker.getStats(); } catch (e) { return `ERR: ${e.message}`; } })(),
     priceScraper: {
       current: (function () { try { return priceScraper.getCurrentPrice(); } catch (e) { return `ERR: ${e.message}`; } })(),

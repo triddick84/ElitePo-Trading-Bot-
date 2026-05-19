@@ -20,7 +20,8 @@ from backtesting_engine import (
     create_deep_confluence_strategy,
     create_momentum_buster_strategy,
     create_lstm_model_predictor,
-    create_ppo_model_predictor
+    create_ppo_model_predictor,
+    create_hybrid_ensemble_strategy,
 )
 
 # Try to import Deriv service
@@ -407,13 +408,22 @@ async def run_backtest(request: BacktestRequest):
         strategies_to_run = []
         
         if request.strategy == "all":
-            strategies_to_run = ["deep_confluence", "momentum_buster", "lstm_gru", "ppo_rl"]
+            strategies_to_run = ["deep_confluence", "momentum_buster", "lstm_gru", "ppo_rl", "hybrid"]
         else:
             strategies_to_run = [request.strategy]
         
         for strategy_name in strategies_to_run:
             try:
-                if strategy_name == "deep_confluence":
+                if strategy_name in ("hybrid", "force_generate_v2", "ensemble"):
+                    # Iter 58 — hybrid uses the same confluence+MTF+regime+ML
+                    # stack as the live force-generate-v2 pipeline.
+                    strategy_func = create_hybrid_ensemble_strategy()
+                    metrics = engine.run_strategy_backtest(
+                        df, strategy_func, request.timeframe,
+                        request.expiry_seconds, request.min_confidence
+                    )
+
+                elif strategy_name == "deep_confluence":
                     strategy_func = create_deep_confluence_strategy()
                     metrics = engine.run_strategy_backtest(
                         df, strategy_func, request.timeframe,

@@ -363,3 +363,168 @@ async def report_client_latency(
     }
     await db[LATENCY_COLL + "_client"].insert_one(doc)
     return {"success": True, "stored": True}
+
+
+# ============================================================================
+# Iter 58 — Latency-Adaptive Trade Rate Guardrail
+# ============================================================================
+#
+# Premise: if `exec_lag_ms` p95 over the last 5 min has DOUBLED vs the trailing
+# 60-min baseline, PO's DOM is slow / our broker connection is stressed. Firing
+# trades in this state means our entries arrive too late and win-rate collapses.
+#
+# Action: when guardrail is tripped, /api/signals/force-generate-v2 flips
+# `abstain=true` with `abstain_source="latency_guardrail"` on a configurable
+# fraction of incoming signals (default 75% throttle = let 25% through).
+#
+# Resolution: when 5-min p95 returns to within 1.3x of baseline for 3 consecutive
+# checks, guardrail releases automatically.
+
+import statistics
+
+_GUARDRAIL_STATE = {
+    "tripped": False,
+    "tripped_at": None,
+    "released_at": None,
+    "p95_current_ms": None,
+    "p95_baseline_ms": None,
+    "ratio": None,
+    "throttle_fraction": 0.75,
+    "recent_recoveries": 0,  # consecutive checks within tolerance
+    "last_evaluated_at": None,
+    "trip_count": 0,
+    "release_count": 0,
+}
+
+GUARDRAIL_TRIP_RATIO = 2.0       # p95 must DOUBLE to trip
+GUARDRAIL_RELEASE_RATIO = 1.3    # within 1.3x for 3 consecutive checks to release
+GUARDRAIL_RELEASE_STREAK = 3
+GUARDRAIL_MIN_SAMPLES_RECENT = 5
+GUARDRAIL_MIN_SAMPLES_BASELINE = 15
+GUARDRAIL_RECENT_WINDOW_MIN = 5
+GUARDRAIL_BASELINE_WINDOW_MIN = 60
+
+
+def _p95(values: List[float]) -> Optional[float]:
+    vals = [float(v) for v in values if v is not None and isinstance(v, (int, float))]
+    if len(vals) < 2:
+        return float(vals[0]) if vals else None
+    vals.sort()
+    # statistics.quantiles requires n>=2; method='inclusive' gives the empirical p95
+    try:
+        qs = statistics.quantiles(vals, n=20, method="inclusive")
+        return float(qs[18])  # 95th percentile
+    except Exception:
+        # Fallback — index-based
+        idx = max(0, int(len(vals) * 0.95) - 1)
+        return float(vals[idx])
+
+
+async def evaluate_latency_guardrail() -> Dict[str, Any]:
+    """
+    Compute current vs baseline exec_lag_ms p95 from `signal_latency_log_client`
+    and update guardrail state. Called both:
+      - on-demand by /api/signals/latency-guardrail/status
+      - implicitly before each force-generate-v2 call
+    Cheap: bounded to two MongoDB cursors of <=500 docs each.
+    """
+    db = _get_db()
+    now = datetime.now(timezone.utc)
+    recent_cutoff = now - timedelta(minutes=GUARDRAIL_RECENT_WINDOW_MIN)
+    baseline_cutoff = now - timedelta(minutes=GUARDRAIL_BASELINE_WINDOW_MIN)
+
+    coll = db[LATENCY_COLL + "_client"]
+    # Recent window
+    recent_cur = coll.find(
+        {"_logged_at": {"$gte": recent_cutoff}, "exec_lag_ms": {"$ne": None}},
+        {"exec_lag_ms": 1, "_id": 0},
+    ).limit(500)
+    recent_docs = await recent_cur.to_list(length=500)
+    # Baseline window (older portion)
+    baseline_cur = coll.find(
+        {
+            "_logged_at": {"$gte": baseline_cutoff, "$lt": recent_cutoff},
+            "exec_lag_ms": {"$ne": None},
+        },
+        {"exec_lag_ms": 1, "_id": 0},
+    ).limit(500)
+    baseline_docs = await baseline_cur.to_list(length=500)
+
+    recent_p95 = _p95([d.get("exec_lag_ms") for d in recent_docs])
+    baseline_p95 = _p95([d.get("exec_lag_ms") for d in baseline_docs])
+
+    _GUARDRAIL_STATE["p95_current_ms"] = round(recent_p95, 2) if recent_p95 is not None else None
+    _GUARDRAIL_STATE["p95_baseline_ms"] = round(baseline_p95, 2) if baseline_p95 is not None else None
+    _GUARDRAIL_STATE["last_evaluated_at"] = now.isoformat()
+    _GUARDRAIL_STATE["recent_samples"] = len(recent_docs)
+    _GUARDRAIL_STATE["baseline_samples"] = len(baseline_docs)
+
+    # Need both windows populated to make any decision
+    if (
+        len(recent_docs) < GUARDRAIL_MIN_SAMPLES_RECENT
+        or len(baseline_docs) < GUARDRAIL_MIN_SAMPLES_BASELINE
+        or recent_p95 is None
+        or baseline_p95 is None
+        or baseline_p95 <= 0
+    ):
+        _GUARDRAIL_STATE["ratio"] = None
+        # Don't change tripped state when we lack data — fail open if not tripped
+        return dict(_GUARDRAIL_STATE)
+
+    ratio = recent_p95 / baseline_p95
+    _GUARDRAIL_STATE["ratio"] = round(ratio, 3)
+
+    if not _GUARDRAIL_STATE["tripped"]:
+        if ratio >= GUARDRAIL_TRIP_RATIO:
+            _GUARDRAIL_STATE["tripped"] = True
+            _GUARDRAIL_STATE["tripped_at"] = now.isoformat()
+            _GUARDRAIL_STATE["released_at"] = None
+            _GUARDRAIL_STATE["recent_recoveries"] = 0
+            _GUARDRAIL_STATE["trip_count"] = _GUARDRAIL_STATE.get("trip_count", 0) + 1
+            logger.warning(
+                f"[latency-guardrail] TRIPPED — recent p95={recent_p95:.0f}ms baseline p95={baseline_p95:.0f}ms ratio={ratio:.2f}x"
+            )
+    else:
+        # When tripped, only release after 3 consecutive sub-1.3x checks
+        if ratio <= GUARDRAIL_RELEASE_RATIO:
+            _GUARDRAIL_STATE["recent_recoveries"] = _GUARDRAIL_STATE.get("recent_recoveries", 0) + 1
+            if _GUARDRAIL_STATE["recent_recoveries"] >= GUARDRAIL_RELEASE_STREAK:
+                _GUARDRAIL_STATE["tripped"] = False
+                _GUARDRAIL_STATE["released_at"] = now.isoformat()
+                _GUARDRAIL_STATE["release_count"] = _GUARDRAIL_STATE.get("release_count", 0) + 1
+                logger.info(
+                    f"[latency-guardrail] RELEASED — ratio={ratio:.2f}x for {GUARDRAIL_RELEASE_STREAK} consecutive checks"
+                )
+        else:
+            _GUARDRAIL_STATE["recent_recoveries"] = 0
+
+    return dict(_GUARDRAIL_STATE)
+
+
+def get_guardrail_state() -> Dict[str, Any]:
+    """Return a copy of the current guardrail state (cheap, no IO)."""
+    return dict(_GUARDRAIL_STATE)
+
+
+def is_guardrail_tripped() -> bool:
+    """Cheap accessor for the live signal pipeline."""
+    return bool(_GUARDRAIL_STATE.get("tripped"))
+
+
+def should_throttle_signal() -> bool:
+    """
+    When guardrail is tripped, returns True for `throttle_fraction` of calls.
+    Probabilistic so we still let some signals through (so we don't lose visibility).
+    """
+    if not _GUARDRAIL_STATE.get("tripped"):
+        return False
+    import random
+    return random.random() < float(_GUARDRAIL_STATE.get("throttle_fraction", 0.75))
+
+
+def set_guardrail_throttle_fraction(fraction: float) -> Dict[str, Any]:
+    """Manual override of the throttle fraction (0.0–1.0)."""
+    f = max(0.0, min(1.0, float(fraction)))
+    _GUARDRAIL_STATE["throttle_fraction"] = f
+    return get_guardrail_state()
+

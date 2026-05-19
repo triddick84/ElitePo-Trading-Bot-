@@ -219,9 +219,17 @@ class AutoRetrainScheduler:
                                 result["models_trained"].append({
                                     "model": "maximized_v3_otc",
                                     "accuracy": otc_result.get("cv_accuracy"),
-                                    "samples": otc_result.get("total_samples")
+                                    "samples": otc_result.get("total_samples"),
+                                    # Iter 58 — surface OOS metrics for the Ensemble tab
+                                    "oos_accuracy": otc_result.get("test_accuracy"),
+                                    "overfit_gap": otc_result.get("overfit_gap"),
+                                    "overfit_warning": otc_result.get("overfit_warning"),
                                 })
-                                logger.info(f"OTC retrain (maximized): {otc_result.get('cv_accuracy')}% accuracy")
+                                logger.info(
+                                    f"OTC retrain (maximized): CV={otc_result.get('cv_accuracy')}% "
+                                    f"OOS={otc_result.get('test_accuracy')}% "
+                                    f"gap={otc_result.get('overfit_gap')}%"
+                                )
 
                         if improved_ai_ml:
                             otc_result_imp = await tuner.train_from_otc(
@@ -233,9 +241,16 @@ class AutoRetrainScheduler:
                                 result["models_trained"].append({
                                     "model": "improved_v2_otc",
                                     "accuracy": otc_result_imp.get("cv_accuracy"),
-                                    "samples": otc_result_imp.get("total_samples")
+                                    "samples": otc_result_imp.get("total_samples"),
+                                    "oos_accuracy": otc_result_imp.get("test_accuracy"),
+                                    "overfit_gap": otc_result_imp.get("overfit_gap"),
+                                    "overfit_warning": otc_result_imp.get("overfit_warning"),
                                 })
-                                logger.info(f"OTC retrain (improved): {otc_result_imp.get('cv_accuracy')}% accuracy")
+                                logger.info(
+                                    f"OTC retrain (improved): CV={otc_result_imp.get('cv_accuracy')}% "
+                                    f"OOS={otc_result_imp.get('test_accuracy')}% "
+                                    f"gap={otc_result_imp.get('overfit_gap')}%"
+                                )
 
                 except Exception as e:
                     logger.warning(f"OTC retrain error: {e}")
@@ -278,12 +293,49 @@ class AutoRetrainScheduler:
             result["duration_seconds"] = round(duration, 1)
             result["models_count"] = len(result["models_trained"])
 
+            # Iter 58 — compute Ensemble-tab aggregate OOS so the UI can show
+            # a single "ensemble was healthy / overfit" read after retrain.
+            oos_values = [m.get("oos_accuracy") for m in result["models_trained"]
+                          if isinstance(m.get("oos_accuracy"), (int, float))]
+            gap_values = [m.get("overfit_gap") for m in result["models_trained"]
+                          if isinstance(m.get("overfit_gap"), (int, float))]
+            any_overfit = any(m.get("overfit_warning") for m in result["models_trained"])
+            if oos_values:
+                result["aggregate_oos"] = {
+                    "mean_oos_accuracy": round(sum(oos_values) / len(oos_values), 2),
+                    "min_oos_accuracy": round(min(oos_values), 2),
+                    "max_oos_accuracy": round(max(oos_values), 2),
+                    "mean_overfit_gap": round(sum(gap_values) / len(gap_values), 2) if gap_values else None,
+                    "any_overfit": bool(any_overfit),
+                    "models_included": len(oos_values),
+                }
+
             self._last_retrain = end
             self._retrain_history.append(result)
             if len(self._retrain_history) > 50:
                 self._retrain_history = self._retrain_history[-50:]
 
             logger.info(f"Auto-retrain complete: {len(result['models_trained'])} models in {duration:.1f}s")
+
+            # Iter 58 — Run a Daily Model Tournament after each retrain.
+            # The freshly-trained models are evaluated on the latest holdout
+            # day and their dynamic vote multipliers are persisted. Fire and
+            # forget — failure does not break the retrain summary.
+            try:
+                from model_tournament import run_tournament
+                tour = await asyncio.wait_for(run_tournament(), timeout=300)
+                if tour.get("success") and tour.get("tournament"):
+                    t = tour["tournament"]
+                    result["tournament"] = {
+                        "weights": t.get("weights"),
+                        "model_winrates": t.get("model_winrates"),
+                        "symbols_evaluated": len(t.get("symbols_evaluated", [])),
+                    }
+                    logger.info(f"[tournament] post-retrain weights: {t.get('weights')}")
+            except asyncio.TimeoutError:
+                logger.warning("[tournament] post-retrain run hit 5-min timeout — skipped")
+            except Exception as _te:
+                logger.warning(f"[tournament] post-retrain run failed: {_te}")
 
         except Exception as e:
             result["status"] = "error"

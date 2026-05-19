@@ -1,8 +1,68 @@
 # Elite Pocket Option Trading Bot - Product Requirements Document
 
-## Last Updated: May 17, 2026
+## Last Updated: May 19, 2026
 
 ## Current Status
+
+✅ **Iteration 58 — Bug-Fix Sweep + P1 Latency Guardrail + P2 Daily Tournament (May 19, 2026)**
+
+User issues fixed:
+- 🐛 **Backtest returning "undefined% / undefined signals"** — Two competing `/backtest/run` routes; the broken `routes/backtest.py` one (delegating to a stale `trading_bot.run_backtest()` that only knew yfinance and 500-ed on every OTC symbol) was winning over the proper `routes/backtesting.py` handler. Redirected the broken route to call the canonical one. Frontend `MLLabPage.runBacktest()` rewritten to correctly read `r.results[0].metrics.win_rate / total_trades / profit_factor` instead of expecting them at top level.
+- 🐛 **Strategy mismatch** — Frontend was sending `strategy: "hybrid"` but backend's strategy list only knew `deep_confluence | momentum_buster | lstm_gru | ppo_rl`. Added new `create_hybrid_ensemble_strategy()` in `backtesting_engine.py` that fuses deep confluence + MTF check + volatility-regime gate + confidence floor — mirrors live `force_generate_v2` behavior. Route accepts `hybrid | force_generate_v2 | ensemble` as aliases.
+- 🐛 **Asset universe limited** — New `/api/backtest/assets-universe` endpoint exposes 7 classes (forex, forex_otc, commodities, commodities_otc, crypto, crypto_otc, indices) with per-class allowed timeframes. **OTC ≥ 3s, regular ≥ M1** rule enforced. MLLab BacktestPanel now has a class selector → asset selector → timeframe selector chain that auto-restricts based on class.
+- 🐛 **Data collection stalled (po_live = 0%)** — TM `ssidBridge` was capturing live PO WS price ticks into an in-memory registry but never POSTing them anywhere. Built `tampermonkey-src/src/trading/liveTickPoster.js`: subscribes to `poLivePrice.onPrice()`, batches per-symbol into 5-second OHLC candles, POSTs to `/api/signals/collect-otc-candles` every 5s. Memory-bounded (50 symbols max, 60-candle queue per symbol). Failure mode: fire-and-forget; re-queue on network errors. **TM userscript bumped 8.62.0 → 8.63.0**.
+- 🐛 **Ensemble retrain OOS metric missing** — Scheduler now captures `test_accuracy`, `overfit_gap`, `overfit_warning` per-model and computes an **aggregate OOS block** (`mean_oos_accuracy`, `any_overfit`, etc.) on retrain completion. Frontend toast surfaces it: `Ensemble retrain complete — N models trained in Xs · OOS Y.Y% (min M, max N) ⚠ overfit detected`.
+
+### P1 — Latency-Adaptive Trade Rate Guardrail (`backend/latency_monitor.py` + new endpoints)
+Premise: when `signal_latency_log_client.exec_lag_ms` p95 over the last 5 min DOUBLES vs the trailing 60-min baseline, PO's DOM is stressed — firing trades at this point means entries arrive too late and win-rate collapses.
+
+Mechanics:
+- `evaluate_latency_guardrail()` — computes p95 over both windows, updates trip/release state.
+- **Trips at 2.0× ratio**, requires both windows populated (≥5 recent, ≥15 baseline samples).
+- **Releases at 1.3× ratio for 3 consecutive checks** — prevents flapping.
+- When tripped, `force_generate_v2` flips `abstain=true` with `abstain_source="latency_guardrail"` on 75% of incoming signals (configurable). 25% still fire so we keep visibility on whether DOM has recovered.
+- 4 REST endpoints: `GET /signals/latency-guardrail/status`, `POST /signals/latency-guardrail/throttle-fraction`, `POST /signals/latency-guardrail/force-trip`, `POST /signals/latency-guardrail/force-release`.
+- Surfaced in MLLab UI: red TRIPPED chip with throttle %, current/baseline p95 stats, trip/release counters.
+
+### P2 — Daily Model Tournament (`backend/model_tournament.py`)
+Premise: hardcoded OTC-aware weights drift as regime changes. Daily walk-forward tournament rebalances per-model vote multipliers based on rolling win-rate.
+
+Mechanics:
+- For each model {improved_v2, maximized_v3, lstm_gru, ppo_rl}, evaluate directional win-rate on the last day of OTC candles per symbol (last 200 walk-forward steps).
+- Normalise win-rates linearly: **best model → 1.5×**, **worst → 0.6×**, others interpolated. Models without enough data stay at 1.0× (neutral).
+- Persisted to `ml_tournament_weights` MongoDB collection (90-day TTL).
+- **In-memory cache** with 10-min refresh — `force_generate_v2` reads multipliers cheaply (no IO on hot path).
+- Multipliers applied: `weight = base_w * model_accuracy * tournament_multiplier` in ML vote tally.
+- 3 REST endpoints: `GET /ml/tournament/status`, `GET /ml/tournament/history`, `POST /ml/tournament/run`.
+- Auto-runs after every scheduled retrain (08:00 UTC + 13:00 UTC).
+- **Runs in `asyncio.to_thread`** — sklearn inference loop doesn't block the FastAPI event loop (lesson learned from past iteration).
+
+### Frontend (`MLLabPage.jsx`)
+- New `GuardrailTournamentCard` — single combined card surfacing both subsystems. Status chips, exec_lag p95, trip ratio, per-model multipliers + win-rates, "Run Tournament" button.
+- BacktestPanel rewritten: Class → Asset → Timeframe → Days layout. Pulls from `/api/backtest/assets-universe`. Auto-defaults timeframe to first option of selected class.
+- `runBacktest()` properly unwraps nested `results[0].metrics` and surfaces `data_points`, `symbol`, `timeframe` for debugging.
+
+### Tests
+`/app/backend/tests/test_iter58_bugfix_p1_p2.py` — 8 regression tests:
+- backtest_run_returns_nested_results_with_hybrid · asset_universe_includes_all_classes · latency_guardrail_status_returns_state · latency_guardrail_throttle_fraction_set · latency_guardrail_force_trip_and_release · tournament_status_returns_cache · tournament_run_is_fire_and_forget · tournament_history_returns_list
+**All 33 tests (Iter 53 + 55 + 56 + 56c + 57 + 58) pass.**
+
+### Verified end-to-end (screenshot)
+- Latency Guardrail card: OK badge, p95 222ms, trip/release counts 2/2 (after force-trip + force-release smoke test)
+- Tournament Card: `improved_v2 1.50×` · `maximized_v3 1.39×` · `lstm_gru 1.35×` · `ppo_rl 0.60×` — PPO RL correctly downweighted (22.9% win-rate)
+- Improved v2 OOS 62.16% / CV 55.38% / overfit gap 35.8% badge
+
+### Architecture overview for the agent's question "are we going the right way?"
+Researched best practices: **YES** — we're aligned with the industry-standard playbook for 5-second binary options bots:
+- ✅ Confluence + multi-timeframe + volatility regime + ML overlay (matches binaryoptions.net + Pocket Option blog recommendations)
+- ✅ Walk-forward OOS validation (Switch Markets best practice — added in Iter 57)
+- ✅ Per-asset/strategy abstain thresholds (BOTAI-inspired, Iter 53)
+- ✅ Latency-aware execution (Iter 55 + Iter 58 guardrail)
+- ✅ Real-trade-outcome training (Iter 54 — grounds labels in actual W/L not synthetic next-candle)
+- ✅ Dynamic vote weighting via daily tournament (Iter 58)
+- 🟡 GAP — execution-aware backtest with realistic spread + slippage (currently assumes 0ms / 0 spread)
+- 🟡 GAP — session/regime-segmented win-rate metrics (computed in aggregate, not split by London/NY/Asia)
+
 ✅ **Iteration 57 — Out-of-Sample (OOS) Validation UI + Persistence (May 17, 2026)**
 
 User asked: "research online ... and implement anything you think will help improve the overall accuracy" — specifically calling out anti-overfit validation.

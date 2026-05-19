@@ -4476,6 +4476,16 @@ async def force_generate_signal_v2(
         # the tuner-pipeline predictor (matches the OTC training feature schema).
         # Per OTC backfill retrain: improved_v2 = 57.07% CV, maximized_v3 = 53.18% CV.
         is_otc = a.endswith("_OTC")
+        # Iter 58 — Daily Model Tournament: per-model dynamic vote multipliers
+        try:
+            from model_tournament import get_tournament_weight, refresh_cache_if_stale
+            await refresh_cache_if_stale()
+            _tour_imp = get_tournament_weight("improved_v2")
+            _tour_max = get_tournament_weight("maximized_v3")
+        except Exception as _te:
+            logger.debug(f"tournament weights unavailable: {_te}")
+            _tour_imp, _tour_max = 1.0, 1.0
+
         try:
             from ml_accuracy_tuner import predict_with_tuner_pipeline
             from improved_ai_ml_system import improved_ai_ml as _imp
@@ -4487,7 +4497,7 @@ async def force_generate_signal_v2(
                     c = float(pred.get("confidence", 0))
                     acc = float(pred.get("model_accuracy", 50.0)) / 100.0
                     base_w = 4.0 if is_otc else 2.5
-                    weight = base_w * acc
+                    weight = base_w * acc * _tour_imp
                     if d == "CALL":
                         votes_call += (c / 100.0) * weight
                     else:
@@ -4496,6 +4506,7 @@ async def force_generate_signal_v2(
                         "direction": d, "confidence": c,
                         "weight": round(weight, 2),
                         "model_accuracy": round(acc * 100, 2),
+                        "tournament_multiplier": round(_tour_imp, 3),
                     }
         except Exception as e:
             logger.warning(f"improved_v2 ML voting in force-generate-v2 failed: {e}")
@@ -4511,7 +4522,7 @@ async def force_generate_signal_v2(
                     c = float(pred.get("confidence", 0))
                     acc = float(pred.get("model_accuracy", 50.0)) / 100.0
                     base_w = 2.0 if is_otc else 3.0
-                    weight = base_w * acc
+                    weight = base_w * acc * _tour_max
                     if d == "CALL":
                         votes_call += (c / 100.0) * weight
                     else:
@@ -4520,6 +4531,7 @@ async def force_generate_signal_v2(
                         "direction": d, "confidence": c,
                         "weight": round(weight, 2),
                         "model_accuracy": round(acc * 100, 2),
+                        "tournament_multiplier": round(_tour_max, 3),
                     }
         except Exception as e:
             logger.warning(f"maximized_v3 ML voting in force-generate-v2 failed: {e}")
@@ -4820,6 +4832,36 @@ async def force_generate_signal_v2(
                     (signal.get("abstain_reason") or "")
                     + f" | also: latency {_lat_report['total_ms']:.0f}ms > {_lat_report['budget_ms']}ms"
                 )
+
+        # Iter 58 — Latency-Adaptive Trade Rate Guardrail
+        # Evaluate the trip/release state from `signal_latency_log_client`
+        # exec_lag_ms p95 (recent 5min vs baseline 60min). If tripped,
+        # throttle a configurable fraction of incoming signals.
+        try:
+            from latency_monitor import (
+                evaluate_latency_guardrail,
+                should_throttle_signal,
+                get_guardrail_state,
+            )
+            await evaluate_latency_guardrail()
+            _gr = get_guardrail_state()
+            signal["latency_guardrail"] = {
+                "tripped": _gr.get("tripped"),
+                "ratio": _gr.get("ratio"),
+                "current_p95_ms": _gr.get("p95_current_ms"),
+                "baseline_p95_ms": _gr.get("p95_baseline_ms"),
+            }
+            if should_throttle_signal() and not signal.get("abstain"):
+                signal["abstain"] = True
+                signal["abstain_source"] = "latency_guardrail"
+                signal["abstain_reason"] = (
+                    f"exec_lag p95 {_gr.get('p95_current_ms'):.0f}ms is "
+                    f"{_gr.get('ratio'):.1f}x baseline {_gr.get('p95_baseline_ms'):.0f}ms — "
+                    f"PO DOM stressed; throttling {int(_gr.get('throttle_fraction', 0.75) * 100)}% of signals"
+                )
+        except Exception as _ge:
+            logger.debug(f"latency-guardrail eval skipped: {_ge}")
+
         # Fire-and-forget MongoDB log (every signal, not just abstained ones)
         log_latency_fire_and_forget(_lat_report)
         
@@ -5008,6 +5050,96 @@ async def get_latency_budgets():
     """Current per-timeframe latency budgets (ms) for client-side display."""
     from latency_monitor import LATENCY_BUDGETS_MS
     return {"success": True, "budgets_ms": LATENCY_BUDGETS_MS}
+
+
+# ============================================================================
+# Iter 58 — Latency-Adaptive Trade Rate Guardrail endpoints
+# ============================================================================
+
+@router.get("/signals/latency-guardrail/status")
+async def get_latency_guardrail_status():
+    """
+    Return current guardrail state (tripped/released, current vs baseline p95,
+    ratio, throttle fraction). Frontend / TM panel polls this for live banner.
+    Triggers a fresh evaluation each call so dashboards see real-time state.
+    """
+    from latency_monitor import evaluate_latency_guardrail
+    state = await evaluate_latency_guardrail()
+    return {"success": True, "guardrail": state}
+
+
+@router.post("/signals/latency-guardrail/throttle-fraction")
+async def set_latency_guardrail_throttle_fraction(
+    fraction: float = Body(..., embed=True, ge=0.0, le=1.0),
+):
+    """Manual override of guardrail throttle severity (0.0 = let everything through, 1.0 = abstain ALL)."""
+    from latency_monitor import set_guardrail_throttle_fraction
+    state = set_guardrail_throttle_fraction(fraction)
+    return {"success": True, "guardrail": state}
+
+
+@router.post("/signals/latency-guardrail/force-trip")
+async def force_trip_guardrail():
+    """Manually trip the guardrail (testing / emergency stop)."""
+    from latency_monitor import _GUARDRAIL_STATE
+    _GUARDRAIL_STATE["tripped"] = True
+    _GUARDRAIL_STATE["tripped_at"] = datetime.now(timezone.utc).isoformat()
+    _GUARDRAIL_STATE["recent_recoveries"] = 0
+    _GUARDRAIL_STATE["trip_count"] = _GUARDRAIL_STATE.get("trip_count", 0) + 1
+    return {"success": True, "guardrail": dict(_GUARDRAIL_STATE)}
+
+
+@router.post("/signals/latency-guardrail/force-release")
+async def force_release_guardrail():
+    """Manually release the guardrail."""
+    from latency_monitor import _GUARDRAIL_STATE
+    _GUARDRAIL_STATE["tripped"] = False
+    _GUARDRAIL_STATE["released_at"] = datetime.now(timezone.utc).isoformat()
+    _GUARDRAIL_STATE["recent_recoveries"] = 0
+    _GUARDRAIL_STATE["release_count"] = _GUARDRAIL_STATE.get("release_count", 0) + 1
+    return {"success": True, "guardrail": dict(_GUARDRAIL_STATE)}
+
+
+# ============================================================================
+# Iter 58 — Daily Model Tournament endpoints (P2)
+# ============================================================================
+
+@router.get("/ml/tournament/status")
+async def get_tournament_status():
+    """Return the latest tournament run with computed weights + per-model win-rates."""
+    from model_tournament import get_latest_tournament
+    return await get_latest_tournament()
+
+
+@router.get("/ml/tournament/history")
+async def get_tournament_history_endpoint(limit: int = 30):
+    """Return recent tournament results for charting."""
+    from model_tournament import get_tournament_history
+    return await get_tournament_history(limit=limit)
+
+
+@router.post("/ml/tournament/run")
+async def trigger_tournament_now(symbols: Optional[List[str]] = Body(default=None)):
+    """
+    Trigger a tournament evaluation immediately (background task).
+    Returns acceptance receipt; poll /api/ml/tournament/status for the result.
+    """
+    from model_tournament import run_tournament
+    import asyncio as _asyncio
+
+    async def _bg():
+        try:
+            await _asyncio.wait_for(run_tournament(symbols=symbols), timeout=600)
+        except Exception as e:
+            logger.exception(f"[tournament] background run failed: {e}")
+
+    _asyncio.create_task(_bg())
+    return {
+        "success": True,
+        "accepted": True,
+        "message": "Tournament started — poll /api/ml/tournament/status for results",
+        "started_at": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 

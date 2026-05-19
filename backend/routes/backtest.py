@@ -16,25 +16,38 @@ from routes import db, convert_numpy_types, logger
 # Re-use the main api_router — routes are registered via include in server.py
 # This module uses a local router that gets included by server.py
 router = APIRouter()
-from trading_models import BacktestResult
 
 from routes.models import BacktestRequest
 import numpy as np
 
 
 # Backtesting
-@router.post("/backtest/run", response_model=BacktestResult)
-async def run_backtest(request: BacktestRequest):
-    """Run backtesting for a specific strategy"""
+@router.post("/backtest/run")
+async def run_backtest(request: dict = Body(...)):
+    """
+    Iter 58 — Delegate to the canonical /backtest/run implementation in
+    routes/backtesting.py which supports the `hybrid` ensemble strategy
+    and the OTC candle fallback. The previous handler routed to a stale
+    `trading_bot.run_backtest()` path that only knew yfinance + failed
+    on every OTC symbol.
+    """
     try:
-        from server import trading_bot
-        result = await trading_bot.run_backtest(
-            request.strategy, 
-            request.symbol, 
-            request.days
+        from routes.backtesting import run_backtest as canonical_run_backtest
+        from routes.backtesting import BacktestRequest as CanonicalReq
+        # Build the canonical request, defaulting fields when omitted.
+        req = CanonicalReq(
+            symbol=request.get("symbol"),
+            timeframe=request.get("timeframe", "M1"),
+            strategy=request.get("strategy", "hybrid"),
+            days=int(request.get("days", 7)),
+            min_confidence=float(request.get("min_confidence", 65.0)),
+            expiry_seconds=int(request.get("expiry_seconds", 60)),
+            initial_balance=float(request.get("initial_balance", 1000.0)),
+            trade_size=float(request.get("trade_size", 10.0)),
         )
-        return result
-        
+        return await canonical_run_backtest(req)
+    except HTTPException:
+        raise
     except Exception as e:
         logging.error(f"Error running backtest: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -70,6 +83,105 @@ async def get_backtest_assets():
     except Exception as e:
         logger.error(f"Error getting backtest assets: {e}")
         return {"success": False, "assets": {"forex": [], "crypto": [], "stocks": []}}
+
+
+# Iter 58 — FULL backtesting asset universe with per-class allowed timeframes.
+# Rule (per user, May 17, 2026):
+#   - Regular markets (forex/commodities/crypto/indices) → ≥ 1m
+#   - OTC markets → ≥ 3s (PO-native)
+_FOREX_MAJORS = [
+    "EURUSD", "GBPUSD", "USDJPY", "USDCHF", "USDCAD", "AUDUSD", "NZDUSD",
+]
+_FOREX_CROSSES = [
+    "EURGBP", "EURJPY", "EURCHF", "EURAUD", "EURCAD", "EURNZD",
+    "GBPJPY", "GBPCHF", "GBPAUD", "GBPCAD", "GBPNZD",
+    "AUDJPY", "AUDCAD", "AUDCHF", "AUDNZD",
+    "CADJPY", "CADCHF", "CHFJPY", "NZDJPY", "NZDCAD", "NZDCHF",
+]
+_FOREX_EXOTICS = [
+    "USDMXN", "USDZAR", "USDTRY", "USDSGD", "USDHKD", "USDSEK", "USDNOK",
+    "USDPLN", "USDCNH", "USDINR", "USDBRL",
+]
+_COMMODITIES = ["XAUUSD", "XAGUSD", "WTI", "BRENT", "XPTUSD", "XPDUSD"]
+_CRYPTO = ["BTCUSD", "ETHUSD", "LTCUSD", "BCHUSD", "XRPUSD", "SOLUSD", "ADAUSD", "DOGEUSD"]
+_INDICES = ["SPX500", "NDX100", "DJI30", "DAX40", "FTSE100", "NIKKEI225", "HSI50"]
+
+_OTC_PAIRS = sorted({f"{s}_OTC" for s in (_FOREX_MAJORS + _FOREX_CROSSES + _FOREX_EXOTICS)})
+_OTC_COMMODITIES = [f"{s}_OTC" for s in _COMMODITIES]
+_OTC_CRYPTO = [f"{s}_OTC" for s in _CRYPTO]
+
+_REGULAR_TIMEFRAMES = ["M1", "M5", "M15", "M30", "H1", "H4", "D1"]
+_OTC_TIMEFRAMES = ["3s", "5s", "15s", "30s", "M1", "M5", "M15", "M30", "H1"]
+
+
+@router.get("/backtest/assets-universe")
+async def get_backtest_assets_universe():
+    """
+    Iter 58 — full backtesting universe (forex + OTC + commodities + crypto + indices).
+    Each class carries its allowed timeframes so the UI can gate the dropdown:
+      - Regular markets: ≥ 1m
+      - OTC markets: ≥ 3s
+    """
+    return {
+        "success": True,
+        "classes": [
+            {
+                "id": "forex",
+                "label": "Forex (Regular)",
+                "min_timeframe": "M1",
+                "timeframes": _REGULAR_TIMEFRAMES,
+                "symbols": _FOREX_MAJORS + _FOREX_CROSSES + _FOREX_EXOTICS,
+            },
+            {
+                "id": "forex_otc",
+                "label": "Forex (OTC)",
+                "min_timeframe": "3s",
+                "timeframes": _OTC_TIMEFRAMES,
+                "symbols": _OTC_PAIRS,
+            },
+            {
+                "id": "commodities",
+                "label": "Commodities (Regular)",
+                "min_timeframe": "M1",
+                "timeframes": _REGULAR_TIMEFRAMES,
+                "symbols": _COMMODITIES,
+            },
+            {
+                "id": "commodities_otc",
+                "label": "Commodities (OTC)",
+                "min_timeframe": "3s",
+                "timeframes": _OTC_TIMEFRAMES,
+                "symbols": _OTC_COMMODITIES,
+            },
+            {
+                "id": "crypto",
+                "label": "Crypto (Regular)",
+                "min_timeframe": "M1",
+                "timeframes": _REGULAR_TIMEFRAMES,
+                "symbols": _CRYPTO,
+            },
+            {
+                "id": "crypto_otc",
+                "label": "Crypto (OTC)",
+                "min_timeframe": "3s",
+                "timeframes": _OTC_TIMEFRAMES,
+                "symbols": _OTC_CRYPTO,
+            },
+            {
+                "id": "indices",
+                "label": "Indices (Regular)",
+                "min_timeframe": "M1",
+                "timeframes": _REGULAR_TIMEFRAMES,
+                "symbols": _INDICES,
+            },
+        ],
+        "rules": {
+            "regular_min": "M1",
+            "otc_min": "3s",
+            "note": "Regular markets cannot use sub-minute timeframes; OTC supports 3s/5s/15s/30s.",
+        },
+    }
+
 
 
 
