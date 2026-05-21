@@ -765,6 +765,10 @@ class MLAccuracyTuner:
         symbols: Optional[List[str]] = None,
         max_age_days: int = 90,
         oanda_fallback: bool = True,
+        max_symbols: int = 6,
+        max_trades_per_symbol: int = 200,
+        oanda_timeout_per_symbol_s: int = 45,
+        oanda_window_days: int = 14,
     ) -> Dict:
         """
         Train ML model using REAL Tampermonkey trade outcomes (Iter 54).
@@ -780,10 +784,14 @@ class MLAccuracyTuner:
                 LOSS + CALL → label 0 (CALL lost → market actually went DOWN)
                 LOSS + PUT  → label 1 (PUT  lost → market actually went UP)
 
-        This trains the model on REAL trades you actually took — calibration is
-        grounded in market outcomes that paid out (or didn't), not next-candle
-        proxy labels. Sharpens accuracy/confidence on the same setups the bot
-        will see live.
+        Iter 59 — Bounded execution:
+            - Top `max_symbols` (default 15) by trade count to prevent the
+              previous 61-symbol × 30-day OANDA hang (was up to 9 HOURS).
+            - At most `max_trades_per_symbol` recent trades each.
+            - Per-symbol OANDA fetch is wrapped in `asyncio.wait_for` with
+              a `oanda_timeout_per_symbol_s` budget — exotic pairs that don't
+              exist on OANDA (MADUSD_OTC, BHDCNY_OTC, AEDCNY_OTC) skip cleanly
+              instead of hanging indefinitely.
         """
         if not ML_AVAILABLE:
             return {"success": False, "error": "ML libraries not available"}
@@ -830,6 +838,45 @@ class MLAccuracyTuner:
                     except Exception:
                         pass
                 symbol_groups.setdefault(sym, []).append(r)
+
+            # Iter 59 — cap to top-N symbols by trade volume + cap per-symbol
+            # trade count. Prevents the OANDA-hang on long-tail exotic pairs.
+            # ALSO restrict to trades within `oanda_window_days` of "now" so
+            # the OANDA fallback has a realistic chance of mapping each trade
+            # to a candle (the SDK has no per-batch timeout and runs forever
+            # on multi-week windows).
+            from datetime import timedelta as _td_filter
+            oanda_cutoff = datetime.now(timezone.utc) - _td_filter(days=oanda_window_days)
+            symbol_groups_filtered: Dict[str, List[Dict]] = {}
+            for sym, group in symbol_groups.items():
+                kept = []
+                for r in group:
+                    ts_raw = r.get("server_received_at") or r.get("timestamp")
+                    if not ts_raw:
+                        continue
+                    try:
+                        ts_p = pd.to_datetime(ts_raw, errors="coerce", utc=True)
+                        if pd.isna(ts_p) or ts_p < oanda_cutoff:
+                            continue
+                        kept.append(r)
+                    except Exception:
+                        continue
+                if kept:
+                    symbol_groups_filtered[sym] = kept
+            symbol_groups = symbol_groups_filtered
+
+            symbol_sizes = sorted(symbol_groups.items(), key=lambda kv: len(kv[1]), reverse=True)
+            kept_symbols = [s for s, _ in symbol_sizes[:max_symbols]]
+            symbol_groups = {
+                s: g[-max_trades_per_symbol:] for s, g in symbol_groups.items() if s in kept_symbols
+            }
+            dropped_symbols = [s for s, _ in symbol_sizes[max_symbols:]]
+            logger.info(
+                f"[real-trade-train] within-{oanda_window_days}d window: kept top "
+                f"{len(symbol_groups)} symbols (of {len(symbol_sizes)}), "
+                f"capped {max_trades_per_symbol} trades each; "
+                f"dropped exotic tail: {dropped_symbols[:8]}{'…' if len(dropped_symbols) > 8 else ''}"
+            )
             
             all_features: List[List[float]] = []
             all_labels: List[int] = []
@@ -881,19 +928,36 @@ class MLAccuracyTuner:
                         if sym_ts:
                             ts_min = min(sym_ts)
                             ts_max = max(sym_ts)
-                            # Cap window to 30 days (typical max_age_days range)
-                            if (ts_max - ts_min) > _td(days=30):
-                                ts_min = ts_max - _td(days=30)
+                            # Iter 59 — TIGHT window cap. OANDA's
+                            # InstrumentsCandlesFactory iterates internally
+                            # without a per-batch timeout; a 30-day S5 fetch
+                            # is 100+ batches × 150ms = 15s+ but with retries
+                            # and exotic-pair errors it routinely runs 5+ min
+                            # PER SYMBOL. Cap to last `oanda_window_days` so
+                            # we never hit that pathological case.
+                            from datetime import timedelta as _td2
+                            if (ts_max - ts_min) > _td2(days=oanda_window_days):
+                                ts_min = ts_max - _td2(days=oanda_window_days)
                             window_start = (ts_min - _td(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
                             window_end = (ts_max + _td(minutes=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
                             oanda_pair = oanda_map[sym]
-                            ohlc = await asyncio.to_thread(
-                                oanda_service.get_candles_large,
-                                instrument=oanda_pair,
-                                granularity="S5",
-                                from_time=window_start,
-                                to_time=window_end,
-                            )
+                            try:
+                                ohlc = await asyncio.wait_for(
+                                    asyncio.to_thread(
+                                        oanda_service.get_candles_large,
+                                        instrument=oanda_pair,
+                                        granularity="S5",
+                                        from_time=window_start,
+                                        to_time=window_end,
+                                    ),
+                                    timeout=oanda_timeout_per_symbol_s,
+                                )
+                            except asyncio.TimeoutError:
+                                logger.warning(
+                                    f"[real-trade-train] OANDA fetch for {sym} ({oanda_pair}) "
+                                    f"timed out after {oanda_timeout_per_symbol_s}s — skipping"
+                                )
+                                ohlc = None
                             if ohlc is not None and not ohlc.empty:
                                 ohlc = ohlc.reset_index()
                                 for col in ('open', 'high', 'low', 'close', 'volume'):

@@ -402,6 +402,7 @@ class AdvancedSignalGenerator:
         2. Market regime analysis
         3. Session awareness
         4. Feature-based scoring
+        5. (Iter 59) Adaptive per-confirmation weights from real W/L outcomes
         
         Returns signal dict with direction, confidence, and metadata
         """
@@ -409,6 +410,18 @@ class AdvancedSignalGenerator:
             return None
         
         try:
+            # Iter 59 — pull adaptive multipliers from the outcome tracker.
+            # Cold start: every multiplier defaults to 1.0 → original behaviour.
+            try:
+                from iq720_outcome_tracker import get_confirmation_multiplier as _cmul
+            except Exception:
+                def _cmul(_name):  # type: ignore
+                    return 1.0
+
+            def _w(name: str, base_score: float) -> float:
+                """Apply adaptive multiplier to a base score for a given confirmation."""
+                return base_score * _cmul(name)
+
             # Extract price data
             closes = pd.Series([float(c.get('close', c.get('Close', 0))) for c in candles])
             highs = pd.Series([float(c.get('high', c.get('High', c.get('close', 0)))) for c in candles])
@@ -423,99 +436,91 @@ class AdvancedSignalGenerator:
                 return None
             
             # === SIGNAL SCORING ===
-            call_score = 0
-            put_score = 0
+            call_score = 0.0
+            put_score = 0.0
             confirmations = []
-            
+            confirmation_multipliers: Dict[str, float] = {}
+
+            def _add(direction: str, base: float, name: str):
+                """Append a confirmation with adaptive multiplier."""
+                nonlocal call_score, put_score
+                mult = _cmul(name)
+                confirmation_multipliers[name] = round(mult, 3)
+                adjusted = base * mult
+                if direction == "CALL":
+                    call_score += adjusted
+                else:
+                    put_score += adjusted
+                confirmations.append(name)
+
             # 1. RSI Signals (weight: 20%)
             rsi = features.get('rsi_14', 50)
             if rsi < 30:
-                call_score += 15
-                confirmations.append('RSI_OVERSOLD')
+                _add('CALL', 15, 'RSI_OVERSOLD')
             elif rsi > 70:
-                put_score += 15
-                confirmations.append('RSI_OVERBOUGHT')
+                _add('PUT', 15, 'RSI_OVERBOUGHT')
             elif rsi < 40:
-                call_score += 5
+                call_score += _w('RSI_BIAS_BULL', 5)
             elif rsi > 60:
-                put_score += 5
-            
+                put_score += _w('RSI_BIAS_BEAR', 5)
+
             # 2. MACD Signals (weight: 20%)
             macd_hist = features.get('macd_hist', 0)
             macd_crossover = features.get('macd_crossover', 0)
             if macd_crossover == 1:
-                call_score += 20
-                confirmations.append('MACD_BULLISH_CROSS')
+                _add('CALL', 20, 'MACD_BULLISH_CROSS')
             elif macd_hist > 0:
-                call_score += 10
-                confirmations.append('MACD_BULLISH')
+                _add('CALL', 10, 'MACD_BULLISH')
             elif macd_hist < 0:
-                put_score += 10
-                confirmations.append('MACD_BEARISH')
-            
+                _add('PUT', 10, 'MACD_BEARISH')
+
             # 3. Stochastic Signals (weight: 15%)
             stoch_k = features.get('stoch_k', 50)
             stoch_crossover = features.get('stoch_crossover', 0)
             if stoch_k < 20:
-                call_score += 15
-                confirmations.append('STOCH_OVERSOLD')
+                _add('CALL', 15, 'STOCH_OVERSOLD')
             elif stoch_k > 80:
-                put_score += 15
-                confirmations.append('STOCH_OVERBOUGHT')
+                _add('PUT', 15, 'STOCH_OVERBOUGHT')
             if stoch_crossover == 1:
-                call_score += 10
-                confirmations.append('STOCH_BULLISH_CROSS')
-            
+                _add('CALL', 10, 'STOCH_BULLISH_CROSS')
+
             # 4. EMA Alignment (weight: 15%)
             if features.get('ema_aligned_bullish', 0) == 1:
-                call_score += 15
-                confirmations.append('EMA_ALIGNED_BULLISH')
+                _add('CALL', 15, 'EMA_ALIGNED_BULLISH')
             elif features.get('ema_aligned_bearish', 0) == 1:
-                put_score += 15
-                confirmations.append('EMA_ALIGNED_BEARISH')
-            
+                _add('PUT', 15, 'EMA_ALIGNED_BEARISH')
+
             # 5. Bollinger Band Position (weight: 10%)
             bb_pos = features.get('bb_position', 0.5)
             if bb_pos < 0.1:
-                call_score += 10
-                confirmations.append('BB_OVERSOLD')
+                _add('CALL', 10, 'BB_OVERSOLD')
             elif bb_pos > 0.9:
-                put_score += 10
-                confirmations.append('BB_OVERBOUGHT')
-            
+                _add('PUT', 10, 'BB_OVERBOUGHT')
+
             # 6. Keltner Channel Position (weight: 10%)
             kc_pos = features.get('kc_position', 0.5)
             if kc_pos < 0.2:
-                call_score += 10
-                confirmations.append('KC_OVERSOLD')
+                _add('CALL', 10, 'KC_OVERSOLD')
             elif kc_pos > 0.8:
-                put_score += 10
-                confirmations.append('KC_OVERBOUGHT')
-            
+                _add('PUT', 10, 'KC_OVERBOUGHT')
+
             # 7. ADX Trend Strength (weight: 10%)
             adx = features.get('adx', 25)
             if adx > 25:
-                # Strong trend - go with the trend
                 if regime == MarketRegime.TRENDING_UP:
-                    call_score += 10
-                    confirmations.append('ADX_STRONG_UPTREND')
+                    _add('CALL', 10, 'ADX_STRONG_UPTREND')
                 elif regime == MarketRegime.TRENDING_DOWN:
-                    put_score += 10
-                    confirmations.append('ADX_STRONG_DOWNTREND')
-            
+                    _add('PUT', 10, 'ADX_STRONG_DOWNTREND')
+
             # 8. Candlestick Patterns (bonus)
             if features.get('hammer', 0) == 1:
-                call_score += 8
-                confirmations.append('HAMMER_PATTERN')
+                _add('CALL', 8, 'HAMMER_PATTERN')
             if features.get('shooting_star', 0) == 1:
-                put_score += 8
-                confirmations.append('SHOOTING_STAR')
+                _add('PUT', 8, 'SHOOTING_STAR')
             if features.get('bullish_engulfing', 0) == 1:
-                call_score += 8
-                confirmations.append('BULLISH_ENGULFING')
+                _add('CALL', 8, 'BULLISH_ENGULFING')
             if features.get('bearish_engulfing', 0) == 1:
-                put_score += 8
-                confirmations.append('BEARISH_ENGULFING')
+                _add('PUT', 8, 'BEARISH_ENGULFING')
             
             # === APPLY MARKET REGIME ADJUSTMENTS ===
             adj = self.regime_adjustments.get(regime, {})
@@ -557,10 +562,11 @@ class AdvancedSignalGenerator:
                 "raw_confidence": round(raw_confidence, 1),
                 "strategy": "IQ720_Ensemble",
                 "confirmations": confirmations,
+                "confirmation_multipliers": confirmation_multipliers,  # Iter 59
                 "market_regime": regime.value,
                 "session": session.value,
-                "call_score": call_score,
-                "put_score": put_score,
+                "call_score": round(call_score, 2),
+                "put_score": round(put_score, 2),
                 "features": {
                     "rsi": round(features.get('rsi_14', 50), 2),
                     "macd_hist": round(features.get('macd_hist', 0), 6),

@@ -54,10 +54,11 @@ export default function MLLabPage() {
   const [latencyStats, setLatencyStats] = useState(null);
   const [guardrail, setGuardrail] = useState(null);
   const [tournament, setTournament] = useState(null);
+  const [iq720Outcomes, setIq720Outcomes] = useState(null);
 
   const refreshAll = async () => {
     try {
-      const [tr, ss, ot, btH, ass, lh, lst, uni, gr, tour] = await Promise.all([
+      const [tr, ss, ot, btH, ass, lh, lst, uni, gr, tour, iq] = await Promise.all([
         fetch(`${API}/ml/tuning-report`).then((r) => r.json()),
         fetch(`${API}/ml/scheduler/status`).then((r) => r.json()),
         fetch(`${API}/signals/otc-candle-stats`).then((r) => r.json()).catch(() => null),
@@ -68,6 +69,7 @@ export default function MLLabPage() {
         fetch(`${API}/backtest/assets-universe`).then((r) => r.json()).catch(() => null),
         fetch(`${API}/signals/latency-guardrail/status`).then((r) => r.json()).catch(() => null),
         fetch(`${API}/ml/tournament/status`).then((r) => r.json()).catch(() => null),
+        fetch(`${API}/iq720/outcome-stats`).then((r) => r.json()).catch(() => null),
       ]);
       setTuningReport(tr);
       setSchedulerStatus(ss);
@@ -79,6 +81,7 @@ export default function MLLabPage() {
       setAssetUniverse(uni);
       setGuardrail(gr?.guardrail || null);
       setTournament(tour || null);
+      setIq720Outcomes(iq || null);
       setLoading(false);
     } catch (e) {
       toast.error("Failed to load ML lab data: " + e.message);
@@ -337,6 +340,7 @@ export default function MLLabPage() {
       <PoolHealthCard otcStats={otcStats} tuningReport={tuningReport} />
       <LatencyHealthCard health={latencyHealth} stats={latencyStats} />
       <GuardrailTournamentCard guardrail={guardrail} tournament={tournament} onRefresh={refreshAll} />
+      <IQ720OutcomeCard outcomes={iq720Outcomes} onRefresh={refreshAll} />
 
       <Tabs value={tab} onValueChange={setTab} className="space-y-4">
         <TabsList className="grid grid-cols-5 bg-slate-900 border border-slate-800" data-testid="ml-model-tabs">
@@ -446,6 +450,123 @@ function PoolHealthCard({ otcStats, tuningReport }) {
   );
 }
 
+/* ---------- IQ-720 OUTCOME FEEDBACK CARD (Iter 59) ---------- */
+function IQ720OutcomeCard({ outcomes, onRefresh }) {
+  const stats = outcomes?.stats || [];
+  const adapted = stats.filter((s) => s.adapted);
+  const sorted = [...stats].sort((a, b) => (b.multiplier ?? 1) - (a.multiplier ?? 1));
+  const top5 = sorted.slice(0, 5);
+  const bot5 = sorted.slice(-5).reverse().filter((s) => !top5.includes(s));
+
+  const triggerMatch = async () => {
+    try {
+      const r = await fetch(`${API}/iq720/match-outcomes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lookback_hours: 168 }),
+      }).then((res) => res.json());
+      const m = r.match || {};
+      toast.success(
+        `Outcome matcher: ${m.matched || 0} new matches (${m.checked || 0} checked). ` +
+        `Stats refreshed for ${r.refresh?.confirmations_evaluated || 0} confirmations.`
+      );
+      onRefresh();
+    } catch (e) {
+      toast.error("Match-outcomes failed: " + e.message);
+    }
+  };
+
+  const totalMatched = stats.reduce((acc, s) => acc + (s.total || 0), 0);
+
+  return (
+    <Card className="bg-slate-900 border-slate-800" data-testid="iq720-outcome-card">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Activity className="w-4 h-4 text-emerald-400" /> IQ-720 Outcome Feedback Loop
+          </CardTitle>
+          <Button size="sm" variant="outline" onClick={triggerMatch} data-testid="iq720-match-btn">
+            <RotateCw className="w-3 h-3 mr-1" /> Match Outcomes Now
+          </Button>
+        </div>
+        <CardDescription className="text-xs">
+          Adaptive per-confirmation weights from real Tampermonkey W/L outcomes (7-day rolling window).
+          Confirmations need ≥8 matched trades before their multiplier kicks in.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Stat label="Confirmations tracked" value={stats.length} />
+          <Stat label="Adapted (≥8 trades)" value={adapted.length} hint="vs neutral 1.00×" />
+          <Stat label="Total matched signals" value={totalMatched} hint="rolling 7d window" />
+          <Stat
+            label="Cache loaded"
+            value={outcomes?.loaded_at ? new Date(outcomes.loaded_at).toLocaleTimeString() : "—"}
+          />
+        </div>
+
+        {stats.length === 0 ? (
+          <div className="text-xs text-slate-500 italic border border-slate-800 rounded p-3" data-testid="iq720-cold-start">
+            Cold start — no IQ-720 signals matched to trade outcomes yet.
+            <br />
+            Generate IQ-720 signals + run trades for a few days, then click "Match Outcomes Now"
+            to populate the rolling stats. Once a confirmation has ≥8 matched trades, its weight
+            will start adapting based on its real win-rate.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <div className="text-xs text-slate-500 uppercase tracking-wider mb-2">
+                ⬆ Top boosted (win-rate × 0.50)²
+              </div>
+              <div className="space-y-1">
+                {top5.map((s) => (
+                  <div
+                    key={s.name}
+                    className="flex justify-between text-xs bg-slate-950 rounded p-2"
+                    data-testid={`iq720-confirm-${s.name}`}
+                  >
+                    <span className="font-mono text-slate-300">{s.name}</span>
+                    <span className="font-mono">
+                      <span className={s.adapted ? "text-green-400" : "text-slate-500"}>
+                        {Number(s.multiplier).toFixed(2)}×
+                      </span>
+                      <span className="text-slate-500 ml-2">
+                        ({(s.win_rate * 100).toFixed(0)}% · {s.total})
+                      </span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs text-slate-500 uppercase tracking-wider mb-2">
+                ⬇ Downweighted
+              </div>
+              <div className="space-y-1">
+                {bot5.map((s) => (
+                  <div key={s.name} className="flex justify-between text-xs bg-slate-950 rounded p-2">
+                    <span className="font-mono text-slate-300">{s.name}</span>
+                    <span className="font-mono">
+                      <span className={s.adapted ? "text-red-400" : "text-slate-500"}>
+                        {Number(s.multiplier).toFixed(2)}×
+                      </span>
+                      <span className="text-slate-500 ml-2">
+                        ({(s.win_rate * 100).toFixed(0)}% · {s.total})
+                      </span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+
 /* ---------- LATENCY GUARDRAIL + DAILY TOURNAMENT (Iter 58) ---------- */
 function GuardrailTournamentCard({ guardrail, tournament, onRefresh }) {
   const tripped = !!guardrail?.tripped;
@@ -530,8 +651,8 @@ function GuardrailTournamentCard({ guardrail, tournament, onRefresh }) {
               </span>
             )}
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {["improved_v2", "maximized_v3", "lstm_gru", "ppo_rl"].map((mid) => {
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            {["improved_v2", "maximized_v3", "lstm_gru", "ppo_rl", "iq720"].map((mid) => {
               const w = weights[mid] ?? 1.0;
               const wr = wrs[mid];
               const wColor = w > 1.15 ? "text-green-400" : w < 0.85 ? "text-red-400" : "text-slate-200";

@@ -11,6 +11,7 @@ Schedule:
 """
 
 import asyncio
+import os
 import logging
 from typing import Dict, Optional
 from datetime import datetime, timezone, timedelta
@@ -315,7 +316,41 @@ class AutoRetrainScheduler:
             if len(self._retrain_history) > 50:
                 self._retrain_history = self._retrain_history[-50:]
 
+            # Iter 59 — persist retrain history to MongoDB so failed/slow
+            # runs are auditable across server restarts. Fire-and-forget on
+            # the same connection used by the tuner.
+            try:
+                from motor.motor_asyncio import AsyncIOMotorClient
+                _mc = AsyncIOMotorClient(os.environ.get("MONGO_URL"))
+                _db = _mc[os.environ.get("DB_NAME")]
+                await _db["ml_retrain_history"].insert_one({
+                    **result,
+                    "_persisted_at": datetime.now(timezone.utc),
+                })
+                await _db["ml_retrain_history"].create_index(
+                    "_persisted_at", expireAfterSeconds=90 * 86400,
+                )
+            except Exception as _pe:
+                logger.warning(f"[retrain-history] persist failed (non-fatal): {_pe}")
+
             logger.info(f"Auto-retrain complete: {len(result['models_trained'])} models in {duration:.1f}s")
+
+            # Iter 59 — IQ-720 outcome-tracker refresh (cheap; reads matched signals).
+            try:
+                from iq720_outcome_tracker import match_trade_outcomes, refresh_confirmation_stats
+                _m = await asyncio.wait_for(match_trade_outcomes(lookback_hours=72), timeout=30)
+                _s = await asyncio.wait_for(refresh_confirmation_stats(), timeout=20)
+                result["iq720_outcome_tracker"] = {
+                    "matched": _m.get("matched", 0),
+                    "checked": _m.get("checked", 0),
+                    "confirmations_evaluated": _s.get("confirmations_evaluated", 0),
+                }
+                logger.info(
+                    f"[iq720-outcomes] matched {_m.get('matched', 0)} / {_m.get('checked', 0)}, "
+                    f"refreshed {_s.get('confirmations_evaluated', 0)} confirmation stats"
+                )
+            except Exception as _ie:
+                logger.warning(f"[iq720-outcomes] post-retrain refresh failed: {_ie}")
 
             # Iter 58 — Run a Daily Model Tournament after each retrain.
             # The freshly-trained models are evaluated on the latest holdout

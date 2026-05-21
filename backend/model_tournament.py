@@ -52,7 +52,7 @@ MIN_CANDLES_PER_SYMBOL = 200
 BEST_MULTIPLIER = 1.5
 WORST_MULTIPLIER = 0.6
 NEUTRAL_MULTIPLIER = 1.0
-MODELS_TRACKED = ["improved_v2", "maximized_v3", "lstm_gru", "ppo_rl"]
+MODELS_TRACKED = ["improved_v2", "maximized_v3", "lstm_gru", "ppo_rl", "iq720"]
 TOURNAMENT_COLL = "ml_tournament_weights"
 
 # In-memory cache of the latest weights (read by force_generate_v2 hot path)
@@ -187,10 +187,53 @@ async def _evaluate_model_on_holdout(
             stats = getattr(_ppo, "training_stats", {}) or {}
             wr = stats.get("avg_win_rate") or stats.get("final_win_rate")
             return float(wr) if wr else None
+        if model_id == "iq720":
+            # Iter 59 — evaluate IQ-720 on the same holdout window. Walk-
+            # forward over the last 200 candles, generate a rules-engine
+            # signal at each point, score against next-candle direction.
+            return await asyncio.to_thread(_iq720_winrate, holdout_df)
     except Exception as e:
         logger.warning(f"[tournament] {model_id} eval failed: {e}")
         return None
     return None
+
+
+def _iq720_winrate(df: pd.DataFrame) -> Optional[float]:
+    """
+    Iter 59 — IQ-720 walk-forward win-rate evaluator (sync, runs in a
+    thread). For each candle from idx=60 onward, build a candle dict list,
+    call the rule-engine signal generator, score against next-candle close.
+    Returns win-rate % or None on no trades.
+    """
+    if df is None or len(df) < 80:
+        return None
+    try:
+        from advanced_signal_strategies import generate_iq720_signal
+    except Exception:
+        return None
+    wins, total = 0, 0
+    start_i = max(60, len(df) - 200)
+    rows = df.to_dict("records")
+    for i in range(start_i, len(df) - 1):
+        try:
+            window = rows[max(0, i - 100): i + 1]
+            sig = generate_iq720_signal(window)
+            if not sig or sig.get("direction") not in ("CALL", "PUT"):
+                continue
+            close_now = float(df["close"].iloc[i])
+            close_next = float(df["close"].iloc[i + 1])
+            actual = "CALL" if close_next > close_now else "PUT" if close_next < close_now else "EQUAL"
+            if actual == "EQUAL":
+                continue
+            total += 1
+            if sig["direction"] == actual:
+                wins += 1
+        except Exception:
+            continue
+    if total == 0:
+        return None
+    return round((wins / total) * 100.0, 2)
+
 
 
 async def _backtest_sklearn(ml_sys, df: pd.DataFrame) -> Optional[float]:

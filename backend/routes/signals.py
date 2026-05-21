@@ -3691,24 +3691,62 @@ async def generate_iq720_ensemble_signal(
             oanda_symbol = f"{oanda_symbol[:3]}_{oanda_symbol[3:]}"
 
         candles = []
+        oanda_attempted = False
+        otc_fallback_used = False
         try:
             oanda_df = enhanced_oanda.get_candles(oanda_symbol, timeframe, candle_count)
+            oanda_attempted = True
             if oanda_df is not None and not oanda_df.empty:
                 candles = oanda_df.reset_index().to_dict('records')
         except Exception as e:
             logger.warning(f"OANDA fetch failed for IQ720: {e}")
 
+        # Iter 59 — fall back to otc_candles_5s pool when OANDA is dry or the
+        # symbol is an exotic OTC pair OANDA doesn't carry (BHDCNY_OTC, etc.)
+        # This unblocks IQ-720 generation for the entire PO universe.
+        if len(candles) < 60:
+            try:
+                from historical_data_service import historical_data_service
+                otc_tf = timeframe if timeframe in {"5s", "15s", "30s", "M1", "M5"} else "5s"
+                otc_df = historical_data_service.get_candles_for_backtest(
+                    symbol, otc_tf, days=14,
+                )
+                if otc_df is not None and not otc_df.empty:
+                    # Use the last `candle_count` rows so regime detection has a tight window
+                    if len(otc_df) > candle_count:
+                        otc_df = otc_df.iloc[-candle_count:].reset_index(drop=True)
+                    candles = otc_df.reset_index().to_dict('records')
+                    otc_fallback_used = True
+                    logger.info(
+                        f"[iq720] OTC fallback for {symbol}: {len(candles)} candles "
+                        f"(OANDA had {0 if not oanda_attempted else 'partial'})"
+                    )
+            except Exception as e:
+                logger.warning(f"OTC fallback failed for IQ720 {symbol}: {e}")
+
         if len(candles) < 60:
             return {
                 "success": False,
-                "message": f"Insufficient data for IQ-720 analysis (need 60+, got {len(candles)})",
-                "signal": None
+                "message": f"Insufficient data for IQ-720 analysis (need 60+, got {len(candles)}; OANDA={oanda_attempted}, OTC={otc_fallback_used})",
+                "signal": None,
+                "oanda_attempted": oanda_attempted,
+                "otc_fallback_used": otc_fallback_used,
             }
 
         signal = generate_iq720_signal(candles)
 
         if signal:
             signal["symbol"] = symbol
+            signal["data_source"] = "otc_pool" if otc_fallback_used else "oanda"
+
+            # Iter 59 — fire-and-forget log the IQ-720 signal so the outcome
+            # tracker can match it to a downstream Tampermonkey trade and
+            # adapt sub-strategy weights from real W/L results.
+            try:
+                from iq720_outcome_tracker import log_iq720_signal
+                log_iq720_signal(signal, symbol)
+            except Exception as _le:
+                logger.debug(f"[iq720] outcome-tracker log failed (non-fatal): {_le}")
             
             # === SIGNAL ROUTING: Route IQ-720 signal through rules engine ===
             routing_result = None
@@ -4453,6 +4491,13 @@ async def force_generate_signal_v2(
         # IQ-720 regime detection bonus (weight its confidence heavier)
         try:
             from iq720_signal_generator import iq720_generator
+            # Iter 59 — adaptive IQ-720 multiplier from daily tournament
+            try:
+                from model_tournament import get_tournament_weight
+                _tour_iq = get_tournament_weight("iq720")
+            except Exception:
+                _tour_iq = 1.0
+
             closes = df["close"].astype(float).tolist()
             highs = df["high"].astype(float).tolist()
             lows = df["low"].astype(float).tolist()
@@ -4462,12 +4507,18 @@ async def force_generate_signal_v2(
             if sig and isinstance(sig, dict):
                 d = (sig.get("direction") or "").upper()
                 c = float(sig.get("confidence") or 0)
-                # IQ720 is weighted 3x (ensemble weight)
+                # IQ720 base weight = 3, scaled by daily tournament multiplier
+                iq720_weight = 3.0 * _tour_iq
                 if d == "CALL":
-                    votes_call += (c / 100.0) * 3
+                    votes_call += (c / 100.0) * iq720_weight
                 elif d == "PUT":
-                    votes_put += (c / 100.0) * 3
-                component_results["iq720_ensemble"] = {"direction": d, "confidence": c, "weight": 3}
+                    votes_put += (c / 100.0) * iq720_weight
+                component_results["iq720_ensemble"] = {
+                    "direction": d,
+                    "confidence": c,
+                    "weight": round(iq720_weight, 2),
+                    "tournament_multiplier": round(_tour_iq, 3),
+                }
         except Exception as e:
             logger.debug(f"iq720 in force-generate: {e}")
 
@@ -5140,6 +5191,35 @@ async def trigger_tournament_now(symbols: Optional[List[str]] = Body(default=Non
         "message": "Tournament started — poll /api/ml/tournament/status for results",
         "started_at": datetime.now(timezone.utc).isoformat(),
     }
+
+
+# ============================================================================
+# Iter 59 — IQ-720 Outcome Feedback Loop endpoints
+# ============================================================================
+
+@router.get("/iq720/outcome-stats")
+async def get_iq720_outcome_stats():
+    """Per-confirmation rolling win-rates + adaptive multipliers."""
+    from iq720_outcome_tracker import get_all_stats, refresh_cache_if_stale
+    await refresh_cache_if_stale()
+    return {"success": True, **get_all_stats()}
+
+
+@router.post("/iq720/match-outcomes")
+async def trigger_iq720_match_outcomes(lookback_hours: int = Body(24, embed=True)):
+    """Fire the IQ-720 signal ↔ Tampermonkey trade outcome matcher manually."""
+    from iq720_outcome_tracker import match_trade_outcomes, refresh_confirmation_stats
+    m = await match_trade_outcomes(lookback_hours=lookback_hours)
+    s = await refresh_confirmation_stats()
+    return {"success": True, "match": m, "refresh": s}
+
+
+@router.post("/iq720/refresh-stats")
+async def trigger_iq720_refresh_stats():
+    """Recompute the rolling per-confirmation stats from already-matched signals."""
+    from iq720_outcome_tracker import refresh_confirmation_stats
+    s = await refresh_confirmation_stats()
+    return {"success": True, **s}
 
 
 
