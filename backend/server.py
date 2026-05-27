@@ -3667,6 +3667,7 @@ from routes.auth import router as auth_router
 from routes.pocket_option import router as pocket_option_router
 from routes.integrations import router as integrations_router
 from routes.trading import router as trading_router
+from routes.sentiment import router as sentiment_router
 
 api_router.include_router(strategies_router)
 api_router.include_router(signals_router)
@@ -3676,6 +3677,7 @@ api_router.include_router(auth_router)
 api_router.include_router(pocket_option_router)
 api_router.include_router(integrations_router)
 api_router.include_router(trading_router)
+api_router.include_router(sentiment_router)
 
 app.include_router(api_router)
 
@@ -3789,6 +3791,18 @@ async def startup_event():
             logger.error(f"Failed to start auto-retrain scheduler: {e}")
 
     asyncio.create_task(start_retrain_scheduler())
+
+    # Iter 62 — Sentiment background loop (RSS + Emergent LLM scoring every 15 min)
+    async def start_sentiment_loop():
+        await asyncio.sleep(45)  # let services warm up
+        try:
+            from sentiment_service import start_background_loop
+            start_background_loop()
+            logger.info("🗞️  Sentiment background loop started (15-min refresh)")
+        except Exception as e:
+            logger.error(f"Failed to start sentiment loop: {e}")
+
+    asyncio.create_task(start_sentiment_loop())
     
     # Return immediately so server can start accepting health checks
     logger.info("⚡ Server startup complete - initialization running in background")

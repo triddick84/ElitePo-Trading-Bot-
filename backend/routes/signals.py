@@ -4610,6 +4610,33 @@ async def force_generate_signal_v2(
             # NO INFLATION — 82% is the realistic ceiling, anything higher is a lie.
             raw_confidence = 52.0 + (confluence_score * 30.0)
 
+        # =====================================================================
+        # Iter 62 — Sentiment soft modifier (+/- up to 3% raw confidence)
+        # =====================================================================
+        sentiment_modifier = 0.0
+        sentiment_payload: Dict[str, Any] = {}
+        try:
+            from sentiment_service import get_pair_sentiment_bias
+            bias = get_pair_sentiment_bias(a)
+            if bias and bias.get("suggested_direction") in ("CALL", "PUT"):
+                # Magnitude scaled by confidence × abs(net_score), capped at 3%
+                mag = min(3.0, abs(float(bias["net_score"])) * float(bias["confidence"]) * 3.0)
+                if bias["suggested_direction"] == direction:
+                    sentiment_modifier = mag
+                else:
+                    sentiment_modifier = -mag
+                raw_confidence = max(40.0, min(85.0, raw_confidence + sentiment_modifier))
+                sentiment_payload = {
+                    "net_score": bias["net_score"],
+                    "confidence": bias["confidence"],
+                    "suggested_direction": bias["suggested_direction"],
+                    "modifier_pct": round(sentiment_modifier, 2),
+                    "base": bias["base"],
+                    "quote": bias["quote"],
+                }
+        except Exception as _sent_e:
+            logger.debug(f"sentiment modifier skipped for {a}: {_sent_e}")
+
         # Participation check — how many strategies agreed with the chosen direction?
         # Filters out "rogue" 100% confluence where only 1 strategy voted.
         agreeing_count = sum(
@@ -4813,6 +4840,8 @@ async def force_generate_signal_v2(
             "ml_agree_count": ml_agree_count,
             "vol_regime": vol_regime,
             "atr_percent": round(atr_pct, 4),
+            # Iter 62 — sentiment soft modifier (may be empty dict if unavailable)
+            "sentiment": sentiment_payload,
         }
 
         # -----------------------------------------------------------------
