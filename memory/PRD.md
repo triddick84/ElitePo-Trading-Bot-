@@ -1,8 +1,36 @@
 # Elite Pocket Option Trading Bot - Product Requirements Document
 
-## Last Updated: May 27, 2026 (afternoon)
+## Last Updated: May 27, 2026 (late evening)
 
 ## Current Status
+
+✅ **Iteration 61 — Twelve Data Integration Verified + Backtest Source Surfacing (May 27, 2026)**
+
+User requested: (a) verify Twelve Data API integration works end-to-end, (b) wire it into the backtest fallback chain with a UI badge showing the data source.
+
+### What was actually broken
+The previous fork reported a `json.decoder.JSONDecodeError` blocker on `/api/twelvedata/*`. Investigation showed it was a **shell-parsing artifact in the test script**, NOT a code bug — the service was already returning clean JSON. All three TD endpoints (`/status`, `/quote/EURUSD`, `/candles/EURUSD`) return 200 with valid bodies.
+
+### Twelve Data plumbing now complete
+1. `historical_data_service.get_candles_for_backtest()` now stamps `df.attrs['data_source']` with `local_pool`, `twelvedata`, or `none` so callers can surface the provider.
+2. `routes/backtesting.py /backtest/run` reads the attr and falls through OANDA → Twelve Data → 400-error chain. Response now includes top-level `data_source` field.
+3. `backtesting_service.py` (multi-provider chain) inserts Twelve Data after Alpha Vantage, before synthetic — closes the gap when MongoDB + OANDA + Finnhub + AV all miss.
+4. **UI badges**: `BacktestingPage.jsx` and `MLLabPage.jsx` now display color-coded badges (OANDA=cyan, Twelve Data=purple, Local Pool=emerald, Synthetic=yellow) on each backtest result, with `data-testid="backtest-data-source-badge"` for testability.
+5. Lowered TD local rate-bucket `max_wait_s` from 30s → 8s so HTTP clients don't time out on throttling.
+
+### Verified live
+- `POST /api/backtest/run` with `EURUSD M1 days=2` (no local data) → `data_source: "twelvedata"`, 5000 candles.
+- `POST /api/backtest/run` with `EURUSD_OTC 5s days=1` → `data_source: "local_pool"` (TD correctly skipped for sub-minute).
+
+### Tests
+- New `tests/test_iter61_twelvedata.py` — 5/5 passing.
+- Testing agent independently verified **11/11 backend cases pass** including a 12-call rate-limit stress test (no 500s). Report: `/app/test_reports/iteration_53.json`.
+
+### Resolved from previous fork
+- ❌ "Twelve Data JSONDecodeError" (Issue #1, P0) — **CLOSED, was a false alarm.**
+- ⏳ "Deployed App Login Connection Error" — still pending user redeploy (no code change needed).
+
+---
 
 ✅ **Iteration 60b — Reset Optimization History + P3/P5 Definitions (May 27, 2026)**
 

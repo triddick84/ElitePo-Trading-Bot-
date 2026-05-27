@@ -40,8 +40,12 @@ _RATE_LOCK = threading.Lock()
 _RATE_TIMES: List[float] = []
 
 
-def _acquire_rate_token(max_wait_s: float = 30.0) -> bool:
-    """Token-bucket gate. Blocks up to `max_wait_s` for an available slot."""
+def _acquire_rate_token(max_wait_s: float = 8.0) -> bool:
+    """Token-bucket gate. Blocks up to `max_wait_s` for an available slot.
+
+    Iter 61.1 — reduced from 30s → 8s so callers can react to throttling
+    without their HTTP client timing out first.
+    """
     deadline = time.time() + max_wait_s
     while True:
         with _RATE_LOCK:
