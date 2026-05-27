@@ -466,47 +466,77 @@ async def train_ml_from_backtests(request: dict = {}):
 async def train_ml_on_price_data(request: dict):
     """
     Train ML models on historical price data for a specific asset/timeframe.
+
+    Iter 60 — Prefers `otc_candles_5s` (or `historical_candles`) over the
+    `BacktestingService` data fetcher, which silently falls back to synthetic
+    data when real sources are dry. Synthetic data poisoned every model with
+    50% accuracy because the labels were uncorrelated with the random walk.
     """
     try:
         from ml_training_service import get_ml_training_service
-        from backtesting_service import BacktestingService
         from dataclasses import asdict
-        
+        from historical_data_service import historical_data_service
+
         asset = request.get("asset", "EURUSD")
-        timeframe = request.get("timeframe", "1h")
-        days = min(request.get("days", 30), 90)
-        
-        # Fetch price data - pass db for real MongoDB data access
-        backtest_service = BacktestingService(db=db)
-        price_df, data_source = await backtest_service.data_fetcher.fetch_historical_data(
-            asset, 
-            backtest_service._determine_asset_type(asset),
-            days,
-            timeframe
-        )
-        
+        timeframe = request.get("timeframe", "M1")
+        days = min(int(request.get("days", 30)), 90)
+
+        # Prefer the same OTC + OANDA fallback path the backtesting endpoint uses
+        price_df = historical_data_service.get_candles_for_backtest(asset, timeframe, days)
+        data_source = "otc_pool_or_oanda"
+
+        # Last-resort fallback to OANDA-only if the unified service returned empty
+        if price_df is None or price_df.empty or len(price_df) < 100:
+            try:
+                from enhanced_oanda_service import enhanced_oanda
+                oanda_symbol = asset.replace("_OTC", "").replace("OTC", "")
+                if "_" not in oanda_symbol and len(oanda_symbol) == 6:
+                    oanda_symbol = f"{oanda_symbol[:3]}_{oanda_symbol[3:]}"
+                tf_map = {"M1": "M1", "M5": "M5", "M15": "M15", "M30": "M30",
+                          "H1": "H1", "H4": "H4", "D1": "D", "5s": "S5", "15s": "S15", "30s": "S30"}
+                oanda_tf = tf_map.get(timeframe, "M1")
+                df = enhanced_oanda.get_candles(oanda_symbol, oanda_tf, count=1000)
+                if df is not None and not df.empty:
+                    price_df = df.reset_index() if "timestamp" not in df.columns else df
+                    data_source = "oanda"
+            except Exception as _oe:
+                logger.warning(f"OANDA fallback for ML training also failed: {_oe}")
+
         if price_df is None or len(price_df) < 100:
             return {
                 "success": False,
-                "error": f"Insufficient price data for {asset}. Got {len(price_df) if price_df is not None else 0} candles from {data_source}."
+                "error": (
+                    f"Insufficient REAL price data for {asset} ({timeframe}, last {days}d). "
+                    f"Got {0 if price_df is None else len(price_df)} candles. Synthetic-data "
+                    "fallback was DISABLED in Iter 60 to prevent training on noise."
+                ),
+                "data_source": data_source,
             }
-        
+
         # Train models
         ml_service = await get_ml_training_service(db)
         trained_models = await ml_service.train_on_price_data(price_df, asset, timeframe)
-        
+
+        if not trained_models:
+            return {
+                "success": False,
+                "error": "Model training returned zero models (likely too few samples after feature prep)",
+                "data_source": data_source,
+                "candles_used": len(price_df),
+            }
+
         models_data = {k: asdict(v) for k, v in trained_models.items()}
-        
+
         return {
             "success": True,
-            "message": f"Trained {len(trained_models)} ML models on {len(price_df)} candles from {data_source}",
+            "message": f"Trained {len(trained_models)} ML models on {len(price_df)} REAL candles from {data_source}",
             "asset": asset,
             "timeframe": timeframe,
             "data_source": data_source,
             "candles_used": len(price_df),
-            "models": models_data
+            "models": models_data,
         }
-        
+
     except Exception as e:
         logger.error(f"Error training on price data: {e}")
         import traceback
@@ -621,26 +651,65 @@ async def run_strategy_optimization(request: dict = None):
             stats['rois'].append(result.get('roi', 0))
         
         # Calculate optimization recommendations
+        # Iter 60 — rank by COMPOSITE score (win-rate × profitability × confidence),
+        # not just win-rate. Previous code recommended a -$63,827 loss strategy
+        # as "HIGH" because it had 57% win-rate — but huge losses per loss trade
+        # destroyed it. Composite ranking + profitability gate fix this.
+        import math
+        MIN_TRADES_FOR_RECOMMENDATION = 30
         recommendations = []
         for strategy, stats in strategy_stats.items():
-            if stats['total_trades'] > 0:
-                avg_win_rate = sum(stats['win_rates']) / len(stats['win_rates'])
-                avg_roi = sum(stats['rois']) / len(stats['rois'])
-                
-                recommendations.append({
-                    'strategy': strategy,
-                    'total_trades': stats['total_trades'],
-                    'avg_win_rate': round(avg_win_rate, 2),
-                    'avg_roi': round(avg_roi, 2),
-                    'total_profit': round(stats['total_profit'], 2),
-                    'recommendation': 'HIGH' if avg_win_rate > 55 else 'MEDIUM' if avg_win_rate > 45 else 'LOW'
-                })
-        
-        # Sort by win rate
-        recommendations.sort(key=lambda x: x['avg_win_rate'], reverse=True)
-        
-        # Get best performing strategy
-        best_strategy = recommendations[0] if recommendations else None
+            if stats['total_trades'] <= 0:
+                continue
+            avg_win_rate = sum(stats['win_rates']) / len(stats['win_rates'])
+            avg_roi = sum(stats['rois']) / len(stats['rois'])
+            total_profit = stats['total_profit']
+            n_trades = stats['total_trades']
+
+            # Composite score: edge above 50% × log10(trade-count+1)
+            # Profitability gate is enforced by tier, not by sign flipping.
+            edge = (avg_win_rate - 50.0) / 50.0  # range [-1, +1]
+            confidence = math.log10(max(1, n_trades) + 1)
+            composite_score = round(edge * confidence, 4)
+
+            # Recommendation tier
+            if n_trades < MIN_TRADES_FOR_RECOMMENDATION:
+                rec_tier = "INSUFFICIENT_DATA"
+            elif total_profit < 0:
+                # Anything losing money is AVOID regardless of win-rate
+                rec_tier = "AVOID_LOSS_MAKER"
+            elif avg_win_rate >= 60 and avg_roi >= 5:
+                rec_tier = "HIGH"
+            elif avg_win_rate >= 55 and avg_roi >= 0:
+                rec_tier = "MEDIUM"
+            elif avg_win_rate >= 50:
+                rec_tier = "LOW"
+            else:
+                rec_tier = "AVOID"
+
+            recommendations.append({
+                'strategy': strategy,
+                'total_trades': n_trades,
+                'avg_win_rate': round(avg_win_rate, 2),
+                'avg_roi': round(avg_roi, 2),
+                'total_profit': round(total_profit, 2),
+                'composite_score': composite_score,
+                'recommendation': rec_tier,
+            })
+
+        # Sort by tier first (HIGH > MEDIUM > LOW > INSUFFICIENT_DATA > AVOID >
+        # AVOID_LOSS_MAKER), then by composite score within each tier
+        _tier_rank = {
+            "HIGH": 0, "MEDIUM": 1, "LOW": 2,
+            "INSUFFICIENT_DATA": 3, "AVOID": 4, "AVOID_LOSS_MAKER": 5,
+        }
+        recommendations.sort(key=lambda x: (_tier_rank.get(x['recommendation'], 99), -x['composite_score']))
+
+        # Best strategy = first profitable HIGH/MEDIUM; fall back to top composite
+        best_strategy = next(
+            (r for r in recommendations if r['recommendation'] in ('HIGH', 'MEDIUM')),
+            recommendations[0] if recommendations else None,
+        )
         
         return {
             "success": True,

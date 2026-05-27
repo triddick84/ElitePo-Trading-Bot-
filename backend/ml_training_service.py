@@ -658,11 +658,12 @@ class MLTrainingService:
             target = (df['outcome'].str.lower() == 'win').astype(int)
         else:
             target = pd.Series([0] * len(df))
-        
-        # Add some noise features to make the model more robust
-        features['noise_1'] = np.random.randn(len(df))
-        features['noise_2'] = np.random.randn(len(df))
-        
+
+        # Iter 60 — REMOVED `noise_1`/`noise_2` random features. Previous
+        # code injected np.random.randn() as features which then dominated
+        # the model's feature importance (81% combined) and made every
+        # prediction effectively random. Train on actual signal features only.
+
         return features, target
     
     async def train_on_price_data(self, price_df: pd.DataFrame, asset: str, timeframe: str) -> Dict[str, TrainedModel]:

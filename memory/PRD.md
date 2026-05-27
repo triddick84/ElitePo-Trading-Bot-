@@ -1,8 +1,60 @@
 # Elite Pocket Option Trading Bot - Product Requirements Document
 
-## Last Updated: May 21, 2026
+## Last Updated: May 27, 2026
 
 ## Current Status
+
+✅ **Iteration 60 — AI Models Page Training/Optimization Pipeline Fixes (May 27, 2026)**
+
+User issue: *"the improve backtesting on Ml Page is not working properly, run through the Ai models training and backtesting and see if everything is working together to achieve the correct data and training are being used"*
+
+### Root cause — three independent bugs poisoning the AI Models page
+
+1. 🐛 **`/api/ml-training/train-from-backtests` trained models on RANDOM NOISE** — `ml_training_service.py` line 663-664 literally injected `np.random.randn()` columns named `noise_1` and `noise_2` into the feature matrix. These ended up with **81% combined feature importance** (noise_1: 41.2%, noise_2: 40.6%) on every "trained" Random Forest, meaning every prediction was effectively a coin flip on random data. The actual signal features (`confidence`, `is_call`, strategy one-hots) summed to <11%.
+
+2. 🐛 **`/api/ml-training/train-on-price-data` silently fell back to SYNTHETIC RANDOM-WALK** — Endpoint routed through `BacktestingService.data_fetcher.fetch_historical_data()` which has an internal `generate_synthetic_data()` fallback (random walk). Returned `data_source: "synthetic"` even when 15k+ real OTC candles existed in the database. Models trained on uncorrelated noise labels → 50% accuracy guaranteed.
+
+3. 🐛 **`/api/ml-training/run-optimization` recommended LOSS-MAKERS as "HIGH"** — Sort key was `avg_win_rate` only (line 670). A strategy with 57.23% win-rate but **-$63,827.56 total profit and -2380% ROI** was ranked #1 with `recommendation: "HIGH"`. The win-rate threshold ignored profit/loss entirely.
+
+### Fixes shipped
+
+**1. Removed `noise_1`/`noise_2` features** from `_prepare_features_from_backtests()`. Verified live:
+   - Before: `noise_1` 41.2%, `noise_2` 40.6%, `confidence` 10.1%
+   - After: `confidence` **78.5%**, `is_call` 7.4%, `strategy_professional_scalping` 5.1% — actual signal features dominate
+
+**2. Rewrote `/api/ml-training/train-on-price-data`** to:
+   - Use `historical_data_service.get_candles_for_backtest()` (same path Iter 58 backtesting uses — OTC pool → OANDA fallback chain)
+   - Last-resort OANDA forex API call with proper symbol mapping (EURUSD_OTC → EUR_USD, etc.)
+   - **NEVER fall back to synthetic data** — fails with clear error message if real sources are dry
+   - Verified live: now returns `data_source: "oanda", candles_used: 1000` for EURUSD_OTC
+
+**3. Rewrote `/api/ml-training/run-optimization` ranking**:
+   - New `composite_score = (edge_above_50pct / 50) × log10(trade_count + 1)` (no profit-sign multiplier since the tier system handles that)
+   - 6-tier recommendation system: `HIGH` (≥60% wr + ≥5% ROI), `MEDIUM` (≥55% wr + ≥0% ROI), `LOW` (≥50% wr), `INSUFFICIENT_DATA` (<30 trades), `AVOID` (<50% wr but profitable), `AVOID_LOSS_MAKER` (negative profit, regardless of win-rate)
+   - Sort key: `(tier_rank, -composite_score)` — loss-makers always at bottom
+   - `best_strategy` selected as first profitable HIGH/MEDIUM tier
+   - Verified live: top recommendation now `MEDIUM | macd_crossover | +$21.70 @ 56.5% wr`. All -$60k+ losers correctly relegated to `AVOID_LOSS_MAKER` tier below MEDIUM/LOW.
+
+### Tests
+`/app/backend/tests/test_iter60_ai_models_fixes.py` — 3 regression tests:
+   - No `noise_*` features in any trained model
+   - `data_source` never returns "synthetic"
+   - `best_strategy.recommendation` never `AVOID_LOSS_MAKER`; sort order verified
+
+**All 17 tests across Iter 58 + 59 + 60 pass in 140s.**
+
+### Diagnosis: is the AI Models pipeline now correct?
+Running through end-to-end after fixes:
+
+| Flow | Status | Notes |
+|------|--------|-------|
+| Train from Backtests | ✅ Real signal features only (78.5% confidence, no noise) | 100 results, 3 models trained |
+| Train on Price Data | ✅ Real OANDA data, 1000 candles | No more synthetic poisoning |
+| Run Optimization | ✅ MEDIUM macd_crossover (+$21.70) ranked above -$63k loss-makers | Composite ranking + 6-tier |
+| ML Lab Backtesting (Iter 58) | ✅ hybrid strategy returns nested metrics correctly | hybrid uses force_generate_v2 semantics |
+| IQ-720 Outcome Feedback (Iter 59) | ✅ Adaptive weights cold start at 1.00× | Needs ≥8 matched trades to activate per confirmation |
+| Daily Tournament (Iter 58/59) | ✅ All 5 models including IQ-720 evaluated | improved_v2 1.50×, iq720 1.21×, ppo_rl 0.60× |
+| OOS Validation (Iter 57) | ✅ Train/test_accuracy + overfit_gap badge | Surfaces in MLLab UI |
 
 ✅ **Iteration 59 — IQ-720 Outcome Feedback Loop + Training Pipeline Unblocked (May 21, 2026)**
 
