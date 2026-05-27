@@ -104,3 +104,45 @@ def test_run_optimization_does_not_recommend_loss_makers():
     # Verify composite_score is on every row
     for r in recs:
         assert "composite_score" in r, f"missing composite_score: {r}"
+
+
+
+def test_reset_optimization_history_requires_confirm():
+    """Reset endpoint must reject calls without the confirm flag."""
+    with _client() as c:
+        r = c.post(f"{API}/ml-training/reset-optimization-history", json={})
+    assert r.status_code == 200
+    body = r.json()
+    assert body.get("success") is False
+    assert "confirm" in body.get("error", "").lower()
+
+
+def test_reset_optimization_history_only_negative_preserves_winners():
+    """When only_negative=true, profitable rows must survive the wipe."""
+    with _client() as c:
+        # Snapshot pre-reset
+        pre = c.post(f"{API}/ml-training/run-optimization").json()
+        had_profitable_before = any(
+            r["recommendation"] in ("HIGH", "MEDIUM", "LOW")
+            for r in (pre.get("all_recommendations") or [])
+        )
+
+        r = c.post(
+            f"{API}/ml-training/reset-optimization-history",
+            json={"confirm": "yes", "only_negative": True},
+        )
+    assert r.status_code == 200
+    body = r.json()
+    assert body.get("success") is True
+    assert body.get("deleted", 0) >= 0
+    assert body.get("filter") == {"total_profit": {"$lt": 0}}
+
+    # Re-query optimization — profitable rows must still be there if they existed before
+    with _client() as c:
+        post = c.post(f"{API}/ml-training/run-optimization").json()
+    if had_profitable_before and post.get("success"):
+        post_profitable = sum(
+            1 for r in (post.get("all_recommendations") or [])
+            if r["recommendation"] in ("HIGH", "MEDIUM", "LOW")
+        )
+        assert post_profitable >= 1, "loss-only reset destroyed profitable rows"

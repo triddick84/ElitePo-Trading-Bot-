@@ -614,6 +614,54 @@ async def get_ml_models():
 
 
 
+@router.post("/ml-training/reset-optimization-history")
+async def reset_optimization_history(request: dict = None):
+    """
+    Iter 60 — Wipe contaminated backtest_results so the optimization endpoint
+    sees a clean dataset post-fixes. Accepts:
+        - `confirm` (required): must equal "yes" — guard against accidental wipes
+        - `only_negative` (optional, default false): if true, only delete rows
+          with negative `total_profit` (keeps profitable history intact)
+        - `older_than_days` (optional): if set, only delete rows older than N days
+    Returns the deletion counts. Safe to re-run.
+    """
+    req = request or {}
+    if (req.get("confirm") or "").lower() != "yes":
+        return {
+            "success": False,
+            "error": "Must POST {'confirm': 'yes'} to wipe optimization history. This is irreversible.",
+        }
+    try:
+        from datetime import timedelta as _td
+        filt: Dict[str, Any] = {}
+        if req.get("only_negative"):
+            filt["total_profit"] = {"$lt": 0}
+        if req.get("older_than_days"):
+            cutoff = (datetime.now(timezone.utc) - _td(days=int(req["older_than_days"]))).isoformat()
+            filt["created_at"] = {"$lt": cutoff}
+
+        before_total = await db.backtest_results.count_documents({})
+        before_filt = await db.backtest_results.count_documents(filt) if filt else before_total
+        res = await db.backtest_results.delete_many(filt) if filt else await db.backtest_results.delete_many({})
+        after = await db.backtest_results.count_documents({})
+
+        logger.info(
+            f"[reset-optimization-history] deleted {res.deleted_count} rows "
+            f"(filter={filt}, before={before_total}, after={after})"
+        )
+        return {
+            "success": True,
+            "deleted": res.deleted_count,
+            "remaining": after,
+            "filter": filt or "ALL",
+            "before_total": before_total,
+            "matched_filter": before_filt,
+        }
+    except Exception as e:
+        logger.error(f"Error resetting optimization history: {e}")
+        return {"success": False, "error": str(e)}
+
+
 @router.post("/ml-training/run-optimization")
 async def run_strategy_optimization(request: dict = None):
     """

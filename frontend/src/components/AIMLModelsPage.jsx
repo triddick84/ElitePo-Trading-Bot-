@@ -362,6 +362,40 @@ const AIMLModelsPage = () => {
     }
   };
 
+  // Iter 60 — Reset optimization history (wipe contaminated backtest_results)
+  const handleResetOptimizationHistory = async (mode = "negative_only") => {
+    const isFullWipe = mode === "all";
+    const msg = isFullWipe
+      ? "Wipe ALL backtest results? This deletes profitable rows too. (Type DELETE to confirm)"
+      : "Wipe ONLY money-losing rows (likely contaminated from pre-Iter-60 noise + synthetic-data bugs)?\n\nProfitable backtests will be preserved. Continue?";
+    const ok = window.confirm(msg);
+    if (!ok) return;
+    if (isFullWipe) {
+      const typed = window.prompt('Type DELETE to confirm full wipe:');
+      if (typed !== 'DELETE') {
+        toast.info('Reset cancelled.');
+        return;
+      }
+    }
+    try {
+      const response = await axios.post(`${API}/ml-training/reset-optimization-history`, {
+        confirm: "yes",
+        only_negative: !isFullWipe,
+      });
+      if (response.data.success) {
+        toast.success(
+          `🧹 Deleted ${response.data.deleted} backtest rows. ${response.data.remaining} remaining.`
+        );
+        // Refresh optimization results so the UI reflects the cleanup
+        setOptimizationResults(null);
+      } else {
+        toast.error(response.data.error || 'Reset failed');
+      }
+    } catch (error) {
+      toast.error('Failed to reset optimization history: ' + (error?.message || ''));
+    }
+  };
+
   // Schedule daily retraining
   const handleScheduleDailyRetrain = async () => {
     try {
@@ -865,10 +899,34 @@ const AIMLModelsPage = () => {
                 </AlertDescription>
               </Alert>
               
-              <Button onClick={handleRunOptimization} className="bg-purple-500 hover:bg-purple-600">
-                <Award className="w-4 h-4 mr-2" />
-                Run Strategy Optimization
-              </Button>
+              <div className="flex flex-wrap gap-2" data-testid="optimization-actions">
+                <Button
+                  onClick={handleRunOptimization}
+                  className="bg-purple-500 hover:bg-purple-600"
+                  data-testid="run-optimization-btn"
+                >
+                  <Award className="w-4 h-4 mr-2" />
+                  Run Strategy Optimization
+                </Button>
+                <Button
+                  onClick={() => handleResetOptimizationHistory("negative_only")}
+                  variant="outline"
+                  className="border-amber-600 text-amber-300 hover:bg-amber-900/30"
+                  data-testid="reset-loss-history-btn"
+                  title="Wipe only loss-making rows (the pre-Iter-60 contaminated ones). Profitable backtests stay intact."
+                >
+                  🧹 Reset Loss-Maker History
+                </Button>
+                <Button
+                  onClick={() => handleResetOptimizationHistory("all")}
+                  variant="outline"
+                  className="border-red-600 text-red-300 hover:bg-red-900/30"
+                  data-testid="reset-all-history-btn"
+                  title="Nuclear option: wipe ALL backtest results (profitable + losing)."
+                >
+                  ⚠ Wipe ALL History
+                </Button>
+              </div>
               
               {optimizationResults && (
                 <div className="space-y-4 mt-6">

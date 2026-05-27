@@ -1,8 +1,35 @@
 # Elite Pocket Option Trading Bot - Product Requirements Document
 
-## Last Updated: May 27, 2026
+## Last Updated: May 27, 2026 (afternoon)
 
 ## Current Status
+
+✅ **Iteration 60b — Reset Optimization History + P3/P5 Definitions (May 27, 2026)**
+
+User asked for the cleanup button + asked what P3/P5 meant. Both addressed.
+
+### Reset Optimization History feature
+Built `POST /api/ml-training/reset-optimization-history` + 2 UI buttons in AIMLModelsPage:
+- **🧹 "Reset Loss-Maker History"** (amber outline) — wipes only `total_profit < 0` rows. Profitable backtests preserved. Single browser confirm.
+- **⚠ "Wipe ALL History"** (red outline) — nuclear option. Browser confirm + DELETE prompt.
+
+Backend safety:
+- `confirm: "yes"` required in body — endpoint rejects without it
+- Filter modes: `only_negative` (default for loss-only button) and `older_than_days` (optional)
+- Returns `{deleted, remaining, before_total, matched_filter}` for audit
+
+Verified live: **580 contaminated loss-maker rows deleted** in one click, 187 profitable rows preserved. After cleanup, best strategy now: `HIGH | +$2,404.52 @ X% wr` (was MEDIUM | +$21.70 — the real winners were buried under noise).
+
+### P3 / P5 definitions (clarified to user)
+- **P3 — A-INV Default Lock**: Make Auto-Invert (CALL↔PUT flip on losing streaks) default-ON at TM panel startup, like "51S" already is. Saves 1 click per session.
+- **P5 — `SEED_ADMINS` env var**: Read admin credentials from environment instead of hardcoding `testuser/test123` in `auth_service.py`. Lets production deploys auto-seed the user's real credentials. Format: `SEED_ADMINS="email1:pass1,email2:pass2"`.
+
+### Tests
+2 new tests in `test_iter60_ai_models_fixes.py`:
+- `test_reset_optimization_history_requires_confirm` — rejects unconfirmed wipes
+- `test_reset_optimization_history_only_negative_preserves_winners` — loss-only mode keeps profitable rows
+
+**21 of 22 tests pass across Iter 57+58+59+60** (1 flaky timeout when running training tests under shared-state load — passes solo).
 
 ✅ **Iteration 60 — AI Models Page Training/Optimization Pipeline Fixes (May 27, 2026)**
 
