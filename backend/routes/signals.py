@@ -5222,6 +5222,58 @@ async def trigger_iq720_refresh_stats():
     return {"success": True, **s}
 
 
+# ============================================================================
+# Iter 61 — Twelve Data integration endpoints
+# ============================================================================
+
+@router.get("/twelvedata/quote/{symbol}")
+async def twelvedata_quote(symbol: str):
+    """Real-time quote for a symbol via Twelve Data."""
+    from twelvedata_service import twelvedata_client, normalize_symbol
+    import asyncio as _asyncio
+    td_sym = normalize_symbol(symbol)
+    if not td_sym:
+        return {"success": False, "error": f"unknown_symbol: {symbol}"}
+    quote = await _asyncio.to_thread(twelvedata_client.get_quote, symbol)
+    if not quote:
+        return {"success": False, "error": "quote_unavailable", "twelvedata_symbol": td_sym}
+    return {"success": True, "symbol": symbol, "twelvedata_symbol": td_sym, "quote": quote}
+
+
+@router.get("/twelvedata/candles/{symbol}")
+async def twelvedata_candles(symbol: str, timeframe: str = "M1", outputsize: int = 200):
+    """Recent OHLCV candles for a symbol via Twelve Data (rate-limited 8/60s)."""
+    from twelvedata_service import twelvedata_client, normalize_symbol
+    import asyncio as _asyncio
+    td_sym = normalize_symbol(symbol)
+    if not td_sym:
+        return {"success": False, "error": f"unknown_symbol: {symbol}"}
+    df = await _asyncio.to_thread(
+        twelvedata_client.get_candles, symbol, timeframe, max(50, min(int(outputsize), 5000)),
+    )
+    if df is None or df.empty:
+        return {"success": False, "error": "no_data", "twelvedata_symbol": td_sym}
+    df = df.copy()
+    df["timestamp"] = df["timestamp"].astype(str)
+    return {
+        "success": True,
+        "symbol": symbol,
+        "twelvedata_symbol": td_sym,
+        "timeframe": timeframe,
+        "count": len(df),
+        "candles": df.to_dict(orient="records"),
+    }
+
+
+@router.get("/twelvedata/status")
+async def twelvedata_status():
+    """Probe API key + show local rate-bucket usage."""
+    from twelvedata_service import twelvedata_client
+    import asyncio as _asyncio
+    info = await _asyncio.to_thread(twelvedata_client.api_credits_status)
+    return {"success": True, "info": info}
+
+
 
 
 

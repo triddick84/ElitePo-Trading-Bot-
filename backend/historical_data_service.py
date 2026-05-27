@@ -389,17 +389,45 @@ class HistoricalDataService:
         timeframe: str,
         days: int = 30
     ) -> pd.DataFrame:
-        """Get candles for backtesting (last N days)"""
+        """
+        Get candles for backtesting (last N days).
+
+        Iter 61 — fallback chain: existing pool → Twelve Data (if pool empty).
+        Twelve Data covers forex, OTC analogues, crypto, indices, commodities
+        on the free tier (8 calls / 60s, rate-limited internally).
+        """
         end_time = datetime.now(timezone.utc)
         start_time = end_time - timedelta(days=days)
-        
-        return self.get_candles(
+
+        df = self.get_candles(
             symbol=symbol,
             timeframe=timeframe,
             start_time=start_time,
             end_time=end_time,
-            limit=100000  # Large limit for backtesting
+            limit=100000,
         )
+
+        if df is not None and not df.empty and len(df) >= 50:
+            return df
+
+        # Twelve Data fallback for any symbol the existing pool didn't cover
+        try:
+            from twelvedata_service import twelvedata_client
+            # TwelveData free-tier intervals: 1min and up. For sub-minute (OTC
+            # 5s/15s/30s) we can't help — return whatever we already had.
+            sub_minute = timeframe in ("3s", "5s", "15s", "30s")
+            if not sub_minute:
+                # Pull plenty of candles. Free-tier outputsize cap 5000.
+                td_df = twelvedata_client.get_candles(symbol, timeframe, outputsize=5000)
+                if td_df is not None and not td_df.empty:
+                    logger.info(
+                        f"[twelvedata-fallback] {symbol} {timeframe}: {len(td_df)} candles"
+                    )
+                    return td_df
+        except Exception as _e:
+            logger.debug(f"[twelvedata-fallback] {symbol}: {_e}")
+
+        return df if df is not None else pd.DataFrame()
     
     def import_csv(
         self,
