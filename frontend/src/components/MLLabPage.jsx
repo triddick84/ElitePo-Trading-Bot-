@@ -303,6 +303,7 @@ export default function MLLabPage() {
             sharpe: m.sharpe_ratio ?? m.sharpe ?? 0,
             equity_curve: m.equity_curve || [],
             data_points: r.data_points,
+            data_source: r.data_source,
             symbol: r.symbol,
             timeframe: r.timeframe,
           };
@@ -1091,6 +1092,29 @@ function BacktestPanel({ model, assets, universe, backtest, setBacktest, onRun, 
 
         {result && !result.error && (
           <div className="space-y-4">
+            {result.data_source && (
+              <div className="flex items-center gap-2 -mt-1">
+                <span className="text-xs text-slate-500">Data source:</span>
+                <Badge
+                  variant="outline"
+                  data-testid="backtest-data-source-badge"
+                  className={`text-[10px] px-2 py-0 ${
+                    result.data_source === 'twelvedata' ? 'border-purple-500/40 text-purple-300 bg-purple-500/10' :
+                    result.data_source === 'oanda' ? 'border-cyan-500/40 text-cyan-300 bg-cyan-500/10' :
+                    result.data_source === 'local_pool' ? 'border-emerald-500/40 text-emerald-300 bg-emerald-500/10' :
+                    result.data_source === 'mongodb_real' ? 'border-emerald-500/40 text-emerald-300 bg-emerald-500/10' :
+                    'border-yellow-500/40 text-yellow-300 bg-yellow-500/10'
+                  }`}
+                >
+                  {result.data_source === 'twelvedata' ? 'Twelve Data (fallback)' :
+                   result.data_source === 'oanda' ? 'OANDA' :
+                   result.data_source === 'local_pool' ? 'Local OTC Pool' :
+                   result.data_source === 'mongodb_real' ? 'Real PO Data' :
+                   result.data_source}
+                </Badge>
+                <span className="text-[10px] text-slate-500">· {result.data_points || 0} candles</span>
+              </div>
+            )}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-3 border-t border-slate-800">
               <Stat label="Win rate" value={`${(result.win_rate || 0).toFixed(1)}%`} />
               <Stat label="Total signals" value={result.total_signals || 0} />

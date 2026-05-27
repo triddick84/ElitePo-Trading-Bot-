@@ -373,6 +373,7 @@ async def run_backtest(request: BacktestRequest):
         df = historical_data_service.get_candles_for_backtest(
             request.symbol, request.timeframe, request.days
         )
+        data_source = (df.attrs.get("data_source") if df is not None else None) or "none"
         
         if df.empty:
             # Try to get from OANDA if no historical data
@@ -387,9 +388,24 @@ async def run_backtest(request: BacktestRequest):
                     df = oanda_df
                     df['timestamp'] = pd.to_datetime(df.index, utc=True)
                     df = df.reset_index(drop=True)
+                    data_source = "oanda"
             except Exception as e:
                 logger.warning(f"OANDA fallback failed: {e}")
         
+        if df.empty:
+            # Final fallback: Twelve Data
+            try:
+                from twelvedata_service import twelvedata_client
+                if request.timeframe not in ("3s", "5s", "15s", "30s"):
+                    td_df = twelvedata_client.get_candles(
+                        request.symbol, request.timeframe, outputsize=5000
+                    )
+                    if td_df is not None and not td_df.empty:
+                        df = td_df
+                        data_source = "twelvedata"
+            except Exception as e:
+                logger.warning(f"Twelve Data fallback failed: {e}")
+
         if df.empty:
             raise HTTPException(
                 status_code=400,
@@ -492,6 +508,7 @@ async def run_backtest(request: BacktestRequest):
             "symbol": request.symbol,
             "timeframe": request.timeframe,
             "data_points": len(df),
+            "data_source": data_source,
             "results": results
         }
         

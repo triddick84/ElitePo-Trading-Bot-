@@ -1,0 +1,52 @@
+{
+  "summary": "Independent verification of Iter 61 Twelve Data integration. All 11 backend test cases pass: TD status/quote/candles, unmappable symbol path, backtest data_source surfacing for EURUSD M1 (twelvedata) and EURUSD_OTC 5s (local_pool), 12-call rate-limit stress (no 500s), and regressions for /api/iq720/outcome-stats, /api/ml/tournament/status, /api/signals/force-generate-v2, /api/backtest/comprehensive.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "/api/twelvedata/candles/{symbol}",
+        "issue": "Under rapid back-to-back requests (12 in a row), about half of calls returned success:false with error='no_data' (upstream returned empty payload) rather than the strict 'rate_limit_local_timeout' / 'rate_limit_429' strings mentioned in the review spec. No 500s, behavior is graceful — but error taxonomy is slightly different from spec."
+      },
+      {
+        "endpoint": "/api/twelvedata/* (local token bucket)",
+        "issue": "Local rate limiter (_acquire_rate_token, capacity=8/60s) waits up to 30s before returning rate_limit_local_timeout. With requests timeout <30s the client times out. Consider lowering server-side max_wait_s to e.g. 10s and returning a 429 immediately so clients can react faster."
+      },
+      {
+        "endpoint": "/api/backtest/comprehensive",
+        "issue": "When given a minimal payload it can return results=[] without erroring, hiding the absence of a data_source field. Consider returning 200 with a clear 'no_data' marker if no strategies produced results."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter62_twelvedata_verify.py",
+    "/app/test_reports/pytest/iter62_results.xml"
+  ],
+  "action_items": [
+    "Consider unifying the TD error taxonomy: on rapid bursts the upstream sometimes returns empty payload which currently surfaces as 'no_data' rather than 'rate_limit_429' — clients can't differentiate transient rate-limit from genuine missing symbol.",
+    "Reduce server-side rate-limit max_wait_s from 30s to ~8-10s and return HTTP 429 immediately so callers don't have to set 30s+ timeouts.",
+    "Document the exact endpoint paths: review mentioned /api/signals/iq720-stats and /api/ml-tournament/snapshot but actual routes are /api/iq720/outcome-stats and /api/ml/tournament/status (used in test instead)."
+  ],
+  "critical_code_review_comments": [
+    "twelvedata_service.py token-bucket is process-local; in a multi-worker uvicorn deployment each worker has its own 8-per-minute window so the effective rate can exceed TD free-tier limits. Consider Redis-backed bucket or single-worker enforcement.",
+    "routes/signals.py is 5274+ lines — well over the 700-line guideline. Twelve Data endpoints should be moved to a dedicated routes/twelvedata.py module.",
+    "routes/backtest.py:240-254 mutates results_data with '_id' and upserts inside a try/except — if persistence fails it's only logged; consider returning a 'persistence_warning' field so the UI can surface stale-data risk."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter62_twelvedata_verify.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (11/11)",
+    "frontend": "N/A (backend-only task)"
+  },
+  "test_credentials": "Not used (no auth-gated endpoints in scope)",
+  "seed_data_creation": "None — Twelve Data is live; OTC 5s backtest uses pre-existing local_pool data.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Twelve Data free-tier bucket is 8 calls / 60s and is process-local. If tests fail with 'rate_limit_local_timeout' or 'no_data' immediately after another TD-heavy run, wait ~75s before re-running. The rate-limit stress test (test_zzz_twelvedata_rate_limit_does_not_500) is intentionally suffixed 'zzz' to run last within the file so it does not deplete the bucket for earlier tests. Endpoint paths: /api/twelvedata/* (no /signals prefix); regression endpoints are /api/iq720/outcome-stats and /api/ml/tournament/status (NOT iq720-stats / ml-tournament/snapshot).",
+  "rca_of_the_issue": "N/A — no defects found. Initial transient failures during testing were caused by the TD per-process rate bucket being depleted by a prior pytest run; resolved by adding a 75s cooldown between runs."
+}

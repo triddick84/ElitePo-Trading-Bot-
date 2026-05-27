@@ -960,6 +960,20 @@ class HistoricalDataFetcher:
                     
                     if df is not None and len(df) > 0:
                         data_source = "alphavantage"
+
+                # 3. Iter 61 — Twelve Data fallback (free-tier 8/min, 800/day)
+                if df is None or len(df) < 100:
+                    try:
+                        from twelvedata_service import twelvedata_client
+                        if interval not in ("3s", "5s", "15s", "30s"):
+                            logger.info(f"🔄 Trying Twelve Data for {symbol} ({interval})...")
+                            td_df = twelvedata_client.get_candles(symbol, interval, outputsize=5000)
+                            if td_df is not None and not td_df.empty:
+                                df = td_df
+                                data_source = "twelvedata"
+                                logger.info(f"📊 Twelve Data hit for {symbol}: {len(df)} candles")
+                    except Exception as _e:
+                        logger.debug(f"[twelvedata fallback] {symbol}: {_e}")
         
         # Last resort: Generate synthetic data
         if df is None or len(df) == 0:

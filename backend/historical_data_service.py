@@ -392,9 +392,13 @@ class HistoricalDataService:
         """
         Get candles for backtesting (last N days).
 
-        Iter 61 — fallback chain: existing pool → Twelve Data (if pool empty).
+        Iter 61 — fallback chain: local pool → Twelve Data (if pool insufficient).
         Twelve Data covers forex, OTC analogues, crypto, indices, commodities
         on the free tier (8 calls / 60s, rate-limited internally).
+
+        The returned DataFrame carries `df.attrs['data_source']` set to one of
+        `local_pool`, `twelvedata`, or `none` so callers (backtest endpoints)
+        can surface it to the UI.
         """
         end_time = datetime.now(timezone.utc)
         start_time = end_time - timedelta(days=days)
@@ -408,6 +412,7 @@ class HistoricalDataService:
         )
 
         if df is not None and not df.empty and len(df) >= 50:
+            df.attrs["data_source"] = "local_pool"
             return df
 
         # Twelve Data fallback for any symbol the existing pool didn't cover
@@ -423,11 +428,14 @@ class HistoricalDataService:
                     logger.info(
                         f"[twelvedata-fallback] {symbol} {timeframe}: {len(td_df)} candles"
                     )
+                    td_df.attrs["data_source"] = "twelvedata"
                     return td_df
         except Exception as _e:
             logger.debug(f"[twelvedata-fallback] {symbol}: {_e}")
 
-        return df if df is not None else pd.DataFrame()
+        out = df if df is not None else pd.DataFrame()
+        out.attrs["data_source"] = "local_pool" if (df is not None and not df.empty) else "none"
+        return out
     
     def import_csv(
         self,

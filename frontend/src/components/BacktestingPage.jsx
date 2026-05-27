@@ -675,16 +675,28 @@ const BacktestingPage = () => {
                         result.data_source === 'alphavantage' ? 'border-green-500/50 text-green-400 bg-green-500/10' :
                         result.data_source === 'finnhub' ? 'border-blue-500/50 text-blue-400 bg-blue-500/10' :
                         result.data_source === 'cryptocompare' ? 'border-orange-500/50 text-orange-400 bg-orange-500/10' :
-                        'border-yellow-500/50 text-yellow-400 bg-yellow-500/10'
+                        result.data_source === 'oanda' ? 'border-cyan-500/50 text-cyan-400 bg-cyan-500/10' :
+                        result.data_source === 'twelvedata' ? 'border-purple-500/50 text-purple-300 bg-purple-500/10' :
+                        result.data_source === 'mongodb_real' || result.data_source === 'local_pool'
+                            ? 'border-emerald-500/50 text-emerald-300 bg-emerald-500/10'
+                          : 'border-yellow-500/50 text-yellow-400 bg-yellow-500/10'
                       }`}
+                      data-testid={`backtest-data-source-${idx}`}
                     >
-                      {result.data_source === 'alphavantage' ? '📊 Alpha Vantage' :
-                       result.data_source === 'finnhub' ? '📈 Finnhub' :
-                       result.data_source === 'cryptocompare' ? '₿ CryptoCompare' :
-                       '⚡ Synthetic Data'}
+                      {result.data_source === 'alphavantage' ? 'Alpha Vantage' :
+                       result.data_source === 'finnhub' ? 'Finnhub' :
+                       result.data_source === 'cryptocompare' ? 'CryptoCompare' :
+                       result.data_source === 'oanda' ? 'OANDA' :
+                       result.data_source === 'twelvedata' ? 'Twelve Data' :
+                       result.data_source === 'mongodb_real' ? 'Real PO Data' :
+                       result.data_source === 'local_pool' ? 'Local Pool' :
+                       'Synthetic Data'}
                     </Badge>
                     {result.data_source === 'synthetic' && (
                       <span className="text-yellow-400 text-xs">(simulated)</span>
+                    )}
+                    {result.data_source === 'twelvedata' && (
+                      <span className="text-purple-300 text-xs">(API fallback)</span>
                     )}
                   </div>
                   
@@ -771,12 +783,20 @@ const BacktestingPage = () => {
                                 result.data_source === 'alphavantage' ? 'border-green-500/30 text-green-400' :
                                 result.data_source === 'finnhub' ? 'border-blue-500/30 text-blue-400' :
                                 result.data_source === 'cryptocompare' ? 'border-orange-500/30 text-orange-400' :
-                                'border-yellow-500/30 text-yellow-400'
+                                result.data_source === 'oanda' ? 'border-cyan-500/30 text-cyan-400' :
+                                result.data_source === 'twelvedata' ? 'border-purple-500/30 text-purple-300' :
+                                result.data_source === 'mongodb_real' || result.data_source === 'local_pool'
+                                    ? 'border-emerald-500/30 text-emerald-300'
+                                  : 'border-yellow-500/30 text-yellow-400'
                               }`}
                             >
                               {result.data_source === 'alphavantage' ? 'AV' :
                                result.data_source === 'finnhub' ? 'FH' :
                                result.data_source === 'cryptocompare' ? 'CC' :
+                               result.data_source === 'oanda' ? 'OD' :
+                               result.data_source === 'twelvedata' ? 'TD' :
+                               result.data_source === 'mongodb_real' ? 'PO' :
+                               result.data_source === 'local_pool' ? 'LP' :
                                'SYN'}
                             </Badge>
                           </div>
