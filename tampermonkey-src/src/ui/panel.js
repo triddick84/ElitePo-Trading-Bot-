@@ -921,10 +921,10 @@ export function createPanel() {
         <div class="${P}stripcell" id="${P}stripscan"><span class="${P}stripled"></span><span>SCAN</span></div>
         <div class="${P}stripcell" id="${P}stripauto"><span class="${P}stripled"></span><span>AUTO</span></div>
         <div class="${P}stripcell" id="${P}stripainv"><span class="${P}stripled"></span><span>A-INV</span></div>
-        <div class="${P}stripcell" id="${P}strip51s" title="Time Strategy toggle — fires at a fixed second of every 1m candle"><span class="${P}stripled"></span><span>TIME STRAT</span></div>
+        <div class="${P}stripcell" id="${P}strip51s" title="Seconds Number Strategy toggle — fires at a fixed second of every 1m candle"><span class="${P}stripled"></span><span>SNS</span></div>
         <div class="${P}stripcell" id="${P}stripcycle"><span class="${P}stripled"></span><span>CYCLE</span></div>
       </div>
-      <div class="${P}timerow" id="${P}timerow" data-testid="live-candle-timer" title="Live PO candle countdown and Time Strategy trigger status. Works on any chart timeframe (S5, S15, M1, M5, etc). Updates every 500ms.">
+      <div class="${P}timerow" id="${P}timerow" data-testid="live-candle-timer" title="Live PO candle countdown and Seconds Number Strategy trigger status. Works on any chart timeframe (S5, S15, M1, M5, etc). Updates every 500ms.">
         <span class="${P}timelbl">PO</span>
         <span class="${P}timeval" id="${P}timeval">—</span>
         <span class="${P}timesep">·</span>
@@ -956,25 +956,25 @@ export function createPanel() {
           <span class="${P}quallat" id="${P}quallat" title="End-to-end round-trip from the TM panel's clock"></span>
         </div>
         <div class="${P}row">
-          <button id="${P}r21s" class="${P}btn ${P}btn-r21s" title="Time Strategy — fires an opposite 5s trade at a chosen second of every 1m candle">TIME STRAT</button>
+          <button id="${P}r21s" data-testid="seconds-number-strategy-toggle" class="${P}btn ${P}btn-r21s" title="Seconds Number Strategy — fires an opposite 5s trade at a chosen second of every 1m candle. Toggle ON/OFF here. Use the timing slider in MORE to pick the second.">SNS</button>
           <button id="${P}ainv" class="${P}btn ${P}btn-ainv" title="Enable smart auto-invert on loss streaks">A-INV</button>
           <button id="${P}inv" class="${P}btn ${P}btn-inv">INVERT</button>
         </div>
-        <div class="${P}assetrow" data-testid="active-asset-indicator" title="Active asset and rotation count. Updates on every CYCLE switch / 51S fire.">
+        <div class="${P}assetrow" data-testid="active-asset-indicator" title="Active asset and rotation count. Updates on every CYCLE switch / SNS fire.">
           <span class="${P}assetlbl">ASSET</span>
           <span class="${P}assetval" id="${P}asset">—</span>
           <span class="${P}assetcount" id="${P}assetcnt">#0</span>
         </div>
-        <button class="${P}morebtn" id="${P}moretog" data-testid="more-toggle" title="Show/hide advanced toggles (CYCLE, APP, 51S timing, strategy picker)">▾ MORE</button>
+        <button class="${P}morebtn" id="${P}moretog" data-testid="more-toggle" title="Show/hide advanced toggles (CYCLE, APP, SNS timing, strategy picker)">▾ MORE</button>
         <div class="${P}advanced hidden" id="${P}advanced">
           <div class="${P}row">
             <button id="${P}cycle" class="${P}btn ${P}btn-cycle" title="Rotate through favorites, scan each, auto-trade best">CYCLE</button>
             <button id="${P}app" class="${P}btn ${P}btn-app" title="Poll backend /signals/latest and auto-execute">APP</button>
           </div>
-          <div class="${P}invst" id="${P}r21st" style="padding:2px 6px !important;">Time: Off</div>
-          <div class="${P}timing-row" title="Drag to change which second of the 1m candle triggers the trade. 49 = fires 11s into candle (~2s after :51 mark). Range 5–55s remaining.">
+          <div class="${P}invst" id="${P}r21st" style="padding:2px 6px !important;">SNS: Off</div>
+          <div class="${P}timing-row" data-testid="sns-timing-slider-row" title="Seconds Number Strategy — drag to choose which second of the 1m candle triggers the trade. Default 49 = fires when 49s remain (i.e. 11s into the candle, the classic ':49 mark' setup). Range 5–55s remaining.">
             <span class="${P}timing-label">Fire @</span>
-            <input id="${P}timing" data-testid="51s-timing-slider" class="${P}timing-slider" type="range" min="5" max="55" step="1" value="49" />
+            <input id="${P}timing" data-testid="sns-timing-slider" class="${P}timing-slider" type="range" min="5" max="55" step="1" value="49" />
             <span class="${P}timing-value" id="${P}timingv">49s left</span>
           </div>
           <div class="${P}stratrow">
@@ -1025,7 +1025,7 @@ export function createPanel() {
         </div>
         <div class="${P}loghdr" id="${P}logtog">Log <span id="${P}arrow">&#9660;</span></div>
         <div class="${P}logbox" id="${P}log"></div>
-        <button class="${P}resetbtn" id="${P}resetbtn" data-testid="reset-defaults-btn" title="Wipe saved settings and reload — restores recommended defaults (51S on, A-INV on, AUTO/SCAN/CYCLE off, base $1)">⟳ RESET TO DEFAULTS</button>
+        <button class="${P}resetbtn" id="${P}resetbtn" data-testid="reset-defaults-btn" title="Wipe saved settings and reload — restores recommended defaults (SNS off, A-INV on, AUTO/SCAN/CYCLE off, base $1)">⟳ RESET TO DEFAULTS</button>
       </div>
       <div class="${P}resize" id="${P}resize" data-testid="resize-handle" title="Drag to resize panel width. Saved across reloads."></div>
     </div>
@@ -1417,13 +1417,13 @@ export function update21sReversalDisplay(enabled, stats = null) {
   }
   if (st) {
     if (!enabled) {
-      st.textContent = 'Time Strategy: Off';
+      st.textContent = 'SNS: Off';
       st.classList.remove('on');
     } else if (stats) {
-      st.textContent = `Time Strategy: On ${stats.wins}/${stats.losses} (${stats.winRate}%)`;
+      st.textContent = `SNS: On ${stats.wins}/${stats.losses} (${stats.winRate}%)`;
       st.classList.add('on');
     } else {
-      st.textContent = 'Time Strategy: On';
+      st.textContent = 'SNS: On';
       st.classList.add('on');
     }
   }

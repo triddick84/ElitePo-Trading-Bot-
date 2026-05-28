@@ -374,13 +374,16 @@ class EliteTradingBot {
         const savedMs = state._twentyOneSConfig?.fireAtMsLeft ?? 49_000;
         set51sTimingSlider(Math.round(savedMs / 1000));
       } catch (_e) { /* ignore */ }
-      // 51S — ALWAYS ENABLED AT STARTUP (Iter 60). State default is true,
-      // loadState forces true, and we belt-and-braces it here so the strategy
-      // is live within ~50ms of bot init regardless of any prior persisted state.
-      state._twentyOneSEnabled = true;
-      twentyOneSecondReversal.enable();
-      update21sReversalDisplay(true, twentyOneSecondReversal.getStats());
-      restored.push('51S');
+      // Seconds Number Strategy — Iter 64: respect the user's saved toggle.
+      // (Previously hard-locked ON at startup; user requested explicit on/off.)
+      if (state._twentyOneSEnabled) {
+        twentyOneSecondReversal.enable();
+        update21sReversalDisplay(true, twentyOneSecondReversal.getStats());
+        restored.push('SNS');
+      } else {
+        twentyOneSecondReversal.disable();
+        update21sReversalDisplay(false, twentyOneSecondReversal.getStats());
+      }
 
       // Loud, visible summary so any persistence gap is immediately obvious
       if (restored.length > 0) {

@@ -1,8 +1,33 @@
 # Elite Pocket Option Trading Bot - Product Requirements Document
 
-## Last Updated: May 28, 2026 (afternoon)
+## Last Updated: May 28, 2026 (evening)
 
 ## Current Status
+
+✅ **Iteration 64 — Pure 2-Loss Auto-Invert + Seconds Number Strategy on/off (May 28, 2026)**
+
+User requested: (a) auto-invert flips on ANY 2 consecutive losses, no gating; (b) the "fire on certain secs" strategy needs an explicit on/off and renamed to "Seconds Number Strategy".
+
+### A) Auto-Invert simplified (smartInvert.js)
+- Reads `state.stats.currentStreak` (global loss streak, any direction, any asset)
+- Removed cooldown gate (`INVERT_COOLDOWN_MS`)
+- Removed per-asset same-direction grouping (`getConsecutiveSameDirectionLosses`)
+- Threshold remains 2 (`CONFIG.INVERT_AFTER_CONSECUTIVE_LOSSES`)
+- Result: any 2 losses in a row → immediate flip. Revert paths still in place (5 inverted trades w/ <40% wr, or 2 consecutive losses while inverted).
+
+### B) Seconds Number Strategy (formerly 51S Reversal / 21S / Time Strategy)
+- Renamed throughout TM UI: button label `SNS`, tooltip "Seconds Number Strategy", status text "SNS: On/Off", strip cell "SNS"
+- Removed hard-lock ON at startup (was forced enabled in `core/state.js` line 297 + `index.js` line 380)
+- Now respects saved toggle — defaults OFF on fresh install, persists user choice across reloads
+- Timing slider relabeled `data-testid="sns-timing-slider"` (was `51s-timing-slider`)
+- Toggle button `data-testid="seconds-number-strategy-toggle"` (was unset)
+- TM bundle bumped to **v8.66.0**
+
+### Tests
+- `tests/test_iter64_sns_and_autoinvert.py` — 6/6 passing (validates bundle contents + smartInvert source has no `INVERT_COOLDOWN_MS` / `getConsecutiveSameDirectionLosses`)
+- Grand total backend regression: **24/24 passing**
+
+---
 
 ✅ **Iteration 63 — JSON-Crash Fix + Latency Slider + Full Asset Universe (May 28, 2026)**
 

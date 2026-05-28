@@ -11,8 +11,9 @@ export const state = {
   autoInvertEnabled: true,     // explicit toggle: when ON, smart-invert logic applies
   cycleEnabled: false,         // CYCLE mode (rotate through favorites)
   dataCollectionEnabled: false,
-  // 51S Reversal: ON by default. User can deactivate via the 51S panel button.
-  _twentyOneSEnabled: true,
+  // Seconds Number Strategy (formerly 51S Reversal). Default OFF — user can
+  // enable explicitly via the "SNS" panel button. Iter 64.
+  _twentyOneSEnabled: false,
   
   // Trading state
   lastTradeTime: 0,
@@ -289,12 +290,13 @@ export function loadState() {
           state.cycleEnabled = !!parsed.toggles.cycleEnabled;
           state.dataCollectionEnabled = !!parsed.toggles.dataCollectionEnabled;
           state.appSignalEnabled = !!parsed.toggles.appSignalEnabled;
-          // 51S Reversal — ALWAYS ENABLED AT STARTUP (Iter 60).
-          // Per user requirement: this strategy must be active on every fresh
-          // page load regardless of what was previously saved. Mid-session
-          // deactivation via the button still works (and is honored within
-          // the running session) but never persists past a reload.
-          state._twentyOneSEnabled = true;
+          // Seconds Number Strategy (formerly "51S Reversal" / "21S Reversal")
+          // Iter 64 — Per user request, this is no longer hard-locked ON at
+          // startup. We now honor the saved toggle so the strategy is only
+          // running when the user explicitly enables it. Defaults to OFF for
+          // brand-new installs.
+          state._twentyOneSEnabled = parsed.toggles.twentyOneSEnabled !== undefined
+            ? !!parsed.toggles.twentyOneSEnabled : false;
         }
         if (parsed.cycleConfig) state._cycleConfig = parsed.cycleConfig;
         if (parsed.twentyOneSConfig) state._twentyOneSConfig = parsed.twentyOneSConfig;

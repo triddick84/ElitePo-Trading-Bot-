@@ -14,7 +14,7 @@
  */
 
 import { CONFIG } from '../core/config.js';
-import { state, getConsecutiveSameDirectionLosses, recordAssetResult } from '../core/state.js';
+import { state } from '../core/state.js';
 import { log, warn, info, success } from '../core/logger.js';
 
 class SmartInvertEngine {
@@ -43,63 +43,69 @@ class SmartInvertEngine {
   /**
    * Check if we should invert signals based on recent loss patterns.
    * Called AFTER each trade result is recorded.
-   * @param {string} asset - Current asset
+   *
+   * Iter 64 — Per user request, the trigger is now PURE: any 2 consecutive
+   * losses (global, ANY asset, ANY direction) → flip immediately. No cooldown.
+   * Same-direction grouping and per-asset gating have been removed.
+   *
+   * @param {string} asset - Current asset (kept for reason text only)
    */
   evaluateInversion(asset) {
     if (!CONFIG.AUTO_INVERT_ENABLED) return;
+    if (!state.autoInvertEnabled) return;
 
-    const now = Date.now();
     const inv = state.inversion;
-    const cooldown = CONFIG.INVERT_COOLDOWN_MS;
-
-    // Respect cooldown
-    if (now - inv.lastInvertChange < cooldown) return;
-
-    // Don't override manual
     if (inv.manualOverride) return;
 
-    const { count, direction } = getConsecutiveSameDirectionLosses(asset);
-    const threshold = CONFIG.INVERT_AFTER_CONSECUTIVE_LOSSES;
+    // Global consecutive-loss streak (negative when losing).
+    // Stats.currentStreak is decremented on every loss in core/state.js.
+    const lossStreak = state.stats.currentStreak < 0
+      ? Math.abs(state.stats.currentStreak)
+      : 0;
+    const threshold = CONFIG.INVERT_AFTER_CONSECUTIVE_LOSSES;  // default 2
 
-    // Log the evaluation for visibility
-    if (count > 0) {
-      info(`Auto-Invert check: ${count} consecutive ${direction || '?'} losses on ${asset} (threshold: ${threshold})`);
+    if (lossStreak > 0) {
+      info(`Auto-Invert check: global loss streak = ${lossStreak} (threshold: ${threshold})`);
     }
 
     if (!inv.isInverted) {
-      // Not inverted: check if we should invert
-      if (count >= threshold && direction) {
+      // Not inverted: invert as soon as the threshold is hit, no matter what.
+      if (lossStreak >= threshold) {
         this._activate(
-          `${count} consecutive ${direction} losses on ${asset} - market likely reversed`
+          `${lossStreak} consecutive losses (any asset/direction) — flipping signal`
         );
       }
     } else {
-      // Currently inverted: check if we should revert
-      // Revert if inverted trades aren't improving
+      // Currently inverted — revert when inversion has played out.
+      // Two ways to come back to normal:
+      //   1) we hit `INVERT_MAX_INVERTED_TRADES` inverted trades and the
+      //      inverted win-rate is poor (< 40%); the market is choppy, give up.
+      //   2) we see 3 consecutive WINs while inverted — the inversion worked,
+      //      the original direction was wrong, and the new direction is now
+      //      the trend; lock it back to normal.
       if (inv.invertedTradeCount >= CONFIG.INVERT_MAX_INVERTED_TRADES) {
         const invertWinRate = inv.invertedTradeCount > 0
           ? (inv.invertedWins / inv.invertedTradeCount * 100)
           : 0;
-
         if (invertWinRate < 40) {
           this._deactivate(
-            `Inversion not helping (${invertWinRate.toFixed(0)}% win rate over ${inv.invertedTradeCount} trades) - reverting`
+            `Inversion not helping (${invertWinRate.toFixed(0)}% over ${inv.invertedTradeCount} trades) — reverting`
           );
         } else {
-          // Reset counter but stay inverted (it's working)
           inv.invertedTradeCount = 0;
           inv.invertedWins = 0;
           inv.invertedLosses = 0;
-          info(`Inversion confirmed effective - continuing inverted signals`);
+          info(`Inversion confirmed effective — continuing inverted signals`);
         }
       }
 
-      // Also revert if we see consecutive wins in original direction (market found trend)
+      // Also revert if we see 2 consecutive losses while INVERTED — meaning
+      // the flip itself is now losing, so flip back.
       const recentHistory = state.assetHistory[asset] || [];
-      const lastResults = recentHistory.slice(-3);
-      const allWins = lastResults.length >= 3 && lastResults.every(r => r.result === 'WIN');
-      if (allWins && inv.invertedTradeCount >= 3) {
-        this._deactivate('3 consecutive wins - market trend confirmed, removing inversion');
+      const lastTwo = recentHistory.slice(-2);
+      const twoLossesInverted = lastTwo.length === 2 && lastTwo.every(r => r.result === 'LOSS');
+      if (twoLossesInverted && inv.invertedTradeCount >= 2) {
+        this._deactivate('2 consecutive losses while inverted — flipping back');
       }
     }
   }
