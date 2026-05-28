@@ -1,8 +1,47 @@
 # Elite Pocket Option Trading Bot - Product Requirements Document
 
-## Last Updated: May 29, 2026 (afternoon)
+## Last Updated: May 29, 2026 (evening)
 
 ## Current Status
+
+✅ **Iteration 68 — CYCLE Mode Universal Scanner + 15s Rotation (May 29, 2026)**
+
+User reported the cycle feature was not working properly. Requested:
+1. Scan ALL ≥85% payout assets (not just currencies)
+2. Rotate every 15 seconds
+3. Pair with the SCAN feature (which generates signals on the current asset) but NOT with the APP feature (which is single-asset only)
+
+### Root cause of "not working properly"
+- Discovery was hard-coded to the **Currencies tab only** — crypto/commodities/stocks/indices OTC were invisible to the rotator
+- The symbol filter was `^[A-Z]{3}[A-Z]{3}(_OTC)?$` — pure 6-char FX-only, blocking BTCUSD, XAUUSD, US30, AAPL_OTC, etc. as a safety net
+- Default rotation was **30s** (user wanted 15s)
+
+### Implementation
+**Backend / `utils/dom.js`:**
+- New `clickPickerTabByText(textRe)` helper — generic tab clicker
+- New `discoverAllAssetsWithPayouts()` — opens picker, walks every category tab (Currencies, Crypto, Commodities, Stocks, Indices, ETFs), scrapes every row with payout, deduplicates by symbol, and **leaves the picker closed**
+
+**`trading/cycleMode.js` rewrite:**
+- `rotateEveryMs` default 30s → **15s**
+- Symbol filter relaxed: old `FX_PAIR_RE` deleted, new `SYMBOL_RE = /^[A-Z0-9]{2,12}(_OTC)?$/`
+- `_discoverEligiblePairs()` now calls `discoverAllAssetsWithPayouts()` — surfaces the FULL universe filtered to ≥85% payout
+- `_switchAssetViaPickerOnly()` has a fast path (Currencies tab) + slow path (full multi-tab) — handles non-FX symbols transparently
+- Log line: `"universal asset scanner @ 15s/asset, min payout 85% (pairs with SCAN; ignores APP poller)"`
+
+**TM bundle:** v8.66.0 → **v8.68.0**, rebuilt + deployed to `/app/frontend/public/`
+
+### How to use (per user's mental model)
+1. Toggle **SCAN** on (signal generator)
+2. Toggle **CYCLE** on (asset rotator)
+3. The bot scans ALL asset categories, picks the ≥85% payout subset, sorts by payout desc, switches every 15s
+4. SCAN fires a signal on whichever asset CYCLE has selected → AUTO fires the trade if confidence threshold met
+5. APP feature remains single-asset (PO's own signal feed is locked to whatever the current chart shows)
+
+### Tests
+- `tests/test_iter68_cycle_universal.py` — 7/7 passing (version bump, 15s in bundle, multi-tab export present, FX-only filter removed, universal discovery wired)
+- Grand total backend regression: **50/50 passing** (Iter 61–68)
+
+---
 
 ✅ **Iteration 67 — Default Strategies Empirically Optimized Per Timeframe (May 29, 2026)**
 

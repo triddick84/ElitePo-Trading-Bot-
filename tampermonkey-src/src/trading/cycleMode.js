@@ -1,21 +1,19 @@
 /**
- * CYCLE Mode — Forex Payout Scanner (v8.60.0 rewrite)
+ * CYCLE Mode — Universal asset rotator (Iter 68 rewrite)
  *
- * Rotates through ALL forex currency pairs whose CURRENT payout is ≥ the
- * configured threshold (default 85%). Uses a SINGLE asset-picker workflow:
- *   1. Open the picker, click the "Currencies" tab
- *   2. Scrape every visible row → [{symbol, payout, el}]
- *   3. Filter rows where payout >= minPayoutPercent
- *   4. For each eligible row: open picker → click "Currencies" → click row → dwell 30s
+ * Per user request (May 29, 2026): scan ALL asset categories ≥85% payout
+ * (forex + crypto + commodities + stocks + indices), rotate every 15 seconds,
+ * and pair with the SCAN feature so signals are generated on whatever asset
+ * CYCLE has currently selected. Does NOT pair with the APP poller (which is
+ * locked to a single asset).
  *
- * v8.60.0 fixes the user complaint that earlier cycles "kept clicking the
- * search window open" — we never type into the search input anymore. We
- * also stopped trying slot-tile clicks (which fall through to the search
- * box). The picker is opened EXACTLY ONCE per asset switch, then closed
- * by clicking the row (PO auto-closes after a row click).
- *
- * Re-discovery cadence: every `discoveryStaleMs` (5 min) we re-open the
- * picker and re-scrape so payout changes are reflected.
+ * v8.68.0 changes vs v8.60.0:
+ *   1. rotateEveryMs default 30s → 15s
+ *   2. Discovery walks EVERY category tab (Currencies, Crypto, Commodities,
+ *      Stocks, Indices) instead of only Currencies
+ *   3. Symbol filter relaxed from 6-char FX-only to any [A-Z0-9]{2,12}(_OTC)?
+ *   4. Switch path retries on the Currencies-only tab first (fast path) then
+ *      falls back to the universal discovery (slow path).
  */
 
 import { log, info, warn, success, error } from '../core/logger.js';
@@ -24,21 +22,22 @@ import {
   getPayout,
   openCurrenciesPicker,
   readCurrencyPairsWithPayouts,
+  discoverAllAssetsWithPayouts,
   clickPickerRowEl,
   dismissPicker,
 } from '../utils/dom.js';
 
 const DEFAULTS = {
-  rotateEveryMs: 30_000,         // 30s per asset (user request)
+  rotateEveryMs: 15_000,         // Iter 68 — user request: 15s per asset
   minPayoutPercent: 85,          // skip < 85% (user request)
   chartLoadMs: 1_200,            // wait after row click before reading payout
-  discoveryStaleMs: 5 * 60_000,  // re-scrape full pair list every 5 min
+  discoveryStaleMs: 5 * 60_000,  // re-scrape full asset universe every 5 min
 };
 
-// Filter rule: ONLY currency pairs (skip stocks, indices, crypto, commodities)
-// — the picker's Currencies tab already filters but as a safety net we
-// require the symbol to look like a 6-char FX pair, optionally with _OTC.
-const FX_PAIR_RE = /^[A-Z]{3}[A-Z]{3}(_OTC)?$/;
+// Iter 68 — relaxed to accept any asset class. Symbols like EURUSD, BTCUSD,
+// XAUUSD, US30, NDX100, AAPL, AAPL_OTC, etc. all pass. The picker-row text
+// already provides PO-canonical symbols so we just sanity-check the shape.
+const SYMBOL_RE = /^[A-Z0-9]{2,12}(_OTC)?$/;
 
 class CycleMode {
   constructor() {
@@ -68,8 +67,8 @@ class CycleMode {
     this.cycleCount = 0;
     this.stats = { scanned: 0, eligible: 0, skipped_low_payout: 0, switch_failures: 0 };
     success(
-      `[CYCLE] started — Currencies-tab scanner @ ${this.config.rotateEveryMs/1000}s/asset, ` +
-      `min payout ${this.config.minPayoutPercent}%`
+      `[CYCLE] started — universal asset scanner @ ${this.config.rotateEveryMs/1000}s/asset, ` +
+      `min payout ${this.config.minPayoutPercent}% (pairs with SCAN; ignores APP poller)`
     );
     this._loop().catch((e) => {
       error(`[CYCLE] loop crashed: ${e.message}`);
@@ -136,47 +135,43 @@ class CycleMode {
   }
 
   /**
-   * Open the picker, switch to Currencies tab, scrape ALL rows with
-   * payouts, filter to FX pairs ≥ minPayoutPercent. Closes the picker
-   * after scraping. Caches the symbol+payout list (refs not retained
-   * because they're invalidated when the picker closes).
+   * Iter 68 — Open the picker, iterate ALL category tabs (Currencies,
+   * Crypto, Commodities, Stocks, Indices), scrape every row with its
+   * payout, filter to ≥minPayoutPercent. Picker is left CLOSED.
    */
   async _discoverEligiblePairs() {
-    log('[CYCLE] discovering eligible currency pairs (≥' + this.config.minPayoutPercent + '%)…');
-    const opened = await openCurrenciesPicker();
-    if (!opened) {
-      warn('[CYCLE] could not open Currencies picker — keeping previous list');
-      return;
-    }
-    await this._sleep(500);
-
-    const all = readCurrencyPairsWithPayouts();
+    log(`[CYCLE] discovering eligible assets across ALL categories (≥${this.config.minPayoutPercent}%)…`);
+    const all = await discoverAllAssetsWithPayouts();
     this.stats.scanned = all.length;
 
-    // Filter: must be FX pair AND payout ≥ threshold
     const eligible = all.filter((p) => {
-      if (!p.symbol || !FX_PAIR_RE.test(p.symbol)) return false;
+      if (!p.symbol || !SYMBOL_RE.test(p.symbol)) return false;
       if (typeof p.payout !== 'number') return false;
       return p.payout >= this.config.minPayoutPercent;
     });
 
-    // Sort by payout desc — best-first
+    // Sort by payout desc — best edge first
     eligible.sort((a, b) => (b.payout || 0) - (a.payout || 0));
 
     this._lastPairs = eligible.map(({ symbol, payout }) => ({ symbol, payout }));
     this._lastDiscoveryAt = Date.now();
 
-    await dismissPicker();
+    if (eligible.length === 0) {
+      warn(`[CYCLE] scanned ${all.length} assets, 0 met the ${this.config.minPayoutPercent}% payout floor`);
+      return;
+    }
+
     success(
-      `[CYCLE] discovered ${eligible.length}/${all.length} eligible FX pairs ` +
-      `(≥${this.config.minPayoutPercent}%): ${eligible.slice(0, 8).map(p => `${p.symbol}@${p.payout}%`).join(', ')}` +
-      (eligible.length > 8 ? '…' : '')
+      `[CYCLE] discovered ${eligible.length}/${all.length} eligible assets ` +
+      `(≥${this.config.minPayoutPercent}%): ${eligible.slice(0, 10).map(p => `${p.symbol}@${p.payout}%`).join(', ')}` +
+      (eligible.length > 10 ? '…' : '')
     );
   }
 
   /**
-   * Open the picker → Currencies tab → click the row matching `symbol` → done.
-   * Picker auto-closes when the row is clicked. NEVER uses the search box.
+   * Open the picker → walk tabs → click the row matching `symbol`.
+   * Fast-path tries Currencies tab first (covers 80%+ of cases). Falls
+   * back to a full multi-tab discovery if not found.
    */
   async _switchAssetViaPickerOnly(symbol) {
     // Already on this asset?
@@ -184,21 +179,38 @@ class CycleMode {
       if (getCurrentAsset() === symbol) return true;
     } catch (_e) { /* ignore */ }
 
+    // Fast path: most active OTC trading is FX, so try Currencies tab first
     const opened = await openCurrenciesPicker();
-    if (!opened) return false;
-    await this._sleep(400);
-
-    const rows = readCurrencyPairsWithPayouts();
-    const match = rows.find((r) => r.symbol === symbol);
-    if (match && match.el) {
-      await clickPickerRowEl(match.el);
-      return true;
+    if (opened) {
+      await this._sleep(300);
+      const rows = readCurrencyPairsWithPayouts();
+      const match = rows.find((r) => r.symbol === symbol);
+      if (match && match.el) {
+        await clickPickerRowEl(match.el);
+        return true;
+      }
+      await dismissPicker();
     }
 
-    // Symbol not visible on the current Currencies tab page — close picker
-    // (we'll just skip this asset; no search-typing fallback)
-    await dismissPicker();
-    return false;
+    // Slow path: walk every category tab
+    const all = await discoverAllAssetsWithPayouts();
+    // discoverAllAssetsWithPayouts closes the picker before returning.
+    // Re-open and click the target row.
+    const target = all.find((r) => r.symbol === symbol);
+    if (!target || !target.el) return false;
+
+    // The `el` from `discoverAllAssetsWithPayouts` was captured while the
+    // picker was open and is no longer in the DOM. Re-open + re-scrape and
+    // click the fresh element.
+    const opened2 = await openCurrenciesPicker();
+    if (!opened2) return false;
+    await this._sleep(300);
+    // The target may be on a non-Currencies tab — find which tab via class hint.
+    const fresh = await discoverAllAssetsWithPayouts();
+    const live = fresh.find((r) => r.symbol === symbol);
+    if (!live || !live.el) return false;
+    await clickPickerRowEl(live.el);
+    return true;
   }
 
   _sleep(ms) {

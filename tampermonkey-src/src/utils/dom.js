@@ -1700,6 +1700,15 @@ function readPickerItems() {
  * (not just user favorites). Returns true on click.
  */
 async function clickCurrenciesTab() {
+  return clickPickerTabByText(/^\s*Currenc(y|ies)\s*$/i);
+}
+
+/**
+ * Iter 68 — Click any picker tab matching a text regex.
+ * Used by CYCLE to walk every category tab (Currencies, Crypto, Commodities,
+ * Stocks, Indices) so the eligible-asset list isn't FX-only.
+ */
+async function clickPickerTabByText(textRe) {
   const clickables = document.querySelectorAll(
     'button, [role="button"], [role="tab"], li, div, span, a'
   );
@@ -1708,7 +1717,7 @@ async function clickCurrenciesTab() {
     if (el.children.length > 3) continue;
     const txt = (el.textContent || '').trim();
     if (!txt || txt.length > 22) continue;
-    if (!/^\s*Currenc(y|ies)\s*$/i.test(txt)) continue;
+    if (!textRe.test(txt)) continue;
     let cur = el;
     let inPicker = false;
     for (let i = 0; i < 15 && cur; i++) {
@@ -1726,7 +1735,7 @@ async function clickCurrenciesTab() {
     }
     if (!inPicker) continue;
     _reactClickEl(_findClickableAncestor(el));
-    log(`[picker] clicked Currencies TAB (text="${txt}")`);
+    log(`[picker] clicked tab (text="${txt}")`);
     await _sleep(350);
     return true;
   }
@@ -1776,6 +1785,50 @@ export async function openCurrenciesPicker() {
   }
   await _sleep(300);
   return true;
+}
+
+/**
+ * Iter 68 — Open the asset picker and scrape EVERY category tab so we
+ * surface the full universe (forex + crypto + commodities + stocks + indices),
+ * not just currencies. Used by the rewritten CYCLE mode.
+ *
+ * Returns: Array<{symbol, payout, el}> deduped by symbol (last write wins).
+ * Picker is left CLOSED on exit.
+ */
+export async function discoverAllAssetsWithPayouts() {
+  const opened = await openAssetPicker();
+  if (!opened) return [];
+  await _sleep(300);
+
+  const TAB_PATTERNS = [
+    /^\s*Currenc(y|ies)\s*$/i,
+    /^\s*Crypto(currencies)?\s*$/i,
+    /^\s*Commodit(y|ies)\s*$/i,
+    /^\s*Stocks?\s*$/i,
+    /^\s*Indices\s*$/i,
+    /^\s*ETF(s)?\s*$/i,
+  ];
+
+  const acc = new Map();   // symbol → {symbol, payout, el}
+
+  // Start with whatever tab is currently active (typically "Favorites"/"All")
+  const seed = readPickerItemsWithPayouts();
+  for (const r of seed) {
+    if (r.symbol) acc.set(r.symbol, r);
+  }
+
+  for (const re of TAB_PATTERNS) {
+    const ok = await clickPickerTabByText(re);
+    if (!ok) continue;
+    await _sleep(350);
+    const rows = readPickerItemsWithPayouts();
+    for (const r of rows) {
+      if (r.symbol) acc.set(r.symbol, r);
+    }
+  }
+
+  await closeAssetPicker().catch(() => {});
+  return Array.from(acc.values());
 }
 
 export function readCurrencyPairsWithPayouts() {
