@@ -1919,6 +1919,101 @@ export async function clickPickerRowEl(el) {
 }
 
 /**
+ * Iter 70 — QUICK-PICK STRIP (fast asset-switch path).
+ *
+ * PO's chart has a horizontal strip of 5–7 "slot tiles" along the TOP
+ * (each shows "GBP/USD OTC +83%"). Clicking one switches the chart instantly
+ * — much faster than opening the picker dropdown (sub-100ms vs 1–2s).
+ *
+ * CYCLE uses this as a fast path: if the target asset is already on the
+ * visible strip, we click the tile directly; otherwise we fall back to
+ * the universal picker rotation built in Iter 68/69.
+ */
+const _QUICK_PICK_SELECTORS = [
+  '.assets-block__active .assets-block__item',
+  '.assets-block__item',
+  '[class*="active-assets"] [class*="item"]',
+  '[class*="assets-block"] [class*="item"]',
+  '[class*="trading-pairs"] [class*="item"]',
+  '[class*="tabs__item"]',
+  'a[class*="asset-tab"]',
+];
+
+function _isQuickPickTile(el) {
+  if (!el || !el.offsetParent) return false;
+  try {
+    const r = el.getBoundingClientRect();
+    // Strip lives in the top ~250px of the viewport, NOT in the right sidebar
+    const VIEWPORT_W = window.innerWidth || 1200;
+    if (r.top > 260) return false;
+    if (r.top < 0) return false;
+    if (r.left > VIEWPORT_W * 0.65) return false;
+    if (r.width < 40 || r.width > 260) return false;
+    if (r.height < 22 || r.height > 100) return false;
+  } catch (_e) { /* ignore */ }
+  // Block trades-sidebar ancestry as a safety net
+  const TRADES_BL = /trades|deals|history|opened|closed|right-panel|notifications|messages|sidebar/i;
+  let cur = el;
+  for (let i = 0; i < 8 && cur; i++) {
+    const cls = ((cur.className || '') + '').toString();
+    if (TRADES_BL.test(cls)) return false;
+    cur = cur.parentElement;
+  }
+  return true;
+}
+
+/**
+ * Read every visible quick-pick tile on the top strip.
+ * Returns: Array<{symbol: string, payout: number|null, el: HTMLElement}>
+ */
+export function readQuickPickTiles() {
+  const seen = new Set();
+  const out = [];
+  const symRe = /([A-Z]{2,4}[/\s_]?[A-Z]{2,4})/;
+  const payoutRe = /\+?(\d{1,3})\s*%/;
+
+  for (const sel of _QUICK_PICK_SELECTORS) {
+    const els = document.querySelectorAll(sel);
+    for (const el of els) {
+      if (!_isQuickPickTile(el)) continue;
+      const txt = (el.textContent || '').trim();
+      const sm = txt.match(symRe);
+      if (!sm) continue;
+      const raw = sm[0] + (/\bOTC\b/i.test(txt) ? ' OTC' : '');
+      const symbol = normalizeAssetName(raw);
+      if (!symbol) continue;
+      const symPart = symbol.replace(/_OTC$/, '');
+      if (symPart.length < 5 || /[^A-Z0-9]/.test(symPart)) continue;
+      if (seen.has(symbol)) continue;
+      seen.add(symbol);
+      const pm = txt.match(payoutRe);
+      const payout = pm ? parseInt(pm[1], 10) : null;
+      out.push({ symbol, payout, el });
+    }
+    if (out.length) break;
+  }
+  return out;
+}
+
+/**
+ * Try the quick-pick fast path for switching to `symbol`. Returns true if
+ * the tile was found and clicked, false otherwise (caller should fall back
+ * to the slow picker-dropdown path).
+ */
+export async function clickQuickPickTile(symbol) {
+  if (!symbol) return false;
+  const tiles = readQuickPickTiles();
+  const match = tiles.find((t) => t.symbol === symbol);
+  if (!match || !match.el) return false;
+  try { match.el.scrollIntoView?.({ block: 'nearest' }); } catch (_e) {}
+  _reactClickEl(_findClickableAncestor(match.el));
+  await _sleep(150);
+  log(`[quickpick] tile-click → ${symbol}`);
+  return true;
+}
+
+
+/**
  * Click the asset picker's CLOSE button or send Escape to dismiss it.
  * Lighter-weight version of closeAssetPicker for the cycle mode.
  */

@@ -24,6 +24,7 @@ import {
   readCurrencyPairsWithPayouts,
   discoverAllAssetsWithPayouts,
   clickPickerRowEl,
+  clickQuickPickTile,
   dismissPicker,
 } from '../utils/dom.js';
 
@@ -47,7 +48,7 @@ class CycleMode {
     this.startedAt = 0;
     this.cycleCount = 0;
     this.config = { ...DEFAULTS };
-    this.stats = { scanned: 0, eligible: 0, skipped_low_payout: 0, switch_failures: 0 };
+    this.stats = { scanned: 0, eligible: 0, skipped_low_payout: 0, switch_failures: 0, quickPickSwitches: 0 };
     this._lastDiscoveryAt = 0;
     this._lastPairs = [];   // [{symbol, payout}] — clickable refs lost after picker close
   }
@@ -65,7 +66,7 @@ class CycleMode {
     this.abortRequested = false;
     this.startedAt = Date.now();
     this.cycleCount = 0;
-    this.stats = { scanned: 0, eligible: 0, skipped_low_payout: 0, switch_failures: 0 };
+    this.stats = { scanned: 0, eligible: 0, skipped_low_payout: 0, switch_failures: 0, quickPickSwitches: 0 };
     success(
       `[CYCLE] started — universal asset scanner @ ${this.config.rotateEveryMs/1000}s/asset, ` +
       `min payout ${this.config.minPayoutPercent}% (pairs with SCAN; ignores APP poller)`
@@ -131,7 +132,7 @@ class CycleMode {
     }
     this.running = false;
     this.currentAsset = null;
-    log(`[CYCLE] stopped — scanned=${this.stats.scanned} eligible=${this.stats.eligible} skipped=${this.stats.skipped_low_payout}`);
+    log(`[CYCLE] stopped — scanned=${this.stats.scanned} eligible=${this.stats.eligible} skipped=${this.stats.skipped_low_payout} quick-pick=${this.stats.quickPickSwitches || 0}`);
   }
 
   /**
@@ -144,28 +145,53 @@ class CycleMode {
     const all = await discoverAllAssetsWithPayouts();
     this.stats.scanned = all.length;
 
-    const eligible = all.filter((p) => {
-      if (!p.symbol || !SYMBOL_RE.test(p.symbol)) return false;
-      if (typeof p.payout !== 'number') return false;
-      return p.payout >= this.config.minPayoutPercent;
-    });
-
-    // Sort by payout desc — best edge first
-    eligible.sort((a, b) => (b.payout || 0) - (a.payout || 0));
-
-    this._lastPairs = eligible.map(({ symbol, payout }) => ({ symbol, payout }));
-    this._lastDiscoveryAt = Date.now();
-
-    if (eligible.length === 0) {
-      warn(`[CYCLE] scanned ${all.length} assets, 0 met the ${this.config.minPayoutPercent}% payout floor`);
-      return;
+    // Iter 70 — Augment with the quick-pick strip tiles (sub-100ms switch path).
+    // Tiles may carry payouts the picker dropdown doesn't show yet; we merge
+    // them into the universe so the fast path always has a current candidate.
+    try {
+      const { readQuickPickTiles } = await import('../utils/dom.js');
+      const tiles = readQuickPickTiles();
+      const byKey = new Map(all.map((r) => [r.symbol, r]));
+      let added = 0;
+      for (const t of tiles) {
+        if (!t.symbol || typeof t.payout !== 'number') continue;
+        if (!byKey.has(t.symbol)) {
+          byKey.set(t.symbol, t);
+          added++;
+        }
+      }
+      if (added > 0) log(`[CYCLE] +${added} quick-pick tile(s) merged into universe`);
+      // Re-materialize the union
+      const merged = Array.from(byKey.values());
+      this.stats.scanned = merged.length;
+      const eligible = merged.filter((p) => {
+        if (!p.symbol || !SYMBOL_RE.test(p.symbol)) return false;
+        if (typeof p.payout !== 'number') return false;
+        return p.payout >= this.config.minPayoutPercent;
+      });
+      eligible.sort((a, b) => (b.payout || 0) - (a.payout || 0));
+      this._lastPairs = eligible.map(({ symbol, payout }) => ({ symbol, payout }));
+      this._lastDiscoveryAt = Date.now();
+      if (eligible.length === 0) {
+        warn(`[CYCLE] scanned ${merged.length} assets, 0 met the ${this.config.minPayoutPercent}% payout floor`);
+        return;
+      }
+      success(
+        `[CYCLE] discovered ${eligible.length}/${merged.length} eligible assets ` +
+        `(≥${this.config.minPayoutPercent}%): ${eligible.slice(0, 10).map(p => `${p.symbol}@${p.payout}%`).join(', ')}` +
+        (eligible.length > 10 ? '…' : '')
+      );
+    } catch (_e) {
+      // Fallback to the prior (non-augmented) flow if the import fails
+      const eligible = all.filter((p) => {
+        if (!p.symbol || !SYMBOL_RE.test(p.symbol)) return false;
+        if (typeof p.payout !== 'number') return false;
+        return p.payout >= this.config.minPayoutPercent;
+      });
+      eligible.sort((a, b) => (b.payout || 0) - (a.payout || 0));
+      this._lastPairs = eligible.map(({ symbol, payout }) => ({ symbol, payout }));
+      this._lastDiscoveryAt = Date.now();
     }
-
-    success(
-      `[CYCLE] discovered ${eligible.length}/${all.length} eligible assets ` +
-      `(≥${this.config.minPayoutPercent}%): ${eligible.slice(0, 10).map(p => `${p.symbol}@${p.payout}%`).join(', ')}` +
-      (eligible.length > 10 ? '…' : '')
-    );
   }
 
   /**
@@ -179,7 +205,21 @@ class CycleMode {
       if (getCurrentAsset() === symbol) return true;
     } catch (_e) { /* ignore */ }
 
-    // Fast path: most active OTC trading is FX, so try Currencies tab first
+    // Iter 70 — Quick-pick strip FAST PATH (~100ms vs 1-2s for the picker).
+    // Try clicking the visible top-strip tile first. If the target is on the
+    // strip we're done; otherwise fall through to the slow picker workflow.
+    try {
+      const quick = await clickQuickPickTile(symbol);
+      if (quick) {
+        await this._sleep(250);
+        if (getCurrentAsset() === symbol) {
+          this.stats.quickPickSwitches = (this.stats.quickPickSwitches || 0) + 1;
+          return true;
+        }
+      }
+    } catch (_e) { /* fall through to slow path */ }
+
+    // Fast path #2: Currencies tab (covers ~80% of FX cases)
     const opened = await openCurrenciesPicker();
     if (opened) {
       await this._sleep(300);
