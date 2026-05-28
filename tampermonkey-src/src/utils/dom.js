@@ -1655,6 +1655,39 @@ function readPickerItems() {
   const seen = new Set();
   const symbolRe = /([A-Z]{2,4}\/?[A-Z]{2,4})\b/i;
 
+  // Iter 69 — Reject elements that live inside the right-side "Trades"
+  // panel (Opened / Closed lists), the top notification banner, or any
+  // sidebar/widget that has nothing to do with asset selection. These
+  // panels use the same "SYMBOL +XX%" text shape as picker rows and were
+  // being scraped + clicked by CYCLE, producing the "rotates closed trades
+  // instead of switching assets" bug.
+  const TRADES_BLACKLIST_RE = /trades|deals|history|opened|closed|right-panel|notifications|messages|sidebar/i;
+  // Picker dropdowns sit on the LEFT side of the screen (next to the chart
+  // header). Anything with a left coordinate > 65% of viewport width is
+  // almost certainly the trades sidebar, not the picker.
+  const VIEWPORT_W = window.innerWidth || document.documentElement.clientWidth || 1200;
+  const MAX_PICKER_LEFT = VIEWPORT_W * 0.65;
+
+  function _isLikelyTradePanelRow(el) {
+    // Walk up to 8 ancestors and check class names / known headings
+    let cur = el;
+    for (let i = 0; i < 8 && cur; i++) {
+      const cls = ((cur.className || '') + '').toString();
+      if (TRADES_BLACKLIST_RE.test(cls)) return true;
+      // Also check for an ancestor whose immediate text-content carries the
+      // sidebar headings (some PO themes use unclassed wrappers)
+      const t = (cur.getAttribute?.('data-test') || '') + ' ' + (cur.getAttribute?.('data-testid') || '');
+      if (TRADES_BLACKLIST_RE.test(t)) return true;
+      cur = cur.parentElement;
+    }
+    // Geometric check — right-side panel rows live past 65% of viewport
+    try {
+      const r = el.getBoundingClientRect();
+      if (r && r.left > MAX_PICKER_LEFT) return true;
+    } catch (_e) { /* ignore */ }
+    return false;
+  }
+
   // Common dropdown row selectors
   const ROW_SELECTORS = [
     '[class*="picker"] [class*="row"]',
@@ -1668,6 +1701,7 @@ function readPickerItems() {
     '[class*="symbol-list"] [class*="item"]',
     '[class*="symbols-list"] [class*="item"]',
     '[class*="assets-list"] [class*="item"]',
+    '[class*="assets-block"] [class*="item"]',
   ];
 
   for (const sel of ROW_SELECTORS) {
@@ -1675,10 +1709,10 @@ function readPickerItems() {
     if (!els.length) continue;
     els.forEach((el) => {
       if (!el || !el.offsetParent) return;
+      if (_isLikelyTradePanelRow(el)) return;     // <- Iter 69 guard
       const txt = (el.textContent || '').trim();
       const m = txt.match(symbolRe);
       if (!m) return;
-      // Strip payout % numbers from match
       const raw = m[0] + (txt.toUpperCase().includes('OTC') ? ' OTC' : '');
       const normalized = normalizeAssetName(raw);
       if (!normalized || seen.has(normalized)) return;
@@ -1709,6 +1743,12 @@ async function clickCurrenciesTab() {
  * Stocks, Indices) so the eligible-asset list isn't FX-only.
  */
 async function clickPickerTabByText(textRe) {
+  // Iter 69 — Refuse to click anything that lives in the right-side
+  // Trades/Closed sidebar (rejects "Closed" tab clicks etc).
+  const VIEWPORT_W = window.innerWidth || document.documentElement.clientWidth || 1200;
+  const MAX_PICKER_LEFT = VIEWPORT_W * 0.65;
+  const TRADES_BLACKLIST_RE = /trades|deals|history|opened|closed|right-panel|notifications|messages|sidebar/i;
+
   const clickables = document.querySelectorAll(
     'button, [role="button"], [role="tab"], li, div, span, a'
   );
@@ -1718,8 +1758,22 @@ async function clickPickerTabByText(textRe) {
     const txt = (el.textContent || '').trim();
     if (!txt || txt.length > 22) continue;
     if (!textRe.test(txt)) continue;
+    // Geometric guard
+    try {
+      const r = el.getBoundingClientRect();
+      if (r && r.left > MAX_PICKER_LEFT) continue;
+    } catch (_e) { /* ignore */ }
+    // Class-ancestor guard
+    let bad = false;
     let cur = el;
+    for (let i = 0; i < 8 && cur; i++) {
+      const cls = ((cur.className || '') + '').toString();
+      if (TRADES_BLACKLIST_RE.test(cls)) { bad = true; break; }
+      cur = cur.parentElement;
+    }
+    if (bad) continue;
     let inPicker = false;
+    cur = el;
     for (let i = 0; i < 15 && cur; i++) {
       const c = ((cur.className || '') + '').toLowerCase();
       if (/picker|modal|dropdown|asset-select|categories|tabs/.test(c)) {
@@ -1837,6 +1891,27 @@ export function readCurrencyPairsWithPayouts() {
 
 export async function clickPickerRowEl(el) {
   if (!el) return false;
+  // Iter 69 — Last line of defense: never click a row that's geometrically
+  // in the right-side trades sidebar, or whose ancestors carry the
+  // trades/closed/deals class hints.
+  const VIEWPORT_W = window.innerWidth || document.documentElement.clientWidth || 1200;
+  try {
+    const r = el.getBoundingClientRect();
+    if (r && r.left > VIEWPORT_W * 0.65) {
+      warn(`[picker] refusing to click row at x=${Math.round(r.left)}px (right-sidebar territory)`);
+      return false;
+    }
+  } catch (_e) { /* ignore */ }
+  const TRADES_BLACKLIST_RE = /trades|deals|history|opened|closed|right-panel|notifications|messages|sidebar/i;
+  let cur = el;
+  for (let i = 0; i < 8 && cur; i++) {
+    const cls = ((cur.className || '') + '').toString();
+    if (TRADES_BLACKLIST_RE.test(cls)) {
+      warn(`[picker] refusing to click — ancestor class matched trades blacklist`);
+      return false;
+    }
+    cur = cur.parentElement;
+  }
   try { el.scrollIntoView?.({ block: 'center' }); } catch (_e) {}
   _reactClickEl(_findClickableAncestor(el));
   await _sleep(400);

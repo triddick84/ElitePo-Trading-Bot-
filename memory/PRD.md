@@ -1,8 +1,28 @@
 # Elite Pocket Option Trading Bot - Product Requirements Document
 
-## Last Updated: May 29, 2026 (evening)
+## Last Updated: May 30, 2026
 
 ## Current Status
+
+✅ **Iteration 69 — CYCLE no longer cycles the "Closed Trades" sidebar (May 30, 2026)**
+
+User reported (with screenshot) that CYCLE was rotating through the right-side **Trades / Opened / Closed** panel rows instead of the asset picker. The closed-trade rows show "AUD/CAD OTC +92%" with the exact same text shape as picker rows, so `readPickerItems()` was scraping them and `clickPickerRowEl` was firing on them — net effect: bot cycles through trade history and never switches assets.
+
+### Three-layer fix (all in `utils/dom.js`)
+1. **Ancestor class blacklist** — any element whose ancestor (up to 8 levels) has a class matching `/trades|deals|history|opened|closed|right-panel|notifications|messages|sidebar/i` is rejected.
+2. **Geometric guard** — any element with `bounding rect.left > viewport_width * 0.65` is rejected (right-sidebar territory).
+3. **Last-line-of-defense on click** — `clickPickerRowEl()` runs both checks again before firing; if either trips, it logs `"refusing to click row at x=Xpx (right-sidebar territory)"` and returns false.
+
+The same two guards (geometric + ancestor blacklist) are also applied to `clickPickerTabByText()` so the new multi-tab discovery from Iter 68 doesn't accidentally click the "Closed" trades tab.
+
+### TM Build
+- v8.68.0 → **v8.69.0**, rebuilt + deployed to `/app/frontend/public/`
+
+### Tests
+- `tests/test_iter69_cycle_trades_panel_blacklist.py` — 6/6 passing (version bump, blacklist regex present, viewport guard, click-row guard, bundle smoke, picker-items guard)
+- Grand total backend regression: **56/56 passing** (Iter 61–69)
+
+---
 
 ✅ **Iteration 68 — CYCLE Mode Universal Scanner + 15s Rotation (May 29, 2026)**
 
