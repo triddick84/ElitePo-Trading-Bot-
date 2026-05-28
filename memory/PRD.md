@@ -1,8 +1,52 @@
 # Elite Pocket Option Trading Bot - Product Requirements Document
 
-## Last Updated: May 27, 2026 (late evening)
+## Last Updated: May 28, 2026
 
 ## Current Status
+
+✅ **Iteration 62 — Macro Sentiment Feature + Per-Model Thresholds in TM Panel (May 28, 2026)**
+
+User requested: (a) Add a FinBERT-style sentiment feed via Twelve Data news or Emergent LLM, (b) expose per-model probability thresholds in the TM panel.
+
+### A) Macro Sentiment Service (NEW)
+- **`/app/backend/sentiment_service.py`** — Pulls 25 macro forex/commodity/crypto headlines every 15 min from 5 free RSS sources (forexlive, fxstreet, investing.com forex/commodities/crypto). Calls Emergent LLM (`claude-sonnet-4-6`) to score each of 10 currencies (USD, EUR, GBP, JPY, AUD, CAD, CHF, NZD, XAU, BTC) on a `-1..+1` scale with confidence + per-currency reason. Caches to Mongo (`sentiment_scores`, `sentiment_runs`). Background loop on server startup.
+- **`/app/backend/routes/sentiment.py`** — Endpoints:
+  - `GET /api/sentiment/scores` — latest cached snapshot
+  - `POST /api/sentiment/refresh` — manual force-refresh
+  - `GET /api/sentiment/pair/{asset}` — derived directional bias (e.g. EURUSD → net=EUR-USD)
+  - `GET /api/sentiment/health` — loop status + snapshot age
+- **Signal modifier** in `force_generate_v2`: `sentiment_modifier` ∈ `[-3, +3]%` confidence bump scaled by `|net_score| × min(base_conf, quote_conf)`. Payload surfaced as `signal.sentiment`.
+- **UI card** in `MLLabPage.jsx` (`<SentimentCard>`) — color-coded 10-currency grid, summary blurb, manual refresh button, fresh/stale age badge.
+- **First live run**: 25 headlines scored; XAU +0.55 (safe-haven), BTC -0.40 (risk-off), AUD -0.50 (carry unwind), CHF +0.35.
+- Note: Emergent LLM key budget was exhausted; topped up + key refreshed to `sk-emergent-4134a60747a47F7Fb3` in `backend/.env`.
+
+### B) Per-Model Probability Thresholds in TM Panel
+- **Backend**: `/api/signals/force-generate-v2` now accepts 4 query params (defaults 0 = no gating):
+  - `min_conf_confluence` — any TA strategy below this is filtered
+  - `min_conf_improved_v2` — Improved v2 ML
+  - `min_conf_maximized_v3` — Maximized v3 ML
+  - `min_conf_iq720` — IQ-720 ensemble
+- Filtered voters are kept in `components` with `filtered_by_threshold: true, threshold: N` for audit.
+- Response includes `signal.model_thresholds` with the values that were applied.
+- **TM Panel (v8.64.0)**: New "Min-Conf Gates" section inside the MORE panel — 4 number inputs (0–100, default 0). Persisted via `GM_setValue` (`modelThresholds`). Sent as `&min_conf_*` query params on every `force-generate-v2` call (both polling and GO-button paths). `data-testid="thr-confluence|thr-improved-v2|thr-maximized-v3|thr-iq720"`.
+
+### Tests
+- `tests/test_iter62_sentiment_and_thresholds.py` — 8/8 passing:
+  1. Sentiment health endpoint
+  2. Refresh + all 10 currencies scored, scores in [-1,1]
+  3. Pair bias resolves EURUSD → EUR/USD
+  4. force-generate-v2 includes `sentiment` field
+  5. Default thresholds = all 0
+  6. High confluence threshold filters strategies (10+ filtered)
+  7. Extreme thresholds filter ML voters
+  8. Signal still returned with mid-range thresholds
+
+### TM Build
+- Webpack production rebuild → `dist/pocket-option-auto-trader.user.js` 286KB
+- Copied to `/app/frontend/public/` for live serving
+- Verified at `https://pocket-option-ai-9.preview.emergentagent.com/pocket-option-auto-trader.user.js` → `@version 8.64.0`
+
+---
 
 ✅ **Iteration 61 — Twelve Data Integration Verified + Backtest Source Surfacing (May 27, 2026)**
 

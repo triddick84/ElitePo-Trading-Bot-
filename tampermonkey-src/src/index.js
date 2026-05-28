@@ -23,6 +23,25 @@ import { getCurrentAsset, getCurrentPrice, waitForElement } from './utils/dom.js
 import * as domUtils from './utils/dom.js';
 import { priceScraper } from './trading/priceScraper.js';
 
+// Iter 62 — build query string for per-model thresholds (skips zeros)
+function buildThresholdQuery() {
+  try {
+    const t = state.modelThresholds || {};
+    const parts = [];
+    const push = (key, paramName) => {
+      const v = Number(t[key] || 0);
+      if (v > 0) parts.push(`${paramName}=${v}`);
+    };
+    push('confluence', 'min_conf_confluence');
+    push('improved_v2', 'min_conf_improved_v2');
+    push('maximized_v3', 'min_conf_maximized_v3');
+    push('iq720', 'min_conf_iq720');
+    return parts.length ? '&' + parts.join('&') : '';
+  } catch (_e) {
+    return '';
+  }
+}
+
 // Install the SSID bridge IMMEDIATELY at module load — before any async init.
 // This wraps window.WebSocket so we can capture the first PO auth frame.
 // Must run before PO opens its trading socket.
@@ -446,7 +465,7 @@ class EliteTradingBot {
         if (inFlight) { inFlight = false; }
       }, ABORT_MS);
       try {
-        const resp = await post(`/signals/force-generate-v2?asset=${encodeURIComponent(asset)}&expiry_seconds=60`, {});
+        const resp = await post(`/signals/force-generate-v2?asset=${encodeURIComponent(asset)}&expiry_seconds=60${buildThresholdQuery()}`, {});
         const sig = resp?.signal;
         if (sig) {
           // Count ML model contributions among components
@@ -553,7 +572,7 @@ class EliteTradingBot {
 
       // Call the new force-generate-v2 endpoint — always returns a signal
       log(`[GO] Calling force-generate-v2 for ${asset}...`);
-      const resp = await post(`/signals/force-generate-v2?asset=${encodeURIComponent(asset)}&expiry_seconds=60`, {});
+      const resp = await post(`/signals/force-generate-v2?asset=${encodeURIComponent(asset)}&expiry_seconds=60${buildThresholdQuery()}`, {});
 
       if (!resp || !resp.signal) {
         warn('[GO] force-generate returned no signal - falling back to standard scan');

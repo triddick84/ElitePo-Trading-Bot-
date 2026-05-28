@@ -75,6 +75,15 @@ export const state = {
   // Data collection
   collectedCandles: [],
   lastDataSend: 0,
+
+  // Iter 62 — Per-model probability thresholds (0 = no gating).
+  // Applied client-side by sending min_conf_* query params to force-generate-v2.
+  modelThresholds: {
+    confluence: 0,      // any TA strategy
+    improved_v2: 0,     // Improved v2 ML
+    maximized_v3: 0,    // Maximized v3 ML
+    iq720: 0,           // IQ-720 ensemble
+  },
 };
 
 /**
@@ -238,8 +247,10 @@ export function saveState() {
       twentyOneSConfig: state._twentyOneSConfig || null,
       // Selected strategy (from dropdown)
       selectedStrategy: state._selectedStrategy || null,
+      // Iter 62 — per-model probability thresholds (TM panel sliders)
+      modelThresholds: state.modelThresholds || null,
       // Save schema version so future migrations can reset cleanly
-      _v: 4,
+      _v: 5,
       _savedAt: Date.now(),
     }));
   }
@@ -279,6 +290,15 @@ export function loadState() {
         if (parsed.cycleConfig) state._cycleConfig = parsed.cycleConfig;
         if (parsed.twentyOneSConfig) state._twentyOneSConfig = parsed.twentyOneSConfig;
         if (parsed.selectedStrategy) state._selectedStrategy = parsed.selectedStrategy;
+        // Iter 62 — per-model thresholds
+        if (parsed.modelThresholds && typeof parsed.modelThresholds === 'object') {
+          state.modelThresholds = {
+            confluence: Number(parsed.modelThresholds.confluence) || 0,
+            improved_v2: Number(parsed.modelThresholds.improved_v2) || 0,
+            maximized_v3: Number(parsed.modelThresholds.maximized_v3) || 0,
+            iq720: Number(parsed.modelThresholds.iq720) || 0,
+          };
+        }
         // Expose meta for debug / restore log
         state._lastSavedAt = parsed._savedAt || null;
         state._stateSchemaVersion = loadedVersion;

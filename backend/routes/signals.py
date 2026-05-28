@@ -4386,7 +4386,14 @@ async def report_trade(report: TrampermonkeyTradeReport):
 async def force_generate_signal_v2(
     asset: str = Query("EURUSD_OTC", description="Asset to force-generate a signal for"),
     expiry_seconds: int = Query(60, ge=5, le=300, description="Target expiry for timeframe context"),
-    preferred_direction: Optional[str] = Query(None, description="Optional hint: CALL/PUT — breaks ties but doesn't override strong confluence")
+    preferred_direction: Optional[str] = Query(None, description="Optional hint: CALL/PUT — breaks ties but doesn't override strong confluence"),
+    # Iter 62 — per-model probability thresholds (0 = no gating).
+    # A voter whose `confidence` is below its threshold is excluded from
+    # vote aggregation and surfaces as `filtered_by_threshold` in components.
+    min_conf_confluence: float = Query(0.0, ge=0.0, le=100.0, description="Min confidence (%) for any TA-confluence strategy to be counted"),
+    min_conf_improved_v2: float = Query(0.0, ge=0.0, le=100.0, description="Min confidence (%) for the Improved v2 ML vote"),
+    min_conf_maximized_v3: float = Query(0.0, ge=0.0, le=100.0, description="Min confidence (%) for the Maximized v3 ML vote"),
+    min_conf_iq720: float = Query(0.0, ge=0.0, le=100.0, description="Min confidence (%) for the IQ-720 ensemble vote"),
 ):
     """
     Always returns a directional signal for the given asset — never empty.
@@ -4474,6 +4481,16 @@ async def force_generate_signal_v2(
                         continue
                     d = (res.get("direction") or "").upper()
                     c = float(res.get("confidence") or 0)
+                    # Iter 62 — per-model gate for TA confluence votes
+                    if c < min_conf_confluence:
+                        component_results[sid] = {
+                            "direction": d,
+                            "confidence": c,
+                            "beta": bool(getattr(strat, "beta", False) or res.get("beta", False)),
+                            "filtered_by_threshold": True,
+                            "threshold": min_conf_confluence,
+                        }
+                        continue
                     if d == "CALL":
                         votes_call += c / 100.0
                     elif d == "PUT":
@@ -4509,16 +4526,23 @@ async def force_generate_signal_v2(
                 c = float(sig.get("confidence") or 0)
                 # IQ720 base weight = 3, scaled by daily tournament multiplier
                 iq720_weight = 3.0 * _tour_iq
-                if d == "CALL":
-                    votes_call += (c / 100.0) * iq720_weight
-                elif d == "PUT":
-                    votes_put += (c / 100.0) * iq720_weight
-                component_results["iq720_ensemble"] = {
-                    "direction": d,
-                    "confidence": c,
-                    "weight": round(iq720_weight, 2),
-                    "tournament_multiplier": round(_tour_iq, 3),
-                }
+                if c < min_conf_iq720:
+                    component_results["iq720_ensemble"] = {
+                        "direction": d, "confidence": c,
+                        "filtered_by_threshold": True,
+                        "threshold": min_conf_iq720,
+                    }
+                else:
+                    if d == "CALL":
+                        votes_call += (c / 100.0) * iq720_weight
+                    elif d == "PUT":
+                        votes_put += (c / 100.0) * iq720_weight
+                    component_results["iq720_ensemble"] = {
+                        "direction": d,
+                        "confidence": c,
+                        "weight": round(iq720_weight, 2),
+                        "tournament_multiplier": round(_tour_iq, 3),
+                    }
         except Exception as e:
             logger.debug(f"iq720 in force-generate: {e}")
 
@@ -4549,16 +4573,23 @@ async def force_generate_signal_v2(
                     acc = float(pred.get("model_accuracy", 50.0)) / 100.0
                     base_w = 4.0 if is_otc else 2.5
                     weight = base_w * acc * _tour_imp
-                    if d == "CALL":
-                        votes_call += (c / 100.0) * weight
+                    if c < min_conf_improved_v2:
+                        component_results["improved_ml_v2"] = {
+                            "direction": d, "confidence": c,
+                            "filtered_by_threshold": True,
+                            "threshold": min_conf_improved_v2,
+                        }
                     else:
-                        votes_put += (c / 100.0) * weight
-                    component_results["improved_ml_v2"] = {
-                        "direction": d, "confidence": c,
-                        "weight": round(weight, 2),
-                        "model_accuracy": round(acc * 100, 2),
-                        "tournament_multiplier": round(_tour_imp, 3),
-                    }
+                        if d == "CALL":
+                            votes_call += (c / 100.0) * weight
+                        else:
+                            votes_put += (c / 100.0) * weight
+                        component_results["improved_ml_v2"] = {
+                            "direction": d, "confidence": c,
+                            "weight": round(weight, 2),
+                            "model_accuracy": round(acc * 100, 2),
+                            "tournament_multiplier": round(_tour_imp, 3),
+                        }
         except Exception as e:
             logger.warning(f"improved_v2 ML voting in force-generate-v2 failed: {e}")
 
@@ -4574,16 +4605,23 @@ async def force_generate_signal_v2(
                     acc = float(pred.get("model_accuracy", 50.0)) / 100.0
                     base_w = 2.0 if is_otc else 3.0
                     weight = base_w * acc * _tour_max
-                    if d == "CALL":
-                        votes_call += (c / 100.0) * weight
+                    if c < min_conf_maximized_v3:
+                        component_results["maximized_ml_v3"] = {
+                            "direction": d, "confidence": c,
+                            "filtered_by_threshold": True,
+                            "threshold": min_conf_maximized_v3,
+                        }
                     else:
-                        votes_put += (c / 100.0) * weight
-                    component_results["maximized_ml_v3"] = {
-                        "direction": d, "confidence": c,
-                        "weight": round(weight, 2),
-                        "model_accuracy": round(acc * 100, 2),
-                        "tournament_multiplier": round(_tour_max, 3),
-                    }
+                        if d == "CALL":
+                            votes_call += (c / 100.0) * weight
+                        else:
+                            votes_put += (c / 100.0) * weight
+                        component_results["maximized_ml_v3"] = {
+                            "direction": d, "confidence": c,
+                            "weight": round(weight, 2),
+                            "model_accuracy": round(acc * 100, 2),
+                            "tournament_multiplier": round(_tour_max, 3),
+                        }
         except Exception as e:
             logger.warning(f"maximized_v3 ML voting in force-generate-v2 failed: {e}")
 
@@ -4842,6 +4880,13 @@ async def force_generate_signal_v2(
             "atr_percent": round(atr_pct, 4),
             # Iter 62 — sentiment soft modifier (may be empty dict if unavailable)
             "sentiment": sentiment_payload,
+            # Iter 62 — per-model thresholds in effect for this request (audit)
+            "model_thresholds": {
+                "confluence": min_conf_confluence,
+                "improved_v2": min_conf_improved_v2,
+                "maximized_v3": min_conf_maximized_v3,
+                "iq720": min_conf_iq720,
+            },
         }
 
         # -----------------------------------------------------------------

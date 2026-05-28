@@ -412,6 +412,46 @@ function injectCSS() {
       border: 1px solid #21262d !important;
       border-radius: 6px !important;
     }
+    .${P}thresholds {
+      margin-top: ${mobile ? '6px' : '8px'} !important;
+      padding: 6px !important;
+      background: rgba(56, 189, 248, 0.06) !important;
+      border: 1px solid rgba(56, 189, 248, 0.25) !important;
+      border-radius: 6px !important;
+    }
+    .${P}thrhdr {
+      font-size: ${mobile ? 9 : 10}px !important;
+      color: #7dd3fc !important;
+      font-weight: 700 !important;
+      letter-spacing: 0.5px !important;
+      margin-bottom: 4px !important;
+      text-transform: uppercase !important;
+    }
+    .${P}thrrow {
+      display: grid !important;
+      grid-template-columns: auto 1fr auto 1fr !important;
+      gap: 4px 6px !important;
+      align-items: center !important;
+      margin-bottom: 4px !important;
+    }
+    .${P}thrlbl {
+      font-size: ${mobile ? 9 : 10}px !important;
+      color: #94a3b8 !important;
+      font-weight: 600 !important;
+    }
+    .${P}thrInp {
+      width: 100% !important;
+      padding: 2px 4px !important;
+      background: #0d1117 !important;
+      border: 1px solid #21262d !important;
+      border-radius: 4px !important;
+      color: #e6edf3 !important;
+      font-size: ${mobile ? 10 : 11}px !important;
+      font-variant-numeric: tabular-nums !important;
+      text-align: center !important;
+      -webkit-appearance: textfield !important;
+    }
+    .${P}thrInp:focus { outline: 1px solid #38bdf8 !important; }
     .${P}assetrow {
       display: flex !important;
       align-items: center !important;
@@ -888,6 +928,21 @@ export function createPanel() {
             </select>
           </div>
           <div class="${P}invst" id="${P}invst" style="padding:2px 6px !important;">Invert: Normal</div>
+          <div class="${P}thresholds" id="${P}thresholds" data-testid="model-thresholds-section" title="Iter 62 — Per-model minimum confidence gates. Any voter below its threshold is excluded from the ensemble vote. Set to 0 to disable a gate.">
+            <div class="${P}thrhdr">Min-Conf Gates (%)</div>
+            <div class="${P}thrrow">
+              <span class="${P}thrlbl" title="TA strategies (5s/15s/1m/etc.)">CONF</span>
+              <input id="${P}thrConf" data-testid="thr-confluence" class="${P}thrInp" type="number" min="0" max="100" step="1" value="0" />
+              <span class="${P}thrlbl" title="Improved v2 ML">ML v2</span>
+              <input id="${P}thrImp" data-testid="thr-improved-v2" class="${P}thrInp" type="number" min="0" max="100" step="1" value="0" />
+            </div>
+            <div class="${P}thrrow">
+              <span class="${P}thrlbl" title="Maximized v3 ML">ML v3</span>
+              <input id="${P}thrMax" data-testid="thr-maximized-v3" class="${P}thrInp" type="number" min="0" max="100" step="1" value="0" />
+              <span class="${P}thrlbl" title="IQ-720 ensemble vote">IQ720</span>
+              <input id="${P}thrIq" data-testid="thr-iq720" class="${P}thrInp" type="number" min="0" max="100" step="1" value="0" />
+            </div>
+          </div>
         </div>
         <div class="${P}stats">
           <button id="${P}statsreset" class="${P}statsreset" data-testid="reset-stats-btn" title="Reset W/L counters, win rate, streak, and P/L (does not affect bot settings)">⟲</button>
@@ -1020,6 +1075,33 @@ export function initPanelEvents(callbacks = {}) {
       }
     });
   }
+
+  // Iter 62 — Per-model probability threshold inputs
+  // Each input (0–100, default 0=disabled) gates one voter in force-generate-v2.
+  const thrInputs = [
+    { id: 'thrConf', key: 'confluence' },
+    { id: 'thrImp', key: 'improved_v2' },
+    { id: 'thrMax', key: 'maximized_v3' },
+    { id: 'thrIq', key: 'iq720' },
+  ];
+  // Restore saved values
+  if (!state.modelThresholds) {
+    state.modelThresholds = { confluence: 0, improved_v2: 0, maximized_v3: 0, iq720: 0 };
+  }
+  thrInputs.forEach(({ id, key }) => {
+    const inp = q(id);
+    if (!inp) return;
+    inp.value = String(Number(state.modelThresholds[key] || 0));
+    inp.addEventListener('change', () => {
+      let v = parseFloat(inp.value);
+      if (!isFinite(v) || v < 0) v = 0;
+      if (v > 100) v = 100;
+      inp.value = String(v);
+      state.modelThresholds[key] = v;
+      try { saveState(); } catch (_e) { /* ignore */ }
+      log(`[THR] ${key} threshold set to ${v}%`);
+    });
+  });
 
   // RESIZE handle (Iter 59) — drag bottom-right corner to widen/narrow.
   // Mobile-friendly: full pointer + touch event support, persists to GM.

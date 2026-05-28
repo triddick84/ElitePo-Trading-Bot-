@@ -179,7 +179,10 @@ async def refresh_sentiment(force: bool = False) -> Dict[str, Any]:
     """Refresh the cached sentiment snapshot. Returns the new doc (or last cached)."""
     latest = sentiment_scores_col.find_one(sort=[("ts", DESCENDING)])
     if (not force) and latest:
-        age_min = (datetime.now(timezone.utc) - latest["ts"]).total_seconds() / 60
+        latest_ts = latest["ts"]
+        if isinstance(latest_ts, datetime) and latest_ts.tzinfo is None:
+            latest_ts = latest_ts.replace(tzinfo=timezone.utc)
+        age_min = (datetime.now(timezone.utc) - latest_ts).total_seconds() / 60
         if age_min < SENTIMENT_FRESH_MINUTES:
             return _clean(latest)
 
@@ -243,7 +246,10 @@ def _clean(doc: Dict[str, Any]) -> Dict[str, Any]:
         return {}
     out = {k: v for k, v in doc.items() if k != "_id"}
     if isinstance(out.get("ts"), datetime):
-        out["ts"] = out["ts"].isoformat()
+        ts = out["ts"]
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        out["ts"] = ts.isoformat()
     return out
 
 
@@ -272,7 +278,10 @@ def get_pair_sentiment_bias(asset: str) -> Optional[Dict[str, Any]]:
     latest = sentiment_scores_col.find_one(sort=[("ts", DESCENDING)])
     if not latest:
         return None
-    age_min = (datetime.now(timezone.utc) - latest["ts"]).total_seconds() / 60
+    latest_ts = latest["ts"]
+    if isinstance(latest_ts, datetime) and latest_ts.tzinfo is None:
+        latest_ts = latest_ts.replace(tzinfo=timezone.utc)
+    age_min = (datetime.now(timezone.utc) - latest_ts).total_seconds() / 60
     if age_min > SENTIMENT_FRESH_MINUTES * 2:
         # Too stale to use as a confidence modifier
         return None
@@ -315,7 +324,7 @@ def get_pair_sentiment_bias(asset: str) -> Optional[Dict[str, Any]]:
         "net_score": round(net, 3),
         "confidence": round(conf, 3),
         "suggested_direction": direction,
-        "ts": latest["ts"].isoformat(),
+        "ts": (latest_ts.isoformat() if isinstance(latest_ts, datetime) else None),
     }
 
 

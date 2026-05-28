@@ -22,7 +22,7 @@ import {
 } from "recharts";
 import {
   Brain, RotateCw, PlayCircle, Calendar, TrendingUp, AlertTriangle,
-  CheckCircle2, Database, Activity, BarChart3,
+  CheckCircle2, Database, Activity, BarChart3, Newspaper,
 } from "lucide-react";
 
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
@@ -55,10 +55,13 @@ export default function MLLabPage() {
   const [guardrail, setGuardrail] = useState(null);
   const [tournament, setTournament] = useState(null);
   const [iq720Outcomes, setIq720Outcomes] = useState(null);
+  const [sentiment, setSentiment] = useState(null);
+  const [sentimentHealth, setSentimentHealth] = useState(null);
+  const [sentimentRefreshing, setSentimentRefreshing] = useState(false);
 
   const refreshAll = async () => {
     try {
-      const [tr, ss, ot, btH, ass, lh, lst, uni, gr, tour, iq] = await Promise.all([
+      const [tr, ss, ot, btH, ass, lh, lst, uni, gr, tour, iq, sent, sentH] = await Promise.all([
         fetch(`${API}/ml/tuning-report`).then((r) => r.json()),
         fetch(`${API}/ml/scheduler/status`).then((r) => r.json()),
         fetch(`${API}/signals/otc-candle-stats`).then((r) => r.json()).catch(() => null),
@@ -70,6 +73,8 @@ export default function MLLabPage() {
         fetch(`${API}/signals/latency-guardrail/status`).then((r) => r.json()).catch(() => null),
         fetch(`${API}/ml/tournament/status`).then((r) => r.json()).catch(() => null),
         fetch(`${API}/iq720/outcome-stats`).then((r) => r.json()).catch(() => null),
+        fetch(`${API}/sentiment/scores`).then((r) => r.json()).catch(() => null),
+        fetch(`${API}/sentiment/health`).then((r) => r.json()).catch(() => null),
       ]);
       setTuningReport(tr);
       setSchedulerStatus(ss);
@@ -82,6 +87,8 @@ export default function MLLabPage() {
       setGuardrail(gr?.guardrail || null);
       setTournament(tour || null);
       setIq720Outcomes(iq || null);
+      setSentiment(sent || null);
+      setSentimentHealth(sentH || null);
       setLoading(false);
     } catch (e) {
       toast.error("Failed to load ML lab data: " + e.message);
@@ -342,6 +349,27 @@ export default function MLLabPage() {
       <LatencyHealthCard health={latencyHealth} stats={latencyStats} />
       <GuardrailTournamentCard guardrail={guardrail} tournament={tournament} onRefresh={refreshAll} />
       <IQ720OutcomeCard outcomes={iq720Outcomes} onRefresh={refreshAll} />
+      <SentimentCard
+        sentiment={sentiment}
+        health={sentimentHealth}
+        refreshing={sentimentRefreshing}
+        onRefresh={async () => {
+          setSentimentRefreshing(true);
+          try {
+            const r = await fetch(`${API}/sentiment/refresh?force=true`, { method: "POST" }).then((x) => x.json());
+            if (r && r.success) {
+              toast.success("Sentiment refreshed");
+              await refreshAll();
+            } else {
+              toast.error(`Sentiment refresh failed: ${r?.detail || r?.error || "unknown"}`);
+            }
+          } catch (e) {
+            toast.error("Sentiment refresh error: " + e.message);
+          } finally {
+            setSentimentRefreshing(false);
+          }
+        }}
+      />
 
       <Tabs value={tab} onValueChange={setTab} className="space-y-4">
         <TabsList className="grid grid-cols-5 bg-slate-900 border border-slate-800" data-testid="ml-model-tabs">
@@ -450,6 +478,95 @@ function PoolHealthCard({ otcStats, tuningReport }) {
     </Card>
   );
 }
+
+/* ---------- SENTIMENT CARD (Iter 62) ---------- */
+function SentimentCard({ sentiment, health, refreshing, onRefresh }) {
+  const scores = sentiment?.scores || {};
+  const order = ["USD", "EUR", "GBP", "JPY", "AUD", "CAD", "CHF", "NZD", "XAU", "BTC"];
+  const ageMin = health?.snapshot_age_minutes;
+  const fresh = ageMin != null && ageMin < (health?.fresh_within_minutes || 30);
+  const hasData = !!sentiment?.success && Object.keys(scores).length > 0;
+
+  const scoreColor = (s) => {
+    if (s > 0.4) return "bg-emerald-500/20 text-emerald-300 border-emerald-500/40";
+    if (s > 0.15) return "bg-emerald-500/10 text-emerald-300 border-emerald-500/30";
+    if (s < -0.4) return "bg-rose-500/20 text-rose-300 border-rose-500/40";
+    if (s < -0.15) return "bg-rose-500/10 text-rose-300 border-rose-500/30";
+    return "bg-slate-700/40 text-slate-300 border-slate-600/40";
+  };
+
+  const arrow = (s) => (s > 0.15 ? "▲" : s < -0.15 ? "▼" : "·");
+
+  return (
+    <Card className="bg-slate-900/60 border-slate-800" data-testid="sentiment-card">
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <div className="flex items-center gap-2">
+          <Newspaper className="w-5 h-5 text-cyan-400" />
+          <CardTitle className="text-base">Macro Sentiment</CardTitle>
+          {fresh ? (
+            <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40">fresh</Badge>
+          ) : ageMin != null ? (
+            <Badge variant="outline" className="border-amber-500/40 text-amber-300">{ageMin}m stale</Badge>
+          ) : (
+            <Badge variant="outline" className="border-slate-600 text-slate-400">no data</Badge>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {ageMin != null && (
+            <span className="text-xs text-slate-500">
+              {health?.last_run_headline_count || 0} headlines · {ageMin}m ago
+            </span>
+          )}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onRefresh}
+            disabled={refreshing}
+            data-testid="sentiment-refresh-btn"
+            className="border-slate-700 text-xs"
+          >
+            <RotateCw className={`w-3 h-3 mr-1 ${refreshing ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {!hasData && (
+          <p className="text-sm text-slate-400">
+            No sentiment snapshot yet. Hit Refresh to pull headlines (forexlive, fxstreet, investing.com) and score them with Claude.
+          </p>
+        )}
+        {hasData && sentiment.summary && (
+          <p className="text-xs text-slate-400 italic border-l-2 border-cyan-500/40 pl-2" data-testid="sentiment-summary">
+            {sentiment.summary}
+          </p>
+        )}
+        {hasData && (
+          <div className="grid grid-cols-5 gap-2" data-testid="sentiment-scores-grid">
+            {order.map((cur) => {
+              const e = scores[cur] || { score: 0, confidence: 0, reason: "" };
+              return (
+                <div
+                  key={cur}
+                  className={`rounded border p-2 text-center ${scoreColor(e.score || 0)}`}
+                  data-testid={`sentiment-${cur}`}
+                  title={e.reason || ""}
+                >
+                  <div className="text-[10px] uppercase tracking-wide opacity-70">{cur}</div>
+                  <div className="text-sm font-mono font-semibold">
+                    {arrow(e.score || 0)} {(e.score || 0).toFixed(2)}
+                  </div>
+                  <div className="text-[10px] opacity-60">conf {(e.confidence || 0).toFixed(2)}</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 
 /* ---------- IQ-720 OUTCOME FEEDBACK CARD (Iter 59) ---------- */
 function IQ720OutcomeCard({ outcomes, onRefresh }) {
