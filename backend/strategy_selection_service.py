@@ -13,7 +13,22 @@ logger = logging.getLogger(__name__)
 
 class StrategySelectionService:
     """Manages strategy selection for different timeframes"""
-    
+
+    # Iter 67 — empirically-best default strategy per timeframe
+    # (3-day EURUSD_OTC backtest, May 29 2026, see scripts/evaluate_default_strategies.py).
+    # When `selections[tf] == 'default'` the routing layer resolves it to the
+    # mapped strategy below. This is the single source of truth — change here
+    # to update the live default everywhere.
+    DEFAULT_STRATEGY_PER_TIMEFRAME = {
+        '5s':  '5s_heikin_fractal',        # 54.2% WR, 83 signals — beats deep_confluence by +7.7%
+        '15s': '15s_ema_cascade',          # 58.3% WR, 48 signals — beats deep_confluence by +6.1%
+        '30s': 'momentum_buster',          # 75.0% WR, 16 signals (small sample — confirm on real trades)
+        '1m':  '1m_triple_ema',            # best in field on M1 OTC (47.1%) — flag for retraining
+        '2m':  'ema_pullback',             # carried over: trend continuation suits 2m
+        '3m':  'ema_pullback',             # carried over
+        '5m':  'ema_pullback',             # carried over
+    }
+
     # Available strategies per timeframe
     AVAILABLE_STRATEGIES = {
         '5s': [
@@ -157,27 +172,41 @@ class StrategySelectionService:
         
     async def get_selected_strategies(self) -> Dict[str, str]:
         """
-        Get user's selected strategies for all timeframes
-        Returns dict of {timeframe: strategy_id}
+        Get user's selected strategies for all timeframes.
+        Returns dict of {timeframe: strategy_id}.
+
+        Iter 67 — when a TF is set to 'default', we transparently resolve it
+        to the empirical winner in DEFAULT_STRATEGY_PER_TIMEFRAME so the
+        signal-generation layer always gets a concrete strategy id.
         """
         try:
             config = await self.collection.find_one({'type': 'strategy_selection'})
-            
-            if config:
-                return config.get('selections', {})
-            
-            # Return defaults if no selection exists
-            return {
-                '5s': 'default',
-                '15s': 'default',
-                '30s': 'default',
-                '1m': 'default',
-                '3m': 'default',
-                '5m': 'default',
-            }
-            
+            raw = (config or {}).get('selections', {}) if config else {}
+            # If nothing saved, start from a default sheet
+            if not raw:
+                raw = {tf: 'default' for tf in self.DEFAULT_STRATEGY_PER_TIMEFRAME}
+            resolved = {}
+            for tf, sid in raw.items():
+                if sid == 'default':
+                    resolved[tf] = self.DEFAULT_STRATEGY_PER_TIMEFRAME.get(tf, 'default')
+                else:
+                    resolved[tf] = sid
+            return resolved
         except Exception as e:
             logger.error(f"Error getting selected strategies: {e}")
+            return {}
+
+    def resolve_default(self, timeframe: str) -> str:
+        """Return the empirical-winner strategy id for `timeframe`, or 'default'."""
+        return self.DEFAULT_STRATEGY_PER_TIMEFRAME.get(timeframe, 'default')
+
+    async def get_raw_selections(self) -> Dict[str, str]:
+        """Return saved selections as-is, without resolving 'default'."""
+        try:
+            config = await self.collection.find_one({'type': 'strategy_selection'})
+            return (config or {}).get('selections', {}) if config else {}
+        except Exception as e:
+            logger.error(f"Error getting raw selections: {e}")
             return {}
     
     async def update_strategy_selection(self, timeframe: str, strategy_id: str) -> bool:

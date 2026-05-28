@@ -479,11 +479,64 @@ async def run_backtest(request: BacktestRequest):
                         request.expiry_seconds, request.min_confidence
                     )
                 else:
-                    results.append({
-                        "strategy": strategy_name,
-                        "error": f"Unknown strategy: {strategy_name}"
-                    })
-                    continue
+                    # Iter 67 — generic strategy_registry fallback so any
+                    # registered strategy (ema20_pullback_reversal, holly_crossover_*,
+                    # turbo_precision_*, golden_one_moment, etc.) can be backtested
+                    # without hardcoding each name above.
+                    try:
+                        from strategy_registry import strategy_registry
+                        registry_key_map = {
+                            'ema20_pullback_reversal': '5s_ema20_pullback_reversal',
+                            'holly_crossover_5s': '5s_holly_crossover',
+                            'holly_crossover_15s': '15s_holly_crossover',
+                            'holly_crossover_30s': '30s_holly_crossover',
+                            'momentum_buster_15s': '15s_momentum_buster',
+                            'golden_one_moment': '30s_golden_one_moment',
+                            'turbo_precision_5s': 'turbo_precision_5s',
+                            'turbo_precision_1m': 'turbo_precision_1m',
+                            'triple_confirmation': '1m_triple_confirmation',
+                            'smart_money': '1m_smart_money_ict',
+                        }
+                        registry_key = registry_key_map.get(strategy_name, strategy_name)
+                        strat = strategy_registry.get_strategy(registry_key)
+                        if not strat:
+                            results.append({
+                                "strategy": strategy_name,
+                                "error": f"Unknown strategy: {strategy_name}",
+                            })
+                            continue
+
+                        def _registry_strategy(_df, _idx, _strat=strat):
+                            if _idx < 50 or len(_df) < 50:
+                                return None
+                            window = _df.iloc[max(0, _idx - 100):_idx + 1].copy()
+                            try:
+                                res = strategy_registry.execute_strategy(
+                                    registry_key, window
+                                )
+                                if not res or not isinstance(res, dict):
+                                    return None
+                                d = (res.get("direction") or "").upper()
+                                if d not in ("CALL", "PUT"):
+                                    return None
+                                return {
+                                    "direction": d,
+                                    "confidence": float(res.get("confidence", 0)),
+                                    "entry_price": float(_df.iloc[_idx]["close"]),
+                                }
+                            except Exception:
+                                return None
+
+                        metrics = engine.run_strategy_backtest(
+                            df, _registry_strategy, request.timeframe,
+                            request.expiry_seconds, request.min_confidence,
+                        )
+                    except Exception as e:
+                        results.append({
+                            "strategy": strategy_name,
+                            "error": f"registry backtest failed: {e}",
+                        })
+                        continue
                 
                 # Save results
                 result_id = engine.save_results(

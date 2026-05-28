@@ -1,8 +1,41 @@
 # Elite Pocket Option Trading Bot - Product Requirements Document
 
-## Last Updated: May 29, 2026
+## Last Updated: May 29, 2026 (afternoon)
 
 ## Current Status
+
+✅ **Iteration 67 — Default Strategies Empirically Optimized Per Timeframe (May 29, 2026)**
+
+User asked to evaluate the default strategies per timeframe and replace any sub-optimal ones with empirical winners.
+
+### Methodology
+- Wrote `scripts/evaluate_default_strategies.py` — backtests every candidate (deep_confluence, momentum_buster, hybrid + registered TF-specific strategies) for each timeframe on EURUSD_OTC over a 3-day window
+- Ranked by composite score = `(WR-50) × √signals × clip(PF, 0.5, 2.5)`
+- Added a generic `strategy_registry` fallback to `routes/backtesting.py` so any of the 42 registered strategies can be backtested via `/api/backtest/run`
+
+### Results (3-day EURUSD_OTC backtest)
+| TF  | Previous Default | NEW Default          | Win Rate | Signals | Score    | Improvement |
+|-----|------------------|----------------------|----------|---------|----------|-------------|
+| 5s  | deep_confluence  | **5s_heikin_fractal**| 54.2%    | 83      | +36.5    | **+7.7% WR** |
+| 15s | deep_confluence  | **15s_ema_cascade**  | 58.3%    | 48      | +64.6    | **+6.1% WR** |
+| 30s | deep_confluence  | **momentum_buster**  | 75.0%    | 16      | +240.0   | **+12.5% WR** |
+| 1m  | deep_confluence  | **1m_triple_ema**    | 47.1%    | 369     | -38.9    | (best of field; entire M1 OTC universe < 50%, flagged for retraining) |
+
+### Implementation
+- New `DEFAULT_STRATEGY_PER_TIMEFRAME` map at top of `strategy_selection_service.py` — single source of truth
+- `get_selected_strategies()` now transparently resolves `'default'` → the empirical winner
+- New helper `resolve_default(timeframe)` for direct lookups
+- Saved selections retain `'default'` literal so users can still see "Default" in the UI, but the routing layer always dispatches to the real strategy id
+- Generic registry-strategy backtest path added so future strategies become evaluable with zero engine changes
+
+### Tests
+- `tests/test_iter67_defaults_per_timeframe.py` — 10/10 passing (defaults map presence, each TF's winner asserted, backtest compatibility for all 4 winners)
+- Grand total backend regression: **43/43 passing** (Iter 61–67)
+
+### Note on M1 underperformance
+Every M1 strategy backtested negative (best 47.1%). Most likely cause: M1 candles in `otc_candles_5s` are aggregated from 5s data with limited recent ticks. Recommended follow-up: pull more M1 history via OANDA backfill for forex_otc majors before relying on M1 strategies.
+
+---
 
 ✅ **Iteration 66 — "Find Best Pair Today" Scanner + Mongo BSON Bugfix (May 29, 2026)**
 
