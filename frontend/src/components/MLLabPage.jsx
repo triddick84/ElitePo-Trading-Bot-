@@ -27,6 +27,45 @@ import {
 
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
 
+/**
+ * Iter 62b — safe JSON parser that survives ingress 502/504 timeouts.
+ * Heavy training/backtest endpoints can exceed the proxy's ~60s budget,
+ * in which case the body is plain text like "The preview environment is
+ * not responding...". `res.json()` then throws "Unexpected token 'T'".
+ * This helper inspects the response and returns a structured error so
+ * the UI surfaces something useful instead of crashing.
+ */
+async function safeFetchJson(url, init = {}) {
+  let res;
+  try {
+    res = await fetch(url, init);
+  } catch (e) {
+    return { success: false, error: `network: ${e?.message || e}` };
+  }
+  const ctype = (res.headers.get("content-type") || "").toLowerCase();
+  if (!ctype.includes("application/json")) {
+    let txt = "";
+    try { txt = (await res.text()).slice(0, 240); } catch (_e) { /* ignore */ }
+    if (res.status === 502 || res.status === 504 || /not responding|gateway|timeout/i.test(txt)) {
+      return {
+        success: false,
+        error: "request timed out (>60s ingress limit) — the job may still be running in the background. Refresh in 1–2 min.",
+        http_status: res.status,
+      };
+    }
+    return {
+      success: false,
+      error: `non-JSON response (HTTP ${res.status}): ${txt || "empty body"}`,
+      http_status: res.status,
+    };
+  }
+  try {
+    return await res.json();
+  } catch (e) {
+    return { success: false, error: `parse: ${e?.message || e}` };
+  }
+}
+
 const MODELS = [
   { id: "improved_v2", name: "Improved v2", color: "#22c55e", desc: "RF + GB + AdaBoost ensemble. Best on OTC pairs." },
   { id: "maximized_v3", name: "Maximized v3", color: "#3b82f6", desc: "XGBoost stacking with regime detector. Best on real forex." },
@@ -109,7 +148,7 @@ export default function MLLabPage() {
         .filter((s) => s.trainable)
         .map((s) => s.symbol);
       if (modelId === "improved_v2" || modelId === "maximized_v3") {
-        const r = await fetch(`${API}/ml/train-from-otc`, {
+        const r = await safeFetchJson(`${API}/ml/train-from-otc`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -117,7 +156,7 @@ export default function MLLabPage() {
             symbols,
             min_samples: 500,
           }),
-        }).then((res) => res.json());
+        });
         if (r.success) {
           // Iter 57 — surface OOS + overfit warning when present
           const oos = r.test_accuracy != null ? ` · OOS ${r.test_accuracy}%` : "";
@@ -129,7 +168,7 @@ export default function MLLabPage() {
         }
       } else if (modelId === "lstm_gru") {
         toast.info("LSTM/GRU training started — this can take 1–2 minutes");
-        const r = await fetch(`${API}/ml/train-from-otc`, {
+        const r = await safeFetchJson(`${API}/ml/train-from-otc`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -137,7 +176,7 @@ export default function MLLabPage() {
             symbols,
             epochs: 20,
           }),
-        }).then((res) => res.json());
+        });
         if (r.success) {
           toast.success(`LSTM/GRU trained → ${r.val_accuracy}% val acc on ${r.total_candles} candles`);
           refreshAll();
@@ -146,7 +185,7 @@ export default function MLLabPage() {
         }
       } else if (modelId === "ppo_rl") {
         toast.info("PPO RL training started — this can take 2–3 minutes");
-        const r = await fetch(`${API}/ml/train-from-otc`, {
+        const r = await safeFetchJson(`${API}/ml/train-from-otc`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -154,7 +193,7 @@ export default function MLLabPage() {
             symbols,
             n_episodes: 15,
           }),
-        }).then((res) => res.json());
+        });
         if (r.success) {
           toast.success(`PPO RL trained → ${(r.avg_win_rate || 0).toFixed(1)}% avg win rate on ${r.total_samples} samples`);
           refreshAll();
@@ -163,7 +202,7 @@ export default function MLLabPage() {
         }
       } else if (modelId === "ensemble") {
         toast.info("Ensemble retrain started — runs in background (2–5 min). Polling for completion...");
-        const r = await fetch(`${API}/ml/scheduler/trigger`, { method: "POST" }).then((res) => res.json());
+        const r = await safeFetchJson(`${API}/ml/scheduler/trigger`, { method: "POST" });
         if (!r.success && !r.accepted) {
           toast.warning(r.message || "Retrain queued");
           return;
@@ -211,7 +250,7 @@ export default function MLLabPage() {
     // synthetic next-candle labels. Fire-and-forget with status polling.
     setRetraining({ ...retraining, [`${modelId}_real`]: true });
     try {
-      const trigger = await fetch(`${API}/ml/train-from-trades`, {
+      const trigger = await safeFetchJson(`${API}/ml/train-from-trades`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -219,7 +258,7 @@ export default function MLLabPage() {
           min_samples: 30,
           max_age_days: 30,
         }),
-      }).then((res) => res.json());
+      });
       if (!trigger.success && !trigger.accepted) {
         toast.warning(trigger.message || trigger.error || "Real-trade training queued");
         return;
@@ -279,7 +318,7 @@ export default function MLLabPage() {
       const isOtc = (backtest.symbol || "").toUpperCase().includes("_OTC");
       const tf = backtest.timeframe || (isOtc ? "5s" : "M1");
 
-      const r = await fetch(`${API}/backtest/run`, {
+      const r = await safeFetchJson(`${API}/backtest/run`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -288,7 +327,15 @@ export default function MLLabPage() {
           timeframe: tf,
           days: parseInt(backtest.days, 10),
         }),
-      }).then((res) => res.json());
+      });
+
+      // safeFetchJson surfaces ingress 502/504 as { success:false, error }
+      if (r && r.success === false && r.error) {
+        toast.error(`Backtest failed: ${r.error}`);
+        setBacktestResult({ error: r.error });
+        refreshAll();
+        return;
+      }
 
       // Backend returns { success, results: [ { strategy, metrics: {...} } ] }
       // We unwrap the first result's metrics and surface them flat.

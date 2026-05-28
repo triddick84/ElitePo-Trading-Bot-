@@ -1948,12 +1948,38 @@ class BacktestingService:
         return results
     
     async def get_available_assets(self) -> Dict[str, List[str]]:
-        """Get list of available assets for backtesting"""
-        return {
-            "forex": list(FINNHUB_FOREX_SYMBOLS.keys()),
-            "crypto": [f"{s}USDT" for s in CRYPTO_SYMBOLS],
-            "stocks": STOCK_SYMBOLS
-        }
+        """
+        Iter 63 — Full regular + OTC asset list across all classes.
+        Returns the same data shape as before (category → symbols dict) so the
+        existing BacktestingPage UI checkbox grid renders without changes, but
+        with ~5x more symbols including every OTC variant.
+        """
+        try:
+            from routes.backtest import (
+                _FOREX_MAJORS, _FOREX_CROSSES, _FOREX_EXOTICS,
+                _OTC_PAIRS, _COMMODITIES, _OTC_COMMODITIES,
+                _CRYPTO, _OTC_CRYPTO, _INDICES, _OTC_INDICES,
+                _STOCKS_US, _OTC_STOCKS,
+            )
+            return {
+                "forex": _FOREX_MAJORS + _FOREX_CROSSES + _FOREX_EXOTICS,
+                "forex_otc": _OTC_PAIRS,
+                "commodities": _COMMODITIES,
+                "commodities_otc": _OTC_COMMODITIES,
+                "crypto": _CRYPTO,
+                "crypto_otc": _OTC_CRYPTO,
+                "indices": _INDICES,
+                "indices_otc": _OTC_INDICES,
+                "stocks": _STOCKS_US,
+                "stocks_otc": _OTC_STOCKS,
+            }
+        except Exception:
+            # Fall back to legacy shape if the universe module isn't importable
+            return {
+                "forex": list(FINNHUB_FOREX_SYMBOLS.keys()),
+                "crypto": [f"{s}USDT" for s in CRYPTO_SYMBOLS],
+                "stocks": STOCK_SYMBOLS,
+            }
     
     async def get_available_strategies(self) -> List[Dict]:
         """Get list of available strategies"""

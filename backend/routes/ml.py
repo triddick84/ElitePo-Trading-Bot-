@@ -2527,23 +2527,49 @@ async def get_trade_reports_training_stats():
 
 # ==================== OTC BACKFILL FROM OANDA (April 25, 2026) ====================
 
-# OTC pairs that map cleanly to an OANDA forex instrument (PO OTC = synthetic
-# forex priced from real underlying). Exotics (SAR/UAH/MAD/YER/VND/COP/PHP/MYR
-# /CNH/RUB/BRL/MXN/ARS/BHD/BDT) are skipped — OANDA doesn't carry them.
+# OTC pairs that map cleanly to an OANDA forex/commodity/index instrument.
+# Iter 63 — expanded with commodities (XAU/XAG/WTI/etc.) and indices that OANDA
+# supports natively. Exotics OANDA doesn't carry (SAR/UAH/MAD/YER/VND/PHP/MYR
+# /RUB/BRL/MXN/ARS) remain skipped.
 OTC_TO_OANDA = {
+    # --- Forex (majors + crosses) ---
     "AUDCAD_OTC": "AUD_CAD", "AUDUSD_OTC": "AUD_USD", "AUDJPY_OTC": "AUD_JPY",
-    "AUDNZD_OTC": "AUD_NZD", "AUDCHF_OTC": "AUD_CHF",
-    "CADCHF_OTC": "CAD_CHF", "CADJPY_OTC": "CAD_JPY",
-    "CHFJPY_OTC": "CHF_JPY",
+    "AUDNZD_OTC": "AUD_NZD", "AUDCHF_OTC": "AUD_CHF", "AUDSGD_OTC": "AUD_SGD",
+    "AUDHKD_OTC": "AUD_HKD",
+    "CADCHF_OTC": "CAD_CHF", "CADJPY_OTC": "CAD_JPY", "CADSGD_OTC": "CAD_SGD",
+    "CHFJPY_OTC": "CHF_JPY", "CHFSGD_OTC": "CHF_SGD",
     "EURAUD_OTC": "EUR_AUD", "EURCAD_OTC": "EUR_CAD", "EURCHF_OTC": "EUR_CHF",
     "EURGBP_OTC": "EUR_GBP", "EURJPY_OTC": "EUR_JPY", "EURNZD_OTC": "EUR_NZD",
-    "EURUSD_OTC": "EUR_USD",
+    "EURUSD_OTC": "EUR_USD", "EURDKK_OTC": "EUR_DKK", "EURHUF_OTC": "EUR_HUF",
+    "EURNOK_OTC": "EUR_NOK", "EURPLN_OTC": "EUR_PLN", "EURSEK_OTC": "EUR_SEK",
+    "EURTRY_OTC": "EUR_TRY", "EURZAR_OTC": "EUR_ZAR",
     "GBPAUD_OTC": "GBP_AUD", "GBPCAD_OTC": "GBP_CAD", "GBPCHF_OTC": "GBP_CHF",
     "GBPJPY_OTC": "GBP_JPY", "GBPNZD_OTC": "GBP_NZD", "GBPUSD_OTC": "GBP_USD",
+    "GBPPLN_OTC": "GBP_PLN", "GBPSGD_OTC": "GBP_SGD", "GBPZAR_OTC": "GBP_ZAR",
     "NZDCAD_OTC": "NZD_CAD", "NZDCHF_OTC": "NZD_CHF", "NZDJPY_OTC": "NZD_JPY",
-    "NZDUSD_OTC": "NZD_USD",
+    "NZDUSD_OTC": "NZD_USD", "NZDSGD_OTC": "NZD_SGD", "NZDHKD_OTC": "NZD_HKD",
     "USDCAD_OTC": "USD_CAD", "USDCHF_OTC": "USD_CHF", "USDCNH_OTC": "USD_CNH",
-    "USDJPY_OTC": "USD_JPY",
+    "USDJPY_OTC": "USD_JPY", "USDDKK_OTC": "USD_DKK", "USDHKD_OTC": "USD_HKD",
+    "USDHUF_OTC": "USD_HUF", "USDNOK_OTC": "USD_NOK", "USDPLN_OTC": "USD_PLN",
+    "USDSEK_OTC": "USD_SEK", "USDSGD_OTC": "USD_SGD", "USDTHB_OTC": "USD_THB",
+    "USDTRY_OTC": "USD_TRY", "USDZAR_OTC": "USD_ZAR", "USDINR_OTC": "USD_INR",
+    "USDCZK_OTC": "USD_CZK", "USDSAR_OTC": "USD_SAR",
+    "TRYJPY_OTC": "TRY_JPY", "ZARJPY_OTC": "ZAR_JPY",
+    # --- Commodities (OANDA naming) ---
+    "XAUUSD_OTC": "XAU_USD", "XAGUSD_OTC": "XAG_USD",
+    "XPTUSD_OTC": "XPT_USD", "XPDUSD_OTC": "XPD_USD",
+    "WTI_OTC": "WTICO_USD", "BRENT_OTC": "BCO_USD", "NGAS_OTC": "NATGAS_USD",
+    "COPPER_OTC": "XCU_USD",
+    "WHEAT_OTC": "WHEAT_USD", "CORN_OTC": "CORN_USD",
+    "SOYBEAN_OTC": "SOYBN_USD", "SUGAR_OTC": "SUGAR_USD",
+    # --- Indices (OANDA CFD naming) ---
+    "SPX500_OTC": "SPX500_USD", "NDX100_OTC": "NAS100_USD",
+    "DJI30_OTC": "US30_USD", "RUT2000_OTC": "US2000_USD",
+    "DAX40_OTC": "DE30_EUR", "FTSE100_OTC": "UK100_GBP",
+    "CAC40_OTC": "FR40_EUR", "AEX25_OTC": "NL25_EUR",
+    "STOXX50_OTC": "EU50_EUR", "SMI20_OTC": "CH20_CHF",
+    "NIKKEI225_OTC": "JP225_USD", "HSI50_OTC": "HK33_HKD",
+    "ASX200_OTC": "AU200_AUD",
 }
 
 

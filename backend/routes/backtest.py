@@ -86,8 +86,9 @@ async def get_backtest_assets():
 
 
 # Iter 58 — FULL backtesting asset universe with per-class allowed timeframes.
+# Iter 63 — expanded to cover the full Pocket Option asset menu (regular + OTC).
 # Rule (per user, May 17, 2026):
-#   - Regular markets (forex/commodities/crypto/indices) → ≥ 1m
+#   - Regular markets (forex/commodities/crypto/indices/stocks) → ≥ 1m
 #   - OTC markets → ≥ 3s (PO-native)
 _FOREX_MAJORS = [
     "EURUSD", "GBPUSD", "USDJPY", "USDCHF", "USDCAD", "AUDUSD", "NZDUSD",
@@ -100,15 +101,45 @@ _FOREX_CROSSES = [
 ]
 _FOREX_EXOTICS = [
     "USDMXN", "USDZAR", "USDTRY", "USDSGD", "USDHKD", "USDSEK", "USDNOK",
-    "USDPLN", "USDCNH", "USDINR", "USDBRL",
+    "USDPLN", "USDCNH", "USDINR", "USDBRL", "USDKRW", "USDTHB", "USDIDR",
+    "USDPHP", "USDARS", "USDCLP", "USDCOP", "USDDKK", "USDHUF", "USDCZK",
+    "USDRUB", "USDEGP", "USDSAR", "USDAED", "USDILS",
+    "EURPLN", "EURNOK", "EURSEK", "EURTRY", "EURZAR", "EURDKK", "EURHUF",
+    "GBPPLN", "GBPNOK", "GBPSEK", "GBPTRY", "GBPZAR",
+    "AUDSGD", "AUDHKD", "NZDSGD", "CADSGD", "CHFSGD", "ZARJPY", "TRYJPY",
 ]
-_COMMODITIES = ["XAUUSD", "XAGUSD", "WTI", "BRENT", "XPTUSD", "XPDUSD"]
-_CRYPTO = ["BTCUSD", "ETHUSD", "LTCUSD", "BCHUSD", "XRPUSD", "SOLUSD", "ADAUSD", "DOGEUSD"]
-_INDICES = ["SPX500", "NDX100", "DJI30", "DAX40", "FTSE100", "NIKKEI225", "HSI50"]
+_COMMODITIES = [
+    "XAUUSD", "XAGUSD", "WTI", "BRENT", "NGAS", "XPTUSD", "XPDUSD",
+    "COFFEE", "COCOA", "SUGAR", "COTTON", "WHEAT", "CORN", "SOYBEAN",
+    "COPPER",
+]
+_CRYPTO = [
+    "BTCUSD", "ETHUSD", "LTCUSD", "BCHUSD", "XRPUSD", "EOSUSD", "DASHUSD",
+    "ZECUSD", "BNBUSD", "ADAUSD", "SOLUSD", "DOGEUSD", "MATICUSD", "AVAXUSD",
+    "DOTUSD", "SHIBUSD", "LINKUSD", "TRXUSD", "ATOMUSD", "UNIUSD", "XLMUSD",
+    "FILUSD", "AAVEUSD", "ALGOUSD", "ICPUSD", "NEARUSD", "APTUSD", "ARBUSD",
+    "OPUSD", "PEPEUSD",
+]
+_INDICES = [
+    "SPX500", "NDX100", "DJI30", "RUT2000",
+    "DAX40", "FTSE100", "CAC40", "IBEX35", "AEX25", "STOXX50", "SMI20",
+    "NIKKEI225", "HSI50", "ASX200", "KOSPI",
+    "BVSP", "MICEX",
+]
+_STOCKS_US = [
+    "AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "NVDA", "NFLX",
+    "DIS", "BABA", "INTC", "AMD", "IBM", "ORCL", "CSCO", "ADBE",
+    "PYPL", "V", "MA", "JPM", "BAC", "WFC", "GS", "MS",
+    "C", "T", "VZ", "PFE", "JNJ", "MRK", "KO", "PEP",
+    "WMT", "MCD", "NKE", "BA", "GE", "F", "TWTR", "UBER",
+    "LYFT", "SNAP", "SPOT", "ROKU", "ZM", "SQ", "SHOP", "COIN",
+]
 
 _OTC_PAIRS = sorted({f"{s}_OTC" for s in (_FOREX_MAJORS + _FOREX_CROSSES + _FOREX_EXOTICS)})
 _OTC_COMMODITIES = [f"{s}_OTC" for s in _COMMODITIES]
 _OTC_CRYPTO = [f"{s}_OTC" for s in _CRYPTO]
+_OTC_INDICES = [f"{s}_OTC" for s in _INDICES]
+_OTC_STOCKS = [f"{s}_OTC" for s in _STOCKS_US]
 
 _REGULAR_TIMEFRAMES = ["M1", "M5", "M15", "M30", "H1", "H4", "D1"]
 _OTC_TIMEFRAMES = ["3s", "5s", "15s", "30s", "M1", "M5", "M15", "M30", "H1"]
@@ -117,8 +148,9 @@ _OTC_TIMEFRAMES = ["3s", "5s", "15s", "30s", "M1", "M5", "M15", "M30", "H1"]
 @router.get("/backtest/assets-universe")
 async def get_backtest_assets_universe():
     """
-    Iter 58 — full backtesting universe (forex + OTC + commodities + crypto + indices).
-    Each class carries its allowed timeframes so the UI can gate the dropdown:
+    Iter 58 / Iter 63 — full backtesting universe (forex + OTC + commodities +
+    crypto + indices + stocks). Each class carries its allowed timeframes so
+    the UI can gate the dropdown:
       - Regular markets: ≥ 1m
       - OTC markets: ≥ 3s
     """
@@ -174,7 +206,46 @@ async def get_backtest_assets_universe():
                 "timeframes": _REGULAR_TIMEFRAMES,
                 "symbols": _INDICES,
             },
+            {
+                "id": "indices_otc",
+                "label": "Indices (OTC)",
+                "min_timeframe": "3s",
+                "timeframes": _OTC_TIMEFRAMES,
+                "symbols": _OTC_INDICES,
+            },
+            {
+                "id": "stocks",
+                "label": "US Stocks (Regular)",
+                "min_timeframe": "M1",
+                "timeframes": _REGULAR_TIMEFRAMES,
+                "symbols": _STOCKS_US,
+            },
+            {
+                "id": "stocks_otc",
+                "label": "US Stocks (OTC)",
+                "min_timeframe": "3s",
+                "timeframes": _OTC_TIMEFRAMES,
+                "symbols": _OTC_STOCKS,
+            },
         ],
+        "totals": {
+            "forex_regular": len(_FOREX_MAJORS) + len(_FOREX_CROSSES) + len(_FOREX_EXOTICS),
+            "forex_otc": len(_OTC_PAIRS),
+            "commodities": len(_COMMODITIES),
+            "commodities_otc": len(_OTC_COMMODITIES),
+            "crypto": len(_CRYPTO),
+            "crypto_otc": len(_OTC_CRYPTO),
+            "indices": len(_INDICES),
+            "indices_otc": len(_OTC_INDICES),
+            "stocks": len(_STOCKS_US),
+            "stocks_otc": len(_OTC_STOCKS),
+            "grand_total": (
+                len(_FOREX_MAJORS) + len(_FOREX_CROSSES) + len(_FOREX_EXOTICS)
+                + len(_OTC_PAIRS) + len(_COMMODITIES) + len(_OTC_COMMODITIES)
+                + len(_CRYPTO) + len(_OTC_CRYPTO) + len(_INDICES) + len(_OTC_INDICES)
+                + len(_STOCKS_US) + len(_OTC_STOCKS)
+            ),
+        },
         "rules": {
             "regular_min": "M1",
             "otc_min": "3s",

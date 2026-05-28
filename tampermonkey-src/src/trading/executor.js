@@ -142,6 +142,16 @@ class TradeExecutor {
       // The internal `state.moneyManagement.currentAmount` is still tracked
       // for win/loss stats display, but it doesn't drive the UI anymore.
       const amount = state.moneyManagement.currentAmount;  // for logs/reports only
+      // Iter 63 — Trade latency offset: positive = sleep N seconds before
+      // clicking CALL/PUT. Negative offsets are advisory (applied as freshness-
+      // budget widening in the signal poller; here we just log them).
+      const _offsetSec = Number(state.latencyOffsetSec || 0);
+      if (_offsetSec > 0) {
+        log(`[exec:${source}] latency offset +${_offsetSec}s — sleeping before click...`);
+        await new Promise((res) => setTimeout(res, _offsetSec * 1000));
+      } else if (_offsetSec < 0) {
+        log(`[exec:${source}] latency offset ${_offsetSec}s (anticipate mode — applied at poll level)`);
+      }
       // Iter 56c — measure DOM click latency precisely around executeTrade()
       const _clickStartedAt = performance.now();
       const executed = await executeTrade(direction);

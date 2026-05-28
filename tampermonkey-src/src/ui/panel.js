@@ -452,6 +452,63 @@ function injectCSS() {
       -webkit-appearance: textfield !important;
     }
     .${P}thrInp:focus { outline: 1px solid #38bdf8 !important; }
+    .${P}latencyrow {
+      display: grid !important;
+      grid-template-columns: auto 1fr auto !important;
+      align-items: center !important;
+      gap: 6px !important;
+      margin-top: ${mobile ? '6px' : '8px'} !important;
+      padding: 5px 7px !important;
+      background: rgba(251, 191, 36, 0.06) !important;
+      border: 1px solid rgba(251, 191, 36, 0.25) !important;
+      border-radius: 6px !important;
+    }
+    .${P}latlbl {
+      font-size: ${mobile ? 9 : 10}px !important;
+      color: #fbbf24 !important;
+      font-weight: 700 !important;
+      letter-spacing: 0.5px !important;
+      text-transform: uppercase !important;
+    }
+    .${P}latslider {
+      width: 100% !important;
+      height: 14px !important;
+      -webkit-appearance: none !important;
+      appearance: none !important;
+      background: linear-gradient(90deg, #b91c1c 0%, #fbbf24 50%, #16a34a 100%) !important;
+      border-radius: 4px !important;
+      outline: none !important;
+      cursor: pointer !important;
+      margin: 0 !important;
+    }
+    .${P}latslider::-webkit-slider-thumb {
+      -webkit-appearance: none !important;
+      appearance: none !important;
+      width: 14px !important;
+      height: 14px !important;
+      background: #fde68a !important;
+      border: 2px solid #ffffff !important;
+      border-radius: 50% !important;
+      cursor: grab !important;
+      box-shadow: 0 0 4px rgba(251,191,36,0.8) !important;
+    }
+    .${P}latslider::-moz-range-thumb {
+      width: 14px !important;
+      height: 14px !important;
+      background: #fde68a !important;
+      border: 2px solid #ffffff !important;
+      border-radius: 50% !important;
+      cursor: grab !important;
+      box-shadow: 0 0 4px rgba(251,191,36,0.8) !important;
+    }
+    .${P}latvalue {
+      font-size: ${mobile ? 10 : 11}px !important;
+      color: #fde68a !important;
+      font-weight: 700 !important;
+      min-width: 38px !important;
+      text-align: right !important;
+      font-variant-numeric: tabular-nums !important;
+    }
     .${P}assetrow {
       display: flex !important;
       align-items: center !important;
@@ -943,6 +1000,11 @@ export function createPanel() {
               <input id="${P}thrIq" data-testid="thr-iq720" class="${P}thrInp" type="number" min="0" max="100" step="1" value="0" />
             </div>
           </div>
+          <div class="${P}latencyrow" data-testid="latency-offset-section" title="Iter 63 — Trade latency offset. Positive (+N): sleep N seconds before clicking CALL/PUT (for laggy PO charts / slow wifi). Negative (-N): widen freshness budget so signals from N seconds ago still fire.">
+            <span class="${P}latlbl">Latency</span>
+            <input id="${P}latency" data-testid="latency-offset-slider" class="${P}latslider" type="range" min="-15" max="15" step="1" value="0" />
+            <span class="${P}latvalue" id="${P}latvalue" data-testid="latency-offset-value">0s</span>
+          </div>
         </div>
         <div class="${P}stats">
           <button id="${P}statsreset" class="${P}statsreset" data-testid="reset-stats-btn" title="Reset W/L counters, win rate, streak, and P/L (does not affect bot settings)">⟲</button>
@@ -1102,6 +1164,28 @@ export function initPanelEvents(callbacks = {}) {
       log(`[THR] ${key} threshold set to ${v}%`);
     });
   });
+
+  // Iter 63 — Latency offset slider (-15s..+15s)
+  const latSlider = q('latency');
+  const latValue = q('latvalue');
+  if (latSlider && latValue) {
+    const current = Number(state.latencyOffsetSec || 0);
+    latSlider.value = String(current);
+    latValue.textContent = `${current >= 0 ? '+' : ''}${current}s`;
+    const updateLatency = () => {
+      let v = parseInt(latSlider.value, 10);
+      if (!isFinite(v)) v = 0;
+      v = Math.max(-15, Math.min(15, v));
+      state.latencyOffsetSec = v;
+      latValue.textContent = `${v >= 0 ? '+' : ''}${v}s`;
+      try { saveState(); } catch (_e) { /* ignore */ }
+    };
+    latSlider.addEventListener('input', updateLatency);
+    latSlider.addEventListener('change', () => {
+      updateLatency();
+      log(`[LATENCY] Trade offset set to ${state.latencyOffsetSec >= 0 ? '+' : ''}${state.latencyOffsetSec}s`);
+    });
+  }
 
   // RESIZE handle (Iter 59) — drag bottom-right corner to widen/narrow.
   // Mobile-friendly: full pointer + touch event support, persists to GM.

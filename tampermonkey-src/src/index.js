@@ -541,7 +541,11 @@ class EliteTradingBot {
       if (!lastSignal || !lastUpdateTs) return;
       const ageSec = Math.round((Date.now() - lastUpdateTs) / 1000);
       lastSignal.ageSec = ageSec;
-      lastSignal.fresh = ageSec < 2;     // green pulse only for ~2s after update
+      // Iter 63 — Negative latency offset widens the freshness window.
+      // e.g. offset = -5 lets a signal stay "fresh" for up to 7 seconds.
+      const _offset = Number(state.latencyOffsetSec || 0);
+      const freshBudget = 2 + Math.max(0, -_offset);
+      lastSignal.fresh = ageSec < freshBudget;
       setSignalPreview(lastSignal);
     }, 1000);
   }

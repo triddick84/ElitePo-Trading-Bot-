@@ -1,8 +1,47 @@
 # Elite Pocket Option Trading Bot - Product Requirements Document
 
-## Last Updated: May 28, 2026
+## Last Updated: May 28, 2026 (afternoon)
 
 ## Current Status
+
+✅ **Iteration 63 — JSON-Crash Fix + Latency Slider + Full Asset Universe (May 28, 2026)**
+
+User reported: error toast "Backtest error: Failed to execute 'json' on 'Response': Unexpected token 'T', 'The previe'..." when retraining AI models. Also requested ±15s latency slider in TM and ALL available assets in backtest + collection.
+
+### A) JSON Crash Fix (MLLabPage)
+- New `safeFetchJson()` helper at top of `MLLabPage.jsx` (lines 41–80) — checks `content-type`, surfaces 502/504 ingress timeouts as a clean `{success:false, error:"…timed out (>60s)…"}` instead of crashing on `.json()`.
+- Applied to all 5 long-running calls: improved_v2/maximized_v3 train, lstm_gru, ppo_rl, ensemble retrain, train-from-trades, and backtest/run.
+- Result: when the proxy returns plaintext "The preview environment is not responding…", the UI now shows a friendly toast and the job continues in the background.
+
+### B) ±15s Latency Slider in TM (v8.65.0)
+- New `state.latencyOffsetSec` field (range -15..+15, default 0) persisted via GM_setValue.
+- Panel UI: amber-styled range slider in the MORE section with live "+Ns" / "-Ns" label. `data-testid="latency-offset-slider"`.
+- **Positive offset**: `await sleep(offsetSec * 1000)` in `trading/executor.js` before calling `executeTrade()` (compensates for chart lag / slow wifi).
+- **Negative offset**: widens the signal freshness budget — a `-5` offset lets a 7-second-old signal still be considered fresh, so the bot pre-empts on signals slightly stale at the polling tick.
+
+### C) Full Asset Universe Expansion (366 symbols, 10 classes)
+Expanded backend `routes/backtest.py`:
+- **Forex Regular & OTC**: 73 each (added 30+ exotic pairs incl. EUR/PLN, USD/THB, GBP/SGD, TRY/JPY)
+- **Commodities Regular & OTC**: 15 each (added NGAS, COPPER, COFFEE, COCOA, SUGAR, COTTON, WHEAT, CORN, SOYBEAN)
+- **Crypto Regular & OTC**: 30 each (added BNB, AVAX, DOT, MATIC, SHIB, LINK, TRX, NEAR, APT, ARB, OP, PEPE, etc.)
+- **Indices Regular & OTC**: 17 each (added RUT2000, CAC40, IBEX35, AEX25, STOXX50, SMI20, ASX200, KOSPI, BVSP)
+- **Stocks Regular & OTC**: 48 each (NEW class — AAPL, MSFT, GOOGL, TSLA, NVDA, META, AMZN, V, JPM, COIN…)
+
+Also expanded **`OTC_TO_OANDA` mapping** (`routes/ml.py`) from 28 → 56 entries — now backfillable for XAU/XAG/WTI/BRENT/NGAS/COPPER + indices SPX500/NDX100/DAX40/FTSE100/NIKKEI225/HSI50/etc.
+
+`backtesting_service.get_available_assets()` rewritten to return the unified universe (same dict shape, so BacktestingPage checkbox grid works unchanged).
+
+### Tests
+- New `tests/test_iter63_universe_and_latency.py` — 5/5 passing
+- All Iter 61 + 62 tests still passing (13/13)
+- Grand total backend regression: **18/18 passing**
+
+### TM Build
+- v8.65.0 webpack production rebuild → 286KB
+- Deployed to `/app/frontend/public/`
+- Live verified at `…/pocket-option-auto-trader.user.js` → `@version 8.65.0`
+
+---
 
 ✅ **Iteration 62 — Macro Sentiment Feature + Per-Model Thresholds in TM Panel (May 28, 2026)**
 

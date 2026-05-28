@@ -84,6 +84,13 @@ export const state = {
     maximized_v3: 0,    // Maximized v3 ML
     iq720: 0,           // IQ-720 ensemble
   },
+
+  // Iter 63 — Trade latency offset in seconds (-15..+15).
+  // Positive: wait N seconds AFTER the bot decides to fire before clicking
+  //   CALL/PUT (useful when PO chart lags or your wifi has consistent delay).
+  // Negative: fire N seconds EARLIER on the polling cycle (anticipate signal
+  //   staleness; widens the freshness budget for last-tick signals).
+  latencyOffsetSec: 0,
 };
 
 /**
@@ -249,8 +256,10 @@ export function saveState() {
       selectedStrategy: state._selectedStrategy || null,
       // Iter 62 — per-model probability thresholds (TM panel sliders)
       modelThresholds: state.modelThresholds || null,
+      // Iter 63 — trade latency offset (sec, range -15..+15)
+      latencyOffsetSec: typeof state.latencyOffsetSec === 'number' ? state.latencyOffsetSec : 0,
       // Save schema version so future migrations can reset cleanly
-      _v: 5,
+      _v: 6,
       _savedAt: Date.now(),
     }));
   }
@@ -298,6 +307,11 @@ export function loadState() {
             maximized_v3: Number(parsed.modelThresholds.maximized_v3) || 0,
             iq720: Number(parsed.modelThresholds.iq720) || 0,
           };
+        }
+        // Iter 63 — restore latency offset
+        if (typeof parsed.latencyOffsetSec === 'number') {
+          const v = Math.max(-15, Math.min(15, parsed.latencyOffsetSec));
+          state.latencyOffsetSec = v;
         }
         // Expose meta for debug / restore log
         state._lastSavedAt = parsed._savedAt || null;
