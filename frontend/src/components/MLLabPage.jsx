@@ -66,6 +66,30 @@ async function safeFetchJson(url, init = {}) {
   }
 }
 
+/**
+ * Iter 65 — Poll a background job until it reaches a terminal state.
+ * Hands off to `onProgress({progress, message, status})` as updates arrive.
+ * Returns the final job document (or throws on cancellation / timeout).
+ */
+async function pollJob(jobId, { onProgress, intervalMs = 2000, timeoutMs = 600_000 } = {}) {
+  const start = Date.now();
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    if (Date.now() - start > timeoutMs) {
+      throw new Error(`polling timeout after ${Math.round(timeoutMs / 1000)}s`);
+    }
+    const r = await safeFetchJson(`${process.env.REACT_APP_BACKEND_URL}/api/jobs/${jobId}`);
+    if (r && r.success && r.job) {
+      const j = r.job;
+      onProgress?.({ progress: j.progress, message: j.message, status: j.status });
+      if (j.status === "completed") return j;
+      if (j.status === "failed") throw new Error(j.error || "job failed");
+      if (j.status === "cancelled") throw new Error("job cancelled");
+    }
+    await new Promise((res) => setTimeout(res, intervalMs));
+  }
+}
+
 const MODELS = [
   { id: "improved_v2", name: "Improved v2", color: "#22c55e", desc: "RF + GB + AdaBoost ensemble. Best on OTC pairs." },
   { id: "maximized_v3", name: "Maximized v3", color: "#3b82f6", desc: "XGBoost stacking with regime detector. Best on real forex." },
@@ -148,7 +172,8 @@ export default function MLLabPage() {
         .filter((s) => s.trainable)
         .map((s) => s.symbol);
       if (modelId === "improved_v2" || modelId === "maximized_v3") {
-        const r = await safeFetchJson(`${API}/ml/train-from-otc`, {
+        // Iter 65 — async via job manager so we don't depend on the 60s ingress budget
+        const submit = await safeFetchJson(`${API}/ml/train-from-otc-async`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -157,48 +182,78 @@ export default function MLLabPage() {
             min_samples: 500,
           }),
         });
-        if (r.success) {
-          // Iter 57 — surface OOS + overfit warning when present
-          const oos = r.test_accuracy != null ? ` · OOS ${r.test_accuracy}%` : "";
-          const warn = r.overfit_warning ? ` ⚠ overfit gap ${r.overfit_gap}%` : "";
-          toast.success(`${modelId} retrained → ${r.cv_accuracy}% CV (±${r.cv_std}%)${oos}${warn}`);
-          refreshAll();
-        } else {
-          toast.error(`Retrain failed: ${r.error || "unknown"}`);
+        if (!submit.success || !submit.job_id) {
+          toast.error(`Retrain submit failed: ${submit.error || "unknown"}`);
+          return;
+        }
+        toast.info(`${modelId} training queued — polling for completion…`);
+        try {
+          const final = await pollJob(submit.job_id, {
+            onProgress: ({ progress, message }) => {
+              if (progress != null && message) {
+                // optional toast updates could go here; we throttle to final only
+              }
+            },
+            intervalMs: 3000,
+            timeoutMs: 600_000,
+          });
+          const r = final.result || {};
+          if (r.success) {
+            const oos = r.test_accuracy != null ? ` · OOS ${r.test_accuracy}%` : "";
+            const warn = r.overfit_warning ? ` ⚠ overfit gap ${r.overfit_gap}%` : "";
+            toast.success(`${modelId} retrained → ${r.cv_accuracy}% CV (±${r.cv_std}%)${oos}${warn}`);
+            refreshAll();
+          } else {
+            toast.error(`Retrain failed: ${r.error || "unknown"}`);
+          }
+        } catch (e) {
+          toast.error(`Retrain polling failed: ${e.message}`);
         }
       } else if (modelId === "lstm_gru") {
-        toast.info("LSTM/GRU training started — this can take 1–2 minutes");
-        const r = await safeFetchJson(`${API}/ml/train-from-otc`, {
+        toast.info("LSTM/GRU training queued — can take 1–2 minutes");
+        const submit = await safeFetchJson(`${API}/ml/train-from-otc-async`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model: "lstm_gru",
-            symbols,
-            epochs: 20,
-          }),
+          body: JSON.stringify({ model: "lstm_gru", symbols, epochs: 20 }),
         });
-        if (r.success) {
-          toast.success(`LSTM/GRU trained → ${r.val_accuracy}% val acc on ${r.total_candles} candles`);
-          refreshAll();
-        } else {
-          toast.error(`LSTM/GRU train failed: ${r.error || "unknown"}`);
+        if (!submit.success || !submit.job_id) {
+          toast.error(`LSTM submit failed: ${submit.error || "unknown"}`);
+          return;
+        }
+        try {
+          const final = await pollJob(submit.job_id, { intervalMs: 4000, timeoutMs: 600_000 });
+          const r = final.result || {};
+          if (r.success) {
+            toast.success(`LSTM/GRU trained → ${r.val_accuracy}% val acc on ${r.total_candles} candles`);
+            refreshAll();
+          } else {
+            toast.error(`LSTM/GRU train failed: ${r.error || "unknown"}`);
+          }
+        } catch (e) {
+          toast.error(`LSTM/GRU polling failed: ${e.message}`);
         }
       } else if (modelId === "ppo_rl") {
-        toast.info("PPO RL training started — this can take 2–3 minutes");
-        const r = await safeFetchJson(`${API}/ml/train-from-otc`, {
+        toast.info("PPO RL training queued — can take 2–3 minutes");
+        const submit = await safeFetchJson(`${API}/ml/train-from-otc-async`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model: "ppo_rl",
-            symbols,
-            n_episodes: 15,
-          }),
+          body: JSON.stringify({ model: "ppo_rl", symbols, n_episodes: 15 }),
         });
-        if (r.success) {
-          toast.success(`PPO RL trained → ${(r.avg_win_rate || 0).toFixed(1)}% avg win rate on ${r.total_samples} samples`);
-          refreshAll();
-        } else {
-          toast.error(`PPO train failed: ${r.error || "unknown"}`);
+        if (!submit.success || !submit.job_id) {
+          toast.error(`PPO submit failed: ${submit.error || "unknown"}`);
+          return;
+        }
+        try {
+          const final = await pollJob(submit.job_id, { intervalMs: 5000, timeoutMs: 600_000 });
+          const r = final.result || {};
+          if (r.success) {
+            toast.success(`PPO RL trained → ${(r.avg_win_rate || 0).toFixed(1)}% avg win rate on ${r.total_samples} samples`);
+            refreshAll();
+          } else {
+            toast.error(`PPO train failed: ${r.error || "unknown"}`);
+          }
+        } catch (e) {
+          toast.error(`PPO polling failed: ${e.message}`);
         }
       } else if (modelId === "ensemble") {
         toast.info("Ensemble retrain started — runs in background (2–5 min). Polling for completion...");

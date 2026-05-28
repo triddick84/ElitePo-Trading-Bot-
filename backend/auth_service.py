@@ -342,6 +342,68 @@ class AuthService:
         except Exception as e:
             logger.error(f"Create default admin error: {e}")
 
+    async def seed_admins_from_env(self):
+        """
+        Iter 65 — Seed admin accounts from the SEED_ADMINS env var on startup.
+
+        Format:
+            SEED_ADMINS="email1:password1[:username1],email2:password2[:username2]"
+        Username is optional; if omitted, we derive it from the email local-part.
+
+        Idempotent: `register()` skips users whose email/username already exists,
+        so it's safe to call this on every server boot.
+
+        Example:
+            SEED_ADMINS="ops@elitepo.com:SuperSecret!9,trader@elitepo.com:Hunter2!"
+        """
+        import os
+        raw = (os.environ.get('SEED_ADMINS') or '').strip()
+        if not raw:
+            return {'seeded': 0, 'skipped': 0, 'errors': []}
+        if self.db is None:
+            logger.warning("[seed_admins] DB unavailable, skipping")
+            return {'seeded': 0, 'skipped': 0, 'errors': ['db_unavailable']}
+
+        seeded = 0
+        skipped = 0
+        errors = []
+        for entry in (e.strip() for e in raw.split(',') if e.strip()):
+            parts = entry.split(':')
+            if len(parts) < 2:
+                errors.append(f"bad_format:{entry[:40]}")
+                continue
+            email = parts[0].strip()
+            password = parts[1].strip()
+            username = parts[2].strip() if len(parts) >= 3 and parts[2].strip() else email.split('@')[0]
+            try:
+                # First check by email — if the seeded admin exists, ensure role=admin
+                existing = await self.db.users.find_one({'email': email})
+                if existing:
+                    if existing.get('role') != UserRole.ADMIN.value:
+                        await self.db.users.update_one(
+                            {'id': existing['id']},
+                            {'$set': {'role': UserRole.ADMIN.value}}
+                        )
+                        logger.info(f"[seed_admins] elevated existing user {email} to admin")
+                    skipped += 1
+                    continue
+                result = await self.register(
+                    username=username,
+                    email=email,
+                    password=password,
+                    role=UserRole.ADMIN,
+                )
+                if result.get('success'):
+                    seeded += 1
+                    logger.info(f"[seed_admins] created admin {email} (username={username})")
+                else:
+                    errors.append(f"{email}:{result.get('error')}")
+            except Exception as e:
+                errors.append(f"{email}:{e}")
+
+        logger.info(f"[seed_admins] done — seeded={seeded} skipped={skipped} errors={len(errors)}")
+        return {'seeded': seeded, 'skipped': skipped, 'errors': errors}
+
 
 # Singleton instance
 _auth_service = None

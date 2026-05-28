@@ -1,8 +1,35 @@
 # Elite Pocket Option Trading Bot - Product Requirements Document
 
-## Last Updated: May 28, 2026 (evening)
+## Last Updated: May 28, 2026 (night)
 
 ## Current Status
+
+✅ **Iteration 65 — SEED_ADMINS env var + Background Job pattern (May 28, 2026)**
+
+User requested: P2 — SEED_ADMINS env var for production auto-seeding; P4 — Background-task pattern so long ML/backtest jobs don't depend on the 60s ingress budget.
+
+### A) `SEED_ADMINS` env var
+- New `AuthService.seed_admins_from_env()` parses `SEED_ADMINS="email:pwd[:user],…"`
+- Idempotent on every boot — existing users are skipped (logs `skipped=N`)
+- Existing non-admin users with a matching email are auto-promoted to admin
+- Wired into `server.py` `startup_event` right after `create_default_admin()`
+- Test admin live: `seedtest@elitepo.com / SeedPass123!` (logged in successfully, JWT issued)
+- `/app/memory/test_credentials.md` updated with new account + usage docs
+
+### B) Background Job Manager
+- New `background_jobs.py` — `JobManager.submit(kind, runner, payload, ttl_seconds)`
+- Persists to `background_jobs` MongoDB collection (TTL = 7 days)
+- Tracks: status (queued / running / completed / failed / cancelled), progress 0–100, message, partial, result, error, timestamps
+- Runner is `async def runner(update)` where `update(progress=, message=, partial=)` is a Mongo-backed setter
+- Generic CRUD: `GET /api/jobs/{id}`, `GET /api/jobs?kind=`, `DELETE /api/jobs/{id}`
+- Wrappers: `POST /api/ml/train-from-otc-async`, `POST /api/backtest/run-async` — return `{job_id}` in <100 ms
+- `MLLabPage.jsx` retraining (improved_v2, maximized_v3, lstm_gru, ppo_rl) now uses async + `pollJob()` helper → no more 60s ingress timeouts
+
+### Tests
+- `tests/test_iter65_seed_admins_and_jobs.py` — 5/5 passing (seed-admin login, jobs CRUD, async backtest submit→completion in <30s, async train submit returns immediately, 404 on unknown job)
+- Grand total backend regression: **29/29 passing** (61+62+63+64+65)
+
+---
 
 ✅ **Iteration 64 — Pure 2-Loss Auto-Invert + Seconds Number Strategy on/off (May 28, 2026)**
 

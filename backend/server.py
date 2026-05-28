@@ -3668,6 +3668,7 @@ from routes.pocket_option import router as pocket_option_router
 from routes.integrations import router as integrations_router
 from routes.trading import router as trading_router
 from routes.sentiment import router as sentiment_router
+from routes.jobs import router as jobs_router
 
 api_router.include_router(strategies_router)
 api_router.include_router(signals_router)
@@ -3678,6 +3679,7 @@ api_router.include_router(pocket_option_router)
 api_router.include_router(integrations_router)
 api_router.include_router(trading_router)
 api_router.include_router(sentiment_router)
+api_router.include_router(jobs_router)
 
 app.include_router(api_router)
 
@@ -3726,6 +3728,16 @@ async def startup_event():
             # Create default admin user
             auth_service = get_auth_service(db)
             await auth_service.create_default_admin()
+            # Iter 65 — seed any production admins listed in SEED_ADMINS env var
+            try:
+                seed_result = await auth_service.seed_admins_from_env()
+                if seed_result['seeded'] or seed_result['skipped']:
+                    logger.info(
+                        f"👤 SEED_ADMINS — seeded={seed_result['seeded']} "
+                        f"skipped={seed_result['skipped']} errors={len(seed_result['errors'])}"
+                    )
+            except Exception as e:
+                logger.error(f"SEED_ADMINS handler failed: {e}")
             logger.info("👤 Auth service initialized")
             
             # Initialize Telegram bot service
