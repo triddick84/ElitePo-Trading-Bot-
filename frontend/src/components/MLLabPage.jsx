@@ -22,7 +22,7 @@ import {
 } from "recharts";
 import {
   Brain, RotateCw, PlayCircle, Calendar, TrendingUp, AlertTriangle,
-  CheckCircle2, Database, Activity, BarChart3, Newspaper,
+  CheckCircle2, Database, Activity, BarChart3, Newspaper, Target,
 } from "lucide-react";
 
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
@@ -121,10 +121,13 @@ export default function MLLabPage() {
   const [sentiment, setSentiment] = useState(null);
   const [sentimentHealth, setSentimentHealth] = useState(null);
   const [sentimentRefreshing, setSentimentRefreshing] = useState(false);
+  const [scanner, setScanner] = useState(null);            // latest snapshot
+  const [scannerRunning, setScannerRunning] = useState(false);
+  const [scannerProgress, setScannerProgress] = useState(null);  // { progress, message }
 
   const refreshAll = async () => {
     try {
-      const [tr, ss, ot, btH, ass, lh, lst, uni, gr, tour, iq, sent, sentH] = await Promise.all([
+      const [tr, ss, ot, btH, ass, lh, lst, uni, gr, tour, iq, sent, sentH, scan] = await Promise.all([
         fetch(`${API}/ml/tuning-report`).then((r) => r.json()),
         fetch(`${API}/ml/scheduler/status`).then((r) => r.json()),
         fetch(`${API}/signals/otc-candle-stats`).then((r) => r.json()).catch(() => null),
@@ -138,6 +141,7 @@ export default function MLLabPage() {
         fetch(`${API}/iq720/outcome-stats`).then((r) => r.json()).catch(() => null),
         fetch(`${API}/sentiment/scores`).then((r) => r.json()).catch(() => null),
         fetch(`${API}/sentiment/health`).then((r) => r.json()).catch(() => null),
+        fetch(`${API}/scanner/latest`).then((r) => r.json()).catch(() => null),
       ]);
       setTuningReport(tr);
       setSchedulerStatus(ss);
@@ -152,6 +156,7 @@ export default function MLLabPage() {
       setIq720Outcomes(iq || null);
       setSentiment(sent || null);
       setSentimentHealth(sentH || null);
+      setScanner(scan && scan.success ? scan : null);
       setLoading(false);
     } catch (e) {
       toast.error("Failed to load ML lab data: " + e.message);
@@ -472,6 +477,46 @@ export default function MLLabPage() {
           }
         }}
       />
+      <ScannerCard
+        scanner={scanner}
+        running={scannerRunning}
+        progress={scannerProgress}
+        onRun={async (scope) => {
+          setScannerRunning(true);
+          setScannerProgress({ progress: 0, message: "submitting…" });
+          try {
+            const submit = await safeFetchJson(`${API}/scanner/find-best-pairs`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                scope,
+                days: 3,
+                top_n: 10,
+                min_signals: 30,
+                min_confidence: 55,
+              }),
+            });
+            if (!submit.success || !submit.job_id) {
+              toast.error(`Scan submit failed: ${submit.error || "unknown"}`);
+              return;
+            }
+            toast.info(`Scanning ${submit.queued_count || "?"} symbols (scope=${scope})`);
+            const final = await pollJob(submit.job_id, {
+              onProgress: (p) => setScannerProgress(p),
+              intervalMs: 4000,
+              timeoutMs: 30 * 60 * 1000,
+            });
+            const r = final.result || {};
+            toast.success(`Scan complete — ${r.qualified_count}/${r.total_scanned} qualified, top pick: ${r.leaderboard?.[0]?.symbol || "—"}`);
+            refreshAll();
+          } catch (e) {
+            toast.error("Scan failed: " + e.message);
+          } finally {
+            setScannerRunning(false);
+            setScannerProgress(null);
+          }
+        }}
+      />
 
       <Tabs value={tab} onValueChange={setTab} className="space-y-4">
         <TabsList className="grid grid-cols-5 bg-slate-900 border border-slate-800" data-testid="ml-model-tabs">
@@ -576,6 +621,154 @@ function PoolHealthCard({ otcStats, tuningReport }) {
           label="Min samples / symbol"
           value={tuningReport?.tuning_config?.min_samples_per_symbol || 200}
         />
+      </CardContent>
+    </Card>
+  );
+}
+
+
+/* ---------- "FIND BEST PAIR TODAY" SCANNER CARD (Iter 66) ---------- */
+function ScannerCard({ scanner, running, progress, onRun }) {
+  const [scope, setScope] = useState("all_otc");
+  const tsAge = scanner?.ts
+    ? Math.round((Date.now() - new Date(scanner.ts).getTime()) / 60000)
+    : null;
+  const SCOPES = [
+    { v: "all_otc", l: "All OTC (~180)" },
+    { v: "forex_otc", l: "Forex OTC (73)" },
+    { v: "commodities_otc", l: "Commodities OTC (15)" },
+    { v: "crypto_otc", l: "Crypto OTC (30)" },
+    { v: "indices_otc", l: "Indices OTC (17)" },
+    { v: "stocks_otc", l: "Stocks OTC (48)" },
+    { v: "all", l: "Everything (366) — slow" },
+  ];
+  const lb = scanner?.leaderboard || [];
+
+  const wrColor = (wr) => {
+    if (wr >= 58) return "text-emerald-300 bg-emerald-500/10 border-emerald-500/40";
+    if (wr >= 52) return "text-emerald-300 bg-emerald-500/5 border-emerald-500/20";
+    if (wr >= 48) return "text-amber-300 bg-amber-500/5 border-amber-500/20";
+    return "text-rose-300 bg-rose-500/5 border-rose-500/20";
+  };
+
+  return (
+    <Card className="bg-slate-900/60 border-slate-800" data-testid="scanner-card">
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <div className="flex items-center gap-2">
+          <Target className="w-5 h-5 text-fuchsia-400" />
+          <CardTitle className="text-base">Find Best Pair Today</CardTitle>
+          {scanner && (
+            <Badge variant="outline" className="border-fuchsia-500/40 text-fuchsia-300 text-[10px]">
+              scope: {scanner.scope}
+            </Badge>
+          )}
+          {tsAge != null && (
+            <span className="text-xs text-slate-500">{tsAge}m ago</span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <select
+            value={scope}
+            onChange={(e) => setScope(e.target.value)}
+            disabled={running}
+            data-testid="scanner-scope-select"
+            className="bg-slate-800 border border-slate-700 text-xs rounded px-2 py-1 text-slate-200"
+          >
+            {SCOPES.map((s) => (
+              <option key={s.v} value={s.v}>{s.l}</option>
+            ))}
+          </select>
+          <Button
+            size="sm"
+            onClick={() => onRun(scope)}
+            disabled={running}
+            data-testid="scanner-run-btn"
+            className="bg-fuchsia-600 hover:bg-fuchsia-700 text-xs"
+          >
+            {running ? (
+              <><RotateCw className="w-3 h-3 mr-1 animate-spin" />Scanning…</>
+            ) : (
+              <><Target className="w-3 h-3 mr-1" />Run Scan</>
+            )}
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {running && progress && (
+          <div className="space-y-1" data-testid="scanner-progress">
+            <div className="flex items-center justify-between text-xs text-slate-400">
+              <span>{progress.message}</span>
+              <span>{progress.progress ?? 0}%</span>
+            </div>
+            <div className="h-1.5 bg-slate-800 rounded overflow-hidden">
+              <div
+                className="h-full bg-fuchsia-500 transition-all"
+                style={{ width: `${progress.progress ?? 0}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {!scanner && !running && (
+          <p className="text-sm text-slate-400">
+            Run a scan to find the highest-edge pairs across your universe. Composite score = (win&nbsp;rate − 50) × √signals × profit&nbsp;factor.
+          </p>
+        )}
+
+        {scanner && (
+          <div className="text-xs text-slate-400 flex flex-wrap gap-x-4 gap-y-1">
+            <span>strategy: <span className="text-slate-200">{scanner.strategy}</span></span>
+            <span>days: <span className="text-slate-200">{scanner.days}</span></span>
+            <span>min-conf: <span className="text-slate-200">{scanner.min_confidence}%</span></span>
+            <span>min-sig: <span className="text-slate-200">{scanner.min_signals}</span></span>
+            <span>qualified: <span className="text-slate-200">{scanner.qualified_count}/{scanner.total_scanned}</span></span>
+          </div>
+        )}
+
+        {lb.length > 0 && (
+          <div className="overflow-x-auto" data-testid="scanner-leaderboard">
+            <table className="w-full text-xs">
+              <thead className="text-slate-500 border-b border-slate-800">
+                <tr>
+                  <th className="text-left py-1 pr-2">#</th>
+                  <th className="text-left py-1 pr-2">Symbol</th>
+                  <th className="text-left py-1 pr-2">TF</th>
+                  <th className="text-right py-1 pr-2">Win&nbsp;Rate</th>
+                  <th className="text-right py-1 pr-2">Signals</th>
+                  <th className="text-right py-1 pr-2">PF</th>
+                  <th className="text-right py-1 pr-2">Return</th>
+                  <th className="text-right py-1 pr-2">Sharpe</th>
+                  <th className="text-right py-1">Score</th>
+                </tr>
+              </thead>
+              <tbody className="font-mono text-slate-300">
+                {lb.map((r, i) => (
+                  <tr key={r.symbol + i} className="border-b border-slate-800/50">
+                    <td className="py-1 pr-2">{i + 1}</td>
+                    <td className="py-1 pr-2 text-slate-200 font-semibold" data-testid={`scanner-row-${i + 1}`}>
+                      {r.symbol}
+                    </td>
+                    <td className="py-1 pr-2 text-slate-500">{r.timeframe}</td>
+                    <td className="py-1 pr-2 text-right">
+                      <span className={`inline-block px-1.5 rounded border ${wrColor(r.win_rate)}`}>
+                        {r.win_rate.toFixed(1)}%
+                      </span>
+                    </td>
+                    <td className="py-1 pr-2 text-right">{r.signals}</td>
+                    <td className="py-1 pr-2 text-right">{r.profit_factor.toFixed(2)}</td>
+                    <td className={`py-1 pr-2 text-right ${(r.total_return_pct || 0) >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
+                      {(r.total_return_pct || 0).toFixed(2)}%
+                    </td>
+                    <td className="py-1 pr-2 text-right">{(r.sharpe || 0).toFixed(2)}</td>
+                    <td className="py-1 text-right text-fuchsia-300 font-semibold">
+                      {r.score}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

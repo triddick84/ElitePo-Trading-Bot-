@@ -117,7 +117,7 @@ class BacktestMetrics:
             "start_balance": round(self.start_balance, 2),
             "end_balance": round(self.end_balance, 2),
             "roi_percent": round(self.roi_percent, 2),
-            "trades_by_hour": self.trades_by_hour,
+            "trades_by_hour": {str(k): v for k, v in (self.trades_by_hour or {}).items()},
             "trades_by_day": self.trades_by_day
         }
 

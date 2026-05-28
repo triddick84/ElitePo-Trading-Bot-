@@ -1,8 +1,42 @@
 # Elite Pocket Option Trading Bot - Product Requirements Document
 
-## Last Updated: May 28, 2026 (night)
+## Last Updated: May 29, 2026
 
 ## Current Status
+
+✅ **Iteration 66 — "Find Best Pair Today" Scanner + Mongo BSON Bugfix (May 29, 2026)**
+
+User requested an auto-scanner across the 366-asset universe to rank pairs by today's edge.
+
+### A) Scanner Service
+- New `routes/scanner.py` with two endpoints:
+  - `POST /api/scanner/find-best-pairs` — submits a background job (returns `{job_id}` in <100 ms)
+  - `GET /api/scanner/latest?scope=` — fetches the persisted top-N snapshot
+- Runs each asset through `run_backtest()` and ranks by composite score:
+  `(win_rate − 50) × √signals × min(2.5, max(0.5, profit_factor))`
+- Scopes: `all_otc` (default ~180 symbols), `forex_otc`, `commodities_otc`, `crypto_otc`, `indices_otc`, `stocks_otc`, individual non-OTC classes, or `all` (full 366)
+- Persists every run to `scanner_results` Mongo collection
+- Built on the Iter 65 JobManager so a full scan can take 5–10 min without ingress timeouts
+
+### B) Critical bugfix: BSON int-key crash in backtest engine
+- `BacktestMetrics.to_dict()` returned `trades_by_hour: Dict[int, Dict]` (hours 0–23 as int keys)
+- Mongo's `insert_one` rejected this with `documents must have only string keys, key was 7`
+- Every `deep_confluence` / `momentum_buster` backtest was failing silently
+- Fix: stringify keys → `{str(k): v for k, v in self.trades_by_hour.items()}`
+- **All confluence backtests now work** — confirmed `EURUSD_OTC 5s 3d` returns 215 trades, 46.5% WR
+- Scanner now qualifies real pairs: top hits in test run were `USDCAD_OTC` (59.1% WR, score 133.4) and `GBPAUD_OTC` (55.1% WR, score 79.97)
+
+### C) UI: `<ScannerCard>` in MLLabPage
+- Scope dropdown (7 options) + "Run Scan" button
+- Live progress bar polling the job
+- Sortable leaderboard table: rank, symbol, TF, win-rate (color-coded), signals, profit factor, return %, Sharpe, composite score
+- `data-testid`: `scanner-card`, `scanner-scope-select`, `scanner-run-btn`, `scanner-leaderboard`, `scanner-row-{N}`
+
+### Tests
+- `tests/test_iter66_scanner.py` — 4/4 passing (submit speed, full forex_otc run + ranking validation, latest endpoint, invalid scope 400)
+- Grand total backend regression: **33/33 passing** (Iter 61–66)
+
+---
 
 ✅ **Iteration 65 — SEED_ADMINS env var + Background Job pattern (May 28, 2026)**
 
