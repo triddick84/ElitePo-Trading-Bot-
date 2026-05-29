@@ -15,6 +15,18 @@ class TradeExecutor {
   constructor() {
     this.pendingTrades = [];
     this.tradeHistory = [];
+    // v8.71.0 — hook registered by Seconds Number Strategy so its results
+    // bypass the global smart-invert engine and feed into the strategy's
+    // own scoped invert tracker instead.
+    this._snsResultHook = null;
+  }
+
+  /**
+   * Register a callback (isWin, ctx) invoked instead of the global
+   * smartInvert engine for SNS-tagged trade results.
+   */
+  setSnsResultHook(fn) {
+    this._snsResultHook = typeof fn === 'function' ? fn : null;
   }
   
   /**
@@ -26,13 +38,19 @@ class TradeExecutor {
     const now = Date.now();
     const cooldown = source === 'scan' ? CONFIG.TRADE_COOLDOWN_SCAN : CONFIG.TRADE_COOLDOWN_APP;
     const lastTrade = source === 'scan' ? state.lastScanTradeTime : state.lastAppTradeTime;
-    
+
     if (now - lastTrade < cooldown) {
-      const remaining = Math.ceil((cooldown - (now - lastTrade)) / 1000);
-      log(`Cooldown active: ${remaining}s remaining`);
+      const remainingMs = cooldown - (now - lastTrade);
+      const remainingSec = Math.ceil(remainingMs / 1000);
+      // Stash the most recent rejection reason so the executor log can echo
+      // the specific remaining-time without a separate log line. Helps users
+      // who see "canTrade returned false" understand *why*.
+      this._lastCanTradeReason = `cooldown ${remainingSec}s remaining (${source} bucket — last ${source} trade was ${Math.floor((now - lastTrade) / 1000)}s ago, min wait ${Math.floor(cooldown / 1000)}s)`;
+      log(`Cooldown active: ${remainingSec}s remaining on ${source} bucket`);
       return false;
     }
-    
+
+    this._lastCanTradeReason = '';
     return true;
   }
   
@@ -327,20 +345,35 @@ class TradeExecutor {
     const trackingDirection = trade?.originalDirection || direction;
     recordAssetResult(asset, trackingDirection, isWin);
 
-    // v8.56.0: CORRECT ORDER — first record the inverted result so
-    // `state.inversion.invertedTradeCount/Wins/Losses` are fresh before
-    // `evaluateInversion()` inspects them. Previously evaluate ran on
-    // stale counters and mis-decided whether to revert.
-    smartInvert.recordInvertedResult(isWin);
+    // v8.71.0 — SNS isolation. Per user request, Seconds Number Strategy
+    // results must be invertible ONLY for SNS itself and must NEVER affect
+    // the global auto-invert decision for scan/cycle/app trades. We detect
+    // SNS trades by their strategy tag (`1m_21s_reversal`) or source prefix
+    // (`51s-reversal-*`), route the result into the strategy's own tracker,
+    // and skip the global smartInvert evaluation entirely.
+    const isSnsTrade = (
+      (strategy && /21s_reversal|sns/i.test(strategy)) ||
+      (trade?.source && /51s-reversal/i.test(trade.source))
+    );
 
-    // Trigger an evaluation — checks consecutive same-direction losses
-    // and flips smart-invert state when threshold is hit. Runs ONCE (the
-    // duplicate call at the bottom of this function was removed in
-    // v8.56.0; the double-eval was causing rapid flip-flopping).
-    try {
-      smartInvert.evaluateInversion(asset);
-    } catch (e) {
-      warn(`smartInvert.evaluateInversion error: ${e.message}`);
+    if (isSnsTrade) {
+      try {
+        this._snsResultHook?.(isWin, { asset, originalDirection: trackingDirection });
+      } catch (e) { /* swallow — keeps global flow intact */ }
+      log(`[exec:${source}] SNS-scoped result — skipping global auto-invert evaluation`);
+    } else {
+      // v8.56.0: CORRECT ORDER — first record the inverted result so
+      // `state.inversion.invertedTradeCount/Wins/Losses` are fresh before
+      // `evaluateInversion()` inspects them.
+      smartInvert.recordInvertedResult(isWin);
+
+      // Trigger an evaluation — checks consecutive same-direction losses
+      // and flips smart-invert state when threshold is hit.
+      try {
+        smartInvert.evaluateInversion(asset);
+      } catch (e) {
+        warn(`smartInvert.evaluateInversion error: ${e.message}`);
+      }
     }
     
     // Send to backend premium result tracker (fire-and-forget)

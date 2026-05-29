@@ -66,6 +66,22 @@ class TwentyOneSecondReversal {
     // Per-asset performance
     this.assetStats = {};
 
+    // v8.71.0 — SNS-scoped auto-invert. Decoupled from the global
+    // `state.inversion` so that SNS losses NEVER flip scan/cycle direction
+    // and global A-INV flips NEVER swap SNS direction. Pure 2-consecutive-
+    // SNS-loss trigger to flip; revert after `revertAfterFlippedLosses`
+    // consecutive losses while flipped.
+    this.snsInvert = {
+      isFlipped: false,
+      consecutiveLosses: 0,        // counts SNS-only losses (resets on win)
+      consecutiveFlippedLosses: 0, // SNS losses *while flipped*
+      flippedAt: 0,
+      reason: '',
+      // Tuning knobs (mutable via setConfig)
+      flipAfterLosses: 2,
+      revertAfterFlippedLosses: 2,
+    };
+
     // Config (user-tunable via panel / setConfig)
     this.config = {
       // Trigger second — fires when 1m candle has THIS many ms remaining.
@@ -131,6 +147,11 @@ class TwentyOneSecondReversal {
     this.bridgeHealthIntervalId = setInterval(() => this._checkBridgeHealth(), 15_000);
 
     this.loopId = setInterval(() => this._tick(), LOOP_INTERVAL_MS);
+    // v8.71.0 — register SNS result hook so the global executor routes
+    // 51s-reversal/SNS outcomes into our scoped invert tracker.
+    try {
+      tradeExecutor?.setSnsResultHook?.((isWin, ctx) => this.onSnsResultRecorded(isWin, ctx));
+    } catch (_e) { /* ignore */ }
     success(`[51s-Reversal] Enabled — mode=${this.config.executionMode} (WS when bridge healthy)`);
   }
 
@@ -233,6 +254,81 @@ class TwentyOneSecondReversal {
       s.losses++;
     }
     this.pendingResult = null;
+  }
+
+  /**
+   * v8.71.0 — SNS-only invert tracker. Called by executor.recordResult ONLY
+   * for trades tagged as SNS (strategy `1m_21s_reversal` or source
+   * `51s-reversal-*`). Updates per-strategy consecutive loss counters and
+   * flips/reverts the strategy-local inversion independent of the global
+   * smart-invert engine.
+   *
+   * Behavior:
+   *  - Win: clears both loss counters; if currently flipped and inversion
+   *         was effective, stay flipped (let the user click INVERT to undo).
+   *  - Loss while NOT flipped: increment consecutiveLosses; flip on threshold.
+   *  - Loss while flipped: increment consecutiveFlippedLosses; revert on
+   *         threshold (the flip is also losing — choppy market).
+   */
+  onSnsResultRecorded(isWin, ctx = {}) {
+    if (!this.snsInvert) return;
+    const inv = this.snsInvert;
+    if (isWin) {
+      inv.consecutiveLosses = 0;
+      inv.consecutiveFlippedLosses = 0;
+      info(`[SNS-Invert] WIN recorded — loss counters reset (flipped=${inv.isFlipped})`);
+      return;
+    }
+    // Loss path
+    if (!inv.isFlipped) {
+      inv.consecutiveLosses++;
+      info(`[SNS-Invert] LOSS (no-flip) — streak ${inv.consecutiveLosses}/${inv.flipAfterLosses}`);
+      if (inv.consecutiveLosses >= inv.flipAfterLosses) {
+        inv.isFlipped = true;
+        inv.flippedAt = Date.now();
+        inv.consecutiveLosses = 0;
+        inv.consecutiveFlippedLosses = 0;
+        inv.reason = `${inv.flipAfterLosses}-loss-streak`;
+        success(`[SNS-Invert] FLIPPED — next SNS signals will be inverted (reason: ${inv.reason})`);
+      }
+    } else {
+      inv.consecutiveFlippedLosses++;
+      info(`[SNS-Invert] LOSS (flipped) — streak ${inv.consecutiveFlippedLosses}/${inv.revertAfterFlippedLosses}`);
+      if (inv.consecutiveFlippedLosses >= inv.revertAfterFlippedLosses) {
+        inv.isFlipped = false;
+        inv.flippedAt = 0;
+        inv.consecutiveLosses = 0;
+        inv.consecutiveFlippedLosses = 0;
+        inv.reason = '';
+        success(`[SNS-Invert] REVERTED — flip was also losing, back to natural SNS direction`);
+      }
+    }
+  }
+
+  /**
+   * Manual SNS-invert toggle (UI button). Independent of global INVERT.
+   */
+  toggleSnsInvert() {
+    const inv = this.snsInvert;
+    if (!inv) return false;
+    inv.isFlipped = !inv.isFlipped;
+    inv.consecutiveLosses = 0;
+    inv.consecutiveFlippedLosses = 0;
+    inv.flippedAt = inv.isFlipped ? Date.now() : 0;
+    inv.reason = inv.isFlipped ? 'manual-user' : '';
+    info(`[SNS-Invert] Manual toggle → ${inv.isFlipped ? 'FLIPPED' : 'NATURAL'}`);
+    return inv.isFlipped;
+  }
+
+  getSnsInvertStatus() {
+    const inv = this.snsInvert || {};
+    return {
+      isFlipped: !!inv.isFlipped,
+      reason: inv.reason || '',
+      consecutiveLosses: inv.consecutiveLosses || 0,
+      consecutiveFlippedLosses: inv.consecutiveFlippedLosses || 0,
+      flipAfterLosses: inv.flipAfterLosses || 2,
+    };
   }
 
   // -- Core loop ------------------------------------------------------------
@@ -484,6 +580,17 @@ class TwentyOneSecondReversal {
     // of this strategy is to fade the current candle, every time.
     // (Previous v8.54.0 added a global invertSignal flag that could
     // flip the direction — explicitly bypassed now.)
+
+    // v8.71.0 — SNS-LOCAL invert. The global A-INV toggle is still
+    // ignored (correct — it must never reach SNS), but SNS now keeps
+    // its OWN invert state that flips on 2 consecutive SNS losses and
+    // applies ONLY to subsequent SNS fires. When flipped, swap CALL ↔ PUT.
+    const _snsOriginalDirection = tradeDirection;
+    if (this.snsInvert && this.snsInvert.isFlipped) {
+      tradeDirection = tradeDirection === 'CALL' ? 'PUT' : 'CALL';
+      reasonTag = `${reasonTag}|sns-inverted(${this.snsInvert.reason || 'auto'})`;
+      info(`[Time-Reversal] SNS-local invert ACTIVE → swapping ${_snsOriginalDirection} → ${tradeDirection}`);
+    }
 
     const asset = getCurrentAsset() || 'UNKNOWN';
     const amount = state.moneyManagement.currentAmount;

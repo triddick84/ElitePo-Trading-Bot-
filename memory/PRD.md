@@ -1,3 +1,68 @@
+# AI's Elite PO Traders Bot — Product Requirements (v8.72.0)
+
+## Iter 72 (Feb 27, 2026) — Settings Persistence Fix
+
+### Tampermonkey v8.72.0
+1. **Strategy choice now persists across reloads** — Root cause: `loadStrategies()`
+   was calling `/strategies/selected` on every page load and silently
+   overwriting the user's local pick (saved as `state._selectedStrategy`).
+   Fix: prefer the locally-saved strategy when it still exists in the
+   available list, then re-sync it back to the server. If the API is
+   offline we still apply the local pick instead of falling back to
+   `'default'`.
+2. **MM trade-amount input now restored on reload** — Same class of bug:
+   the HTML `value="1"` default was always winning because nothing was
+   syncing `state.moneyManagement.baseAmount` back into the DOM after the
+   panel was created. `_restoreToggleStates` now reads the saved amount
+   and writes it into `#__epb__amt`.
+
+### Tests
+- `/app/backend/tests/test_iter72_settings_persistence.py` — 3 new tests
+  validating bundle version, strategy local-over-server precedence, and
+  amt-input restoration.
+
+---
+
+
+# AI's Elite PO Traders Bot — Product Requirements (v8.71.0)
+
+## Iter 71 (Feb 27, 2026) — Latest Changes
+
+### Tampermonkey v8.71.0
+1. **SNS-only Auto-Invert** — Seconds Number Strategy now has its OWN auto-invert
+   tracker that flips on 2 consecutive SNS losses and applies ONLY to subsequent
+   SNS fires. Global A-INV no longer reaches SNS, and SNS losses no longer
+   contribute to the global streak that flips scan/cycle direction.
+   - State: `twentyOneSecondReversal.snsInvert` (`isFlipped`, `consecutiveLosses`,
+     `consecutiveFlippedLosses`, `flipAfterLosses`, `revertAfterFlippedLosses`).
+   - Wiring: executor exposes `setSnsResultHook(fn)`; strategy registers its
+     `onSnsResultRecorded(isWin, ctx)` callback on `enable()`. When a trade is
+     tagged SNS (strategy = `1m_21s_reversal` or source matches `51s-reversal-*`),
+     the executor calls the hook instead of `smartInvert.evaluateInversion()`.
+2. **canTrade clarity** — Cooldown rejection log now embeds remaining seconds,
+   the cooldown bucket (`scan`/`app`), and how long ago the last trade in that
+   bucket happened. Example:
+   `[exec:scan] ✗ canTrade returned false — cooldown 23s remaining (scan bucket — last scan trade was 7s ago, min wait 30s)`
+
+### Frontend — AI Models › Real Data Training
+- DataCollectionDashboard now loads the **full 366-symbol / 11-timeframe universe**
+  from `/api/backtest/assets-universe` instead of the previous hardcoded 7-asset
+  list. Adds:
+  - Global **Select ALL assets (366)** / **Select ALL timeframes (11)** buttons.
+  - Per-class **+ All / − Clear** toggles for each of the 10 asset classes
+    (Forex Regular + OTC, Commodities Regular + OTC, Crypto Regular + OTC,
+    Indices Regular + OTC, US Stocks Regular + OTC).
+  - Selection counter showing live `N assets · M TFs` totals.
+- Training dropdown also pulls from the same universe (no more 7-asset cap).
+
+### Tests
+- `/app/backend/tests/test_iter71_sns_invert_and_universe.py` — 6 new tests
+  covering bundle version, SNS hooks/log, canTrade log clarity, universe endpoint
+  integrity, and dashboard wiring. All pass (74/74 → 80/80 cumulative).
+
+---
+
+
 # Elite Pocket Option Trading Bot - Product Requirements Document
 
 ## Last Updated: May 30, 2026

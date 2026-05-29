@@ -307,20 +307,54 @@ class EliteTradingBot {
       // Fetch available strategies from API
       const available = await get('/strategies/available/5s');
       const strategies = available.strategies || [];
-      
-      // Fetch current selection
+
+      // Fetch the server's last-known selection (multi-device fallback)
       const selected = await get('/strategies/selected');
-      const selectedId = selected.selections?.['5s'] || 'default';
-      
-      // Populate dropdown UI
+      const serverId = selected.selections?.['5s'] || 'default';
+
+      // v8.72.0 — Local saved strategy wins. Previously the panel always
+      // adopted the server's `/strategies/selected` value on every page
+      // load, silently discarding whatever the user had picked locally
+      // (which is also saved via GM_setValue → state._selectedStrategy).
+      // Now we honor the local choice if it still exists in the available
+      // list, and re-sync it to the server so other devices catch up.
+      const localId = state._selectedStrategy;
+      const localExists = !!localId && (
+        localId === 'default' ||
+        strategies.some((s) => s.id === localId)
+      );
+      const selectedId = localExists ? localId : serverId;
+
+      // Populate dropdown UI with the resolved selection
       populateStrategies(strategies, selectedId);
-      
+
       // Apply selection locally
       strategyManager.applyAppSelection(selectedId);
-      
-      info(`Strategies loaded: ${strategies.length} available, active: ${selectedId}`);
+
+      // Persist the resolved value so subsequent reloads stay sticky
+      state._selectedStrategy = selectedId;
+      saveState();
+
+      // If local diverged from server, push our pick back up (fire-and-forget)
+      if (localExists && localId !== serverId) {
+        try {
+          await post('/strategies/select', { timeframe: '5s', strategy_id: selectedId });
+          info(`[Restore] Re-synced local strategy "${selectedId}" to server (was "${serverId}")`);
+        } catch (e) {
+          warn(`Failed to re-sync strategy to server: ${e.message}`);
+        }
+      }
+
+      info(`Strategies loaded: ${strategies.length} available, active: ${selectedId}${localExists ? ' (from local save)' : ' (from server)'}`);
     } catch (e) {
       warn(`Strategy load failed (using all): ${e.message}`);
+      // Even on API failure, honor the local pick if we have one
+      if (state._selectedStrategy) {
+        try {
+          strategyManager.applyAppSelection(state._selectedStrategy);
+          info(`[Restore] API offline — applied locally-saved strategy "${state._selectedStrategy}"`);
+        } catch (_e) { /* ignore */ }
+      }
     }
   }
 
@@ -373,6 +407,18 @@ class EliteTradingBot {
       try {
         const savedMs = state._twentyOneSConfig?.fireAtMsLeft ?? 49_000;
         set51sTimingSlider(Math.round(savedMs / 1000));
+      } catch (_e) { /* ignore */ }
+
+      // v8.72.0 — Restore the MM trade-amount input value from saved
+      // state.moneyManagement.baseAmount so the field doesn't reset to $1
+      // on every page reload. Previously the HTML default `value="1"` won
+      // because nothing was syncing the saved baseAmount back into the DOM.
+      try {
+        const amtEl = document.getElementById('__epb__amt');
+        const savedAmt = Number(state.moneyManagement?.baseAmount);
+        if (amtEl && isFinite(savedAmt) && savedAmt > 0) {
+          amtEl.value = String(savedAmt);
+        }
       } catch (_e) { /* ignore */ }
       // Seconds Number Strategy — Iter 64: respect the user's saved toggle.
       // (Previously hard-locked ON at startup; user requested explicit on/off.)
