@@ -628,9 +628,21 @@ class TwentyOneSecondReversal {
     const useWs = this._shouldUseWs();
     info(`[51s-Reversal] ${originalDirection} (${reasonTag}) → FIRE ${tradeDirection} on ${asset} @ $${amount} [${this.config.expirySeconds}s] via ${useWs ? 'WS' : 'DOM'}`);
 
-    const executionPromise = useWs
-      ? this._executeViaWs(asset, tradeDirection, amount)
-      : this._executeViaDom(tradeDirection, amount);
+    // v8.73.0 — Honour the global latency offset (default +3.5s) for SNS too,
+    // so EVERY signal source (scan / cycle / app / GO / SNS) fires with a
+    // uniform arming delay. Positive offsets sleep before clicking; negative
+    // offsets are advisory and applied at poll level upstream.
+    const _snsOffsetSec = Number(state.latencyOffsetSec || 0);
+    const armAndExecute = async () => {
+      if (_snsOffsetSec > 0) {
+        info(`[51s-Reversal] latency offset +${_snsOffsetSec}s — sleeping before fire...`);
+        await new Promise((res) => setTimeout(res, _snsOffsetSec * 1000));
+      }
+      return useWs
+        ? this._executeViaWs(asset, tradeDirection, amount)
+        : this._executeViaDom(tradeDirection, amount);
+    };
+    const executionPromise = armAndExecute();
 
     executionPromise
       .then((ok) => {

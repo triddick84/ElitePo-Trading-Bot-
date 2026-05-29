@@ -1002,7 +1002,7 @@ export function createPanel() {
           </div>
           <div class="${P}latencyrow" data-testid="latency-offset-section" title="Iter 63 — Trade latency offset. Positive (+N): sleep N seconds before clicking CALL/PUT (for laggy PO charts / slow wifi). Negative (-N): widen freshness budget so signals from N seconds ago still fire.">
             <span class="${P}latlbl">Latency</span>
-            <input id="${P}latency" data-testid="latency-offset-slider" class="${P}latslider" type="range" min="-15" max="15" step="1" value="0" />
+            <input id="${P}latency" data-testid="latency-offset-slider" class="${P}latslider" type="range" min="-15" max="15" step="0.5" value="3.5" />
             <span class="${P}latvalue" id="${P}latvalue" data-testid="latency-offset-value">0s</span>
           </div>
         </div>
@@ -1165,19 +1165,22 @@ export function initPanelEvents(callbacks = {}) {
     });
   });
 
-  // Iter 63 — Latency offset slider (-15s..+15s)
+  // Iter 63 / v8.73.0 — Latency offset slider (-15s..+15s, 0.5s precision)
   const latSlider = q('latency');
   const latValue = q('latvalue');
   if (latSlider && latValue) {
-    const current = Number(state.latencyOffsetSec || 0);
+    const current = Number(state.latencyOffsetSec ?? 3.5);
     latSlider.value = String(current);
-    latValue.textContent = `${current >= 0 ? '+' : ''}${current}s`;
+    const fmt = (v) => `${v >= 0 ? '+' : ''}${Number.isInteger(v) ? v.toFixed(0) : v.toFixed(1)}s`;
+    latValue.textContent = fmt(current);
     const updateLatency = () => {
-      let v = parseInt(latSlider.value, 10);
+      let v = parseFloat(latSlider.value);
       if (!isFinite(v)) v = 0;
+      // Snap to 0.5 increments and clamp
+      v = Math.round(v * 2) / 2;
       v = Math.max(-15, Math.min(15, v));
       state.latencyOffsetSec = v;
-      latValue.textContent = `${v >= 0 ? '+' : ''}${v}s`;
+      latValue.textContent = fmt(v);
       try { saveState(); } catch (_e) { /* ignore */ }
     };
     latSlider.addEventListener('input', updateLatency);

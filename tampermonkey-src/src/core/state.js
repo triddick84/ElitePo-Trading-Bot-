@@ -91,7 +91,10 @@ export const state = {
   //   CALL/PUT (useful when PO chart lags or your wifi has consistent delay).
   // Negative: fire N seconds EARLIER on the polling cycle (anticipate signal
   //   staleness; widens the freshness budget for last-tick signals).
-  latencyOffsetSec: 0,
+  // v8.73.0 — Default raised to +3.5s and supports 0.5s steps so EVERY
+  // signal (scan/cycle/app/GO/SNS) gets a uniform +3.5s arming delay
+  // unless the user explicitly drags the slider elsewhere.
+  latencyOffsetSec: 3.5,
 };
 
 /**
@@ -310,9 +313,11 @@ export function loadState() {
             iq720: Number(parsed.modelThresholds.iq720) || 0,
           };
         }
-        // Iter 63 — restore latency offset
+        // Iter 63 — restore latency offset (now float, 0.5s precision)
         if (typeof parsed.latencyOffsetSec === 'number') {
-          const v = Math.max(-15, Math.min(15, parsed.latencyOffsetSec));
+          let v = Math.max(-15, Math.min(15, parsed.latencyOffsetSec));
+          // Snap legacy integer saves onto the 0.5 grid
+          v = Math.round(v * 2) / 2;
           state.latencyOffsetSec = v;
         }
         // Expose meta for debug / restore log

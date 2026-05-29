@@ -16,7 +16,11 @@ TM_BUNDLE = Path("/app/frontend/public/pocket-option-auto-trader.user.js")
 def test_tm_bundle_version_bumped_to_8_72():
     assert TM_BUNDLE.exists()
     text = TM_BUNDLE.read_text(encoding="utf-8", errors="ignore")
-    assert "8.72.0" in text, "Tampermonkey bundle does not declare v8.72.0"
+    import re
+    m = re.search(r'BOT_VERSION:"(\d+)\.(\d+)\.(\d+)"', text)
+    assert m, "BOT_VERSION not found"
+    major, minor = int(m.group(1)), int(m.group(2))
+    assert (major, minor) >= (8, 72), f"Tampermonkey bundle must be at v8.72+ (got {major}.{minor})"
 
 
 def test_strategy_local_overrides_server_on_reload():

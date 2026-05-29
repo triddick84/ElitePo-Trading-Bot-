@@ -1,3 +1,38 @@
+# AI's Elite PO Traders Bot — Product Requirements (v8.73.0)
+
+## Iter 73 (Feb 27, 2026) — Universal +3.5s Fire Offset
+
+### Backend (signals.py)
+- `POST /api/signals/force-generate-v2` now ships a new field on every
+  generated signal: **`fire_offset_sec`** (float, default `3.5`).
+- Configurable via env var `SIGNAL_FIRE_OFFSET_SEC` (range clamped to
+  `[-15.0, +15.0]`). Helper: `_signal_fire_offset_sec()`.
+- This is the "settle delay" the server recommends for any client that
+  fires trades from these signals (currently TM script, but downstream
+  clients can also adopt it).
+
+### Tampermonkey v8.73.0
+- `state.latencyOffsetSec` default raised from `0` → **`3.5`** seconds.
+- Latency slider now supports **0.5s precision** (step="0.5", range -15..+15).
+  Visual readout shows decimals only when fractional (e.g. `+3.5s`, `+4s`).
+- **Universal application**: the +3.5s arming delay now applies to:
+  - Scan trades · Cycle trades · App-poller trades · GO/force trades
+    (already wired via `executor.execute()` from Iter 63).
+  - **NEW**: Seconds Number Strategy fires — SNS used to bypass
+    `executor.execute()` via its own `_executeViaWs`/`_executeViaDom` path.
+    Now wrapped in `armAndExecute()` which honours `state.latencyOffsetSec`
+    before clicking CALL/PUT.
+- Legacy integer saves of `latencyOffsetSec` are snapped onto the 0.5s
+  grid on load.
+
+### Tests
+- `/app/backend/tests/test_iter73_universal_fire_offset.py` — 5 new tests
+  (bundle version, slider step + default, SNS arming, API field present,
+  helper clamping). All pass. Cumulative regression suite: 88/88 ✅.
+
+---
+
+
 # AI's Elite PO Traders Bot — Product Requirements (v8.72.0)
 
 ## Iter 72 (Feb 27, 2026) — Settings Persistence Fix

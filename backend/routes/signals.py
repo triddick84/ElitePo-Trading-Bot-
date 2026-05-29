@@ -39,6 +39,21 @@ except ImportError:
 # Re-use the main api_router — routes are registered via include in server.py
 # This module uses a local router that gets included by server.py
 router = APIRouter()
+
+
+def _signal_fire_offset_sec() -> float:
+    """v8.73.0 — Server-recommended client-side fire delay (seconds).
+    Read from `SIGNAL_FIRE_OFFSET_SEC` env var with a default of +3.5s so
+    every feature-driven signal carries a uniform arming delay. Clamped to
+    [-15, +15] to match the TM slider range.
+    """
+    try:
+        v = float(os.environ.get("SIGNAL_FIRE_OFFSET_SEC", "3.5"))
+    except (TypeError, ValueError):
+        v = 3.5
+    return max(-15.0, min(15.0, v))
+
+
 from trading_models import TradingSignal, FlexibleStrategyRequest, TradingStrategy, AssetType, SignalDirection
 from deep_market_analyzer import get_deep_analysis_signal
 from high_accuracy_strategies import high_accuracy_generator, get_high_accuracy_signal
@@ -4887,6 +4902,12 @@ async def force_generate_signal_v2(
                 "maximized_v3": min_conf_maximized_v3,
                 "iq720": min_conf_iq720,
             },
+            # v8.73.0 — Server-recommended client-side fire delay. The TM
+            # script reads this and sleeps for `fire_offset_sec` seconds
+            # before clicking CALL/PUT. Default +3.5s gives feature-driven
+            # signals time to "settle" relative to PO's chart tick. Per-asset
+            # tuning can override this via SIGNAL_FIRE_OFFSET_SEC env var.
+            "fire_offset_sec": _signal_fire_offset_sec(),
         }
 
         # -----------------------------------------------------------------
