@@ -85,7 +85,7 @@
     },
     "control_panel_script_url": {
       "status": "WORKING",
-      "notes": "tm-script-url displays 'https://pocket-option-ai-9.preview.emergentagent.com/pocket-option-auto-trader-modular.user.js', copy button uses modular URL."
+      "notes": "tm-script-url displays 'https://auto-invert-engine.preview.emergentagent.com/pocket-option-auto-trader-modular.user.js', copy button uses modular URL."
     },
     "both_scripts_downloadable": {
       "status": "WORKING",

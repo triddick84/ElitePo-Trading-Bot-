@@ -18,7 +18,7 @@ import os
 import time
 
 # Get BASE_URL from environment - production URL for testing
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://pocket-option-ai-9.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://auto-invert-engine.preview.emergentagent.com').rstrip('/')
 
 
 class TestHealthAndSetup:

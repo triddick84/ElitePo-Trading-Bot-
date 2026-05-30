@@ -14,7 +14,7 @@ import os
 import time
 from datetime import datetime, timezone
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://pocket-option-ai-9.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://auto-invert-engine.preview.emergentagent.com')
 
 class TestOTCCandleCollection:
     """Tests for OTC candle collection endpoints"""

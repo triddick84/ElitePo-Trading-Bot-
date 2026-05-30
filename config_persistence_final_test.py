@@ -9,7 +9,7 @@ import aiohttp
 import json
 from datetime import datetime
 
-BACKEND_URL = "https://pocket-option-ai-9.preview.emergentagent.com/api"
+BACKEND_URL = "https://auto-invert-engine.preview.emergentagent.com/api"
 
 async def test_complete_configuration_workflow():
     """Test the complete configuration persistence workflow"""

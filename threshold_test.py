@@ -8,7 +8,7 @@ import asyncio
 import aiohttp
 import json
 
-BACKEND_URL = "https://pocket-option-ai-9.preview.emergentagent.com/api"
+BACKEND_URL = "https://auto-invert-engine.preview.emergentagent.com/api"
 
 class ThresholdTester:
     def __init__(self):

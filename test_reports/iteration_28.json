@@ -85,7 +85,7 @@
     }
   },
   "tampermonkey_script": {
-    "url": "https://pocket-option-ai-9.preview.emergentagent.com/pocket-option-auto-trader.user.js",
+    "url": "https://auto-invert-engine.preview.emergentagent.com/pocket-option-auto-trader.user.js",
     "version": "8.8.0",
     "go_button_fix": "handleFetch rewritten to try local OTC signals FIRST before falling back to backend API",
     "note": "Cannot test actual TM script behavior - requires Pocket Option website"

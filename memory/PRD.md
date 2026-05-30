@@ -588,7 +588,7 @@ User requested: (a) Add a FinBERT-style sentiment feed via Twelve Data news or E
 ### TM Build
 - Webpack production rebuild → `dist/pocket-option-auto-trader.user.js` 286KB
 - Copied to `/app/frontend/public/` for live serving
-- Verified at `https://pocket-option-ai-9.preview.emergentagent.com/pocket-option-auto-trader.user.js` → `@version 8.64.0`
+- Verified at `https://auto-invert-engine.preview.emergentagent.com/pocket-option-auto-trader.user.js` → `@version 8.64.0`
 
 ---
 

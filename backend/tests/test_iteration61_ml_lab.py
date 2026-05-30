@@ -13,7 +13,7 @@ import re
 import requests
 import pytest
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://pocket-option-ai-9.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://auto-invert-engine.preview.emergentagent.com").rstrip("/")
 
 
 @pytest.fixture(scope="module")

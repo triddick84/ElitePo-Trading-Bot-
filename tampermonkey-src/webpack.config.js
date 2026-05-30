@@ -15,7 +15,7 @@ const SCRIPT_VERSION = fs
 // Userscript header - preserved at top of bundle
 const userscriptHeader = `// ==UserScript==
 // @name         AI's Elite PO Traders Bot
-// @namespace    https://pocket-option-ai-9.preview.emergentagent.com
+// @namespace    https://auto-invert-engine.preview.emergentagent.com
 // @version      ${SCRIPT_VERSION}
 // @description  AI's Elite PO Traders Bot - CYCLE mode, APP signal poller, A-INV toggle, 21s + 51s Reversal via direct-WS, SSID Bridge, persistent settings
 // @author       Elite Trading

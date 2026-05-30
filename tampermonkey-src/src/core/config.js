@@ -11,7 +11,7 @@ export const CONFIG = {
   BOT_VERSION: typeof __SCRIPT_VERSION__ !== 'undefined' ? __SCRIPT_VERSION__ : '0.0.0-dev',
 
   // API Settings
-  API_URL: 'https://pocket-option-ai-9.preview.emergentagent.com/api',
+  API_URL: 'https://auto-invert-engine.preview.emergentagent.com/api',
   
   // Polling Intervals
   APP_POLL_INTERVAL: 3000,
