@@ -1,3 +1,52 @@
+# AI's Elite PO Traders Bot — Production Login Fix (v8.77.0)
+
+## Iter 77 (Feb 28, 2026) — Production Deploy Login Fix
+
+### Bug
+- Production app (`https://auto-trader-pro-3.emergent.host`) returned
+  generic "red X connection error" toast on every login attempt
+  regardless of credentials (triddick84, testuser, seedtest@...).
+- Symptom = pure connection failure, not 401 → backend was crashing on
+  startup in the production pod and never returning any HTTP response.
+
+### Root Cause
+- `backend/.env` had 8 unquoted values containing shell-special chars:
+  ```
+  POCKET_OPTION_PASSWORD=Tonyistheman#1    ← `#` truncates to "Tonyistheman"
+  TELEGRAM_BOT_USERNAME=@ElitePocket_bot   ← `@` triggers shell expansion
+  AUTOBOT_WEBHOOK_URL=http://34.81.61.52/index.php
+  OANDA_ACCESS_TOKEN=86b39ffb-...-12128789-001
+  SEED_ADMINS=seedtest@elitepo.com:SeedPass123!:seedtest
+  PLAYWRIGHT_BROWSERS_PATH=/pw-browsers
+  POCKET_OPTION_SSID=a%3A4%3A%7B...        ← URL-encoded with `%`
+  ```
+- When Kubernetes pod parses the env file, the `#` comment marker
+  truncates `POCKET_OPTION_PASSWORD`, several keys end up missing or
+  partially populated, the FastAPI server crashes on startup, and every
+  frontend request returns "connection error".
+- The preview env was tolerant because `load_dotenv()` in dev uses a
+  more forgiving parser than the production env loader.
+
+### Fix
+- Rewrote `backend/.env` with **all values double-quoted** and **all
+  inline comments removed** (per system-prompt rules). Also de-duplicated
+  the TELEGRAM_BOT_TOKEN that appeared twice.
+- Verified on preview: backend starts cleanly, `[seed_admins] done` log
+  appears, `/api/auth/login` returns a JWT for `seedtest / SeedPass123!`.
+
+### Tests
+- `/app/backend/tests/test_iter77_env_quoting_and_login.py` — 5 new
+  tests (no-inline-comments, quoting rule, dotenv intact-load,
+  SEED_ADMINS parseable, end-to-end login). All pass.
+
+### User Action Required
+- **Redeploy preview → production** to push the fixed `.env`. After
+  redeploy, log in with `seedtest` / `SeedPass123!` (note: USERNAME is
+  `seedtest`, NOT the email).
+
+---
+
+
 # AI's Elite PO Traders Bot — Product Requirements (v8.76.0)
 
 ## Iter 76 (Feb 28, 2026) — Ensemble + Backtest Fixes
