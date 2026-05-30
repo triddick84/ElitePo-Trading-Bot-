@@ -202,34 +202,48 @@ class BacktestingEngine:
         
         # Iterate through candles
         lookback = 50  # Minimum candles needed for indicators
-        
-        for i in range(lookback, len(df) - 1):
+
+        # v8.76.0 — Open-trade cooldown. Previously the engine could open
+        # one trade PER candle even when the previous trade's expiry hadn't
+        # elapsed yet, simulating 60 overlapping 60s binary trades on M1
+        # data (which is physically impossible on PO). This inflated trade
+        # counts ~60× and made every strategy look like a noise-trader.
+        # Now we fast-forward to the candle AFTER the open trade expires
+        # before evaluating the next signal — the same way the live bot
+        # behaves with its TRADE_COOLDOWN_APP rate-limit.
+        i = lookback
+        N = len(df) - 1
+        while i < N:
             # Get signal from strategy
             try:
-                signal = strategy_func(df.iloc[:i+1], i)
+                signal = strategy_func(df.iloc[:i + 1], i)
             except Exception as e:
                 logger.debug(f"Strategy error at index {i}: {e}")
+                i += 1
                 continue
-            
+
             if signal is None:
+                i += 1
                 continue
-            
+
             confidence = signal.get("confidence", 0)
             if confidence < min_confidence:
+                i += 1
                 continue
-            
+
             direction = signal.get("direction", "").upper()
             if direction not in ["CALL", "PUT", "BUY", "SELL"]:
+                i += 1
                 continue
-            
+
             # Get entry and exit prices
             entry_price = float(df.iloc[i]["close"])
             entry_time = df.iloc[i]["timestamp"]
-            
+
             exit_idx = self._get_exit_candle_index(df, i, expiry_seconds, timeframe)
             exit_price = float(df.iloc[exit_idx]["close"])
             exit_time = df.iloc[exit_idx]["timestamp"]
-            
+
             # Create and close trade
             trade = Trade(
                 entry_time=entry_time,
@@ -240,14 +254,19 @@ class BacktestingEngine:
                 expiry_seconds=expiry_seconds
             )
             trade.close(exit_price, exit_time)
-            
+
             # Update balance
             trade_pnl = self.trade_size * (trade.pnl_percent / 100)
             self.balance += trade_pnl
             trade.pnl = trade_pnl
-            
+
             self.trades.append(trade)
             self.equity_curve.append((exit_time, self.balance))
+
+            # v8.76.0 — Fast-forward past the trade's expiry so the next
+            # signal is evaluated AFTER the current binary settles. Always
+            # advance at least 1 to avoid infinite loops when exit_idx == i.
+            i = max(exit_idx + 1, i + 1)
         
         return self._calculate_metrics()
     

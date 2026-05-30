@@ -36,10 +36,69 @@ try:
     from sklearn.preprocessing import StandardScaler
     from sklearn.model_selection import train_test_split, cross_val_score
     from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+    from sklearn.utils.class_weight import compute_sample_weight
     ML_AVAILABLE = True
 except ImportError:
     ML_AVAILABLE = False
     logger.warning("scikit-learn not available. ML features will be limited.")
+
+# v8.75.0 — Optional SMOTE oversampling. When imbalanced-learn is available
+# AND the minority class is severely under-represented (≤25% of training
+# samples), we synthetically oversample so the trainer doesn't bias toward
+# the majority class. Falls back to class_weight='balanced' / sample_weight
+# when SMOTE is unavailable or unsafe (e.g. <5 minority samples).
+try:
+    from imblearn.over_sampling import SMOTE
+    IMBLEARN_AVAILABLE = True
+except ImportError:
+    IMBLEARN_AVAILABLE = False
+    logger.warning("imbalanced-learn not available — falling back to class_weight only")
+
+
+def _maybe_smote_balance(
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    *,
+    minority_threshold: float = 0.25,
+    k_neighbors: int = 5,
+) -> Tuple[np.ndarray, np.ndarray, str]:
+    """v8.75.0 — Conditionally apply SMOTE to a training split.
+
+    Returns the (possibly resampled) X/y plus a short tag explaining what
+    happened (audited into model metadata). Gates the call so we never
+    SMOTE when:
+      * imblearn isn't installed
+      * the classes are already balanced (minority ≥ threshold)
+      * the minority class has < k_neighbors+1 samples (SMOTE crashes)
+      * the labels aren't binary 0/1
+    """
+    try:
+        y_arr = np.asarray(y_train).ravel()
+        unique, counts = np.unique(y_arr, return_counts=True)
+        if len(unique) != 2:
+            return X_train, y_train, "smote-skipped:non-binary"
+        minority_count = int(counts.min())
+        majority_count = int(counts.max())
+        total = minority_count + majority_count
+        minority_ratio = minority_count / max(1, total)
+        if minority_ratio >= minority_threshold:
+            return X_train, y_train, f"smote-skipped:balanced({minority_ratio:.2f})"
+        if not IMBLEARN_AVAILABLE:
+            return X_train, y_train, "smote-skipped:imblearn-missing"
+        # Need at least k_neighbors+1 minority samples, otherwise SMOTE
+        # falls back to fewer neighbors automatically — but we clamp it
+        # ourselves so we never crash on tiny datasets.
+        k = max(1, min(k_neighbors, minority_count - 1))
+        sm = SMOTE(random_state=42, k_neighbors=k)
+        X_res, y_res = sm.fit_resample(X_train, y_arr)
+        new_counts = dict(zip(*np.unique(y_res, return_counts=True)))
+        return X_res, y_res, (
+            f"smote-applied:{minority_count}→{int(max(new_counts.values()))} "
+            f"(k={k})"
+        )
+    except Exception as e:
+        logger.warning(f"SMOTE failed, using raw split: {e}")
+        return X_train, y_train, f"smote-failed:{type(e).__name__}"
 
 # Try to import neural network libraries
 try:
@@ -65,6 +124,11 @@ class ModelMetrics:
     training_samples: int = 0
     validation_samples: int = 0
     trained_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    # v8.75.0 — Class-balancing audit. Tracks whether SMOTE was applied,
+    # skipped, or unavailable so the UI can show "Trained on N samples
+    # (SMOTE-balanced 12 → 70)" instead of hiding the imbalance.
+    smote_status: str = ""
+    minority_class_ratio: float = 0.0
 
 
 @dataclass
@@ -199,6 +263,7 @@ class RandomForestModel:
         self.n_estimators = n_estimators
         self.max_depth = max_depth
         self.is_trained = False
+        self.smote_status = ""  # v8.75.0 — populated in train()
     
     def train(self, X: pd.DataFrame, y: pd.Series, test_size: float = 0.2) -> ModelMetrics:
         """Train the Random Forest model"""
@@ -214,7 +279,15 @@ class RandomForestModel:
         # Scale features
         X_train_scaled = self.scaler.fit_transform(X_train)
         X_val_scaled = self.scaler.transform(X_val)
-        
+
+        # v8.75.0 — Apply SMOTE oversampling on the TRAINING split only so
+        # we never leak synthetic samples into validation. Class imbalance
+        # was driving 17% precision on the minority (winning-trade) class.
+        X_train_bal, y_train_bal, self.smote_status = _maybe_smote_balance(
+            X_train_scaled, y_train.to_numpy() if hasattr(y_train, "to_numpy") else np.asarray(y_train)
+        )
+        logger.info(f"[RandomForest] {self.smote_status} — final train size={len(X_train_bal)}")
+
         # Train model
         self.model = RandomForestClassifier(
             n_estimators=self.n_estimators,
@@ -225,19 +298,30 @@ class RandomForestModel:
             random_state=42,
             n_jobs=-1
         )
-        self.model.fit(X_train_scaled, y_train)
+        self.model.fit(X_train_bal, y_train_bal)
         self.is_trained = True
         
         # Evaluate
         y_pred = self.model.predict(X_val_scaled)
-        
+
+        # v8.75.0 — Report minority ratio on the ORIGINAL (un-resampled) train
+        # set so users see the real imbalance.
+        try:
+            _orig = y_train.to_numpy() if hasattr(y_train, "to_numpy") else np.asarray(y_train)
+            _, _cnts = np.unique(_orig, return_counts=True)
+            minority_ratio = float(_cnts.min() / max(1, _cnts.sum())) if len(_cnts) == 2 else 0.0
+        except Exception:
+            minority_ratio = 0.0
+
         metrics = ModelMetrics(
             accuracy=accuracy_score(y_val, y_pred),
             precision=precision_score(y_val, y_pred, zero_division=0),
             recall=recall_score(y_val, y_pred, zero_division=0),
             f1_score=f1_score(y_val, y_pred, zero_division=0),
-            training_samples=len(X_train),
-            validation_samples=len(X_val)
+            training_samples=len(X_train_bal),
+            validation_samples=len(X_val),
+            smote_status=self.smote_status,
+            minority_class_ratio=minority_ratio,
         )
         
         logger.info(f"Random Forest trained: Accuracy={metrics.accuracy:.4f}, F1={metrics.f1_score:.4f}")
@@ -302,6 +386,7 @@ class GradientBoostingModel:
         self.max_depth = max_depth
         self.learning_rate = learning_rate
         self.is_trained = False
+        self.smote_status = ""  # v8.75.0 — populated in train()
     
     def train(self, X: pd.DataFrame, y: pd.Series, test_size: float = 0.2) -> ModelMetrics:
         """Train the Gradient Boosting model"""
@@ -317,7 +402,20 @@ class GradientBoostingModel:
         # Scale features
         X_train_scaled = self.scaler.fit_transform(X_train)
         X_val_scaled = self.scaler.transform(X_val)
-        
+
+        # v8.75.0 — SMOTE on training split. sklearn's GradientBoosting
+        # doesn't expose class_weight, so we use compute_sample_weight as
+        # a secondary safety net (rebalances loss gradient even when SMOTE
+        # itself is skipped).
+        X_train_bal, y_train_bal, self.smote_status = _maybe_smote_balance(
+            X_train_scaled, y_train.to_numpy() if hasattr(y_train, "to_numpy") else np.asarray(y_train)
+        )
+        try:
+            sample_weight = compute_sample_weight(class_weight="balanced", y=y_train_bal)
+        except Exception:
+            sample_weight = None
+        logger.info(f"[GradientBoosting] {self.smote_status} — final train size={len(X_train_bal)}")
+
         # Train model
         self.model = GradientBoostingClassifier(
             n_estimators=self.n_estimators,
@@ -327,19 +425,29 @@ class GradientBoostingModel:
             min_samples_leaf=5,
             random_state=42
         )
-        self.model.fit(X_train_scaled, y_train)
+        self.model.fit(X_train_bal, y_train_bal, sample_weight=sample_weight)
         self.is_trained = True
         
         # Evaluate
         y_pred = self.model.predict(X_val_scaled)
-        
+
+        # v8.75.0 — Report minority ratio on the ORIGINAL train set
+        try:
+            _orig = y_train.to_numpy() if hasattr(y_train, "to_numpy") else np.asarray(y_train)
+            _, _cnts = np.unique(_orig, return_counts=True)
+            minority_ratio = float(_cnts.min() / max(1, _cnts.sum())) if len(_cnts) == 2 else 0.0
+        except Exception:
+            minority_ratio = 0.0
+
         metrics = ModelMetrics(
             accuracy=accuracy_score(y_val, y_pred),
             precision=precision_score(y_val, y_pred, zero_division=0),
             recall=recall_score(y_val, y_pred, zero_division=0),
             f1_score=f1_score(y_val, y_pred, zero_division=0),
-            training_samples=len(X_train),
-            validation_samples=len(X_val)
+            training_samples=len(X_train_bal),
+            validation_samples=len(X_val),
+            smote_status=self.smote_status,
+            minority_class_ratio=minority_ratio,
         )
         
         logger.info(f"Gradient Boosting trained: Accuracy={metrics.accuracy:.4f}, F1={metrics.f1_score:.4f}")
@@ -608,16 +716,54 @@ class MLTrainingService:
         ensemble.add_model('random_forest', rf_model, weight=rf_metrics.f1_score)
         ensemble.add_model('gradient_boosting', gb_model, weight=gb_metrics.f1_score)
         ensemble.is_trained = True
-        
+
+        # v8.76.0 — Actually evaluate the ensemble on a fresh validation
+        # split instead of naively averaging RF + GB metrics. The previous
+        # code only averaged accuracy + f1, leaving precision/recall/
+        # validation_samples at default 0 (which made the ensemble look
+        # broken in the API response). We re-split with the same
+        # `shuffle=False` policy the individual models use so the
+        # validation set matches what they evaluated on.
+        from sklearn.model_selection import train_test_split as _split
+        try:
+            _X_train_full, _X_val_ens, _y_train_full, _y_val_ens = _split(
+                X, y, test_size=0.2, shuffle=False
+            )
+            ens_pred = ensemble.predict(_X_val_ens)
+            ens_acc = float(accuracy_score(_y_val_ens, ens_pred))
+            ens_prec = float(precision_score(_y_val_ens, ens_pred, zero_division=0))
+            ens_recall = float(recall_score(_y_val_ens, ens_pred, zero_division=0))
+            ens_f1 = float(f1_score(_y_val_ens, ens_pred, zero_division=0))
+            ens_train_n = int(len(_X_train_full))
+            ens_val_n = int(len(_X_val_ens))
+            # Surface the audit details from the better-balanced model
+            ens_smote_status = rf_model.smote_status or gb_model.smote_status or ""
+            ens_minority_ratio = rf_metrics.minority_class_ratio
+        except Exception as e:
+            logger.warning(f"Ensemble evaluation failed, falling back to averaged metrics: {e}")
+            ens_acc = (rf_metrics.accuracy + gb_metrics.accuracy) / 2
+            ens_prec = (rf_metrics.precision + gb_metrics.precision) / 2
+            ens_recall = (rf_metrics.recall + gb_metrics.recall) / 2
+            ens_f1 = (rf_metrics.f1_score + gb_metrics.f1_score) / 2
+            ens_train_n = rf_metrics.training_samples
+            ens_val_n = rf_metrics.validation_samples
+            ens_smote_status = "ensemble-eval-failed"
+            ens_minority_ratio = rf_metrics.minority_class_ratio
+
         trained_models['ensemble'] = TrainedModel(
             name="Ensemble Signal Classifier",
             model_type="ensemble",
             asset=asset,
             timeframe=timeframe,
             metrics=ModelMetrics(
-                accuracy=(rf_metrics.accuracy + gb_metrics.accuracy) / 2,
-                f1_score=(rf_metrics.f1_score + gb_metrics.f1_score) / 2,
-                training_samples=rf_metrics.training_samples
+                accuracy=ens_acc,
+                precision=ens_prec,
+                recall=ens_recall,
+                f1_score=ens_f1,
+                training_samples=ens_train_n,
+                validation_samples=ens_val_n,
+                smote_status=ens_smote_status,
+                minority_class_ratio=ens_minority_ratio,
             )
         )
         self.models['ensemble'] = ensemble

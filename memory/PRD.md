@@ -1,3 +1,83 @@
+# AI's Elite PO Traders Bot — Product Requirements (v8.76.0)
+
+## Iter 76 (Feb 28, 2026) — Ensemble + Backtest Fixes
+
+### Two distinct bugs reported as "ensemble not working properly"
+
+#### Bug 1: Backtest engine simulated overlapping binary trades
+- `BacktestingEngine.run_strategy_backtest()` was iterating `for i in
+  range(...)` — opening one trade per candle even when the previous
+  trade's expiry hadn't elapsed. On M1 EURUSD with 60s expiry, the hybrid
+  ensemble produced **3853 trades on 5000 candles (~77%)** which is
+  physically impossible on Pocket Option (you can't run 60 overlapping
+  60-second binaries simultaneously).
+- **Fix**: Loop converted to `while i < N` and after each opened trade,
+  `i = exit_idx + 1` so the next signal is only evaluated AFTER the
+  previous binary settles — matching live `TRADE_COOLDOWN_APP` behavior.
+- **Verified**: hybrid trade count dropped 3853 → 2131 on the same
+  5000-candle window (no overlap; correct sequential semantics).
+
+#### Bug 2: Ensemble training metrics were all zeros
+- `train_from_backtest_results()` was building the `TrainedModel` for the
+  ensemble by averaging RF + GB metrics, but ONLY passing `accuracy` and
+  `f1_score` to the new `ModelMetrics()` — `precision`, `recall`,
+  `validation_samples`, `smote_status`, `minority_class_ratio` all
+  defaulted to 0/empty. The API was reporting
+  `ensemble: prec=0.000 recall=0.000 smote=''` which looked broken.
+- **Fix**: After creating the ensemble, re-split with the same
+  `shuffle=False` policy the individual models use, call
+  `ensemble.predict(X_val)` and compute real precision/recall/f1
+  from the actual ensemble vote. SMOTE audit inherited from the
+  underlying models so the response stays consistent.
+- **Verified**: ensemble now reports `prec=0.180 rec=1.000 f1=0.305
+  val_n=342 smote='smote-applied:144→1222 (k=5)'` — real numbers.
+
+### Tests
+- `/app/backend/tests/test_iter76_ensemble_and_backtest_fixes.py` —
+  3 new tests covering the cooldown enforcement and ensemble metric
+  population. Cumulative regression: 25+ tests, all pass.
+
+---
+
+
+# AI's Elite PO Traders Bot — Product Requirements (v8.75.0)
+
+## Iter 75 (Feb 28, 2026) — SMOTE Oversampling + Class Weights for ML Trainer
+
+### Motivation
+Iter 74 fixed the "Trained 0 models" bug but exposed a secondary issue: the
+RandomForest trained at 69.7% accuracy with **17% precision** on winning
+trades because the dataset is heavily imbalanced (only ~11% of backtest
+trades win at the default 50% confidence threshold). The model was
+biased toward predicting "loss" for everything.
+
+### Fix
+1. **Installed `imbalanced-learn==0.14.1`** (added to requirements.txt).
+2. **New `_maybe_smote_balance()` helper** in `ml_training_service.py` —
+   - Gated SMOTE that only fires when minority class is < 25% AND has
+     ≥ k_neighbors+1 samples (auto-clamped). Returns the (possibly
+     resampled) X/y plus an audit string explaining what happened.
+3. **RandomForestModel.train()** & **GradientBoostingModel.train()** now:
+   - Apply SMOTE to the TRAINING split only (never the validation split,
+     so we don't leak synthetic samples into evaluation).
+   - GradientBoosting additionally uses `compute_sample_weight('balanced')`
+     because sklearn's GB doesn't expose `class_weight` natively.
+   - Surface `smote_status` (e.g. `"smote-applied:86→718 (k=5)"`) and
+     `minority_class_ratio` in returned `ModelMetrics`.
+4. **`ModelMetrics` dataclass** extended with `smote_status` (str) and
+   `minority_class_ratio` (float) for full auditability through the API.
+
+### Verified
+- End-to-end backtest → train run on the live preview:
+  - **Minority class 86 → 718 samples** (perfectly balanced).
+  - Accuracy: **69.7% → 78.7%** (+9 points).
+  - F1 score: **0.290 → 0.317** (+2.7 points).
+  - SMOTE status visible in API response (`smote-applied:86→718 (k=5)`).
+- 22/22 regression tests pass including 5 new SMOTE-specific tests.
+
+---
+
+
 # AI's Elite PO Traders Bot — Product Requirements (v8.74.0)
 
 ## Iter 74 (Feb 28, 2026) — Backtest Trade Persistence Fix (P0)
