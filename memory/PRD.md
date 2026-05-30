@@ -1,3 +1,47 @@
+# AI's Elite PO Traders Bot — Product Requirements (v8.74.0)
+
+## Iter 74 (Feb 28, 2026) — Backtest Trade Persistence Fix (P0)
+
+### Bug
+- "Train from Backtests" button on AI Models page returned
+  `"Trained 0 ML models from 100 backtest results"` no matter how many
+  backtests had been run.
+- Root cause: `backtesting_engine.save_results()` was writing only
+  aggregate metrics (`metrics`, `equity_curve`, `trade_count`) but NOT
+  the per-trade list. 522 historical records all had `trades: missing`.
+- `ml_training_service.train_from_backtest_results()` walks
+  `result['trades']` to build the training matrix — 0 trades → 0 models →
+  silent success with `"Trained 0"`.
+
+### Fix
+1. **`backtesting_engine.save_results()`** now persists `trades[]` (capped
+   at 200 entries) with full per-trade fields:
+   `entry_time, exit_time, direction, entry_price, exit_price, pnl,
+    pnl_percent, is_win, result, confidence, strategy, expiry_seconds`.
+2. **`/api/ml-training/train-from-backtests`** now performs a pre-flight
+   check on `total_trades_available`. If <100, returns a precise error
+   with `results_with_trades`, `total_trades_available`, and
+   `needs_retrain_action: "rerun_backtests"` so the UI tells the user to
+   re-run their backtests on v8.74.0+.
+3. **Success path** now returns
+   `"Trained N ML models from M backtest results (T trades)"` so users
+   can see exactly how much training data was used.
+
+### Verified
+- Fresh backtest call → DB doc carries `trades` array of 200 rows
+  with `is_win`/`result` labels (verified by direct MongoDB query).
+- 5 backtests across multiple OTC pairs → trainer succeeds with
+  806 trades and 3 models (random_forest, gradient_boosting, ensemble),
+  random forest hitting 69.8% accuracy.
+
+### Tests
+- `/app/backend/tests/test_iter74_backtest_trade_persistence.py` — 3 new
+  tests including a full end-to-end backtest → train cycle. All pass.
+  Cumulative regression: 17/17 ✅.
+
+---
+
+
 # AI's Elite PO Traders Bot — Product Requirements (v8.73.0)
 
 ## Iter 73 (Feb 27, 2026) — Universal +3.5s Fire Offset

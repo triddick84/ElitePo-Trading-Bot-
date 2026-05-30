@@ -437,20 +437,58 @@ async def train_ml_from_backtests(request: dict = {}):
                 "error": "Insufficient backtest results. Run more backtests first.",
                 "results_count": len(results)
             }
-        
+
+        # v8.74.0 — Pre-flight check: surface a precise diagnosis instead of
+        # the misleading "Trained 0 ML models" success path. Legacy backtest
+        # records (written before v8.74.0) only stored aggregate metrics, so
+        # the per-trade ML trainer would silently return zero models. Now we
+        # tell the user exactly what to do.
+        results_with_trades = sum(1 for r in results if isinstance(r.get("trades"), list) and r["trades"])
+        total_trades_available = sum(len(r.get("trades") or []) for r in results)
+        if total_trades_available < 100:
+            return {
+                "success": False,
+                "error": (
+                    f"Not enough per-trade samples to train (need ≥100, have {total_trades_available}). "
+                    f"{results_with_trades}/{len(results)} stored backtests carry a `trades[]` array. "
+                    "Re-run the backtests from the Backtesting page (v8.74.0+ persists trades) "
+                    "and try again, or use AI Models → Real Data Training which trains from live "
+                    "candles in MongoDB."
+                ),
+                "results_count": len(results),
+                "results_with_trades": results_with_trades,
+                "total_trades_available": total_trades_available,
+                "needs_retrain_action": "rerun_backtests",
+            }
+
         # Train models
         asset = request.get("asset", "all")
         timeframe = request.get("timeframe", "1h")
         
         trained_models = await service.train_from_backtest_results(results, asset, timeframe)
-        
+
+        # If the trainer still returns 0 models (e.g. all trades had no
+        # `result`/`outcome` label), tell the user what's wrong.
+        if not trained_models:
+            return {
+                "success": False,
+                "error": (
+                    f"Found {total_trades_available} trades but the trainer rejected them "
+                    "(check that each trade has a `result`, `outcome`, or `is_win` field). "
+                    "Re-run the latest backtests to populate per-trade labels."
+                ),
+                "results_count": len(results),
+                "total_trades_available": total_trades_available,
+            }
+
         # Convert to serializable format
         models_data = {k: asdict(v) for k, v in trained_models.items()}
         
         return {
             "success": True,
-            "message": f"Trained {len(trained_models)} ML models from {len(results)} backtest results",
-            "models": models_data
+            "message": f"Trained {len(trained_models)} ML models from {len(results)} backtest results ({total_trades_available} trades)",
+            "models": models_data,
+            "total_trades_used": total_trades_available,
         }
         
     except Exception as e:

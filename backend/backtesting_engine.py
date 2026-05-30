@@ -466,13 +466,45 @@ class BacktestingEngine:
         strategy_name: str,
         metrics: BacktestMetrics
     ) -> str:
-        """Save backtest results to database"""
+        """Save backtest results to database.
+
+        v8.74.0 — Now persists the actual `trades[]` array (capped at 200)
+        so downstream ML pipelines (/api/ml-training/train-from-backtests)
+        can train on real per-trade samples instead of just aggregate
+        metrics. Older records written without this field caused the
+        "Trained 0 ML models from N backtest results" failure mode.
+        """
+        # Serialize trades for storage. Keep the most recent 200 to bound
+        # document size while remaining ML-friendly (RandomForest etc.
+        # need ≥100 samples per the trainer's gate).
+        serialized_trades: List[Dict[str, Any]] = []
+        for t in self.trades[-200:]:
+            try:
+                serialized_trades.append({
+                    "entry_time": t.entry_time.isoformat() if hasattr(t.entry_time, "isoformat") else str(t.entry_time),
+                    "exit_time": t.exit_time.isoformat() if t.exit_time and hasattr(t.exit_time, "isoformat") else (str(t.exit_time) if t.exit_time else None),
+                    "direction": t.direction,
+                    "entry_price": float(t.entry_price),
+                    "exit_price": float(t.exit_price),
+                    "pnl": float(t.pnl),
+                    "pnl_percent": float(t.pnl_percent),
+                    "is_win": bool(t.is_win),
+                    "result": "win" if t.is_win else "loss",
+                    "confidence": float(t.confidence or 0),
+                    "strategy": t.strategy or strategy_name,
+                    "expiry_seconds": int(getattr(t, "expiry_seconds", 60) or 60),
+                })
+            except Exception:
+                continue  # skip malformed trade rows
+
         doc = {
             "symbol": symbol,
             "timeframe": timeframe,
             "strategy": strategy_name,
             "metrics": metrics.to_dict(),
             "trade_count": len(self.trades),
+            "total_trades": len(self.trades),   # alias for downstream consumers
+            "trades": serialized_trades,         # v8.74.0 — ML trainer reads this
             "equity_curve": [(str(t), e) for t, e in self.equity_curve[-100:]],  # Last 100 points
             "created_at": datetime.now(timezone.utc)
         }
