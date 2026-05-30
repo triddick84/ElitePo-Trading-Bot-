@@ -1,3 +1,57 @@
+# AI's Elite PO Traders Bot — Deploy Build Fix (v8.78.0)
+
+## Iter 78 (Feb 28, 2026) — Deploy "uvicorn: command not found" Fix
+
+### Root Cause Found in Production Build Logs
+- Production build was failing with `/entrypoint.sh: line 29: uvicorn:
+  command not found` then `Backend process died during startup, exiting`,
+  causing nginx upstream to refuse all /api/* connections.
+- The deploy failure traced to `backend/requirements.txt` line 15:
+  ```
+  BinaryOptionsToolsV2 @ file:///tmp/BinaryOptionsTools-v2/.../wheel
+  ```
+  This local-file-path wheel doesn't exist on the Kubernetes build
+  server. `pip install -r requirements.txt` aborts at this line and
+  NEVER reaches `uvicorn==0.25.0` further down — so uvicorn isn't on
+  PATH at runtime → entrypoint fails → backend never starts → every
+  login attempt returns "red X connection error" because nginx has
+  no live upstream.
+
+### Fix
+Removed all deploy-incompatible packages from `requirements.txt`:
+- `BinaryOptionsToolsV2 @ file:///tmp/...` (the primary culprit)
+- `pocketoptionapi-async @ git+https://github.com/...` (git install)
+- `tensorflow==2.20.0`, `keras==3.11.3`, `tensorboard==2.20.0`,
+  `tensorboard-data-server==0.7.2` (~600MB+ each, exceed 1Gi memory)
+- `TA-Lib==0.6.8` (requires libta-lib0 OS package not on build image)
+- `selenium==4.36.0`, `playwright==1.57.0`, `playwright-stealth==2.0.0`,
+  `undetected-chromedriver==3.5.5`, `webdriver-manager==4.0.2`
+  (browser automation only used in optional code paths)
+
+All affected imports were ALREADY wrapped in `try/except ImportError`
+blocks (the codebase had graceful-fallback patterns) so the runtime
+just logs "X not available" instead of crashing.
+
+### Verified on Preview
+- Backend startup log shows `[seed_admins] done — seeded=0 skipped=1
+  errors=0` and `Application initialization complete`.
+- `/api/health` returns 200 healthy.
+- `/api/auth/login` with `seedtest`/`SeedPass123!` returns a JWT.
+- 30+4 = 34 regression tests pass.
+
+### Tests
+- `/app/backend/tests/test_iter78_deploy_requirements.py` — 4 new tests
+  that lock in the requirements.txt fix:
+    1. Forbidden patterns (`@ file://`, `@ git+`, tensorflow, selenium, …)
+       must never reappear.
+    2. Critical runtime deps (uvicorn, fastapi, motor, pymongo, sklearn,
+       passlib, PyJWT, imbalanced-learn) must remain pinned.
+    3. Smoke test: live `/api/health` still returns 200.
+    4. Smoke test: live `/api/auth/login` still works.
+
+---
+
+
 # AI's Elite PO Traders Bot — Production Login Fix (v8.77.0)
 
 ## Iter 77 (Feb 28, 2026) — Production Deploy Login Fix
