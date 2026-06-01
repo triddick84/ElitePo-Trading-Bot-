@@ -25,6 +25,7 @@ import {
   discoverAllAssetsWithPayouts,
   clickPickerRowEl,
   clickQuickPickTile,
+  switchAssetViaSearch,
   dismissPicker,
 } from '../utils/dom.js';
 
@@ -218,6 +219,16 @@ class CycleMode {
         }
       }
     } catch (_e) { /* fall through to slow path */ }
+
+    // v8.74.0 — PRIMARY: deterministic Search-box switch. Types the symbol
+    // into the picker's search field so the list filters to a single row,
+    // then clicks that row's asset-NAME leaf (never the ★ star / payout cell).
+    // This is the reliable fix for "clicks the wrong area" on narrow/portrait
+    // layouts. Verified via getCurrentAsset() inside switchAssetViaSearch().
+    try {
+      const ok = await switchAssetViaSearch(symbol);
+      if (ok) return true;
+    } catch (_e) { /* fall through to legacy paths */ }
 
     // Fast path #2: Currencies tab (covers ~80% of FX cases)
     const opened = await openCurrenciesPicker();

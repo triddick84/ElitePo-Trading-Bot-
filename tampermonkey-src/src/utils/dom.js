@@ -2127,6 +2127,161 @@ export async function switchAssetViaPicker(symbol) {
   }
 }
 
+/**
+ * v8.74.0 — SEARCH-BOX asset switch (deterministic).
+ *
+ * Replaces the fragile "click the middle of the full row" approach that
+ * mis-targeted the ★ favorite star / green payout-boost button on narrow
+ * & portrait layouts. Instead we:
+ *   1. open the picker
+ *   2. type the symbol into the picker's Search box (React-controlled input)
+ *   3. wait for the list to filter to (usually) a single row
+ *   4. click that row's ASSET-NAME leaf precisely — never the star/payout cell
+ *
+ * Because the list is filtered, even an imperfect click lands on the right
+ * asset. Returns true only if getCurrentAsset() confirms the switch.
+ */
+
+function _findPickerSearchInput() {
+  const sels = [
+    '[class*="picker"] input',
+    '[class*="modal"] input',
+    '[class*="dropdown"] input',
+    '[class*="currencies"] input',
+    '[class*="assets"] input',
+    'input[placeholder*="search" i]',
+    'input[type="search"]',
+  ];
+  for (const sel of sels) {
+    const els = document.querySelectorAll(sel);
+    for (const el of els) {
+      if (!el || !el.offsetParent || el.disabled || el.readOnly) continue;
+      if (el.closest('[id^="el-bot-"]')) continue;          // skip bot's own inputs
+      const ph = (el.placeholder || '').toLowerCase();
+      const aria = (el.getAttribute('aria-label') || '').toLowerCase();
+      // Reject obvious non-search inputs (amount/time/expiry)
+      if (/amount|invest|time|expir|second|minute|hour|\$/.test(ph + ' ' + aria)) continue;
+      try {
+        const r = el.getBoundingClientRect();
+        if (r.top > 700) continue;                          // search sits near the picker top
+      } catch (_e) { /* ignore */ }
+      return el;
+    }
+  }
+  return null;
+}
+
+function _setReactInputValue(input, value) {
+  try {
+    input.focus();
+    const proto = Object.getPrototypeOf(input);
+    const setValue = Object.getOwnPropertyDescriptor(proto, 'value')?.set
+                  || Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    setValue.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+  } catch (e) {
+    warn(`[picker] search-input set failed: ${e.message}`);
+    return false;
+  }
+}
+
+function _searchQueryForSymbol(symbol) {
+  const base = String(symbol).toUpperCase().replace(/_OTC$/, '');
+  // 6-letter alpha FX pair → render with a slash so PO's display-name search matches
+  if (/^[A-Z]{6}$/.test(base)) return `${base.slice(0, 3)}/${base.slice(3)}`;
+  return base;
+}
+
+/**
+ * Click the asset-NAME leaf inside a picker row, avoiding the ★ star (far
+ * left) and the green payout-boost cell (far right). Falls back to the row
+ * element itself if no name leaf is found.
+ */
+async function _clickAssetRowName(rowEl, symbol) {
+  if (!rowEl) return false;
+  const VIEWPORT_W = window.innerWidth || document.documentElement.clientWidth || 1200;
+  try {
+    const r = rowEl.getBoundingClientRect();
+    // Relaxed vs the old 0.65 guard so narrow/portrait layouts aren't rejected;
+    // only refuse rows clearly inside the far-right trades sidebar.
+    if (r && r.left > VIEWPORT_W * 0.85) {
+      warn(`[picker] refusing row at x=${Math.round(r.left)}px (sidebar territory)`);
+      return false;
+    }
+  } catch (_e) { /* ignore */ }
+
+  const base = String(symbol).toUpperCase().replace(/_OTC$/, '');
+  const pairText = /^[A-Z]{6}$/.test(base) ? `${base.slice(0, 3)}/${base.slice(3)}` : base;
+
+  let nameEl = null;
+  const leaves = rowEl.querySelectorAll('*');
+  for (const el of leaves) {
+    if (el.children.length > 0) continue;                  // leaf only
+    const t = (el.textContent || '').trim().toUpperCase();
+    if (!t || t.includes('%')) continue;                   // skip payout cell
+    if (t.includes(pairText) || t.includes(base)) { nameEl = el; break; }
+  }
+
+  const clickTarget = nameEl || rowEl;
+  try { clickTarget.scrollIntoView?.({ block: 'center' }); } catch (_e) { /* ignore */ }
+  _reactClickEl(_findClickableAncestor(clickTarget));
+  log(`[picker] clicked ${symbol} via ${nameEl ? 'name-leaf' : 'row'}`);
+  return true;
+}
+
+/**
+ * Switch to `symbol` using the picker Search box. Returns true ONLY when
+ * getCurrentAsset() confirms the chart actually switched.
+ */
+export async function switchAssetViaSearch(symbol) {
+  if (!symbol) return false;
+  const targetNorm = normalizeAssetName(symbol);
+  try { if (getCurrentAsset() === targetNorm) return true; } catch (_e) { /* ignore */ }
+
+  const opened = await openAssetPicker();
+  if (!opened) return false;
+  await _sleep(250);
+
+  const input = _findPickerSearchInput();
+  if (!input) {
+    warn('[picker] search box not found — caller should fall back');
+    await closeAssetPicker().catch(() => {});
+    return false;
+  }
+
+  const query = _searchQueryForSymbol(targetNorm);
+  _setReactInputValue(input, '');
+  await _sleep(120);
+  _setReactInputValue(input, query);
+  log(`[picker] searched "${query}" for ${targetNorm}`);
+  await _sleep(500);                                        // let the list filter
+
+  const items = readPickerItems();
+  const baseTarget = targetNorm.replace(/_OTC$/, '');
+  let row = items.find((it) => it.symbol === targetNorm)
+         || items.find((it) => it.symbol.replace(/_OTC$/, '') === baseTarget);
+
+  if (!row || !row.el) {
+    warn(`[picker] search found no row for ${targetNorm} (query="${query}", ${items.length} rows)`);
+    await closeAssetPicker().catch(() => {});
+    return false;
+  }
+
+  await _clickAssetRowName(row.el, targetNorm);
+  await _sleep(450);
+  try {
+    if (getCurrentAsset() === targetNorm) {
+      log(`[picker] switched → ${targetNorm} (search box)`);
+      return true;
+    }
+  } catch (_e) { /* ignore */ }
+  warn(`[picker] post-click asset is "${(() => { try { return getCurrentAsset(); } catch (_e) { return '?'; } })()}", expected ${targetNorm}`);
+  await closeAssetPicker().catch(() => {});
+  return false;
+}
+
 export default {
   waitForElement,
   getCurrentAsset,
@@ -2143,6 +2298,7 @@ export default {
   getFavoritesViaPicker,
   switchAsset,
   switchAssetViaPicker,
+  switchAssetViaSearch,
   getAccountBalance,
   scanDOMForTradeResult,
   getCandleCountdown,
