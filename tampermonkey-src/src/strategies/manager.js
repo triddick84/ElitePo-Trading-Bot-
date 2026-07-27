@@ -18,30 +18,85 @@ import { TripleConfirmationStrategy } from './tripleConfirmation.js';
 import { get } from '../utils/api.js';
 
 /**
- * Mapping of app strategy IDs -> Tampermonkey strategy names
+ * Mapping of app strategy IDs -> Tampermonkey strategy names.
+ *
+ * Every strategy id that can be returned by the backend
+ * `/api/strategies/selected` endpoint MUST be mapped here.
+ * IDs whose logic isn't implemented natively in Tampermonkey fall back
+ * to `Local Signal Engine` (multi-indicator RSI/Stoch/BB/EMA/candles),
+ * which is a safe generic single-strategy execution — this prevents the
+ * "no local match → run ALL strategies" spam that used to happen when
+ * the backend resolved `'default'` to a concrete winner like
+ * `5s_heikin_fractal` (Iter 67).
+ *
+ * Convention: keep this list synced with
+ * /app/backend/strategy_selection_service.py::AVAILABLE_STRATEGIES.
  */
 const APP_TO_LOCAL_MAP = {
+  // 'default' means the user hasn't picked → keep the historical
+  // behaviour of enabling every strategy.
   'default': null,
+
+  // ————— 5s —————
+  '5s_heikin_fractal': 'Local Signal Engine',
   'ema20_pullback_reversal': 'EMA 20 Pullback Reversal',
   'holly_crossover_5s': 'Holly Crossover',
-  'holly_crossover_15s': 'Holly Crossover',
-  'holly_crossover_30s': 'Holly Crossover',
   'turbo_precision_5s': 'Local Signal Engine',
   'micro_compression_burst': 'Local Signal Engine',
   'keltner_breakout': 'Local Signal Engine',
   'candlestick_patterns': 'Local Signal Engine',
   'rsi_bb_scalp': 'Local Signal Engine',
-  'golden_one_moment': 'Golden One Moment',
+  'proven_supertrend': 'Local Signal Engine',
+
+  // ————— 15s —————
+  'holly_crossover_15s': 'Holly Crossover',
   'momentum_buster_15s': 'Momentum Buster',
+  'starc_cci_reversal': 'Local Signal Engine',
+  'macd_histogram': 'Local Signal Engine',
+  'stochastic_rsi_combo': 'Local Signal Engine',
+  'rsi_volume': 'Local Signal Engine',
+  'bollinger_ema': 'Local Signal Engine',
+  'macd_rsi': 'Local Signal Engine',
+  'proven_rsi': 'Local Signal Engine',
+
+  // ————— 30s —————
+  'holly_crossover_30s': 'Holly Crossover',
+  'golden_one_moment': 'Golden One Moment',
+  '30s_fibonacci_confluence': 'Fibonacci Confluence',
+  '30s_triple_confirmation': 'Triple Confirmation',
+  'dynamic_ema_rsi': 'Local Signal Engine',
+  'otc_reverse': 'Local Signal Engine',
+  'psar_fractals': 'Local Signal Engine',
+  'stochastic_adx': 'Local Signal Engine',
+  'psar_stochastic': 'Local Signal Engine',
+
+  // ————— 1m —————
+  '1m_21s_reversal': 'Local Signal Engine',
+  '1m_fibonacci_confluence': 'Fibonacci Confluence',
+  '1m_triple_confirmation': 'Triple Confirmation',
+  'turbo_precision_1m': 'Local Signal Engine',
+  '1m_momentum_exhaustion': 'Local Signal Engine',
+  '1m_quad_crossover': 'Local Signal Engine',
+  'zigzag_double_ma': 'Local Signal Engine',
+  'triple_supertrend': 'Local Signal Engine',
+  'ema_pullback': 'Local Signal Engine',
+  'rsi_sr_reversal': 'Local Signal Engine',
+  'triple_confirmation': 'Triple Confirmation',
+  'smart_money': 'Local Signal Engine',
+  '1m_triple_ema': 'Local Signal Engine',
+
+  // ————— 2m/3m/5m —————
+  'ema_macd_trend': 'Local Signal Engine',
+  'ichimoku_cci': 'Local Signal Engine',
+  'atr_sr': 'Local Signal Engine',
+  'cci_rsi': 'Local Signal Engine',
+  '5m_fibonacci_confluence': 'Fibonacci Confluence',
+  '5m_triple_confirmation': 'Triple Confirmation',
+  'vwap_momentum': 'Local Signal Engine',
+
+  // Legacy aliases (older builds / on-disk selections)
   'keltner_macd_5s': 'Keltner-MACD 5s',
   'iq720_ensemble': 'IQ-720 Ensemble',
-  // BETA (P0 — April 23, 2026)
-  '30s_fibonacci_confluence': 'Fibonacci Confluence',
-  '1m_fibonacci_confluence': 'Fibonacci Confluence',
-  '5m_fibonacci_confluence': 'Fibonacci Confluence',
-  '30s_triple_confirmation': 'Triple Confirmation',
-  '1m_triple_confirmation': 'Triple Confirmation',
-  '5m_triple_confirmation': 'Triple Confirmation',
 };
 
 class StrategyManager {
@@ -85,17 +140,45 @@ class StrategyManager {
   
   /**
    * Sync strategy selection from the app API.
-   * Enables only the strategy matching the user's app selection.
+   *
+   * The Tampermonkey userscript can only run ONE selected strategy at a
+   * time; the backend exposes per-timeframe selections. We prefer the
+   * user's 5s pick (fastest expiry, most common on PO Blitz), but if that
+   * timeframe is set to 'default' / unmapped and another timeframe has a
+   * concrete mapping, we use that instead. This makes the panel do
+   * something useful for users who only care about 30s or 1m.
    */
   async syncFromApp() {
     try {
       const response = await get('/strategies/selected');
-      
+
       if (response.success && response.selections) {
-        // Use the 5s selection for Tampermonkey (primary timeframe)
-        const selected5s = response.selections['5s'] || 'default';
-        this.applyAppSelection(selected5s);
-        info(`Strategy synced from app: ${selected5s}`);
+        const selections = response.selections || {};
+        // Preference order — 5s first (most-used PO timeframe), then
+        // the next-fastest expiries.
+        const TIMEFRAME_PRIORITY = ['5s', '15s', '30s', '1m', '2m', '3m', '5m'];
+
+        let chosenId = null;
+        let chosenTf = null;
+        for (const tf of TIMEFRAME_PRIORITY) {
+          const sid = selections[tf];
+          if (!sid || sid === 'default') continue;
+          if (APP_TO_LOCAL_MAP[sid]) {
+            chosenId = sid;
+            chosenTf = tf;
+            break;
+          }
+        }
+
+        // Nothing mapped explicitly — fall back to the raw 5s value so
+        // applyAppSelection can log/handle it (and default → all).
+        if (!chosenId) {
+          chosenId = selections['5s'] || 'default';
+          chosenTf = '5s';
+        }
+
+        this.applyAppSelection(chosenId);
+        info(`Strategy synced from app (${chosenTf}): ${chosenId}`);
         return true;
       }
     } catch (e) {
@@ -130,12 +213,17 @@ class StrategyManager {
       }
       log(`Strategy locked to: ${localName} (app: ${appStrategyId})`);
     } else {
-      // Unknown strategy - enable all as fallback
-      this.forceSingle = false;
+      // Unknown strategy id (e.g. a custom user-built strategy not yet
+      // implemented locally). Instead of enabling every strategy (which
+      // pollutes signals and was the reported bug), fall back to the
+      // safest generic engine — Local Signal Engine — so the panel keeps
+      // producing single, coherent signals.
+      this.forceSingle = true;
+      const fallbackName = 'Local Signal Engine';
       for (const s of this.getAllStrategies()) {
-        s.setEnabled(true);
+        s.setEnabled(s.getName() === fallbackName);
       }
-      log(`App strategy "${appStrategyId}" has no local match, using all strategies`);
+      warn(`App strategy "${appStrategyId}" has no local match, falling back to ${fallbackName}`);
     }
   }
   

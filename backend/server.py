@@ -3670,6 +3670,7 @@ from routes.trading import router as trading_router
 from routes.sentiment import router as sentiment_router
 from routes.jobs import router as jobs_router
 from routes.scanner import router as scanner_router
+from routes.tma import router as tma_router
 
 api_router.include_router(strategies_router)
 api_router.include_router(signals_router)
@@ -3682,6 +3683,7 @@ api_router.include_router(trading_router)
 api_router.include_router(sentiment_router)
 api_router.include_router(jobs_router)
 api_router.include_router(scanner_router)
+api_router.include_router(tma_router)
 
 app.include_router(api_router)
 

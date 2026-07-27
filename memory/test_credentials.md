@@ -28,4 +28,12 @@
 - AI Ensemble: `/api/ai-ensemble/predict`
 - Maximized ML: `/api/maximized-ml/stats`, `/api/maximized-ml/predict/{symbol}`, `/api/maximized-ml/train`
 
-## Last Updated: May 28, 2026
+## TMA (Telegram Mini App) — Phase A
+- Admin Telegram User ID: `6434316177` (matches `TMA_ADMIN_TELEGRAM_IDS` in backend/.env)
+- Dev mode: `TMA_DEV_MODE=true` — enables `dev:<telegram_user_id>:<username>` synthetic initData bypass (turn OFF in production).
+- Sign in as TMA admin via dashboard: navigate to sidebar `🛡️ TMA KYC Admin` and click "Sign in as TMA admin (dev bypass)". Uses admin ID from env.
+- Sign in as user via TMA page: open `/tma/?dev_uid=<any-numeric-id>&dev_username=<any-string>` in a browser (Phase A dev flow).
+- Preview URL (TMA): `https://auto-invert-engine.preview.emergentagent.com/tma/`
+- Preview URL (Admin): `https://auto-invert-engine.preview.emergentagent.com/` → sidebar `TMA KYC Admin`
+
+## Last Updated: Feb 2026 (TMA Phase A)

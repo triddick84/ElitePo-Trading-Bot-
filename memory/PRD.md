@@ -1,3 +1,89 @@
+# AI's Elite PO Traders Bot — Feb 2026 (TMA Phase A + TM Strategy Fix)
+
+## Iter 79 (Feb 2026) — Tampermonkey Strategy Match Fix + Telegram Mini App Phase A
+
+### 1. Tampermonkey Strategy Match Fix (P0 — completed)
+**Issue reported by user:** "tampermonkey script keeps indicating there is no
+local match for strategies chosen on tampermonkey it defaults to all
+strategies."
+
+**Root cause:** `strategy_selection_service.get_selected_strategies()`
+resolves `'default'` → concrete IDs (e.g., `5s_heikin_fractal`, Iter 67
+DEFAULT_STRATEGY_PER_TIMEFRAME). The Tampermonkey `APP_TO_LOCAL_MAP` had
+NO entry for these resolved winners → fell into the "unknown → run ALL
+strategies" branch, polluting signals.
+
+**Fix (v8.75.0):**
+- Expanded `/app/tampermonkey-src/src/strategies/manager.js::APP_TO_LOCAL_MAP`
+  to cover every id in `AVAILABLE_STRATEGIES` (5s → 5m). Unknown-yet
+  strategies map to `Local Signal Engine` (generic RSI/Stoch/BB/EMA
+  engine) so we always produce single-strategy signals.
+- `syncFromApp()` now iterates preferred TFs (5s → 15s → 30s → 1m → …)
+  looking for the first mapped selection, instead of only reading 5s.
+- Changed the unknown-id fallback: no longer enables ALL strategies —
+  now enables only `Local Signal Engine` (safest single generic).
+- Bumped userscript version so Tampermonkey re-downloads: **8.75.0**.
+- Deployed to `/app/frontend/public/pocket-option-auto-trader-modular.user.js`.
+
+### 2. Telegram Mini App Phase A (P0 — completed)
+Shipped a fully functional 4-step onboarding TMA under `/tma/` on the
+existing preview domain, no separate deploy pipeline needed.
+
+**Stack:** Vite + React 18 + TypeScript + @twa-dev/sdk. Builds to
+`/app/frontend/public/tma/` (served by CRA static). Source lives in
+`/app/telegram-mini-app/`.
+
+**Backend routes** (all under `/api/tma/`, in `/app/backend/routes/tma.py`):
+- `POST /tma/auth` — HMAC-SHA256 initData validation per Telegram spec,
+  JWT issuance (HS256, 7-day TTL), user upsert into `tma_users`.
+- `GET /tma/me`, `/tma/onboarding/state`, `/tma/packages`
+- `POST /tma/onboarding/update` — Step 1 (PO signup attestation),
+  Step 3 (package pick). Access step is server-computed only.
+- `POST /tma/kyc/upload` — stores screenshot on disk under
+  `/app/backend/uploads/tma_kyc/`. 8 MB limit.
+- `GET /tma/kyc/status`
+- `GET /tma/admin/kyc/queue`, `GET /tma/admin/kyc/{id}/image`,
+  `POST /tma/admin/kyc/{id}/review` (approve/reject)
+- `GET /tma/admin/users`, `GET /tma/health`
+
+**Auto access grant:** When admin approves KYC AND the user has picked a
+package, `access_granted = true` is set + step 4 completed atomically.
+
+**Env additions (backend/.env):**
+- `TMA_JWT_SECRET` (auto-generated, 64-byte urlsafe)
+- `TMA_ADMIN_TELEGRAM_IDS="6434316177"`
+- `PO_AFFILIATE_URL="https://u3.shortink.io/register?...&a=elite-po-traders"`
+- `TMA_DEV_MODE="true"` (dev bypass — turn OFF in production)
+
+**Admin UI:** New sidebar item `🛡️ TMA KYC Admin` → `TmaAdminPage.jsx`.
+Sign-in via dev-mode bypass in Phase A, or paste TMA JWT (obtained inside
+Telegram).
+
+**Data model (Mongo collections):**
+- `tma_users`: id, telegram_user_id, username, role, referral_code,
+  referred_by, onboarding{po_signup,kyc,package,access}, access_granted,
+  kyc_status
+- `tma_kyc`: id, user_id, telegram_user_id, status, screenshot_path,
+  submitted_at, reviewed_at, reviewed_by, review_reason
+
+**Verified via curl** (real HMAC-signed initData + dev-mode initData) —
+end-to-end flow: user signs in → step 1 complete → KYC upload → package
+pick → admin approves → access granted.
+
+### Next Actions (Phase B backlog)
+- Stripe Checkout webhook wiring for real payment (currently only records
+  package pick, no charge).
+- Telegram Bot Python worker (`telegram_bot.py`) — `/start`, `/pocket`,
+  `/packages`, `/refer` commands.
+- Referral tracking UI + payout calculation.
+- Crypto payment gateway (P2).
+- Migrate KYC screenshot storage from local disk to Emergent Object
+  Storage (Phase B for production).
+- Remove `TMA_DEV_MODE=true` for production launch.
+
+---
+
+
 # AI's Elite PO Traders Bot — Deploy Build Fix (v8.78.0)
 
 ## Iter 78 (Feb 28, 2026) — Deploy "uvicorn: command not found" Fix

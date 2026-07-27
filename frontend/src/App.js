@@ -18,6 +18,7 @@ import PocketOptionPage from "./components/PocketOptionPage";
 import MobileAutoTraderPage from "./components/MobileAutoTraderPage";
 import IntegrationsPage from "./components/IntegrationsPage";
 import SignalRoutingPage from "./components/SignalRoutingPage";
+import TmaAdminPage from "./components/TmaAdminPage";
 import { AuthProvider, LoginPage, useAuth } from "./components/AuthComponents";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
@@ -144,6 +145,7 @@ function ProtectedApp() {
     { id: "mobile-trader", label: "Mobile Auto-Trade", icon: "📲" },
     { id: "integrations", label: "Integrations", icon: "🔗" },
     { id: "signal-routing", label: "Signal Routing", icon: "🔀" },
+    { id: "tma-admin", label: "TMA KYC Admin", icon: "🛡️" },
     { id: "strategies", label: "Strategies", icon: "🎯" },
     { id: "ai-models", label: "AI Models", icon: "🧠" },
     { id: "ml-lab", label: "ML Lab", icon: "🧪" },
@@ -173,6 +175,8 @@ function ProtectedApp() {
         return <IntegrationsPage />;
       case "signal-routing":
         return <SignalRoutingPage />;
+      case "tma-admin":
+        return <TmaAdminPage />;
       case "strategies":
         return <StrategyBuilder />;
       case "ai-models":
