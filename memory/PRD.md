@@ -1,4 +1,41 @@
-# AI's Elite PO Traders Bot — Feb 2026 (TMA Phase A + TM Strategy Fix)
+# AI's Elite PO Traders Bot — Feb 2026 (TMA Phase A + TM Strategy Fix + /signal Fix)
+
+## Iter 79b (Feb 2026) — Telegram `/signal` "conditions not met" fix
+
+**User report:** "telegrams /signal is returning an error every time a
+generate signal command is entered saying conditions not met when
+should be a high priority generate."
+
+**Root cause:** `routes/integrations.py::signal_callback` routed the
+Telegram `/signal` command through `force_signal_generator.force_generate_signal`,
+whose internal analysis stack (multi-source data fetch → S/R analyzer →
+`_force_combine_analysis` → emergency fallback) had multiple silent
+failure paths that could yield a signal whose downstream shape didn't
+satisfy `platform_integration.send_telegram_signal()` — surfacing to
+the user as "⚠️ No signal generated - conditions not met." even though
+the whole point of `/signal` is a **guaranteed** high-priority signal.
+
+**Fix:** Rewrote `signal_callback` to invoke `routes/signals.py::force_generate_signal_v2`
+directly (in-process — no HTTP self-call). That endpoint's docstring
+explicitly guarantees "Always returns a directional signal — never
+empty," and it's the same pipeline the dashboard uses. The callback now:
+1. Normalises the user's selected asset to the `_OTC` suffix v2 expects.
+2. Maps the timeframe to `expiry_seconds`.
+3. Calls v2 directly; on any exception, sends a **specific** error
+   (with exception type + message) rather than the generic "conditions
+   not met".
+4. Adapts the v2 signal payload to a `TradingSignal` so
+   `platform_integration.send_telegram_signal` works unchanged.
+5. Keeps the auto-trade branch intact when
+   `telegram_bot.auto_trading_enabled`.
+
+**Regression guard:** `/app/backend/tests/test_iter79_telegram_signal_callback.py`
+(2 tests, both PASS) asserts:
+- Source imports & calls `force_generate_signal_v2`
+- The `"conditions not met"` Telegram surface is removed
+- v2 pipeline returns a non-empty signal payload with a valid direction
+
+---
 
 ## Iter 79 (Feb 2026) — Tampermonkey Strategy Match Fix + Telegram Mini App Phase A
 

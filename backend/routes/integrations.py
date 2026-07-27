@@ -1433,69 +1433,129 @@ async def start_telegram_bot_polling(background_tasks: BackgroundTasks):
     if telegram_bot.is_running:
         return {"success": True, "message": "Bot already running"}
     
-    # Set up signal callback that properly generates and sends signals
+    # Set up signal callback that properly generates and sends signals.
+    #
+    # We call the same `/signals/force-generate-v2` service the dashboard
+    # uses (`force_generate_signal_v2` in routes.signals) — its docstring
+    # guarantees a directional signal is ALWAYS returned. The previous
+    # implementation went through `force_signal_generator.force_generate_signal`
+    # which could silently fail to a fallback path whose signal object was
+    # then rejected downstream, surfacing as "conditions not met" to the
+    # user even though a high-priority signal should have been generated.
     async def signal_callback():
         try:
-            logger.info("📡 Telegram /signal command triggered - generating signal...")
-            
-            # Get user config for assets
+            logger.info("📡 Telegram /signal command triggered - generating signal via v2 pipeline...")
+
+            # Get user config for assets + expirations
             config_doc = await db.trading_configurations.find_one({"user_id": "default_user"})
-            selected_assets = config_doc.get('selected_assets', ['EURUSD_otc']) if config_doc else ['EURUSD_otc']
-            user_expirations = config_doc.get('selected_expirations', ['1m']) if config_doc else ['1m']
-            
-            # Use first selected asset
-            asset = selected_assets[0] if selected_assets else 'EURUSD_otc'
-            base_symbol = asset.replace('_regular', '').replace('_otc', '')
-            
-            # Create market data object
-            from trading_models import MarketData, AssetType
-            target_asset = MarketData(
-                symbol=base_symbol,
-                price=1.0500,
-                timestamp=datetime.now(timezone.utc),
+            selected_assets = (config_doc or {}).get('selected_assets') or ['EURUSD_OTC']
+            user_expirations = (config_doc or {}).get('selected_expirations') or ['1m']
+
+            asset = selected_assets[0]
+            # Normalise to the OTC convention v2 expects (`_OTC` uppercase suffix)
+            if asset.endswith('_otc'):
+                asset = asset[:-4] + '_OTC'
+
+            # Map first expiration timeframe -> seconds for the v2 API
+            expiry_map = {
+                '5s': 5, '15s': 15, '30s': 30, '1m': 60,
+                '2m': 120, '3m': 180, '5m': 300,
+            }
+            expiry_seconds = expiry_map.get(user_expirations[0], 60)
+
+            # Directly invoke the v2 signal service (in-process, no HTTP).
+            from routes.signals import force_generate_signal_v2
+            try:
+                v2_response = await force_generate_signal_v2(
+                    asset=asset,
+                    expiry_seconds=expiry_seconds,
+                    preferred_direction=None,
+                    min_conf_confluence=0.0,
+                    min_conf_improved_v2=0.0,
+                    min_conf_maximized_v3=0.0,
+                    min_conf_iq720=0.0,
+                )
+            except Exception as gen_err:
+                logger.error(f"❌ /signal generator failure ({type(gen_err).__name__}): {gen_err}", exc_info=True)
+                await telegram_bot.send_message(
+                    f"❌ Signal generator crashed: <code>{type(gen_err).__name__}: {str(gen_err)[:180]}</code>"
+                )
+                return
+
+            # v2 returns {"success": True, "signal": {...}, ...}
+            v2_signal = (v2_response or {}).get('signal')
+            if not v2_signal:
+                logger.error(f"❌ v2 pipeline returned no signal payload — response keys: {list((v2_response or {}).keys())}")
+                await telegram_bot.send_message(
+                    "❌ Signal engine returned an empty payload. Backend logs have details."
+                )
+                return
+
+            # Adapt v2 payload -> the TradingSignal object platform_integration expects.
+            # v2 fields: id, symbol, direction ('CALL'/'PUT'), confidence, strategy,
+            # expiry_seconds, reason, entry_price? (we set current price if missing).
+            from trading_models import TradingSignal, SignalDirection, TradingStrategy, AssetType
+            direction_str = str(v2_signal.get('direction', 'CALL')).upper()
+            direction_enum = SignalDirection.BUY if direction_str in ('CALL', 'BUY') else SignalDirection.SELL
+            expiration_seconds = int(v2_signal.get('expiry_seconds', expiry_seconds))
+            entry_price = float(v2_signal.get('entry_price') or v2_signal.get('price') or 0.0)
+
+            adapted = TradingSignal(
+                id=str(v2_signal.get('id', f"TG_SIG_{datetime.now().strftime('%Y%m%d_%H%M%S')}")),
+                symbol=asset,
                 asset_type=AssetType.FOREX,
-                volume=0
+                direction=direction_enum,
+                entry_price=entry_price,
+                expiration_minutes=max(expiration_seconds / 60.0, 5.0 / 60.0),
+                timeframe=user_expirations[0],
+                market_type='otc' if 'OTC' in asset.upper() else 'regular',
+                probability=float(v2_signal.get('confidence', 70.0)),
+                confidence_level=str(v2_signal.get('quality', 'MEDIUM')).upper(),
+                strategy_used=TradingStrategy.HYBRID,
+                technical_analysis={
+                    'source': 'force_generate_v2',
+                    'strategy_id': v2_signal.get('strategy'),
+                    'confluence_score': v2_signal.get('confluence_score'),
+                    'agreeing_strategies': v2_signal.get('agreeing_strategies'),
+                },
+                market_analysis_summary=str(v2_signal.get('reason', ''))[:500],
+                justification=f"🚀 /signal command — {v2_signal.get('strategy', 'v2 pipeline')}",
+                risk_assessment=f"Quality: {v2_signal.get('quality', 'MEDIUM')}",
+                suggested_stake=5.0,
+                timestamp=datetime.now(timezone.utc),
             )
-            
-            # Generate signal using force_generate_signal
-            from server import force_signal_generator
-            signals = await force_signal_generator.force_generate_signal(
-                base_symbol, target_asset, user_expirations, 
-                chart_type='japanese_candles', wait_for_candle=False
-            )
-            
-            if signals and len(signals) > 0:
-                signal = signals[0]
-                signal.symbol = asset  # Use full asset name
-                
-                # Send to Telegram via platform integration (this handles the enum properly now)
-                await platform_integration.send_telegram_signal(signal)
-                
-                # Also execute auto-trade if enabled
-                if telegram_bot.auto_trading_enabled:
-                    # Create TelegramTradingSignal for auto-trading
-                    tg_signal = TelegramTradingSignal(
-                        id=str(signal.id),
-                        symbol=signal.symbol,
-                        direction=signal.direction.value if hasattr(signal.direction, 'value') else str(signal.direction),
-                        confidence=float(signal.probability),
-                        entry_price=float(signal.entry_price),
-                        timeframe=str(signal.timeframe),
-                        expiration_seconds=int(signal.expiration_minutes * 60),
-                        strategy=str(signal.strategy_used),
-                        timestamp=signal.timestamp.isoformat(),
-                        reasoning=signal.justification[:200]
-                    )
-                    await telegram_bot.send_signal(tg_signal)
-                
-                logger.info(f"✅ Signal generated and sent via Telegram: {signal.id}")
-            else:
-                await telegram_bot.send_message("⚠️ No signal generated - conditions not met. Try again.")
-                logger.warning("⚠️ No signal generated from /signal command")
-                
+
+            # Send to Telegram via platform integration (handles enums properly)
+            sent = await platform_integration.send_telegram_signal(adapted)
+            if not sent:
+                logger.error("Telegram send returned False — see prior log for HTTP error")
+                await telegram_bot.send_message("❌ Signal generated but Telegram send failed (check logs).")
+                return
+
+            # Also execute auto-trade if enabled
+            if telegram_bot.auto_trading_enabled:
+                tg_signal = TelegramTradingSignal(
+                    id=str(adapted.id),
+                    symbol=adapted.symbol,
+                    direction=adapted.direction.value if hasattr(adapted.direction, 'value') else str(adapted.direction),
+                    confidence=float(adapted.probability),
+                    entry_price=float(adapted.entry_price),
+                    timeframe=str(adapted.timeframe),
+                    expiration_seconds=int(adapted.expiration_minutes * 60),
+                    strategy=str(adapted.strategy_used),
+                    timestamp=adapted.timestamp.isoformat(),
+                    reasoning=adapted.justification[:200]
+                )
+                await telegram_bot.send_signal(tg_signal)
+
+            logger.info(f"✅ /signal delivered via v2 pipeline: {adapted.id} ({direction_str} {adapted.probability}%)")
+
         except Exception as e:
-            logger.error(f"Signal callback error: {e}")
-            await telegram_bot.send_message(f"❌ Signal generation error: {str(e)[:100]}")
+            logger.error(f"Signal callback fatal error: {type(e).__name__}: {e}", exc_info=True)
+            try:
+                await telegram_bot.send_message(f"❌ Signal generation error: <code>{type(e).__name__}: {str(e)[:150]}</code>")
+            except Exception:
+                pass
     
     telegram_bot.set_signal_callback(signal_callback)
     
