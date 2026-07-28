@@ -6,12 +6,12 @@ A 5-second contrarian scalping strategy
 Configuration:
 - Chart: 5 second
 - Expiration: 5 seconds
-- Supertrend: ATR Period 100, Multiplier 1
-- Moving Average: 15-period EMA
+- Supertrend: ATR Period 12, Multiplier 1
+- Moving Average: 8-period EMA
 
 Signal Logic (CONTRARIAN):
-- Price ABOVE 15 EMA + Supertrend BUY signal → Generate SELL
-- Price BELOW 15 EMA + Supertrend SELL signal → Generate BUY
+- Price ABOVE 8 EMA + Supertrend BUY signal → Generate SELL
+- Price BELOW 8 EMA + Supertrend SELL signal → Generate BUY
 - At Support/Resistance levels → NO SIGNAL (wait for confirmation)
 
 Author: GPT Signal Bot
@@ -44,7 +44,7 @@ class FastSupertrendSignal:
     confidence: float
     entry_price: float
     supertrend_direction: str
-    ema_15_value: float
+    ema_8_value: float
     price_vs_ema: str  # 'ABOVE' or 'BELOW'
     at_sr_level: bool
     reasoning: str
@@ -68,11 +68,11 @@ class FastSupertrendCatchStrategy:
         self.expiration_seconds = 5
         
         # Supertrend settings
-        self.atr_period = 100
+        self.atr_period = 12
         self.multiplier = 1.0
         
         # EMA settings
-        self.ema_period = 15
+        self.ema_period = 8
         
         # S/R detection settings
         self.sr_lookback = 50
@@ -80,14 +80,14 @@ class FastSupertrendCatchStrategy:
         
         # Confidence settings
         self.base_confidence = 75.0
-        self.max_confidence = 92.0
+        self.max_confidence = 99.0
         
         logger.info(f"🚀 {self.name} Strategy initialized")
         logger.info(f"   ATR Period: {self.atr_period}, Multiplier: {self.multiplier}")
         logger.info(f"   EMA Period: {self.ema_period}")
     
     def calculate_atr(self, highs: List[float], lows: List[float], 
-                      closes: List[float], period: int = 100) -> List[float]:
+                      closes: List[float], period: int = 12) -> List[float]:
         """
         Calculate Average True Range (ATR)
         
@@ -222,13 +222,13 @@ class FastSupertrendCatchStrategy:
             atr=atr_values[-1]
         )
     
-    def calculate_ema(self, prices: List[float], period: int = 15) -> float:
+    def calculate_ema(self, prices: List[float], period: int = 8) -> float:
         """
         Calculate Exponential Moving Average
         
         Args:
             prices: List of prices
-            period: EMA period (default 15)
+            period: EMA period (default 8)
         
         Returns:
             Current EMA value
@@ -328,7 +328,7 @@ class FastSupertrendCatchStrategy:
             
             # Calculate indicators
             supertrend = self.calculate_supertrend(highs, lows, closes)
-            ema_15 = self.calculate_ema(closes, self.ema_period)
+            ema_8 = self.calculate_ema(closes, self.ema_period)
             
             # Detect S/R levels
             is_at_sr, support_levels, resistance_levels = self.detect_support_resistance(
@@ -336,12 +336,12 @@ class FastSupertrendCatchStrategy:
             )
             
             # Determine price position relative to EMA
-            price_vs_ema = 'ABOVE' if current_price > ema_15 else 'BELOW'
+            price_vs_ema = 'ABOVE' if current_price > ema_8 else 'BELOW'
             
             # Log analysis
             logger.info(f"📊 Fast Supertrend Catch Analysis:")
             logger.info(f"   Current Price: {current_price:.5f}")
-            logger.info(f"   15 EMA: {ema_15:.5f} (Price {price_vs_ema})")
+            logger.info(f"   15 EMA: {ema_8:.5f} (Price {price_vs_ema})")
             logger.info(f"   Supertrend: {supertrend.direction} @ {supertrend.value:.5f}")
             logger.info(f"   At S/R Level: {is_at_sr}")
             
@@ -353,7 +353,7 @@ class FastSupertrendCatchStrategy:
                     confidence=0,
                     entry_price=current_price,
                     supertrend_direction=supertrend.direction,
-                    ema_15_value=ema_15,
+                    ema_15_value=ema_8,
                     price_vs_ema=price_vs_ema,
                     at_sr_level=True,
                     reasoning="Price at Support/Resistance level - waiting for confirmation",
@@ -368,10 +368,10 @@ class FastSupertrendCatchStrategy:
             # Price ABOVE EMA + Supertrend BUY → SELL (contrarian)
             if price_vs_ema == 'ABOVE' and supertrend.direction == 'BUY':
                 signal_direction = 'SELL'
-                reasoning = f"Contrarian SELL: Price ({current_price:.5f}) ABOVE 15 EMA ({ema_15:.5f}) with Supertrend BUY signal"
+                reasoning = f"Contrarian SELL: Price ({current_price:.5f}) ABOVE 8 EMA ({ema_8:.5f}) with Supertrend BUY signal"
                 
                 # Boost confidence based on distance from EMA
-                ema_distance = ((current_price - ema_15) / ema_15) * 100
+                ema_distance = ((current_price - ema_8) / ema_8) * 100
                 if ema_distance > 0.1:  # More than 0.1% above EMA
                     confidence += min(10, ema_distance * 50)
                 
@@ -380,10 +380,10 @@ class FastSupertrendCatchStrategy:
             # Price BELOW EMA + Supertrend SELL → BUY (contrarian)
             elif price_vs_ema == 'BELOW' and supertrend.direction == 'SELL':
                 signal_direction = 'BUY'
-                reasoning = f"Contrarian BUY: Price ({current_price:.5f}) BELOW 15 EMA ({ema_15:.5f}) with Supertrend SELL signal"
+                reasoning = f"Contrarian BUY: Price ({current_price:.5f}) BELOW 8 EMA ({ema_8:.5f}) with Supertrend SELL signal"
                 
                 # Boost confidence based on distance from EMA
-                ema_distance = ((ema_15 - current_price) / ema_15) * 100
+                ema_distance = ((ema_8 - current_price) / ema_8) * 100
                 if ema_distance > 0.1:  # More than 0.1% below EMA
                     confidence += min(10, ema_distance * 50)
                 
@@ -398,7 +398,7 @@ class FastSupertrendCatchStrategy:
                     confidence=0,
                     entry_price=current_price,
                     supertrend_direction=supertrend.direction,
-                    ema_15_value=ema_15,
+                    ema_8_value=ema_8,
                     price_vs_ema=price_vs_ema,
                     at_sr_level=False,
                     reasoning=reasoning,
@@ -413,7 +413,7 @@ class FastSupertrendCatchStrategy:
                 confidence=confidence,
                 entry_price=current_price,
                 supertrend_direction=supertrend.direction,
-                ema_15_value=ema_15,
+                ema_8_value=ema_8,
                 price_vs_ema=price_vs_ema,
                 at_sr_level=False,
                 reasoning=reasoning,
@@ -467,7 +467,7 @@ class FastSupertrendCatchStrategy:
                 'reasoning': signal.reasoning,
                 'indicators': {
                     'supertrend_direction': signal.supertrend_direction,
-                    'ema_15': signal.ema_15_value,
+                    'ema_8': signal.ema_8_value,
                     'price_vs_ema': signal.price_vs_ema,
                     'at_sr_level': signal.at_sr_level
                 },
