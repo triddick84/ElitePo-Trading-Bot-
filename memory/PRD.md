@@ -1,4 +1,65 @@
-# AI's Elite PO Traders Bot — Feb 2026 (TMA Phase A + TM Strategy Fix + /signal Fix)
+# AI's Elite PO Traders Bot — Jul 2026 (TM v8.122.0 compat)
+
+## Iter 80 (Jul 28, 2026) — TM v8.122.0 backend catch-up
+
+**Context:** After a workspace rollback to Iter 79b (Feb 2026), the user
+re-uploaded a compiled `AI's Elite PO Traders Bot-8.122.0.user.js` bundle
+from a lost dev session. GitHub research (`triddick84/ElitePo-Trading-Bot-`
+branch `rollback-`) confirmed no newer sources exist in any public repo —
+the compiled userscript was the only surviving artifact.
+
+### Scope of catch-up
+Diffed the compiled `v8.122.0.user.js` against the /app backend to find every
+endpoint it pings. 14 of ~17 already existed; 3 were missing. Rebuilt those
+three so the served v8.122.0 script has a fully functional API surface again.
+
+### Changes
+- **Deployed** uploaded `v8.122.0.user.js` (378 KB) byte-for-byte to:
+  - `/app/frontend/public/pocket-option-auto-trader.user.js`
+  - `/app/frontend/public/pocket-option-auto-trader-modular.user.js`
+  - `/app/tampermonkey-src/dist/pocket-option-auto-trader.user.js`
+  - Bumped `/app/tampermonkey-src/version.txt` → **8.122.0**.
+- **New route module `/app/backend/routes/tampermonkey.py`** wired into
+  `server.py` via `api_router.include_router(tampermonkey_extra_router)`:
+  - `GET /api/tampermonkey/script` — serves compiled userscript as
+    `application/javascript` for `@updateURL`/`@downloadURL` auto-updates.
+  - `GET /api/settings/chart` — returns `{success, chart_type, chart_timeframe}`
+    from `trading_configurations` (defaults `japanese_candles` / `30s`).
+  - `POST /api/diag/ws-frames` — WS diagnostic sink, capped at 200 frames
+    per request + 2 000 rolling docs in `tm_ws_frame_diagnostics`.
+  - `GET  /api/diag/ws-frames` — recent-batches list for offline debugging.
+- **Fixed hardcoded preview URL** in `server.py:3484` — `script_url` now
+  points at the dynamic `/api/tampermonkey/script` endpoint (safe under any
+  hostname, including production).
+
+### Verified live
+- Both localhost (`http://localhost:8001`) and external preview
+  (`https://auto-invert-engine.preview.emergentagent.com`) return 200 on the
+  three new endpoints.
+- Served `/api/tampermonkey/script` bytes match the uploaded userscript
+  exactly (378 164 bytes). Content-Type is `application/javascript`.
+- `POST /api/diag/ws-frames` accepts real payloads and returns
+  `{"success":true,"stored":N}`.
+- React dashboard still renders (login screen loads clean on the preview URL).
+- Health/signals endpoints still 200 — no router-include regression.
+
+### Tests
+- `/app/backend/tests/test_iter80_tm_v8122_compat.py` — **8/8 pass**:
+  - chart settings default contract
+  - script served with correct MIME + `@version` ≥ 8.122.0
+  - served bytes byte-match on-disk bundle
+  - ws-frames POST stores batch, empty POST OK, GET lists recent
+  - regression guards on `/api/health` and `/api/signals/latest`.
+
+### Not rebuilt (deliberate scope cut)
+The handoff summary mentioned an alleged "Iter 117-127" bundle of features
+(Emergent Object Storage for admin datasets, 228-asset AssetPicker, Strategy
+Publish/Unpublish flow, AccuracyEngine gating). None of these are referenced
+by the compiled `v8.122.0.user.js` bundle, and no source code for them exists
+in any public repo. They are captured in ROADMAP.md as P1 rebuild candidates
+if the user confirms they still want them.
+
+---
 
 ## Iter 79b (Feb 2026) — Telegram `/signal` "conditions not met" fix
 

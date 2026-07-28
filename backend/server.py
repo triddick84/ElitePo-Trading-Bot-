@@ -3481,7 +3481,7 @@ async def get_tampermonkey_status():
                 "force_generate": "/api/tampermonkey/force-generate",
                 "toggle_inversion": "/api/tampermonkey/toggle-inversion",
                 "heartbeat": "/api/tampermonkey/heartbeat",
-                "script_url": "https://auto-invert-engine.preview.emergentagent.com/pocket-option-auto-trader.user.js"
+                "script_url": "/api/tampermonkey/script"
             }
         }
     except Exception as e:
@@ -3671,6 +3671,7 @@ from routes.sentiment import router as sentiment_router
 from routes.jobs import router as jobs_router
 from routes.scanner import router as scanner_router
 from routes.tma import router as tma_router
+from routes.tampermonkey import router as tampermonkey_extra_router
 
 api_router.include_router(strategies_router)
 api_router.include_router(signals_router)
@@ -3684,6 +3685,7 @@ api_router.include_router(sentiment_router)
 api_router.include_router(jobs_router)
 api_router.include_router(scanner_router)
 api_router.include_router(tma_router)
+api_router.include_router(tampermonkey_extra_router)
 
 app.include_router(api_router)
 
