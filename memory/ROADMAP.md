@@ -4,21 +4,13 @@ _Last updated: Iter 80 (Jul 28, 2026)_
 
 ## P0 — Delivered
 - ✅ Iter 80: TM v8.122.0 backend catch-up (3 missing endpoints, script hosting, regression tests).
+- ✅ Iter 81: AccuracyEngine gating on `/signals/latest` — rolling per-(asset, strategy) win-rate gate, live-tested against real historical data (13 combos gated at default 45% threshold).
 
-## P1 — Rebuild candidates (only if user confirms they still want them)
-The handoff described these as "built in lost session, need to rebuild". None
-are referenced by the compiled v8.122.0 userscript, so they are optional:
-
-- 🔵 **Emergent Object Storage for admin datasets** → `/api/maximized-ml/train`
-  wiring so admin CSV uploads feed the ML trainer directly.
-- 🔵 **228-asset catalog** + React `AssetPicker` UI (with per-market
-  All / Clear toggles).
-- 🔵 **Strategy Publish/Unpublish flow** — Draft → Published states in
-  `custom_strategies` so main selection dropdown only shows admin-approved
-  strategies.
-- 🔵 **AccuracyEngine gating on `/signals/latest`** — auto-refresh weights on
-  TM W/L outcomes.
-- 🔵 **Compact backend health strip** in TM panel (latency + status).
+## P1 — Remaining rebuild queue (approved by user, running in order b→a→c→d→e)
+- ⏭️ **Next: a) Backend health strip in TM panel** — needs user's answer on a1/a2/a3 (rebuild modular sources vs. patch dist vs. skip).
+- 🔵 **c) Strategy Publish/Unpublish flow** — DB + API + React.
+- 🔵 **d) 228-asset AssetPicker** — needs user's answer on embed location.
+- 🔵 **e) Emergent Object Storage for admin datasets** — needs playbook + admin-only confirm.
 
 ## P2 — Small backlog items
 - 🟢 "Remember this device / stay signed in for 30 days" JWT refresh token.

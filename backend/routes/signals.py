@@ -36,6 +36,9 @@ except ImportError:
     ppo_agent = None
     PPO_AVAILABLE = False
 
+# AccuracyEngine — gates /signals/latest on rolling (asset, strategy) win-rate.
+from accuracy_engine import accuracy_engine as _accuracy_engine
+
 # Re-use the main api_router — routes are registered via include in server.py
 # This module uses a local router that gets included by server.py
 router = APIRouter()
@@ -871,7 +874,52 @@ async def get_latest_signal(
         
         # Add confidence for display
         latest_signal['confidence'] = latest_signal.get('probability', 85)
-        
+
+        # ------------------------------------------------------------------
+        # AccuracyEngine gate — reject/abstain on chronically-losing combos.
+        # Only touches signals that have a strategy tag; unknown-strategy
+        # signals bypass the gate (behaviour unchanged).
+        # ------------------------------------------------------------------
+        gate_asset = latest_signal.get('symbol') or latest_signal.get('asset')
+        gate_strategy = latest_signal.get('strategy')
+        if gate_asset and gate_strategy:
+            try:
+                gate = await _accuracy_engine.should_gate(gate_asset, gate_strategy)
+                latest_signal['accuracy_engine'] = {
+                    'gated': gate.get('gated', False),
+                    'win_rate': gate.get('win_rate'),
+                    'n_trades': gate.get('n_trades', 0),
+                    'threshold_wr': gate.get('threshold_wr'),
+                    'reason': gate.get('reason'),
+                }
+                if gate.get('gated'):
+                    action = gate.get('action', 'abstain')
+                    if action == 'block':
+                        # Drop the signal entirely — behave like "no fresh signal"
+                        logger.info(
+                            "[AccuracyEngine] BLOCKED %s/%s: %s",
+                            gate_asset, gate_strategy, gate.get('reason'),
+                        )
+                        return {
+                            "success": False,
+                            "message": (
+                                "Signal blocked by AccuracyEngine — "
+                                f"{gate.get('reason')}"
+                            ),
+                            "signal": None,
+                            "accuracy_engine": latest_signal['accuracy_engine'],
+                        }
+                    # Default: abstain (surface to TM as no-trade)
+                    latest_signal['abstain'] = True
+                    latest_signal['abstain_source'] = 'accuracy_engine'
+                    latest_signal['abstain_reason'] = gate.get('reason')
+                    logger.info(
+                        "[AccuracyEngine] ABSTAIN %s/%s: %s",
+                        gate_asset, gate_strategy, gate.get('reason'),
+                    )
+            except Exception as _ge:
+                logger.debug("AccuracyEngine gate skipped: %s", _ge)
+
         return {
             "success": True,
             "signal": latest_signal,
@@ -4379,6 +4427,15 @@ async def report_trade(report: TrampermonkeyTradeReport):
         except Exception:
             pass
         await coll.insert_one(doc)
+
+        # If this report carries a WIN/LOSS outcome, invalidate the
+        # AccuracyEngine cache so the next /signals/latest call recomputes
+        # the rolling win-rate with the freshest data.
+        if doc.get("outcome"):
+            try:
+                await _accuracy_engine.invalidate()
+            except Exception as _ae:
+                logger.debug("AccuracyEngine invalidate skipped: %s", _ae)
 
         return {
             "success": True,

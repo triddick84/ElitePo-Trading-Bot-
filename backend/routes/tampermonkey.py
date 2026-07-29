@@ -34,8 +34,6 @@ router = APIRouter()
 # Mongo bootstrap — matches the pattern in the other route modules so we can
 # read/write persisted settings without touching server.py globals.
 # ---------------------------------------------------------------------------
-_mongo_url = os.environ.get("MONGO_URL")
-_db_name = os.environ.get("DB_NAME", "gpt_signal_bot")
 _client: AsyncIOMotorClient | None = None
 _db = None
 
@@ -43,8 +41,11 @@ _db = None
 def _get_db():
     global _client, _db
     if _db is None:
-        _client = AsyncIOMotorClient(_mongo_url)
-        _db = _client[_db_name]
+        from dotenv import load_dotenv
+        from pathlib import Path
+        load_dotenv(Path(__file__).parent.parent / ".env")
+        _client = AsyncIOMotorClient(os.environ["MONGO_URL"])
+        _db = _client[os.environ["DB_NAME"]]
     return _db
 
 

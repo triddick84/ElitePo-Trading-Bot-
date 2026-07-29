@@ -1,4 +1,67 @@
-# AI's Elite PO Traders Bot — Jul 2026 (TM v8.122.0 compat)
+# AI's Elite PO Traders Bot — Jul 2026 (TM v8.122.0 compat + AccuracyEngine)
+
+## Iter 81 (Jul 29, 2026) — AccuracyEngine gating on /signals/latest (P1 · b)
+
+**Motivation:** Historical `tm_trade_reports` showed several (asset, strategy)
+combos with catastrophic rolling win-rates — e.g. `EURRUB_OTC` on
+`1m_21s_reversal` at **10% WR over 30 trades**, `USDVND_OTC` at **8.33%** —
+that were still being fired by /signals/latest with no gate. AccuracyEngine
+closes that loop.
+
+### Backend
+- **New `/app/backend/accuracy_engine.py`** — singleton service:
+  - Aggregates `tm_trade_reports` into a rolling `(asset, strategy) → win-rate`
+    cache. Window: 30 most-recent outcome-tagged trades per combo.
+  - Config knobs persisted to `accuracy_engine_config` Mongo collection:
+    `enabled`, `min_trades_for_gating` (default 8), `min_win_rate_pct`
+    (default 45%), `rolling_window` (30), `cache_ttl_seconds` (60),
+    `gate_action` (`abstain` | `block`).
+  - `should_gate(asset, strategy)` returns a structured decision with reason.
+  - Cold-start safe: combos with fewer than `min_trades_for_gating` samples
+    are never gated (`reason: "cold_start"`).
+- **`routes/signals.py`** — `/signals/latest` now decorates every returned
+  signal with an `accuracy_engine` block and marks the signal `abstain=True,
+  abstain_source="accuracy_engine"` when the gate trips. Falls back cleanly
+  if the engine throws.
+- **`routes/signals.py::/trades/report`** — invalidates the AccuracyEngine
+  cache whenever a report arrives with a WIN/LOSS outcome, so the next
+  `/signals/latest` recomputes with the freshest data.
+- **New `/app/backend/routes/accuracy_engine.py`** — 6 REST endpoints:
+  - `GET  /api/accuracy-engine/status` — cache summary + gated combos.
+  - `GET  /api/accuracy-engine/stats` — all cached entries (paginated).
+  - `GET  /api/accuracy-engine/stats/one?asset=X&strategy=Y`
+  - `GET  /api/accuracy-engine/should-gate?asset=X&strategy=Y` — diagnostic.
+  - `GET  /api/accuracy-engine/config` and `POST /api/accuracy-engine/config`.
+  - `POST /api/accuracy-engine/refresh` — force cache rebuild.
+- **`server.py` startup** — primes the engine (load config + refresh) after
+  app initialisation so gating works from the first `/signals/latest` call.
+
+### Verified live
+- On the current DB, engine loaded **333 total keys, 116 active, 13 gated**
+  at the default 45% threshold. Bumping threshold to 55% correctly widens
+  gated set to 24 combos, then reverts on rollback.
+- End-to-end proof: seeded a fresh signal for `EURRUB_OTC + 1m_21s_reversal`
+  → `/api/signals/latest?symbol=EURRUB_OTC` returned it with
+  `abstain=true, abstain_source="accuracy_engine",
+  abstain_reason="win_rate 10.0% < threshold 45.0% over last 30 trades"`.
+- Trade-report → cache-invalidation → next status hit rebuilds. Verified via
+  `last_refresh` timestamp comparison.
+- All AccuracyEngine endpoints reachable on the external preview URL.
+
+### Tests
+- `/app/backend/tests/test_iter81_accuracy_engine.py` — **7/7 pass**:
+  status/config/stats REST contract, cold-start-never-gates, gated-combo
+  end-to-end through `/signals/latest`, cold-start signal is NOT gated,
+  `/trades/report` invalidates cache.
+- Combined Iter 80 + 81 regression: **15/15 pass** in 6.3 s.
+
+### Bug caught & fixed mid-implementation
+- `accuracy_engine.py` and `routes/tampermonkey.py` were defaulting
+  `DB_NAME` to `gpt_signal_bot` if env was unset. Actual DB is
+  `trading_bot_db`. Fixed both modules to `load_dotenv()` before reading
+  env so they hit the same physical DB as the other route modules.
+
+---
 
 ## Iter 80 (Jul 28, 2026) — TM v8.122.0 backend catch-up
 

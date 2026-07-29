@@ -3672,6 +3672,7 @@ from routes.jobs import router as jobs_router
 from routes.scanner import router as scanner_router
 from routes.tma import router as tma_router
 from routes.tampermonkey import router as tampermonkey_extra_router
+from routes.accuracy_engine import router as accuracy_engine_router
 
 api_router.include_router(strategies_router)
 api_router.include_router(signals_router)
@@ -3686,6 +3687,7 @@ api_router.include_router(jobs_router)
 api_router.include_router(scanner_router)
 api_router.include_router(tma_router)
 api_router.include_router(tampermonkey_extra_router)
+api_router.include_router(accuracy_engine_router)
 
 app.include_router(api_router)
 
@@ -3771,6 +3773,19 @@ async def startup_event():
             
             app_initialized = True
             logger.info("Application initialization complete")
+
+            # Load AccuracyEngine config + prime cache in background so
+            # /signals/latest gating works from the first request.
+            try:
+                from accuracy_engine import accuracy_engine as _ae
+                await _ae.load_config()
+                await _ae.refresh(force=True)
+                logger.info(
+                    "[AccuracyEngine] primed: %d keys, config=%s",
+                    len(_ae.all_entries()), _ae.get_config(),
+                )
+            except Exception as _aee:
+                logger.warning("[AccuracyEngine] prime skipped: %s", _aee)
         except Exception as e:
             logger.error(f"❌ Error during initialization: {e}")
             app_initialized = False
