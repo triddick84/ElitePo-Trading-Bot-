@@ -6,13 +6,16 @@ _Last updated: Iter 80 (Jul 28, 2026)_
 - ✅ Iter 80: TM v8.122.0 backend catch-up (3 missing endpoints, script hosting, regression tests).
 - ✅ Iter 81: AccuracyEngine gating on `/signals/latest` — rolling per-(asset, strategy) win-rate gate, live-tested against real historical data (13 combos gated at default 45% threshold).
 - ✅ Iter 82: Strategy Publish/Unpublish flow — custom strategies now selectable per-timeframe via `/api/strategies/select` (React + Tampermonkey), independent `is_active`/`is_published` states, UI badges + toasts.
+- ✅ Iter 83: Reusable `AssetPicker` (366 symbols, Regular/OTC bulk-select toolbar) — wired into StrategyBuilder + BacktestingPage.
 
-## P1 — Remaining rebuild queue (user-approved order b→a→c→d→e; b + c done)
+## P1 — Remaining rebuild queue (user-approved order b→a→c→d→e; b + c + d done)
 - ⏭️ **Next: a) Backend health strip in TM panel** — needs user's answer on a1/a2/a3 (rebuild modular sources vs. patch dist vs. skip).
-- 🔵 **d) 228-asset AssetPicker** — needs user's answer on embed location.
 - 🔵 **e) Emergent Object Storage for admin datasets** — needs playbook + admin-only confirm.
 
 ## P2 — Small backlog items
+- 🟢 Roll `<AssetPicker>` into other pages that still have their own asset UI:
+  Data Collection Dashboard, ML Lab, Pocket Option page (trivial swap now the
+  component exists).
 - 🟢 "Remember this device / stay signed in for 30 days" JWT refresh token.
 - 🟢 Backend smoke-test script that curls every route module's key endpoints
   for instant regression checking on deploy.

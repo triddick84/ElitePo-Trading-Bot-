@@ -30,6 +30,7 @@ import {
   Activity, AlertTriangle, CheckCircle, XCircle, Zap, Filter,
   Star, User
 } from 'lucide-react';
+import { AssetPicker } from './shared/AssetPicker';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -417,60 +418,15 @@ const BacktestingPage = () => {
             </Card>
 
             {/* Asset Selection */}
-            <Card className="glass-dark border-slate-700/50">
-              <CardHeader>
-                <CardTitle className="text-white flex items-center gap-2">
-                  <BarChart3 className="w-5 h-5" />
-                  Assets
-                </CardTitle>
-                <CardDescription>Select assets to test ({config.assets.length} selected)</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4 max-h-80 overflow-y-auto">
-                {Object.entries(availableAssets).map(([category, assets]) => (
-                  <div key={category} className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <button
-                        onClick={() => setExpandedCategories(prev => ({ ...prev, [category]: !prev[category] }))}
-                        className="flex items-center gap-2 text-white font-medium"
-                      >
-                        <span>{category === 'forex' ? '💱' : category === 'crypto' ? '₿' : '📈'}</span>
-                        <span className="capitalize">{category}</span>
-                        <Badge className="bg-slate-700 text-xs">{assets.length}</Badge>
-                        <span className="text-slate-400">{expandedCategories[category] ? '▼' : '▶'}</span>
-                      </button>
-                      <div className="flex gap-1">
-                        <Button size="sm" variant="ghost" className="text-xs h-6 px-2" onClick={() => selectAllInCategory(category)}>
-                          All
-                        </Button>
-                        <Button size="sm" variant="ghost" className="text-xs h-6 px-2" onClick={() => clearCategory(category)}>
-                          Clear
-                        </Button>
-                      </div>
-                    </div>
-                    {expandedCategories[category] && (
-                      <div className="grid grid-cols-2 gap-1 pl-6">
-                        {assets.map(asset => (
-                          <label
-                            key={asset}
-                            className={`flex items-center gap-2 p-2 rounded cursor-pointer text-sm ${
-                              config.assets.includes(asset)
-                                ? 'bg-purple-500/20 text-purple-300'
-                                : 'text-slate-400 hover:bg-slate-800/50'
-                            }`}
-                          >
-                            <Checkbox
-                              checked={config.assets.includes(asset)}
-                              onCheckedChange={() => toggleAsset(asset)}
-                            />
-                            <span>{asset}</span>
-                          </label>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
+            {/* Assets — Iter 83: reusable AssetPicker replaces the tree UI */}
+            <AssetPicker
+              value={config.assets || []}
+              onChange={(next) => setConfig(prev => ({ ...prev, assets: next }))}
+              testIdPrefix="backtest-asset-picker"
+              title="Assets"
+              description="Select any combination of Regular and OTC assets to backtest."
+              maxHeight="max-h-80"
+            />
 
             {/* Timeframe & Settings */}
             <Card className="glass-dark border-slate-700/50">

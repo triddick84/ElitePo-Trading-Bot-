@@ -15,6 +15,7 @@ import {
   Plus, Trash2, Copy, Save, Play, Settings, TrendingUp, Activity,
   BarChart3, Layers, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, Circle, Zap, ArrowUp, ArrowDown
 } from 'lucide-react';
+import { AssetPicker } from './shared/AssetPicker';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL || '';
 
@@ -1506,24 +1507,16 @@ const StrategyBuilder = () => {
                 </div>
               </div>
 
-              {/* Assets */}
+              {/* Assets — Iter 83: reusable AssetPicker with market bulk-select */}
               <div>
-                <Label className="mb-2 block">Assets ({strategyForm.assets.length} selected)</Label>
-                <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
-                  {assets.map(asset => (
-                    <Button
-                      key={asset.value}
-                      variant={strategyForm.assets.includes(asset.value) ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => toggleAsset(asset.value)}
-                      className={`text-xs ${strategyForm.assets.includes(asset.value) 
-                        ? asset.market === 'otc' ? 'bg-green-500/20 text-green-400 border-green-500/50' : 'bg-blue-500/20 text-blue-400 border-blue-500/50'
-                        : 'border-slate-600'}`}
-                    >
-                      {asset.label}
-                    </Button>
-                  ))}
-                </div>
+                <AssetPicker
+                  value={strategyForm.assets || []}
+                  onChange={(next) => setStrategyForm(prev => ({ ...prev, assets: next }))}
+                  testIdPrefix="strategy-builder-asset-picker"
+                  title="Assets & Markets"
+                  description="Pick individual symbols, entire markets (Regular / OTC), or specific asset classes."
+                  maxHeight="max-h-96"
+                />
               </div>
 
               {/* Risk Settings */}

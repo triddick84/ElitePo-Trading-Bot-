@@ -1,4 +1,81 @@
-# AI's Elite PO Traders Bot — Jul 2026 (Publish Flow + AccuracyEngine + TM v8.122.0)
+# AI's Elite PO Traders Bot — Jul 2026 (AssetPicker + Publish + AccuracyEngine + TM v8.122.0)
+
+## Iter 83 (Jul 29, 2026) — Reusable AssetPicker w/ Regular/OTC bulk-select (P1 · d)
+
+**Motivation:** User feedback — "within the strategy builder the assets and
+markets selection needs to have a single or select all for markets and
+regular and otc. This needs to be implemented thru the whole application even
+for backtesting". The old StrategyBuilder had a flat 30-chip grid with no
+bulk controls; BacktestingPage had its own hand-rolled category tree. Two
+completely different UX for the same problem.
+
+### New reusable component
+- `/app/frontend/src/components/shared/AssetPicker.jsx` — single component
+  used by both StrategyBuilder and BacktestingPage.
+- Consumes existing `GET /api/backtest/assets-universe` (366 symbols across
+  10 asset classes: Forex, Commodities, Crypto, Indices, US Stocks × Regular
+  + OTC).
+- Bulk toolbar user asked for:
+  - **Select All ({N})** / **Clear All**
+  - **All Regular ({N})** / **Clear Regular**
+  - **All OTC ({N})** / **Clear OTC**
+  - Per-class **All / Clear** (matches existing BacktestingPage pattern)
+- Live selection summary: `{N} selected` badge + `{R} Regular · {O} OTC`
+  breakdown chips.
+- Text search across all symbols (`EURUSD`, `BTC`, `XAU`…).
+- Collapsible asset classes with per-class `M/N` selection counters that
+  turn emerald when the whole class is selected.
+- Props:
+  - `value` / `onChange` — controlled component.
+  - `restrictToMarket` (`"regular"` | `"otc"` | `null`) — pass a value to
+    scope the picker to just one side when the calling context requires it.
+  - `testIdPrefix` — namespaces every `data-testid` so pages hosting multiple
+    pickers stay collision-free.
+  - `maxHeight`, `defaultCollapsed`, `title`, `description` for styling.
+
+### Wired into
+- **`StrategyBuilder.jsx`** — replaced the flat 30-chip grid inside the
+  Builder tab with `<AssetPicker testIdPrefix="strategy-builder-asset-picker">`.
+  Any strategy the user builds now has the full 366-symbol universe available
+  with all bulk controls.
+- **`BacktestingPage.jsx`** — replaced the bespoke category tree with
+  `<AssetPicker testIdPrefix="backtest-asset-picker">`. Same UX as StrategyBuilder now.
+- Both places share exactly the same UX — no more "why does this page work
+  differently" cognitive tax.
+
+### `data-testid` surface (per prefix)
+- `{prefix}` (root)
+- `{prefix}-selected-count`, `{prefix}-breakdown-regular`, `{prefix}-breakdown-otc`
+- `{prefix}-select-all`, `{prefix}-clear-all`
+- `{prefix}-select-all-regular`, `{prefix}-clear-all-regular`
+- `{prefix}-select-all-otc`, `{prefix}-clear-all-otc`
+- `{prefix}-search`
+- `{prefix}-class-{id}`, `{prefix}-class-{id}-toggle`, `{prefix}-class-{id}-all`, `{prefix}-class-{id}-clear`
+- `{prefix}-symbol-{SYM}`, `{prefix}-symbol-{SYM}-checkbox`
+- `{prefix}-empty` (when a search yields no results)
+
+### Verified end-to-end (browser automation)
+- StrategyBuilder → Builder tab → AssetPicker renders with all bulk buttons.
+- BacktestingPage → Backtesting tab → AssetPicker renders.
+- Interactive test on BacktestingPage:
+  - Click **All OTC (183)** → `183 OTC` chip, `184 selected` total (1 pre-existing + 183 OTC).
+  - Click **All Regular (183)** → both chips at 183, `366 selected` total (whole universe).
+  - Type "BTC" in search → filters to just Crypto Regular + Crypto OTC classes.
+  - Click **Clear All** → `0 selected`.
+
+### Tests
+- `/app/backend/tests/test_iter83_asset_picker_catalog.py` — **5/5 pass**:
+  universe shape, both market sides present, symbol totals (≥100 each side),
+  OTC symbols carry `_OTC` marker, no dupes within a market.
+- Combined Iter 80 + 81 + 82 + 83 regression: **29/29 pass** in 1.5 s.
+
+### Not touched (deliberate scope)
+- Other places that have their own smaller asset selectors (Data Collection
+  Dashboard, ML Lab, Pocket Option page) — user's request was specifically
+  Strategy Builder + Backtesting. Trivial to swap the same `<AssetPicker>` in
+  once those pages get any other change; noted in ROADMAP.md.
+
+---
 
 ## Iter 82 (Jul 29, 2026) — Strategy Publish/Unpublish flow (P1 · c)
 
