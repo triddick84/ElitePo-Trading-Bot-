@@ -4,7 +4,7 @@ Manages user strategy preferences for each timeframe
 """
 
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 
@@ -216,10 +216,13 @@ class StrategySelectionService:
             if timeframe not in self.AVAILABLE_STRATEGIES:
                 logger.error(f"Invalid timeframe: {timeframe}")
                 return False
-            
-            available_ids = [s['id'] for s in self.AVAILABLE_STRATEGIES[timeframe]]
-            if strategy_id not in available_ids:
-                logger.error(f"Invalid strategy ID {strategy_id} for timeframe {timeframe}")
+
+            # Iter 82 — accept 'default', curated/registry strategies, and any
+            # published custom strategy that declares this timeframe.
+            if not await self.is_valid_selection(timeframe, strategy_id):
+                logger.error(
+                    f"Invalid strategy ID {strategy_id} for timeframe {timeframe}"
+                )
                 return False
             
             # Update or create selection
@@ -261,6 +264,86 @@ class StrategySelectionService:
         """Get all available strategies for all timeframes"""
         self._auto_discover_from_registry()
         return self.AVAILABLE_STRATEGIES
+
+    # ------------------------------------------------------------------
+    # Iter 82 — merge in published custom strategies.
+    # Sync `get_available_strategies*` above returns ONLY curated + registry
+    # entries so we don't touch every legacy caller. The async variants below
+    # additionally merge in `is_published=True` docs from `custom_strategies`.
+    # ------------------------------------------------------------------
+    async def _fetch_published_customs(
+        self, timeframe: Optional[str] = None
+    ) -> List[Dict]:
+        """Fetch published custom strategies (optionally filtered by TF)."""
+        try:
+            db = self.collection.database
+            q: Dict[str, Any] = {"is_published": True}
+            if timeframe:
+                q["timeframes"] = timeframe
+            docs = await db.custom_strategies.find(q, {"_id": 0}).to_list(500)
+            # Coerce into the same shape as curated entries
+            out = []
+            for d in docs:
+                out.append({
+                    "id": d.get("id"),
+                    "name": f"🛠 {d.get('name') or 'Custom Strategy'}",
+                    "description": d.get("description") or "User-built custom strategy",
+                    "custom": True,
+                    "is_active": bool(d.get("is_active", True)),
+                    "is_published": True,
+                    "timeframes": d.get("timeframes") or [],
+                    "win_rate": (
+                        f"{d.get('win_rate', 0):.1f}%"
+                        if isinstance(d.get('win_rate'), (int, float)) and d.get('win_rate')
+                        else None
+                    ),
+                })
+            return out
+        except Exception as e:
+            logger.warning(f"[strategy_selection] fetch_published_customs failed: {e}")
+            return []
+
+    async def get_available_strategies_with_customs(
+        self, timeframe: str
+    ) -> List[Dict]:
+        """Curated + auto-discovered + published customs for one TF."""
+        base = list(self.get_available_strategies(timeframe))
+        customs = await self._fetch_published_customs(timeframe)
+        # Prevent id collisions — customs win if same id somehow appears
+        base_ids = {s.get("id") for s in base}
+        merged = base + [c for c in customs if c.get("id") not in base_ids]
+        return merged
+
+    async def get_all_available_strategies_with_customs(
+        self,
+    ) -> Dict[str, List[Dict]]:
+        """Same as `get_all_available_strategies` but includes published customs."""
+        merged: Dict[str, List[Dict]] = {}
+        for tf in self.AVAILABLE_STRATEGIES.keys():
+            merged[tf] = list(self.AVAILABLE_STRATEGIES[tf])
+        customs = await self._fetch_published_customs(None)
+        for c in customs:
+            for tf in (c.get("timeframes") or []):
+                if tf not in merged:
+                    merged[tf] = []
+                if not any(s.get("id") == c.get("id") for s in merged[tf]):
+                    merged[tf].append(c)
+        return merged
+
+    async def is_valid_selection(self, timeframe: str, strategy_id: str) -> bool:
+        """
+        True if `strategy_id` is a valid selection for `timeframe` — either
+        curated/registry OR a published custom strategy that declares this TF.
+        """
+        if strategy_id == "default":
+            return timeframe in self.DEFAULT_STRATEGY_PER_TIMEFRAME
+        # Curated / registry
+        if timeframe in self.AVAILABLE_STRATEGIES:
+            if any(s["id"] == strategy_id for s in self.AVAILABLE_STRATEGIES[timeframe]):
+                return True
+        # Published customs
+        customs = await self._fetch_published_customs(timeframe)
+        return any(c.get("id") == strategy_id for c in customs)
 
 
 # Global instance

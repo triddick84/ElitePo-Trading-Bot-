@@ -1,4 +1,85 @@
-# AI's Elite PO Traders Bot — Jul 2026 (TM v8.122.0 compat + AccuracyEngine)
+# AI's Elite PO Traders Bot — Jul 2026 (Publish Flow + AccuracyEngine + TM v8.122.0)
+
+## Iter 82 (Jul 29, 2026) — Strategy Publish/Unpublish flow (P1 · c)
+
+**Motivation:** User's feedback — "built and saved strategies are attached to
+default not individual". Custom strategies lived in a parallel universe:
+`/strategies/available/{tf}` (the picker feeding the React dashboard AND the
+Tampermonkey userscript) only returned curated + auto-discovered strategies.
+Nothing a user built with the Strategy Builder ever showed up there.
+
+### Model change
+- `custom_strategies` gains an `is_published: bool` field, **defaulting to
+  `False`** for new strategies. Legacy rows without the field are treated as
+  drafts on read (no destructive migration required).
+- Two flags are now independent and orthogonal:
+  - **`is_active`** — "generator switch — is this strategy allowed to fire signals?"
+  - **`is_published`** — "is this strategy exposed in the timeframe strategy
+    picker (React + Tampermonkey)?"
+
+### Backend
+- **`custom_strategy_service.py`** — new methods `set_published`,
+  `toggle_published`, `list_published`. `create_strategy` accepts
+  `is_published`; `duplicate_strategy` intentionally forces `is_published=False`
+  so experimental copies never leak to the picker.
+- **`strategy_selection_service.py`** — three new async methods:
+  - `get_available_strategies_with_customs(tf)` — merges curated + registry +
+    published customs into one list. Customs are tagged `custom: true` and
+    prefixed with `🛠 ` so they stand out visually.
+  - `get_all_available_strategies_with_customs()` — same across all TFs.
+  - `is_valid_selection(tf, id)` — accepts `default`, curated/registry ids,
+    **or any published custom that declares this timeframe**. Used by
+    `update_strategy_selection` so `/strategies/select` can now target
+    custom strategies too.
+- **`routes/strategies.py`** — three new endpoints and two upgraded ones:
+  - `POST /api/custom-strategies/{id}/publish`
+  - `POST /api/custom-strategies/{id}/unpublish`
+  - `POST /api/custom-strategies/{id}/toggle-publish`
+  - `GET  /api/strategies/available` and `/available/{tf}` now use the async
+    merged views (published customs appear alongside curated).
+
+### Frontend
+- **`StrategyBuilder.jsx`** — "My Strategies" list gets:
+  - **`Draft` / `Published` badge** with tooltips explaining the state.
+  - **Publish / Unpublish button** (cyan when published, amber when draft)
+    with success toast: `"<name>" published — now selectable in the
+    timeframe picker`.
+  - Existing **On/Off** button kept but its purpose clarified in the header
+    subtitle: *Publish controls picker visibility; On/Off controls firing*.
+  - All new elements carry `data-testid` attributes:
+    `strategy-draft-badge-{id}`, `strategy-published-badge-{id}`,
+    `strategy-publish-toggle-{id}`.
+
+### Verified end-to-end
+- Manual UI test: logged in as `seedtest`, went to Strategies → Saved tab,
+  clicked Publish on "Donchain Gang" → badge flipped Draft → Published, button
+  became Unpublish, success toast fired. Unpublish restores state cleanly.
+- Curl walkthrough (all 9 steps green):
+  1. Create strategy → `is_published: false`
+  2. Missing from `/strategies/available/1m`
+  3. Publish → `is_published: true`
+  4. Present in `/strategies/available/1m` with `custom: true` tag
+  5. `/strategies/select 1m` → strategy id accepted
+  6. `/strategies/selected` reflects the pick
+  7. Unpublish → gone from picker
+  8. `toggle-publish` flips it back
+  9. Delete cleanup
+
+### Tests
+- `/app/backend/tests/test_iter82_strategy_publish_flow.py` — **9/9 pass**:
+  defaults-to-draft, draft-hidden, publish-visible-with-marker,
+  select-published-accepted, select-unpublished-rejected, unpublish-removes,
+  toggle-flips, active-and-published-independent, all-TFs-response-includes.
+- Combined Iter 80 + 81 + 82 regression: **24/24 pass** in 0.93 s.
+
+### Tampermonkey compatibility
+- Zero changes needed to the compiled v8.122.0 userscript — it already pulls
+  `/strategies/available/{tf}` dynamically. Published customs now appear
+  there automatically. If a user selects a custom strategy for a timeframe,
+  the TM script falls back to its Local Signal Engine for that (asset, TF)
+  which is the correct behaviour for user-built rulesets.
+
+---
 
 ## Iter 81 (Jul 29, 2026) — AccuracyEngine gating on /signals/latest (P1 · b)
 

@@ -50,11 +50,17 @@ import math
 # Strategy Selection API Endpoints
 @router.get("/strategies/available")
 async def get_available_strategies():
-    """Get all available strategies for all timeframes"""
+    """Get all available strategies for all timeframes.
+
+    Iter 82 — includes any user-built custom strategies that have been
+    published (`is_published=True`), so the timeframe strategy picker in the
+    React dashboard AND the Tampermonkey userscript sees them alongside
+    curated + auto-discovered strategies.
+    """
     try:
         from strategy_selection_service import strategy_selection_service
-        strategies = strategy_selection_service.get_all_available_strategies()
-        
+        strategies = await strategy_selection_service.get_all_available_strategies_with_customs()
+
         return {
             "success": True,
             "strategies": strategies
@@ -67,14 +73,14 @@ async def get_available_strategies():
 
 @router.get("/strategies/available/{timeframe}")
 async def get_available_strategies_for_timeframe(timeframe: str):
-    """Get available strategies for a specific timeframe"""
+    """Get available strategies for a specific timeframe (includes published customs)."""
     try:
         from strategy_selection_service import strategy_selection_service
-        strategies = strategy_selection_service.get_available_strategies(timeframe)
-        
+        strategies = await strategy_selection_service.get_available_strategies_with_customs(timeframe)
+
         if not strategies:
             raise HTTPException(status_code=404, detail=f"No strategies found for timeframe {timeframe}")
-        
+
         return {
             "success": True,
             "timeframe": timeframe,
@@ -2494,6 +2500,45 @@ async def toggle_custom_strategy(strategy_id: str, is_active: bool = True):
         return result
     except Exception as e:
         logger.error(f"Error toggling strategy: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/custom-strategies/{strategy_id}/publish")
+async def publish_custom_strategy(strategy_id: str):
+    """Publish a strategy — makes it selectable in the timeframe strategy picker
+    (React dashboard + Tampermonkey `/strategies/available/{tf}`)."""
+    try:
+        service = await get_strategy_service()
+        result = await service.set_published(strategy_id, True)
+        return result
+    except Exception as e:
+        logger.error(f"Error publishing strategy: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/custom-strategies/{strategy_id}/unpublish")
+async def unpublish_custom_strategy(strategy_id: str):
+    """Unpublish a strategy — removes it from the timeframe strategy picker.
+    Any timeframe currently pointing at this id will be gracefully re-defaulted
+    on the next `/strategies/select` validation."""
+    try:
+        service = await get_strategy_service()
+        result = await service.set_published(strategy_id, False)
+        return result
+    except Exception as e:
+        logger.error(f"Error unpublishing strategy: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/custom-strategies/{strategy_id}/toggle-publish")
+async def toggle_publish_custom_strategy(strategy_id: str):
+    """Flip the strategy's publish state (Draft ↔ Published)."""
+    try:
+        service = await get_strategy_service()
+        result = await service.toggle_published(strategy_id)
+        return result
+    except Exception as e:
+        logger.error(f"Error toggling publish state: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

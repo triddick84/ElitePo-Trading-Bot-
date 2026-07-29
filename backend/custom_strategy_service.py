@@ -588,6 +588,13 @@ class CustomStrategy:
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     is_active: bool = True
+    # Iter 82 — Publish/Unpublish flow.
+    # `is_active`   = "generator switch — is this strategy allowed to fire signals?"
+    # `is_published` = "is this strategy exposed in the timeframe-selection UI
+    #                   (React dashboard AND Tampermonkey `/strategies/available`)?"
+    # Default False so newly-built strategies stay as **Drafts** until the
+    # user explicitly publishes them.
+    is_published: bool = False
     win_rate: float = 0.0
     total_signals: int = 0
     
@@ -608,6 +615,7 @@ class CustomStrategy:
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
             "is_active": self.is_active,
+            "is_published": self.is_published,
             "win_rate": self.win_rate,
             "total_signals": self.total_signals
         }
@@ -655,7 +663,8 @@ class CustomStrategyService:
                 cooldown_seconds=strategy_data.get("cooldown_seconds", 60),
                 created_at=now,
                 updated_at=now,
-                is_active=strategy_data.get("is_active", True)
+                is_active=strategy_data.get("is_active", True),
+                is_published=strategy_data.get("is_published", False),
             )
             
             # Save to database
@@ -764,6 +773,32 @@ class CustomStrategyService:
     async def toggle_strategy(self, strategy_id: str, is_active: bool) -> Dict[str, Any]:
         """Toggle strategy active status"""
         return await self.update_strategy(strategy_id, {"is_active": is_active})
+
+    async def set_published(self, strategy_id: str, is_published: bool) -> Dict[str, Any]:
+        """Set the publish state of a strategy (draft ↔ published)."""
+        return await self.update_strategy(strategy_id, {"is_published": bool(is_published)})
+
+    async def toggle_published(self, strategy_id: str) -> Dict[str, Any]:
+        """Flip the publish state of a strategy."""
+        current = await self.get_strategy(strategy_id)
+        if not current:
+            return {"success": False, "error": "Strategy not found"}
+        new_state = not bool(current.get("is_published", False))
+        return await self.set_published(strategy_id, new_state)
+
+    async def list_published(
+        self, timeframe: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Return all published custom strategies. If `timeframe` is given,
+        filter to strategies that declare that timeframe in their
+        `timeframes` array.
+        """
+        q: Dict[str, Any] = {"is_published": True}
+        if timeframe:
+            q["timeframes"] = timeframe
+        cursor = self.collection.find(q, {"_id": 0}).sort("updated_at", -1)
+        return [d async for d in cursor]
     
     async def duplicate_strategy(self, strategy_id: str, new_name: str) -> Dict[str, Any]:
         """Duplicate an existing strategy"""
@@ -784,6 +819,9 @@ class CustomStrategyService:
             "min_confidence": original.get("min_confidence", 75),
             "user_id": original.get("user_id", "default_user"),
             "is_active": True,
+            # Duplicated strategies start as drafts — user must publish them
+            # explicitly. Prevents accidental publishing of experimental copies.
+            "is_published": False,
             "win_rate": 0.0,
             "total_signals": 0,
             "created_at": datetime.now(timezone.utc).isoformat(),

@@ -1580,7 +1580,14 @@ const StrategyBuilder = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="text-white">My Strategies</CardTitle>
-                  <CardDescription>Toggle individual strategies on/off. Only active strategies will generate signals.</CardDescription>
+                  <CardDescription>
+                    <span className="block">
+                      <span className="text-cyan-400 font-semibold">Publish</span> to make a strategy selectable in the timeframe strategy picker (React + Tampermonkey).
+                    </span>
+                    <span className="block">
+                      <span className="text-emerald-400 font-semibold">On/Off</span> controls whether it is allowed to fire signals.
+                    </span>
+                  </CardDescription>
                 </div>
                 <Button
                   data-testid="deactivate-all-strategies"
@@ -1615,6 +1622,7 @@ const StrategyBuilder = () => {
                 <div className="space-y-3">
                   {strategies.map(strategy => {
                     const isActive = strategy.is_active === true;
+                    const isPublished = strategy.is_published === true;
                     return (
                       <div
                         key={strategy.id}
@@ -1627,10 +1635,28 @@ const StrategyBuilder = () => {
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-medium text-white truncate">{strategy.name}</span>
                               {isActive && (
                                 <Badge data-testid={`strategy-active-badge-${strategy.id}`} className="bg-emerald-600 text-xs shrink-0">Active</Badge>
+                              )}
+                              {isPublished ? (
+                                <Badge
+                                  data-testid={`strategy-published-badge-${strategy.id}`}
+                                  className="bg-cyan-600 text-xs shrink-0"
+                                  title="Selectable in the timeframe strategy picker (React + TM)"
+                                >
+                                  Published
+                                </Badge>
+                              ) : (
+                                <Badge
+                                  data-testid={`strategy-draft-badge-${strategy.id}`}
+                                  variant="outline"
+                                  className="border-amber-500/50 text-amber-400 text-xs shrink-0"
+                                  title="Draft — hidden from the timeframe strategy picker"
+                                >
+                                  Draft
+                                </Badge>
                               )}
                             </div>
                             <div className="text-sm text-slate-400 mt-1">{strategy.description}</div>
@@ -1644,6 +1670,32 @@ const StrategyBuilder = () => {
                             </div>
                           </div>
                           <div className="flex items-center gap-2 ml-4 shrink-0">
+                            <Button
+                              data-testid={`strategy-publish-toggle-${strategy.id}`}
+                              variant="outline"
+                              size="sm"
+                              onClick={async () => {
+                                try {
+                                  const res = await axios.post(`${API_URL}/api/custom-strategies/${strategy.id}/toggle-publish`);
+                                  const newState = res.data?.strategy?.is_published;
+                                  fetchStrategies();
+                                  toast.success(
+                                    newState
+                                      ? `"${strategy.name}" published — now selectable in the timeframe picker`
+                                      : `"${strategy.name}" unpublished — hidden from the timeframe picker`
+                                  );
+                                } catch (error) {
+                                  toast.error('Failed to toggle publish state');
+                                }
+                              }}
+                              className={isPublished
+                                ? 'border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/20'
+                                : 'border-amber-500/50 text-amber-400 hover:bg-amber-500/20'
+                              }
+                              title={isPublished ? 'Click to unpublish (return to Draft)' : 'Click to publish (make selectable)'}
+                            >
+                              {isPublished ? 'Unpublish' : 'Publish'}
+                            </Button>
                             <Button
                               data-testid={`strategy-toggle-${strategy.id}`}
                               variant="outline"
