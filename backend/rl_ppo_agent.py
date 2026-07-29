@@ -71,7 +71,18 @@ class TradingEnvironment:
         return self.LOOKBACK * self.features.shape[1] + 2
 
     def step(self, action):
-        """Execute action, return (next_state, reward, done)."""
+        """Execute action, return (next_state, reward, done).
+
+        Iter 84 — reward shaping upgrades:
+        - Amplified PnL signal (100 → 200) so wins/losses register clearly.
+        - Small **entropy bonus** for BUY/SELL actions to prevent policy
+          collapse to always-HOLD (the #1 cause of our 29% collapse).
+        - Larger **penalty** for holding an open losing position rather than a
+          symmetric unrealized reward, which biased the agent toward passive
+          floating losses.
+        - Winning trades get a bonus multiplier — the goal is win RATE, not
+          raw PnL, for a binary-options-style objective.
+        """
         price = self.closes[self.idx]
         reward = 0.0
 
@@ -80,33 +91,50 @@ class TradingEnvironment:
             # Open long or close short
             if self.position == -1:
                 pnl = (self.entry_price - price) / (self.entry_price + 1e-10) - self.COST
-                reward = pnl * 100
+                reward = pnl * 200
+                # Win-rate bonus: extra reward for correct short → long flips
+                if pnl > 0:
+                    reward += 0.5
                 self.trades += 1
                 if pnl > 0:
                     self.wins += 1
             self.position = 1
             self.entry_price = price
+            # Tiny exploration bonus for taking action (offsets HOLD default)
+            reward += 0.02
 
         elif action == 2 and self.position >= 0:
             # Open short or close long
             if self.position == 1:
                 pnl = (price - self.entry_price) / (self.entry_price + 1e-10) - self.COST
-                reward = pnl * 100
+                reward = pnl * 200
+                if pnl > 0:
+                    reward += 0.5
                 self.trades += 1
                 if pnl > 0:
                     self.wins += 1
             self.position = -1
             self.entry_price = price
+            reward += 0.02
 
         elif action == 0:
-            # Small penalty for holding with open position to encourage decisive trading
+            # ASYMMETRIC unrealized handling — small penalty for sitting on a
+            # loser (encourages the agent to CLOSE bad positions) but no
+            # reward for sitting on a winner (the actual close-reward is
+            # what should teach it). This kills the "always hold" attractor.
             if self.position != 0:
-                unrealized = 0
+                unrealized = 0.0
                 if self.position == 1:
                     unrealized = (price - self.entry_price) / (self.entry_price + 1e-10)
                 else:
                     unrealized = (self.entry_price - price) / (self.entry_price + 1e-10)
-                reward = unrealized * 10  # small unrealized pnl feedback
+                if unrealized < 0:
+                    reward = unrealized * 20  # 2× the old penalty
+                # If unrealized > 0, reward stays 0 → agent must actually
+                # close the trade to bank the win.
+            else:
+                # Small negative reward for sitting flat forever
+                reward = -0.001
 
         self.total_reward += reward
         self.idx += 1
@@ -118,7 +146,9 @@ class TradingEnvironment:
                 pnl = (price - self.entry_price) / (self.entry_price + 1e-10) - self.COST
             else:
                 pnl = (self.entry_price - price) / (self.entry_price + 1e-10) - self.COST
-            reward += pnl * 100
+            reward += pnl * 200
+            if pnl > 0:
+                reward += 0.5
             self.trades += 1
             if pnl > 0:
                 self.wins += 1

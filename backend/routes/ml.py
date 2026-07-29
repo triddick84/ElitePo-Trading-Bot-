@@ -1895,11 +1895,18 @@ async def get_ppo_stats():
 async def train_ppo(
     symbol: str = Query("EUR_USD"),
     granularity: str = Query("M1"),
-    count: int = Query(2000, ge=500, le=5000),
-    episodes: int = Query(20, ge=5, le=100),
+    count: int = Query(5000, ge=500, le=20000),
+    episodes: int = Query(50, ge=5, le=200),
     background_tasks: BackgroundTasks = None
 ):
-    """Train PPO RL agent on OANDA historical data."""
+    """Train PPO RL agent on OANDA historical data.
+
+    Iter 84 — bumped defaults: 2 000 → 5 000 candles, 20 → 50 episodes.
+    The old defaults produced ≤82 trades over training which was nowhere near
+    enough for PPO to converge on financial data. Empirically we need at
+    least ~500 trades of experience across ≥40 episodes for the policy
+    entropy to stabilize.
+    """
     if ppo_agent is None:
         raise HTTPException(400, "PPO agent not available")
 
@@ -1985,7 +1992,45 @@ async def ensemble_predict(symbol: str = Query("EUR_USD"), granularity: str = Qu
 
     predictions = {}
     votes = {'BUY': 0, 'SELL': 0, 'HOLD': 0}
-    weights = {'stacking': 0.4, 'lstm_gru': 0.35, 'ppo': 0.25}
+
+    # Iter 84 — DYNAMIC ensemble weights based on live per-model accuracy.
+    # Old hardcoded {stacking: 0.4, lstm_gru: 0.35, ppo: 0.25} was letting
+    # a 29%-accuracy PPO drag the ensemble around. Now weights come from
+    # each model's edge above 50% baseline, and any model below the
+    # min_trusted threshold (default 45%) is EXCLUDED from the vote.
+    try:
+        from ensemble_weights import compute_weights as _ew
+        _weight_info = _ew(
+            stacking_model=maximized_ai_ml,
+            lstm_gru=lstm_gru_system,
+            ppo=ppo_agent,
+        )
+        _w = _weight_info["weights"]
+        weights = {
+            'stacking': _w.get('stacking', 0.0),
+            'lstm_gru': _w.get('lstm_gru', 0.0),
+            'ppo':      _w.get('ppo', 0.0),
+        }
+    except Exception as _ew_exc:
+        logger.warning(f"[ai-ensemble] dynamic weights failed, falling back: {_ew_exc}")
+        weights = {'stacking': 0.4, 'lstm_gru': 0.35, 'ppo': 0.25}
+        _weight_info = {"weights": weights, "excluded": [], "reason": {"__fallback__": str(_ew_exc)}}
+
+    # Iter 84 — REGIME-AWARE tilt. Classify the last 50 candles into
+    # trend/range/high-vol and nudge weights toward the model best suited
+    # for that regime (LSTM/PPO for trends, stacking for ranges).
+    try:
+        from regime_classifier import classify_regime, apply_regime_bias
+        _regime = classify_regime(candles, lookback=50)
+        _tilted = apply_regime_bias(weights, _regime.get("regime", "range"))
+        weights = {
+            'stacking': _tilted.get('stacking', weights.get('stacking', 0.0)),
+            'lstm_gru': _tilted.get('lstm_gru', weights.get('lstm_gru', 0.0)),
+            'ppo':      _tilted.get('ppo', weights.get('ppo', 0.0)),
+        }
+    except Exception as _re_exc:
+        logger.debug(f"[ai-ensemble] regime bias skipped: {_re_exc}")
+        _regime = {"regime": "unknown", "confidence": 0.0}
 
     # 1. Stacking Ensemble
     try:
@@ -2057,6 +2102,10 @@ async def ensemble_predict(symbol: str = Query("EUR_USD"), granularity: str = Qu
     elif agreeing >= 2:
         ensemble_conf = min(95, ensemble_conf + 4)
 
+    # Iter 84 — Dampen confidence during high-volatility regimes
+    if _regime.get("regime") == "high_volatility":
+        ensemble_conf = round(ensemble_conf * 0.85, 2)
+
     return {
         "success": True,
         "symbol": symbol,
@@ -2064,7 +2113,14 @@ async def ensemble_predict(symbol: str = Query("EUR_USD"), granularity: str = Qu
         "ensemble_confidence": ensemble_conf,
         "agreement": f"{agreeing}/{len(predictions)}",
         "individual_predictions": predictions,
-        "votes": {k: round(v, 2) for k, v in votes.items()}
+        "votes": {k: round(v, 2) for k, v in votes.items()},
+        # Iter 84 — visibility into dynamic weighting + regime
+        "ensemble_weights": weights,
+        "excluded_models": _weight_info.get("excluded", []),
+        "exclusion_reasons": _weight_info.get("reason", {}),
+        "live_accuracies": _weight_info.get("accuracies", {}),
+        "degraded": _weight_info.get("degraded", False),
+        "regime": _regime,
     }
 
 

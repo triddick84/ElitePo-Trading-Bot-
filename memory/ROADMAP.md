@@ -3,14 +3,21 @@
 _Last updated: Iter 80 (Jul 28, 2026)_
 
 ## P0 — Delivered
-- ✅ Iter 80: TM v8.122.0 backend catch-up (3 missing endpoints, script hosting, regression tests).
-- ✅ Iter 81: AccuracyEngine gating on `/signals/latest` — rolling per-(asset, strategy) win-rate gate, live-tested against real historical data (13 combos gated at default 45% threshold).
-- ✅ Iter 82: Strategy Publish/Unpublish flow — custom strategies now selectable per-timeframe via `/api/strategies/select` (React + Tampermonkey), independent `is_active`/`is_published` states, UI badges + toasts.
-- ✅ Iter 83: Reusable `AssetPicker` (366 symbols, Regular/OTC bulk-select toolbar) — wired into StrategyBuilder + BacktestingPage.
+- ✅ Iter 80: TM v8.122.0 backend catch-up.
+- ✅ Iter 81: AccuracyEngine gating on `/signals/latest`.
+- ✅ Iter 82: Strategy Publish/Unpublish flow.
+- ✅ Iter 83: Reusable `AssetPicker` (366 symbols, Regular/OTC bulk).
+- ✅ Iter 84: ML accuracy uplift — dynamic accuracy-based ensemble weighting (excludes sub-45% models), regime-aware weight tilting (trend/range/high-vol), PPO RL reward shaping fixes, bumped PPO defaults (5000 candles × 50 episodes).
 
 ## P1 — Remaining rebuild queue (user-approved order b→a→c→d→e; b + c + d done)
-- ⏭️ **Next: a) Backend health strip in TM panel** — needs user's answer on a1/a2/a3 (rebuild modular sources vs. patch dist vs. skip).
+- ⏭️ **Next: a) Backend health strip in TM panel** — still needs your call on a1/a2/a3.
 - 🔵 **e) Emergent Object Storage for admin datasets** — needs playbook + admin-only confirm.
+
+## P1.5 — ML accuracy Tier 3 (optional next-level uplift)
+- 🔵 Cross-validation calibration (Platt scaling / isotonic) so `confidence` values are actual probabilities.
+- 🔵 Kelly-criterion confidence gate — only surface signals where fractional Kelly > 0 after payout.
+- 🔵 Transformer time-series model as 4th ensemble member (Temporal Fusion Transformer).
+- 🔵 Walk-forward validation on 10k+ candles/asset.
 
 ## P2 — Small backlog items
 - 🟢 Roll `<AssetPicker>` into other pages that still have their own asset UI:
