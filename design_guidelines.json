@@ -1,0 +1,47 @@
+{
+  "theme": "Dark Mode Only - AI Trading Synthwave",
+  "typography": {
+    "default": "Inter",
+    "mono": "JetBrains Mono (or similar mono) for numerical data, tickers, stats, and badges",
+    "rules": "Preserve Inter for general body text. Enforce mono fonts for financial data to achieve the 'Bloomberg terminal' technical feel."
+  },
+  "colors": {
+    "backgrounds": {
+      "app_base": "#02040A",
+      "surface": "#050814",
+      "surface_elevated": "#0B132B",
+      "glass": "rgba(5, 8, 20, 0.6)"
+    },
+    "primary": "#00F0FF",
+    "secondary": "#2E8BFF",
+    "semantic": {
+      "buy_success": "#00E676",
+      "sell_error": "#FF1744",
+      "warning_draft": "#FFC400",
+      "published": "#00F0FF",
+      "active": "#00E676"
+    }
+  },
+  "visual_enhancers": {
+    "glass-dark": "backdrop-blur-xl bg-[#050814]/70 border border-[#00F0FF]/15 hover:border-[#00F0FF]/40 hover:shadow-[0_0_15px_rgba(0,240,255,0.15)] transition-colors duration-300",
+    "grids": "Subtle technical grid background: `background-image: linear-gradient(rgba(0, 240, 255, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 240, 255, 0.03) 1px, transparent 1px); background-size: 32px 32px;`",
+    "glow": "Use drop-shadows and text-shadows sparingly for active indicators and neon text."
+  },
+  "signature_moments": [
+    "1. Hover Neon Glows: Interactive cards and buttons emit a soft cyan/electric-blue glow on hover.",
+    "2. Pulse Status Dots: Live signals and active bots use a pulsing `box-shadow` in neon green or cyan.",
+    "3. Data Flash: Subtle neon text-shadows for high-emphasis 'AI' elements to simulate terminal fluorescence."
+  ],
+  "instructions_to_main_agent": [
+    "CRITICAL: Do NOT touch any component JSX files, component logic, or data-testid attributes.",
+    "CRITICAL: Do NOT modify the Tampermonkey script CSS.",
+    "CRITICAL: This app is DARK MODE ONLY. Only update the `.dark` class variables or force dark mode defaults.",
+    "1. `/app/frontend/tailwind.config.js`: Override the `purple` color scale to output Neon Cyan / Electric Blue shades (e.g. mapping `purple-500` to `#00F0FF`). This ensures all existing JSX using `bg-purple-500` automatically adopts the new AI trading theme. Also override `slate` or background colors to a deep blue-navy scale (`#02040A` to `#0B132B`).",
+    "2. `/app/frontend/src/index.css`: Update the CSS variables for the shadcn theme in the `.dark` block. Map `--background` to deep void navy, `--primary` to neon cyan, etc. Preserve standard red/green hexes for `--destructive` and success.",
+    "3. `/app/frontend/src/App.css`: Replace the global slate background gradient on `.trading-app` or `body` with a deep navy gradient plus the subtle grid pattern.",
+    "4. `/app/frontend/src/App.css`: Update the `.glass-dark` class to match the requested synthwave/AI terminal feel (darker background, cyan tinted border, hover glow).",
+    "5. `/app/frontend/src/App.css`: Add helper classes like `.neon-text` (adds text-shadow), `.neon-border`, and `.pulse-status-dot`.",
+    "6. Verify that AssetPicker's semantic colors (blue for Regular, green for OTC) are maintained."
+  ],
+  "UNIVERSAL GUIDELINES FOR MAIN AGENT": "Do not apply universal transition 'all'. Avoid purely flat slate backgrounds; use deep navy for depth. Never use pure transparent backgrounds for overlays or headers. Ensure all interactive elements have highly visible, glowing hover/focus states to match the cyber/trading aesthetic."
+}
