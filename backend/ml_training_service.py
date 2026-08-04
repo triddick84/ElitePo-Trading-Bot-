@@ -862,7 +862,59 @@ class MLTrainingService:
             feature_importance=gb_model.get_feature_importance()
         )
         self.models[f'gb_{asset}_{timeframe}'] = gb_model
-        
+
+        # Iter 88 — Register an Ensemble alongside RF + GB so all three
+        # models show consistent metrics side-by-side. Mirrors the
+        # `train_from_backtest_results` pattern (Iter 76): weight by F1,
+        # evaluate on a fresh held-out validation split, surface real
+        # precision / recall / f1 / validation_samples.
+        ensemble = EnsembleModel()
+        ensemble.add_model('random_forest', rf_model, weight=rf_metrics.f1_score)
+        ensemble.add_model('gradient_boosting', gb_model, weight=gb_metrics.f1_score)
+        ensemble.is_trained = True
+
+        try:
+            _X_train_full, _X_val_ens, _y_train_full, _y_val_ens = train_test_split(
+                X, y, test_size=0.2, shuffle=False
+            )
+            ens_pred = ensemble.predict(_X_val_ens)
+            ens_acc = float(accuracy_score(_y_val_ens, ens_pred))
+            ens_prec = float(precision_score(_y_val_ens, ens_pred, zero_division=0))
+            ens_recall = float(recall_score(_y_val_ens, ens_pred, zero_division=0))
+            ens_f1 = float(f1_score(_y_val_ens, ens_pred, zero_division=0))
+            ens_train_n = int(len(_X_train_full))
+            ens_val_n = int(len(_X_val_ens))
+            ens_smote_status = rf_model.smote_status or gb_model.smote_status or ""
+            ens_minority_ratio = rf_metrics.minority_class_ratio
+        except Exception as e:
+            logger.warning(f"Ensemble evaluation failed, falling back to averaged metrics: {e}")
+            ens_acc = (rf_metrics.accuracy + gb_metrics.accuracy) / 2
+            ens_prec = (rf_metrics.precision + gb_metrics.precision) / 2
+            ens_recall = (rf_metrics.recall + gb_metrics.recall) / 2
+            ens_f1 = (rf_metrics.f1_score + gb_metrics.f1_score) / 2
+            ens_train_n = rf_metrics.training_samples
+            ens_val_n = rf_metrics.validation_samples
+            ens_smote_status = "ensemble-eval-failed"
+            ens_minority_ratio = rf_metrics.minority_class_ratio
+
+        trained_models['ensemble'] = TrainedModel(
+            name=f"Price Predictor Ensemble ({asset})",
+            model_type="ensemble",
+            asset=asset,
+            timeframe=timeframe,
+            metrics=ModelMetrics(
+                accuracy=ens_acc,
+                precision=ens_prec,
+                recall=ens_recall,
+                f1_score=ens_f1,
+                training_samples=ens_train_n,
+                validation_samples=ens_val_n,
+                smote_status=ens_smote_status,
+                minority_class_ratio=ens_minority_ratio,
+            )
+        )
+        self.models[f'ens_{asset}_{timeframe}'] = ensemble
+
         # Save to database
         if self.db is not None:
             for name, model_info in trained_models.items():

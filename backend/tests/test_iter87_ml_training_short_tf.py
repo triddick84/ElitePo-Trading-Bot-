@@ -105,6 +105,24 @@ def test_train_price_error_message_actionable():
     assert "Insufficient REAL price data" in err or "raw candles" in err
 
 
+# ---------------------------------------------------------------------------
+# 4) Iter 88 — train-on-price-data must register an ensemble alongside RF+GB
+# ---------------------------------------------------------------------------
+def test_train_price_registers_ensemble():
+    d = _post_train_price("EURUSD_otc", "30s", days=3)
+    assert d.get("success") is True, f"Setup failed: {d.get('error')}"
+    models = d.get("models") or {}
+    # All three models must be present
+    assert set(models.keys()) >= {"random_forest", "gradient_boosting", "ensemble"}, \
+        f"Missing models — got {list(models.keys())}"
+    # Ensemble must have real metrics (not defaults)
+    ens_met = (models["ensemble"] or {}).get("metrics") or {}
+    assert ens_met.get("validation_samples", 0) > 0, "Ensemble val_n=0"
+    assert ens_met.get("training_samples", 0) > 0, "Ensemble train_n=0"
+    # Ensemble should have plausible metric values (not all zero)
+    assert ens_met.get("accuracy", 0.0) > 0.0, "Ensemble accuracy=0"
+
+
 if __name__ == "__main__":
     import pytest
     pytest.main([__file__, "-v"])
