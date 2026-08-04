@@ -426,16 +426,43 @@ async def train_ml_from_backtests(request: dict = {}):
         from dataclasses import asdict
         
         service = await get_ml_training_service(db)
-        
-        # Get recent backtest results
-        limit = request.get("limit", 100)
-        results = await db.backtest_results.find({}, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
-        
+
+        # Get recent backtest results — v8.123.0 now supports asset + timeframe
+        # filters so users can scope training to short-TF (5s/15s/30s) buckets
+        # instead of averaging the model across an entire mixed corpus.
+        limit = int(request.get("limit", 100))
+        asset_filter = (request.get("asset") or "all").strip()
+        timeframe_filter = (request.get("timeframe") or "all").strip()
+
+        mongo_filter = {}
+        if timeframe_filter and timeframe_filter.lower() != "all":
+            mongo_filter["timeframe"] = timeframe_filter
+        if asset_filter and asset_filter.lower() != "all":
+            mongo_filter["asset"] = asset_filter
+
+        results = await db.backtest_results.find(
+            mongo_filter, {"_id": 0}
+        ).sort("created_at", -1).limit(limit).to_list(limit)
+
         if len(results) < 10:
+            scope_msg = ""
+            if mongo_filter:
+                parts = []
+                if "timeframe" in mongo_filter:
+                    parts.append(f"timeframe={mongo_filter['timeframe']}")
+                if "asset" in mongo_filter:
+                    parts.append(f"asset={mongo_filter['asset']}")
+                scope_msg = f" for {' + '.join(parts)}"
             return {
                 "success": False,
-                "error": "Insufficient backtest results. Run more backtests first.",
-                "results_count": len(results)
+                "error": (
+                    f"Insufficient backtest results{scope_msg} "
+                    f"(need ≥10, have {len(results)}). Run more backtests on this "
+                    "asset/timeframe from the Backtesting page and try again."
+                ),
+                "results_count": len(results),
+                "asset_filter": asset_filter,
+                "timeframe_filter": timeframe_filter,
             }
 
         # v8.74.0 — Pre-flight check: surface a precise diagnosis instead of
@@ -461,10 +488,11 @@ async def train_ml_from_backtests(request: dict = {}):
                 "needs_retrain_action": "rerun_backtests",
             }
 
-        # Train models
-        asset = request.get("asset", "all")
-        timeframe = request.get("timeframe", "1h")
-        
+        # Train models — pass through the same filters the query used so the
+        # saved model documents are properly tagged in Mongo.
+        asset = asset_filter if asset_filter and asset_filter.lower() != "all" else "all"
+        timeframe = timeframe_filter if timeframe_filter and timeframe_filter.lower() != "all" else "all"
+
         trained_models = await service.train_from_backtest_results(results, asset, timeframe)
 
         # If the trainer still returns 0 models (e.g. all trades had no
@@ -486,9 +514,11 @@ async def train_ml_from_backtests(request: dict = {}):
         
         return {
             "success": True,
-            "message": f"Trained {len(trained_models)} ML models from {len(results)} backtest results ({total_trades_available} trades)",
+            "message": f"Trained {len(trained_models)} ML models from {len(results)} backtest results ({total_trades_available} trades) — asset={asset}, tf={timeframe}",
             "models": models_data,
             "total_trades_used": total_trades_available,
+            "asset_filter": asset,
+            "timeframe_filter": timeframe,
         }
         
     except Exception as e:

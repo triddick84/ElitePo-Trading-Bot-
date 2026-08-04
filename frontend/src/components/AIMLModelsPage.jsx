@@ -108,6 +108,9 @@ const AIMLModelsPage = () => {
   const [mlTrainingAsset, setMlTrainingAsset] = useState('EURUSD');
   const [mlTrainingTimeframe, setMlTrainingTimeframe] = useState('1h');
   const [mlTrainingDays, setMlTrainingDays] = useState(30);
+  // Iter 87 — Train-from-Backtests scoping (asset + timeframe filters)
+  const [mlBacktestAsset, setMlBacktestAsset] = useState('all');
+  const [mlBacktestTimeframe, setMlBacktestTimeframe] = useState('5s');
   const [optimizationResults, setOptimizationResults] = useState(null);
   
   // Loading States
@@ -303,9 +306,11 @@ const AIMLModelsPage = () => {
   const handleTrainFromBacktests = async () => {
     setIsTrainingML(true);
     try {
-      toast.info('Training ML models from backtest results...');
+      toast.info(`Training ML models from backtests — asset=${mlBacktestAsset}, tf=${mlBacktestTimeframe}...`);
       const response = await axios.post(`${API}/ml-training/train-from-backtests`, {
-        limit: 100
+        limit: 200,
+        asset: mlBacktestAsset,
+        timeframe: mlBacktestTimeframe,
       });
       
       if (response.data.success) {
@@ -654,7 +659,63 @@ const AIMLModelsPage = () => {
                     More backtests = better training.
                   </AlertDescription>
                 </Alert>
-                
+
+                {/* Iter 87 — Asset + Timeframe scoping */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-slate-300 text-sm">Asset</Label>
+                    <Select value={mlBacktestAsset} onValueChange={setMlBacktestAsset}>
+                      <SelectTrigger
+                        className="bg-slate-800/50 border-slate-600 mt-1"
+                        data-testid="train-from-backtests-asset"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-800 border-slate-600 max-h-72 overflow-y-auto">
+                        <SelectItem value="all">All assets</SelectItem>
+                        <SelectItem value="EURUSD_OTC">EUR/USD (OTC)</SelectItem>
+                        <SelectItem value="GBPUSD_OTC">GBP/USD (OTC)</SelectItem>
+                        <SelectItem value="USDJPY_OTC">USD/JPY (OTC)</SelectItem>
+                        <SelectItem value="AUDUSD_OTC">AUD/USD (OTC)</SelectItem>
+                        <SelectItem value="USDCAD_OTC">USD/CAD (OTC)</SelectItem>
+                        <SelectItem value="USDCHF_OTC">USD/CHF (OTC)</SelectItem>
+                        <SelectItem value="NZDUSD_OTC">NZD/USD (OTC)</SelectItem>
+                        <SelectItem value="EURGBP_OTC">EUR/GBP (OTC)</SelectItem>
+                        <SelectItem value="EURJPY_OTC">EUR/JPY (OTC)</SelectItem>
+                        <SelectItem value="GBPJPY_OTC">GBP/JPY (OTC)</SelectItem>
+                        <SelectItem value="EURUSD">EUR/USD</SelectItem>
+                        <SelectItem value="GBPUSD">GBP/USD</SelectItem>
+                        <SelectItem value="USDJPY">USD/JPY</SelectItem>
+                        <SelectItem value="BTCUSD_OTC">BTC/USD (OTC)</SelectItem>
+                        <SelectItem value="ETHUSD_OTC">ETH/USD (OTC)</SelectItem>
+                        <SelectItem value="XAUUSD_OTC">Gold/XAU (OTC)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-slate-300 text-sm">Timeframe</Label>
+                    <Select value={mlBacktestTimeframe} onValueChange={setMlBacktestTimeframe}>
+                      <SelectTrigger
+                        className="bg-slate-800/50 border-slate-600 mt-1"
+                        data-testid="train-from-backtests-timeframe"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-800 border-slate-600">
+                        <SelectItem value="5s">5 Seconds</SelectItem>
+                        <SelectItem value="10s">10 Seconds</SelectItem>
+                        <SelectItem value="15s">15 Seconds</SelectItem>
+                        <SelectItem value="30s">30 Seconds</SelectItem>
+                        <SelectItem value="1m">1 Minute</SelectItem>
+                        <SelectItem value="5m">5 Minutes</SelectItem>
+                        <SelectItem value="15m">15 Minutes</SelectItem>
+                        <SelectItem value="1h">1 Hour</SelectItem>
+                        <SelectItem value="all">All timeframes</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
                 <div className="space-y-2">
                   <p className="text-slate-400 text-sm">Models trained:</p>
                   {ML_MODEL_TYPES.map(model => (
@@ -672,6 +733,7 @@ const AIMLModelsPage = () => {
                   onClick={handleTrainFromBacktests}
                   disabled={isTrainingML}
                   className="w-full bg-purple-500 hover:bg-purple-600"
+                  data-testid="train-from-backtests-btn"
                 >
                   {isTrainingML ? (
                     <>
@@ -769,6 +831,10 @@ const AIMLModelsPage = () => {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="bg-slate-800 border-slate-600">
+                        <SelectItem value="5s">5 Seconds</SelectItem>
+                        <SelectItem value="10s">10 Seconds</SelectItem>
+                        <SelectItem value="15s">15 Seconds</SelectItem>
+                        <SelectItem value="30s">30 Seconds</SelectItem>
                         <SelectItem value="1m">1 Minute</SelectItem>
                         <SelectItem value="5m">5 Minutes</SelectItem>
                         <SelectItem value="15m">15 Minutes</SelectItem>
