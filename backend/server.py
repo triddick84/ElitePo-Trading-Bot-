@@ -3673,6 +3673,8 @@ from routes.scanner import router as scanner_router
 from routes.tma import router as tma_router
 from routes.tampermonkey import router as tampermonkey_extra_router
 from routes.accuracy_engine import router as accuracy_engine_router
+from routes.microstructure import router as microstructure_router
+from routes.latency import router as latency_router
 
 api_router.include_router(strategies_router)
 api_router.include_router(signals_router)
@@ -3688,8 +3690,15 @@ api_router.include_router(scanner_router)
 api_router.include_router(tma_router)
 api_router.include_router(tampermonkey_extra_router)
 api_router.include_router(accuracy_engine_router)
+api_router.include_router(microstructure_router)
+api_router.include_router(latency_router)
 
 app.include_router(api_router)
+
+# Iter 86 — Request latency histogram middleware. Records p50/p95/p99/p99.9
+# per route so /signals/latest can abstain when the pipe is degraded.
+from request_latency_histogram import RequestLatencyMiddleware
+app.add_middleware(RequestLatencyMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -3786,6 +3795,18 @@ async def startup_event():
                 )
             except Exception as _aee:
                 logger.warning("[AccuracyEngine] prime skipped: %s", _aee)
+
+            # Iter 86 — Prime Microstructure service (VPIN + Kyle's λ).
+            try:
+                from microstructure import microstructure as _ms
+                await _ms.load_config()
+                await _ms.refresh(force=True)
+                logger.info(
+                    "[Microstructure] primed: %d keys, config=%s",
+                    len(_ms.all_entries()), _ms.get_config(),
+                )
+            except Exception as _mse:
+                logger.warning("[Microstructure] prime skipped: %s", _mse)
         except Exception as e:
             logger.error(f"❌ Error during initialization: {e}")
             app_initialized = False

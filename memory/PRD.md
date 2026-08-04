@@ -1,4 +1,59 @@
-# AI's Elite PO Traders Bot — Jul 2026 (ML Accuracy Uplift + AssetPicker + Publish + AccuracyEngine + TM v8.122.0)
+# AI's Elite PO Traders Bot — Jul 2026 (Synthwave Theme + ML Uplift + AssetPicker + Publish + AccuracyEngine + TM v8.122.0)
+
+## Iter 85 (Jul 31, 2026) — AI Trading Synthwave theme (React app + TM panel)
+
+**User request**: "The color scheme needs to be changed for both the application and tampermonkey script needs to be some dark but with blues and neon colors and ai trading feel to it"
+
+### Strategy — global palette remap, zero JSX changes
+Instead of rewriting hundreds of component files, we remapped Tailwind's `purple.*` scale to the new neon-cyan scale and added a `navy.*` scale for deep-navy surfaces. Every existing `bg-purple-500`, `text-purple-400`, `from-purple-600 to-purple-800`, etc. **automatically** now renders as the new synthwave theme. Semantic colors (green/red/amber) preserved for buy/sell/warning.
+
+### Palette
+- Base: void navy `#02040A` → `#050814` → `#0B132B` (radial cyan halo top-lit).
+- Primary: neon cyan `#00E5FF` (was purple 270°).
+- Secondary: electric blue `#338BFF`.
+- Semantic (unchanged for UX consistency): green `#00E676`, red `#FF1744`, amber `#FFC400`.
+- Neon border-glow presets on cards; pulsing status dots for live indicators.
+
+### Files touched
+- **`/app/frontend/tailwind.config.js`** — remapped `purple` scale + added `navy` scale + `boxShadow` neon presets + `fontFamily.mono` (JetBrains Mono for tabular data) + `pulse-neon` keyframe animation.
+- **`/app/frontend/src/index.css`** — full CSS-variable palette swap in `:root`. Body gets void-navy gradient with radial cyan halo. New utility classes: `.neon-text`, `.neon-border`, `.pulse-status-dot`, `.font-tabular`, `.trading-grid`. Rewrote `.glass-dark` to include hover neon glow.
+- **`/app/frontend/src/App.css`** — body gradient replaced with void-navy stack. Scrollbars neon-cyan. Removed the legacy `.glass-dark` override (index.css now owns it). Skeleton loader shifts to navy shimmer.
+
+### Tampermonkey theme override
+The compiled `v8.122.0` bundle has embedded inline styles with `!important`. Rather than reverse-engineering the minified source, I injected a **`GM_addStyle` override block** right after the UserScript metadata (before the webpack IIFE). The block:
+- Targets 30+ known panel IDs I extracted from the bundle (`#panel-sidebar`, `#panel-content`, `#call`, `#put`, `#buy`, `#sell`, `#backend-health-row`, `#status-strip`, `#asset-name`, `#current-price`, `#trade-amount`, `[id^='view-']`, `[id^='nav-view-']`, `#result-feed*`, `#resize-handle`, `#invbtn`, all `input[type]`, generic buttons, etc.).
+- Preserves semantic colors (CALL/BUY = neon green gradient, PUT/SELL = neon red gradient, invert toggle = neon amber).
+- Uses `!important` on every declaration to defeat the embedded inline styles.
+- Idempotent — a sentinel comment `AI Elite Bot — Iter 85 Theme Override` prevents double-injection on repeat installs.
+- Byte-safe injection: bumped file size 377 675 → 386 396 bytes (+8.7 KB). All 3 deployment paths synced: `frontend/public/*.user.js`, `-modular.user.js`, `tampermonkey-src/dist/*.user.js`.
+
+### Signature moments (per design agent recommendations)
+- **Cards** — `.glass-dark` now emits a soft cyan glow on hover (`box-shadow: 0 0 22px rgba(0,229,255,0.14)`) with an inset cyan tint.
+- **Focus rings** — every `--ring` uses neon cyan (`hsl(186 100% 50%)`) so keyboard nav flows visibly.
+- **Skeletons** — shimmer through navy shades instead of slate.
+- **Status dots** — `.pulse-status-dot.green/.red/.amber/(cyan default)` animate with a subtle `pulse-neon` box-shadow at 2 s cadence.
+- **Numeric data** — `.font-tabular` utility for `tabular-nums` mono rendering, ready to apply to any price/percent/timestamp text.
+
+### Verified visually (browser)
+- Login screen — cyan title glow, cyan Sign In button, navy card.
+- Dashboard — cyan primary title, cyan-highlighted active timeframe pill (5s), neon sidebar active-item, deep-navy asset panel with cyan checkboxes.
+- Strategy Builder → Saved tab — cyan Published / amber Draft badges maintained; Publish/Unpublish buttons all cyan-themed; sidebar active state cyan-glowing.
+- AI/ML Models — cyan brain icon + stats (75.0% accuracy), cyan tabs with underline active state, asset grid tiles cyan-highlighted when selected.
+
+### Tests
+- `/app/backend/tests/test_iter85_theme_override.py` — **6/6 pass**:
+  1. TM override block present on disk
+  2. Idempotency (no duplication)
+  3. Uses `GM_addStyle` (already granted)
+  4. Targets all critical panel IDs
+  5. Served script is still a valid userscript with `@version` intact
+  6. Override sits AFTER the metadata block (Tampermonkey parses grants correctly)
+- Combined Iter 80+81+82+83+84+85: **46/46 pass** in 2.0 s.
+
+### Rollout note
+For existing users to see the TM panel update, they need to trigger a reinstall (Tampermonkey checks `@updateURL` daily, or user can manually refresh). Iter 80 already wired `@updateURL` to `/api/tampermonkey/script` so the update path is live.
+
+---
 
 ## Iter 84 (Jul 29, 2026) — ML accuracy uplift Tier 1 + Tier 2
 

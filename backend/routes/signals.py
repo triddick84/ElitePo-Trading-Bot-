@@ -38,6 +38,10 @@ except ImportError:
 
 # AccuracyEngine — gates /signals/latest on rolling (asset, strategy) win-rate.
 from accuracy_engine import accuracy_engine as _accuracy_engine
+# Iter 86 — Microstructure toxicity gate + pair confluence.
+from microstructure import microstructure as _microstructure
+from pair_confluence import confluence_score as _confluence_score
+from request_latency_histogram import is_healthy as _latency_healthy
 
 # Re-use the main api_router — routes are registered via include in server.py
 # This module uses a local router that gets included by server.py
@@ -882,6 +886,7 @@ async def get_latest_signal(
         # ------------------------------------------------------------------
         gate_asset = latest_signal.get('symbol') or latest_signal.get('asset')
         gate_strategy = latest_signal.get('strategy')
+        gate_direction = latest_signal.get('direction') or latest_signal.get('signal')
         if gate_asset and gate_strategy:
             try:
                 gate = await _accuracy_engine.should_gate(gate_asset, gate_strategy)
@@ -919,6 +924,112 @@ async def get_latest_signal(
                     )
             except Exception as _ge:
                 logger.debug("AccuracyEngine gate skipped: %s", _ge)
+
+        # ------------------------------------------------------------------
+        # Iter 86 — Microstructure toxicity gate (VPIN + Kyle's λ).
+        # Independent of AccuracyEngine. Even a winning combo can enter a
+        # dangerous flow regime — this catches it.
+        # ------------------------------------------------------------------
+        if gate_asset and not latest_signal.get('abstain'):
+            try:
+                ms_gate = await _microstructure.should_gate(gate_asset)
+                latest_signal['microstructure'] = {
+                    'gated': ms_gate.get('gated', False),
+                    'vpin': ms_gate.get('vpin'),
+                    'kyle_lambda': ms_gate.get('kyle_lambda'),
+                    'flow_imbalance': ms_gate.get('flow_imbalance'),
+                    'flow_streak': ms_gate.get('flow_streak'),
+                    'reason': ms_gate.get('reason'),
+                }
+                if ms_gate.get('gated'):
+                    latest_signal['abstain'] = True
+                    latest_signal['abstain_source'] = 'microstructure_toxic_flow'
+                    latest_signal['abstain_reason'] = ms_gate.get('reason')
+                    logger.info(
+                        "[Microstructure] ABSTAIN %s: %s",
+                        gate_asset, ms_gate.get('reason'),
+                    )
+            except Exception as _mse:
+                logger.debug("Microstructure gate skipped: %s", _mse)
+
+        # ------------------------------------------------------------------
+        # Iter 86 — Latency health gate.
+        # If our own pipe is degraded (p99 > threshold on any critical route),
+        # abstain from time-sensitive signals so we don't fire stale directions.
+        # ------------------------------------------------------------------
+        try:
+            _tf = str(latest_signal.get('timeframe', '')).lower()
+            # only enforce on 5s / 15s — 30s+ has enough budget
+            is_time_sensitive = _tf in ('5s', '10s', '15s') or _tf.endswith('_5s')
+            if is_time_sensitive and not latest_signal.get('abstain'):
+                lat = _latency_healthy(p99_threshold_ms=250.0)
+                latest_signal['latency_ok'] = bool(lat.get('ok', True))
+                latest_signal['latency_stats'] = lat
+                if not lat.get('ok', True):
+                    latest_signal['abstain'] = True
+                    latest_signal['abstain_source'] = 'latency_degraded'
+                    latest_signal['abstain_reason'] = (
+                        f"server p99 {lat.get('worst_p99_ms')}ms on "
+                        f"{lat.get('worst_route')} > 250ms threshold"
+                    )
+                    logger.info(
+                        "[Latency] ABSTAIN %s (%s): p99=%.1fms",
+                        gate_asset, _tf, lat.get('worst_p99_ms', 0),
+                    )
+        except Exception as _le:
+            logger.debug("Latency gate skipped: %s", _le)
+
+        # ------------------------------------------------------------------
+        # Iter 86 — Pair-confluence booster (does NOT gate, only tilts confidence)
+        # If our top cointegrated partners agree with our direction → boost
+        # confidence by up to 15%. If they disagree → dampen by up to 15%.
+        # ------------------------------------------------------------------
+        if gate_asset and gate_direction and not latest_signal.get('abstain'):
+            try:
+                # Use our existing get_candles helper if we already fetched them
+                _self_candles = candles if 'candles' in locals() else []
+
+                def _fetch_partner(partner_asset):
+                    # Reuse candles from same DB — one blocking sync call OK here
+                    try:
+                        docs = list(
+                            db.candles.find(
+                                {"symbol": {"$in": [partner_asset,
+                                                    partner_asset.replace("_OTC", "")]}},
+                                {"_id": 0, "open": 1, "high": 1, "low": 1,
+                                 "close": 1, "volume": 1, "timestamp": 1},
+                            ).sort("timestamp", -1).limit(30)
+                        )
+                        return list(reversed(docs))
+                    except Exception:
+                        return None
+
+                conf = _confluence_score(
+                    gate_asset, gate_direction, _self_candles, _fetch_partner
+                )
+                latest_signal['pair_confluence'] = conf
+                # Apply the multiplier (bounded)
+                mult = float(conf.get('multiplier', 1.0))
+                orig = float(latest_signal.get('confidence', 85))
+                latest_signal['confidence'] = round(min(99.0, max(1.0, orig * mult)), 1)
+            except Exception as _pc:
+                logger.debug("Pair-confluence skipped: %s", _pc)
+
+        # ------------------------------------------------------------------
+        # Iter 86 — Microstructure λ confidence multiplier (per-asset regime).
+        # Small tilt applied on TOP of pair confluence — bounded ±15%.
+        # ------------------------------------------------------------------
+        if gate_asset and not latest_signal.get('abstain'):
+            try:
+                lam_mult = _microstructure.confidence_multiplier(gate_asset)
+                latest_signal['microstructure_multiplier'] = lam_mult
+                if lam_mult != 1.0:
+                    orig = float(latest_signal.get('confidence', 85))
+                    latest_signal['confidence'] = round(
+                        min(99.0, max(1.0, orig * lam_mult)), 1
+                    )
+            except Exception as _mm:
+                logger.debug("Microstructure multiplier skipped: %s", _mm)
 
         return {
             "success": True,

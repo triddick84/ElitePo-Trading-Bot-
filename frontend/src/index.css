@@ -18,58 +18,65 @@ code {
 
 @layer base {
   :root {
-        /* Trading Theme - Dark Mode with Black, Purple, Green, Grey */
-        --background: 240 10% 3.9%;  /* Deep black */
-        --foreground: 0 0% 95%;  /* Off-white text */
-        
-        --card: 240 8% 8%;  /* Dark grey cards */
-        --card-foreground: 0 0% 95%;
-        
-        --popover: 240 10% 6%;
-        --popover-foreground: 0 0% 95%;
-        
-        /* Purple accent for primary actions */
-        --primary: 270 75% 60%;  /* Vibrant purple */
-        --primary-foreground: 0 0% 100%;
-        
-        /* Green for positive/bullish */
-        --secondary: 142 76% 45%;  /* Trading green */
-        --secondary-foreground: 0 0% 100%;
-        
-        --muted: 240 5% 15%;  /* Medium grey */
-        --muted-foreground: 240 5% 64%;
-        
-        --accent: 270 70% 50%;  /* Purple accent */
-        --accent-foreground: 0 0% 100%;
-        
-        /* Red for negative/bearish */
-        --destructive: 0 84% 60%;
+        /* Iter 85 — AI Trading Synthwave palette (dark navy + neon cyan) */
+        --background: 222 68% 3%;         /* #02040A — void navy */
+        --foreground: 210 40% 96%;        /* near-white icy tint */
+
+        --card: 224 62% 8%;               /* #0B132B — elevated navy panel */
+        --card-foreground: 210 40% 96%;
+
+        --popover: 226 65% 6%;
+        --popover-foreground: 210 40% 96%;
+
+        /* Neon cyan — primary electric-blue accent */
+        --primary: 186 100% 50%;          /* #00E5FF neon cyan */
+        --primary-foreground: 222 68% 4%; /* dark navy for contrast on neon */
+
+        /* Electric blue — secondary supporting hue */
+        --secondary: 216 100% 60%;        /* #338BFF */
+        --secondary-foreground: 210 40% 96%;
+
+        --muted: 224 40% 14%;             /* muted navy */
+        --muted-foreground: 214 30% 68%;
+
+        --accent: 186 100% 50%;           /* mirror primary */
+        --accent-foreground: 222 68% 4%;
+
+        /* Semantic — red for negative/PUT */
+        --destructive: 350 100% 55%;      /* #FF1744 */
         --destructive-foreground: 0 0% 100%;
-        
-        --border: 240 6% 18%;  /* Grey borders */
-        --input: 240 6% 16%;
-        --ring: 270 75% 60%;
-        
-        /* Trading chart colors */
-        --chart-1: 142 76% 45%;  /* Green - bullish */
-        --chart-2: 0 84% 60%;    /* Red - bearish */
-        --chart-3: 270 75% 60%;  /* Purple - neutral */
-        --chart-4: 45 93% 47%;   /* Gold - alert */
-        --chart-5: 195 85% 48%;  /* Cyan - info */
-        
+
+        --border: 210 60% 20%;            /* subtle blue-tinted border */
+        --input: 224 45% 10%;
+        --ring: 186 100% 50%;             /* neon cyan focus ring */
+
+        /* Trading chart colors — neon */
+        --chart-1: 156 100% 45%;   /* Neon green — bullish */
+        --chart-2: 350 100% 55%;   /* Neon red — bearish */
+        --chart-3: 186 100% 50%;   /* Neon cyan — neutral */
+        --chart-4: 45 100% 55%;    /* Neon amber — alert */
+        --chart-5: 216 100% 65%;   /* Electric blue — info */
+
         --radius: 0.5rem;
-        
-        /* Custom trading colors */
-        --trading-bg: 240 10% 3.9%;
-        --trading-card: 240 8% 8%;
-        --trading-border: 240 6% 18%;
-        --trading-purple: 270 75% 60%;
-        --trading-purple-dark: 270 70% 40%;
-        --trading-green: 142 76% 45%;
-        --trading-green-dark: 142 76% 30%;
-        --trading-red: 0 84% 60%;
-        --trading-grey: 240 5% 15%;
-        --trading-grey-light: 240 5% 25%;
+
+        /* Custom trading colors (retro-compat aliases used across App.css) */
+        --trading-bg: 222 68% 3%;
+        --trading-card: 224 62% 8%;
+        --trading-border: 210 60% 20%;
+        --trading-purple: 186 100% 50%;      /* now neon cyan */
+        --trading-purple-dark: 186 100% 38%;
+        --trading-green: 156 100% 45%;
+        --trading-green-dark: 156 100% 30%;
+        --trading-red: 350 100% 55%;
+        --trading-grey: 224 40% 14%;
+        --trading-grey-light: 214 30% 30%;
+
+        /* Iter 85 — neon-glow color tokens for utility classes */
+        --neon-cyan-rgb: 0, 229, 255;
+        --neon-blue-rgb: 51, 139, 255;
+        --neon-green-rgb: 0, 230, 118;
+        --neon-red-rgb: 255, 23, 68;
+        --neon-amber-rgb: 255, 196, 0;
     }
 }
 
@@ -78,49 +85,111 @@ code {
     @apply border-border;
     }
   body {
-    @apply bg-[#0a0a0f] text-foreground;
+    @apply bg-[#02040A] text-foreground;
+    background-image:
+      radial-gradient(ellipse 80% 60% at 50% -10%, rgba(0, 229, 255, 0.10), transparent 60%),
+      linear-gradient(180deg, #02040A 0%, #050814 100%);
+    background-attachment: fixed;
     }
 }
 
-/* Custom scrollbar for trading theme */
+/* Custom scrollbar — neon cyan on navy */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: hsl(240 8% 8%);
+  background: hsl(224 62% 8%);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: hsl(270 75% 60% / 0.3);
+  background: hsl(186 100% 50% / 0.28);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(270 75% 60% / 0.5);
+  background: hsl(186 100% 50% / 0.55);
+  box-shadow: 0 0 6px rgba(0, 229, 255, 0.5);
 }
 
-/* Trading card styles */
+/* Iter 85 — Glass-morphism cards with neon border glow on hover.
+   Keeps the name `glass-dark` since dozens of components already use it. */
 .glass-dark {
-  background: rgba(15, 15, 25, 0.7);
-  backdrop-filter: blur(10px);
-  border: 1px solid hsl(240 6% 18%);
+  background: rgba(5, 8, 20, 0.72);
+  backdrop-filter: blur(16px) saturate(120%);
+  -webkit-backdrop-filter: blur(16px) saturate(120%);
+  border: 1px solid rgba(0, 229, 255, 0.14);
+  transition: border-color 220ms ease, box-shadow 220ms ease, background 220ms ease;
+}
+.glass-dark:hover {
+  border-color: rgba(0, 229, 255, 0.42);
+  box-shadow: 0 0 22px rgba(0, 229, 255, 0.14),
+              inset 0 0 1px rgba(0, 229, 255, 0.28);
 }
 
-/* Glow effects */
-.glow-purple {
-  box-shadow: 0 0 20px hsl(270 75% 60% / 0.2);
+/* Neon glow utility classes ---------------------------------------- */
+.glow-purple {   /* legacy name — now cyan */
+  box-shadow: 0 0 22px rgba(0, 229, 255, 0.25);
 }
-
+.glow-cyan {
+  box-shadow: 0 0 22px rgba(0, 229, 255, 0.28);
+}
 .glow-green {
-  box-shadow: 0 0 20px hsl(142 76% 45% / 0.2);
+  box-shadow: 0 0 22px rgba(0, 230, 118, 0.28);
+}
+.glow-red {
+  box-shadow: 0 0 22px rgba(255, 23, 68, 0.24);
 }
 
-/* Trading grid pattern */
+/* Neon text — soft glow for high-emphasis labels */
+.neon-text {
+  color: #00E5FF;
+  text-shadow: 0 0 10px rgba(0, 229, 255, 0.55),
+               0 0 22px rgba(0, 229, 255, 0.25);
+}
+.neon-text-blue {
+  color: #338BFF;
+  text-shadow: 0 0 10px rgba(51, 139, 255, 0.55);
+}
+.neon-text-green {
+  color: #00E676;
+  text-shadow: 0 0 10px rgba(0, 230, 118, 0.55);
+}
+
+/* Neon border used on active tabs, primary buttons, active toggles */
+.neon-border {
+  border: 1px solid rgba(0, 229, 255, 0.55);
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.35),
+              inset 0 0 8px rgba(0, 229, 255, 0.10);
+}
+
+/* Pulsing status dot — for live signal / bot connected indicators */
+.pulse-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #00E5FF;
+  box-shadow: 0 0 6px rgba(0, 229, 255, 0.7);
+  animation: pulse-neon 2s ease-in-out infinite;
+  display: inline-block;
+}
+.pulse-status-dot.green { background: #00E676; box-shadow: 0 0 6px rgba(0, 230, 118, 0.7); }
+.pulse-status-dot.red   { background: #FF1744; box-shadow: 0 0 6px rgba(255, 23, 68, 0.7); }
+.pulse-status-dot.amber { background: #FFC400; box-shadow: 0 0 6px rgba(255, 196, 0, 0.7); }
+
+/* Mono utility — apply to price/percent/timestamp text for terminal feel */
+.font-tabular {
+  font-family: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, SFMono-Regular,
+               Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* Iter 85 — subtle technical grid background (opt-in via .trading-grid) */
 .trading-grid {
-  background-image: 
-    linear-gradient(hsl(240 6% 18% / 0.3) 1px, transparent 1px),
-    linear-gradient(90deg, hsl(240 6% 18% / 0.3) 1px, transparent 1px);
-  background-size: 20px 20px;
+  background-image:
+    linear-gradient(rgba(0, 229, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 229, 255, 0.045) 1px, transparent 1px);
+  background-size: 32px 32px;
 }

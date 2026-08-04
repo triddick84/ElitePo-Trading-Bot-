@@ -10,44 +10,49 @@ body {
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+  /* Iter 85 — void navy base with a top-lit cyan halo (AI terminal feel) */
+  background:
+    radial-gradient(ellipse 80% 60% at 50% -10%, rgba(0, 229, 255, 0.10), transparent 60%),
+    linear-gradient(180deg, #02040A 0%, #050814 45%, #0B132B 100%);
+  background-attachment: fixed;
   min-height: 100vh;
+  color: #E8F4FF;
 }
 
 code {
-  font-family: 'Roboto Mono', source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+  font-family: 'JetBrains Mono', 'IBM Plex Mono', 'Roboto Mono', source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
 }
 
-/* Custom Scrollbar */
+/* Custom Scrollbar — matches index.css neon theme */
 ::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #1e293b;
+  background: #050814;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #475569;
+  background: rgba(0, 229, 255, 0.28);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #64748b;
+  background: rgba(0, 229, 255, 0.55);
+  box-shadow: 0 0 6px rgba(0, 229, 255, 0.5);
 }
 
 /* Glass morphism effects */
 .glass {
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 229, 255, 0.04);
+  backdrop-filter: blur(16px) saturate(120%);
+  -webkit-backdrop-filter: blur(16px) saturate(120%);
+  border: 1px solid rgba(0, 229, 255, 0.12);
 }
 
-.glass-dark {
-  background: rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-}
+/* Note: `.glass-dark` is defined in index.css (Iter 85 neon-glow variant).
+   Removed the older App.css override so the index.css version wins. */
 
 /* Animation utilities */
 @keyframes fadeIn {
@@ -175,9 +180,9 @@ code {
   box-shadow: 0 0 12px rgba(245, 158, 11, 0.3);
 }
 
-/* Loading states */
+/* Loading states — synthwave shimmer */
 .skeleton {
-  background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+  background: linear-gradient(90deg, #0B132B 25%, #131C55 50%, #0B132B 75%);
   background-size: 200% 100%;
   animation: skeleton-loading 1.5s infinite;
 }

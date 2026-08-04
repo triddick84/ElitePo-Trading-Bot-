@@ -7,7 +7,8 @@ _Last updated: Iter 80 (Jul 28, 2026)_
 - ✅ Iter 81: AccuracyEngine gating on `/signals/latest`.
 - ✅ Iter 82: Strategy Publish/Unpublish flow.
 - ✅ Iter 83: Reusable `AssetPicker` (366 symbols, Regular/OTC bulk).
-- ✅ Iter 84: ML accuracy uplift — dynamic accuracy-based ensemble weighting (excludes sub-45% models), regime-aware weight tilting (trend/range/high-vol), PPO RL reward shaping fixes, bumped PPO defaults (5000 candles × 50 episodes).
+- ✅ Iter 84: ML accuracy uplift (dynamic ensemble weighting, regime bias, PPO reward shaping).
+- ✅ Iter 85: AI Trading Synthwave theme (React app + TM panel — neon cyan on void navy).
 
 ## P1 — Remaining rebuild queue (user-approved order b→a→c→d→e; b + c + d done)
 - ⏭️ **Next: a) Backend health strip in TM panel** — still needs your call on a1/a2/a3.
