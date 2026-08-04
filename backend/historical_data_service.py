@@ -284,7 +284,7 @@ class HistoricalDataService:
             tf = (timeframe or "M1").upper()
             # Normalise PO-style M1/M5 to pandas resample rules
             rule_map = {
-                "5S": "5s", "15S": "15s", "30S": "30s",
+                "5S": "5s", "10S": "10s", "15S": "15s", "30S": "30s",
                 "M1": "1min", "1M": "1min",
                 "M5": "5min", "5M": "5min",
                 "M15": "15min", "15M": "15min",

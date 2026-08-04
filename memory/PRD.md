@@ -1,4 +1,48 @@
-# AI's Elite PO Traders Bot — Jul 2026 (Synthwave Theme + ML Uplift + AssetPicker + Publish + AccuracyEngine + TM v8.122.0)
+# AI's Elite PO Traders Bot — Aug 2026 (Short-TF ML Training + Microstructure Gates + Synthwave)
+
+## Iter 87 (Aug 4, 2026) — Short-TF ML training (5s/10s/15s/30s)
+
+**User request**: "Ai/Ml section under Ai models the train from backtesting needs to have the 5sec-30sec timeframe. May need to look into if training is flowing thru smooth and error free for all models"
+
+### Two bugs found + fixed
+1. **"Train from Backtest Results" card had no timeframe selector** — the button just POSTed `{limit: 100}`. Backend accepted an unused `timeframe` param.
+2. **"Train on Price Data" silently failed on lowercase `_otc` assets at short TFs** — the frontend Select values were lowercase (`EURUSD_otc`), but both the OTC candle collection lookup and OANDA symbol mapper only matched uppercase `_OTC`. Result: 0 candles → "Insufficient REAL price data" error even though OANDA had thousands of candles available.
+
+### Backend changes
+- **`routes/ml.py::train_ml_from_backtests`** — now accepts `asset` + `timeframe` in the POST body and filters `db.backtest_results.find({...})` accordingly. Empty-scope errors surface a specific message with filter names. Success message includes the active filters.
+- **`routes/ml.py::train_ml_on_price_data`** —
+  - Uppercase-normalises `asset` before hitting historical service + OANDA (`asset_raw.upper()`).
+  - Expanded `tf_map` to include `10s → S10`, plus lowercase `1m/5m/15m/30m/1h/4h/1d` aliases.
+  - Raised OANDA-fallback trigger threshold: OTC pool with `< 400` raw candles now falls through to OANDA (previously only `< 100`). This fixes thin-OTC + short-TF cases like `USDJPY_otc 30s` where 500 @5s → 110 resampled → 61 samples after feature-eng warmup (below `train_on_price_data`'s 100 minimum).
+  - OANDA fallback only overrides OTC data if OANDA returned MORE candles.
+  - "Zero models" error message now points to actionable next-steps (larger `days` window or longer TF).
+- **`historical_data_service.py::_fetch_from_otc_collection`** — added `10S` to resample rule_map.
+
+### Frontend changes (`AIMLModelsPage.jsx`)
+- **"Train from Backtest Results" card** — new Asset + Timeframe selectors above the Train button. Timeframe options: `5s / 10s / 15s / 30s / 1m / 5m / 15m / 1h / all`. Asset options: `all` + 16 common OTC/regular pairs. Sends both as POST body params. Success toast shows the applied scope.
+- **"Train on Price Data" card timeframe select** — added `5s / 10s / 15s / 30s` at the top of the existing dropdown.
+- New React state: `mlBacktestAsset`, `mlBacktestTimeframe` (defaults `all` / `5s`).
+- `data-testid`: `train-from-backtests-asset`, `train-from-backtests-timeframe`, `train-from-backtests-btn`.
+
+### Verified end-to-end
+- `EURUSD_otc 5s / 10s / 15s / 30s` → OANDA path, 500-1000 candles, both RF + GB train with real metrics.
+- `USDJPY_otc 30s` (regression case) → OANDA fallback kicks in on thin pool, 1000 candles, both models train (acc 0.54-0.57 — data-quality limited but no errors).
+- `GBPUSD_otc / EURJPY_otc` short-TF → all pass.
+- `train-from-backtests` filters `backtest_results` by TF: 15s/30s/1m/5s/all → all 3 models (RF, GB, ensemble) train with real precision/recall/f1/validation_samples.
+- Bogus TF like `999h` → clean "Insufficient backtest results" error.
+
+### Tests
+- **`test_iter87_ml_training_short_tf.py`** — 7/7 pass:
+  1. Lowercase `EURUSD_otc` + `5s` training succeeds.
+  2. Thin-pool `USDJPY_otc 30s` triggers OANDA fallback.
+  3. All 4 short TFs (5s/10s/15s/30s) supported end-to-end.
+  4. `train-from-backtests` accepts `timeframe` filter, returns all 3 model metrics.
+  5. Empty-scope returns clear error message.
+  6. `"all"` timeframe works for both training endpoints.
+  7. Zero-model error message actionable, not generic.
+- **Full regression**: Iter 60 + 74 + 75 + 76 + 86 + 87 = 39/39 pass.
+
+---
 
 ## Iter 85 (Jul 31, 2026) — AI Trading Synthwave theme (React app + TM panel)
 

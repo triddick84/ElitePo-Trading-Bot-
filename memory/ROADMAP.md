@@ -1,6 +1,6 @@
 # Roadmap — AI's Elite PO Traders Bot
 
-_Last updated: Iter 80 (Jul 28, 2026)_
+_Last updated: Iter 87 (Aug 4, 2026)_
 
 ## P0 — Delivered
 - ✅ Iter 80: TM v8.122.0 backend catch-up.
@@ -9,6 +9,8 @@ _Last updated: Iter 80 (Jul 28, 2026)_
 - ✅ Iter 83: Reusable `AssetPicker` (366 symbols, Regular/OTC bulk).
 - ✅ Iter 84: ML accuracy uplift (dynamic ensemble weighting, regime bias, PPO reward shaping).
 - ✅ Iter 85: AI Trading Synthwave theme (React app + TM panel — neon cyan on void navy).
+- ✅ Iter 86: Microstructure + Latency + Pair-Confluence gates on `/signals/latest`.
+- ✅ Iter 87: Short-TF ML training (5s/10s/15s/30s) + fix lowercase `_otc` failure.
 
 ## P1 — Remaining rebuild queue (user-approved order b→a→c→d→e; b + c + d done)
 - ⏭️ **Next: a) Backend health strip in TM panel** — still needs your call on a1/a2/a3.

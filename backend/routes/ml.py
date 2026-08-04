@@ -545,28 +545,48 @@ async def train_ml_on_price_data(request: dict):
         from dataclasses import asdict
         from historical_data_service import historical_data_service
 
-        asset = request.get("asset", "EURUSD")
+        asset_raw = request.get("asset", "EURUSD")
         timeframe = request.get("timeframe", "M1")
         days = min(int(request.get("days", 30)), 90)
+
+        # Iter 87 — Normalise asset code so OTC lookups aren't case-sensitive.
+        # Frontend passes `EURUSD_otc` (lowercase) but `otc_candles_5s` and
+        # our OANDA symbol mapper both key on `_OTC` (uppercase). Without
+        # this normalisation, every OTC + short-TF request 0-hits both
+        # sources and errors as "Insufficient REAL price data".
+        asset = str(asset_raw).upper()
 
         # Prefer the same OTC + OANDA fallback path the backtesting endpoint uses
         price_df = historical_data_service.get_candles_for_backtest(asset, timeframe, days)
         data_source = "otc_pool_or_oanda"
 
-        # Last-resort fallback to OANDA-only if the unified service returned empty
-        if price_df is None or price_df.empty or len(price_df) < 100:
+        # Iter 87 — Short-TF resilience: feature engineering (RSI/MACD/ATR
+        # warm-up + label-shift) shaves ~40% off the raw candle count. A
+        # 110-row OTC-pool result becomes 61 usable samples which trips the
+        # `train_on_price_data` 100-sample minimum. Trigger OANDA fallback
+        # whenever the pool is thin (< 400 raw candles) instead of only when
+        # empty.
+        raw_len = 0 if price_df is None else len(price_df)
+        needs_oanda = (price_df is None) or price_df.empty or (raw_len < 400)
+        if needs_oanda:
             try:
                 from enhanced_oanda_service import enhanced_oanda
-                oanda_symbol = asset.replace("_OTC", "").replace("OTC", "")
+                oanda_symbol = asset.upper().replace("_OTC", "").replace("OTC", "")
                 if "_" not in oanda_symbol and len(oanda_symbol) == 6:
                     oanda_symbol = f"{oanda_symbol[:3]}_{oanda_symbol[3:]}"
                 tf_map = {"M1": "M1", "M5": "M5", "M15": "M15", "M30": "M30",
-                          "H1": "H1", "H4": "H4", "D1": "D", "5s": "S5", "15s": "S15", "30s": "S30"}
+                          "H1": "H1", "H4": "H4", "D1": "D",
+                          "1m": "M1", "5m": "M5", "15m": "M15", "30m": "M30",
+                          "1h": "H1", "4h": "H4", "1d": "D",
+                          "5s": "S5", "10s": "S10", "15s": "S15", "30s": "S30"}
                 oanda_tf = tf_map.get(timeframe, "M1")
                 df = enhanced_oanda.get_candles(oanda_symbol, oanda_tf, count=1000)
                 if df is not None and not df.empty:
-                    price_df = df.reset_index() if "timestamp" not in df.columns else df
-                    data_source = "oanda"
+                    oanda_df = df.reset_index() if "timestamp" not in df.columns else df
+                    # Only override the OTC pool if OANDA gave us MORE data.
+                    if len(oanda_df) > raw_len:
+                        price_df = oanda_df
+                        data_source = "oanda"
             except Exception as _oe:
                 logger.warning(f"OANDA fallback for ML training also failed: {_oe}")
 
@@ -588,7 +608,11 @@ async def train_ml_on_price_data(request: dict):
         if not trained_models:
             return {
                 "success": False,
-                "error": "Model training returned zero models (likely too few samples after feature prep)",
+                "error": (
+                    f"Model training returned zero models. Got {len(price_df)} raw candles "
+                    f"but feature engineering left too few samples after indicator warm-up. "
+                    f"Try a larger `days` window or a longer timeframe."
+                ),
                 "data_source": data_source,
                 "candles_used": len(price_df),
             }
