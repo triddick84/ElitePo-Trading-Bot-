@@ -1,4 +1,62 @@
-# AI's Elite PO Traders Bot — Aug 2026 (Presets + Adaptive Offset + Latency Ops)
+# AI's Elite PO Traders Bot — Aug 2026 (Multi-Cond Bug Fix + Expert LLM Persona + qtpylib)
+
+## Iter 92 (Aug 6, 2026) — Strategy Builder condition-persistence + LLM Expert Persona
+
+**User reports**:
+1. "The strategy Builder seems to only be saving one condition out of multiple ones added into the strategy take a look and double check to make sure that it is saving all conditions after saved and published"
+2. "research online https://github.com/ranaroussi/qtpylib and implement anything to improve the code and build to have its maximum resources and knowledge of trading, the ai models should be experts in binary options trading along with decades of knowledge and trading experience"
+
+### Root-cause of the "only saving one condition" bug — THREE distinct issues
+
+1. **Silent drop on save** (`saveStrategy` in `StrategyBuilder.jsx`):
+   The frontend partitions rows into `call_conditions` and `put_conditions` by looking up `INDICATOR_TEMPLATES[c.indicator].conditions.find(x => x.id === c.conditionType).signal`. When user picked an indicator whose default `conditionType` didn't match the new indicator's template (or the user cleared the conditionType by re-picking an indicator — see line 823 `onValueChange` which resets `conditionType: ''`), the `.find(...).signal` returned `undefined` and the row got silently dropped from BOTH partitions. **Users saw 5 conditions in the UI, only 1-2 persisted.**
+
+2. **Edit-load only reads `call_conditions[0].conditions[0]`** (edit button handler):
+   The Edit button flattened the saved strategy back into the form's flat `conditions` array using `(strategy.call_conditions || []).map(c => ({ ...c.conditions[0] }))` — meaning it (a) ignored `put_conditions` entirely and (b) only grabbed the first inner condition per group. **Editing an Ichimoku preset (3+3 inner rules) and Save-ing back wiped it down to 3 rules total. Editing any strategy with PUT rules wiped the PUT side on next save.**
+
+3. **`Date.now()` collisions on rapid Add clicks**:
+   `addCondition` used `id: cond_${Date.now()}`. Double-clicking "Add" within a millisecond produced two rows with identical ids, React's list reconciliation collapsed them, and downstream flows using id as dedup key kept only one.
+
+### Fixes shipped
+
+* **Pre-flight save validation** — checks every row has a valid `(indicator, conditionType)` pair before firing the POST. Blocks Save with a toast pointing to the exact row + reason (`"Row 3: MACD: no condition type selected"`). Also verifies `callConditions.length + putConditions.length === form.conditions.length` and aborts if any row got un-routed.
+* **Round-trip Edit-load** — flattens `[...call_conditions, ...put_conditions]` and iterates every inner condition of every group, preserving each `reversal` flag. Toast on load: `"Editing 'name' — loaded N condition(s)"`.
+* **`crypto.randomUUID()` ids** — no more collision risk on rapid clicks.
+* **Visual warning on empty-conditionType cards** — amber border + ring + banner: *"⚠ Pick a condition type below — otherwise this row will be skipped on save."*
+* **Save success toast now shows the counts** — `"Strategy created (3 CALL · 2 PUT rules)"` so the user can eyeball that everything was saved.
+
+### qtpylib research — what was adopted
+
+**Rejected** (not applicable):
+* qtpylib is IB-broker-specific + event-driven around a MySQL Blotter + ZeroMQ pub/sub. Our FastAPI+Mongo+PocketOption stack doesn't map to that pattern.
+* Its indicator library is a thin wrapper over TA-Lib which we already use.
+
+**Adopted** (mental model + concepts):
+* **Crossover semantics** — qtpylib's `.crossed_above()` / `.crossed_below()` methods insist on the CROSS at t vs. t-1, not just "A > B right now". Baked into the expert LLM persona (see "CROSSOVER MECHANICS" section) so the enhancer rejects late-cross entries.
+* **Bar resolution shorthand** (`1T`, `5T`, `1D`) — already supported by our TF-map for short-TF ML (Iter 87).
+* **Trade-record CSV + Reports concept** — we have `trade_summary_service.py` that mirrors this.
+
+### AI models are now "experts with 30+ years of experience"
+
+New `_get_expert_system_prompt()` on `GPTSignalEnhancer` (4121 chars) — a hardened institutional-trader playbook covering:
+* Binary-options payout math (break-even = 55.6% win rate at 80% payout)
+* Session/liquidity filter (London-NY overlap = prime; Sunday chop = reject; OTC session inversion)
+* Microstructure hard-stops (spread > 3× median; VPIN > 0.5; Kyle's λ > p90; p99 latency > 250 ms; bid-ask bounce dominance)
+* Proper crossover mechanics (qtpylib model)
+* 6-signal confluence requirement (trend, momentum, volatility, order-flow, S/R, multi-TF)
+* Confidence-adjustment scale [-25, +25]
+* Behavioural bias checklist (recency, anchoring, revenge, gambler's fallacy)
+* Strict JSON output shape with `confluence_hits`, `session_quality`, `microstructure_status`
+
+### Tests
+* `test_iter92_strategy_builder_and_expert_persona.py` — **4/4 pass**:
+  1. 3 CALL groups + 2 PUT groups round-trip untouched via API.
+  2. Multi-inner group (3 inner conditions in 1 group) survives.
+  3. Applying Ichimoku preset persists full 3-CALL + 3-PUT tree.
+  4. LLM expert prompt contains VPIN, Kyle, crossover, confluence, OTC, session, REJECT keywords + is ≥ 2500 chars.
+* **Full regression 45/45 pass** (Iter 86/87/89/90/91/92).
+
+---
 
 ## Iter 91 (Aug 6, 2026) — Strategy Presets + Adaptive Latency Offset
 

@@ -780,10 +780,16 @@ const ConditionCard = ({ condition, onRemove, onUpdate, index }) => {
 
   return (
     <div className={`p-4 rounded-lg border-2 ${
+      !condition.conditionType ? 'border-amber-500/50 bg-amber-500/10 ring-2 ring-amber-500/20' :
       effectiveSignal === 'CALL' ? 'border-green-500/30 bg-green-500/5' :
       effectiveSignal === 'PUT' ? 'border-red-500/30 bg-red-500/5' :
       'border-slate-600/30 bg-slate-800/30'
-    }`}>
+    }`} data-testid={`condition-card-${condition.id || 'unknown'}`}>
+      {!condition.conditionType && (
+        <div className="mb-2 text-amber-400 text-xs font-medium flex items-center gap-1.5" data-testid="condition-card-warning">
+          ⚠ Pick a condition type below — otherwise this row will be skipped on save.
+        </div>
+      )}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <span className="text-lg">{template?.icon || '📊'}</span>
@@ -983,10 +989,15 @@ const StrategyBuilder = () => {
   };
 
   const addCondition = () => {
+    // Iter 92 — Use crypto.randomUUID for unique ids (Date.now() can collide
+    // when the user clicks Add twice in <1 ms, silently merging rows).
+    const newId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? `cond_${crypto.randomUUID()}`
+      : `cond_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     setStrategyForm(prev => ({
       ...prev,
       conditions: [...prev.conditions, {
-        id: `cond_${Date.now()}`,
+        id: newId,
         indicator: 'RSI',
         conditionType: 'crosses_above_oversold',
         parameters: {},
@@ -1013,7 +1024,49 @@ const StrategyBuilder = () => {
   const saveStrategy = async () => {
     try {
       setIsSaving(true);
-      
+
+      // Iter 92 — Pre-flight validation. Silently-dropped conditions are
+      // the #1 reported bug — happens when a user picks an indicator but
+      // never picks a conditionType (or if the picked conditionType isn't
+      // in that indicator's template). Both cases produce
+      // `originalSignal = undefined` → the condition was silently dropped
+      // from both call_conditions AND put_conditions.
+      const invalidConditions = [];
+      strategyForm.conditions.forEach((c, idx) => {
+        const template = INDICATOR_TEMPLATES[c.indicator];
+        if (!template) {
+          invalidConditions.push({ idx, reason: `Unknown indicator: ${c.indicator}` });
+          return;
+        }
+        if (!c.conditionType) {
+          invalidConditions.push({
+            idx, reason: `${template.name}: no condition type selected`,
+          });
+          return;
+        }
+        const cond = template.conditions.find(x => x.id === c.conditionType);
+        if (!cond) {
+          invalidConditions.push({
+            idx,
+            reason: `${template.name}: condition "${c.conditionType}" is not valid for this indicator`,
+          });
+        }
+      });
+
+      if (strategyForm.conditions.length === 0) {
+        toast.error('Add at least one condition before saving.');
+        setIsSaving(false);
+        return;
+      }
+      if (invalidConditions.length > 0) {
+        const msg = invalidConditions
+          .map(x => `Row ${x.idx + 1}: ${x.reason}`)
+          .join(' · ');
+        toast.error(`Fix ${invalidConditions.length} incomplete condition(s) before saving. ${msg}`);
+        setIsSaving(false);
+        return;
+      }
+
       // Convert our simplified format to the backend format
       // Consider reversal: if reversed, swap CALL/PUT assignment
       const callConditions = strategyForm.conditions
@@ -1058,6 +1111,19 @@ const StrategyBuilder = () => {
           logical_operator: 'AND'
         }));
 
+      // Iter 92 — Post-partition sanity check. If a rule ends up in NEITHER
+      // list (shouldn't happen given the pre-flight, but guard anyway) tell
+      // the user rather than silently persisting an empty strategy.
+      const totalRoutedRules = callConditions.length + putConditions.length;
+      if (totalRoutedRules !== strategyForm.conditions.length) {
+        const dropped = strategyForm.conditions.length - totalRoutedRules;
+        toast.error(
+          `${dropped} condition(s) could not be routed to CALL/PUT — check that each condition maps to a template signal.`,
+        );
+        setIsSaving(false);
+        return;
+      }
+
       const payload = {
         name: strategyForm.name,
         description: strategyForm.description,
@@ -1073,10 +1139,10 @@ const StrategyBuilder = () => {
 
       if (selectedStrategy) {
         await axios.put(`${API_URL}/api/custom-strategies/${selectedStrategy.id}`, payload);
-        toast.success('Strategy updated!');
+        toast.success(`Strategy updated (${callConditions.length} CALL · ${putConditions.length} PUT rules).`);
       } else {
         await axios.post(`${API_URL}/api/custom-strategies`, payload);
-        toast.success('Strategy created!');
+        toast.success(`Strategy created (${callConditions.length} CALL · ${putConditions.length} PUT rules).`);
       }
       
       fetchStrategies();
@@ -1772,16 +1838,43 @@ const StrategyBuilder = () => {
                               size="sm"
                               onClick={() => {
                                 setSelectedStrategy(strategy);
+
+                                // Iter 92 — Round-trip fix. Previously this
+                                // only iterated `call_conditions` and only
+                                // grabbed `.conditions[0]`, so any strategy
+                                // with PUT rules OR multi-condition groups
+                                // (e.g. the Ichimoku preset) lost data on
+                                // edit — and a subsequent Save re-persisted
+                                // the truncated state, wiping the missing
+                                // rules from Mongo.
+                                const flatten = (groups, wasPutGroup) =>
+                                  (groups || []).flatMap((g, gi) =>
+                                    (g?.conditions || []).map((inner, ii) => ({
+                                      id: inner?.id || `edit-${gi}-${ii}-${Date.now()}`,
+                                      indicator: inner?.indicator || 'RSI',
+                                      conditionType: inner?.conditionType || '',
+                                      parameters: inner?.parameters || {},
+                                      // Preserve the reversal flag persisted
+                                      // on the inner condition; if missing
+                                      // AND the group was originally a PUT
+                                      // group whose inner template is CALL,
+                                      // we default to reversal=false (the
+                                      // groups on the server are already
+                                      // canonicalised by direction).
+                                      reversal: !!inner?.reversal,
+                                      _sourceDirection: wasPutGroup ? 'PUT' : 'CALL',
+                                    })),
+                                  );
+
+                                const allConditions = [
+                                  ...flatten(strategy.call_conditions, false),
+                                  ...flatten(strategy.put_conditions, true),
+                                ];
+
                                 setStrategyForm({
                                   name: strategy.name || 'New Strategy',
                                   description: strategy.description || '',
-                                  conditions: (strategy.call_conditions || []).map(c => ({
-                                    id: c.conditions?.[0]?.id || `c${Date.now()}`,
-                                    indicator: c.conditions?.[0]?.indicator || 'RSI',
-                                    conditionType: c.conditions?.[0]?.conditionType || 'crosses_above_oversold',
-                                    parameters: c.conditions?.[0]?.parameters || {},
-                                    reversal: c.conditions?.[0]?.reversal || false
-                                  })),
+                                  conditions: allConditions,
                                   timeframes: strategy.timeframes || ['1m'],
                                   assets: strategy.assets || ['EURUSD'],
                                   min_confidence: strategy.min_confidence || 75,
@@ -1790,7 +1883,9 @@ const StrategyBuilder = () => {
                                   is_active: strategy.is_active || false
                                 });
                                 setActiveTab('builder');
-                                toast.info(`Editing "${strategy.name}"`);
+                                toast.info(
+                                  `Editing "${strategy.name}" — loaded ${allConditions.length} condition(s)`,
+                                );
                               }}
                               className="border-blue-500/50 text-blue-400"
                             >
