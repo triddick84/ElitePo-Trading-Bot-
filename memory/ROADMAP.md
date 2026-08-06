@@ -11,6 +11,9 @@ _Last updated: Iter 87 (Aug 4, 2026)_
 - ✅ Iter 85: AI Trading Synthwave theme (React app + TM panel — neon cyan on void navy).
 - ✅ Iter 86: Microstructure + Latency + Pair-Confluence gates on `/signals/latest`.
 - ✅ Iter 87: Short-TF ML training (5s/10s/15s/30s) + fix lowercase `_otc` failure.
+- ✅ Iter 88: Ensemble Model Registration in train-on-price-data (3 models side-by-side).
+- ✅ Iter 89: GZip compression + Signal pre-generation buffer + Live Latency Dashboard.
+- ✅ Iter 90: Ichimoku Cloud indicator (previously declared but not implemented).
 
 ## P1 — Remaining rebuild queue (user-approved order b→a→c→d→e; b + c + d done)
 - ⏭️ **Next: a) Backend health strip in TM panel** — still needs your call on a1/a2/a3.

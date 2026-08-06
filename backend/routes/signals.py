@@ -715,6 +715,21 @@ async def get_latest_signal(
     If use_enhanced=True and no recent signal exists, generates a new one.
     """
     try:
+        # Iter 89 — Pre-generation buffer probe. If we have a fresh
+        # pre-computed signal for this (asset, tf), skip the inline
+        # `generate_trend_signal` (saves 300-1500 ms). Downstream gates
+        # (AccuracyEngine, Microstructure, Latency, Pair-Confluence) still
+        # run on the buffered signal.
+        prewarm_signal: Optional[Dict[str, Any]] = None
+        try:
+            from signal_prewarm_service import get_buffer as _prewarm
+            _pw = _prewarm()
+            if symbol:
+                _pw.touch(symbol, "5s")  # mark active for LRU refresher
+                prewarm_signal = _pw.get(symbol, "5s")
+        except Exception as _pw_err:
+            logger.debug(f"prewarm buffer probe failed: {_pw_err}")
+
         # Build query — optionally filter by symbol
         # Iter 56: TM script passes ?symbol=X to scope to the current asset.
         # Match against both `symbol` and `asset` fields since force-generate-v2
@@ -767,6 +782,19 @@ async def get_latest_signal(
         else:
             signal_is_stale = True
         
+        # Iter 89 — If we have a fresh pre-generated signal, use it directly
+        # instead of running the slow inline `generate_trend_signal`. All
+        # downstream gates (AccuracyEngine, Microstructure, Latency,
+        # Pair-Confluence) still run on the resulting `latest_signal`.
+        if signal_is_stale and prewarm_signal is not None:
+            latest_signal = prewarm_signal
+            signal_is_stale = False
+            try:
+                await db.trading_signals.insert_one({**prewarm_signal})
+            except Exception:
+                pass
+            logger.debug(f"[prewarm] served pre-generated signal for {symbol}")
+
         # If signal is stale and enhanced mode is enabled, generate new signal
         if signal_is_stale and use_enhanced and enhanced_oanda.is_configured:
             try:

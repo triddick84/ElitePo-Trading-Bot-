@@ -262,7 +262,19 @@ class IndicatorCalculator:
             elif indicator == "HEIKIN_ASHI":
                 result = self._calculate_heikin_ashi(opens, highs, lows, closes)
                 return result.get(output, result.get("ha_close"))
-            
+
+            elif indicator == "ICHIMOKU":
+                # Iter 90 — Ichimoku Cloud was declared in the indicator
+                # schema (custom_strategy_service.py) but never executed —
+                # user strategies referencing it silently returned None.
+                result = self._calculate_ichimoku(
+                    highs, lows, closes,
+                    parameters.get("tenkan_period", 9),
+                    parameters.get("kijun_period", 26),
+                    parameters.get("senkou_b_period", 52),
+                )
+                return result.get(output, result.get("tenkan"))
+
             else:
                 logger.warning(f"Unknown indicator: {indicator}")
                 return None
@@ -531,6 +543,51 @@ class IndicatorCalculator:
         middle = (upper + lower) / 2
         
         return {"upper": upper, "middle": middle, "lower": lower}
+
+    def _calculate_ichimoku(self, highs: List[float], lows: List[float],
+                            closes: List[float],
+                            tenkan_period: int = 9,
+                            kijun_period: int = 26,
+                            senkou_b_period: int = 52) -> Dict[str, float]:
+        """
+        Iter 90 — Ichimoku Cloud (Ichimoku Kinko Hyo).
+
+        Outputs:
+            tenkan    — Conversion Line ((PH+PL)/2 over tenkan_period)
+            kijun     — Base Line ((PH+PL)/2 over kijun_period)
+            senkou_a  — Leading Span A ((tenkan+kijun)/2), shifted forward
+                        by kijun_period — here we return the *current-bar*
+                        value; consumers that need the shifted plot can
+                        offset in their own visualisation layer.
+            senkou_b  — Leading Span B ((PH+PL)/2 over senkou_b_period)
+            chikou    — Lagging Span (close shifted BACK by kijun_period);
+                        we return the last close so binary-options rules
+                        can compare current close vs. cloud without a plot.
+        """
+        if not highs or not lows or not closes:
+            return {"tenkan": 0.0, "kijun": 0.0, "senkou_a": 0.0,
+                    "senkou_b": 0.0, "chikou": 0.0}
+
+        def _mid_range(hs: List[float], ls: List[float], p: int) -> float:
+            hs_slice = hs[-p:] if len(hs) >= p else hs
+            ls_slice = ls[-p:] if len(ls) >= p else ls
+            if not hs_slice or not ls_slice:
+                return 0.0
+            return (max(hs_slice) + min(ls_slice)) / 2.0
+
+        tenkan = _mid_range(highs, lows, tenkan_period)
+        kijun = _mid_range(highs, lows, kijun_period)
+        senkou_a = (tenkan + kijun) / 2.0
+        senkou_b = _mid_range(highs, lows, senkou_b_period)
+        chikou = closes[-1] if closes else 0.0
+
+        return {
+            "tenkan": float(tenkan),
+            "kijun": float(kijun),
+            "senkou_a": float(senkou_a),
+            "senkou_b": float(senkou_b),
+            "chikou": float(chikou),
+        }
     
     # ============================================================
     # POCKET OPTION NATIVE INDICATORS

@@ -3675,6 +3675,7 @@ from routes.tampermonkey import router as tampermonkey_extra_router
 from routes.accuracy_engine import router as accuracy_engine_router
 from routes.microstructure import router as microstructure_router
 from routes.latency import router as latency_router
+from routes.signal_prewarm import router as signal_prewarm_router
 
 api_router.include_router(strategies_router)
 api_router.include_router(signals_router)
@@ -3692,6 +3693,7 @@ api_router.include_router(tampermonkey_extra_router)
 api_router.include_router(accuracy_engine_router)
 api_router.include_router(microstructure_router)
 api_router.include_router(latency_router)
+api_router.include_router(signal_prewarm_router)
 
 app.include_router(api_router)
 
@@ -3699,6 +3701,12 @@ app.include_router(api_router)
 # per route so /signals/latest can abstain when the pipe is degraded.
 from request_latency_histogram import RequestLatencyMiddleware
 app.add_middleware(RequestLatencyMiddleware)
+
+# Iter 89 — GZip response compression. Signal payloads are 2-5 KB JSON;
+# compressing them saves 50-200 ms on slower client links (mobile / far VPS).
+# Only compresses responses >= 500 bytes (below that the CPU cost > gain).
+from fastapi.middleware.gzip import GZipMiddleware
+app.add_middleware(GZipMiddleware, minimum_size=500, compresslevel=6)
 
 app.add_middleware(
     CORSMiddleware,
@@ -3807,6 +3815,17 @@ async def startup_event():
                 )
             except Exception as _mse:
                 logger.warning("[Microstructure] prime skipped: %s", _mse)
+
+            # Iter 89 — Signal pre-generation buffer. Runs a background loop
+            # that pre-computes signals for actively-polled (asset, tf) combos
+            # so `/signals/latest` can return in ~5-30 ms instead of
+            # 300-1500 ms when the DB is stale.
+            try:
+                from signal_prewarm_service import start_background_refresher
+                start_background_refresher()
+                logger.info("[SignalPrewarm] background refresher started")
+            except Exception as _pwe:
+                logger.warning("[SignalPrewarm] refresher failed to start: %s", _pwe)
         except Exception as e:
             logger.error(f"❌ Error during initialization: {e}")
             app_initialized = False

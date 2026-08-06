@@ -1,4 +1,54 @@
-# AI's Elite PO Traders Bot — Aug 2026 (Short-TF ML Training + Microstructure Gates + Synthwave)
+# AI's Elite PO Traders Bot — Aug 2026 (Latency Ops + Ichimoku + Prewarm + Short-TF ML)
+
+## Iter 89-90 (Aug 6, 2026) — Latency Optimization + GitHub-Research Adoption
+
+**User requests**:
+1. "need to research online on ways to improve latency with Pocket option trading platform"
+2. "Go with your recommendation pick #3... research online https://github.com/educem15/binary-bot, https://github.com/Bilowbinarymasterai/Bilow_Binary_ai_signal-, https://github.com/harshkarwadai-prediction-windowow and implement anything that will potentially help improve our build"
+
+### What was implemented
+
+**#3 GZip compression** (Iter 89):
+- `FastAPI.add_middleware(GZipMiddleware, minimum_size=500, compresslevel=6)` in `server.py`.
+- `/signals/latest` payload: **1026 B → 420 B on wire (59% reduction)**. Estimated 50-200ms saving per fire on slow mobile / VPS links.
+
+**#7 Signal pre-generation buffer** (Iter 89):
+- New file `signal_prewarm_service.py` — in-memory dict keyed by `(asset, timeframe)`, TTL 3s, LRU-tracked active combos (last 30s).
+- Background asyncio loop refreshes every 2s for actively-polled combos via `enhanced_oanda.generate_trend_signal`. Started from server startup handler.
+- `/signals/latest` now checks the buffer BEFORE falling into the slow inline `generate_trend_signal` path — when hit, skips the 300-1500ms generation call.
+- REST introspection: `GET /api/signal-prewarm/stats` returns hit-rate + buffered entries (used by the dashboard).
+- Env-tunable: `SIGNAL_PREWARM_TTL_SECONDS`, `SIGNAL_PREWARM_REFRESH_SECONDS`, `SIGNAL_PREWARM_ACTIVE_WINDOW_SECONDS`, `SIGNAL_PREWARM_MAX_COMBOS`.
+
+**#6 Live Latency Dashboard** (Iter 89):
+- New page `LatencyDashboard.jsx` under sidebar "⚡ Latency".
+- 4 summary cards: Overall health (Healthy/Degraded), Worst-latency route + p99 ms, Prewarm hit rate %, Prewarm buffer size.
+- Table: per-route p50/p95/p99/max with colour coding (green ≤100ms, cyan ≤250ms, amber ≤500ms, rose >500ms). Sorted by p99 desc.
+- Second table: Prewarm buffer entries (asset, TF, direction, confidence, age, generator).
+- Auto-refresh every 3s, pauseable via "Live ●" / "Paused" toggle.
+
+### GitHub research findings + adoption
+
+| Repo | Adopted? | Rationale |
+|---|---|---|
+| `educem15/binary-bot` | **Ichimoku Cloud added** | Repo uses 10 indicators; only Ichimoku was missing from our custom-strategy executor. We already had CCI / OBV / everything else. Ichimoku was declared in the strategy schema but silently returned None. Now implements tenkan / kijun / senkou_a / senkou_b / chikou. |
+| `Bilowbinarymasterai/Bilow_Binary_ai_signal-` | **Nothing** | 15-line Streamlit demo that uses `random.choice()` to pick CALL/PUT. No real algorithm to mine. |
+| `harshkarwadai-prediction-windowow` | **Not found** | Repo URL doesn't exist as typed (likely typo). Skipped. |
+
+**Ichimoku implementation** (`custom_strategy_executor.py::_calculate_ichimoku`):
+- 5 outputs: `tenkan` (9-period midrange), `kijun` (26), `senkou_a` (avg of tenkan+kijun), `senkou_b` (52-period midrange), `chikou` (last close).
+- Dispatched via the `ICHIMOKU` name in `IndicatorCalculator.calculate()`.
+- Handles empty input gracefully (returns all zeros, not None).
+
+### Tests
+- **`test_iter89_gzip_and_prewarm.py`** — 5/5 pass: gzip compression works on large payloads, `/signal-prewarm/stats` reachable, touches tracked, background refresher makes progress.
+- **`test_iter90_ichimoku_and_dashboard.py`** — 4/4 pass: Ichimoku math correct, empty-input safe, dispatched from `calculate()`, all 3 dashboard endpoints reachable.
+- **Full regression** (Iter 86 + 87 + 89 + 90): **33/33 pass**.
+
+### Verified live in preview
+- Screenshot of `/latency` shows all 4 summary cards populated, 21+ backend routes with correct p50/p95/p99 ms, 44 prewarm writes over ~30s of traffic, hit rate 2.56% and climbing.
+- `/api/signals/latest` p99 = 232.8 ms (under our 250 ms abstain threshold).
+
+---
 
 ## Iter 87 (Aug 4, 2026) — Short-TF ML training (5s/10s/15s/30s)
 

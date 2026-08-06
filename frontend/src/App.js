@@ -12,6 +12,7 @@ import TelegramBotPage from "./components/TelegramBotPage";
 import StrategyBuilder from "./components/StrategyBuilder";
 import AIMLModelsPage from "./components/AIMLModelsPage";
 import MLLabPage from "./components/MLLabPage";
+import LatencyDashboard from "./components/LatencyDashboard";
 import PerformancePage from "./components/PerformancePage";
 import SettingsPage from "./components/SettingsPage";
 import PocketOptionPage from "./components/PocketOptionPage";
@@ -149,6 +150,7 @@ function ProtectedApp() {
     { id: "strategies", label: "Strategies", icon: "🎯" },
     { id: "ai-models", label: "AI Models", icon: "🧠" },
     { id: "ml-lab", label: "ML Lab", icon: "🧪" },
+    { id: "latency", label: "Latency", icon: "⚡" },
     { id: "performance", label: "Performance", icon: "📈" },
     { id: "settings", label: "Settings", icon: "⚙️" }
   ];
@@ -183,6 +185,8 @@ function ProtectedApp() {
         return <AIMLModelsPage />;
       case "ml-lab":
         return <MLLabPage />;
+      case "latency":
+        return <LatencyDashboard />;
       case "performance":
         return <PerformancePage />;
       case "settings":
