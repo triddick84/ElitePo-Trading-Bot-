@@ -1059,6 +1059,27 @@ async def get_latest_signal(
             except Exception as _mm:
                 logger.debug("Microstructure multiplier skipped: %s", _mm)
 
+        # Iter 91 — Attach per-asset adaptive latency-offset recommendation.
+        # TM script (when rebuilt) can consume `recommended_offset_sec` to
+        # replace the global +3.5 s constant. Never blocks the response.
+        try:
+            asset_for_offset = (
+                latest_signal.get("asset") or latest_signal.get("symbol") or symbol
+            )
+            if asset_for_offset:
+                from adaptive_latency_offset import compute_asset_offset as _ao
+                _rec = await _ao(db, asset_for_offset)
+                latest_signal["recommended_offset_sec"] = _rec.get(
+                    "recommended_offset_sec"
+                )
+                latest_signal["adaptive_offset_meta"] = {
+                    "sample_count": _rec.get("sample_count"),
+                    "using_default": _rec.get("using_default"),
+                    "median_total_ms": _rec.get("median_total_ms"),
+                }
+        except Exception as _ao_err:
+            logger.debug("Adaptive-offset attach skipped: %s", _ao_err)
+
         return {
             "success": True,
             "signal": latest_signal,
@@ -5343,6 +5364,14 @@ async def post_client_latency_report(report: ClientLatencyReport):
     Lets us join server-side signal generation with end-to-end performance.
     """
     from latency_monitor import report_client_latency
+    # Iter 91 — invalidate the adaptive-offset cache for this asset so the
+    # next `/adaptive-latency-offset` call picks up fresh samples instantly.
+    if report.asset:
+        try:
+            from adaptive_latency_offset import _cache as _ao_cache, _norm_asset
+            _ao_cache.pop(_norm_asset(report.asset), None)
+        except Exception:
+            pass
     return await report_client_latency(
         signal_id=report.signal_id,
         network_rtt_ms=report.network_rtt_ms,
@@ -5352,6 +5381,33 @@ async def post_client_latency_report(report: ClientLatencyReport):
         strategy=report.strategy,
         notes=report.notes,
     )
+
+
+# ---------------------------------------------------------------------------
+# Iter 91 — Adaptive Latency Offset (per-asset TM click compensation)
+# ---------------------------------------------------------------------------
+@router.get("/signals/adaptive-latency-offset")
+async def get_adaptive_latency_offset(
+    asset: str = Query(..., description="Asset symbol e.g. EURUSD_OTC"),
+):
+    """
+    Return the per-asset recommended TM click offset (seconds) derived
+    from rolling median of (network_rtt + dom_click_lag).
+    Falls back to the global default when < 8 samples exist.
+    """
+    from server import db as _db  # late import to avoid circular reference
+    from adaptive_latency_offset import compute_asset_offset
+    result = await compute_asset_offset(_db, asset)
+    return {"success": True, **result}
+
+
+@router.get("/signals/adaptive-latency-offsets")
+async def get_adaptive_latency_offsets_map(top_n: int = Query(30, ge=1, le=200)):
+    """Batch endpoint — recommended offset for every actively-reported asset."""
+    from server import db as _db
+    from adaptive_latency_offset import compute_all_offsets
+    result = await compute_all_offsets(_db, top_n=top_n)
+    return {"success": True, **result}
 
 
 @router.get("/signals/latency-stats")

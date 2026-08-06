@@ -2281,6 +2281,37 @@ async def get_all_custom_strategies(user_id: str = "default_user"):
         logger.error(f"Error getting strategies: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# =====================================================
+# Iter 91 — Strategy Presets (ready-made templates)
+# =====================================================
+from strategy_presets import list_presets as _list_presets, get_preset_payload as _get_preset_payload
+
+
+@api_router.get("/custom-strategies/presets")
+async def get_strategy_presets():
+    """List every available ready-made strategy preset."""
+    return {"success": True, "count": len(_list_presets()), "presets": _list_presets()}
+
+
+@api_router.post("/custom-strategies/presets/{preset_id}/apply")
+async def apply_strategy_preset(preset_id: str, user_id: str = "default_user"):
+    """
+    Clone a preset into the caller's `custom_strategies` collection as a
+    fresh Draft (unpublished, active).
+    """
+    try:
+        payload = _get_preset_payload(preset_id, user_id=user_id)
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    try:
+        service = await get_strategy_service()
+        result = await service.create_strategy(payload)
+        return {"success": True, "preset_id": preset_id, "strategy": result}
+    except Exception as e:
+        logger.error(f"Error applying preset {preset_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # =====================================================
 # SSID HEALTH MONITOR ENDPOINTS
 # =====================================================

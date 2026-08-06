@@ -1,4 +1,79 @@
-# AI's Elite PO Traders Bot — Aug 2026 (Latency Ops + Ichimoku + Prewarm + Short-TF ML)
+# AI's Elite PO Traders Bot — Aug 2026 (Presets + Adaptive Offset + Latency Ops)
+
+## Iter 91 (Aug 6, 2026) — Strategy Presets + Adaptive Latency Offset
+
+**User requests**:
+1. "Ichimoku Strategy Preset: Add a ready-made 'Ichimoku Cloud Break' custom-strategy template so users can drop it in and paper-trade in one click"
+2. "Adaptive Latency Offset: Auto-tune the +3.5s TM click offset per asset based on measured DOM lag reported by the client"
+
+### Task 1 — Strategy Presets
+
+New file **`strategy_presets.py`** with the first preset **"Ichimoku Cloud Break"**:
+- **CALL rules** (AND): `Tenkan > Kijun` AND `Close > Senkou Span A` AND `Close > Senkou Span B` (price above cloud + bullish momentum crossover).
+- **PUT rules** (AND): mirror image (below cloud + bearish crossover).
+- Timeframes: 30s / 1m / 5m; Assets: 6 OTC forex pairs; min_confidence 70%; cooldown 45s.
+- Each preset uses the schema-compliant `IndicatorCondition` shape → drops straight into `CustomStrategyExecutor` (Iter 90 shipped the ICHIMOKU indicator).
+
+New endpoints on `api_router`:
+- `GET /api/custom-strategies/presets` — list compact previews (name, description, category, tags, TFs, asset count, CALL/PUT rule count).
+- `POST /api/custom-strategies/presets/{preset_id}/apply?user_id=X` — clones the preset into user's `custom_strategies` collection as an **unpublished Draft**.
+- Unknown `preset_id` → 404.
+
+Frontend (`StrategyBuilder.jsx`):
+- New **📦 Presets** button in the "My Strategies" tab header.
+- Modal dialog lists every preset with name, category badge, description, tags, TFs/assets summary, and per-row **Apply** button.
+- On successful Apply → toast + auto-refresh strategy list + switch to the strategies tab.
+
+### Task 2 — Adaptive Latency Offset
+
+New file **`adaptive_latency_offset.py`**:
+- Reads `signal_latency_log_client` (populated by existing `POST /api/signals/latency-report`).
+- Rolling median of `network_rtt_ms + dom_click_lag_ms` for the last **50 samples per asset** (env-tunable via `ADAPTIVE_OFFSET_SAMPLES`).
+- Rounded to **0.5 s granularity** (matches TM slider), **clamped to [-5, +15] s**.
+- Falls back to global default `3.5 s` when < 8 samples available.
+- **30-s in-memory cache** per asset; invalidated automatically on new `/latency-report` for that asset.
+- Handles asset name variants: `EURUSD`, `EURUSD_OTC`, and `EURUSDOTC` all resolve to the same bucket.
+
+New endpoints (both in `routes/signals.py`):
+- `GET /api/signals/adaptive-latency-offset?asset=X` — single asset.
+- `GET /api/signals/adaptive-latency-offsets?top_n=30` — batch map (sorted by sample count desc).
+
+**`/signals/latest` enrichment**: every response now carries two fresh fields:
+```json
+"recommended_offset_sec": 3.0,
+"adaptive_offset_meta": {"sample_count": 50, "using_default": false, "median_total_ms": 3233.0}
+```
+So when the TM userscript's compiled bundle is next rebuilt, it can consume the per-asset offset with zero backend changes needed.
+
+Frontend (`LatencyDashboard.jsx`):
+- New **"Adaptive latency offsets"** table under the per-route percentiles.
+- Columns: Asset · Samples · Median RTT · Median DOM lag · Median total · Recommended.
+- Cyan colour when computed from real data, muted slate when using the 3.5 s default.
+- Auto-refreshes every 3 s alongside the other cards.
+
+### Verified live (see screenshot in this session)
+- `AUDCHF_OTC / CADCHF_OTC / AUDJPY_OTC` all recommend **3.0 s** (median DOM lag ~3000 ms).
+- `BHDCNY_OTC` recommends **1.5 s** (1505 ms lag).
+- `KESUSD_OTC` recommends **9.0 s** (8923 ms lag — very slow).
+- `GBPUSD_OTC` recommends **1.0 s** (fast) → we'd have been consistently ~2.5 s LATE with the old global 3.5 s.
+- Absurd 60 s lag samples clamp cleanly to 15 s max (guardrail works).
+
+### Tests
+- **`test_iter91_presets_and_adaptive_offset.py`** — 8/8 pass (+1 sensible skip for signal generation on synthetic asset):
+  1. Presets list includes `ichimoku-cloud-break`.
+  2. Preset shape correct (category, tags, TFs, rule counts).
+  3. Apply preset creates a Draft strategy retrievable by user_id.
+  4. Unknown preset → 404.
+  5. Default offset returned when < 8 samples.
+  6. Median-derived offset returned with 12+ samples.
+  7. Absurd lag clamps to 15.0 s max.
+  8. `/adaptive-latency-offsets` map endpoint reachable + shape-correct.
+- **Full regression** across Iter 86 / 87 / 89 / 90 / 91: **41/41 pass**.
+
+### NOT done this iteration (documented for later)
+- Compiled TM userscript bundle rewrite to consume `recommended_offset_sec` from `/signals/latest`. The field is already delivered — the userscript's next rebuild from source can read it. String-patching the compiled bundle was rejected as too fragile.
+
+---
 
 ## Iter 89-90 (Aug 6, 2026) — Latency Optimization + GitHub-Research Adoption
 

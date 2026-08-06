@@ -10,6 +10,10 @@ import { Switch } from './ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter,
+  DialogHeader, DialogTitle,
+} from './ui/dialog';
 import { toast } from 'sonner';
 import { 
   Plus, Trash2, Copy, Save, Play, Settings, TrendingUp, Activity,
@@ -910,6 +914,45 @@ const StrategyBuilder = () => {
   const [selectedStrategies, setSelectedStrategies] = useState({});
   const [loadingStrategies, setLoadingStrategies] = useState(true);
 
+  // Iter 91 — Ready-made strategy presets (one-click templates)
+  const [showPresetsDialog, setShowPresetsDialog] = useState(false);
+  const [presets, setPresets] = useState([]);
+  const [presetsLoading, setPresetsLoading] = useState(false);
+  const [applyingPresetId, setApplyingPresetId] = useState(null);
+
+  const fetchPresets = async () => {
+    setPresetsLoading(true);
+    try {
+      const res = await axios.get(`${API_URL}/api/custom-strategies/presets`);
+      setPresets(res.data?.presets || []);
+    } catch (e) {
+      toast.error('Failed to load presets');
+    } finally {
+      setPresetsLoading(false);
+    }
+  };
+
+  const applyPreset = async (presetId) => {
+    setApplyingPresetId(presetId);
+    try {
+      const res = await axios.post(
+        `${API_URL}/api/custom-strategies/presets/${presetId}/apply`,
+      );
+      if (res.data?.success) {
+        toast.success(`Applied preset "${presetId}" — saved as Draft`);
+        setShowPresetsDialog(false);
+        fetchStrategies();
+        setActiveTab('strategies');
+      } else {
+        toast.error(res.data?.error || 'Preset apply failed');
+      }
+    } catch (e) {
+      toast.error(`Preset apply failed: ${e.response?.data?.detail || e.message}`);
+    } finally {
+      setApplyingPresetId(null);
+    }
+  };
+
   // Strategy form state
   const [strategyForm, setStrategyForm] = useState({
     name: 'New Strategy',
@@ -1582,28 +1625,39 @@ const StrategyBuilder = () => {
                     </span>
                   </CardDescription>
                 </div>
-                <Button
-                  data-testid="deactivate-all-strategies"
-                  variant="outline"
-                  size="sm"
-                  onClick={async () => {
-                    try {
-                      // Deactivate all strategies
-                      await Promise.all(
-                        strategies
-                          .filter(s => s.is_active)
-                          .map(s => axios.post(`${API_URL}/api/custom-strategies/${s.id}/toggle?is_active=false`))
-                      );
-                      fetchStrategies();
-                      toast.success('All strategies deactivated');
-                    } catch (error) {
-                      toast.error('Failed to deactivate');
-                    }
-                  }}
-                  className="border-orange-500/50 text-orange-400 hover:bg-orange-500/20"
-                >
-                  Deactivate All
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    data-testid="open-presets-dialog"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => { setShowPresetsDialog(true); fetchPresets(); }}
+                    className="border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/20"
+                  >
+                    📦 Presets
+                  </Button>
+                  <Button
+                    data-testid="deactivate-all-strategies"
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      try {
+                        // Deactivate all strategies
+                        await Promise.all(
+                          strategies
+                            .filter(s => s.is_active)
+                            .map(s => axios.post(`${API_URL}/api/custom-strategies/${s.id}/toggle?is_active=false`))
+                        );
+                        fetchStrategies();
+                        toast.success('All strategies deactivated');
+                      } catch (error) {
+                        toast.error('Failed to deactivate');
+                      }
+                    }}
+                    className="border-orange-500/50 text-orange-400 hover:bg-orange-500/20"
+                  >
+                    Deactivate All
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent>
@@ -1762,6 +1816,87 @@ const StrategyBuilder = () => {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Iter 91 — Presets Dialog */}
+      <Dialog open={showPresetsDialog} onOpenChange={setShowPresetsDialog}>
+        <DialogContent
+          className="max-w-2xl bg-slate-900 border-slate-700 text-white"
+          data-testid="presets-dialog"
+        >
+          <DialogHeader>
+            <DialogTitle className="text-cyan-400">Strategy Presets</DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Drop-in templates. Each preset clones into your strategies as a Draft — review, tweak, and publish when ready.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 max-h-[520px] overflow-y-auto pr-2">
+            {presetsLoading && (
+              <div className="text-slate-400 text-sm text-center py-6">Loading presets…</div>
+            )}
+            {!presetsLoading && presets.length === 0 && (
+              <div className="text-slate-500 text-sm text-center py-6">No presets available.</div>
+            )}
+            {presets.map((p) => (
+              <div
+                key={p.preset_id}
+                className="border border-slate-700/50 rounded-lg p-4 hover:border-cyan-500/40 transition-colors"
+                data-testid={`preset-card-${p.preset_id}`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h4 className="font-semibold text-white">{p.name}</h4>
+                      <Badge className="bg-cyan-500/20 text-cyan-400 border-cyan-500/30 text-xs">
+                        {p.category}
+                      </Badge>
+                    </div>
+                    <p className="text-slate-400 text-sm mb-2">{p.description}</p>
+                    <div className="flex flex-wrap gap-1.5 text-xs text-slate-500 font-tabular">
+                      <span>TFs: {(p.timeframes || []).join(', ')}</span>
+                      <span>·</span>
+                      <span>{(p.assets || []).length} assets</span>
+                      <span>·</span>
+                      <span>{p.call_conditions_count} CALL / {p.put_conditions_count} PUT rules</span>
+                    </div>
+                    {(p.tags || []).length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {p.tags.map((t) => (
+                          <span
+                            key={t}
+                            className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400"
+                          >
+                            #{t}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <Button
+                    onClick={() => applyPreset(p.preset_id)}
+                    disabled={applyingPresetId === p.preset_id}
+                    className="bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 hover:bg-cyan-500/30"
+                    data-testid={`preset-apply-${p.preset_id}`}
+                  >
+                    {applyingPresetId === p.preset_id ? 'Applying…' : 'Apply'}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowPresetsDialog(false)}
+              className="border-slate-600 text-slate-300"
+              data-testid="presets-dialog-close"
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

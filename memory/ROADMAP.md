@@ -14,6 +14,7 @@ _Last updated: Iter 87 (Aug 4, 2026)_
 - ✅ Iter 88: Ensemble Model Registration in train-on-price-data (3 models side-by-side).
 - ✅ Iter 89: GZip compression + Signal pre-generation buffer + Live Latency Dashboard.
 - ✅ Iter 90: Ichimoku Cloud indicator (previously declared but not implemented).
+- ✅ Iter 91: Strategy Presets (Ichimoku Cloud Break) + Adaptive Latency Offset (per-asset).
 
 ## P1 — Remaining rebuild queue (user-approved order b→a→c→d→e; b + c + d done)
 - ⏭️ **Next: a) Backend health strip in TM panel** — still needs your call on a1/a2/a3.

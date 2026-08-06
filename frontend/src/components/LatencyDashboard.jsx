@@ -39,21 +39,24 @@ export default function LatencyDashboard() {
   const [routes, setRoutes] = useState([]);
   const [prewarm, setPrewarm] = useState(null);
   const [health, setHealth] = useState(null);
+  const [adaptiveOffsets, setAdaptiveOffsets] = useState(null);
   const [lastFetch, setLastFetch] = useState(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
 
   const fetchAll = async () => {
     try {
-      const [statsRes, healthRes, pwRes] = await Promise.all([
+      const [statsRes, healthRes, pwRes, adRes] = await Promise.all([
         axios.get(`${API}/latency/stats`, { timeout: 5000 }),
         axios.get(`${API}/latency/healthy?p99_threshold_ms=250`, { timeout: 5000 }),
         axios.get(`${API}/signal-prewarm/stats`, { timeout: 5000 }),
+        axios.get(`${API}/signals/adaptive-latency-offsets`, { timeout: 5000 }),
       ]);
       setRoutes((statsRes.data?.routes || []).slice().sort(
         (a, b) => (b.p99 || 0) - (a.p99 || 0),
       ));
       setHealth(healthRes.data || null);
       setPrewarm(pwRes.data || null);
+      setAdaptiveOffsets(adRes.data || null);
       setLastFetch(new Date());
     } catch (e) {
       // Silent — dashboard is read-only, don't spam toasts
@@ -277,6 +280,54 @@ export default function LatencyDashboard() {
                         {(e.age_sec || 0).toFixed(2)}
                       </td>
                       <td className="py-1.5 text-slate-400 text-xs">{e.generator}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Iter 91 — Adaptive Latency Offsets (per-asset TM click compensation) */}
+      {adaptiveOffsets && (adaptiveOffsets.assets || []).length > 0 && (
+        <Card className="glass-dark border-slate-700/50">
+          <CardHeader>
+            <CardTitle className="text-white text-lg">Adaptive latency offsets</CardTitle>
+            <CardDescription>
+              Per-asset TM click offset (seconds) auto-computed from rolling median of network RTT + DOM click lag. Global default: {adaptiveOffsets.default_offset_sec}s · window: last {adaptiveOffsets.window} samples · min samples: {adaptiveOffsets.min_samples_required}.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm" data-testid="adaptive-offsets-table">
+                <thead className="text-slate-400 border-b border-slate-800">
+                  <tr>
+                    <th className="text-left py-2 pr-3">Asset</th>
+                    <th className="text-right py-2 pr-3">Samples</th>
+                    <th className="text-right py-2 pr-3">Median RTT</th>
+                    <th className="text-right py-2 pr-3">Median DOM lag</th>
+                    <th className="text-right py-2 pr-3">Median total</th>
+                    <th className="text-right py-2">Recommended</th>
+                  </tr>
+                </thead>
+                <tbody className="text-slate-200 font-tabular">
+                  {adaptiveOffsets.assets.slice(0, 30).map((a, i) => (
+                    <tr
+                      key={a.asset}
+                      className="border-b border-slate-800/50 hover:bg-slate-800/20"
+                      data-testid={`adaptive-offset-row-${i}`}
+                    >
+                      <td className="py-1.5 pr-3">{a.asset}</td>
+                      <td className="py-1.5 pr-3 text-right text-slate-500">{a.sample_count}</td>
+                      <td className="py-1.5 pr-3 text-right">{(a.median_network_rtt_ms || 0).toFixed(0)} ms</td>
+                      <td className="py-1.5 pr-3 text-right">{(a.median_dom_click_lag_ms || 0).toFixed(0)} ms</td>
+                      <td className="py-1.5 pr-3 text-right">{(a.median_total_ms || 0).toFixed(0)} ms</td>
+                      <td className={`py-1.5 text-right font-semibold ${
+                        a.using_default ? "text-slate-500" : "text-cyan-400"
+                      }`}>
+                        {a.using_default ? `${adaptiveOffsets.default_offset_sec}s (default)` : `${a.recommended_offset_sec.toFixed(1)}s`}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
