@@ -1,4 +1,33 @@
-# AI's Elite PO Traders Bot — Aug 2026 (Multi-Cond Bug Fix + Expert LLM Persona + qtpylib)
+# AI's Elite PO Traders Bot — Aug 2026 (TM Connectivity Self-Heal + Mongo Indexes)
+
+## Iter 93 (Aug 6, 2026) — TM Connectivity Bug Fix
+
+**User report**: "tampermonkey script is having issues with connecting to application and pocket option, alot of timeout and offline then online connection" — both preview + production, TM panel shows red dot + timeout errors in F12 console, random cycles.
+
+### Root causes (all three fixed)
+
+1. **Stale hardcoded API_URL in compiled TM bundle**: `pocket-option-auto-trader.user.js` shipped with `API_URL:"https://www.elitepotradingbot.com/api"` baked in. Unless the user manually ran `GM_setValue("epb_api_url", …)` every fetch resolved (or failed) against that stale domain — hence "Backend disconnected" flapping tied to intermittent DNS/routing to elitepotradingbot.com.
+2. **Missing Mongo indexes on hot collections**: Iter 91 added `adaptive_latency_offset.compute_asset_offset()` which queries `signal_latency_log_client` filtered by `asset` and sorted by `_logged_at`. Collection had **only `_id_` index** → every `/signals/latest` cold-cache miss ran a full collscan on 5-40 k docs. Under concurrent TM polls this monopolised the connection pool and produced 1-5 s stalls that the TM script surfaced as timeouts.
+3. **Pydantic ValidationError spam**: `TradingSignal.risk_assessment` and `.suggested_stake` were required fields, but pre-Iter-60 documents lack them. `trading_bot_service.get_active_signals` threw 8 `ValidationError`s per call → log noise + occasional cascading 500s.
+
+### Fixes shipped
+
+* **`/api/tampermonkey/script` now self-heals** — reads the compiled bundle, string-rewrites:
+  * `API_URL:"…elitepotradingbot.com/api"` → `API_URL:"<serving-scheme>://<serving-host>/api"` (or `PUBLIC_API_URL` env override if set).
+  * `// @updateURL <stale>` and `// @downloadURL <stale>` → serving-host equivalent.
+  * Appends `// @connect <serving-host>` if not already in the allowlist (so strict TM installs don't block GM_xmlhttpRequest).
+  * Adds diagnostic `X-EPB-Api-Root` response header so operators can see what was injected.
+  * Falls back to regex if the exact string literal changes in future rebuilds.
+* **Startup indexer** in `server.py` startup handler — creates 8 composite indexes on 4 hot collections (`signal_latency_log_client`, `trading_signals`, `signal_latency_log`, `tm_trade_reports`). Idempotent (`create_index` is a no-op if already present).
+* **`TradingSignal.risk_assessment` + `.suggested_stake` made optional** in `trading_models.py` with empty-string / 0.0 defaults. Legacy records now parse cleanly.
+
+### Testing agent verdict — **16/16 backend tests pass, 100% success, no retest needed**
+* Verified byte-for-byte that the served TM script contains the rewritten API_URL and no stale `elitepotradingbot.com` literal in the API_URL / @updateURL / @downloadURL positions.
+* Confirmed all 8 startup indexes exist via `index_information()`.
+* Median `/signals/latest` latency < 500 ms across 5 hot polls.
+* No regressions in Iter 86 latency stats, Iter 89 prewarm, Iter 91 Ichimoku preset + adaptive offset, or Iter 92 5-group persistence.
+
+---
 
 ## Iter 92 (Aug 6, 2026) — Strategy Builder condition-persistence + LLM Expert Persona
 
