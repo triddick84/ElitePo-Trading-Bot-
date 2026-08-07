@@ -3857,6 +3857,48 @@ async def startup_event():
                 logger.info("[SignalPrewarm] background refresher started")
             except Exception as _pwe:
                 logger.warning("[SignalPrewarm] refresher failed to start: %s", _pwe)
+
+            # Iter 93 — Hot-collection indexes. Adaptive-offset (Iter 91) and
+            # /signals/latest both do frequent per-asset queries; without
+            # indexes each poll was a full collscan on 5-40 k documents, which
+            # cascaded into TM socket timeouts + "Backend disconnected" flaps
+            # under concurrent load. These indexes are idempotent — create_index
+            # is a no-op if the index already exists.
+            try:
+                await asyncio.gather(
+                    db.signal_latency_log_client.create_index(
+                        [("asset", 1), ("_logged_at", -1)],
+                        name="asset_logged_at_desc", background=True,
+                    ),
+                    db.signal_latency_log_client.create_index(
+                        [("_logged_at", -1)], name="logged_at_desc", background=True,
+                    ),
+                    db.signal_latency_log.create_index(
+                        [("_logged_at", -1)], name="logged_at_desc", background=True,
+                    ),
+                    db.signal_latency_log.create_index(
+                        [("route", 1), ("_logged_at", -1)],
+                        name="route_logged_at_desc", background=True,
+                    ),
+                    db.trading_signals.create_index(
+                        [("symbol", 1), ("timestamp", -1)],
+                        name="symbol_timestamp_desc", background=True,
+                    ),
+                    db.trading_signals.create_index(
+                        [("asset", 1), ("timestamp", -1)],
+                        name="asset_timestamp_desc", background=True,
+                    ),
+                    db.trading_signals.create_index(
+                        [("timestamp", -1)], name="timestamp_desc", background=True,
+                    ),
+                    db.tm_trade_reports.create_index(
+                        [("asset", 1), ("timestamp", -1)],
+                        name="asset_timestamp_desc", background=True,
+                    ),
+                )
+                logger.info("[Indexes] hot-collection indexes verified")
+            except Exception as _ie:
+                logger.warning("[Indexes] create_index failed: %s", _ie)
         except Exception as e:
             logger.error(f"❌ Error during initialization: {e}")
             app_initialized = False

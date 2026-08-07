@@ -22,8 +22,8 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, Body, HTTPException
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi import APIRouter, Body, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse, Response
 from motor.motor_asyncio import AsyncIOMotorClient
 
 logger = logging.getLogger(__name__)
@@ -58,25 +58,122 @@ def _get_db():
 
 USERSCRIPT_PATHS = [
     Path("/app/frontend/public/pocket-option-auto-trader.user.js"),
+    Path("/app/frontend/public/pocket-option-auto-trader-modular.user.js"),
     Path("/app/tampermonkey-src/dist/pocket-option-auto-trader.user.js"),
 ]
 
 
+# Iter 93 — Hardcoded API_URL in the compiled bundle. The user has been
+# expected to manually GM_setValue("epb_api_url", "…") to override this. When
+# they don't (or storage got cleared), every fetch goes to the stale
+# elitepotradingbot.com domain and the TM panel shows "Backend disconnected".
+# Fix: rewrite the compiled bundle at delivery time so API_URL always points
+# to whichever host is actually SERVING the script. Self-healing.
+_STALE_API_URL_LITERAL = 'API_URL:"https://www.elitepotradingbot.com/api"'
+
+
+def _resolve_public_api_root(request: Request) -> str:
+    """
+    Figure out the API root URL to inject. Priority:
+      1. `PUBLIC_API_URL` env override (for production deployments where the
+         backend host and the user-facing host differ).
+      2. The forwarded scheme+host on the incoming request (works both in
+         preview + production behind the Emergent ingress).
+      3. Falls back to `https://<host>/api`.
+    """
+    override = os.environ.get("PUBLIC_API_URL", "").strip().rstrip("/")
+    if override:
+        return override if override.endswith("/api") else f"{override}/api"
+
+    scheme = request.headers.get("x-forwarded-proto") or request.url.scheme or "https"
+    host = (
+        request.headers.get("x-forwarded-host")
+        or request.headers.get("host")
+        or request.url.hostname
+        or ""
+    ).strip()
+    if not host:
+        return "/api"  # relative fallback — GM_xmlhttpRequest can't use this, but at least fail-safe
+    return f"{scheme}://{host}/api"
+
+
 @router.get("/tampermonkey/script")
-async def get_tampermonkey_script():
-    """Serve the compiled userscript for Tampermonkey auto-updates."""
+async def get_tampermonkey_script(request: Request):
+    """
+    Serve the compiled userscript with API_URL rewritten to match the
+    host that's actually serving it — so the TM panel connects back to
+    whatever backend the user grabbed the script from.
+    """
     for p in USERSCRIPT_PATHS:
-        if p.exists():
-            return FileResponse(
-                p,
-                media_type="application/javascript",
-                headers={
-                    "Cache-Control": "no-cache, no-store, must-revalidate",
-                    "Content-Disposition": (
-                        'inline; filename="pocket-option-auto-trader.user.js"'
-                    ),
-                },
+        if not p.exists():
+            continue
+        try:
+            raw = p.read_text(encoding="utf-8")
+        except Exception as e:
+            logger.error("[tampermonkey/script] failed to read %s: %s", p, e)
+            continue
+
+        api_root = _resolve_public_api_root(request)
+        rewritten_literal = f'API_URL:"{api_root}"'
+        if _STALE_API_URL_LITERAL in raw:
+            raw = raw.replace(_STALE_API_URL_LITERAL, rewritten_literal)
+            logger.info(
+                "[tampermonkey/script] rewrote API_URL -> %s (host=%s)",
+                api_root,
+                request.headers.get("host"),
             )
+        else:
+            # Best-effort catch for future rebuilds that use single quotes or
+            # https://elitepotradingbot.com (no www).
+            import re
+            raw = re.sub(
+                r'API_URL\s*:\s*["\']https?://(www\.)?elitepotradingbot\.com/api["\']',
+                rewritten_literal,
+                raw,
+            )
+
+        # Iter 93 — Also rewrite `@updateURL`/`@downloadURL` in the metadata
+        # block so Tampermonkey's auto-update actually points at the host
+        # serving the script — otherwise TM periodically fetches the stale
+        # elitepotradingbot.com URL, fails, and logs a warning.
+        script_endpoint = f"{api_root}/tampermonkey/script"
+        import re
+        raw = re.sub(
+            r"(//\s*@updateURL\s+)https?://(www\.)?elitepotradingbot\.com/api/tampermonkey/script",
+            f"\\1{script_endpoint}",
+            raw,
+        )
+        raw = re.sub(
+            r"(//\s*@downloadURL\s+)https?://(www\.)?elitepotradingbot\.com/api/tampermonkey/script",
+            f"\\1{script_endpoint}",
+            raw,
+        )
+        # Also ensure the host serving the script is in the @connect allow-list
+        # so GM_xmlhttpRequest doesn't get blocked in strict TM installs.
+        try:
+            from urllib.parse import urlparse
+            api_host = urlparse(api_root).netloc.split(":")[0]
+            if api_host and f"@connect      {api_host}" not in raw and f"@connect {api_host}" not in raw:
+                # Insert right after the last existing @connect line
+                raw = re.sub(
+                    r"(//\s*@connect\s+[^\n]+\n)(?!//\s*@connect)",
+                    lambda m: f"{m.group(1)}// @connect      {api_host}\n",
+                    raw, count=1,
+                )
+        except Exception as _connect_err:
+            logger.debug("[tampermonkey/script] @connect append skipped: %s", _connect_err)
+
+        return Response(
+            content=raw,
+            media_type="application/javascript",
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Content-Disposition": (
+                    'inline; filename="pocket-option-auto-trader.user.js"'
+                ),
+                "X-EPB-Api-Root": api_root,
+            },
+        )
     raise HTTPException(
         status_code=404,
         detail="Compiled userscript not found on disk — rebuild TM bundle.",

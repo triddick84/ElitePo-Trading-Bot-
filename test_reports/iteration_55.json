@@ -1,0 +1,27 @@
+{
+  "summary": "Iter 93 backend review — TM connectivity fix + Mongo indexes + TradingSignal schema softening. All 16 backend tests PASSED (6 pre-existing iter93 + 10 new review-focused). Verified: (a) /api/tampermonkey/script self-heals API_URL, @updateURL, @downloadURL, and @connect allowlist on both spoofed Host (localhost) AND the real public preview URL — no stale elitepotradingbot literal in served body. (b) Content-Type=application/javascript, Cache-Control=no-cache/no-store, X-EPB-Api-Root diagnostic header present and correct. (c) All 8 startup indexes exist on signal_latency_log_client (asset_logged_at_desc), trading_signals (symbol_timestamp_desc, asset_timestamp_desc, timestamp_desc), signal_latency_log (route_logged_at_desc, logged_at_desc). (d) /signals/latest median latency across 5 hot polls is < 500ms and payload still carries recommended_offset_sec + adaptive_offset_meta (Iter 91 intact). (e) TradingSignal pydantic model accepts legacy records without risk_assessment/suggested_stake — defaults to '' and 0.0. (f) No regressions in Iter 89 prewarm stats, Iter 86 latency stats, Iter 91 Ichimoku preset, or Iter 92 5-group persistence (3 CALL + 2 PUT).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter93_tm_connectivity_fix.py",
+    "/app/backend/tests/test_iter93_review_full.py",
+    "/app/test_reports/pytest/iter93_review.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is 3969 lines — well above the 700-line guideline. Consider splitting endpoint groups (custom-strategies, signals, latency, presets) into /app/backend/routes/ modules similar to routes/tampermonkey.py.",
+    "The self-healing rewrite in routes/tampermonkey.py resolves the serving host from x-forwarded-host / Host — good. Confirmed no residual stale API_URL string in served bundle body (defense-in-depth check passed).",
+    "TradingSignal.risk_assessment default is empty string '' rather than None. If any downstream code truth-checks the field to detect legacy records, they will still see falsy — OK — but a Literal/enum default might be safer than an empty string."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter93_tm_connectivity_fix.py (added sys.path insert so trading_models imports cleanly)",
+    "/app/backend/tests/test_iter93_review_full.py (new — 10 tests)"
+  ],
+  "success_rate": {"backend": "100% (16/16)", "frontend": "N/A (backend-only per request)"},
+  "test_credentials": "Not required — all endpoints under test are public.",
+  "seed_data_creation": "test_custom_strategies_persists_5_groups_call_and_put creates a strategy named TEST_iter93_<uuid> under user_id=integration_test_iter93 and best-effort deletes it after the assertions.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "To test the self-healing Host-header rewrite you MUST hit http://localhost:8001 directly — Cloudflare returns 403 for spoofed Host headers against the public preview URL. Public-URL tests instead assert the rewrite uses REACT_APP_BACKEND_URL. The iter93 pre-existing test file was missing sys.path.insert('/app/backend') for `import trading_models` — fixed. Run: BACKEND_URL=http://localhost:8001 pytest backend/tests/test_iter93_tm_connectivity_fix.py backend/tests/test_iter93_review_full.py -v.",
+  "rca of the issue": "User-reported 'Backend disconnected / timeout then online' flapping in TM panel had TWO root causes both fixed in Iter 93: (1) The webpack-bundled userscript had API_URL hardcoded to https://www.elitepotradingbot.com/api which is a stale domain — every GM_xmlhttpRequest hit the wrong host and either timed out or intermittently resolved. The fix is a string-rewrite in /api/tampermonkey/script that substitutes the serving host at delivery time (verified byte-for-byte in served body). (2) Hot Mongo collections had ZERO non-_id indexes; adaptive_latency_offset.py performed full collscans on 5-40k docs per /signals/latest call, causing sporadic 1-5s stalls under load. Fix: 8 composite indexes created at startup (verified via index_information()). Combined effect: median /signals/latest is now <500ms and every request self-configures the correct backend."
+}

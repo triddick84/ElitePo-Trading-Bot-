@@ -95,10 +95,15 @@ class TradingSignal(BaseModel):
     strategy_used: TradingStrategy
     technical_analysis: Dict[str, Any]
     sentiment_analysis: Optional[Dict[str, Any]] = None
-    market_analysis_summary: str
-    justification: str
-    risk_assessment: str
-    suggested_stake: float
+    market_analysis_summary: str = ""
+    justification: str = ""
+    # Iter 93 — Made optional. Legacy records from before Iter 60 don't have
+    # these fields; requiring them made `TradingBotService.get_active_signals`
+    # spam the log with 8-error pydantic ValidationErrors on every /signals/*
+    # poll and 500-error some paths. Downstream consumers already treat these
+    # as "best-effort text" so making them optional is safe.
+    risk_assessment: str = ""
+    suggested_stake: float = 0.0
     precision_entry_time: Optional[datetime] = None  # Real entry time for trade execution (Chicago timezone)
     popup_display_time: Optional[datetime] = None  # When to show popup (10s before entry for force generate)
     countdown_duration: Optional[int] = 10  # Countdown timer duration in seconds
