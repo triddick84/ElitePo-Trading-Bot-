@@ -180,5 +180,25 @@ def test_tampermonkey_script_version_bumped_for_auto_update():
     )
 
 
+def test_tampermonkey_script_appends_version_badge_injector():
+    """
+    Iter 93c — the served script must end with a runtime IIFE that:
+      * Reads the running version via GM_info.script.version.
+      * Injects a `<span class="epb-version-badge">` into the panel header.
+      * Adds a stylesheet so the badge is visible on the neon-cyan theme.
+    """
+    r = requests.get(f"{BASE_URL}/api/tampermonkey/script", timeout=10)
+    assert r.status_code == 200
+    body = r.text
+    assert "epb-version-badge" in body, "Badge injector missing"
+    # Must reference GM_info so it can't lie about the running version
+    assert "GM_info.script.version" in body, "Injector doesn't read GM_info"
+    # Style hook is present
+    assert "epb-version-badge-style" in body, "Badge stylesheet missing"
+    # Injector only appears once (no double-append on repeated fetches)
+    assert body.count("epb-version-badge-style") == 1, \
+        "Badge stylesheet duplicated"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

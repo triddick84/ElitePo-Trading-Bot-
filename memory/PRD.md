@@ -21,11 +21,13 @@
 * **Startup indexer** in `server.py` startup handler — creates 8 composite indexes on 4 hot collections (`signal_latency_log_client`, `trading_signals`, `signal_latency_log`, `tm_trade_reports`). Idempotent (`create_index` is a no-op if already present).
 * **`TradingSignal.risk_assessment` + `.suggested_stake` made optional** in `trading_models.py` with empty-string / 0.0 defaults. Legacy records now parse cleanly.
 
-### Iter 93b — Bundle version bump
+### Iter 93c — Version badge injector
 
-Bumped `@version` header on all three TM userscript bundles from `8.122.0` → `8.123.0`. This is what Tampermonkey compares to trigger its auto-update prompt. Users who already have the old script installed will now see the "Update available" banner and one click gets them the self-healing bundle from Iter 93.
+Runtime IIFE appended to every `/api/tampermonkey/script` response. It reads `GM_info.script.version` (the authoritative version — reflects what Tampermonkey actually installed, not any stale `BOT_VERSION` constant baked into the webpack bundle) and stamps a small neon-cyan pill into the panel header. Styling: cyan `v8.123.0` text with a green heartbeat dot, glowing shadow, and click-to-open on the update URL.
 
-Verified: `curl /api/tampermonkey/script | grep @version` returns `8.123.0`. New pytest lock: `test_tampermonkey_script_version_bumped_for_auto_update` (7/7 total in Iter 93 suite).
+Robust in three ways: (1) tries immediate render, (2) falls back to a MutationObserver, (3) polls for up to 30 s in case the SPA lazy-loads. Idempotent — repeated fetches don't double-append, existing badge is upserted in place.
+
+Verified: served script contains exactly one `epb-version-badge-style` block and references `GM_info.script.version`. New pytest: `test_tampermonkey_script_appends_version_badge_injector` (8/8 total).
 
 ---
 
