@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AI's Elite PO Traders Bot
 // @namespace    https://auto-invert-engine.preview.emergentagent.com
-// @version      8.122.0
+// @version      8.123.0
 // @description  AI's Elite PO Traders Bot - CYCLE mode, APP signal poller, A-INV toggle, 21s + 51s Reversal via direct-WS, SSID Bridge, persistent settings
 // @author       Elite Trading
 // @match        *://*.pocketoption.com/*

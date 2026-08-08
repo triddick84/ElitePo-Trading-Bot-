@@ -21,11 +21,11 @@
 * **Startup indexer** in `server.py` startup handler — creates 8 composite indexes on 4 hot collections (`signal_latency_log_client`, `trading_signals`, `signal_latency_log`, `tm_trade_reports`). Idempotent (`create_index` is a no-op if already present).
 * **`TradingSignal.risk_assessment` + `.suggested_stake` made optional** in `trading_models.py` with empty-string / 0.0 defaults. Legacy records now parse cleanly.
 
-### Testing agent verdict — **16/16 backend tests pass, 100% success, no retest needed**
-* Verified byte-for-byte that the served TM script contains the rewritten API_URL and no stale `elitepotradingbot.com` literal in the API_URL / @updateURL / @downloadURL positions.
-* Confirmed all 8 startup indexes exist via `index_information()`.
-* Median `/signals/latest` latency < 500 ms across 5 hot polls.
-* No regressions in Iter 86 latency stats, Iter 89 prewarm, Iter 91 Ichimoku preset + adaptive offset, or Iter 92 5-group persistence.
+### Iter 93b — Bundle version bump
+
+Bumped `@version` header on all three TM userscript bundles from `8.122.0` → `8.123.0`. This is what Tampermonkey compares to trigger its auto-update prompt. Users who already have the old script installed will now see the "Update available" banner and one click gets them the self-healing bundle from Iter 93.
+
+Verified: `curl /api/tampermonkey/script | grep @version` returns `8.123.0`. New pytest lock: `test_tampermonkey_script_version_bumped_for_auto_update` (7/7 total in Iter 93 suite).
 
 ---
 

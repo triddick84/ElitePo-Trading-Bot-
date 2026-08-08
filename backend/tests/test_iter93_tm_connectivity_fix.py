@@ -157,5 +157,28 @@ def test_signals_latest_still_responds_under_500ms_after_indexes():
         f"median /signals/latest latency {median:.3f}s — expected < 0.5s"
 
 
+def test_tampermonkey_script_version_bumped_for_auto_update():
+    """
+    Iter 93 also bumps @version from 8.122.0 to 8.123.0 across all three
+    bundles on disk so Tampermonkey's auto-update mechanism prompts existing
+    users to re-fetch the fresh self-healing script.
+    """
+    r = requests.get(f"{BASE_URL}/api/tampermonkey/script", timeout=10)
+    assert r.status_code == 200
+    body = r.text
+    # Extract @version line from the metadata block
+    version_line = next(
+        (ln for ln in body.splitlines() if ln.startswith("// @version")),
+        None,
+    )
+    assert version_line is not None, "No @version line in served script"
+    version_str = version_line.split()[2]
+    # Parse to a tuple for numeric comparison
+    parts = tuple(int(p) for p in version_str.split("."))
+    assert parts >= (8, 123, 0), (
+        f"Expected @version >= 8.123.0 after Iter 93 bundle bump, got {version_str!r}"
+    )
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
