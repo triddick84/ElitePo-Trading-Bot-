@@ -5127,6 +5127,41 @@ async def force_generate_signal_v2(
             "fire_offset_sec": _signal_fire_offset_sec(),
         }
 
+        # Iter 94 — Candlestick pattern analysis + historical outcome scoring.
+        # Enriches the /signals/force-generate-v2 response with detected
+        # patterns on the current bar + rolling-500-bar win-rate on THIS
+        # asset for each detected pattern. Users see WHY the bot picked its
+        # direction — not just a confidence number.
+        try:
+            from candle_patterns import analyze as _analyze_patterns
+            df = candles_1m_df.reset_index() if candles_1m_df is not None else None
+            if df is not None and len(df) >= 20:
+                o = df["o"].tolist() if "o" in df else df["open"].tolist()
+                h = df["h"].tolist() if "h" in df else df["high"].tolist()
+                l = df["l"].tolist() if "l" in df else df["low"].tolist()
+                c = df["c"].tolist() if "c" in df else df["close"].tolist()
+                with _latency.phase("candle_patterns"):
+                    signal["candle_analysis"] = _analyze_patterns(o, h, l, c, lookahead_bars=3, window_bars=500)
+                # Cross-check: if pattern bias STRONGLY disagrees with the
+                # chosen direction, shave 3-8% off confidence + surface a
+                # warning in the signal.
+                ca = signal["candle_analysis"]
+                if ca["pattern_bias"] not in ("neutral", "") \
+                   and ca["pattern_bias_strength"] > 0.5:
+                    if (
+                        (direction == "CALL" and ca["pattern_bias"] == "bearish")
+                        or (direction == "PUT" and ca["pattern_bias"] == "bullish")
+                    ):
+                        penalty = round(3 + 5 * ca["pattern_bias_strength"], 1)
+                        signal["confidence"] = max(50.0, signal["confidence"] - penalty)
+                        signal["pattern_disagreement"] = {
+                            "penalty": penalty,
+                            "pattern_bias": ca["pattern_bias"],
+                            "message": f"Candlestick patterns lean {ca['pattern_bias']} but signal is {direction} — confidence reduced by {penalty}%",
+                        }
+        except Exception as _cp_err:
+            logger.debug(f"candle_analysis skipped: {_cp_err}")
+
         # -----------------------------------------------------------------
         # BOTAI-inspired abstain gate (v8.55.0; Iter 53b strategy-aware)
         # Resolves the most specific tuned threshold for this signal:
