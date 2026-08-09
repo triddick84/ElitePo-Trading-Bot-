@@ -73,15 +73,29 @@ def test_tampermonkey_script_served():
 
 
 def test_tampermonkey_script_matches_disk():
+    """
+    Iter 93+94: /api/tampermonkey/script rewrites API_URL, @connect,
+    @updateURL, and injects a version-badge IIFE at serve-time. Exact
+    byte-match is no longer expected. Instead assert the served bundle
+    is a superset of the on-disk bundle's core webpack IIFE + carries
+    the same @version metadata.
+    """
     if not USERSCRIPT_ONDISK.exists():
         pytest.skip("no on-disk userscript to compare against")
     r = _get("/api/tampermonkey/script")
     assert r.status_code == 200
-    served = r.content
-    on_disk = USERSCRIPT_ONDISK.read_bytes()
-    assert served == on_disk, (
-        f"served bytes ({len(served)}) != on-disk bytes ({len(on_disk)})"
-    )
+    served = r.text
+    on_disk = USERSCRIPT_ONDISK.read_text(encoding="utf-8", errors="replace")
+    # Version must match
+    import re
+    served_v = re.search(r"@version\s+([\d.]+)", served)
+    disk_v = re.search(r"@version\s+([\d.]+)", on_disk)
+    assert served_v and disk_v and served_v.group(1) == disk_v.group(1), \
+        f"served vs disk @version mismatch: {served_v} vs {disk_v}"
+    # A representative slice of the on-disk source should survive the rewrite
+    core_slice = on_disk[len(on_disk)//2 : len(on_disk)//2 + 500]
+    assert core_slice in served, \
+        "served bundle missing core on-disk content — serve-time rewrite may be corrupting the payload"
 
 
 # ---------------------------------------------------------------------------

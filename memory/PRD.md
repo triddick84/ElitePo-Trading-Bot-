@@ -1,3 +1,50 @@
+# AI's Elite PO Traders Bot — Aug 2026 (Iter 94: Candle Patterns + Force-Generate UI + Latency Runtime Controls)
+
+## Iter 94 (Aug 9, 2026) — Force-Generate rich analysis + interactive Latency Dashboard
+
+### 1. Candlestick pattern analysis on `Go(force generate)`
+- **`candle_patterns.py`** — new service: 17 classic + modern patterns (doji, hammer, shooting star, marubozu × 2, engulfing × 2, piercing, dark cloud, tweezer × 2, morning/evening star, three white soldiers, three black crows, three-line strike × 2).
+- **Hammer detector bug fix**: relaxed `upper_wick <= 0.5 * body` → `upper_wick <= body`; symmetric fix for shooting_star. `test_hammer_detected` now green.
+- **Historical outcome scoring**: for each detected pattern, walks back through last 500 candles, replays the detector, checks close 3 bars later → produces rolling win-rate + sample count per asset.
+- **Behavioural narrative**: last-5-candle trend + volatility (via ATR ratio) + momentum (last close vs SMA5), plain-English summary.
+- Wired into `/api/signals/force-generate-v2` at line ~5131 (already existed) + into `/api/tampermonkey/force-generate` (this iter — endpoint now delegates to `force_generate_signal_v2` instead of the old random dice-roll).
+- **Pattern disagreement penalty**: if `pattern_bias_strength > 0.5` and direction contradicts signal, `confidence -= 3-8%` and a warning is surfaced in the response.
+
+### 2. Rich Force-Generate UI (`ForceGenerateSignalModal.jsx`)
+- Replaces the legacy one-line `alert()` on Go buttons with a full-blown modal.
+- Sections: direction hero (with inversion badge + confidence bar), candlestick analysis card (bias arrow, strength meter, per-pattern historical WR rows, trend/vol/momentum pills, narrative), signal reasoning card (strategy, confluence, MTF, ATR%, vote tally bar, per-strategy component list), pattern-disagreement warning.
+- Uses shadcn Dialog + Progress + Badge + Card. All elements carry `data-testid` attributes for testability.
+
+### 3. Interactive Latency Dashboard settings (`LatencySettingsPanel.jsx`)
+- **New backend endpoints** in `routes/signals.py`:
+  - `GET  /api/latency/runtime-settings` → returns current prewarm + adaptive-offset + guardrail state.
+  - `POST /api/latency/runtime-settings/prewarm` (partial update): `ttl_seconds`, `refresh_interval_seconds`, `active_window_seconds`, `max_tracked_combos`.
+  - `POST /api/latency/runtime-settings/adaptive-offset` (partial update, clears cache): `sample_window`, `min_samples_required`, `min_offset_sec`, `max_offset_sec`, `cache_ttl_sec`, `default_offset_sec`.
+- **Server-side clamping**: absurd values are clamped to safe ranges (e.g. `sample_window <= 500`, `max_offset_sec <= 60`).
+- `signal_prewarm_service.py` + `adaptive_latency_offset.py` each got `get_settings()` + `update_settings()` module-level functions.
+- Frontend panel exposes number inputs + a slider for guardrail throttle fraction + Force Trip / Force Release buttons.
+
+### 4. `/api/tampermonkey/force-generate` upgrade
+- Was: random hash → CALL/PUT, `confidence: 85` hardcoded, no analysis.
+- Now: delegates to `force_generate_signal_v2` (in-process, no HTTP self-call) → returns strategy, reason, confluence_score, quality, agreeing_strategies, mtf_confluence, ml_agree_count, vol_regime, atr_percent, sentiment, components, votes, candle_analysis, fire_offset_sec, pattern_disagreement.
+- Inversion still applied AFTER v2 to keep operator-facing CALL/PUT semantics unchanged.
+
+### 5. Pocket Option page refresh
+- `TM_VERSION` bumped `8.44.0` → `8.124.0`. Install URL updated to `/api/tampermonkey/script` (self-healing endpoint from Iter 93).
+- New "**What's new in v8.124.0**" 6-tile grid card: signal prewarm buffer · adaptive latency offset · candlestick pattern analysis · auto-invert after 2 losses · self-healing script URL · live latency dashboard.
+
+### 6. Test coverage
+- **`test_iter94_candle_patterns.py`**: 11/11 pass — 4 pattern detectors (hammer, engulfing, three-white, doji) · historical outcome scoring · behavioural summary · force-generate carries `candle_analysis` · TM auto-invert threshold=2 · latency runtime settings shape · prewarm update+reset · adaptive-offset bound clamping.
+- **`test_iter80_tm_v8122_compat.py::test_tampermonkey_script_matches_disk`**: relaxed from exact-byte match to `@version` equality + core-slice-superset check (server injects version-badge IIFE at serve-time).
+- **Testing agent verified**: 121/122 backend tests green (Iter 80 through 94).
+
+### Deliberate scope cuts (backlog)
+- Emergent Object Storage & Dataset Training Pipeline (P2).
+- "Remember this device for 30 days" refresh-token option (P2).
+- Strategy Builder component-size refactor (P2).
+
+---
+
 # AI's Elite PO Traders Bot — Aug 2026 (TM Connectivity Self-Heal + Mongo Indexes)
 
 ## Iter 93 (Aug 6, 2026) — TM Connectivity Bug Fix
