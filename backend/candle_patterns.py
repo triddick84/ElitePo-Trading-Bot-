@@ -112,18 +112,18 @@ def _is_doji(c: Candle, atr_ref: float) -> bool:
 
 
 def _is_hammer(c: Candle, atr_ref: float) -> bool:
-    """Small body near top, long lower wick (>= 2× body), tiny upper wick."""
+    """Small body near top, long lower wick (>= 2× body), small upper wick (<= body)."""
     if c.range < 0.5 * atr_ref: return False
     return (c.lower_wick >= 2 * c.body
-            and c.upper_wick <= 0.5 * c.body
+            and c.upper_wick <= c.body
             and c.body_ratio > 0.05)
 
 
 def _is_shooting_star(c: Candle, atr_ref: float) -> bool:
-    """Small body near bottom, long upper wick (>= 2× body), tiny lower wick."""
+    """Small body near bottom, long upper wick (>= 2× body), small lower wick (<= body)."""
     if c.range < 0.5 * atr_ref: return False
     return (c.upper_wick >= 2 * c.body
-            and c.lower_wick <= 0.5 * c.body
+            and c.lower_wick <= c.body
             and c.body_ratio > 0.05)
 
 

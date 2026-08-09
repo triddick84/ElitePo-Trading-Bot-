@@ -20,8 +20,8 @@ import { toast } from 'sonner';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
-const TM_SCRIPT_URL = `${BACKEND_URL}/pocket-option-auto-trader.user.js`;
-const TM_VERSION = '8.44.0';
+const TM_SCRIPT_URL = `${BACKEND_URL}/api/tampermonkey/script`;
+const TM_VERSION = '8.124.0';
 
 // TM Script Install & Live Status Card (Iter 61)
 const TMScriptStatusCard = () => {
@@ -657,6 +657,77 @@ const PocketOptionPage = () => {
 
       {/* TM Script Install + Live Status (Iter 61) */}
       <TMScriptStatusCard />
+
+      {/* Iter 94 — What's New in v8.124.0 (new systems overview) */}
+      <Card className="bg-slate-900/70 border-slate-700 p-6" data-testid="tm-whats-new-card">
+        <div className="flex items-center gap-3 mb-4">
+          <span className="text-2xl">✨</span>
+          <div>
+            <h3 className="text-lg font-bold text-white">What's new in v{TM_VERSION}</h3>
+            <p className="text-xs text-slate-400">Latest systems shipped in the app + Tampermonkey bundle</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/5 p-3" data-testid="feature-signal-prewarm">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-cyan-400">⚡</span>
+              <span className="font-semibold text-cyan-300 text-sm">Signal Prewarm Buffer</span>
+            </div>
+            <p className="text-xs text-slate-400">
+              Background loop pre-computes signals for active (asset, TF) combos. Serves /signals/latest from memory — 300-1500 ms saved per fire.
+            </p>
+          </div>
+          <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/5 p-3" data-testid="feature-adaptive-latency">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-cyan-400">🎯</span>
+              <span className="font-semibold text-cyan-300 text-sm">Adaptive Latency Offset</span>
+            </div>
+            <p className="text-xs text-slate-400">
+              Per-asset TM click delay auto-tuned from median network RTT + DOM lag. Slow assets fire later, fast assets fire on-time.
+            </p>
+          </div>
+          <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/5 p-3" data-testid="feature-candle-patterns">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-cyan-400">🕯</span>
+              <span className="font-semibold text-cyan-300 text-sm">Candlestick Pattern Analysis</span>
+            </div>
+            <p className="text-xs text-slate-400">
+              17 classic patterns detected on every Go(Force Generate) — with rolling per-asset historical win-rates + behavioural narrative.
+            </p>
+          </div>
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3" data-testid="feature-auto-invert">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-amber-400">🔁</span>
+              <span className="font-semibold text-amber-300 text-sm">Auto-Invert after 2 losses</span>
+            </div>
+            <p className="text-xs text-slate-400">
+              Reverted from 1-loss to 2 consecutive losses — reduces false flips on natural micro-drawdowns.
+            </p>
+          </div>
+          <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3" data-testid="feature-self-heal-url">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-emerald-400">🔌</span>
+              <span className="font-semibold text-emerald-300 text-sm">Self-healing Script URL</span>
+            </div>
+            <p className="text-xs text-slate-400">
+              /api/tampermonkey/script rewrites API_URL to match the serving host — no more offline/online flapping on domain changes.
+            </p>
+          </div>
+          <div className="rounded-lg border border-violet-500/30 bg-violet-500/5 p-3" data-testid="feature-latency-dashboard">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-violet-400">📊</span>
+              <span className="font-semibold text-violet-300 text-sm">Live Latency Dashboard</span>
+            </div>
+            <p className="text-xs text-slate-400">
+              Per-route p50/p95/p99 + prewarm hit rate + adaptive offsets — all tunable at runtime from the ⚡ Latency page.
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 pt-3 border-t border-slate-800 text-xs text-slate-500">
+          Tip: Tampermonkey re-downloads the script daily. To force an update now, click{' '}
+          <span className="font-semibold text-cyan-400">Install / Update Script</span> above.
+        </div>
+      </Card>
 
 
       {/* Connection Status Banner */}

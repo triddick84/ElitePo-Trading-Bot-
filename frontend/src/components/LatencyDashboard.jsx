@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Activity, Zap, TrendingUp, RefreshCw } from "lucide-react";
+import LatencySettingsPanel from "./LatencySettingsPanel";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
 const API = BACKEND_URL ? `${BACKEND_URL}/api` : "";
@@ -342,6 +343,9 @@ export default function LatencyDashboard() {
           Last updated {lastFetch.toLocaleTimeString()}
         </div>
       )}
+
+      {/* Iter 94 — Interactive runtime settings for the entire latency stack */}
+      <LatencySettingsPanel />
     </div>
   );
 }

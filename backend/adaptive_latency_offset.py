@@ -197,3 +197,44 @@ async def compute_all_offsets(
 def clear_cache() -> None:
     """Test-support: drop the in-memory cache."""
     _cache.clear()
+
+
+# ---------------------------------------------------------------------------
+# Runtime settings — mutated by /api/latency/settings POST (Iter 94)
+# ---------------------------------------------------------------------------
+def get_settings() -> Dict[str, Any]:
+    return {
+        "sample_window": SAMPLE_WINDOW,
+        "min_samples_required": MIN_SAMPLES_FOR_RECOMMENDATION,
+        "min_offset_sec": MIN_OFFSET_SEC,
+        "max_offset_sec": MAX_OFFSET_SEC,
+        "cache_ttl_sec": CACHE_TTL_SEC,
+        "default_offset_sec": DEFAULT_GLOBAL_OFFSET_SEC,
+    }
+
+
+def update_settings(
+    sample_window: Optional[int] = None,
+    min_samples_required: Optional[int] = None,
+    min_offset_sec: Optional[float] = None,
+    max_offset_sec: Optional[float] = None,
+    cache_ttl_sec: Optional[float] = None,
+    default_offset_sec: Optional[float] = None,
+) -> Dict[str, Any]:
+    global SAMPLE_WINDOW, MIN_SAMPLES_FOR_RECOMMENDATION
+    global MIN_OFFSET_SEC, MAX_OFFSET_SEC, CACHE_TTL_SEC, DEFAULT_GLOBAL_OFFSET_SEC
+    if sample_window is not None:
+        SAMPLE_WINDOW = max(5, min(500, int(sample_window)))
+    if min_samples_required is not None:
+        MIN_SAMPLES_FOR_RECOMMENDATION = max(1, min(200, int(min_samples_required)))
+    if min_offset_sec is not None:
+        MIN_OFFSET_SEC = max(-30.0, min(0.0, float(min_offset_sec)))
+    if max_offset_sec is not None:
+        MAX_OFFSET_SEC = max(0.0, min(60.0, float(max_offset_sec)))
+    if cache_ttl_sec is not None:
+        CACHE_TTL_SEC = max(1.0, min(600.0, float(cache_ttl_sec)))
+    if default_offset_sec is not None:
+        DEFAULT_GLOBAL_OFFSET_SEC = max(-15.0, min(30.0, float(default_offset_sec)))
+    _cache.clear()  # invalidate — new bounds change results
+    logger.info(f"[adaptive_offset] settings updated: {get_settings()}")
+    return get_settings()

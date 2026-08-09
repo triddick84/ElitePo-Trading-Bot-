@@ -161,5 +161,62 @@ def test_tampermonkey_script_auto_invert_threshold_is_2():
         "Old 1-loss threshold still present"
 
 
+# ---------------------------------------------------------------------------
+# Latency runtime settings — Iter 94 interactive controls
+# ---------------------------------------------------------------------------
+def test_latency_runtime_settings_shape():
+    r = requests.get(f"{BASE_URL}/api/latency/runtime-settings", timeout=10).json()
+    assert r.get("success") is True
+    pw = r.get("signal_prewarm") or {}
+    ao = r.get("adaptive_offset") or {}
+    for k in ("ttl_seconds", "refresh_interval_seconds", "active_window_seconds", "max_tracked_combos"):
+        assert k in pw, f"prewarm missing key: {k}"
+    for k in ("sample_window", "min_samples_required", "min_offset_sec",
+              "max_offset_sec", "cache_ttl_sec", "default_offset_sec"):
+        assert k in ao, f"adaptive_offset missing key: {k}"
+
+
+def test_latency_prewarm_settings_update_and_reset():
+    orig = requests.get(f"{BASE_URL}/api/latency/runtime-settings", timeout=10).json().get("signal_prewarm") or {}
+    r = requests.post(
+        f"{BASE_URL}/api/latency/runtime-settings/prewarm",
+        json={"ttl_seconds": 6.5, "refresh_interval_seconds": 4.0},
+        timeout=10,
+    ).json()
+    assert r.get("success") is True
+    assert r["signal_prewarm"]["ttl_seconds"] == 6.5
+    assert r["signal_prewarm"]["refresh_interval_seconds"] == 4.0
+    # Reset to originals
+    requests.post(
+        f"{BASE_URL}/api/latency/runtime-settings/prewarm",
+        json={
+            "ttl_seconds": orig.get("ttl_seconds", 3.0),
+            "refresh_interval_seconds": orig.get("refresh_interval_seconds", 2.0),
+        },
+        timeout=10,
+    )
+
+
+def test_latency_adaptive_settings_bounds_clamp():
+    # Setting absurd values should clamp to safe bounds server-side
+    r = requests.post(
+        f"{BASE_URL}/api/latency/runtime-settings/adaptive-offset",
+        json={"sample_window": 99999, "min_samples_required": 99999,
+              "max_offset_sec": 999, "min_offset_sec": -999},
+        timeout=10,
+    ).json()
+    assert r["adaptive_offset"]["sample_window"] <= 500
+    assert r["adaptive_offset"]["min_samples_required"] <= 200
+    assert r["adaptive_offset"]["max_offset_sec"] <= 60
+    assert r["adaptive_offset"]["min_offset_sec"] >= -30
+    # Reset
+    requests.post(
+        f"{BASE_URL}/api/latency/runtime-settings/adaptive-offset",
+        json={"sample_window": 50, "min_samples_required": 8,
+              "max_offset_sec": 15.0, "min_offset_sec": -5.0},
+        timeout=10,
+    )
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

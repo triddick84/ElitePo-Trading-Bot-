@@ -51,8 +51,9 @@ class _Entry:
     def age_seconds(self) -> float:
         return time.monotonic() - self.generated_at
 
-    def is_fresh(self, ttl: float = TTL_SECONDS) -> bool:
-        return self.age_seconds() < ttl
+    def is_fresh(self, ttl: Optional[float] = None) -> bool:
+        eff = TTL_SECONDS if ttl is None else ttl
+        return self.age_seconds() < eff
 
 
 class SignalPrewarmBuffer:
@@ -238,3 +239,34 @@ def stop_background_refresher() -> None:
     if _refresh_task is not None:
         _refresh_task.cancel()
         _refresh_task = None
+
+
+# ---------------------------------------------------------------------------
+# Runtime settings — mutated by /api/latency/settings POST (Iter 94)
+# ---------------------------------------------------------------------------
+def get_settings() -> Dict[str, Any]:
+    return {
+        "ttl_seconds": TTL_SECONDS,
+        "refresh_interval_seconds": REFRESH_INTERVAL_SECONDS,
+        "active_window_seconds": ACTIVE_WINDOW_SECONDS,
+        "max_tracked_combos": MAX_TRACKED_COMBOS,
+    }
+
+
+def update_settings(
+    ttl_seconds: Optional[float] = None,
+    refresh_interval_seconds: Optional[float] = None,
+    active_window_seconds: Optional[float] = None,
+    max_tracked_combos: Optional[int] = None,
+) -> Dict[str, Any]:
+    global TTL_SECONDS, REFRESH_INTERVAL_SECONDS, ACTIVE_WINDOW_SECONDS, MAX_TRACKED_COMBOS
+    if ttl_seconds is not None:
+        TTL_SECONDS = max(0.5, min(30.0, float(ttl_seconds)))
+    if refresh_interval_seconds is not None:
+        REFRESH_INTERVAL_SECONDS = max(0.5, min(15.0, float(refresh_interval_seconds)))
+    if active_window_seconds is not None:
+        ACTIVE_WINDOW_SECONDS = max(5.0, min(600.0, float(active_window_seconds)))
+    if max_tracked_combos is not None:
+        MAX_TRACKED_COMBOS = max(1, min(500, int(max_tracked_combos)))
+    logger.info(f"[signal_prewarm] settings updated: {get_settings()}")
+    return get_settings()

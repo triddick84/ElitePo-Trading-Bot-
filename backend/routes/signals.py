@@ -5534,6 +5534,77 @@ async def force_release_guardrail():
 
 
 # ============================================================================
+# Iter 94 — Latency system runtime settings (interactive dashboard controls)
+# ============================================================================
+
+@router.get("/latency/runtime-settings")
+async def get_latency_runtime_settings():
+    """
+    Return current runtime settings for the entire latency stack:
+      - signal prewarm buffer (TTL, refresh, active window, max combos)
+      - adaptive latency offset (sample window, min samples, min/max clamp,
+        cache TTL, default global offset)
+      - latency guardrail state (throttle fraction, tripped/released)
+    """
+    from signal_prewarm_service import get_settings as _pw_get
+    from adaptive_latency_offset import get_settings as _ao_get
+    try:
+        from latency_monitor import _GUARDRAIL_STATE
+        guardrail = {
+            "tripped": bool(_GUARDRAIL_STATE.get("tripped")),
+            "throttle_fraction": float(_GUARDRAIL_STATE.get("throttle_fraction", 0.0)),
+            "trip_count": int(_GUARDRAIL_STATE.get("trip_count", 0)),
+            "release_count": int(_GUARDRAIL_STATE.get("release_count", 0)),
+        }
+    except Exception:
+        guardrail = None
+    return {
+        "success": True,
+        "signal_prewarm": _pw_get(),
+        "adaptive_offset": _ao_get(),
+        "guardrail": guardrail,
+    }
+
+
+@router.post("/latency/runtime-settings/prewarm")
+async def set_prewarm_settings(
+    ttl_seconds: Optional[float] = Body(None),
+    refresh_interval_seconds: Optional[float] = Body(None),
+    active_window_seconds: Optional[float] = Body(None),
+    max_tracked_combos: Optional[int] = Body(None),
+):
+    """Update signal-prewarm knobs at runtime. All fields optional — partial updates OK."""
+    from signal_prewarm_service import update_settings as _pw_set
+    return {"success": True, "signal_prewarm": _pw_set(
+        ttl_seconds=ttl_seconds,
+        refresh_interval_seconds=refresh_interval_seconds,
+        active_window_seconds=active_window_seconds,
+        max_tracked_combos=max_tracked_combos,
+    )}
+
+
+@router.post("/latency/runtime-settings/adaptive-offset")
+async def set_adaptive_offset_settings(
+    sample_window: Optional[int] = Body(None),
+    min_samples_required: Optional[int] = Body(None),
+    min_offset_sec: Optional[float] = Body(None),
+    max_offset_sec: Optional[float] = Body(None),
+    cache_ttl_sec: Optional[float] = Body(None),
+    default_offset_sec: Optional[float] = Body(None),
+):
+    """Update adaptive-offset knobs at runtime. Cache is cleared on update."""
+    from adaptive_latency_offset import update_settings as _ao_set
+    return {"success": True, "adaptive_offset": _ao_set(
+        sample_window=sample_window,
+        min_samples_required=min_samples_required,
+        min_offset_sec=min_offset_sec,
+        max_offset_sec=max_offset_sec,
+        cache_ttl_sec=cache_ttl_sec,
+        default_offset_sec=default_offset_sec,
+    )}
+
+
+# ============================================================================
 # Iter 58 — Daily Model Tournament endpoints (P2)
 # ============================================================================
 

@@ -4,6 +4,7 @@ import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Switch } from '../components/ui/switch';
 import { Slider } from '../components/ui/slider';
+import ForceGenerateSignalModal from './ForceGenerateSignalModal';
 
 const API_BASE = process.env.REACT_APP_BACKEND_URL;
 const API = `${API_BASE}/api`;
@@ -29,6 +30,9 @@ const TampermonkeyControlPanel = () => {
   const [lastUpdate, setLastUpdate] = useState(null);
   const [connectionActive, setConnectionActive] = useState(false);
   const [strategies, setStrategies] = useState([]);
+  // Iter 94 — rich Force-Generate result modal
+  const [forceGenResult, setForceGenResult] = useState(null);
+  const [forceGenModalOpen, setForceGenModalOpen] = useState(false);
   
   // Win/Loss Stats - v6.6.0
   const [stats, setStats] = useState({
@@ -208,7 +212,11 @@ const TampermonkeyControlPanel = () => {
       const data = await response.json();
       if (data.success) {
         fetchStatus();
-        alert(`Signal generated: ${data.signal.direction} ${data.signal.symbol} (${data.inverted ? 'INVERTED' : 'NORMAL'})`);
+        // Iter 94 — surface the FULL analytical breakdown (patterns,
+        // votes, confluence, narrative) in a rich modal instead of the
+        // legacy alert() one-liner.
+        setForceGenResult(data);
+        setForceGenModalOpen(true);
       } else {
         alert('Failed to generate signal: ' + data.message);
       }
@@ -851,6 +859,13 @@ const TampermonkeyControlPanel = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Iter 94 — Rich Force-Generate result modal */}
+      <ForceGenerateSignalModal
+        open={forceGenModalOpen}
+        onOpenChange={setForceGenModalOpen}
+        result={forceGenResult}
+      />
     </div>
   );
 };

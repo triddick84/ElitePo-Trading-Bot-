@@ -3379,7 +3379,12 @@ async def tampermonkey_force_generate(
 ):
     """
     Force generate a signal for Tampermonkey to execute.
-    Signal will be inverted based on current invert_signals setting.
+    Iter 94: now delegates to /signals/force-generate-v2 so the response
+    carries the full analytical stack — candle patterns, historical
+    win-rates, per-strategy votes, ML ensemble breakdown, confluence,
+    volatility regime, and behavioural narrative — instead of the
+    previous random dice roll. Inversion is still applied AFTER v2 so
+    the TM side receives the operator's expected direction.
     """
     try:
         # Map timeframe to expiry seconds
@@ -3387,39 +3392,70 @@ async def tampermonkey_force_generate(
             "5s": 5, "15s": 15, "30s": 30,
             "1m": 60, "2m": 120, "3m": 180, "5m": 300
         }
-        
         expiry_seconds = timeframe_to_seconds.get(timeframe, 60)
-        
-        # Default OTC assets for signal generation
+
+        # Default OTC assets — used only when caller omits `asset`
         otc_assets = [
             "EURUSD_OTC", "GBPUSD_OTC", "USDJPY_OTC", "AUDUSD_OTC",
             "EURJPY_OTC", "GBPJPY_OTC", "EURGBP_OTC", "USDCAD_OTC",
             "USDCHF_OTC", "NZDUSD_OTC", "AUDCAD_OTC"
         ]
-        
-        # Select asset - use provided or random OTC
-        import random
-        target_asset = asset if asset else random.choice(otc_assets)
-        
-        # Generate simple signal (random direction based on time)
-        import hashlib
-        time_hash = hashlib.sha256(f"{datetime.now(timezone.utc).isoformat()}{target_asset}".encode()).hexdigest()
-        raw_direction = "CALL" if int(time_hash[0], 16) > 7 else "PUT"
-        
-        # Create signal
+        import random as _rand
+        target_asset = asset if asset else _rand.choice(otc_assets)
+        # Normalise asset name for v2 (expects EURUSD_OTC form)
+        norm = target_asset.strip().replace(" ", "").replace("/", "").upper()
+        if norm.endswith("OTC") and not norm.endswith("_OTC"):
+            norm = norm[:-3] + "_OTC"
+
+        # Delegate to force-generate-v2 — always returns a directional signal
+        from routes.signals import force_generate_signal_v2 as _v2
+        v2_response = await _v2(
+            asset=norm, expiry_seconds=expiry_seconds, preferred_direction=None,
+            min_conf_confluence=0.0, min_conf_improved_v2=0.0,
+            min_conf_maximized_v3=0.0, min_conf_iq720=0.0,
+        )
+
+        # v2 returns {success, signal, candles_received, strategies_evaluated}
+        v2_sig = (v2_response or {}).get("signal") or {}
+        if not v2_sig:
+            raise HTTPException(status_code=500, detail="Force-generate-v2 returned no signal")
+
+        raw_direction = v2_sig.get("direction", "CALL")
+
+        # Build TM-facing signal: keep v2's rich fields, add TM-specific ones
         signal = {
-            "id": f"TM_FORCE_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{target_asset}",
-            "symbol": target_asset,
+            "id": f"TM_FORCE_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{norm}",
+            "symbol": norm,
             "direction": raw_direction,
-            "confidence": 85.0,
-            "probability": 85.0,
+            "confidence": v2_sig.get("confidence", 65.0),
+            "probability": v2_sig.get("confidence", 65.0),
             "entry_price": 1.0,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "source": "tampermonkey_force_generate",
-            "timeframe": timeframe
+            "timeframe": timeframe,
+            "expiry_seconds": expiry_seconds,
+            "expiration_minutes": expiry_seconds / 60,
+            # Rich technical-analysis fields from v2 — surfaced to the UI
+            "strategy": v2_sig.get("strategy"),
+            "reason": v2_sig.get("reason"),
+            "confluence_score": v2_sig.get("confluence_score"),
+            "quality": v2_sig.get("quality"),
+            "agreeing_strategies": v2_sig.get("agreeing_strategies"),
+            "mtf_confluence": v2_sig.get("mtf_confluence"),
+            "ml_agree_count": v2_sig.get("ml_agree_count"),
+            "vol_regime": v2_sig.get("vol_regime"),
+            "atr_percent": v2_sig.get("atr_percent"),
+            "sentiment": v2_sig.get("sentiment"),
+            "components": v2_sig.get("components"),
+            "votes": v2_sig.get("votes"),
+            "candle_analysis": v2_sig.get("candle_analysis"),
+            "abstain": v2_sig.get("abstain", False),
+            "abstain_reason": v2_sig.get("abstain_reason"),
+            "fire_offset_sec": v2_sig.get("fire_offset_sec"),
+            "pattern_disagreement": v2_sig.get("pattern_disagreement"),
         }
-        
-        # Apply inversion if enabled in settings (DEFAULT: ON)
+
+        # Apply inversion AFTER v2 analysis (invert flips CALL <-> PUT only)
         if tampermonkey_settings.get("invert_signals", True):
             original_direction = signal["direction"]
             signal["direction"] = "PUT" if original_direction == "CALL" else "CALL"
@@ -3428,27 +3464,27 @@ async def tampermonkey_force_generate(
             logger.info(f"Signal inverted: {original_direction} -> {signal['direction']}")
         else:
             signal["inverted"] = False
-        
-        # Set expiry based on timeframe
-        signal["expiry_seconds"] = expiry_seconds
-        signal["expiration_minutes"] = expiry_seconds / 60
-        
+
         # Save to database for /signals/latest to pick up
         signal_doc = {**signal, "timestamp": datetime.now(timezone.utc).isoformat()}
         signal_doc.pop('_id', None)
         await db.trading_signals.insert_one(signal_doc)
-        
-        logger.info(f"Force generated signal: {signal['direction']} {signal['symbol']} @ {timeframe}")
-        
+
+        logger.info(f"Force generated signal (v2-backed): {signal['direction']} {signal['symbol']} @ {timeframe} conf={signal['confidence']:.1f}")
+
         return {
             "success": True,
             "signal": signal,
             "inverted": signal.get("inverted", False),
+            "candles_received": v2_response.get("candles_received"),
+            "strategies_evaluated": v2_response.get("strategies_evaluated"),
             "message": f"Signal generated for {timeframe} - {'INVERTED' if signal.get('inverted') else 'NORMAL'}"
         }
-            
+
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Force generate error: {e}")
+        logger.error(f"Force generate error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.post("/tampermonkey/toggle-inversion")
