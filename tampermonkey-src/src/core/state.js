@@ -258,6 +258,8 @@ export function saveState() {
       twentyOneSConfig: state._twentyOneSConfig || null,
       // Selected strategy (from dropdown)
       selectedStrategy: state._selectedStrategy || null,
+      // Iter 96 — Selected timeframe for the strategy picker
+      selectedStrategyTf: state._selectedStrategyTf || '5s',
       // Iter 62 — per-model probability thresholds (TM panel sliders)
       modelThresholds: state.modelThresholds || null,
       // Iter 63 — trade latency offset (sec, range -15..+15)
@@ -304,6 +306,7 @@ export function loadState() {
         if (parsed.cycleConfig) state._cycleConfig = parsed.cycleConfig;
         if (parsed.twentyOneSConfig) state._twentyOneSConfig = parsed.twentyOneSConfig;
         if (parsed.selectedStrategy) state._selectedStrategy = parsed.selectedStrategy;
+        if (parsed.selectedStrategyTf) state._selectedStrategyTf = parsed.selectedStrategyTf;
         // Iter 62 — per-model thresholds
         if (parsed.modelThresholds && typeof parsed.modelThresholds === 'object') {
           state.modelThresholds = {

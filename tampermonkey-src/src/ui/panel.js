@@ -979,7 +979,16 @@ export function createPanel() {
           </div>
           <div class="${P}stratrow">
             <span class="${P}stratlbl">Strategy:</span>
-            <select id="${P}strat" class="${P}stratsel">
+            <select id="${P}stratTf" class="${P}stratsel" data-testid="strategy-tf-select" title="Iter 96 — Timeframe for strategy selection. Choose which chart TF's strategies you want to browse and enable.">
+              <option value="5s">5s</option>
+              <option value="15s">15s</option>
+              <option value="30s">30s</option>
+              <option value="1m">1m</option>
+              <option value="2m">2m</option>
+              <option value="3m">3m</option>
+              <option value="5m">5m</option>
+            </select>
+            <select id="${P}strat" class="${P}stratsel" data-testid="strategy-select">
               <option value="default">All Strategies</option>
               <option value="ema20_pullback_reversal">EMA 20 Pullback</option>
             </select>
@@ -1340,6 +1349,14 @@ export function initPanelEvents(callbacks = {}) {
   if (stratSelect) {
     stratSelect.addEventListener('change', (e) => {
       callbacks.onStrategyChange?.(e.target.value);
+    });
+  }
+
+  // Iter 96 — Strategy timeframe selector (drives which TF's strategies appear)
+  const stratTfSelect = q('stratTf');
+  if (stratTfSelect) {
+    stratTfSelect.addEventListener('change', (e) => {
+      callbacks.onStrategyTfChange?.(e.target.value);
     });
   }
 
@@ -1833,6 +1850,22 @@ export function populateStrategies(strategies, selectedId) {
   }
 }
 
+
+/**
+ * Iter 96 — Get/set the selected strategy timeframe in the TF dropdown.
+ * Reads/writes the DOM directly so callers don't have to know the ID convention.
+ */
+export function setStrategyTf(tf) {
+  const sel = q('stratTf');
+  if (sel && tf) sel.value = tf;
+}
+
+export function getStrategyTf() {
+  const sel = q('stratTf');
+  return sel ? sel.value : '5s';
+}
+
+
 export default {
   createPanel,
   initPanelEvents,
@@ -1841,4 +1874,6 @@ export default {
   updateStatusDot,
   cleanupPanel,
   populateStrategies,
+  setStrategyTf,
+  getStrategyTf,
 };

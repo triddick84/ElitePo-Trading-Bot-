@@ -6,7 +6,7 @@
 import { CONFIG } from './core/config.js';
 import { state, setState, loadState, saveState, resetStats } from './core/state.js';
 import { log, info, warn, success, error } from './core/logger.js';
-import { createPanel, initPanelEvents, updateStatsDisplay, updateInvertDisplay, updateStatusDot, cleanupPanel, populateStrategies, update21sReversalDisplay, set51sTimingSlider, updateActiveAsset, setToggleActive, setSignalPreview, updateStatusStrip, updateLiveCountdown } from './ui/panel.js';
+import { createPanel, initPanelEvents, updateStatsDisplay, updateInvertDisplay, updateStatusDot, cleanupPanel, populateStrategies, setStrategyTf, getStrategyTf, update21sReversalDisplay, set51sTimingSlider, updateActiveAsset, setToggleActive, setSignalPreview, updateStatusStrip, updateLiveCountdown } from './ui/panel.js';
 import { strategyManager } from './strategies/manager.js';
 import { tradeExecutor } from './trading/executor.js';
 import { tradeResultWatcher } from './trading/tradeResultWatcher.js';
@@ -212,10 +212,22 @@ class EliteTradingBot {
         strategyManager.applyAppSelection(strategyId);
         saveState();
         try {
-          await post('/strategies/select', { timeframe: '5s', strategy_id: strategyId });
-          info(`Strategy "${strategyId}" synced to server`);
+          const tf = state._selectedStrategyTf || getStrategyTf() || '5s';
+          await post('/strategies/select', { timeframe: tf, strategy_id: strategyId });
+          info(`Strategy "${strategyId}" (${tf}) synced to server`);
         } catch (e) {
           warn(`Failed to sync strategy to server: ${e.message}`);
+        }
+      },
+      // Iter 96 — TF change: reload the strategy list for the picked TF
+      onStrategyTfChange: async (tf) => {
+        log(`Strategy timeframe changed to: ${tf}`);
+        state._selectedStrategyTf = tf;
+        saveState();
+        try {
+          await this.loadStrategies(tf);
+        } catch (e) {
+          warn(`Failed to reload strategies for ${tf}: ${e.message}`);
         }
       },
       onWin: () => {
@@ -302,15 +314,22 @@ class EliteTradingBot {
     });
   }
   
-  async loadStrategies() {
+  async loadStrategies(tf) {
     try {
-      // Fetch available strategies from API
-      const available = await get('/strategies/available/5s');
+      // Iter 96 — accept `tf` from the TF picker so users can browse
+      // strategies per timeframe. Falls back to the last-picked TF, then 5s.
+      const selectedTf = tf || state._selectedStrategyTf || '5s';
+      state._selectedStrategyTf = selectedTf;
+      // Reflect the TF in the dropdown (idempotent — safe on repeat call)
+      try { setStrategyTf(selectedTf); } catch (_e) { /* UI may not exist yet */ }
+
+      // Fetch available strategies from API for the chosen TF
+      const available = await get(`/strategies/available/${selectedTf}`);
       const strategies = available.strategies || [];
 
       // Fetch the server's last-known selection (multi-device fallback)
       const selected = await get('/strategies/selected');
-      const serverId = selected.selections?.['5s'] || 'default';
+      const serverId = selected.selections?.[selectedTf] || 'default';
 
       // v8.72.0 — Local saved strategy wins. Previously the panel always
       // adopted the server's `/strategies/selected` value on every page
@@ -338,14 +357,14 @@ class EliteTradingBot {
       // If local diverged from server, push our pick back up (fire-and-forget)
       if (localExists && localId !== serverId) {
         try {
-          await post('/strategies/select', { timeframe: '5s', strategy_id: selectedId });
-          info(`[Restore] Re-synced local strategy "${selectedId}" to server (was "${serverId}")`);
+          await post('/strategies/select', { timeframe: selectedTf, strategy_id: selectedId });
+          info(`[Restore] Re-synced local strategy "${selectedId}" (${selectedTf}) to server (was "${serverId}")`);
         } catch (e) {
           warn(`Failed to re-sync strategy to server: ${e.message}`);
         }
       }
 
-      info(`Strategies loaded: ${strategies.length} available, active: ${selectedId}${localExists ? ' (from local save)' : ' (from server)'}`);
+      info(`Strategies loaded for ${selectedTf}: ${strategies.length} available, active: ${selectedId}${localExists ? ' (from local save)' : ' (from server)'}`);
     } catch (e) {
       warn(`Strategy load failed (using all): ${e.message}`);
       // Even on API failure, honor the local pick if we have one

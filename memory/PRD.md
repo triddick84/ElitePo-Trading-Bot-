@@ -1,3 +1,65 @@
+# AI's Elite PO Traders Bot — Aug 2026 (Iter 95: App↔TM Active-Target Sync)
+
+## Iter 95 (Aug 9, 2026) — Fix "trades fire on wrong asset" bug
+
+### User report
+> "The flow should be that whatever the chart timeframe and assets selected in the application is what needs to be placed for trades in TM script... right now pocket option and application have to be on and display the same otherwise the trade gets placed on whatever assets are currently displayed on pocket option when signal comes thru"
+
+### Root cause (3 layers)
+1. **TM was polling signals bound to PO's chart** — `appSignalPoller` passed `getCurrentAsset()` (PO's DOM) as the `?symbol` filter. If the app was set to `EURUSD_OTC 1m` but PO showed `USDJPY_OTC 30s`, TM literally never saw the app's signals.
+2. **Signal endpoint had no fallback** — `/signals/latest` without `?symbol` returned whichever signal was most recent globally, regardless of what the app was targeting.
+3. **Asset switch was fire-and-forget** — `switchAsset()` was called then a fixed 1200ms wait, then click. If PO ignored the switch (rate limit, DOM change), the trade fired on the OLD asset.
+
+### Fix shipped
+
+**Backend** (`/app/backend/server.py`):
+- New `GET /api/tampermonkey/active-target` — returns `{asset, timeframe, expiry_seconds, source}`. Precedence: **override → /api/config → EURUSD_OTC 1m fallback**.
+- New `POST /api/tampermonkey/active-target` — sets/clears an explicit override (`{asset: null}` clears). Persisted to `tampermonkey_settings.active_target` in Mongo.
+- `_normalize_asset()` + `_tf_to_expiry_seconds()` helpers handle lowercase/no-underscore variants and TF→seconds mapping.
+
+**Backend** (`/app/backend/routes/signals.py`):
+- `/signals/latest` — when caller omits `?symbol`, falls back to `active_target.asset` (override → config → nothing). Never returns cross-asset signals to a caller that expected app-scoped.
+
+**Backend** (`/app/backend/routes/tampermonkey.py`):
+- Broadened `API_URL` rewrite regex to catch ANY hardcoded literal (not just elitepotradingbot.com) so fresh webpack rebuilds with preview URLs still self-heal to the serving host.
+- Same broadening for `@updateURL` / `@downloadURL`.
+
+**Tampermonkey userscript v8.125.0**:
+- New `fetchActiveTarget()` helper in `utils/api.js`.
+- `appSignalPoller._tick()` now:
+  1. Fetches active-target FIRST → uses `target.asset` for `fetchSignal(target.asset)`.
+  2. Before firing, compares PO's `getCurrentAsset()` vs signal's `symbol`.
+  3. If mismatch → `switchAsset()` then `_verifyAssetSwitched()` (retry 3× with 500ms delay).
+  4. If verification fails → **ABORT trade** with red-toast log `asset_switch_failed`. No trade fires on the wrong asset.
+- `getStats()` now surfaces `assetSwitchFailedCount` + `lastActiveTarget` for observability.
+
+**Webpack config** — restored `@updateURL`/`@downloadURL` placeholder lines so the server-side rewrite has anchors to match.
+
+**Frontend** — `TM_VERSION` bumped to `8.125.0` on the Pocket Option page.
+
+### Verified end-to-end (live)
+1. Set app config `EURUSD_OTC 1m` → `active-target` returns `{asset:EURUSD_OTC, timeframe:1m, expiry_seconds:60, source:config}`.
+2. TM polls `/signals/latest` (no `?symbol`) → response scoped to EURUSD_OTC only.
+3. Switch app to `GBPJPY_OTC 30s` → target immediately updates.
+
+### Tests
+- **`test_iter95_active_target_sync.py`** — 7/7 pass:
+  1. Active-target shape + config fallback
+  2. Override precedence
+  3. Case/underscore normalisation (`eurusdotc` → `EURUSD_OTC`)
+  4. Clear override works
+  5. `/signals/latest` fallback to active_target
+  6. TM userscript contains new markers (`active-target`, `asset_switch_failed`, `_verifyAssetSwitched`)
+  7. `@version` ≥ 8.125.0
+- **Regression** Iter 80/91/93/94/95 combined: 44 passed / 1 skipped ✅
+- **Testing agent** iter80-95 sweep: 123/129 pass (6 unrelated pre-existing failures — Iter 85 theme override marker missing after rebuild, one env-latency flake).
+
+### NOT done this iter (option-b scope)
+- No expiration/timeframe switching yet. Trades still fire at whatever expiration PO's screen shows. User deferred to a later iteration.
+- No frontend "active target" indicator badge on the Dashboard (backend flow works without it — Dashboard already persists to `/api/config`).
+
+---
+
 # AI's Elite PO Traders Bot — Aug 2026 (Iter 94: Candle Patterns + Force-Generate UI + Latency Runtime Controls)
 
 ## Iter 94 (Aug 9, 2026) — Force-Generate rich analysis + interactive Latency Dashboard
