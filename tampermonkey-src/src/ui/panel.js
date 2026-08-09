@@ -876,6 +876,389 @@ function injectCSS() {
     }
     .${P}logbox::-webkit-scrollbar { width: 4px !important; }
     .${P}logbox::-webkit-scrollbar-thumb { background: #30363d !important; border-radius: 2px !important; }
+
+    /* ═══════════════════════════════════════════════════════════════════
+     * Iter 96 — MODERN TABBED REDESIGN
+     * Deep charcoal · Cyan primary · Emerald success · Rose danger
+     * Auto-adapts: compact FAB on mobile · spacious dashboard on desktop
+     * All existing IDs are retained — event wiring stays intact.
+     * ═══════════════════════════════════════════════════════════════════ */
+
+    /* Panel chrome override — glassmorphic dark with cyan accent glow */
+    #${P}host {
+      width: ${mobile ? '260' : '360'}px !important;
+      max-width: 94vw !important;
+      transition: width 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+                  height 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+                  top 0.28s ease, right 0.28s ease, left 0.28s ease !important;
+    }
+    /* Fullscreen expand mode (mobile) — added via .expanded class on host */
+    #${P}host.expanded {
+      width: 100vw !important;
+      height: 100vh !important;
+      top: 0 !important;
+      right: 0 !important;
+      left: 0 !important;
+      max-width: 100vw !important;
+      border-radius: 0 !important;
+    }
+    #${P}host.expanded #${P}panel {
+      width: 100% !important;
+      height: 100% !important;
+      max-height: 100vh !important;
+      border-radius: 0 !important;
+      display: flex !important;
+      flex-direction: column !important;
+    }
+    #${P}host.expanded .${P}body {
+      flex: 1 !important;
+      overflow-y: auto !important;
+      max-height: none !important;
+    }
+    #${P}panel {
+      background: linear-gradient(180deg, rgba(10,14,20,0.98) 0%, rgba(8,11,17,0.98) 100%) !important;
+      border: 1px solid rgba(34,211,238,0.18) !important;
+      border-radius: 14px !important;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6),
+                  0 0 0 1px rgba(255,255,255,0.02),
+                  inset 0 1px 0 rgba(255,255,255,0.04) !important;
+      backdrop-filter: blur(20px) saturate(140%) !important;
+      -webkit-backdrop-filter: blur(20px) saturate(140%) !important;
+      overflow: hidden !important;
+    }
+    /* Header — refined gradient with subtle accent line */
+    .${P}header {
+      background: linear-gradient(90deg,
+        rgba(34,211,238,0.10) 0%,
+        rgba(52,211,153,0.06) 50%,
+        rgba(34,211,238,0.10) 100%) !important;
+      border-bottom: 1px solid rgba(34,211,238,0.20) !important;
+      padding: 10px 12px !important;
+      cursor: grab !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      gap: 8px !important;
+    }
+    .${P}header::after {
+      content: '' !important;
+      position: absolute !important;
+      left: 12px !important; right: 12px !important; bottom: 0 !important;
+      height: 1px !important;
+      background: linear-gradient(90deg, transparent, rgba(34,211,238,0.4), transparent) !important;
+    }
+    .${P}title {
+      font-size: ${mobile ? '13' : '14'}px !important;
+      font-weight: 700 !important;
+      letter-spacing: 0.3px !important;
+      color: #e6edf3 !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 6px !important;
+    }
+    .${P}title::before {
+      content: '' !important;
+      width: 6px !important; height: 6px !important;
+      border-radius: 50% !important;
+      background: radial-gradient(circle, #22d3ee, #0891b2) !important;
+      box-shadow: 0 0 8px rgba(34,211,238,0.7) !important;
+    }
+    .${P}hright { display: flex !important; align-items: center !important; gap: 6px !important; }
+    .${P}dot {
+      width: 8px !important; height: 8px !important;
+      border-radius: 50% !important;
+      background: #10b981 !important;
+      box-shadow: 0 0 8px rgba(16,185,129,0.6) !important;
+      transition: all 0.3s !important;
+    }
+    .${P}dot.off { background: #6b7280 !important; box-shadow: none !important; }
+    /* Header buttons (minimize, expand, close) — larger tap targets */
+    .${P}minbtn, .${P}expandbtn {
+      background: rgba(255,255,255,0.05) !important;
+      border: 1px solid rgba(255,255,255,0.10) !important;
+      color: #cbd5e1 !important;
+      width: 26px !important; height: 26px !important;
+      border-radius: 6px !important;
+      font-size: 14px !important;
+      font-weight: 700 !important;
+      line-height: 1 !important;
+      cursor: pointer !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      transition: all 0.15s !important;
+      padding: 0 !important;
+    }
+    .${P}minbtn:hover, .${P}expandbtn:hover {
+      background: rgba(34,211,238,0.15) !important;
+      border-color: rgba(34,211,238,0.4) !important;
+      color: #22d3ee !important;
+    }
+
+    /* Tab bar — sticky, glass, active-bar underline */
+    .${P}tabbar {
+      display: grid !important;
+      grid-template-columns: repeat(4, 1fr) !important;
+      gap: 0 !important;
+      background: rgba(0,0,0,0.30) !important;
+      border-bottom: 1px solid rgba(255,255,255,0.05) !important;
+      padding: 0 !important;
+      position: relative !important;
+    }
+    .${P}tabbtn {
+      background: transparent !important;
+      border: none !important;
+      color: #64748b !important;
+      font-size: ${mobile ? '10' : '11'}px !important;
+      font-weight: 700 !important;
+      letter-spacing: 0.4px !important;
+      text-transform: uppercase !important;
+      padding: ${mobile ? '10px 4px' : '9px 6px'} !important;
+      cursor: pointer !important;
+      position: relative !important;
+      transition: color 0.2s !important;
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      gap: 2px !important;
+      font-family: inherit !important;
+    }
+    .${P}tabbtn:hover { color: #cbd5e1 !important; }
+    .${P}tabbtn.active { color: #22d3ee !important; }
+    .${P}tabbtn.active::after {
+      content: '' !important;
+      position: absolute !important;
+      bottom: 0 !important; left: 15% !important; right: 15% !important;
+      height: 2px !important;
+      background: linear-gradient(90deg, transparent, #22d3ee, transparent) !important;
+      box-shadow: 0 0 6px rgba(34,211,238,0.7) !important;
+      border-radius: 2px !important;
+    }
+    .${P}tabicon { font-size: ${mobile ? '13' : '14'}px !important; line-height: 1 !important; }
+
+    /* Tab panels */
+    .${P}tabpanel {
+      display: none !important;
+      padding: 10px 10px !important;
+      animation: ${P}tabin 0.22s ease-out !important;
+    }
+    .${P}tabpanel.active { display: block !important; }
+    @keyframes ${P}tabin {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Section groups — visual grouping inside tabs */
+    .${P}section {
+      background: rgba(255,255,255,0.02) !important;
+      border: 1px solid rgba(255,255,255,0.05) !important;
+      border-radius: 10px !important;
+      padding: 8px !important;
+      margin-bottom: 8px !important;
+    }
+    .${P}section:last-child { margin-bottom: 0 !important; }
+    .${P}sectionttl {
+      font-size: ${mobile ? '9' : '10'}px !important;
+      font-weight: 700 !important;
+      color: #64748b !important;
+      letter-spacing: 0.6px !important;
+      text-transform: uppercase !important;
+      margin-bottom: 6px !important;
+      padding-left: 2px !important;
+      display: flex !important;
+      align-items: center !important;
+      gap: 4px !important;
+    }
+    .${P}sectionttl::before {
+      content: '' !important;
+      width: 3px !important; height: 10px !important;
+      background: linear-gradient(180deg, #22d3ee, #0891b2) !important;
+      border-radius: 2px !important;
+    }
+
+    /* Upgrade all .btn class buttons: modern pill, tap-friendly */
+    .${P}btn {
+      background: rgba(255,255,255,0.04) !important;
+      border: 1px solid rgba(255,255,255,0.08) !important;
+      color: #cbd5e1 !important;
+      font-weight: 700 !important;
+      border-radius: 8px !important;
+      padding: ${mobile ? '11px 6px' : '9px 6px'} !important;
+      font-size: ${mobile ? '11' : '11'}px !important;
+      letter-spacing: 0.4px !important;
+      cursor: pointer !important;
+      transition: all 0.15s ease !important;
+      position: relative !important;
+      overflow: hidden !important;
+    }
+    .${P}btn:hover {
+      background: rgba(34,211,238,0.10) !important;
+      border-color: rgba(34,211,238,0.30) !important;
+      color: #e6edf3 !important;
+      transform: translateY(-1px) !important;
+    }
+    .${P}btn:active { transform: translateY(0) !important; }
+    .${P}btn.active {
+      background: linear-gradient(135deg, rgba(34,211,238,0.20), rgba(16,185,129,0.15)) !important;
+      border-color: rgba(34,211,238,0.5) !important;
+      color: #22d3ee !important;
+      box-shadow: 0 0 12px rgba(34,211,238,0.25), inset 0 1px 0 rgba(255,255,255,0.08) !important;
+    }
+    .${P}btn-go {
+      background: linear-gradient(135deg, #22d3ee 0%, #0891b2 100%) !important;
+      border-color: #22d3ee !important;
+      color: #082f38 !important;
+      font-weight: 800 !important;
+      box-shadow: 0 4px 12px rgba(34,211,238,0.35) !important;
+    }
+    .${P}btn-go:hover {
+      background: linear-gradient(135deg, #67e8f9 0%, #22d3ee 100%) !important;
+      color: #041f26 !important;
+      box-shadow: 0 6px 18px rgba(34,211,238,0.5) !important;
+    }
+    .${P}btn-win.active { background: linear-gradient(135deg, rgba(16,185,129,0.25), rgba(52,211,153,0.15)) !important; border-color: rgba(16,185,129,0.5) !important; color: #34d399 !important; }
+    .${P}btn-loss.active, .${P}btn-inv.active { background: linear-gradient(135deg, rgba(244,63,94,0.25), rgba(251,113,133,0.15)) !important; border-color: rgba(244,63,94,0.5) !important; color: #fb7185 !important; }
+
+    /* Stats — big numeric tiles */
+    .${P}stats {
+      display: grid !important;
+      grid-template-columns: repeat(4, 1fr) !important;
+      gap: 6px !important;
+      position: relative !important;
+    }
+    .${P}stat {
+      background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01)) !important;
+      border: 1px solid rgba(255,255,255,0.06) !important;
+      border-radius: 8px !important;
+      padding: 8px 4px !important;
+      text-align: center !important;
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      gap: 3px !important;
+    }
+    .${P}stlbl {
+      font-size: ${mobile ? '9' : '9'}px !important;
+      color: #64748b !important;
+      font-weight: 700 !important;
+      letter-spacing: 0.5px !important;
+      text-transform: uppercase !important;
+    }
+    .${P}stval {
+      font-size: ${mobile ? '14' : '15'}px !important;
+      font-weight: 800 !important;
+      color: #e6edf3 !important;
+      font-variant-numeric: tabular-nums !important;
+      line-height: 1 !important;
+    }
+
+    /* Inputs / selects — cleaner treatment */
+    .${P}stratsel, .${P}mminp, .${P}thrInp, .${P}latslider, .${P}timing-slider {
+      background: rgba(0,0,0,0.35) !important;
+      border: 1px solid rgba(255,255,255,0.10) !important;
+      color: #e6edf3 !important;
+      border-radius: 6px !important;
+      padding: 6px 8px !important;
+      font-size: ${mobile ? '11' : '12'}px !important;
+      font-family: inherit !important;
+    }
+    .${P}stratsel:focus, .${P}mminp:focus, .${P}thrInp:focus {
+      outline: none !important;
+      border-color: rgba(34,211,238,0.5) !important;
+      box-shadow: 0 0 0 3px rgba(34,211,238,0.15) !important;
+    }
+
+    /* Live-tab strip: bigger LEDs, nicer chips */
+    .${P}strip {
+      display: grid !important;
+      grid-template-columns: repeat(5, 1fr) !important;
+      gap: 4px !important;
+      padding: 6px !important;
+      background: rgba(0,0,0,0.30) !important;
+      border-radius: 8px !important;
+      margin-bottom: 8px !important;
+      border: 1px solid rgba(255,255,255,0.04) !important;
+    }
+    .${P}stripcell {
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      gap: 3px !important;
+      padding: 3px 2px !important;
+      font-size: ${mobile ? '9' : '10'}px !important;
+      color: #64748b !important;
+      font-weight: 700 !important;
+      letter-spacing: 0.4px !important;
+    }
+    .${P}stripcell.active { color: #22d3ee !important; }
+    .${P}stripled {
+      width: 8px !important; height: 8px !important;
+      border-radius: 50% !important;
+      background: #374151 !important;
+      transition: all 0.25s !important;
+    }
+    .${P}stripcell.active .${P}stripled {
+      background: #22d3ee !important;
+      box-shadow: 0 0 8px rgba(34,211,238,0.7) !important;
+    }
+
+    /* Time row — LIVE countdown big and prominent */
+    .${P}timerow {
+      background: linear-gradient(90deg, rgba(34,211,238,0.06), transparent) !important;
+      border: 1px solid rgba(34,211,238,0.15) !important;
+      border-radius: 8px !important;
+      padding: 8px 10px !important;
+      margin-bottom: 8px !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      gap: 8px !important;
+    }
+    #${P}timeval {
+      font-size: ${mobile ? '18' : '20'}px !important;
+      font-weight: 800 !important;
+      color: #22d3ee !important;
+      font-variant-numeric: tabular-nums !important;
+      letter-spacing: 0.5px !important;
+    }
+
+    /* Log box — cleaner console look */
+    .${P}logbox {
+      background: rgba(0,0,0,0.5) !important;
+      border: 1px solid rgba(255,255,255,0.05) !important;
+      border-radius: 8px !important;
+      padding: 8px !important;
+      font-family: 'SF Mono', 'Menlo', 'Consolas', monospace !important;
+      font-size: 10px !important;
+      color: #94a3b8 !important;
+      line-height: 1.5 !important;
+    }
+    .${P}resetbtn {
+      background: rgba(244,63,94,0.08) !important;
+      border: 1px solid rgba(244,63,94,0.25) !important;
+      color: #fb7185 !important;
+      border-radius: 8px !important;
+      padding: 10px !important;
+      font-weight: 700 !important;
+      letter-spacing: 0.5px !important;
+      cursor: pointer !important;
+      transition: all 0.15s !important;
+      width: 100% !important;
+      margin-top: 8px !important;
+    }
+    .${P}resetbtn:hover {
+      background: rgba(244,63,94,0.18) !important;
+      border-color: rgba(244,63,94,0.5) !important;
+    }
+
+    /* Hide the legacy MORE toggle since we now have tabs */
+    .${P}morebtn { display: none !important; }
+    /* The legacy .advanced div is now inside the Config tab — show contents always */
+    .${P}advanced.hidden { display: block !important; }
+
+    /* Mobile: even bigger tap targets in expanded mode */
+    #${P}host.expanded .${P}btn { padding: 14px 10px !important; font-size: 13px !important; }
+    #${P}host.expanded .${P}tabbtn { padding: 14px 6px !important; font-size: 12px !important; }
   `;
 
   if (typeof GM_addStyle === 'function') {
@@ -903,6 +1286,8 @@ export function createPanel() {
   injectCSS();
   console.log('[Elite Bot] CSS injected');
 
+  const mobile = isMobile();
+
   panelEl = document.createElement('div');
   panelEl.id = `${P}host`;
 
@@ -910,131 +1295,204 @@ export function createPanel() {
 
   panelEl.innerHTML = `
     <div id="${P}panel">
-      <div class="${P}header" id="${P}header">
+      <!-- Header -->
+      <div class="${P}header" id="${P}header" data-testid="tm-panel-header">
         <span class="${P}title">${titleShort}</span>
         <div class="${P}hright">
-          <span class="${P}dot" id="${P}dot"></span>
-          <button class="${P}minbtn" id="${P}minbtn">_</button>
+          <span class="${P}dot" id="${P}dot" title="Bot connection status"></span>
+          <button class="${P}expandbtn" id="${P}expandbtn" data-testid="tm-panel-expand" title="Expand to fullscreen / restore compact view">⛶</button>
+          <button class="${P}minbtn" id="${P}minbtn" data-testid="tm-panel-minimize" title="Minimize panel">_</button>
         </div>
       </div>
-      <div class="${P}strip" id="${P}strip" data-testid="status-strip" title="Live state of all toggles. Green dot = ON, grey = OFF.">
-        <div class="${P}stripcell" id="${P}stripscan"><span class="${P}stripled"></span><span>SCAN</span></div>
-        <div class="${P}stripcell" id="${P}stripauto"><span class="${P}stripled"></span><span>AUTO</span></div>
-        <div class="${P}stripcell" id="${P}stripainv"><span class="${P}stripled"></span><span>A-INV</span></div>
-        <div class="${P}stripcell" id="${P}strip51s" title="Seconds Number Strategy toggle — fires at a fixed second of every 1m candle"><span class="${P}stripled"></span><span>SNS</span></div>
-        <div class="${P}stripcell" id="${P}stripcycle"><span class="${P}stripled"></span><span>CYCLE</span></div>
+
+      <!-- Tab bar (Iter 96) -->
+      <div class="${P}tabbar" data-testid="tm-tabbar">
+        <button class="${P}tabbtn active" data-tab="live" data-testid="tab-live"><span class="${P}tabicon">◉</span>Live</button>
+        <button class="${P}tabbtn" data-tab="trade" data-testid="tab-trade"><span class="${P}tabicon">▲</span>Trade</button>
+        <button class="${P}tabbtn" data-tab="config" data-testid="tab-config"><span class="${P}tabicon">⚙</span>Config</button>
+        <button class="${P}tabbtn" data-tab="stats" data-testid="tab-stats"><span class="${P}tabicon">▨</span>Stats</button>
       </div>
-      <div class="${P}timerow" id="${P}timerow" data-testid="live-candle-timer" title="Live PO candle countdown and Seconds Number Strategy trigger status. Works on any chart timeframe (S5, S15, M1, M5, etc). Updates every 500ms.">
-        <span class="${P}timelbl">PO</span>
-        <span class="${P}timeval" id="${P}timeval">—</span>
-        <span class="${P}timesep">·</span>
-        <span class="${P}timetfval" id="${P}timetfval" title="Current chart timeframe auto-detected from PO UI">M1</span>
-        <span class="${P}timesep">·</span>
-        <span class="${P}timelbl">@</span>
-        <span class="${P}timetrg" id="${P}timetrg">—</span>
-        <span class="${P}timestatus" id="${P}timestatus">off</span>
-      </div>
+
       <div class="${P}body" id="${P}body">
-        <div class="${P}row">
-          <button id="${P}scan" class="${P}btn">SCAN</button>
-          <button id="${P}auto" class="${P}btn">AUTO</button>
-          <button id="${P}go" class="${P}btn ${P}btn-go">GO</button>
-        </div>
-        <div class="${P}qualrow" id="${P}qualrow" data-testid="signal-quality-preview" title="Live signal preview from backend (refreshes every 3s). Tells you whether it's worth pulling GO right now.">
-          <span class="${P}quallbl">Live</span>
-          <span class="${P}qualbar" id="${P}qualbar"><span class="${P}qualfill" id="${P}qualfill"></span></span>
-          <span class="${P}qualval" id="${P}qualval">…polling</span>
-          <span class="${P}qualage" id="${P}qualage" title="Data age in seconds since last successful refresh"></span>
-        </div>
-        <div class="${P}qualsub" id="${P}qualsub" data-testid="signal-quality-sub" title="Strategy & ML model participation in the current force-generated signal">
-          <span class="${P}qualpill ml" id="${P}qualml" style="display:none">·</span>
-          <span class="${P}qualpill strats" id="${P}qualstrats" style="display:none">·</span>
-          <span class="${P}qualpill votes" id="${P}qualvotes" style="display:none">·</span>
-          <span class="${P}qualpill abstainsrc" id="${P}qualabstainsrc" data-testid="abstain-source-chip" style="display:none" title="Which level supplied the abstain threshold for this signal: strategy-specific tuning > asset tuning > default. Lets you see whether the gate is custom-calibrated (Iter 53c)."></span>
-          <span class="${P}qualpill srvlat" id="${P}qualsrvlat" data-testid="server-latency-chip" style="display:none" title="Server-side signal generation latency. Coloured by % of timeframe budget used (Iter 55). Red = approaching auto-abstain on stale data."></span>
-          <span class="${P}qualspacer"></span>
-          <span class="${P}quallat" id="${P}quallat" title="End-to-end round-trip from the TM panel's clock"></span>
-        </div>
-        <div class="${P}row">
-          <button id="${P}r21s" data-testid="seconds-number-strategy-toggle" class="${P}btn ${P}btn-r21s" title="Seconds Number Strategy — fires an opposite 5s trade at a chosen second of every 1m candle. Toggle ON/OFF here. Use the timing slider in MORE to pick the second.">SNS</button>
-          <button id="${P}ainv" class="${P}btn ${P}btn-ainv" title="Enable smart auto-invert on loss streaks">A-INV</button>
-          <button id="${P}inv" class="${P}btn ${P}btn-inv">INVERT</button>
-        </div>
-        <div class="${P}assetrow" data-testid="active-asset-indicator" title="Active asset and rotation count. Updates on every CYCLE switch / SNS fire.">
-          <span class="${P}assetlbl">ASSET</span>
-          <span class="${P}assetval" id="${P}asset">—</span>
-          <span class="${P}assetcount" id="${P}assetcnt">#0</span>
-        </div>
-        <button class="${P}morebtn" id="${P}moretog" data-testid="more-toggle" title="Show/hide advanced toggles (CYCLE, APP, SNS timing, strategy picker)">▾ MORE</button>
-        <div class="${P}advanced hidden" id="${P}advanced">
-          <div class="${P}row">
-            <button id="${P}cycle" class="${P}btn ${P}btn-cycle" title="Rotate through favorites, scan each, auto-trade best">CYCLE</button>
-            <button id="${P}app" class="${P}btn ${P}btn-app" title="Poll backend /signals/latest and auto-execute">APP</button>
+        <!-- ═════════════════ TAB: LIVE ═════════════════ -->
+        <div class="${P}tabpanel active" data-tab-panel="live" data-testid="tab-panel-live">
+          <div class="${P}strip" id="${P}strip" data-testid="status-strip" title="Live state of all toggles. Green dot = ON, grey = OFF.">
+            <div class="${P}stripcell" id="${P}stripscan"><span class="${P}stripled"></span><span>SCAN</span></div>
+            <div class="${P}stripcell" id="${P}stripauto"><span class="${P}stripled"></span><span>AUTO</span></div>
+            <div class="${P}stripcell" id="${P}stripainv"><span class="${P}stripled"></span><span>A-INV</span></div>
+            <div class="${P}stripcell" id="${P}strip51s" title="Seconds Number Strategy toggle — fires at a fixed second of every 1m candle"><span class="${P}stripled"></span><span>SNS</span></div>
+            <div class="${P}stripcell" id="${P}stripcycle"><span class="${P}stripled"></span><span>CYCLE</span></div>
           </div>
-          <div class="${P}invst" id="${P}r21st" style="padding:2px 6px !important;">SNS: Off</div>
-          <div class="${P}timing-row" data-testid="sns-timing-slider-row" title="Seconds Number Strategy — drag to choose which second of the 1m candle triggers the trade. Default 49 = fires when 49s remain (i.e. 11s into the candle, the classic ':49 mark' setup). Range 5–55s remaining.">
-            <span class="${P}timing-label">Fire @</span>
-            <input id="${P}timing" data-testid="sns-timing-slider" class="${P}timing-slider" type="range" min="5" max="55" step="1" value="49" />
-            <span class="${P}timing-value" id="${P}timingv">49s left</span>
-          </div>
-          <div class="${P}stratrow">
-            <span class="${P}stratlbl">Strategy:</span>
-            <select id="${P}stratTf" class="${P}stratsel" data-testid="strategy-tf-select" title="Iter 96 — Timeframe for strategy selection. Choose which chart TF's strategies you want to browse and enable.">
-              <option value="5s">5s</option>
-              <option value="15s">15s</option>
-              <option value="30s">30s</option>
-              <option value="1m">1m</option>
-              <option value="2m">2m</option>
-              <option value="3m">3m</option>
-              <option value="5m">5m</option>
-            </select>
-            <select id="${P}strat" class="${P}stratsel" data-testid="strategy-select">
-              <option value="default">All Strategies</option>
-              <option value="ema20_pullback_reversal">EMA 20 Pullback</option>
-            </select>
-          </div>
-          <div class="${P}invst" id="${P}invst" style="padding:2px 6px !important;">Invert: Normal</div>
-          <div class="${P}thresholds" id="${P}thresholds" data-testid="model-thresholds-section" title="Iter 62 — Per-model minimum confidence gates. Any voter below its threshold is excluded from the ensemble vote. Set to 0 to disable a gate.">
-            <div class="${P}thrhdr">Min-Conf Gates (%)</div>
-            <div class="${P}thrrow">
-              <span class="${P}thrlbl" title="TA strategies (5s/15s/1m/etc.)">CONF</span>
-              <input id="${P}thrConf" data-testid="thr-confluence" class="${P}thrInp" type="number" min="0" max="100" step="1" value="0" />
-              <span class="${P}thrlbl" title="Improved v2 ML">ML v2</span>
-              <input id="${P}thrImp" data-testid="thr-improved-v2" class="${P}thrInp" type="number" min="0" max="100" step="1" value="0" />
+          <div class="${P}timerow" id="${P}timerow" data-testid="live-candle-timer" title="Live PO candle countdown and Seconds Number Strategy trigger status. Works on any chart timeframe.">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:${mobile ? 9 : 10}px;color:#64748b;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;">LIVE</span>
+              <span id="${P}timeval">--:--</span>
             </div>
-            <div class="${P}thrrow">
-              <span class="${P}thrlbl" title="Maximized v3 ML">ML v3</span>
-              <input id="${P}thrMax" data-testid="thr-maximized-v3" class="${P}thrInp" type="number" min="0" max="100" step="1" value="0" />
-              <span class="${P}thrlbl" title="IQ-720 ensemble vote">IQ720</span>
-              <input id="${P}thrIq" data-testid="thr-iq720" class="${P}thrInp" type="number" min="0" max="100" step="1" value="0" />
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;">
+              <span id="${P}timetfval" style="font-size:${mobile ? 9 : 10}px;color:#94a3b8;font-weight:600;">--</span>
+              <span id="${P}timestatus" style="font-size:${mobile ? 9 : 10}px;color:#64748b;">idle</span>
+              <span id="${P}timetrg" style="display:none;"></span>
             </div>
           </div>
-          <div class="${P}latencyrow" data-testid="latency-offset-section" title="Iter 63 — Trade latency offset. Positive (+N): sleep N seconds before clicking CALL/PUT (for laggy PO charts / slow wifi). Negative (-N): widen freshness budget so signals from N seconds ago still fire.">
-            <span class="${P}latlbl">Latency</span>
-            <input id="${P}latency" data-testid="latency-offset-slider" class="${P}latslider" type="range" min="-15" max="15" step="0.5" value="3.5" />
-            <span class="${P}latvalue" id="${P}latvalue" data-testid="latency-offset-value">0s</span>
+          <div class="${P}qualrow" id="${P}qualrow" data-testid="signal-quality-preview" title="Live signal preview from backend (refreshes every 3s). Tells you whether it's worth pulling GO right now.">
+            <span class="${P}quallbl">Signal</span>
+            <span class="${P}qualval" id="${P}qualval">—</span>
+            <span class="${P}qualage" id="${P}qualage"></span>
+            <span class="${P}qualspacer"></span>
+            <span class="${P}quallat" id="${P}quallat"></span>
+            <div class="${P}qualbar"><div class="${P}qualfill" id="${P}qualfill"></div></div>
+          </div>
+          <div class="${P}qualsub" id="${P}qualsub" data-testid="signal-quality-sub" title="Strategy & ML model participation in the current force-generated signal">
+            <span class="${P}qualpill ml" id="${P}qualml">ML —</span>
+            <span class="${P}qualpill strats" id="${P}qualstrats">— strats</span>
+            <span class="${P}qualpill votes" id="${P}qualvotes">— votes</span>
+            <span class="${P}qualspacer"></span>
+            <span class="${P}qualpill abstainsrc" id="${P}qualabstainsrc" style="display:none;"></span>
+            <span class="${P}qualpill srvlat" id="${P}qualsrvlat" style="display:none;"></span>
+          </div>
+          <div class="${P}section">
+            <div class="${P}sectionttl">Active Asset</div>
+            <div class="${P}assetrow" data-testid="active-asset-indicator" title="Active asset and rotation count. Updates on every CYCLE switch / SNS fire.">
+              <span id="${P}asset">—</span>
+              <span class="${P}assetsp"></span>
+              <span id="${P}assetcnt" class="${P}assetcnt">0</span>
+            </div>
           </div>
         </div>
-        <div class="${P}stats">
-          <button id="${P}statsreset" class="${P}statsreset" data-testid="reset-stats-btn" title="Reset W/L counters, win rate, streak, and P/L (does not affect bot settings)">⟲</button>
-          <div class="${P}stat"><span class="${P}stlbl">W/L</span><span class="${P}stval" id="${P}wl">0/0</span></div>
-          <div class="${P}stat"><span class="${P}stlbl">Rate</span><span class="${P}stval" id="${P}rate">0%</span></div>
-          <div class="${P}stat"><span class="${P}stlbl">Strk</span><span class="${P}stval" id="${P}streak">0</span></div>
-          <div class="${P}stat"><span class="${P}stlbl">P/L</span><span class="${P}stval" id="${P}profit">$0</span></div>
+
+        <!-- ═════════════════ TAB: TRADE ═════════════════ -->
+        <div class="${P}tabpanel" data-tab-panel="trade" data-testid="tab-panel-trade">
+          <div class="${P}section">
+            <div class="${P}sectionttl">Primary Controls</div>
+            <div class="${P}row">
+              <button id="${P}scan" class="${P}btn" data-testid="btn-scan" title="Scan markets for best asset">SCAN</button>
+              <button id="${P}auto" class="${P}btn" data-testid="btn-auto" title="Enable/disable automatic trade execution">AUTO</button>
+              <button id="${P}go" class="${P}btn ${P}btn-go" data-testid="btn-go" title="Force-generate a signal now (with full technical analysis)">GO</button>
+            </div>
+            <div class="${P}row" style="margin-top:6px;">
+              <button id="${P}r21s" data-testid="seconds-number-strategy-toggle" class="${P}btn ${P}btn-r21s" title="Seconds Number Strategy — fires an opposite 5s trade at a chosen second of every 1m candle.">SNS</button>
+              <button id="${P}ainv" class="${P}btn ${P}btn-ainv" title="Auto-invert on 2 consecutive losses">A-INV</button>
+              <button id="${P}inv" class="${P}btn ${P}btn-inv" data-testid="btn-invert" title="Flip CALL↔PUT globally">INVERT</button>
+            </div>
+            <div class="${P}row" style="margin-top:6px;">
+              <button id="${P}cycle" class="${P}btn ${P}btn-cycle" data-testid="btn-cycle" title="Rotate through favorites, scan each, auto-trade best">CYCLE</button>
+              <button id="${P}app" class="${P}btn ${P}btn-app" data-testid="btn-app" title="Poll backend /signals/latest and auto-execute">APP</button>
+            </div>
+          </div>
+
+          <div class="${P}section">
+            <div class="${P}sectionttl">Money Management</div>
+            <div class="${P}mmrow" title="Bot's internal MM tracker — for stats only. Set actual trade amount manually in Pocket Option's UI.">
+              <span class="${P}mmlbl">MM $</span>
+              <input type="number" id="${P}amt" class="${P}mminp" value="1" min="1" max="1000" data-testid="mm-amount-input" style="flex:1;">
+              <span class="${P}mmlbl">Step:</span>
+              <span id="${P}step" style="font-weight:700;color:#e6edf3;">0</span>
+            </div>
+            <div class="${P}row" style="margin-top:8px;">
+              <button id="${P}win" class="${P}btn ${P}btn-win" data-testid="btn-win-manual" title="Manually record a WIN">WIN</button>
+              <button id="${P}loss" class="${P}btn ${P}btn-loss" data-testid="btn-loss-manual" title="Manually record a LOSS">LOSS</button>
+            </div>
+            <div class="${P}invst" id="${P}invst" style="padding:6px 8px !important;margin-top:6px;background:rgba(0,0,0,0.25);border-radius:6px;">Invert: Normal</div>
+            <div class="${P}invst" id="${P}r21st" style="padding:6px 8px !important;margin-top:6px;background:rgba(0,0,0,0.25);border-radius:6px;">SNS: Off</div>
+          </div>
         </div>
-        <div class="${P}row">
-          <button id="${P}win" class="${P}btn ${P}btn-win">WIN</button>
-          <button id="${P}loss" class="${P}btn ${P}btn-loss">LOSS</button>
+
+        <!-- ═════════════════ TAB: CONFIG ═════════════════ -->
+        <div class="${P}tabpanel" data-tab-panel="config" data-testid="tab-panel-config">
+          <div class="${P}advanced" id="${P}advanced">
+            <div class="${P}section">
+              <div class="${P}sectionttl">Strategy Selector</div>
+              <div class="${P}stratrow" style="display:flex;gap:6px;align-items:center;">
+                <select id="${P}stratTf" class="${P}stratsel" data-testid="strategy-tf-select" title="Iter 96 — Choose a chart timeframe to browse strategies for." style="flex:0 0 78px;">
+                  <option value="5s">5s</option>
+                  <option value="15s">15s</option>
+                  <option value="30s">30s</option>
+                  <option value="1m">1m</option>
+                  <option value="2m">2m</option>
+                  <option value="3m">3m</option>
+                  <option value="5m">5m</option>
+                </select>
+                <select id="${P}strat" class="${P}stratsel" data-testid="strategy-select" style="flex:1;">
+                  <option value="default">All Strategies</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="${P}section">
+              <div class="${P}sectionttl">Seconds-Number Timing</div>
+              <div class="${P}timing-row" data-testid="sns-timing-slider-row" title="Drag to choose which second of the 1m candle triggers the SNS trade. Range 5–55s remaining.">
+                <input id="${P}timing" data-testid="sns-timing-slider" class="${P}timing-slider" type="range" min="5" max="55" step="1" value="49" style="width:100%;" />
+                <div style="display:flex;justify-content:space-between;font-size:${mobile ? 9 : 10}px;color:#94a3b8;margin-top:4px;">
+                  <span>fires at</span>
+                  <span id="${P}timingv" style="color:#22d3ee;font-weight:700;">:49</span>
+                  <span>of the 1m candle</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="${P}section">
+              <div class="${P}thresholds" id="${P}thresholds" data-testid="model-thresholds-section" title="Per-model minimum confidence gates. Any voter below its threshold is excluded from the ensemble vote. Set to 0 to disable a gate.">
+                <div class="${P}sectionttl">Min-Confidence Gates (%)</div>
+                <div class="${P}thrrow" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+                  <div>
+                    <div style="font-size:${mobile ? 9 : 10}px;color:#94a3b8;margin-bottom:3px;">Confluence</div>
+                    <input id="${P}thrConf" data-testid="thr-confluence" class="${P}thrInp" type="number" min="0" max="100" step="1" value="0" style="width:100%;" />
+                  </div>
+                  <div>
+                    <div style="font-size:${mobile ? 9 : 10}px;color:#94a3b8;margin-bottom:3px;">Improved v2</div>
+                    <input id="${P}thrImp" data-testid="thr-improved-v2" class="${P}thrInp" type="number" min="0" max="100" step="1" value="0" style="width:100%;" />
+                  </div>
+                  <div>
+                    <div style="font-size:${mobile ? 9 : 10}px;color:#94a3b8;margin-bottom:3px;">Maximized v3</div>
+                    <input id="${P}thrMax" data-testid="thr-maximized-v3" class="${P}thrInp" type="number" min="0" max="100" step="1" value="0" style="width:100%;" />
+                  </div>
+                  <div>
+                    <div style="font-size:${mobile ? 9 : 10}px;color:#94a3b8;margin-bottom:3px;">IQ 720</div>
+                    <input id="${P}thrIq" data-testid="thr-iq720" class="${P}thrInp" type="number" min="0" max="100" step="1" value="0" style="width:100%;" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="${P}section">
+              <div class="${P}latencyrow" data-testid="latency-offset-section" title="Trade latency offset. Positive (+N): sleep N seconds before clicking. Negative (-N): widen freshness budget.">
+                <div class="${P}sectionttl">Latency Offset</div>
+                <input id="${P}latency" data-testid="latency-offset-slider" class="${P}latslider" type="range" min="-15" max="15" step="0.5" value="3.5" style="width:100%;" />
+                <div style="display:flex;justify-content:space-between;font-size:${mobile ? 9 : 10}px;color:#94a3b8;margin-top:4px;">
+                  <span>-15s</span>
+                  <span id="${P}latvalue" style="color:#22d3ee;font-weight:700;">+3.5s</span>
+                  <span>+15s</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="${P}mmrow" title="Bot's internal MM tracker — for stats only. Set actual trade amount manually in Pocket Option's UI.">
-          <span class="${P}mmlbl">MM $</span>
-          <input type="number" id="${P}amt" class="${P}mminp" value="1" min="1" max="1000">
-          <span class="${P}mmlbl">Step:</span>
-          <span id="${P}step">0</span>
+
+        <!-- ═════════════════ TAB: STATS ═════════════════ -->
+        <div class="${P}tabpanel" data-tab-panel="stats" data-testid="tab-panel-stats">
+          <div class="${P}section">
+            <div class="${P}sectionttl" style="display:flex;justify-content:space-between;align-items:center;">
+              <span>Trading Stats</span>
+              <button id="${P}statsreset" class="${P}statsreset" data-testid="reset-stats-btn" title="Reset W/L counters, win rate, streak, and P/L" style="background:transparent;border:none;color:#64748b;font-size:14px;cursor:pointer;padding:0 4px;">⟲</button>
+            </div>
+            <div class="${P}stats">
+              <div class="${P}stat"><span class="${P}stlbl">W/L</span><span class="${P}stval" id="${P}wl">0/0</span></div>
+              <div class="${P}stat"><span class="${P}stlbl">Rate</span><span class="${P}stval" id="${P}rate">0%</span></div>
+              <div class="${P}stat"><span class="${P}stlbl">Strk</span><span class="${P}stval" id="${P}streak">0</span></div>
+              <div class="${P}stat"><span class="${P}stlbl">P/L</span><span class="${P}stval" id="${P}profit">$0</span></div>
+            </div>
+          </div>
+
+          <div class="${P}section">
+            <div class="${P}sectionttl" style="display:flex;justify-content:space-between;align-items:center;">
+              <span>Event Log</span>
+              <span id="${P}logtog" style="font-size:${mobile ? 9 : 10}px;color:#64748b;cursor:pointer;user-select:none;">show <span id="${P}arrow">&#9660;</span></span>
+            </div>
+            <div class="${P}logbox" id="${P}log"></div>
+          </div>
+
+          <button class="${P}resetbtn" id="${P}resetbtn" data-testid="reset-defaults-btn" title="Wipe saved settings and reload — restores recommended defaults">⟳ RESET TO DEFAULTS</button>
         </div>
-        <div class="${P}loghdr" id="${P}logtog">Log <span id="${P}arrow">&#9660;</span></div>
-        <div class="${P}logbox" id="${P}log"></div>
-        <button class="${P}resetbtn" id="${P}resetbtn" data-testid="reset-defaults-btn" title="Wipe saved settings and reload — restores recommended defaults (SNS off, A-INV on, AUTO/SCAN/CYCLE off, base $1)">⟳ RESET TO DEFAULTS</button>
       </div>
       <div class="${P}resize" id="${P}resize" data-testid="resize-handle" title="Drag to resize panel width. Saved across reloads."></div>
     </div>
@@ -1091,6 +1549,52 @@ export function initPanelEvents(callbacks = {}) {
   window._epbCallbacks = callbacks;
   setLogContainer(q('log'));
 
+  // Iter 96 — Tab navigation
+  const tabButtons = document.querySelectorAll(`.${P}tabbtn`);
+  const tabPanels = document.querySelectorAll(`.${P}tabpanel`);
+  tabButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const target = btn.dataset.tab;
+      tabButtons.forEach((b) => b.classList.toggle('active', b.dataset.tab === target));
+      tabPanels.forEach((p) => p.classList.toggle('active', p.dataset.tabPanel === target));
+      try {
+        if (typeof GM_setValue !== 'undefined') GM_setValue(`${P}activeTab`, target);
+      } catch (_e) { /* ignore */ }
+    });
+  });
+  // Restore last-active tab
+  try {
+    if (typeof GM_getValue !== 'undefined') {
+      const savedTab = GM_getValue(`${P}activeTab`, 'live');
+      if (savedTab && savedTab !== 'live') {
+        const btn = document.querySelector(`.${P}tabbtn[data-tab="${savedTab}"]`);
+        if (btn) btn.click();
+      }
+    }
+  } catch (_e) { /* ignore */ }
+
+  // Iter 96 — Expand-to-fullscreen (mobile/tap-to-focus)
+  const expandBtn = q('expandbtn');
+  const host = document.getElementById(`${P}host`);
+  if (expandBtn && host) {
+    expandBtn.addEventListener('click', () => {
+      host.classList.toggle('expanded');
+      expandBtn.textContent = host.classList.contains('expanded') ? '⛶⁻' : '⛶';
+      try {
+        if (typeof GM_setValue !== 'undefined') {
+          GM_setValue(`${P}expanded`, host.classList.contains('expanded'));
+        }
+      } catch (_e) { /* ignore */ }
+    });
+    // Restore expanded state
+    try {
+      if (typeof GM_getValue !== 'undefined' && GM_getValue(`${P}expanded`, false)) {
+        host.classList.add('expanded');
+        expandBtn.textContent = '⛶⁻';
+      }
+    } catch (_e) { /* ignore */ }
+  }
+
   // Minimize
   const minBtn = q('minbtn');
   const body = q('body');
@@ -1101,7 +1605,9 @@ export function initPanelEvents(callbacks = {}) {
     });
   }
 
-  // MORE — show/hide advanced toggles (CYCLE/APP/51S timing/strategy/invert status)
+  // MORE — legacy toggle. Now hidden by CSS (tabs replace it) but the click
+  // handler is retained so we don't break external callers that programmatically
+  // click #{P}moretog. Iter 96.
   const moreBtn = q('moretog');
   const advanced = q('advanced');
   if (moreBtn && advanced) {

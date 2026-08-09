@@ -1,3 +1,51 @@
+# AI's Elite PO Traders Bot — Aug 2026 (Iter 96: Modern Tabbed TM Panel + Strategy TF Picker)
+
+## Iter 96 (Aug 9, 2026) — Fix hardcoded 5s strategy scope + full UI redesign
+
+### User reports
+> (a) "within TM script you can't choose expiry timeframe with the strategy selection tool to select saved or other strategies"
+> (b) "the whole looks and operation of TM is the older version it looks like. Lets do a more user friendly design with easy selection and navigation"
+
+### (a) Strategy TF picker
+- `TM_STRATEGY_SCOPE` was hardcoded to `'5s'` in three places (`loadStrategies`, `onStrategyChange`, `applyAppSelection`). Users had zero way to browse/enable strategies for 15s, 30s, 1m, 2m, 3m, or 5m timeframes.
+- **Fix**: New TF `<select id="pobot_stratTf">` sits BEFORE the strategy dropdown. Options: 5s/15s/30s/1m/2m/3m/5m. Changing it now:
+  1. Fires `onStrategyTfChange(tf)` → reloads `/strategies/available/{tf}`.
+  2. Repopulates the strategy dropdown.
+  3. Persists to `state._selectedStrategyTf` (GM_setValue) so the pick sticks across reloads.
+- `loadStrategies(tf)` now accepts a TF param (defaults to persisted or `5s`).
+
+### (b) Modern tabbed panel redesign
+Old UI was a 20-year-old single-column stack with a "▾ MORE" toggle hiding half the settings. Redesigned as a modern 4-tab dashboard that auto-adapts:
+
+- **Header**: title badge with pulse dot · connection dot · **⛶ expand-to-fullscreen** · minimize
+- **Tab bar** (sticky, cyan-underline active state): **◉ Live · ▲ Trade · ⚙ Config · ▨ Stats**
+- **Live tab**: 5-cell status strip (SCAN/AUTO/A-INV/SNS/CYCLE), big LIVE candle countdown, signal-quality preview with ML/strats/votes/abstain-source/server-latency pills, active-asset display.
+- **Trade tab**: Primary Controls (SCAN/AUTO/GO + SNS/A-INV/INVERT + CYCLE/APP), Money-Management section (MM $ input, WIN/LOSS quick buttons, step counter, invert & SNS status pills).
+- **Config tab**: Strategy TF picker + strategy dropdown, Seconds-Number timing slider, Min-Confidence gates 2×2 grid (Conf/Imp/Max/IQ), Latency-offset slider.
+- **Stats tab**: 4-tile stats grid (W/L, Rate, Strk, P/L), Event Log, RESET TO DEFAULTS.
+- **Fullscreen mode**: Tap ⛶ → panel fills the viewport, tabs pin to top, larger tap targets. Persisted in GM_setValue.
+- **Design language**: Deep charcoal `#0a0e14` base · cyan primary `#22d3ee` · emerald success `#34d399` · rose danger `#fb7185` · amber warn `#fbbf24`. Backdrop-blur glassmorphism, cyan accent glow on active elements, tap-friendly padding (11px on mobile), tabular numerals for stats.
+- **Zero breakage**: ALL 60+ existing element IDs retained. Every event handler (SCAN/AUTO/GO/SNS/A-INV/INVERT/CYCLE/APP/WIN/LOSS/resetbtn/statsreset/thresholds/latency slider/timing slider/strategy dropdown) wires to its original ID. `#pobot_moretog` legacy button hidden by CSS but click handler retained for backward compat.
+
+### TM userscript version → **8.127.0**
+Frontend `TM_VERSION` on Pocket Option page bumped to match.
+
+### Tests
+- **`test_iter96_tm_ui_redesign.py`** — 7/7 pass:
+  1. All 4 tab-bar attributes present
+  2. Expand-fullscreen button + `.expanded` CSS rule
+  3. All 4 tab panels present
+  4. Strategy TF picker has all 7 options (5s→5m)
+  5. `onStrategyTfChange` + `_selectedStrategyTf` plumbing present
+  6. Userscript body non-empty + parseable (>100 KB, IIFE wrapper)
+  7. `@version` ≥ 8.127.0
+- **Combined Iter 80/91/93/94/95/96 regression**: 51/52 pass (1 skipped is expected).
+
+### Visual verification
+- `/pocket-option-auto-trader.user.js` injected into `/tm-panel-preview.html` — screenshots captured for Live · Trade · Config · Stats · Fullscreen. All render cleanly at mobile viewport (420×900).
+
+---
+
 # AI's Elite PO Traders Bot — Aug 2026 (Iter 95: App↔TM Active-Target Sync)
 
 ## Iter 95 (Aug 9, 2026) — Fix "trades fire on wrong asset" bug

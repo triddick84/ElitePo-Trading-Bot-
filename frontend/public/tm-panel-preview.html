@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TM Panel Preview</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      background: #0a1929;
+      color: #e6edf3;
+      font-family: -apple-system, sans-serif;
+      min-height: 100vh;
+    }
+    h1 { color: #22d3ee; font-size: 18px; }
+    .stub {
+      background: #1e293b;
+      border: 1px dashed #334155;
+      padding: 20px;
+      border-radius: 8px;
+      color: #64748b;
+      text-align: center;
+      font-size: 14px;
+      margin: 20px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>TM Panel Preview · Iter 96 · v8.127.0</h1>
+  <div class="stub">
+    ↖ Panel should appear injected at top-right of this page.<br>
+    Try: click ⛶ to expand · click tabs to switch views.
+  </div>
+  <!-- Stub Tampermonkey globals so the userscript body runs cleanly -->
+  <script>
+    window.GM_setValue = (k, v) => localStorage.setItem(k, JSON.stringify(v));
+    window.GM_getValue = (k, d) => {
+      try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); }
+      catch (_e) { return d; }
+    };
+    window.GM_addStyle = (css) => {
+      const s = document.createElement('style'); s.textContent = css; document.head.appendChild(s);
+    };
+    window.GM_log = (m) => console.log(m);
+    window.GM_notification = () => {};
+    window.GM_xmlhttpRequest = (opts) => {
+      // Stub — respond with an empty body so init doesn't hang
+      setTimeout(() => opts.onload && opts.onload({ status: 200, response: '{}', responseText: '{}' }), 100);
+    };
+  </script>
+  <!-- Load the compiled userscript body — extract everything after the ==UserScript== header -->
+  <script>
+    fetch('/pocket-option-auto-trader.user.js').then(r => r.text()).then(src => {
+      // Strip the // ==UserScript== ... ==/UserScript== block
+      const body = src.replace(/^\/\/ ==UserScript==[\s\S]*?==\/UserScript==\s*/, '');
+      const s = document.createElement('script');
+      s.textContent = body;
+      document.body.appendChild(s);
+    });
+  </script>
+</body>
+</html>
