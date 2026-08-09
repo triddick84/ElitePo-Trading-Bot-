@@ -712,9 +712,27 @@ async def get_latest_signal(
     Returns the latest signal if it was generated within the last 5 minutes.
     If `symbol` is given, returns only signals matching that asset (lets the
     TM poller stay on one asset without picking up signals for others).
+    Iter 95: if `symbol` is NOT given, we fall back to the app's active_target
+    (from /api/tampermonkey/active-target) so TM always polls signals for the
+    asset the app has selected — regardless of what PO's chart displays.
     If use_enhanced=True and no recent signal exists, generates a new one.
     """
     try:
+        # Iter 95 — Fallback to app-side active_target when caller omits symbol.
+        # This is the fix for "TM fires on wrong asset when PO is on the wrong chart".
+        if not symbol:
+            try:
+                _stored = await db.tampermonkey_settings.find_one({"_id": "default"}) or {}
+                _override = _stored.get("active_target")
+                if _override and isinstance(_override, dict) and _override.get("asset"):
+                    symbol = _override["asset"]
+                else:
+                    _cfg = await db.trading_configurations.find_one({"user_id": "default_user"}) or {}
+                    _sel = _cfg.get("selected_assets") or []
+                    if _sel:
+                        symbol = _sel[0]
+            except Exception as _atge:
+                logger.debug(f"/signals/latest active_target fallback failed: {_atge}")
         # Iter 89 — Pre-generation buffer probe. If we have a fresh
         # pre-computed signal for this (asset, tf), skip the inline
         # `generate_trend_signal` (saves 300-1500 ms). Downstream gates

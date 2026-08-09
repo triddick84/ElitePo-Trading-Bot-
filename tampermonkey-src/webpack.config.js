@@ -13,6 +13,11 @@ const SCRIPT_VERSION = fs
   .trim();
 
 // Userscript header - preserved at top of bundle
+// Note: @updateURL/@downloadURL point to the elitepotradingbot.com legacy
+// domain as a PLACEHOLDER — the /api/tampermonkey/script endpoint rewrites
+// them at serve-time to match the host actually serving the userscript
+// (Iter 93 self-healing endpoint). Do not remove these lines even though
+// they look wrong on disk — they're the anchors the rewrite regex matches.
 const userscriptHeader = `// ==UserScript==
 // @name         AI's Elite PO Traders Bot
 // @namespace    https://auto-invert-engine.preview.emergentagent.com
@@ -27,6 +32,8 @@ const userscriptHeader = `// ==UserScript==
 // @match        *://pocket-option.com/*
 // @match        *://*.po.market/*
 // @match        *://po.market/*
+// @updateURL    https://www.elitepotradingbot.com/api/tampermonkey/script
+// @downloadURL  https://www.elitepotradingbot.com/api/tampermonkey/script
 // @grant        GM_addStyle
 // @grant        GM_notification
 // @grant        GM_xmlhttpRequest

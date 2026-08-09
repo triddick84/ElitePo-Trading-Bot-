@@ -3372,6 +3372,126 @@ async def update_tampermonkey_settings(settings: dict = Body(...)):
         logger.error(f"Error updating Tampermonkey settings: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# ============================================================================
+# Iter 95 — Active trading target (app-side source of truth for TM script)
+# ============================================================================
+
+def _tf_to_expiry_seconds(tf: str) -> int:
+    """Map a timeframe string to expiration seconds."""
+    m = {"5s": 5, "10s": 10, "15s": 15, "30s": 30,
+         "1m": 60, "2m": 120, "3m": 180, "5m": 300,
+         "15m": 900, "30m": 1800, "1h": 3600}
+    return m.get((tf or "").strip().lower(), 60)
+
+
+def _normalize_asset(a: str) -> str:
+    """Normalise to the EURUSD_OTC form (uppercase + explicit _OTC suffix)."""
+    if not a:
+        return ""
+    a = str(a).strip().replace(" ", "").replace("/", "").upper()
+    if a.endswith("OTC") and not a.endswith("_OTC"):
+        a = a[:-3] + "_OTC"
+    if a.endswith("_otc"):  # defensive
+        a = a[:-4] + "_OTC"
+    return a
+
+
+@api_router.get("/tampermonkey/active-target")
+async def get_tampermonkey_active_target():
+    """
+    Iter 95 — Return the app-side "currently selected" asset + timeframe.
+    Tampermonkey polls this to know what to fire trades on — INDEPENDENT of
+    whatever asset/timeframe PocketOption's chart is currently displaying.
+
+    Precedence:
+      1. `tampermonkey_settings.active_target` (explicit override)
+      2. `/api/config`.selected_assets[0] + selected_timeframe
+      3. `EURUSD_OTC` / `1m` fallback
+    """
+    try:
+        # 1. Explicit override
+        stored = await db.tampermonkey_settings.find_one({"_id": "default"}) or {}
+        override = stored.get("active_target") or tampermonkey_settings.get("active_target")
+        if override and isinstance(override, dict) and override.get("asset"):
+            asset = _normalize_asset(override["asset"])
+            tf = str(override.get("timeframe") or "1m")
+            return {
+                "success": True,
+                "source": "override",
+                "asset": asset,
+                "timeframe": tf,
+                "expiry_seconds": int(override.get("expiry_seconds") or _tf_to_expiry_seconds(tf)),
+            }
+
+        # 2. Fall back to /api/config
+        cfg = await db.trading_configurations.find_one({"user_id": "default_user"}) or {}
+        selected_assets = cfg.get("selected_assets") or []
+        selected_tf = cfg.get("selected_timeframe") or "1m"
+        first = selected_assets[0] if selected_assets else "EURUSD_OTC"
+        asset = _normalize_asset(first)
+        return {
+            "success": True,
+            "source": "config" if selected_assets else "fallback",
+            "asset": asset,
+            "timeframe": selected_tf,
+            "expiry_seconds": _tf_to_expiry_seconds(selected_tf),
+        }
+    except Exception as e:
+        logger.error(f"active-target error: {e}")
+        # Never fail — TM depends on this being resilient
+        return {
+            "success": True,
+            "source": "error_fallback",
+            "asset": "EURUSD_OTC",
+            "timeframe": "1m",
+            "expiry_seconds": 60,
+            "error": str(e),
+        }
+
+
+@api_router.post("/tampermonkey/active-target")
+async def set_tampermonkey_active_target(payload: dict = Body(...)):
+    """
+    Explicitly override the app-selected trading target. When set, this
+    takes precedence over /api/config. Send `{asset: null}` (or empty dict)
+    to clear the override.
+    """
+    try:
+        global tampermonkey_settings
+        asset = payload.get("asset")
+        tf = payload.get("timeframe") or "1m"
+        expiry = payload.get("expiry_seconds")
+
+        if not asset:
+            # Clear the override
+            tampermonkey_settings["active_target"] = None
+            await db.tampermonkey_settings.update_one(
+                {"_id": "default"},
+                {"$unset": {"active_target": ""}, "$set": {"last_updated": datetime.now(timezone.utc).isoformat()}},
+                upsert=True,
+            )
+            return {"success": True, "active_target": None, "message": "override cleared"}
+
+        norm = _normalize_asset(asset)
+        target = {
+            "asset": norm,
+            "timeframe": str(tf),
+            "expiry_seconds": int(expiry) if expiry is not None else _tf_to_expiry_seconds(tf),
+        }
+        tampermonkey_settings["active_target"] = target
+        tampermonkey_settings["last_updated"] = datetime.now(timezone.utc).isoformat()
+        await db.tampermonkey_settings.update_one(
+            {"_id": "default"},
+            {"$set": {"active_target": target, "last_updated": tampermonkey_settings["last_updated"]}},
+            upsert=True,
+        )
+        return {"success": True, "active_target": target}
+    except Exception as e:
+        logger.error(f"set active-target error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @api_router.post("/tampermonkey/force-generate")
 async def tampermonkey_force_generate(
     timeframe: str = Query("1m", description="Timeframe: 5s, 15s, 30s, 1m, 2m, 3m, 5m"),

@@ -248,11 +248,37 @@ export function reportLatency(timings) {
   }
 }
 
+/**
+ * Iter 95 — Fetch the app-side active trading target.
+ * Returns {asset, timeframe, expiry_seconds, source} or null on failure.
+ * This is the ONE source of truth for what asset the TM should fire on —
+ * independent of what PO's chart currently displays.
+ */
+export async function fetchActiveTarget() {
+  try {
+    const response = await get('/tampermonkey/active-target');
+    if (response && response.success && response.asset) {
+      return {
+        asset: response.asset,
+        timeframe: response.timeframe || '1m',
+        expiry_seconds: Number(response.expiry_seconds || 60),
+        source: response.source || 'unknown',
+      };
+    }
+    return null;
+  } catch (e) {
+    // Silent — TM poller will fall back to fetchSignal(null)
+    return null;
+  }
+}
+
+
 export default {
   request,
   get,
   post,
   fetchSignal,
+  fetchActiveTarget,
   scanMarkets,
   sendCandles,
   reportTrade,

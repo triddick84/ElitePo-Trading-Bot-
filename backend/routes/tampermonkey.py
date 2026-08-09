@@ -123,28 +123,39 @@ async def get_tampermonkey_script(request: Request):
                 request.headers.get("host"),
             )
         else:
-            # Best-effort catch for future rebuilds that use single quotes or
-            # https://elitepotradingbot.com (no www).
+            # Best-effort catch — rewrite ANY hardcoded API_URL literal in
+            # the compiled bundle to the current serving host. Handles the
+            # legacy elitepotradingbot.com literal AND any preview/prod
+            # hostname that got baked in during a fresh webpack build.
             import re
-            raw = re.sub(
-                r'API_URL\s*:\s*["\']https?://(www\.)?elitepotradingbot\.com/api["\']',
+            raw, _n = re.subn(
+                r'API_URL\s*:\s*["\']https?://[^"\'\\]+["\']',
                 rewritten_literal,
                 raw,
+                count=1,
             )
+            if _n:
+                logger.info(
+                    "[tampermonkey/script] rewrote API_URL (generic match) -> %s (host=%s)",
+                    api_root,
+                    request.headers.get("host"),
+                )
 
         # Iter 93 — Also rewrite `@updateURL`/`@downloadURL` in the metadata
         # block so Tampermonkey's auto-update actually points at the host
         # serving the script — otherwise TM periodically fetches the stale
         # elitepotradingbot.com URL, fails, and logs a warning.
+        # Iter 95: broadened regex to match ANY host (including fresh
+        # rebuilds that ship with a different placeholder).
         script_endpoint = f"{api_root}/tampermonkey/script"
         import re
         raw = re.sub(
-            r"(//\s*@updateURL\s+)https?://(www\.)?elitepotradingbot\.com/api/tampermonkey/script",
+            r"(//\s*@updateURL\s+)https?://[^\s\n]+/api/tampermonkey/script",
             f"\\1{script_endpoint}",
             raw,
         )
         raw = re.sub(
-            r"(//\s*@downloadURL\s+)https?://(www\.)?elitepotradingbot\.com/api/tampermonkey/script",
+            r"(//\s*@downloadURL\s+)https?://[^\s\n]+/api/tampermonkey/script",
             f"\\1{script_endpoint}",
             raw,
         )
