@@ -3940,6 +3940,14 @@ async def startup_event():
             # Create default admin user
             auth_service = get_auth_service(db)
             await auth_service.create_default_admin()
+            # Iter 97 — grandfather any users that pre-date the admin-approval
+            # feature so they don't get locked out on first boot after upgrade.
+            try:
+                gf = await auth_service.grandfather_existing_users()
+                if gf.get('grandfathered'):
+                    logger.info(f"👤 grandfathered {gf['grandfathered']} legacy users to status=active")
+            except Exception as e:
+                logger.error(f"grandfather migration failed: {e}")
             # Iter 65 — seed any production admins listed in SEED_ADMINS env var
             try:
                 seed_result = await auth_service.seed_admins_from_env()

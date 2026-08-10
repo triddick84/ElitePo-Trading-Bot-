@@ -71,8 +71,20 @@ export const AuthProvider = ({ children }) => {
         toast.success(`Welcome back, ${data.user.username}!`);
         return { success: true };
       } else {
-        toast.error(data.error || 'Login failed');
-        return { success: false, error: data.error };
+        // Iter 97 — status-gated failures come back as { detail: {code, message} }
+        const detail = data.detail;
+        if (detail && typeof detail === 'object' && detail.code) {
+          const friendly = {
+            ACCOUNT_PENDING: 'Your account is pending admin approval. You will be able to sign in once an admin approves you.',
+            ACCOUNT_REJECTED: 'Your registration was rejected. Please contact an administrator.',
+            ACCOUNT_SUSPENDED: 'Your account has been suspended. Please contact an administrator.',
+          }[detail.code] || detail.message || 'Login failed';
+          toast.error(friendly, { duration: 6000 });
+          return { success: false, error: friendly, code: detail.code };
+        }
+        const errMsg = data.error || data.detail || 'Login failed';
+        toast.error(typeof errMsg === 'string' ? errMsg : 'Login failed');
+        return { success: false, error: errMsg };
       }
     } catch (error) {
       toast.error('Connection error');
@@ -89,16 +101,26 @@ export const AuthProvider = ({ children }) => {
       });
       const data = await response.json();
       
-      if (data.success) {
+      // Iter 97 — Regular registrations now return HTTP 202 with `pending:true`
+      // and NO token. Surface the approval-pending message and don't auto-login.
+      if (data.success && data.pending) {
+        toast.success(
+          data.message || 'Registration received. Your account is pending admin approval.',
+          { duration: 8000 },
+        );
+        return { success: true, pending: true };
+      }
+      if (data.success && data.token) {
+        // Admin/seed path — auto-active
         sessionStorage.setItem('token', data.token);
         setToken(data.token);
         setUser(data.user);
         toast.success('Account created successfully!');
         return { success: true };
-      } else {
-        toast.error(data.error || 'Registration failed');
-        return { success: false, error: data.error };
       }
+      const errMsg = data.error || data.detail || 'Registration failed';
+      toast.error(typeof errMsg === 'string' ? errMsg : 'Registration failed');
+      return { success: false, error: errMsg };
     } catch (error) {
       toast.error('Connection error');
       return { success: false, error: error.message };
@@ -168,7 +190,9 @@ export const LoginPage = ({ onClose }) => {
     setIsLoading(true);
     const result = await register(regUsername, regEmail, regPassword);
     setIsLoading(false);
-    if (result.success && onClose) {
+    // Iter 97 — Pending registrations keep the modal open (user isn't signed in
+    // yet). Only auto-close on a real success (admin/seed with token).
+    if (result.success && !result.pending && onClose) {
       onClose();
     }
   };

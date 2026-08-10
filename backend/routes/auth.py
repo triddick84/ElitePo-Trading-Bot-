@@ -25,7 +25,13 @@ from auth_service import get_auth_service
 
 @router.post("/auth/register")
 async def register_user(request: UserRegisterRequest):
-    """Register a new user"""
+    """
+    Register a new user.
+
+    Iter 97 — non-admin registrations default to `status=pending` and do
+    NOT receive a JWT. The user must be approved by an admin before
+    they can log in.
+    """
     auth_service = get_auth_service(db)
     result = await auth_service.register(
         username=request.username,
@@ -35,19 +41,40 @@ async def register_user(request: UserRegisterRequest):
     )
     if not result['success']:
         raise HTTPException(status_code=400, detail=result['error'])
+    # Pending users: return 202 (accepted, not-yet-active) with a clear
+    # message the frontend can surface to the operator.
+    if result.get('pending'):
+        return JSONResponse(status_code=202, content=result)
     return result
 
 
 
 @router.post("/auth/login")
 async def login_user(request: UserLoginRequest):
-    """Login user and return JWT token"""
+    """
+    Login user and return JWT token.
+
+    Iter 97 — after password verification we also check `status`. Non-active
+    accounts get a 403 with a stable code (ACCOUNT_PENDING / ACCOUNT_REJECTED
+    / ACCOUNT_SUSPENDED) that the frontend uses to render a helpful message.
+    """
     auth_service = get_auth_service(db)
     result = await auth_service.login(
         username=request.username,
         password=request.password
     )
     if not result['success']:
+        # Status-gated failures return 403 + structured detail. Bad creds
+        # remain 401 (keeps callers who look at raw status codes working).
+        if result.get('code') in ('ACCOUNT_PENDING', 'ACCOUNT_REJECTED', 'ACCOUNT_SUSPENDED', 'ACCOUNT_INACTIVE'):
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    'code': result['code'],
+                    'message': result.get('error') or 'Account is not active',
+                    'status': result.get('status'),
+                },
+            )
         raise HTTPException(status_code=401, detail=result['error'])
     return result
 
@@ -105,16 +132,66 @@ async def change_password(request: Request, data: ChangePasswordRequest):
 
 
 @router.get("/auth/users")
-async def list_users(request: Request):
-    """List all users (admin only)"""
+async def list_users(request: Request, status: Optional[str] = None):
+    """List all users (admin only). Iter 97 — supports ?status=pending|active|rejected|suspended."""
     from auth_middleware import get_current_user as get_user
     user = await get_user(request, db)
     if not user or user.get('role') != 'admin':
         raise HTTPException(status_code=403, detail="Admin access required")
     
     auth_service = get_auth_service(db)
-    users = await auth_service.list_users()
-    return {"success": True, "users": users}
+    users = await auth_service.list_users(status_filter=status)
+    return {"success": True, "users": users, "count": len(users), "filter": status}
+
+
+@router.get("/auth/users/pending")
+async def list_pending_users(request: Request):
+    """
+    Iter 97 — Convenience shortcut: list every user awaiting approval.
+    Same as GET /auth/users?status=pending but easier to badge in the UI.
+    """
+    from auth_middleware import get_current_user as get_user
+    user = await get_user(request, db)
+    if not user or user.get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    auth_service = get_auth_service(db)
+    pending = await auth_service.list_users(status_filter='pending')
+    return {"success": True, "users": pending, "count": len(pending)}
+
+
+async def _admin_action_on_user(request: Request, user_id: str, new_status: str) -> Dict[str, Any]:
+    """
+    Iter 97 — Shared helper: verify admin caller, delegate to the audit-safe
+    set_user_status in auth_service. Blocks admin self-lockout + last-admin-out.
+    """
+    from auth_middleware import get_current_user as get_user
+    actor = await get_user(request, db)
+    if not actor or actor.get('role') != 'admin':
+        raise HTTPException(status_code=403, detail={"code": "ADMIN_REQUIRED", "message": "Admin access required"})
+    auth_service = get_auth_service(db)
+    result = await auth_service.set_user_status(user_id, new_status, actor['user_id'])
+    if not result.get('success'):
+        raise HTTPException(status_code=400, detail=result.get('error', 'action failed'))
+    return result
+
+
+@router.post("/auth/users/{user_id}/approve")
+async def approve_user(request: Request, user_id: str):
+    """Iter 97 — Admin-approves a pending user so they can log in."""
+    return await _admin_action_on_user(request, user_id, 'active')
+
+
+@router.post("/auth/users/{user_id}/reject")
+async def reject_user(request: Request, user_id: str):
+    """Iter 97 — Admin-rejects a pending registration (user cannot log in)."""
+    return await _admin_action_on_user(request, user_id, 'rejected')
+
+
+@router.post("/auth/users/{user_id}/suspend")
+async def suspend_user(request: Request, user_id: str):
+    """Iter 97 — Admin-suspends an active user (revokes login access)."""
+    return await _admin_action_on_user(request, user_id, 'suspended')
 
 
 

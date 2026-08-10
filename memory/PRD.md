@@ -1,3 +1,55 @@
+# AI's Elite PO Traders Bot — Aug 2026 (Iter 97: Admin Approval Gate)
+
+## Iter 97 (Aug 10, 2026) — Admin approval required for new user registrations
+
+### User report
+> "Need to have admin approval on new users for login due to users restricted"
+
+### What shipped
+
+**Backend** (`auth_service.py` + `routes/auth.py`):
+- New `UserStatus` enum: `pending` · `active` · `rejected` · `suspended`. Regular registrations default to `pending`; admins are auto-`active`.
+- `/api/auth/register` now returns HTTP **202** + `{ pending: true, code: 'ACCOUNT_PENDING' }` — **no JWT issued** until an admin approves.
+- `/api/auth/login` rejects non-active accounts with HTTP **403** + a stable error code (`ACCOUNT_PENDING` / `ACCOUNT_REJECTED` / `ACCOUNT_SUSPENDED` / `ACCOUNT_INACTIVE`).
+- New admin-only endpoints:
+  - `GET /api/auth/users?status=pending|active|rejected|suspended` — filtered list
+  - `GET /api/auth/users/pending` — badge-friendly shortcut
+  - `POST /api/auth/users/{id}/approve` — set status=active, record `approved_by` + `approved_at`
+  - `POST /api/auth/users/{id}/reject` — set status=rejected, record `rejected_by` + `rejected_at`
+  - `POST /api/auth/users/{id}/suspend` — set status=suspended, record `suspended_by` + `suspended_at`
+- **Idempotent grandfather migration** runs on startup: `users.update_many({status: {$exists: False}}, {$set: {status: 'active'}})` — nobody who existed before Iter 97 gets locked out.
+- **Guardrails**: admins cannot suspend/reject themselves; cannot deactivate the last active admin; seed admins are force-`active` on every startup.
+- Login response now includes `user.status` so the frontend can surface it.
+
+**Frontend** (`UserApprovalsPage.jsx` + `App.js` + `AuthComponents.jsx`):
+- New "**👥 User Approvals**" sidebar item (admin-only via `adminOnly: true` filter).
+- Live **pending-count badge** on the sidebar entry (red pill, polls every 30s).
+- Filter pills: **Pending / Active / Rejected / Suspended / All** with per-filter counts.
+- Search bar (username/email substring match).
+- Each row shows role, status badge, email, join date, audit timestamps, and Approve/Reject/Suspend buttons. Self-lockout prevention: current admin can't see Suspend/Reject on their own row.
+- Registration UI: on `pending` registration response, we DON'T auto-login; toast shows the approval message and the modal stays open.
+- Login errors surface friendly copy per status code.
+
+### Tests (all passing)
+`test_iter97_admin_approval.py` — **10/10**:
+1. New user registers → HTTP 202, `status=pending`, no token
+2. Pending user login → HTTP 403 + `ACCOUNT_PENDING`
+3. Admin lists pending users
+4. Admin approves → user can then log in
+5. Admin rejects → login blocked with `ACCOUNT_REJECTED`
+6. Admin suspends active user → login blocked with `ACCOUNT_SUSPENDED`
+7. Non-admin cannot call admin endpoints (403)
+8. Admin cannot suspend themselves (400)
+9. Seed admin always stays `role=admin, status=active`
+10. Grandfather leaves pending users alone (only touches `$exists:false`)
+
+Combined Iter 80/93/94/95/96/97 regression: **51/51 pass**.
+
+### Playbook compliance (from `integration_playbook_expert_v2`)
+✅ Kept JWT claims unchanged (status is a live DB check, existing sessions still work) · ✅ Status defaults to PENDING on missing field (fail-safe) · ✅ Never returns `password_hash` · ✅ Structured 403 error codes · ✅ Grandfather migration is idempotent · ✅ Self-lockout + last-admin guards · ✅ Seed admin force-heal.
+
+---
+
 # AI's Elite PO Traders Bot — Aug 2026 (Iter 96: Modern Tabbed TM Panel + Strategy TF Picker)
 
 ## Iter 96 (Aug 9, 2026) — Fix hardcoded 5s strategy scope + full UI redesign

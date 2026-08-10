@@ -13,6 +13,7 @@ import StrategyBuilder from "./components/StrategyBuilder";
 import AIMLModelsPage from "./components/AIMLModelsPage";
 import MLLabPage from "./components/MLLabPage";
 import LatencyDashboard from "./components/LatencyDashboard";
+import UserApprovalsPage from "./components/UserApprovalsPage";
 import PerformancePage from "./components/PerformancePage";
 import SettingsPage from "./components/SettingsPage";
 import PocketOptionPage from "./components/PocketOptionPage";
@@ -27,13 +28,14 @@ const API = BACKEND_URL ? `${BACKEND_URL}/api` : '';
 
 // Protected App Content - only shown when authenticated
 function ProtectedApp() {
-  const { user, logout, isAuthenticated, loading } = useAuth();
+  const { user, logout, isAuthenticated, loading, token, isAdmin } = useAuth();
   
   // All hooks must be declared at the top before any conditional returns
   const [botStatus, setBotStatus] = useState(null);
   const [activeView, setActiveView] = useState("dashboard");
   const [isLoading, setIsLoading] = useState(true);
   const [liveSignals, setLiveSignals] = useState([]);
+  const [pendingUserCount, setPendingUserCount] = useState(0);
   const [globalNotificationSettings, setGlobalNotificationSettings] = useState({
     popupEnabled: true,
     soundEnabled: true,
@@ -99,6 +101,28 @@ function ProtectedApp() {
       window.removeEventListener('navigate', handleNavigate);
     };
   }, [isAuthenticated]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Iter 97 — Poll pending user count for admins so the sidebar badge stays fresh
+  useEffect(() => {
+    if (!isAuthenticated || !isAdmin || !token) {
+      setPendingUserCount(0);
+      return undefined;
+    }
+    const fetchPending = async () => {
+      try {
+        const r = await fetch(`${BACKEND_URL}/api/auth/users/pending`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (r.ok) {
+          const d = await r.json();
+          setPendingUserCount(d.count || 0);
+        }
+      } catch (_e) { /* silent */ }
+    };
+    fetchPending();
+    const iv = setInterval(fetchPending, 30000);
+    return () => clearInterval(iv);
+  }, [isAuthenticated, isAdmin, token]);
   
   // Show loading while checking auth
   if (loading) {
@@ -151,6 +175,7 @@ function ProtectedApp() {
     { id: "ai-models", label: "AI Models", icon: "🧠" },
     { id: "ml-lab", label: "ML Lab", icon: "🧪" },
     { id: "latency", label: "Latency", icon: "⚡" },
+    { id: "user-approvals", label: "User Approvals", icon: "👥", adminOnly: true },
     { id: "performance", label: "Performance", icon: "📈" },
     { id: "settings", label: "Settings", icon: "⚙️" }
   ];
@@ -187,6 +212,8 @@ function ProtectedApp() {
         return <MLLabPage />;
       case "latency":
         return <LatencyDashboard />;
+      case "user-approvals":
+        return <UserApprovalsPage />;
       case "performance":
         return <PerformancePage />;
       case "settings":
@@ -274,7 +301,9 @@ function ProtectedApp() {
           <nav className="w-64 bg-[#13131a]/50 backdrop-blur-xl border-r border-[#2a2a35] min-h-screen">
             <div className="p-6">
               <div className="space-y-2">
-                {navigation.map((item) => (
+                {navigation
+                  .filter((item) => !item.adminOnly || isAdmin)
+                  .map((item) => (
                   <button
                     key={item.id}
                     onClick={() => setActiveView(item.id)}
@@ -286,7 +315,15 @@ function ProtectedApp() {
                     data-testid={`nav-${item.id}`}
                   >
                     <span className="text-lg group-hover:scale-110 transition-transform duration-200">{item.icon}</span>
-                    <span className="font-medium">{item.label}</span>
+                    <span className="font-medium flex-1 text-left">{item.label}</span>
+                    {item.id === 'user-approvals' && pendingUserCount > 0 && (
+                      <span
+                        className="ml-auto flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-rose-500 text-white text-[10px] font-bold shadow-lg shadow-rose-500/50"
+                        data-testid="pending-users-badge"
+                      >
+                        {pendingUserCount > 99 ? '99+' : pendingUserCount}
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>

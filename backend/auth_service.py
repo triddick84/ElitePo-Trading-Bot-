@@ -31,6 +31,25 @@ class UserRole(str, Enum):
     VIEWER = 'viewer'
 
 
+class UserStatus(str, Enum):
+    """
+    Iter 97 — Account approval status.
+    New users default to PENDING and can't log in until an admin approves them.
+    """
+    PENDING = 'pending'
+    ACTIVE = 'active'
+    REJECTED = 'rejected'
+    SUSPENDED = 'suspended'
+
+
+# Frontend-facing status codes returned in login error payloads.
+STATUS_ERROR_CODES = {
+    UserStatus.PENDING.value: ('ACCOUNT_PENDING', 'Your account is pending admin approval.'),
+    UserStatus.REJECTED.value: ('ACCOUNT_REJECTED', 'Your registration was rejected.'),
+    UserStatus.SUSPENDED.value: ('ACCOUNT_SUSPENDED', 'Your account is suspended. Contact an administrator.'),
+}
+
+
 @dataclass
 class User:
     id: str
@@ -127,12 +146,17 @@ class AuthService:
             # Create user
             import uuid
             user_id = str(uuid.uuid4())
+            # Iter 97 — Admins are auto-approved; regular users start as PENDING.
+            initial_status = (
+                UserStatus.ACTIVE.value if role == UserRole.ADMIN else UserStatus.PENDING.value
+            )
             user_doc = {
                 'id': user_id,
                 'username': username,
                 'email': email,
                 'password_hash': self._hash_password(password),
                 'role': role.value,
+                'status': initial_status,
                 'created_at': datetime.now(timezone.utc).isoformat(),
                 'is_active': True,
                 'telegram_chat_id': None,
@@ -145,18 +169,39 @@ class AuthService:
             
             await self.db.users.insert_one(user_doc)
             
-            # Generate token
+            logger.info(f"User registered: {username} ({role.value}) status={initial_status}")
+
+            # Iter 97 — Regular users must be approved before they can log in.
+            # We DO NOT issue a token here for pending users; they'll receive
+            # one only when their subsequent login succeeds after approval.
+            if initial_status == UserStatus.PENDING.value:
+                return {
+                    'success': True,
+                    'pending': True,
+                    'code': 'ACCOUNT_PENDING',
+                    'message': (
+                        'Registration received. Your account is pending admin '
+                        'approval — you will be able to sign in once approved.'
+                    ),
+                    'user': {
+                        'id': user_id,
+                        'username': username,
+                        'email': email,
+                        'role': role.value,
+                        'status': initial_status,
+                    },
+                }
+
+            # Admin/seed path — auto-active, issue token immediately.
             token = self._generate_token(user_id, username, role.value)
-            
-            logger.info(f"User registered: {username} ({role.value})")
-            
             return {
                 'success': True,
                 'user': {
                     'id': user_id,
                     'username': username,
                     'email': email,
-                    'role': role.value
+                    'role': role.value,
+                    'status': initial_status,
                 },
                 'token': token
             }
@@ -188,6 +233,24 @@ class AuthService:
             # Verify password
             if not self._verify_password(password, user['password_hash']):
                 return {'success': False, 'error': 'Invalid credentials'}
+
+            # Iter 97 — Status gate. After password verification, refuse to
+            # issue a token unless the account is ACTIVE. We default missing
+            # status to PENDING (fail-safe) so a lost migration never
+            # accidentally grants access.
+            status_val = user.get('status', UserStatus.PENDING.value)
+            if status_val != UserStatus.ACTIVE.value:
+                code, message = STATUS_ERROR_CODES.get(
+                    status_val,
+                    ('ACCOUNT_INACTIVE', 'Your account is not active.'),
+                )
+                logger.info(f"Login blocked for {username} — status={status_val}")
+                return {
+                    'success': False,
+                    'code': code,
+                    'error': message,
+                    'status': status_val,
+                }
             
             # Update last login
             await self.db.users.update_one(
@@ -207,6 +270,7 @@ class AuthService:
                     'username': user['username'],
                     'email': user['email'],
                     'role': user['role'],
+                    'status': user.get('status', UserStatus.ACTIVE.value),
                     'telegram_chat_id': user.get('telegram_chat_id'),
                     'settings': user.get('settings', {})
                 },
@@ -342,6 +406,89 @@ class AuthService:
         except Exception as e:
             logger.error(f"Create default admin error: {e}")
 
+    # ------------------------------------------------------------------
+    # Iter 97 — Admin approval workflow helpers
+    # ------------------------------------------------------------------
+    async def grandfather_existing_users(self) -> Dict:
+        """
+        One-time idempotent migration: any user without a `status` field
+        is upgraded to ACTIVE so we don't lock out anyone who existed
+        before the admin-approval feature was rolled out.
+
+        Safe to call on every startup — `$exists: False` only matches
+        legacy documents and never overwrites explicit statuses.
+        """
+        if self.db is None:
+            return {'grandfathered': 0}
+        result = await self.db.users.update_many(
+            {'status': {'$exists': False}},
+            {'$set': {'status': UserStatus.ACTIVE.value}},
+        )
+        if result.modified_count:
+            logger.info(f"[grandfather] set status=active on {result.modified_count} legacy users")
+        return {'grandfathered': result.modified_count}
+
+    async def list_users(self, status_filter: Optional[str] = None, limit: int = 500) -> List[Dict]:
+        """List users (optionally filtered by status). Never returns password hashes."""
+        if self.db is None:
+            return []
+        query = {'status': status_filter} if status_filter else {}
+        cursor = self.db.users.find(
+            query,
+            {'_id': 0, 'password_hash': 0},
+        ).sort('created_at', -1).limit(limit)
+        return await cursor.to_list(length=limit)
+
+    async def set_user_status(self, user_id: str, new_status: str, actor_id: str) -> Dict:
+        """
+        Change a user's status. Records `<action>_by` + `<action>_at` audit
+        fields. Refuses no-op transitions and self-suspension/rejection.
+        """
+        if self.db is None:
+            return {'success': False, 'error': 'Database not available'}
+        if new_status not in {s.value for s in UserStatus}:
+            return {'success': False, 'error': f'Invalid status: {new_status}'}
+
+        # Fetch target user first — needed for self-lockout + admin-count check
+        target = await self.db.users.find_one({'id': user_id})
+        if not target:
+            return {'success': False, 'error': 'User not found'}
+
+        # Guard: an admin cannot lock themselves out
+        if actor_id == user_id and new_status in (UserStatus.REJECTED.value, UserStatus.SUSPENDED.value):
+            return {'success': False, 'error': 'You cannot reject or suspend your own account'}
+
+        # Guard: prevent locking out the last active admin
+        if (target.get('role') == UserRole.ADMIN.value
+                and new_status != UserStatus.ACTIVE.value):
+            active_admins = await self.db.users.count_documents({
+                'role': UserRole.ADMIN.value,
+                'status': UserStatus.ACTIVE.value,
+                'id': {'$ne': user_id},
+            })
+            if active_admins == 0:
+                return {'success': False, 'error': 'Cannot deactivate the last active admin'}
+
+        now = datetime.now(timezone.utc).isoformat()
+        audit_fields = {
+            UserStatus.ACTIVE.value: {'approved_by': actor_id, 'approved_at': now},
+            UserStatus.REJECTED.value: {'rejected_by': actor_id, 'rejected_at': now},
+            UserStatus.SUSPENDED.value: {'suspended_by': actor_id, 'suspended_at': now},
+            UserStatus.PENDING.value: {},  # re-queuing to pending records nothing extra
+        }[new_status]
+
+        set_doc = {'status': new_status, **audit_fields}
+        result = await self.db.users.update_one({'id': user_id}, {'$set': set_doc})
+        if result.matched_count == 0:
+            return {'success': False, 'error': 'User not found'}
+
+        updated = await self.db.users.find_one(
+            {'id': user_id},
+            {'_id': 0, 'password_hash': 0},
+        )
+        logger.info(f"[status] user={user_id} → {new_status} (by={actor_id})")
+        return {'success': True, 'user': updated}
+
     async def seed_admins_from_env(self):
         """
         Iter 65 — Seed admin accounts from the SEED_ADMINS env var on startup.
@@ -376,15 +523,23 @@ class AuthService:
             password = parts[1].strip()
             username = parts[2].strip() if len(parts) >= 3 and parts[2].strip() else email.split('@')[0]
             try:
-                # First check by email — if the seeded admin exists, ensure role=admin
+                # First check by email — if the seeded admin exists, ensure role=admin AND status=active
                 existing = await self.db.users.find_one({'email': email})
                 if existing:
+                    update_fields = {}
                     if existing.get('role') != UserRole.ADMIN.value:
+                        update_fields['role'] = UserRole.ADMIN.value
+                    # Iter 97 — seed admins are ALWAYS force-active. Prevents
+                    # the admin-approval feature from ever locking out the
+                    # operator running the app.
+                    if existing.get('status') != UserStatus.ACTIVE.value:
+                        update_fields['status'] = UserStatus.ACTIVE.value
+                    if update_fields:
                         await self.db.users.update_one(
                             {'id': existing['id']},
-                            {'$set': {'role': UserRole.ADMIN.value}}
+                            {'$set': update_fields}
                         )
-                        logger.info(f"[seed_admins] elevated existing user {email} to admin")
+                        logger.info(f"[seed_admins] updated existing seed {email}: {update_fields}")
                     skipped += 1
                     continue
                 result = await self.register(
