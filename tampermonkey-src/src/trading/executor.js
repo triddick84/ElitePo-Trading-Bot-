@@ -98,7 +98,13 @@ class TradeExecutor {
    * @returns {Promise<boolean>} Success
    */
   async execute(signal, source = 'scan') {
-    const force = source === 'go-force' || source === '21s-reversal';
+    // Iter 98 — App/21s-reversal/GO-force signals are USER-INITIATED. The
+    // user explicitly asked the app to generate a signal — refusing to
+    // trade because MIN_CONFIDENCE (typically 75%) is above the signal's
+    // 60-70% confidence is what the user reported as "most signals wont
+    // place trades". Bypass the confidence AND cooldown gates for these
+    // trusted sources.
+    const force = source === 'go-force' || source === '21s-reversal' || source === 'app';
     // Iter 56c — latency instrumentation. Captures DOM-click lag (from this
     // entry point → actual click) and exec lag (click → DOM-confirmed trade).
     // Posted fire-and-forget to /api/signals/latency-report.

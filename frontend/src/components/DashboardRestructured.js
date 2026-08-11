@@ -60,6 +60,7 @@ const DashboardRestructured = ({
     min_probability_threshold: 85,
     selected_strategy: '',
     selected_timeframe: '5s',               // 5 seconds selected by default
+    chart_type: 'japanese_candles',         // Iter 98 — Chart type for signal generation
     trading_mode: 'demo',                   // Demo account selected
     invert_signals: false,                  // Independent of account type
     popup_notifications: true,
@@ -150,6 +151,7 @@ const DashboardRestructured = ({
         ...response.data,
         selected_strategy: response.data.selected_strategy || '',
         selected_timeframe: response.data.selected_timeframe || '1m',
+        chart_type: response.data.chart_type || 'japanese_candles',
         trading_mode: tradingMode,
         invert_signals: response.data.invert_signals !== undefined ? response.data.invert_signals : false,
         popup_notifications: response.data.popup_notifications !== undefined ? response.data.popup_notifications : true,
@@ -232,7 +234,8 @@ const DashboardRestructured = ({
         asset_symbol: symbol,
         market_type: market,
         selected_timeframe: config.selected_timeframe || '1m',
-        selected_strategy: config.selected_strategy || 'enhanced_rsi_bb_volume'
+        selected_strategy: config.selected_strategy || 'enhanced_rsi_bb_volume',
+        chart_type: config.chart_type || 'japanese_candles'
       });
 
       if (response.data.success && response.data.signal) {
@@ -270,7 +273,8 @@ const DashboardRestructured = ({
         asset_symbol: symbol,
         market_type: market,
         selected_timeframe: config.selected_timeframe || '1m',
-        selected_strategy: config.selected_strategy || 'enhanced_rsi_bb_volume'
+        selected_strategy: config.selected_strategy || 'enhanced_rsi_bb_volume',
+        chart_type: config.chart_type || 'japanese_candles'
       });
 
       if (response.data.success && response.data.signal) {
@@ -429,7 +433,8 @@ const DashboardRestructured = ({
         asset_symbol: symbol,
         market_type: market,
         selected_timeframe: config.selected_timeframe || '1m',
-        selected_strategy: config.selected_strategy || 'enhanced_rsi_bb_volume'
+        selected_strategy: config.selected_strategy || 'enhanced_rsi_bb_volume',
+        chart_type: config.chart_type || 'japanese_candles'
       });
 
       if (response.data.success && response.data.signal) {
@@ -740,6 +745,40 @@ const DashboardRestructured = ({
                   ⏳ Note: 5-second signals include 10-second built-in latency for stability
                 </div>
               )}
+
+              {/* Iter 98 — Chart Type selector (feeds signal generation) */}
+              <div className="mt-4 pt-3 border-t border-purple-500/20">
+                <Label className="text-purple-300 mb-2 flex items-center gap-2">
+                  <span>📈 Chart Type</span>
+                  <span className="text-xs text-slate-400 font-normal">for signal generation</span>
+                </Label>
+                <div className="flex flex-wrap gap-2" data-testid="chart-type-selector">
+                  {[
+                    { value: 'japanese_candles', label: 'Japanese', icon: '🕯' },
+                    { value: 'heikin_ashi',      label: 'Heikin Ashi', icon: '🎋' },
+                    { value: 'line',             label: 'Line',     icon: '📉' },
+                    { value: 'bars',             label: 'Bars',     icon: '📊' },
+                  ].map(({ value, label, icon }) => (
+                    <Button
+                      key={value}
+                      size="sm"
+                      variant={config.chart_type === value ? 'default' : 'outline'}
+                      onClick={() => {
+                        setConfig(prev => ({ ...prev, chart_type: value }));
+                        // Persist immediately so downstream signal-gen picks it up
+                        axios.put(`${API}/config`, { ...config, chart_type: value })
+                          .catch(err => console.error('Failed to save chart_type:', err));
+                      }}
+                      data-testid={`chart-type-${value}`}
+                      className={config.chart_type === value
+                        ? 'bg-purple-600 hover:bg-purple-700'
+                        : 'border-purple-500/50 text-purple-300'}
+                    >
+                      <span className="mr-1">{icon}</span>{label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
             </div>
 
             {/* Market Assets Selection */}

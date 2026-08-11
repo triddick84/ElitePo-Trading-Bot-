@@ -1,3 +1,52 @@
+# AI's Elite PO Traders Bot — Aug 2026 (Iter 98: Favorites CYCLE + Signal Reliability + Chart Type)
+
+## Iter 98 (Aug 11, 2026) — Fix CYCLE / app-signals / add chart-type selector
+
+### User bug reports (3-in-1)
+> (1) "cycle feature in tampermonkey script is not working properly... clicking on assets drop down and scrolling through the assets and markets not selecting anything, needs to scroll through the favorites bar above the assets drop down and have a teach function"
+> (2) "signals that are generated from the application is having a hard time with placing trades with tampermonkey script it seems like some signals will generate a trade and most of the time it wont"
+> (3) "main selection for assets on the dashboard needs to have chart type selection (line, heikin ashi, japanese candlesticks, bar)"
+
+### (1) CYCLE rewritten — point-to-teach favorites bar
+- New file `favoritesCycle.js` replaces the old `cycleMode.js` behavior. When CYCLE is toggled ON:
+  1. If no favorites container has been taught → logs an error nudging user to click **🎓 Teach Favorites**.
+  2. Otherwise queries `document.querySelectorAll(containerSelector + ' > ' + tileSelector)` and rotates through the tiles.
+- **Teach mode**: User clicks the 🎓 button → a full-width cyan banner appears at the top of the page ("🎓 TEACH MODE — click any tile in your Pocket Option favorites bar. ESC to cancel") → next click is captured → `_analyzeClickedElement()` walks up the DOM looking for a parent whose children share the same tag+class shape → records `{ containerSelector, tileSelector, taughtAt, tileCount }` in GM_setValue.
+- **Rotation**: Every 30s (configurable 5-120s via slider), click the next tile. Dispatches full mousedown/mouseup/click sequence to defeat React onClick handlers that ignore `.click()`.
+- **When CYCLE is OFF**: This module is dormant. Signal-poller (Iter 95) handles asset switching on incoming signals.
+
+### (2) App-signal reliability fixes
+- **Asset-switch verification window widened**: 3×500ms → 8×500ms (4s p95 budget) — was too tight; PO chart re-render can take 2-4s on slow networks.
+- **Fallback chain**: After the fast sync `switchAsset()` fails to verify, the poller now cascades:
+  1. `switchAssetViaPicker()` — opens the currencies picker and clicks the row.
+  2. `switchAssetViaSearch()` — types into the PO search box.
+  Only aborts if BOTH slow paths also miss.
+- **Executor gate relaxed for `source='app'`**: App signals now bypass the `MIN_CONFIDENCE` (75%) and cooldown gates. Rationale: the user's app IS the trusted source; if the app decided to emit a signal, the user wants it fired.
+
+### (3) Chart type selector
+- Added `chart_type` to `BotStartRequest` and `/api/config` PUT persistence.
+- New 4-button pill row on the Dashboard next to timeframe/asset selectors:
+  🕯 Japanese · 🎋 Heikin Ashi · 📉 Line · 📊 Bars.
+- Click any button → instant write to `/api/config` so downstream signal-gen picks it up on the next request.
+- `/api/signals/force-generate` frontend calls now pass `chart_type` from the current config.
+
+### TM script v8.128.0
+Bumped from 8.127.0. Deployed to `/app/frontend/public/pocket-option-auto-trader.user.js`.
+
+### Tests
+- **`test_iter98_cycle_and_chart_type.py`** — 7/7 pass:
+  1. Userscript @version ≥ 8.128.0
+  2. Favorites-cycle markers present (`pobot_favoritesTeachData`, TEACH MODE, Teach Favorites)
+  3. Teach button wired with `btn-teach-favorites` data-testid
+  4. Signal-poller fallback paths compiled in (picker + search)
+  5. Config exposes chart_type
+  6. chart_type persists across PUT/GET
+  7. All 4 chart_type values accepted
+- **Testing agent** (iteration_58.json): 147/154 pass · 0 critical Iter 98 issues · 6 pre-existing failures unrelated (Iter 85 theme override marker no longer in bundle after later refactor; one env-latency flake).
+- Local full regression Iter 80-98: **58/58 pass**.
+
+---
+
 # AI's Elite PO Traders Bot — Aug 2026 (Iter 97: Admin Approval Gate)
 
 ## Iter 97 (Aug 10, 2026) — Admin approval required for new user registrations

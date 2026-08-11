@@ -1,0 +1,31 @@
+{
+  "summary": "Iter 98 backend-only verification. Executed the new suite backend/tests/test_iter98_cycle_and_chart_type.py (7/7 passed) covering: userscript v>=8.128.0, favorites-cycle markers ('pobot_favoritesTeachData', 'TEACH MODE', 'Teach Favorites', data-testid='btn-teach-favorites'), appSignalPoller fallbacks (switchAssetViaPicker + switchAssetViaSearch), /api/config exposes chart_type, PUT /api/config persists chart_type=heikin_ashi, all 4 chart_type values accepted (japanese_candles/heikin_ashi/line/bars). Also ran full iter80..iter98 regression: 147 passed, 1 skipped, 6 failed (all pre-existing from iter_57 baseline; unrelated to Iter 98). Explicit regression targets verified via direct curl: /api/tampermonkey/active-target returns success/asset/expiry (Iter 95), /api/auth/register returns HTTP 202 (Iter 97), /api/tampermonkey/force-generate returns rich v2 payload with signal.candle_analysis present (Iter 94), /api/latency/runtime-settings returns signal_prewarm + adaptive_offset config (Iter 94).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "userscript (iter85 theme override)", "issue": "5 tests in test_iter85_theme_override.py look for the exact marker string 'AI Elite Bot — Iter 85 Theme Override' in served /api/tampermonkey/script; the compiled bundle no longer contains that literal comment (theme block was refactored/inlined in later iterations). Pre-existing failure carried over from iter_57 report — not introduced by Iter 98."},
+      {"endpoint": "/api/signals/latest", "issue": "test_iter86 test_signals_latest_has_microstructure_and_latency_fields flaked because the latest signal was in an abstain state (server p99 253.1ms > 250ms threshold) so microstructure_multiplier was None. Transient/environmental; retry when latency settles. Not an Iter 98 regression."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter98_cycle_and_chart_type.py",
+    "/app/test_reports/pytest/iter98_results.xml",
+    "/app/test_reports/pytest/iter80_98_regression.xml"
+  ],
+  "action_items": [
+    "Optional cleanup: update or delete the 5 iter85 theme-override tests to match the current compiled userscript (marker string no longer present); this is pre-existing tech debt, not blocking Iter 98.",
+    "Investigate why /api/config p99 sometimes exceeds the 250ms latency guard on cold requests — causes intermittent signal abstain in iter86 test."
+  ],
+  "critical_code_review_comments": [
+    "Iter 98 backend surface is small and clean: chart_type is a plain string field on the config model; consider validating against an enum server-side to reject typos (currently PUT accepts arbitrary strings — the new test only checks the 4 valid ones; no negative test was added to reject invalid values).",
+    "The favorites-cycle module is compiled into the served userscript with all required markers/testids as designed; verified via /api/tampermonkey/script bundle inspection."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "95.5% (147/154 regression; 7/7 Iter 98)", "frontend": "n/a (backend-only run)"},
+  "test_credentials": "seedtest / SeedPass123! (admin), testuser / test123 (user) — not exercised in this backend-only surface.",
+  "seed_data_creation": "None. PUT /api/config was reset to chart_type=japanese_candles after mutation to avoid leaking test state.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter 98 all green. Pre-existing failures: (a) 5 iter85 theme-override tests search for a legacy marker string no longer emitted by the compiled bundle — needs test refresh; (b) 1 iter86 microstructure test flakes on cold latency. Full iter80-98 = 147 pass / 1 skip / 6 fail (same 6 as iter_57 baseline)."
+}

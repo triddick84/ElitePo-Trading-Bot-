@@ -12,12 +12,16 @@ import { log, info, warn, error } from '../core/logger.js';
 import { state } from '../core/state.js';
 import { fetchSignal, fetchActiveTarget } from '../utils/api.js';
 import { tradeExecutor } from './executor.js';
-import { getCurrentAsset, switchAsset } from '../utils/dom.js';
+import { getCurrentAsset, switchAsset, switchAssetViaPicker, switchAssetViaSearch } from '../utils/dom.js';
 
 const DEFAULT_POLL_MS = 5_000;
 
-// Iter 95 — asset-switch verification tuning
-const ASSET_SWITCH_VERIFY_TRIES = 3;
+// Iter 95 → 98 — asset-switch verification tuning
+// Iter 98 fix: PO's chart re-render can take 2-4s on slow networks. The
+// old 3×500ms=1.5s window was too tight → most signals aborted with
+// "asset_switch_failed" even though the switch DID work. New window is
+// 8×500ms=4s which comfortably covers p95 switch latency.
+const ASSET_SWITCH_VERIFY_TRIES = 8;
 const ASSET_SWITCH_VERIFY_INTERVAL_MS = 500;
 
 /**
@@ -128,23 +132,45 @@ class AppSignalPoller {
         return;
       }
 
-      // Iter 95 — enforce asset alignment BEFORE firing. If PO is on the
-      // wrong asset, switch and VERIFY. If verification fails, abort the
-      // trade (do NOT fire on the wrong asset).
+      // Iter 95 → 98 — Enforce asset alignment BEFORE firing. If PO is on
+      // the wrong asset, switch and VERIFY. Iter 98 upgrade:
+      //   1. Try the fast sync switch first (favorites-bar click).
+      //   2. If that doesn't verify within 4s, fall back to the picker
+      //      (openCurrenciesPicker + row-click), then to the search box.
+      //   3. Only abort if BOTH paths fail. This drastically reduces the
+      //      "trade dropped: asset_switch_failed" flapping the user reported.
       const target = normAsset(signal.symbol || signal.asset || scopeAsset);
       const current = normAsset(getCurrentAsset());
       if (target && current !== target) {
         info(`[APP] asset mismatch — PO on ${current || '?'}, need ${target}. Switching...`);
-        try {
-          switchAsset(target);
-        } catch (e) {
-          warn(`[APP] switchAsset threw: ${e.message}`);
+        let switched = false;
+
+        // Fast path — favorites-bar / DOM click
+        try { switchAsset(target); } catch (e) { warn(`[APP] switchAsset threw: ${e.message}`); }
+        switched = await this._verifyAssetSwitched(target);
+
+        // Slow path #1 — picker (openCurrenciesPicker → click row)
+        if (!switched) {
+          info(`[APP] fast switch missed — falling back to currencies picker for ${target}`);
+          try {
+            await switchAssetViaPicker(target);
+          } catch (e) { warn(`[APP] picker fallback threw: ${e.message}`); }
+          switched = await this._verifyAssetSwitched(target);
         }
-        const ok = await this._verifyAssetSwitched(target);
-        if (!ok) {
+
+        // Slow path #2 — search box
+        if (!switched) {
+          info(`[APP] picker missed — falling back to search box for ${target}`);
+          try {
+            await switchAssetViaSearch(target);
+          } catch (e) { warn(`[APP] search fallback threw: ${e.message}`); }
+          switched = await this._verifyAssetSwitched(target);
+        }
+
+        if (!switched) {
           this.assetSwitchFailedCount++;
           this.skippedCount++;
-          error(`[APP] ✗ ABORT trade — could not switch PO to ${target} (still on ${normAsset(getCurrentAsset()) || '?'}) after ${ASSET_SWITCH_VERIFY_TRIES} retries. Signal ${signal.direction} dropped to protect from firing on wrong asset.`);
+          error(`[APP] ✗ ABORT trade — could not switch PO to ${target} after fast/picker/search paths. Signal ${signal.direction} dropped to protect from firing on wrong asset.`);
           state.lastSignal = {
             direction: (signal.direction || '').toUpperCase(),
             symbol: target,

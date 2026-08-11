@@ -16,6 +16,7 @@ import { ssidBridge, poLivePrice } from './trading/ssidBridge.js';
 import { liveTickPoster } from './trading/liveTickPoster.js';
 import { livePriceTracker } from './trading/livePriceTracker.js';
 import { cycleMode } from './trading/cycleMode.js';
+import { favoritesCycle } from './trading/favoritesCycle.js';
 import { appSignalPoller } from './trading/appSignalPoller.js';
 import { scanMarkets } from './utils/api.js';
 import { get, post } from './utils/api.js';
@@ -273,12 +274,37 @@ class EliteTradingBot {
 
       onCycleToggle: async (enabled) => {
         state.cycleEnabled = enabled;
+        // Iter 98 — CYCLE now rotates a user-TAUGHT favorites bar (see
+        // favoritesCycle.js). If the user hasn't taught yet, the module
+        // logs an error and returns false — the button stays visually ON
+        // but nothing rotates. UI shows a nudge to click "🎓 Teach".
         if (enabled) {
-          await cycleMode.start();
+          const ok = favoritesCycle.start();
+          if (!ok) {
+            state.cycleEnabled = false;
+            warn('[CYCLE] cannot start — click "🎓 Teach Favorites" in Config tab first');
+          }
         } else {
-          cycleMode.stop();
+          favoritesCycle.stop();
         }
         saveState();
+      },
+
+      onTeachFavorites: () => {
+        // Iter 98 — Enter point-to-teach mode for the favorites bar.
+        favoritesCycle.startTeach((result) => {
+          if (result && result.success) {
+            success(`[TEACH] ✓ Favorites bar captured (${result.data.tileCount} tiles). Toggle CYCLE to start rotating.`);
+          }
+        });
+      },
+
+      onClearTaughtFavorites: () => {
+        favoritesCycle.clearTeachData();
+      },
+
+      onCycleIntervalChange: (ms) => {
+        favoritesCycle.setInterval(ms);
       },
 
       onAppSignalToggle: (enabled) => {

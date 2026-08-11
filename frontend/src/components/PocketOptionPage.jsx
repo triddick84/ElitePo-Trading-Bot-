@@ -21,7 +21,7 @@ import { toast } from 'sonner';
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 const TM_SCRIPT_URL = `${BACKEND_URL}/api/tampermonkey/script`;
-const TM_VERSION = '8.127.0';
+const TM_VERSION = '8.128.0';
 
 // TM Script Install & Live Status Card (Iter 61)
 const TMScriptStatusCard = () => {

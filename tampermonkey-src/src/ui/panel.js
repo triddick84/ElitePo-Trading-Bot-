@@ -1401,6 +1401,25 @@ export function createPanel() {
         <div class="${P}tabpanel" data-tab-panel="config" data-testid="tab-panel-config">
           <div class="${P}advanced" id="${P}advanced">
             <div class="${P}section">
+              <div class="${P}sectionttl">Favorites Cycle (Iter 98)</div>
+              <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                <button id="${P}teachFav" class="${P}btn" data-testid="btn-teach-favorites" title="Click, then click any tile in Pocket Option's favorites bar. CYCLE will rotate through the tiles found in that container.">🎓 Teach Favorites</button>
+                <button id="${P}clearFav" class="${P}btn" data-testid="btn-clear-favorites" title="Forget the taught favorites container — you'll need to teach again">🗑 Clear</button>
+              </div>
+              <div class="${P}timing-row" style="margin-top:8px;" title="How often (seconds) CYCLE clicks the next tile in the taught favorites bar.">
+                <input id="${P}cycleInt" class="${P}timing-slider" type="range" min="5" max="120" step="5" value="30" style="width:100%;" />
+                <div style="display:flex;justify-content:space-between;font-size:${mobile ? 9 : 10}px;color:#94a3b8;margin-top:4px;">
+                  <span>rotate every</span>
+                  <span id="${P}cycleIntV" style="color:#22d3ee;font-weight:700;">30s</span>
+                  <span>through favorites</span>
+                </div>
+              </div>
+              <div id="${P}favStatus" style="margin-top:6px;font-size:${mobile ? 9 : 10}px;color:#94a3b8;padding:6px 8px;background:rgba(0,0,0,0.25);border-radius:6px;">
+                Status: <span id="${P}favStatusText" style="color:#e6edf3;">not taught yet</span>
+              </div>
+            </div>
+
+            <div class="${P}section">
               <div class="${P}sectionttl">Strategy Selector</div>
               <div class="${P}stratrow" style="display:flex;gap:6px;align-items:center;">
                 <select id="${P}stratTf" class="${P}stratsel" data-testid="strategy-tf-select" title="Iter 96 — Choose a chart timeframe to browse strategies for." style="flex:0 0 78px;">
@@ -1802,6 +1821,32 @@ export function initPanelEvents(callbacks = {}) {
       const isActive = cycleBtn.classList.contains('active');
       cycleBtn.classList.toggle('active');
       callbacks.onCycleToggle?.(!isActive);
+    });
+  }
+
+  // Iter 98 — Favorites-cycle Teach button
+  const teachBtn = q('teachFav');
+  if (teachBtn) {
+    teachBtn.addEventListener('click', () => {
+      callbacks.onTeachFavorites?.();
+    });
+  }
+  const clearFavBtn = q('clearFav');
+  if (clearFavBtn) {
+    clearFavBtn.addEventListener('click', () => {
+      callbacks.onClearTaughtFavorites?.();
+      const statusEl = q('favStatusText');
+      if (statusEl) statusEl.textContent = 'not taught yet';
+    });
+  }
+  // Iter 98 — Cycle interval slider (5-120s)
+  const cycleIntSlider = q('cycleInt');
+  const cycleIntV = q('cycleIntV');
+  if (cycleIntSlider) {
+    cycleIntSlider.addEventListener('input', (e) => {
+      const secs = parseInt(e.target.value, 10);
+      if (cycleIntV) cycleIntV.textContent = `${secs}s`;
+      callbacks.onCycleIntervalChange?.(secs * 1000);
     });
   }
 

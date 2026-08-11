@@ -268,6 +268,7 @@ class BotStartRequest(BaseModel):
     popup_notifications: bool = True
     selected_timeframe: Optional[str] = '1m'
     selected_strategy: Optional[str] = ''
+    chart_type: Optional[str] = 'japanese_candles'  # Iter 98 — chart type for signal generation
     chart_config: Optional[Dict[str, Any]] = None
     flexible_config: Optional[Dict[str, Any]] = None
 
@@ -688,6 +689,7 @@ async def update_config(config: BotStartRequest):
             "user_id": "default_user",
             "selected_timeframe": config.selected_timeframe,
             "selected_strategy": config.selected_strategy,
+            "chart_type": config.chart_type or 'japanese_candles',  # Iter 98
             "chart_config": config.chart_config or {},
             "flexible_config": config.flexible_config or {},
             "selected_assets": merged_selected_assets,
