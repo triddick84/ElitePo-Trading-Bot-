@@ -3424,12 +3424,14 @@ async def get_tampermonkey_active_target():
                 "asset": asset,
                 "timeframe": tf,
                 "expiry_seconds": int(override.get("expiry_seconds") or _tf_to_expiry_seconds(tf)),
+                "chart_type": override.get("chart_type") or "japanese_candles",
             }
 
         # 2. Fall back to /api/config
         cfg = await db.trading_configurations.find_one({"user_id": "default_user"}) or {}
         selected_assets = cfg.get("selected_assets") or []
         selected_tf = cfg.get("selected_timeframe") or "1m"
+        chart_type = cfg.get("chart_type") or "japanese_candles"
         first = selected_assets[0] if selected_assets else "EURUSD_OTC"
         asset = _normalize_asset(first)
         return {
@@ -3438,6 +3440,7 @@ async def get_tampermonkey_active_target():
             "asset": asset,
             "timeframe": selected_tf,
             "expiry_seconds": _tf_to_expiry_seconds(selected_tf),
+            "chart_type": chart_type,  # Iter 99 — TM enforces this on the PO chart
         }
     except Exception as e:
         logger.error(f"active-target error: {e}")
@@ -3448,6 +3451,7 @@ async def get_tampermonkey_active_target():
             "asset": "EURUSD_OTC",
             "timeframe": "1m",
             "expiry_seconds": 60,
+            "chart_type": "japanese_candles",
             "error": str(e),
         }
 

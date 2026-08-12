@@ -12,6 +12,7 @@ import { log, info, warn, error } from '../core/logger.js';
 import { state } from '../core/state.js';
 import { fetchSignal, fetchActiveTarget } from '../utils/api.js';
 import { tradeExecutor } from './executor.js';
+import { chartTypeSwitcher } from './chartTypeSwitcher.js';
 import { getCurrentAsset, switchAsset, switchAssetViaPicker, switchAssetViaSearch } from '../utils/dom.js';
 
 const DEFAULT_POLL_MS = 5_000;
@@ -181,6 +182,19 @@ class AppSignalPoller {
           return;
         }
         info(`[APP] ✓ asset switch verified — PO now on ${target}`);
+      }
+
+      // Iter 99 — Enforce chart type BEFORE firing. The signal was
+      // generated for a specific chart type (Japanese / Heikin / Line /
+      // Bars). If PO's chart is showing a different type, silently switch
+      // it so the human sees the same view the bot is trading on.
+      const desiredChartType = activeTarget && activeTarget.chart_type;
+      if (desiredChartType && desiredChartType !== 'japanese_candles') {
+        try {
+          const r = await chartTypeSwitcher.ensure(desiredChartType);
+          if (r.changed) info(`[APP] chart type synced → ${desiredChartType}`);
+          else if (!r.matched) warn(`[APP] chart-type sync missed for ${desiredChartType} (${r.reason})`);
+        } catch (e) { warn(`[APP] chart-type sync threw: ${e.message}`); }
       }
 
       const ok = await tradeExecutor.execute(signal, 'app');

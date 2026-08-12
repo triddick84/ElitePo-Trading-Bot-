@@ -17,6 +17,7 @@ import { liveTickPoster } from './trading/liveTickPoster.js';
 import { livePriceTracker } from './trading/livePriceTracker.js';
 import { cycleMode } from './trading/cycleMode.js';
 import { favoritesCycle } from './trading/favoritesCycle.js';
+import { chartTypeSwitcher } from './trading/chartTypeSwitcher.js';
 import { appSignalPoller } from './trading/appSignalPoller.js';
 import { scanMarkets } from './utils/api.js';
 import { get, post } from './utils/api.js';
@@ -305,6 +306,19 @@ class EliteTradingBot {
 
       onCycleIntervalChange: (ms) => {
         favoritesCycle.setInterval(ms);
+      },
+
+      // Iter 99 — Chart-type teach mode
+      onTeachChartType: () => {
+        chartTypeSwitcher.startTeach((result) => {
+          if (result && result.success) {
+            success(`[TEACH] ✓ Chart-type menu captured (${result.data.childCount} buttons). TM will now sync PO's chart on each signal.`);
+          }
+        });
+      },
+
+      onClearTaughtChartType: () => {
+        chartTypeSwitcher.clearTeachData();
       },
 
       onAppSignalToggle: (enabled) => {

@@ -1420,6 +1420,20 @@ export function createPanel() {
             </div>
 
             <div class="${P}section">
+              <div class="${P}sectionttl">Chart Type Sync (Iter 99)</div>
+              <div style="font-size:${mobile ? 9 : 10}px;color:#94a3b8;margin-bottom:6px;line-height:1.5;">
+                When the app has a chart type selected (Japanese/Heikin/Line/Bars), TM will switch PO's chart type on every signal. First, open PO's chart-type menu, then click Teach → click any chart type in that menu.
+              </div>
+              <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                <button id="${P}teachChart" class="${P}btn" data-testid="btn-teach-charttype" title="Open PO's chart-type menu, then click Teach. Next click on any chart-type button in that menu will record the menu container.">🎓 Teach Chart Types</button>
+                <button id="${P}clearChart" class="${P}btn" data-testid="btn-clear-charttype" title="Forget the taught chart-type menu">🗑 Clear</button>
+              </div>
+              <div id="${P}chartStatus" style="margin-top:6px;font-size:${mobile ? 9 : 10}px;color:#94a3b8;padding:6px 8px;background:rgba(0,0,0,0.25);border-radius:6px;">
+                Status: <span id="${P}chartStatusText" style="color:#e6edf3;">not taught yet</span>
+              </div>
+            </div>
+
+            <div class="${P}section">
               <div class="${P}sectionttl">Strategy Selector</div>
               <div class="${P}stratrow" style="display:flex;gap:6px;align-items:center;">
                 <select id="${P}stratTf" class="${P}stratsel" data-testid="strategy-tf-select" title="Iter 96 — Choose a chart timeframe to browse strategies for." style="flex:0 0 78px;">
@@ -1847,6 +1861,22 @@ export function initPanelEvents(callbacks = {}) {
       const secs = parseInt(e.target.value, 10);
       if (cycleIntV) cycleIntV.textContent = `${secs}s`;
       callbacks.onCycleIntervalChange?.(secs * 1000);
+    });
+  }
+
+  // Iter 99 — Chart-type teach buttons
+  const teachChartBtn = q('teachChart');
+  if (teachChartBtn) {
+    teachChartBtn.addEventListener('click', () => {
+      callbacks.onTeachChartType?.();
+    });
+  }
+  const clearChartBtn = q('clearChart');
+  if (clearChartBtn) {
+    clearChartBtn.addEventListener('click', () => {
+      callbacks.onClearTaughtChartType?.();
+      const statusEl = q('chartStatusText');
+      if (statusEl) statusEl.textContent = 'not taught yet';
     });
   }
 

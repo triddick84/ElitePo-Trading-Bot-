@@ -1,3 +1,52 @@
+# AI's Elite PO Traders Bot — Aug 2026 (Iter 99: Chart-Type Enforcement in TM)
+
+## Iter 99 (Aug 12, 2026) — Sync PO's chart type to match the app's selection
+
+### User request
+> "When the app picks Heikin Ashi, have the TM script also switch PO's chart type on the fly (currently only used server-side for signal-gen)"
+
+### What shipped
+
+**Backend** (`server.py`):
+- `/api/tampermonkey/active-target` now surfaces `chart_type` alongside asset/timeframe. Precedence: **override.chart_type → config.chart_type → 'japanese_candles' default**.
+- All 3 response branches (override / config / error-fallback) include the field so TM never sees an undefined chart_type.
+
+**TM userscript v8.129.0** (new file `chartTypeSwitcher.js`):
+- `chartTypeSwitcher.ensure(desired)` — the workhorse called by the signal-poller on each fire. Compares `detectCurrent()` against the desired type; if mismatched, clicks the matching button.
+- **Match logic**: keyword-based regex per type: `heikin[\s-]*ashi` / `japanese|candle` / `\bline\b` / `\bbars?\b`. Robust to menu-label variations across PO builds.
+- **Teach mode** (mirrors favorites-cycle): user opens PO chart-type menu → clicks 🎓 Teach Chart Types → next click on any chart-type option is captured. Purple gradient overlay banner (visually distinct from the cyan favorites-teach banner) so the user knows which teach mode they're in.
+- **Fallback**: If no teach data, scans the whole document for a visible button whose textContent matches the keyword regex. Best-effort — works even before teaching, provided PO's menu is open.
+- **Full click chain**: `.click()` + mousedown/mouseup/click MouseEvents so React onClick handlers fire correctly.
+
+**appSignalPoller integration**:
+- After the asset switch succeeds, if `activeTarget.chart_type` is non-default, `chartTypeSwitcher.ensure(chart_type)` runs. Silently no-ops when already matching.
+
+**Panel UI** (Config tab):
+- New "Chart Type Sync (Iter 99)" section with:
+  - Explanatory text: "When the app has a chart type selected... TM will switch PO's chart type on every signal. First, open PO's chart-type menu, then click Teach → click any chart type in that menu."
+  - 🎓 Teach Chart Types + 🗑 Clear buttons.
+  - Status row showing whether the menu has been taught.
+
+### Tests
+- **`test_iter99_chart_type_enforcement.py`** — 7/7 pass:
+  1. active-target returns chart_type from config
+  2. Default is `japanese_candles`
+  3. Override branch also carries chart_type
+  4. `@version` ≥ 8.129.0
+  5. All markers present (chartTypeTeachData, TEACH CHART TYPES, Teach Chart Types, Chart Type Sync)
+  6. Teach button data-testid + ID wired
+  7. Keyword regex fragments (heikin, japanese) survive minification
+- Combined Iter 95-99 regression: **38/38 pass**.
+
+### Notes on real-world testing
+This iter can't be fully unit-tested against a real PocketOption DOM in CI — the switcher relies on user-taught selectors OR a fallback keyword scan. Recommended user validation:
+1. Install v8.129.0.
+2. On the dashboard, pick chart_type = Heikin Ashi.
+3. Open PO's chart menu, click 🎓 Teach Chart Types in TM panel, click any chart option.
+4. Trigger a force-generate signal → verify PO's chart flips to Heikin Ashi automatically.
+
+---
+
 # AI's Elite PO Traders Bot — Aug 2026 (Iter 98: Favorites CYCLE + Signal Reliability + Chart Type)
 
 ## Iter 98 (Aug 11, 2026) — Fix CYCLE / app-signals / add chart-type selector
