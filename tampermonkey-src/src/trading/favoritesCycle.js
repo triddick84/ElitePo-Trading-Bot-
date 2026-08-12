@@ -372,13 +372,73 @@ class FavoritesCycle {
     this.currentIndex = (this.currentIndex + 1) % tiles.length;
   }
 
+  /**
+   * Iter 101 — Locate a favorites-bar tile whose visible label matches the
+   * requested asset symbol, then click it. Returns true on success, false
+   * if the asset isn't present in the taught favorites container.
+   *
+   * Called by appSignalPoller so that when a signal targets a specific
+   * asset we click its tile in the favorites bar directly — never the
+   * currency-picker dropdown. Aligns with the user's expectation that
+   * "favorites bar is the source of truth" once teach is done.
+   *
+   * Accepts symbols in any of these forms and normalises internally:
+   *   "EURUSD"  "EUR/USD"  "EURUSD_OTC"  "EUR/USD OTC"
+   */
+  clickAsset(symbol) {
+    const tiles = this._getTiles();
+    if (tiles.length === 0) return false;
+
+    const norm = (s) => String(s || '').toUpperCase().replace(/[\s/_\-]/g, '');
+    const wantRaw = norm(symbol);
+    const wantNoOtc = wantRaw.replace(/OTC$/, '');
+    const isOtc = wantRaw.endsWith('OTC');
+
+    // Prefer exact normalised match; fall back to substring
+    let hit = null;
+    for (const t of tiles) {
+      const text = norm(t.textContent || t.getAttribute('title') || t.getAttribute('data-symbol') || '');
+      if (!text) continue;
+      if (text === wantRaw) { hit = t; break; }
+    }
+    if (!hit) {
+      for (const t of tiles) {
+        const text = norm(t.textContent || t.getAttribute('title') || t.getAttribute('data-symbol') || '');
+        if (!text) continue;
+        // Base match — but only if OTC-ness lines up (don't fire on
+        // EURUSD when signal asked EURUSD_OTC)
+        const tileHasOtc = /OTC/.test(text);
+        if (text.includes(wantNoOtc) && tileHasOtc === isOtc) { hit = t; break; }
+      }
+    }
+    if (!hit) {
+      info(`[favCycle] asset "${symbol}" not in taught favorites (${tiles.length} tiles) — no click attempted`);
+      return false;
+    }
+
+    const label = (hit.textContent || '').trim().slice(0, 24);
+    try {
+      hit.click();
+      const rect = hit.getBoundingClientRect();
+      const opts = { bubbles: true, cancelable: true, view: window,
+                     clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2 };
+      hit.dispatchEvent(new MouseEvent('mousedown', opts));
+      hit.dispatchEvent(new MouseEvent('mouseup', opts));
+      hit.dispatchEvent(new MouseEvent('click', opts));
+      info(`[favCycle] ✓ clicked taught favorite for ${symbol} · label="${label}"`);
+      return true;
+    } catch (e) {
+      warn(`[favCycle] clickAsset failed for ${symbol}: ${e.message}`);
+      return false;
+    }
+  }
+
   getStats() {
     return {
       running: this.running,
       intervalMs: this.intervalMs,
       currentIndex: this.currentIndex,
-      teachData: _readTeachData(),
-      stats: { ...this.stats },
+      teachData: _readTeachData(),      stats: { ...this.stats },
     };
   }
 

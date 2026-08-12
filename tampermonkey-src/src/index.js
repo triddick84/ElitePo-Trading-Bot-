@@ -282,6 +282,10 @@ class EliteTradingBot {
           const ok = favoritesCycle.start();
           if (!ok) {
             state.cycleEnabled = false;
+            // Iter 101 — Also flip the visual toggle back OFF so the user
+            // immediately sees CYCLE didn't actually start (previously the
+            // button stayed green + user assumed rotation was running).
+            try { setToggleActive('cycle', false); } catch (_e) { /* ignore */ }
             warn('[CYCLE] cannot start — click "🎓 Teach Favorites" in Config tab first');
           }
         } else {

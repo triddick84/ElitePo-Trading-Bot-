@@ -1,3 +1,43 @@
+# AI's Elite PO Traders Bot — Feb 2026 (Iter 101: Favorites Bar = Source of Truth)
+
+## Iter 101 (Feb 2026) — No more dropdown, ever, when favorites are taught
+
+### User bug report (P0 follow-up)
+> "tampermonkey is now being displayed and working but now the cycle feature is clicking on the drop down menu instead of the favorites bar"
+
+### Root cause
+The CYCLE toggle itself was clean (Iter 100 removed the legacy cycleMode). The dropdown was being opened by the **APP signal poller's Iter 95 fallback chain**:
+```
+switchAsset(target)               // fast — favorites-bar DOM click
+   → switchAssetViaPicker(target) // opens currency-picker DROPDOWN  ← this
+      → switchAssetViaSearch()     // final search-box fallback
+```
+Whenever the incoming signal targeted an asset that wasn't in the fast-path DOM walk, PO's asset-picker dropdown popped open. The user (correctly) considered this behavior wrong once they had taught a favorites bar.
+
+### Fix
+1. **`favoritesCycle.clickAsset(symbol)`** — new method that resolves the symbol against the tiles inside the taught container (exact match first, then OTC-aware substring), clicks the matching tile with the full React-friendly event chain, and returns true/false.
+2. **`appSignalPoller` rewired**:
+   - When `favoritesCycle.getTeachData()` exists → use `favoritesCycle.clickAsset(target)` **exclusively**. If the tile isn't found, ABORT the trade with `aborted_reason: 'asset_not_in_favorites'`. No dropdown ever opens.
+   - When no teach data → legacy 3-step fast/picker/search fallback is preserved unchanged.
+3. **CYCLE toggle UX** — `onCycleToggle` now calls `setToggleActive('cycle', false)` when `favoritesCycle.start()` returns false so the visual state matches reality (previously the button stayed green even when nothing was rotating).
+
+### Files touched
+- `/app/tampermonkey-src/src/trading/favoritesCycle.js` (+`clickAsset`)
+- `/app/tampermonkey-src/src/trading/appSignalPoller.js` (favorites-first routing, no dropdown when taught)
+- `/app/tampermonkey-src/src/index.js` (`onCycleToggle` visual revert on failure)
+- `/app/tampermonkey-src/version.txt` → **8.131.0**
+- `/app/frontend/public/pocket-option-auto-trader.user.js` (rebuilt)
+- `/app/frontend/public/pocket-option-auto-trader-modular.user.js` (rebuilt)
+- `/app/backend/tests/test_iter101_favorites_source_of_truth.py` (new, 8 tests)
+
+### Verification
+- `curl /api/tampermonkey/script` → 200, `@version 8.131.0`, contains `clickAsset` + `asset_not_in_favorites`, no `cycleMode`.
+- **Iter 95–101 combined regression: 54/54 pass** in 2.1s.
+- Panel visually rendered in Playwright headed browser (previous validation from Iter 100 still valid — no init-path changes).
+
+---
+
+
 # AI's Elite PO Traders Bot — Feb 2026 (Iter 100: Cycle-Mode Purge + Teach Visuals)
 
 ## Iter 100 (Feb 2026) — Kill legacy dropdown-cycle & light up TEACH modes

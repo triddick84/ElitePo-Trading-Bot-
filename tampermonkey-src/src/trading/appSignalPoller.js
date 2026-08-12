@@ -13,6 +13,7 @@ import { state } from '../core/state.js';
 import { fetchSignal, fetchActiveTarget } from '../utils/api.js';
 import { tradeExecutor } from './executor.js';
 import { chartTypeSwitcher } from './chartTypeSwitcher.js';
+import { favoritesCycle } from './favoritesCycle.js';
 import { getCurrentAsset, switchAsset, switchAssetViaPicker, switchAssetViaSearch } from '../utils/dom.js';
 
 const DEFAULT_POLL_MS = 5_000;
@@ -133,53 +134,86 @@ class AppSignalPoller {
         return;
       }
 
-      // Iter 95 → 98 — Enforce asset alignment BEFORE firing. If PO is on
-      // the wrong asset, switch and VERIFY. Iter 98 upgrade:
-      //   1. Try the fast sync switch first (favorites-bar click).
-      //   2. If that doesn't verify within 4s, fall back to the picker
-      //      (openCurrenciesPicker + row-click), then to the search box.
-      //   3. Only abort if BOTH paths fail. This drastically reduces the
-      //      "trade dropped: asset_switch_failed" flapping the user reported.
+      // Iter 95 → 101 — Enforce asset alignment BEFORE firing.
+      //
+      // Iter 101 update (favorites-bar is source of truth):
+      //   If the user has taught a favorites container, we NEVER open the
+      //   currency-picker dropdown. Instead we click the matching tile
+      //   directly in the taught favorites bar. This matches the user's
+      //   expectation that "once I've taught my favorites, everything
+      //   uses that bar — no dropdown ever again".
+      //
+      //   If the asset isn't in favorites, we ABORT the trade rather
+      //   than fall back to opening the dropdown (which was Iter 95's
+      //   old behavior). The user can either add the asset to their
+      //   favorites in PO, re-teach a wider container, or turn OFF
+      //   favorites-mode by clearing the taught container.
+      //
+      // Legacy path (no teach data): fast switch → picker → search box.
       const target = normAsset(signal.symbol || signal.asset || scopeAsset);
       const current = normAsset(getCurrentAsset());
       if (target && current !== target) {
         info(`[APP] asset mismatch — PO on ${current || '?'}, need ${target}. Switching...`);
         let switched = false;
+        const teachData = (() => { try { return favoritesCycle.getTeachData(); } catch (_e) { return null; } })();
 
-        // Fast path — favorites-bar / DOM click
-        try { switchAsset(target); } catch (e) { warn(`[APP] switchAsset threw: ${e.message}`); }
-        switched = await this._verifyAssetSwitched(target);
-
-        // Slow path #1 — picker (openCurrenciesPicker → click row)
-        if (!switched) {
-          info(`[APP] fast switch missed — falling back to currencies picker for ${target}`);
-          try {
-            await switchAssetViaPicker(target);
-          } catch (e) { warn(`[APP] picker fallback threw: ${e.message}`); }
+        if (teachData) {
+          // Favorites-only mode — click the tile directly, no dropdown fallback
+          const clicked = (() => { try { return favoritesCycle.clickAsset(target); } catch (e) { warn(`[APP] favorites clickAsset threw: ${e.message}`); return false; } })();
+          if (clicked) {
+            switched = await this._verifyAssetSwitched(target);
+          }
+          if (!switched) {
+            this.assetSwitchFailedCount++;
+            this.skippedCount++;
+            error(
+              `[APP] ✗ ABORT — "${target}" not found in your taught favorites bar. ` +
+              `Add it to favorites in Pocket Option (or re-teach with 🎓 Teach Favorites), then try again. ` +
+              `Dropdown fallback is DISABLED while favorites are taught (per Iter 101).`
+            );
+            state.lastSignal = {
+              direction: (signal.direction || '').toUpperCase(),
+              symbol: target,
+              confidence: signal.confidence,
+              strategy: signal.strategy,
+              aborted_reason: 'asset_not_in_favorites',
+            };
+            return;
+          }
+        } else {
+          // No teach data — legacy 3-step fallback (fast → picker → search)
+          try { switchAsset(target); } catch (e) { warn(`[APP] switchAsset threw: ${e.message}`); }
           switched = await this._verifyAssetSwitched(target);
-        }
 
-        // Slow path #2 — search box
-        if (!switched) {
-          info(`[APP] picker missed — falling back to search box for ${target}`);
-          try {
-            await switchAssetViaSearch(target);
-          } catch (e) { warn(`[APP] search fallback threw: ${e.message}`); }
-          switched = await this._verifyAssetSwitched(target);
-        }
+          if (!switched) {
+            info(`[APP] fast switch missed — falling back to currencies picker for ${target}`);
+            try {
+              await switchAssetViaPicker(target);
+            } catch (e) { warn(`[APP] picker fallback threw: ${e.message}`); }
+            switched = await this._verifyAssetSwitched(target);
+          }
 
-        if (!switched) {
-          this.assetSwitchFailedCount++;
-          this.skippedCount++;
-          error(`[APP] ✗ ABORT trade — could not switch PO to ${target} after fast/picker/search paths. Signal ${signal.direction} dropped to protect from firing on wrong asset.`);
-          state.lastSignal = {
-            direction: (signal.direction || '').toUpperCase(),
-            symbol: target,
-            confidence: signal.confidence,
-            strategy: signal.strategy,
-            aborted_reason: 'asset_switch_failed',
-          };
-          return;
+          if (!switched) {
+            info(`[APP] picker missed — falling back to search box for ${target}`);
+            try {
+              await switchAssetViaSearch(target);
+            } catch (e) { warn(`[APP] search fallback threw: ${e.message}`); }
+            switched = await this._verifyAssetSwitched(target);
+          }
+
+          if (!switched) {
+            this.assetSwitchFailedCount++;
+            this.skippedCount++;
+            error(`[APP] ✗ ABORT trade — could not switch PO to ${target} after fast/picker/search paths. Signal ${signal.direction} dropped to protect from firing on wrong asset.`);
+            state.lastSignal = {
+              direction: (signal.direction || '').toUpperCase(),
+              symbol: target,
+              confidence: signal.confidence,
+              strategy: signal.strategy,
+              aborted_reason: 'asset_switch_failed',
+            };
+            return;
+          }
         }
         info(`[APP] ✓ asset switch verified — PO now on ${target}`);
       }
