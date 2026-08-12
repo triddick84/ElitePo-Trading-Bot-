@@ -1,3 +1,48 @@
+# AI's Elite PO Traders Bot — Feb 2026 (Iter 100: Cycle-Mode Purge + Teach Visuals)
+
+## Iter 100 (Feb 2026) — Kill legacy dropdown-cycle & light up TEACH modes
+
+### User bug report (P0)
+> "The tampermonkey script's CYCLE feature is STILL clicking the asset dropdown menu and scrolling through assets instead of rotating my favorites bar."
+
+### Root cause
+The prior iter (98) shipped the new `favoritesCycle.js` module but **left the legacy `cycleMode.js` module wired into `src/index.js`** — its `.start()` was still being auto-invoked on state restore, its `.stop()` was still called on cleanup, and it was still exposed as `window.eliteBotCycleMode`. Both modules were fighting for the CYCLE toggle; the legacy one won.
+
+### Fix (P0)
+- Removed all `cycleMode` imports, invocations, and window exposures from `/app/tampermonkey-src/src/index.js`.
+- **Deleted** `/app/tampermonkey-src/src/trading/cycleMode.js` entirely.
+- `_restoreToggleStates()` now only re-arms CYCLE if `favoritesCycle.getTeachData()` returns a taught container; otherwise the toggle visually flips back OFF with a warning so the user isn't confused by a "green" button that doesn't rotate anything.
+- `cleanup()` now calls `favoritesCycle.stop()` (was `cycleMode.stop()`).
+- Bundle bumped to **v8.130.0**, rebuilt via `yarn build:deploy`, and copied to both `pocket-option-auto-trader.user.js` and `pocket-option-auto-trader-modular.user.js` (the `/api/tampermonkey/script` endpoint prefers the canonical filename).
+
+### Enhancement (P1) — Visual feedback for TEACH modes
+Added a shared helper `/app/tampermonkey-src/src/trading/teachVisuals.js` used by both `favoritesCycle` and `chartTypeSwitcher`:
+- **Live hover-outline preview**: While in TEACH mode, a cyan (favorites) / purple (chart) dashed outline follows the mouse and highlights the container that WOULD be captured **before** the user clicks — with a floating caption showing how many tiles were found.
+- **Post-capture pulse**: On successful capture, a 2-second green pulse animation flashes around the captured container with a "✓ N favorites/chart options captured" badge.
+- **Chart-switch toast**: When `chartTypeSwitcher.ensure()` successfully changes PO's chart type, a lightweight top-right toast appears ("✓ Chart → heikin ashi") for 2.2s.
+
+### Tests (all green)
+- **`test_iter100_cyclemode_purge.py`** — 8/8 pass: legacy source deleted, `index.js` clean, bundle has no `cycleMode`, bundle has `favCycle`, both bundle filenames byte-identical, endpoint serves v8.130+, teach-visuals CSS + toast wiring present in bundle.
+- Combined Iter 95–100 regression: **46/46 pass**.
+
+### Files touched
+- `/app/tampermonkey-src/src/index.js` (cycleMode purge)
+- `/app/tampermonkey-src/src/trading/cycleMode.js` (deleted)
+- `/app/tampermonkey-src/src/trading/favoritesCycle.js` (hover preview + capture flash)
+- `/app/tampermonkey-src/src/trading/chartTypeSwitcher.js` (hover preview + capture flash + success toast)
+- `/app/tampermonkey-src/src/trading/teachVisuals.js` (new — shared helper)
+- `/app/tampermonkey-src/version.txt` → 8.130.0
+- `/app/frontend/public/pocket-option-auto-trader.user.js` (rebuilt)
+- `/app/frontend/public/pocket-option-auto-trader-modular.user.js` (rebuilt)
+- `/app/backend/tests/test_iter100_cyclemode_purge.py` (new)
+
+### Verification
+- `curl /api/tampermonkey/script` → 200, `@version 8.130.0`, `favCycle` present, `cycleMode` absent.
+- All 46 auth/panel/active-target/cycle/chart-type/purge tests pass in 2.0s.
+
+---
+
+
 # AI's Elite PO Traders Bot — Aug 2026 (Iter 99: Chart-Type Enforcement in TM)
 
 ## Iter 99 (Aug 12, 2026) — Sync PO's chart type to match the app's selection

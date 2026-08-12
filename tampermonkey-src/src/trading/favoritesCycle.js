@@ -24,6 +24,7 @@
  */
 
 import { log, info, warn, success, error } from '../core/logger.js';
+import { flashCaptureConfirmation as _flashCapture, showTeachToast } from './teachVisuals.js';
 
 const STORAGE_KEY = 'pobot_favoritesTeachData';
 const DEFAULT_INTERVAL_MS = 30_000;
@@ -144,11 +145,16 @@ class FavoritesCycle {
   /**
    * Enter point-to-teach mode. Next click on the page will be intercepted
    * and used to derive the favorites container selector.
+   *
+   * Iter 100 — Adds LIVE HOVER-OUTLINE preview: as the user moves the
+   * mouse, we highlight the container that WOULD be captured, so they
+   * can visually verify the right DOM row before clicking. After the
+   * click we flash a green confirmation pulse on the captured container.
    */
   startTeach(onComplete) {
     if (this.teachMode) { warn('[favCycle] already teaching'); return; }
     this.teachMode = true;
-    info('[favCycle] TEACH MODE — click any tile in your Pocket Option favorites bar. The next click is captured.');
+    info('[favCycle] TEACH MODE — hover over your favorites bar to preview, click to capture. ESC to cancel.');
 
     // Overlay banner so user knows they're in teach mode
     const overlay = document.createElement('div');
@@ -161,16 +167,74 @@ class FavoritesCycle {
       'text-align:center', 'box-shadow:0 4px 20px rgba(0,0,0,0.3)',
       'cursor:crosshair',
     ].join(';');
-    overlay.textContent = '🎓 TEACH MODE — click any tile in your Pocket Option favorites bar. ESC to cancel.';
+    overlay.textContent = '🎓 TEACH MODE — hover to preview outline, click a tile in your favorites bar to capture. ESC to cancel.';
     document.body.appendChild(overlay);
     this._teachOverlay = overlay;
 
+    // Live hover-outline element (positioned absolutely over the container
+    // that WOULD be captured, updated on every mousemove).
+    const hoverBox = document.createElement('div');
+    hoverBox.id = 'pobot_teach_hover_box';
+    hoverBox.style.cssText = [
+      'position:fixed', 'pointer-events:none', 'z-index:2147483646',
+      'border:3px dashed #22d3ee', 'border-radius:6px',
+      'background:rgba(34,211,238,0.10)',
+      'box-shadow:0 0 0 2px rgba(8,47,56,0.35), 0 8px 30px rgba(34,211,238,0.35)',
+      'transition:top 60ms linear,left 60ms linear,width 60ms linear,height 60ms linear',
+      'display:none',
+    ].join(';');
+    // Tiny caption
+    const hoverCaption = document.createElement('div');
+    hoverCaption.style.cssText = [
+      'position:absolute', 'top:-26px', 'left:0',
+      'background:#082f38', 'color:#22d3ee', 'font:600 11px system-ui,sans-serif',
+      'padding:3px 8px', 'border-radius:4px', 'white-space:nowrap',
+      'box-shadow:0 2px 8px rgba(0,0,0,0.4)',
+    ].join(';');
+    hoverCaption.textContent = 'preview';
+    hoverBox.appendChild(hoverCaption);
+    document.body.appendChild(hoverBox);
+    this._hoverBox = hoverBox;
+    this._hoverCaption = hoverCaption;
+
+    const positionHoverBox = (el, tileCount) => {
+      if (!el) { hoverBox.style.display = 'none'; return; }
+      const rect = el.getBoundingClientRect();
+      if (rect.width < 8 || rect.height < 8) { hoverBox.style.display = 'none'; return; }
+      hoverBox.style.display = 'block';
+      hoverBox.style.top = `${rect.top - 3}px`;
+      hoverBox.style.left = `${rect.left - 3}px`;
+      hoverBox.style.width = `${rect.width + 6}px`;
+      hoverBox.style.height = `${rect.height + 6}px`;
+      hoverCaption.textContent = tileCount != null
+        ? `preview → ${tileCount} tile${tileCount === 1 ? '' : 's'}`
+        : 'preview';
+    };
+
+    let lastPreviewTarget = null;
+    const moveHandler = (e) => {
+      const t = e.target;
+      if (!t || (t.closest && t.closest('#pobot_host'))) { hoverBox.style.display = 'none'; return; }
+      if (t === overlay || overlay.contains(t) || t === hoverBox || hoverBox.contains(t)) return;
+      if (t === lastPreviewTarget) return;
+      lastPreviewTarget = t;
+      const analysis = _analyzeClickedElement(t);
+      if (!analysis) { hoverBox.style.display = 'none'; return; }
+      const container = document.querySelector(analysis.containerSelector);
+      if (!container) { hoverBox.style.display = 'none'; return; }
+      const tiles = container.querySelectorAll(analysis.tileSelector);
+      positionHoverBox(container, tiles.length);
+    };
+    document.addEventListener('mousemove', moveHandler, true);
+
     const cleanup = () => {
       if (this._teachOverlay) { this._teachOverlay.remove(); this._teachOverlay = null; }
+      if (this._hoverBox) { this._hoverBox.remove(); this._hoverBox = null; this._hoverCaption = null; }
       if (this._teachClickHandler) {
         document.removeEventListener('click', this._teachClickHandler, true);
         this._teachClickHandler = null;
       }
+      document.removeEventListener('mousemove', moveHandler, true);
       document.removeEventListener('keydown', escHandler, true);
       this.teachMode = false;
     };
@@ -189,6 +253,8 @@ class FavoritesCycle {
       if (e.target.closest && e.target.closest('#pobot_host')) return;
       // Ignore the overlay click
       if (e.target === overlay || overlay.contains(e.target)) return;
+      // Ignore the hover-preview overlay
+      if (this._hoverBox && (e.target === this._hoverBox || this._hoverBox.contains(e.target))) return;
 
       e.preventDefault();
       e.stopPropagation();
@@ -225,6 +291,8 @@ class FavoritesCycle {
       };
       _writeTeachData(data);
       success(`[favCycle] ✓ TEACHED — ${tiles.length} tiles in "${analysis.containerSelector}" (child: "${analysis.tileSelector}")`);
+      // Post-capture confirmation flash — 2s green pulse around the container
+      _flashCapture(container, `✓ ${tiles.length} favorites captured`);
       if (onComplete) onComplete({ success: true, data });
     };
     this._teachClickHandler = handler;

@@ -15,7 +15,6 @@ import { twentyOneSecondReversal } from './strategies/twentyOneSecondReversal.js
 import { ssidBridge, poLivePrice } from './trading/ssidBridge.js';
 import { liveTickPoster } from './trading/liveTickPoster.js';
 import { livePriceTracker } from './trading/livePriceTracker.js';
-import { cycleMode } from './trading/cycleMode.js';
 import { favoritesCycle } from './trading/favoritesCycle.js';
 import { chartTypeSwitcher } from './trading/chartTypeSwitcher.js';
 import { appSignalPoller } from './trading/appSignalPoller.js';
@@ -447,8 +446,20 @@ class EliteTradingBot {
       // CYCLE toggle
       if (state.cycleEnabled) {
         setToggleActive('cycle', true);
-        cycleMode.start().catch(() => {});
-        restored.push('CYCLE');
+        // Iter 98 — CYCLE now uses favoritesCycle exclusively.
+        // Guard: only auto-restart if a favorites container was previously taught.
+        try {
+          if (favoritesCycle.getTeachData()) {
+            favoritesCycle.start();
+            restored.push('CYCLE');
+          } else {
+            // No teach data yet — turn the visual toggle back OFF so the user
+            // isn't confused by a "green" button that isn't cycling anything.
+            setToggleActive('cycle', false);
+            state.cycleEnabled = false;
+            warn('[Restore] CYCLE was ON but no favorites container is taught — turned OFF. Click "🎓 Teach Favorites" then re-enable.');
+          }
+        } catch (_e) { /* ignore */ }
       }
 
       // APP signal poller toggle
@@ -860,7 +871,7 @@ class EliteTradingBot {
     this.stopDataCollection();
     priceScraper.stop();
     twentyOneSecondReversal.disable();
-    cycleMode.stop();
+    favoritesCycle.stop();
     appSignalPoller.stop();
     cleanupPanel();
 
@@ -905,7 +916,8 @@ window.eliteBotSsidBridge = ssidBridge;
 window.eliteBotLivePrice = poLivePrice;
 window.eliteBotLiveTickPoster = liveTickPoster;
 window.eliteBotLivePriceTracker = livePriceTracker;
-window.eliteBotCycleMode = cycleMode;
+window.eliteBotFavoritesCycle = favoritesCycle;
+window.eliteBotChartTypeSwitcher = chartTypeSwitcher;
 window.eliteBotAppSignal = appSignalPoller;
 window.eliteBotDom = domUtils;
 

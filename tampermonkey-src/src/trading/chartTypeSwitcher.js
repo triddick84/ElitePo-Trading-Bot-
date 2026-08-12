@@ -21,6 +21,7 @@
  */
 
 import { log, info, warn, success, error } from '../core/logger.js';
+import { flashCaptureConfirmation, showTeachToast } from './teachVisuals.js';
 
 const STORAGE_KEY = 'pobot_chartTypeTeachData';
 
@@ -152,6 +153,8 @@ class ChartTypeSwitcher {
     if (target) {
       this.stats.switches++;
       success(`[chartType] switched PO chart to ${desired}`);
+      // Iter 100 — visual toast confirming the on-page switch
+      try { showTeachToast(`✓ Chart → ${desired.replace(/_/g, ' ')}`, 'success', 2200); } catch (_e) { /* silent */ }
       return { changed: true, matched: true, reason: 'switched' };
     }
     this.stats.misses++;
@@ -221,16 +224,64 @@ class ChartTypeSwitcher {
       'text-align:center', 'box-shadow:0 4px 20px rgba(0,0,0,0.3)',
       'cursor:crosshair',
     ].join(';');
-    overlay.textContent = '🎓 TEACH CHART TYPES — open the chart menu in PO, then click any chart-type option (Japanese/Heikin/Line/Bars). ESC to cancel.';
+    overlay.textContent = '🎓 TEACH CHART TYPES — open PO chart menu, hover to preview, click a chart-type option. ESC to cancel.';
     document.body.appendChild(overlay);
     this._teachOverlay = overlay;
 
+    // Iter 100 — live hover-outline preview so the user visually confirms
+    // the menu container we'd capture BEFORE they click.
+    const hoverBox = document.createElement('div');
+    hoverBox.id = 'pobot_chartteach_hover_box';
+    hoverBox.style.cssText = [
+      'position:fixed', 'pointer-events:none', 'z-index:2147483646',
+      'border:3px dashed #a78bfa', 'border-radius:6px',
+      'background:rgba(139,92,246,0.10)',
+      'box-shadow:0 0 0 2px rgba(30,10,60,0.35), 0 8px 30px rgba(139,92,246,0.35)',
+      'transition:top 60ms linear,left 60ms linear,width 60ms linear,height 60ms linear',
+      'display:none',
+    ].join(';');
+    const hoverCaption = document.createElement('div');
+    hoverCaption.style.cssText = [
+      'position:absolute', 'top:-26px', 'left:0',
+      'background:#3b0764', 'color:#c4b5fd', 'font:600 11px system-ui,sans-serif',
+      'padding:3px 8px', 'border-radius:4px', 'white-space:nowrap',
+      'box-shadow:0 2px 8px rgba(0,0,0,0.4)',
+    ].join(';');
+    hoverCaption.textContent = 'preview';
+    hoverBox.appendChild(hoverCaption);
+    document.body.appendChild(hoverBox);
+    this._hoverBox = hoverBox;
+
+    let lastPreviewTarget = null;
+    const moveHandler = (e) => {
+      const t = e.target;
+      if (!t || (t.closest && t.closest('#pobot_host'))) { hoverBox.style.display = 'none'; return; }
+      if (t === overlay || overlay.contains(t) || t === hoverBox || hoverBox.contains(t)) return;
+      if (t === lastPreviewTarget) return;
+      lastPreviewTarget = t;
+      const analysis = _analyzeMenu(t);
+      if (!analysis) { hoverBox.style.display = 'none'; return; }
+      const container = document.querySelector(analysis.containerSelector);
+      if (!container) { hoverBox.style.display = 'none'; return; }
+      const rect = container.getBoundingClientRect();
+      if (rect.width < 8 || rect.height < 8) { hoverBox.style.display = 'none'; return; }
+      hoverBox.style.display = 'block';
+      hoverBox.style.top = `${rect.top - 3}px`;
+      hoverBox.style.left = `${rect.left - 3}px`;
+      hoverBox.style.width = `${rect.width + 6}px`;
+      hoverBox.style.height = `${rect.height + 6}px`;
+      hoverCaption.textContent = `preview → ${analysis.childCount} options`;
+    };
+    document.addEventListener('mousemove', moveHandler, true);
+
     const cleanup = () => {
       if (this._teachOverlay) { this._teachOverlay.remove(); this._teachOverlay = null; }
+      if (this._hoverBox) { this._hoverBox.remove(); this._hoverBox = null; }
       if (this._teachClickHandler) {
         document.removeEventListener('click', this._teachClickHandler, true);
         this._teachClickHandler = null;
       }
+      document.removeEventListener('mousemove', moveHandler, true);
       document.removeEventListener('keydown', escHandler, true);
       this.teachMode = false;
     };
@@ -247,6 +298,7 @@ class ChartTypeSwitcher {
     const handler = (e) => {
       if (e.target.closest && e.target.closest('#pobot_host')) return;
       if (e.target === overlay || overlay.contains(e.target)) return;
+      if (this._hoverBox && (e.target === this._hoverBox || this._hoverBox.contains(e.target))) return;
 
       e.preventDefault();
       e.stopPropagation();
@@ -262,6 +314,11 @@ class ChartTypeSwitcher {
       const data = { ...analysis, taughtAt: Date.now() };
       _writeTeachData(data);
       success(`[chartType] ✓ TEACHED — ${analysis.childCount} chart-type buttons in "${analysis.containerSelector}"`);
+      // Post-capture visual confirmation flash on the taught container
+      try {
+        const container = document.querySelector(analysis.containerSelector);
+        if (container) flashCaptureConfirmation(container, `✓ ${analysis.childCount} chart options captured`);
+      } catch (_e) { /* silent */ }
       if (onComplete) onComplete({ success: true, data });
     };
     this._teachClickHandler = handler;
