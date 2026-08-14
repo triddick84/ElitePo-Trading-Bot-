@@ -19,6 +19,7 @@ import { favoritesCycle } from './trading/favoritesCycle.js';
 import { chartTypeSwitcher } from './trading/chartTypeSwitcher.js';
 import { appSignalPoller } from './trading/appSignalPoller.js';
 import { networkLatencyPoller } from './trading/networkLatencyPoller.js';
+import { heartbeatReporter } from './trading/heartbeatReporter.js';
 import { scanMarkets } from './utils/api.js';
 import { get, post } from './utils/api.js';
 import { getCurrentAsset, getCurrentPrice, waitForElement } from './utils/dom.js';
@@ -130,6 +131,13 @@ class EliteTradingBot {
     try {
       networkLatencyPoller.start(updateNetworkLatency);
     } catch (_e) { /* non-fatal — widget just stays "—" */ }
+
+    // Iter 106 — Heartbeat reporter (feeds the app's Mobile Auto-Trader
+    // connection dashboard so the user can tell if TM is alive without
+    // waiting for a trade to fail).
+    try {
+      heartbeatReporter.start();
+    } catch (_e) { /* non-fatal */ }
 
     // Allow tradeResultWatcher to bump the count on every arm (= every fire)
     window.__eliteBotIncFireCount = (asset) => {
@@ -903,6 +911,7 @@ class EliteTradingBot {
     favoritesCycle.stop();
     appSignalPoller.stop();
     try { networkLatencyPoller.stop(); } catch (_e) { /* ignore */ }
+    try { heartbeatReporter.stop(); } catch (_e) { /* ignore */ }
     cleanupPanel();
 
     if (this.statsInterval) clearInterval(this.statsInterval);

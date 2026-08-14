@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import TampermonkeyControlPanel from './TampermonkeyControlPanel';
+import TampermonkeyConnectionDashboard from './TampermonkeyConnectionDashboard';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -21,29 +22,38 @@ const MobileAutoTraderPage = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4 md:p-8">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-5xl mx-auto">
         {/* Header */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-6">
           <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">
             📱 Mobile Auto-Trader
           </h1>
           <p className="text-slate-400">
-            Run automated trading on your Android phone using your residential IP
+            Real-time bridge between the app and your Tampermonkey userscript
           </p>
-          <Badge className="mt-2 bg-green-600">Bypasses Cloud IP Block</Badge>
+          <div className="flex justify-center gap-2 mt-2 flex-wrap">
+            <Badge className="bg-emerald-600 hover:bg-emerald-600">Bypasses Cloud IP Block</Badge>
+            <Badge className="bg-cyan-600/70 hover:bg-cyan-600/70">Live Connection Health · Iter 106</Badge>
+          </div>
         </div>
 
+        {/* Iter 106 — Rich connection dashboard is now at the TOP of the page,
+             above the tabs, so the user sees TM health BEFORE anything else. */}
+        <TampermonkeyConnectionDashboard />
+
         {/* Tab Navigation */}
-        <div className="flex gap-2 mb-6">
+        <div className="flex gap-2 mb-6 mt-6" data-testid="tm-page-tabs">
           <Button
             onClick={() => setShowSetup(false)}
-            className={!showSetup ? 'bg-purple-600' : 'bg-slate-700'}
+            className={!showSetup ? 'bg-purple-600 hover:bg-purple-500' : 'bg-slate-700 hover:bg-slate-600'}
+            data-testid="tm-tab-control"
           >
             🎮 Control Panel
           </Button>
           <Button
             onClick={() => setShowSetup(true)}
-            className={showSetup ? 'bg-purple-600' : 'bg-slate-700'}
+            className={showSetup ? 'bg-purple-600 hover:bg-purple-500' : 'bg-slate-700 hover:bg-slate-600'}
+            data-testid="tm-tab-setup"
           >
             📖 Setup Guide
           </Button>

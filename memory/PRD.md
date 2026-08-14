@@ -1,3 +1,75 @@
+# AI's Elite PO Traders Bot — Feb 2026 (Iter 106: Mobile Auto-Trader Connection Dashboard)
+
+## Iter 106 (Feb 2026) — Redesigned TM Connection Dashboard + Heartbeat Reporter
+
+### User pain
+> "I can't tell if it's connected or not until trades are failing or winning and the trades stop totally while it should be connected."
+
+### Root cause discovered
+The TM script had **never been posting to `/api/tampermonkey/heartbeat`** — only the SSID bridge did its own separate heartbeat. So the app's status endpoint always returned `connection_active: false` regardless of whether TM was actually running.
+
+### What shipped
+
+**A. TM Heartbeat Reporter** (`/app/tampermonkey-src/src/trading/heartbeatReporter.js`)
+- New module. Posts a rich payload every **15s** to `/api/tampermonkey/heartbeat`.
+- Payload: `script_version` (from GM_info), `ssid_bridge_active`, `current_asset`, `current_timeframe`, `chart_type`, `user_agent`, `page_url`, `panel_visible`, `toggle_states`.
+- Backoff: 3 consecutive failures → 60s cadence, recovers to 15s on next success.
+- Wired into `index.js` `init()` and `cleanup()`.
+
+**B. Enriched backend status** (`server.py`)
+- `POST /api/tampermonkey/heartbeat` now persists `script_version`, `ssid_bridge_active`, `current_timeframe`, `chart_type`, `user_agent`, `page_url`.
+- `GET /api/tampermonkey/status` now returns:
+  - `connection_state` ∈ {`fresh`, `stale`, `lost`, `never_seen`}
+  - `seconds_since_heartbeat`
+  - `installed_version` (from last heartbeat) vs `latest_version` (from `version.txt`) with `is_stale` flag
+  - `ssid_bridge_active`
+  - `active_target` `{asset, timeframe, chart_type}`
+  - `network_latency` snapshot from Iter 103 probe (`last_ms`, `p50_ms`, `p99_ms`, `p999_ms`, `sample_count`)
+
+**C. React Dashboard** (`TampermonkeyConnectionDashboard.jsx`)
+- Hero card: giant status label (`CONNECTED` / `STALE` / `DISCONNECTED` / `NEVER SEEN`) with state-coloured gradient, animated pulse dot, plain-English help text.
+- **6-metric grid**: Script Version (with staleness warning), Tracking (asset/TF/chart-type), SSID Bridge (with unlocked-state note), Latency Now/P50/P99 (color-coded green/amber/rose thresholds).
+- **Update hint** card appears only if TM is stale/never seen; shows copyable installer URL.
+- **1-second ticker** re-renders "N seconds ago" so the age visibly increments.
+- **Auto-refresh every 4s** for the whole status payload.
+- **Browser-notification** fires on connection-loss transition (with user permission).
+- Full test-id coverage for automated QA.
+
+**D. Cleanup**
+- Removed the old red-pill "Tampermonkey Connected/Disconnected" banner from `TampermonkeyControlPanel.jsx` (superseded by the new dashboard which now owns that responsibility).
+
+### Tests
+`test_iter106_connection_dashboard.py` — **13/13 pass**:
+- Enriched status shape validated
+- Heartbeat persists all new fields
+- Fresh state detected within 30s of a heartbeat
+- Stale-version detection (submitted 8.100.0 vs latest 8.134.0 → is_stale=true)
+- Bundle wiring (posts to heartbeat, has all payload keys)
+- React dashboard imported into MobileAutoTraderPage
+- All key `data-testid` markers present for the QA agent
+
+### Verification
+- Live endpoint returns state correctly transitioning `never_seen → fresh → stale` based on last heartbeat age
+- Playwright screenshot at `/mobile-auto-trade` confirms visual rendering — hero card + 6 metrics + update hint all display correctly
+- **Full regression Iter 100–106: 68/68 pass in 1.2s**
+- Bundle bumped to **v8.134.0**
+
+### Files touched
+- `/app/tampermonkey-src/src/trading/heartbeatReporter.js` (new — 130 lines)
+- `/app/tampermonkey-src/src/index.js` (import + start/stop wiring)
+- `/app/tampermonkey-src/version.txt` → **8.134.0**
+- `/app/backend/server.py` (heartbeat + status endpoints enriched)
+- `/app/frontend/src/components/TampermonkeyConnectionDashboard.jsx` (new — 320 lines)
+- `/app/frontend/src/components/MobileAutoTraderPage.jsx` (mount dashboard above tabs)
+- `/app/frontend/src/components/TampermonkeyControlPanel.jsx` (remove legacy pill)
+- `/app/backend/tests/test_iter106_connection_dashboard.py` (new — 13 tests)
+- `/app/backend/tests/test_iter103_network_latency.py` (loosened version check)
+- `/app/frontend/public/pocket-option-auto-trader.user.js` (rebuilt)
+- `/app/frontend/public/pocket-option-auto-trader-modular.user.js` (rebuilt)
+
+---
+
+
 # AI's Elite PO Traders Bot — Feb 2026 (Iter 104-105: SNS Direction Mode + Kyle & Glosten-Milgrom Models)
 
 ## Iter 104 (Feb 2026) — SNS Direction Mode (fire WITH / AGAINST candle)

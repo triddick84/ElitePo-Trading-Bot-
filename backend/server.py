@@ -3647,6 +3647,11 @@ async def toggle_signal_inversion():
 async def get_tampermonkey_status():
     """
     Get full Tampermonkey integration status including settings and recent signals.
+
+    Iter 106 (Feb 2026) — Enriched response for the Mobile Auto-Trader
+    connection dashboard: adds script_version comparison, seconds-since-heartbeat,
+    SSID-bridge status, network latency snapshot, and an actionable "state"
+    string (fresh / stale / lost / never_seen).
     """
     try:
         # Get recent signals
@@ -3654,20 +3659,93 @@ async def get_tampermonkey_status():
             {},
             {"_id": 0}
         ).sort("timestamp", -1).limit(5).to_list(5)
-        
+
         # Check connection status (active if heartbeat within 30 seconds)
         connection_active = False
-        if tampermonkey_settings.get("last_heartbeat"):
+        seconds_since_heartbeat = None
+        heartbeat_iso = tampermonkey_settings.get("last_heartbeat")
+        if heartbeat_iso:
             try:
-                last_hb = datetime.fromisoformat(tampermonkey_settings["last_heartbeat"].replace('Z', '+00:00'))
-                connection_active = (datetime.now(timezone.utc) - last_hb).total_seconds() < 30
-            except:
+                last_hb = datetime.fromisoformat(heartbeat_iso.replace('Z', '+00:00'))
+                delta = (datetime.now(timezone.utc) - last_hb).total_seconds()
+                seconds_since_heartbeat = round(delta, 1)
+                connection_active = delta < 30
+            except Exception:
                 pass
-        
+
+        # Iter 106 — Latest server-side userscript version (source of truth)
+        latest_version = ""
+        try:
+            with open("/app/tampermonkey-src/version.txt", "r") as _vf:
+                latest_version = _vf.read().strip()
+        except Exception:
+            latest_version = ""
+
+        installed_version = str(tampermonkey_settings.get("script_version") or "").strip()
+
+        def _v_tuple(v: str):
+            try:
+                return tuple(int(x) for x in v.split("."))
+            except Exception:
+                return None
+
+        is_stale = False
+        if installed_version and latest_version:
+            iv = _v_tuple(installed_version)
+            lv = _v_tuple(latest_version)
+            if iv and lv:
+                is_stale = iv < lv
+
+        # State bucket used by the UI to pick a colour and message
+        if heartbeat_iso is None:
+            connection_state = "never_seen"
+        elif connection_active:
+            connection_state = "fresh"
+        elif seconds_since_heartbeat is not None and seconds_since_heartbeat < 120:
+            connection_state = "stale"
+        else:
+            connection_state = "lost"
+
+        # SSID bridge status — reported by TM in heartbeat payload
+        ssid_bridge_active = bool(tampermonkey_settings.get("ssid_bridge_active", False))
+
+        # Network latency snapshot (Iter 103 probe) — best-effort read
+        network_latency = None
+        try:
+            from latency_probe_service import network_latency_probe
+            snap = network_latency_probe.get_stats("pocketoption")
+            if snap and isinstance(snap, dict) and snap.get("sample_count", 0) > 0:
+                network_latency = {
+                    "last_ms": snap.get("last_ms"),
+                    "p50_ms": snap.get("p50_ms"),
+                    "p99_ms": snap.get("p99_ms"),
+                    "p999_ms": snap.get("p999_ms"),
+                    "sample_count": snap.get("sample_count"),
+                }
+        except Exception:
+            network_latency = None
+
+        # Active target snapshot (Iter 95) so the UI can show what TM is tracking
+        active_target = {
+            "asset": tampermonkey_settings.get("current_asset")
+                     or tampermonkey_settings.get("active_asset"),
+            "timeframe": tampermonkey_settings.get("current_timeframe")
+                         or tampermonkey_settings.get("active_timeframe"),
+            "chart_type": tampermonkey_settings.get("chart_type"),
+        }
+
         return {
             "success": True,
             "settings": tampermonkey_settings,
             "connection_active": connection_active,
+            "connection_state": connection_state,
+            "seconds_since_heartbeat": seconds_since_heartbeat,
+            "installed_version": installed_version or None,
+            "latest_version": latest_version or None,
+            "is_stale": is_stale,
+            "ssid_bridge_active": ssid_bridge_active,
+            "active_target": active_target,
+            "network_latency": network_latency,
             "recent_signals": recent_signals,
             "endpoints": {
                 "settings": "/api/tampermonkey/settings",
@@ -3701,6 +3779,13 @@ async def tampermonkey_heartbeat(data: dict = Body(default={})):
         # Update current asset if provided
         if "current_asset" in data:
             tampermonkey_settings["current_asset"] = data["current_asset"]
+
+        # Iter 106 — Absorb the extra fields the TM script now sends so the
+        # Mobile Auto-Trader dashboard can show them in the connection card.
+        for key in ("script_version", "ssid_bridge_active", "current_timeframe",
+                    "chart_type", "user_agent", "page_url"):
+            if key in data:
+                tampermonkey_settings[key] = data[key]
         
         # Persist to database
         await db.tampermonkey_settings.update_one(

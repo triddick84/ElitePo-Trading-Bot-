@@ -237,31 +237,18 @@ const TampermonkeyControlPanel = () => {
 
   return (
     <div className="space-y-6" data-testid="tampermonkey-control-panel">
-      {/* Connection Status Banner */}
-      <Card className={`border-2 ${connectionActive ? 'bg-green-900/20 border-green-600' : 'bg-red-900/20 border-red-600'}`}>
-        <CardContent className="py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className={`w-4 h-4 rounded-full ${connectionActive ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
-              <div>
-                <h3 className={`font-bold ${connectionActive ? 'text-green-400' : 'text-red-400'}`}>
-                  {connectionActive ? '🟢 Tampermonkey Connected' : '🔴 Tampermonkey Disconnected'}
-                </h3>
-                <p className="text-xs text-slate-400">
-                  {connectionActive 
-                    ? `Last heartbeat: ${settings.last_heartbeat ? new Date(settings.last_heartbeat).toLocaleTimeString() : 'Just now'}`
-                    : 'Install and open Tampermonkey script on Pocket Option'}
-                </p>
-              </div>
-            </div>
-            {settings.favorites_list?.length > 0 && (
-              <Badge className="bg-purple-600">
-                {settings.favorites_list.length} Favorites Detected
-              </Badge>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+      {/* Iter 106 — Legacy Connection Status pill removed. The rich
+           TampermonkeyConnectionDashboard rendered above by
+           MobileAutoTraderPage now owns "am I connected?" visualization. */}
+
+      {/* Favorites badge (moved out of the removed banner) */}
+      {settings.favorites_list?.length > 0 && (
+        <div className="flex justify-end">
+          <Badge className="bg-purple-600">
+            {settings.favorites_list.length} Favorites Detected
+          </Badge>
+        </div>
+      )}
 
       {/* Win/Loss Stats - v6.6.0 */}
       <Card className="bg-slate-800/50 border-slate-700">

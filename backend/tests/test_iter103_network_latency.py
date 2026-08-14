@@ -174,7 +174,12 @@ class TestNetworkLatencyEndpoints:
 class TestTMBundleNetworkLatencyWidget:
     def test_bundle_version_bumped(self):
         text = BUNDLE_PATH.read_text()
-        assert "@version      8.132" in text or "@version      8.133" in text
+        # Any 8.132+ version proves Iter 103 shipped and hasn't regressed.
+        import re
+        m = re.search(r"@version\s+(\d+)\.(\d+)\.(\d+)", text)
+        assert m, "no @version header in bundle"
+        v = (int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        assert v >= (8, 132, 0), f"version regressed: {v}"
 
     def test_bundle_contains_network_latency_poller(self):
         text = BUNDLE_PATH.read_text()
