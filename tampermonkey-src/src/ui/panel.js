@@ -25,10 +25,13 @@ function isMobile() {
  */
 function injectCSS() {
   const mobile = isMobile();
-  const W = mobile ? 220 : 300;
-  const FONT = mobile ? 11 : 12;
-  const BTN_PAD = mobile ? '10px 6px' : '7px 4px';
-  const BTN_FONT = mobile ? 12 : 11;
+  // Iter 107 — "extension-style" defaults: wider panel + larger touch targets
+  // so users don't complain about hard-to-hit buttons. Original 300px was
+  // too cramped for the growing tab set + AI TA cards.
+  const W = mobile ? 300 : 440;
+  const FONT = mobile ? 12 : 13;
+  const BTN_PAD = mobile ? '12px 8px' : '9px 8px';
+  const BTN_FONT = mobile ? 13 : 12;
 
   const css = `
     #${P}host {
@@ -549,6 +552,147 @@ function injectCSS() {
       border-color: rgba(139, 92, 246, 0.7) !important;
       box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.35) inset !important;
     }
+    /* Iter 107 — AI Analysis tab */
+    .${P}aigauge {
+      padding: ${mobile ? '8px 6px' : '10px 8px'} !important;
+      background: rgba(15, 23, 42, 0.55) !important;
+      border: 1px solid rgba(148, 163, 184, 0.2) !important;
+      border-radius: 8px !important;
+    }
+    .${P}aigaugebar {
+      height: ${mobile ? 10 : 12}px !important;
+      background: rgba(148, 163, 184, 0.15) !important;
+      border-radius: 6px !important;
+      overflow: hidden !important;
+      position: relative !important;
+    }
+    .${P}aigaugefill {
+      height: 100% !important;
+      background: linear-gradient(90deg, #f87171, #fbbf24 50%, #4ade80) !important;
+      transition: width 250ms ease !important;
+    }
+    .${P}aigaugestats {
+      display: flex !important;
+      justify-content: space-between !important;
+      align-items: baseline !important;
+      margin-top: 8px !important;
+    }
+    .${P}aiconfval {
+      font-family: ui-monospace, SFMono-Regular, monospace !important;
+      font-size: ${mobile ? 22 : 26}px !important;
+      font-weight: 800 !important;
+      color: #e2e8f0 !important;
+      letter-spacing: -0.02em !important;
+    }
+    .${P}aiconfdir {
+      font-size: ${mobile ? 13 : 14}px !important;
+      font-weight: 800 !important;
+      letter-spacing: 0.5px !important;
+      color: #94a3b8 !important;
+    }
+    .${P}aiconfdir.CALL { color: #4ade80 !important; }
+    .${P}aiconfdir.PUT  { color: #f87171 !important; }
+    .${P}aiconfarrow { font-size: ${mobile ? 14 : 16}px !important; color: #94a3b8 !important; }
+    .${P}aivotes {
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 5px !important;
+    }
+    .${P}aivoterow {
+      display: grid !important;
+      grid-template-columns: 1fr auto auto !important;
+      gap: 8px !important;
+      align-items: center !important;
+      padding: ${mobile ? '6px 7px' : '5px 8px'} !important;
+      background: rgba(30, 41, 59, 0.5) !important;
+      border-radius: 6px !important;
+      border-left: 3px solid transparent !important;
+    }
+    .${P}aivoterow.CALL { border-left-color: #4ade80 !important; }
+    .${P}aivoterow.PUT  { border-left-color: #f87171 !important; }
+    .${P}aivotename {
+      font-size: ${mobile ? 10 : 11}px !important;
+      color: #cbd5e1 !important;
+      font-weight: 600 !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      white-space: nowrap !important;
+    }
+    .${P}aivotedir {
+      font-size: ${mobile ? 10 : 11}px !important;
+      font-weight: 800 !important;
+      letter-spacing: 0.4px !important;
+      padding: 2px 6px !important;
+      border-radius: 3px !important;
+    }
+    .${P}aivotedir.CALL { color: #052e16 !important; background: #4ade80 !important; }
+    .${P}aivotedir.PUT  { color: #450a0a !important; background: #f87171 !important; }
+    .${P}aivoteconf {
+      font-family: ui-monospace, monospace !important;
+      font-size: ${mobile ? 11 : 12}px !important;
+      color: #22d3ee !important;
+      font-weight: 700 !important;
+    }
+    .${P}aivotempty {
+      color: #64748b !important;
+      font-style: italic !important;
+      font-size: ${mobile ? 10 : 11}px !important;
+      padding: 8px 4px !important;
+      text-align: center !important;
+    }
+    .${P}aiindgrid {
+      display: grid !important;
+      grid-template-columns: repeat(2, 1fr) !important;
+      gap: 6px !important;
+    }
+    .${P}aiindpair {
+      display: flex !important;
+      justify-content: space-between !important;
+      align-items: center !important;
+      padding: ${mobile ? '5px 7px' : '6px 8px'} !important;
+      background: rgba(30, 41, 59, 0.5) !important;
+      border: 1px solid rgba(148, 163, 184, 0.15) !important;
+      border-radius: 5px !important;
+    }
+    .${P}aiindk {
+      font-size: ${mobile ? 9 : 10}px !important;
+      color: #94a3b8 !important;
+      font-weight: 700 !important;
+      letter-spacing: 0.4px !important;
+      text-transform: uppercase !important;
+    }
+    .${P}aiindv {
+      font-family: ui-monospace, monospace !important;
+      font-size: ${mobile ? 11 : 12}px !important;
+      color: #22d3ee !important;
+      font-weight: 700 !important;
+    }
+    .${P}airecent {
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 4px !important;
+    }
+    .${P}airecentrow {
+      display: grid !important;
+      grid-template-columns: auto auto 1fr auto !important;
+      gap: 8px !important;
+      align-items: center !important;
+      padding: ${mobile ? '5px 7px' : '4px 8px'} !important;
+      background: rgba(30, 41, 59, 0.5) !important;
+      border-radius: 5px !important;
+      border-left: 3px solid transparent !important;
+      font-size: ${mobile ? 10 : 11}px !important;
+    }
+    .${P}airecentrow.WIN  { border-left-color: #4ade80 !important; }
+    .${P}airecentrow.LOSS { border-left-color: #f87171 !important; }
+    .${P}airecentdir { font-weight: 800 !important; color: #cbd5e1 !important; }
+    .${P}airecentdir.CALL { color: #4ade80 !important; }
+    .${P}airecentdir.PUT  { color: #f87171 !important; }
+    .${P}airecentres  { font-weight: 800 !important; padding: 1px 5px !important; border-radius: 3px !important; }
+    .${P}airecentres.WIN  { color: #052e16 !important; background: #4ade80 !important; }
+    .${P}airecentres.LOSS { color: #450a0a !important; background: #f87171 !important; }
+    .${P}airecentsym { color: #cbd5e1 !important; font-family: ui-monospace, monospace !important; overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important; }
+    .${P}airecenttime { color: #64748b !important; font-family: ui-monospace, monospace !important; }
     .${P}latlbl {
       font-size: ${mobile ? 9 : 10}px !important;
       color: #fbbf24 !important;
@@ -1395,6 +1539,7 @@ export function createPanel() {
       <div class="${P}tabbar" data-testid="tm-tabbar">
         <button class="${P}tabbtn active" data-tab="live" data-testid="tab-live"><span class="${P}tabicon">◉</span>Live</button>
         <button class="${P}tabbtn" data-tab="trade" data-testid="tab-trade"><span class="${P}tabicon">▲</span>Trade</button>
+        <button class="${P}tabbtn" data-tab="ai" data-testid="tab-ai" title="AI Technical Analysis — model votes, indicators, Kyle λ, mini-chart, recent trades"><span class="${P}tabicon">✧</span>AI</button>
         <button class="${P}tabbtn" data-tab="config" data-testid="tab-config"><span class="${P}tabicon">⚙</span>Config</button>
         <button class="${P}tabbtn" data-tab="stats" data-testid="tab-stats"><span class="${P}tabicon">▨</span>Stats</button>
       </div>
@@ -1498,6 +1643,62 @@ export function createPanel() {
           </div>
         </div>
 
+        <!-- ═════════════════ TAB: AI (Iter 107) ═════════════════ -->
+        <div class="${P}tabpanel" data-tab-panel="ai" data-testid="tab-panel-ai">
+          <!-- Confidence gauge -->
+          <div class="${P}section" data-testid="ai-confidence-card">
+            <div class="${P}sectionttl">Signal Confidence</div>
+            <div class="${P}aigauge">
+              <div class="${P}aigaugebar">
+                <div id="${P}aiConfFill" class="${P}aigaugefill" style="width:0%;"></div>
+              </div>
+              <div class="${P}aigaugestats">
+                <span id="${P}aiConfVal" class="${P}aiconfval">— %</span>
+                <span id="${P}aiConfDir" class="${P}aiconfdir">—</span>
+                <span id="${P}aiConfArrow" class="${P}aiconfarrow"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Top model votes -->
+          <div class="${P}section" data-testid="ai-votes-card">
+            <div class="${P}sectionttl">Top Model Votes</div>
+            <div id="${P}aiVotes" class="${P}aivotes">
+              <div class="${P}aivotempty">no signal yet — waiting…</div>
+            </div>
+          </div>
+
+          <!-- Indicators readout -->
+          <div class="${P}section" data-testid="ai-indicators-card">
+            <div class="${P}sectionttl">Indicators</div>
+            <div class="${P}aiindgrid">
+              <div class="${P}aiindpair"><span class="${P}aiindk">RSI</span><span id="${P}aiIndRSI" class="${P}aiindv">—</span></div>
+              <div class="${P}aiindpair"><span class="${P}aiindk">MACD H</span><span id="${P}aiIndMACD" class="${P}aiindv">—</span></div>
+              <div class="${P}aiindpair"><span class="${P}aiindk">BB pos</span><span id="${P}aiIndBB" class="${P}aiindv">—</span></div>
+              <div class="${P}aiindpair"><span class="${P}aiindk">ATR %</span><span id="${P}aiIndATR" class="${P}aiindv">—</span></div>
+            </div>
+          </div>
+
+          <!-- Microstructure -->
+          <div class="${P}section" data-testid="ai-microstructure-card">
+            <div class="${P}sectionttl">Microstructure <span style="color:#64748b;font-weight:500;font-size:9px;margin-left:4px;">(Kyle · Glosten-Milgrom)</span></div>
+            <div class="${P}aiindgrid">
+              <div class="${P}aiindpair"><span class="${P}aiindk">Kyle λ</span><span id="${P}aiKyleLambda" class="${P}aiindv">—</span></div>
+              <div class="${P}aiindpair"><span class="${P}aiindk">Adv Sel</span><span id="${P}aiGMAdv" class="${P}aiindv">—</span></div>
+              <div class="${P}aiindpair"><span class="${P}aiindk">Informed</span><span id="${P}aiGMInf" class="${P}aiindv">—</span></div>
+              <div class="${P}aiindpair"><span class="${P}aiindk">Illiq bps</span><span id="${P}aiKyleBps" class="${P}aiindv">—</span></div>
+            </div>
+          </div>
+
+          <!-- Recent trades log -->
+          <div class="${P}section" data-testid="ai-trades-card">
+            <div class="${P}sectionttl">Recent Trades <span style="color:#64748b;font-weight:500;font-size:9px;margin-left:4px;">(last 5)</span></div>
+            <div id="${P}aiRecentTrades" class="${P}airecent">
+              <div class="${P}aivotempty">no trades yet</div>
+            </div>
+          </div>
+        </div>
+
         <!-- ═════════════════ TAB: CONFIG ═════════════════ -->
         <div class="${P}tabpanel" data-tab-panel="config" data-testid="tab-panel-config">
           <div class="${P}advanced" id="${P}advanced">
@@ -1531,6 +1732,34 @@ export function createPanel() {
               </div>
               <div id="${P}chartStatus" style="margin-top:6px;font-size:${mobile ? 9 : 10}px;color:#94a3b8;padding:6px 8px;background:rgba(0,0,0,0.25);border-radius:6px;">
                 Status: <span id="${P}chartStatusText" style="color:#e6edf3;">not taught yet</span>
+              </div>
+              <!-- Iter 107 — Manual Chart Type dropdown (in addition to auto-sync) -->
+              <div style="margin-top:8px;padding-top:8px;border-top:1px dashed rgba(148,163,184,0.2);">
+                <div style="font-size:${mobile ? 9 : 10}px;color:#94a3b8;margin-bottom:4px;font-weight:600;">
+                  Manual Chart Type <span style="color:#64748b;font-weight:500;">(overrides app until "auto")</span>
+                </div>
+                <select id="${P}chartTypeSel" class="${P}stratsel" data-testid="chart-type-manual-select" style="width:100%;" title="Pick a chart type and TM will switch PO to it once. Choose 'Auto (follow app)' to defer to whatever the React dashboard selects.">
+                  <option value="auto">Auto (follow app)</option>
+                  <option value="candles">Japanese Candles</option>
+                  <option value="heikin_ashi">Heikin Ashi</option>
+                  <option value="line">Line</option>
+                  <option value="bars">Bars</option>
+                  <option value="area">Area</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Iter 107 — Auto-Invert Threshold slider -->
+            <div class="${P}section" data-testid="autoinvert-threshold-section" title="How many consecutive losses before AUTO-INVERT flips the signal direction. Lower = snappier reaction, higher = more tolerant of noise.">
+              <div class="${P}sectionttl">Auto-Invert Sensitivity</div>
+              <div style="font-size:${mobile ? 9 : 10}px;color:#94a3b8;margin-bottom:6px;line-height:1.5;">
+                Flip after <span id="${P}invThreshVal" style="color:#22d3ee;font-weight:800;">1</span> consecutive loss<span id="${P}invThreshS"></span>. Same threshold also flips BACK when the inverted direction starts losing.
+              </div>
+              <input id="${P}invThresh" data-testid="invert-threshold-slider" type="range" min="1" max="5" step="1" value="1" style="width:100%;" />
+              <div style="display:flex;justify-content:space-between;font-size:${mobile ? 8 : 9}px;color:#64748b;margin-top:2px;font-weight:600;">
+                <span>1 · snappy</span>
+                <span>3 · balanced</span>
+                <span>5 · tolerant</span>
               </div>
             </div>
 
@@ -1873,7 +2102,7 @@ export function initPanelEvents(callbacks = {}) {
       // Drag-from-bottom-right widens when going RIGHT but the panel is
       // anchored at right:5px, so increasing width pushes left. Compensate
       // by inverting dx so dragging right grows the panel.
-      const newW = Math.max(180, Math.min(600, startW - dx));
+      const newW = Math.max(280, Math.min(720, startW - dx));
       hostEl.style.setProperty('width', `${newW}px`, 'important');
       ev.preventDefault();
     };
@@ -2034,7 +2263,7 @@ export function initPanelEvents(callbacks = {}) {
     });
   }
 
-  // Iter 104 — SNS Direction Mode segmented buttons
+  // Iter 107 — SNS Direction Mode segmented buttons
   const snsAgainstBtn = q('snsDirAgainst');
   const snsWithBtn = q('snsDirWith');
   const setSnsDirActive = (withCandle) => {
@@ -2051,6 +2280,31 @@ export function initPanelEvents(callbacks = {}) {
     snsWithBtn.addEventListener('click', () => {
       setSnsDirActive(true);
       callbacks.onSnsDirectionModeChange?.('with');
+    });
+  }
+
+  // Iter 107 — Manual Chart Type dropdown (Config tab)
+  const chartTypeSel = q('chartTypeSel');
+  if (chartTypeSel) {
+    chartTypeSel.addEventListener('change', () => {
+      callbacks.onChartTypeManualChange?.(chartTypeSel.value);
+    });
+  }
+
+  // Iter 107 — Auto-Invert Threshold slider (Config tab)
+  const invThresh = q('invThresh');
+  const invThreshVal = q('invThreshVal');
+  const invThreshS = q('invThreshS');
+  const renderInvThresh = (v) => {
+    if (invThreshVal) invThreshVal.textContent = String(v);
+    if (invThreshS) invThreshS.textContent = v > 1 ? 'es' : '';
+  };
+  if (invThresh) {
+    renderInvThresh(parseInt(invThresh.value, 10));
+    invThresh.addEventListener('input', () => {
+      const v = parseInt(invThresh.value, 10);
+      renderInvThresh(v);
+      callbacks.onInvertThresholdChange?.(v);
     });
   }
 
@@ -2588,6 +2842,141 @@ export function setSnsDirectionMode(mode) {
 }
 
 /**
+ * Iter 107 — Reflect the persisted manual chart-type override so state
+ * survives page reloads.
+ */
+export function setChartTypeManual(value) {
+  const sel = document.getElementById(`${P}chartTypeSel`);
+  if (sel && value) sel.value = value;
+}
+
+/**
+ * Iter 107 — Reflect the persisted auto-invert threshold slider position.
+ */
+export function setInvertThreshold(v) {
+  const sl = document.getElementById(`${P}invThresh`);
+  const val = document.getElementById(`${P}invThreshVal`);
+  const suffix = document.getElementById(`${P}invThreshS`);
+  const n = Math.max(1, Math.min(5, parseInt(v, 10) || 1));
+  if (sl) sl.value = String(n);
+  if (val) val.textContent = String(n);
+  if (suffix) suffix.textContent = n > 1 ? 'es' : '';
+}
+
+/**
+ * Iter 107 — Update the AI Analysis tab with a fresh signal-preview payload.
+ * Called by `aiAnalysisPoller.js` every 3s.
+ *
+ * Payload shape (partial, all fields optional):
+ *   {
+ *     signal: { direction, confidence, symbol, strategy },
+ *     votes:  [{ name, direction, confidence }, ...]  // sorted desc by conf
+ *     indicators: { rsi, macd_hist, bb_pos, atr_percentile }
+ *     microstructure: { kyle_lambda, kyle_illiq_bps,
+ *                       gm_adverse_selection_pct, gm_alpha_informed }
+ *     recent_trades: [{ time, asset, direction, result }, ...]
+ *   }
+ */
+export function updateAITab(data) {
+  if (!data || typeof data !== 'object') return;
+
+  // Confidence gauge
+  const fill = document.getElementById(`${P}aiConfFill`);
+  const val  = document.getElementById(`${P}aiConfVal`);
+  const dir  = document.getElementById(`${P}aiConfDir`);
+  const arr  = document.getElementById(`${P}aiConfArrow`);
+  const sig = data.signal || {};
+  if (fill && sig.confidence != null) {
+    const c = Math.max(0, Math.min(100, Number(sig.confidence) || 0));
+    fill.style.width = `${c}%`;
+    if (val) val.textContent = `${Math.round(c)}%`;
+  }
+  if (dir) {
+    const d = String(sig.direction || '').toUpperCase();
+    dir.textContent = d || '—';
+    dir.classList.remove('CALL', 'PUT');
+    if (d === 'CALL' || d === 'PUT') dir.classList.add(d);
+  }
+  if (arr) {
+    const d = String(sig.direction || '').toUpperCase();
+    arr.textContent = d === 'CALL' ? '▲' : d === 'PUT' ? '▼' : '';
+  }
+
+  // Model votes (top 3)
+  const votesEl = document.getElementById(`${P}aiVotes`);
+  if (votesEl) {
+    const votes = Array.isArray(data.votes) ? data.votes.slice(0, 3) : [];
+    if (votes.length === 0) {
+      votesEl.innerHTML = `<div class="${P}aivotempty">no votes yet — waiting…</div>`;
+    } else {
+      votesEl.innerHTML = votes.map((v) => {
+        const d = String(v.direction || '').toUpperCase();
+        const dCls = (d === 'CALL' || d === 'PUT') ? d : '';
+        const conf = v.confidence != null ? `${Math.round(v.confidence)}%` : '—';
+        const name = String(v.name || 'unknown').slice(0, 26);
+        return `<div class="${P}aivoterow ${dCls}">
+          <span class="${P}aivotename">${name}</span>
+          <span class="${P}aivotedir ${dCls}">${d || '—'}</span>
+          <span class="${P}aivoteconf">${conf}</span>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  // Indicators
+  const ind = data.indicators || {};
+  const setInd = (id, v, fmt = (x) => x) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = (v == null || !isFinite(Number(v))) ? '—' : fmt(v);
+  };
+  setInd(`${P}aiIndRSI`,  ind.rsi,             (v) => Number(v).toFixed(1));
+  setInd(`${P}aiIndMACD`, ind.macd_hist,       (v) => Number(v).toFixed(5));
+  setInd(`${P}aiIndBB`,   ind.bb_pos,          (v) => `${(Number(v) * 100).toFixed(0)}%`);
+  setInd(`${P}aiIndATR`,  ind.atr_percentile,  (v) => `${Math.round(Number(v) * 100)}%`);
+
+  // Microstructure
+  const ms = data.microstructure || {};
+  setInd(`${P}aiKyleLambda`, ms.kyle_lambda,             (v) => Number(v).toFixed(4));
+  setInd(`${P}aiGMAdv`,      ms.gm_adverse_selection_pct, (v) => `${Number(v).toFixed(1)}%`);
+  setInd(`${P}aiGMInf`,      ms.gm_alpha_informed,        (v) => `${Math.round(Number(v) * 100)}%`);
+  setInd(`${P}aiKyleBps`,    ms.kyle_illiq_bps,           (v) => `${Number(v).toFixed(1)} bps`);
+
+  // Recent trades
+  const recent = Array.isArray(data.recent_trades) ? data.recent_trades.slice(0, 5) : [];
+  const recentEl = document.getElementById(`${P}aiRecentTrades`);
+  if (recentEl) {
+    if (recent.length === 0) {
+      recentEl.innerHTML = `<div class="${P}aivotempty">no trades yet</div>`;
+    } else {
+      recentEl.innerHTML = recent.map((t) => {
+        const d = String(t.direction || '').toUpperCase();
+        const r = String(t.result || '').toUpperCase();
+        const dCls = (d === 'CALL' || d === 'PUT') ? d : '';
+        const rCls = (r === 'WIN' || r === 'LOSS') ? r : '';
+        let time = '';
+        try {
+          const tt = t.time ? new Date(t.time) : null;
+          if (tt && !isNaN(tt.getTime())) {
+            const hh = String(tt.getHours()).padStart(2, '0');
+            const mm = String(tt.getMinutes()).padStart(2, '0');
+            const ss = String(tt.getSeconds()).padStart(2, '0');
+            time = `${hh}:${mm}:${ss}`;
+          }
+        } catch (_e) { /* silent */ }
+        const sym = String(t.asset || '').slice(0, 12);
+        return `<div class="${P}airecentrow ${rCls}">
+          <span class="${P}airecentdir ${dCls}">${d || '—'}</span>
+          <span class="${P}airecentres ${rCls}">${r || '—'}</span>
+          <span class="${P}airecentsym">${sym}</span>
+          <span class="${P}airecenttime">${time}</span>
+        </div>`;
+      }).join('');
+    }
+  }
+}
+
+/**
  * Iter 103 — Network latency widget renderer.
  *
  * Called by the poller in `networkLatencyPoller.js` on every refresh with
@@ -2687,4 +3076,7 @@ export default {
   getStrategyTf,
   updateNetworkLatency,
   setSnsDirectionMode,
+  setChartTypeManual,
+  setInvertThreshold,
+  updateAITab,
 };

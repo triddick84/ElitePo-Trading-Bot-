@@ -42,10 +42,12 @@ export const CONFIG = {
 
   // Auto-Invert System
   AUTO_INVERT_ENABLED: true,
-  INVERT_AFTER_CONSECUTIVE_LOSSES: 2,
-  INVERT_COOLDOWN_MS: 10000,
+  INVERT_AFTER_CONSECUTIVE_LOSSES: 1,
+  INVERT_COOLDOWN_MS: 3000,
   INVERT_MAX_INVERTED_TRADES: 5,
   LOSS_MEMORY_SIZE: 10,
+  // Iter 107 — user-tunable "flip back" threshold (originally hardcoded 2)
+  INVERT_REVERT_AFTER_LOSSES: 1,
 
   // CYCLE Mode
   CYCLE_ENABLED: false,

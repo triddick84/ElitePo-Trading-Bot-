@@ -6,7 +6,7 @@
 import { CONFIG } from './core/config.js';
 import { state, setState, loadState, saveState, resetStats } from './core/state.js';
 import { log, info, warn, success, error } from './core/logger.js';
-import { createPanel, initPanelEvents, updateStatsDisplay, updateInvertDisplay, updateStatusDot, cleanupPanel, populateStrategies, setStrategyTf, getStrategyTf, update21sReversalDisplay, set51sTimingSlider, updateActiveAsset, setToggleActive, setSignalPreview, updateStatusStrip, updateLiveCountdown, updateNetworkLatency, setSnsDirectionMode } from './ui/panel.js';
+import { createPanel, initPanelEvents, updateStatsDisplay, updateInvertDisplay, updateStatusDot, cleanupPanel, populateStrategies, setStrategyTf, getStrategyTf, update21sReversalDisplay, set51sTimingSlider, updateActiveAsset, setToggleActive, setSignalPreview, updateStatusStrip, updateLiveCountdown, updateNetworkLatency, setSnsDirectionMode, setChartTypeManual, setInvertThreshold, updateAITab } from './ui/panel.js';
 import { strategyManager } from './strategies/manager.js';
 import { tradeExecutor } from './trading/executor.js';
 import { tradeResultWatcher } from './trading/tradeResultWatcher.js';
@@ -20,6 +20,7 @@ import { chartTypeSwitcher } from './trading/chartTypeSwitcher.js';
 import { appSignalPoller } from './trading/appSignalPoller.js';
 import { networkLatencyPoller } from './trading/networkLatencyPoller.js';
 import { heartbeatReporter } from './trading/heartbeatReporter.js';
+import { aiAnalysisPoller } from './trading/aiAnalysisPoller.js';
 import { scanMarkets } from './utils/api.js';
 import { get, post } from './utils/api.js';
 import { getCurrentAsset, getCurrentPrice, waitForElement } from './utils/dom.js';
@@ -137,6 +138,11 @@ class EliteTradingBot {
     // waiting for a trade to fail).
     try {
       heartbeatReporter.start();
+    } catch (_e) { /* non-fatal */ }
+
+    // Iter 107 — AI Analysis poller (feeds the new AI tab)
+    try {
+      aiAnalysisPoller.start(updateAITab);
     } catch (_e) { /* non-fatal */ }
 
     // Allow tradeResultWatcher to bump the count on every arm (= every fire)
@@ -292,6 +298,36 @@ class EliteTradingBot {
         state._twentyOneSConfig = { ...twentyOneSecondReversal.config };
         state._snsDirectionMode = mode;
         info(`[SNS] Direction mode → ${withCandle ? 'WITH candle' : 'AGAINST candle'}`);
+        saveState();
+      },
+
+      // Iter 107 — Manual chart type override (Config tab dropdown).
+      // 'auto' → clear override, defer to the app's config.
+      // Anything else → immediately ask chartTypeSwitcher to switch PO's chart.
+      onChartTypeManualChange: (value) => {
+        state._chartTypeManual = value || 'auto';
+        try {
+          if (value && value !== 'auto') {
+            chartTypeSwitcher.ensure(value).catch((e) => {
+              warn(`[chartType] manual switch to ${value} threw: ${e.message}`);
+            });
+            info(`[chartType] manual override → ${value}`);
+          } else {
+            info('[chartType] manual override cleared — following app');
+          }
+        } catch (e) { warn(`[chartType] manual change error: ${e.message}`); }
+        saveState();
+      },
+
+      // Iter 107 — Auto-Invert threshold slider (1..5). Updates both the
+      // "how many losses to flip" AND the "how many to flip back" thresholds
+      // so the sensitivity is symmetric.
+      onInvertThresholdChange: (n) => {
+        const val = Math.max(1, Math.min(5, parseInt(n, 10) || 1));
+        CONFIG.INVERT_AFTER_CONSECUTIVE_LOSSES = val;
+        CONFIG.INVERT_REVERT_AFTER_LOSSES = val;
+        state._invertThreshold = val;
+        info(`[AutoInvert] threshold → ${val} loss${val > 1 ? 'es' : ''} (activate + revert both)`);
         saveState();
       },
       onAmountChange: (amount) => {
@@ -514,6 +550,16 @@ class EliteTradingBot {
         const mode = state._snsDirectionMode
           || (state._twentyOneSConfig?.invertSignal ? 'with' : 'against');
         setSnsDirectionMode(mode);
+      } catch (_e) { /* ignore */ }
+      // Iter 107 — Restore manual chart-type override + auto-invert threshold
+      try {
+        setChartTypeManual(state._chartTypeManual || 'auto');
+      } catch (_e) { /* ignore */ }
+      try {
+        const thr = Math.max(1, Math.min(5, parseInt(state._invertThreshold, 10) || 1));
+        CONFIG.INVERT_AFTER_CONSECUTIVE_LOSSES = thr;
+        CONFIG.INVERT_REVERT_AFTER_LOSSES = thr;
+        setInvertThreshold(thr);
       } catch (_e) { /* ignore */ }
 
       // v8.72.0 — Restore the MM trade-amount input value from saved
@@ -912,6 +958,7 @@ class EliteTradingBot {
     appSignalPoller.stop();
     try { networkLatencyPoller.stop(); } catch (_e) { /* ignore */ }
     try { heartbeatReporter.stop(); } catch (_e) { /* ignore */ }
+    try { aiAnalysisPoller.stop(); } catch (_e) { /* ignore */ }
     cleanupPanel();
 
     if (this.statsInterval) clearInterval(this.statsInterval);

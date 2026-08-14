@@ -1,3 +1,71 @@
+# AI's Elite PO Traders Bot — Feb 2026 (Iter 107: Extension-Style TM Redesign)
+
+## Iter 107 (Feb 2026) — TM Panel Extension-Style Redesign + Snappier Auto-Invert
+
+### User pain
+1. "Tampermonkey script auto invert is not working properly — it's slow to switch after consecutive losses"
+2. "Add a selection tool for chart type in the TM script along with the auto chart type"
+3. "Extension-style look and feel — feels like its own application with a good size window display, active chart, and technical analysis from the AI models. The panel is just too compact and hard to select items."
+
+### What shipped
+
+**A. Snappier Auto-Invert**
+- Default `INVERT_AFTER_CONSECUTIVE_LOSSES`: **2 → 1** (fires after first loss).
+- Default `INVERT_COOLDOWN_MS`: **10000 → 3000** (2/3 of the wait cut).
+- New symmetric config key `INVERT_REVERT_AFTER_LOSSES` — the flip-back logic (which was hardcoded to 2 losses) now uses this. Setting either threshold via the slider updates BOTH so behaviour is symmetric.
+- **Auto-Invert Sensitivity slider** (1–5) in the Config tab with a live "Flip after N consecutive loss/es" readout. Persists to `state._invertThreshold` and restores on boot.
+
+**B. Manual Chart Type Selector**
+- New dropdown in the Config tab beside "Chart Type Sync":
+  `Auto (follow app) | Japanese Candles | Heikin Ashi | Line | Bars | Area`
+- On non-`auto` selection: immediately calls `chartTypeSwitcher.ensure(value)` to flip PO's chart, coexists with the auto sync.
+- Persists to `state._chartTypeManual`, restored on boot via new `setChartTypeManual()` exporter.
+
+**C. Extension-Style Panel Redesign**
+- Default panel width bumped: **desktop 300 → 440 px** / **mobile 220 → 300 px**.
+- Larger button padding + font sizes so buttons are no longer "hard to select".
+- Resize handle max width raised: **600 → 720 px**.
+
+**D. New "AI" Tab** with 5 cards driven by a 3s poller:
+1. **Signal Confidence** — 0–100% gradient gauge + direction badge + arrow, colour-coded by CALL/PUT.
+2. **Top Model Votes** — top 3 strategies (name, direction badge, confidence %) from `/signals/preview`, sorted desc by confidence.
+3. **Indicators** — RSI, MACD histogram, BB position, ATR percentile in a 2×2 grid.
+4. **Microstructure** — Kyle λ, Adverse Selection %, Informed Trader %, Illiquidity bps from `/microstructure/models` (Iter 105).
+5. **Recent Trades** — last 5 with direction/result badges + timestamp from new `/api/trades/recent-outcomes` endpoint.
+
+**E. Backend endpoint** `GET /api/trades/recent-outcomes?limit=N&asset=SYM` — returns the last N reports from `trade_reports` with `{asset, direction, result, confidence, strategy, time}`. Sorted newest-first, filterable by asset.
+
+**F. Poller** `aiAnalysisPoller.js` — parallel `Promise.allSettled` on the 4 sources, 3s cadence, 15s backoff after 3 consecutive failures.
+
+### Tests
+`test_iter107_extension_upgrade.py` — **17/17 pass**:
+- Default threshold is 1 (snappy) + revert-key exists + cooldown ≤ 5s
+- `smartInvert.js` uses dynamic revert threshold (no `twoLossesInverted` hardcode)
+- Manual chart-type dropdown + 5 options + callback wired to `chartTypeSwitcher.ensure()`
+- All 5 AI cards + poller wiring + all 4 endpoint references in bundle
+- Panel width ≥ 440 desktop / ≥ 280 mobile / ≥ 720 resize max
+- `/api/trades/recent-outcomes` returns correct shape + respects limit + filters by asset
+- No regression from Iter 100–106 (cycleMode absent, clickAsset present, netlat present, sns-direction-mode present, heartbeat present)
+
+### Verification
+- Full regression Iter 100–107: **85/85 pass in 1.5s**
+- Playwright screenshot confirms AI tab renders all 5 cards visibly
+
+### Files touched
+- `/app/tampermonkey-src/src/core/config.js` (defaults + new revert key)
+- `/app/tampermonkey-src/src/trading/smartInvert.js` (dynamic revert threshold)
+- `/app/tampermonkey-src/src/ui/panel.js` (width bump + AI tab HTML/CSS + chart-type dropdown + threshold slider + 4 new exporters + `updateAITab`)
+- `/app/tampermonkey-src/src/index.js` (2 new callbacks + 2 new poller start/stop + 2 new state-restore blocks)
+- `/app/tampermonkey-src/src/trading/aiAnalysisPoller.js` (new — 155 lines)
+- `/app/tampermonkey-src/version.txt` → **8.135.0**
+- `/app/backend/routes/signals.py` (new `/trades/recent-outcomes` endpoint)
+- `/app/backend/tests/test_iter107_extension_upgrade.py` (new — 17 tests)
+- `/app/frontend/public/pocket-option-auto-trader.user.js` (rebuilt)
+- `/app/frontend/public/pocket-option-auto-trader-modular.user.js` (rebuilt)
+
+---
+
+
 # AI's Elite PO Traders Bot — Feb 2026 (Iter 106: Mobile Auto-Trader Connection Dashboard)
 
 ## Iter 106 (Feb 2026) — Redesigned TM Connection Dashboard + Heartbeat Reporter

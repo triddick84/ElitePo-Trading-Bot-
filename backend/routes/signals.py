@@ -5812,3 +5812,55 @@ async def record_tm_trade_outcome(report: TrampermonkeyOutcome):
     except Exception as e:
         logger.error(f"trades/outcome error: {e}")
         return {"success": False, "error": str(e)}
+
+
+
+# ---------------------------------------------------------------------------
+# Iter 107 — Recent trade outcomes for the TM panel's "AI · trades" card
+# ---------------------------------------------------------------------------
+@router.get("/trades/recent-outcomes")
+async def get_recent_outcomes(
+    limit: int = Query(5, ge=1, le=50, description="How many recent trades to return"),
+    asset: Optional[str] = Query(None, description="Filter by normalized asset symbol"),
+):
+    """
+    Return the last N reported trade outcomes (WIN/LOSS/PENDING).
+
+    Reads the same `trade_reports` collection populated by /trades/report +
+    /trades/outcome. Sorted newest-first. Used by the TM panel's AI tab
+    (aiAnalysisPoller) and any React widget that wants a quick trade log.
+    """
+    try:
+        query = {}
+        if asset:
+            query["asset_normalized"] = asset.upper()
+        cursor = db.trade_reports.find(
+            query,
+            {
+                "_id": 0,
+                "asset": 1, "asset_normalized": 1,
+                "direction": 1, "outcome": 1, "result": 1,
+                "confidence": 1, "strategy": 1,
+                "reported_at": 1, "closed_at": 1, "expires_at": 1, "created_at": 1,
+            },
+        ).sort([("reported_at", -1), ("created_at", -1)]).limit(int(limit))
+        docs = await cursor.to_list(length=int(limit))
+        outcomes = []
+        for d in docs:
+            result = (d.get("outcome") or d.get("result") or "").upper()
+            outcomes.append({
+                "asset": d.get("asset_normalized") or d.get("asset") or "",
+                "direction": (d.get("direction") or "").upper(),
+                "result": result,
+                "confidence": d.get("confidence"),
+                "strategy": d.get("strategy"),
+                "time": (
+                    d.get("closed_at")
+                    or d.get("reported_at")
+                    or d.get("created_at")
+                ),
+            })
+        return {"success": True, "count": len(outcomes), "outcomes": outcomes}
+    except Exception as e:
+        logger.error(f"trades/recent-outcomes error: {e}")
+        return {"success": False, "error": str(e), "outcomes": []}

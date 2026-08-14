@@ -99,13 +99,17 @@ class SmartInvertEngine {
         }
       }
 
-      // Also revert if we see 2 consecutive losses while INVERTED — meaning
-      // the flip itself is now losing, so flip back.
+      // Also revert if we see N consecutive losses while INVERTED — meaning
+      // the flip itself is now losing, so flip back. Iter 107: threshold is
+      // now user-tunable via CONFIG.INVERT_REVERT_AFTER_LOSSES (default 1
+      // for snappy reaction — was hardcoded 2).
+      const revertThreshold = Math.max(1, CONFIG.INVERT_REVERT_AFTER_LOSSES || 1);
       const recentHistory = state.assetHistory[asset] || [];
-      const lastTwo = recentHistory.slice(-2);
-      const twoLossesInverted = lastTwo.length === 2 && lastTwo.every(r => r.result === 'LOSS');
-      if (twoLossesInverted && inv.invertedTradeCount >= 2) {
-        this._deactivate('2 consecutive losses while inverted — flipping back');
+      const lastN = recentHistory.slice(-revertThreshold);
+      const nLossesInverted = lastN.length === revertThreshold
+        && lastN.every(r => r.result === 'LOSS');
+      if (nLossesInverted && inv.invertedTradeCount >= revertThreshold) {
+        this._deactivate(`${revertThreshold} consecutive loss${revertThreshold === 1 ? '' : 'es'} while inverted — flipping back`);
       }
     }
   }
