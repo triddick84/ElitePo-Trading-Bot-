@@ -87,8 +87,13 @@ class TestIter100BundleEndpoint:
             pytest.skip(f"backend unreachable: {e}")
         assert r.status_code == 200, r.status_code
         body = r.text
-        assert "@version      8.130" in body or "@version      8.131" in body or "@version      8.132" in body, (
-            "endpoint served an older bundle — the version header didn't advance"
+        # Any 8.130+ version proves the cleanup shipped and hasn't been rolled back.
+        import re
+        m = re.search(r"@version\s+(\d+)\.(\d+)\.(\d+)", body)
+        assert m, "no @version header in served bundle"
+        major, minor, patch = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        assert (major, minor, patch) >= (8, 130, 0), (
+            f"endpoint served an older bundle ({major}.{minor}.{patch})"
         )
         assert "cycleMode" not in body, "endpoint served a bundle still containing cycleMode"
         assert "favCycle" in body, "endpoint served a bundle missing favoritesCycle"

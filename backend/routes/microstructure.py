@@ -66,3 +66,68 @@ async def set_config(patch: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
 async def refresh() -> Dict[str, Any]:
     result = await microstructure.refresh(force=True)
     return {"success": True, **result}
+
+
+# ---------------------------------------------------------------------------
+# Iter 105 — Kyle (1985) & Glosten-Milgrom (1985) classical model endpoints
+# ---------------------------------------------------------------------------
+@router.get("/microstructure/kyle")
+async def kyle(
+    asset: str = Query(..., description="Asset symbol e.g. EURUSD_OTC"),
+    lookback: int = Query(60, ge=20, le=500),
+) -> Dict[str, Any]:
+    """
+    Kyle (1985) linear price-impact estimate for `asset`.
+
+    Returns:
+        {
+          success, asset, mid_price, n_candles,
+          kyle: {
+            lambda, beta, sigma_v, sigma_u,
+            informed_profit, illiquidity_bps, interpretation
+          }
+        }
+    """
+    from microstructure_models import kyle_for_asset
+    return await kyle_for_asset(asset, lookback=lookback)
+
+
+@router.get("/microstructure/glosten_milgrom")
+async def glosten_milgrom(
+    asset: str = Query(..., description="Asset symbol e.g. EURUSD_OTC"),
+    lookback: int = Query(40, ge=20, le=500),
+    alpha_informed: Optional[float] = Query(
+        None, ge=0.0, le=1.0,
+        description="Override the informed-trader probability. If omitted, "
+                    "estimated from one-sided body dominance over lookback."
+    ),
+) -> Dict[str, Any]:
+    """
+    Glosten-Milgrom (1985) sequential-trade spread model.
+
+    Returns:
+        {
+          success, asset, mid_price, sma, n_candles, n_up_bars, n_down_bars,
+          gm: {
+            v_high, v_low, ask, bid, spread_abs, spread_bps,
+            alpha_informed, p_high_prior, adverse_selection_pct, interpretation
+          }
+        }
+    """
+    from microstructure_models import glosten_milgrom_for_asset
+    return await glosten_milgrom_for_asset(
+        asset, lookback=lookback, alpha_informed=alpha_informed,
+    )
+
+
+@router.get("/microstructure/models")
+async def both_models(
+    asset: str = Query(..., description="Asset symbol"),
+    lookback: int = Query(60, ge=20, le=500),
+) -> Dict[str, Any]:
+    """Convenience endpoint returning BOTH Kyle + Glosten-Milgrom in one call."""
+    from microstructure_models import kyle_for_asset, glosten_milgrom_for_asset
+    k = await kyle_for_asset(asset, lookback=lookback)
+    g = await glosten_milgrom_for_asset(asset, lookback=lookback)
+    return {"success": True, "asset": asset,
+            "kyle_result": k, "gm_result": g}

@@ -517,6 +517,38 @@ function injectCSS() {
     .${P}netlatstate.bad   { background: rgba(248, 113, 113, 0.14) !important; color: #f87171 !important; }
     .${P}netlatspacer { flex: 1; }
     .${P}netlatstats { color: #64748b !important; font-variant-numeric: tabular-nums !important; }
+    /* Iter 104 — SNS Direction Mode segmented buttons */
+    .${P}snsdir {
+      margin-top: ${mobile ? '6px' : '8px'} !important;
+      padding: ${mobile ? '6px 7px' : '7px 8px'} !important;
+      background: rgba(139, 92, 246, 0.06) !important;
+      border: 1px solid rgba(139, 92, 246, 0.25) !important;
+      border-radius: 6px !important;
+    }
+    .${P}snsdirrow {
+      display: grid !important;
+      grid-template-columns: 1fr 1fr !important;
+      gap: 6px !important;
+    }
+    .${P}snsdirbtn {
+      cursor: pointer !important;
+      padding: ${mobile ? '6px 4px' : '7px 6px'} !important;
+      font-size: ${mobile ? 10 : 11}px !important;
+      font-weight: 700 !important;
+      letter-spacing: 0.3px !important;
+      border-radius: 5px !important;
+      border: 1px solid rgba(148, 163, 184, 0.35) !important;
+      background: rgba(30, 41, 59, 0.55) !important;
+      color: #94a3b8 !important;
+      transition: transform 100ms ease, background-color 150ms ease, color 150ms ease, border-color 150ms ease !important;
+    }
+    .${P}snsdirbtn:hover { transform: translateY(-1px) !important; background: rgba(51, 65, 85, 0.7) !important; }
+    .${P}snsdirbtn.active {
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.35), rgba(56, 189, 248, 0.28)) !important;
+      color: #e0e7ff !important;
+      border-color: rgba(139, 92, 246, 0.7) !important;
+      box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.35) inset !important;
+    }
     .${P}latlbl {
       font-size: ${mobile ? 9 : 10}px !important;
       color: #fbbf24 !important;
@@ -1530,6 +1562,14 @@ export function createPanel() {
                   <span>of the 1m candle</span>
                 </div>
               </div>
+              <!-- Iter 104 — Direction Mode: fire WITH or AGAINST current 1m candle -->
+              <div class="${P}snsdir" data-testid="sns-direction-mode" title="Choose whether SNS fires WITH the current 1m candle direction (with-trend) or AGAINST it (contrarian). Default: AGAINST.">
+                <div style="font-size:${mobile ? 9 : 10}px;color:#94a3b8;margin-bottom:4px;font-weight:600;">Direction Mode</div>
+                <div class="${P}snsdirrow">
+                  <button type="button" id="${P}snsDirAgainst" data-testid="sns-dir-against" class="${P}snsdirbtn active" title="Contrarian — fires OPPOSITE to the current 1m candle body. Default behaviour.">↺ Against Candle</button>
+                  <button type="button" id="${P}snsDirWith" data-testid="sns-dir-with" class="${P}snsdirbtn" title="With-trend — fires the SAME direction as the current 1m candle body.">↻ With Candle</button>
+                </div>
+              </div>
             </div>
 
             <div class="${P}section">
@@ -1991,6 +2031,26 @@ export function initPanelEvents(callbacks = {}) {
       const v = parseInt(timingSlider.value, 10);
       renderTiming(v);
       callbacks.on51sTimingChange?.(v);
+    });
+  }
+
+  // Iter 104 — SNS Direction Mode segmented buttons
+  const snsAgainstBtn = q('snsDirAgainst');
+  const snsWithBtn = q('snsDirWith');
+  const setSnsDirActive = (withCandle) => {
+    if (snsAgainstBtn) snsAgainstBtn.classList.toggle('active', !withCandle);
+    if (snsWithBtn) snsWithBtn.classList.toggle('active', !!withCandle);
+  };
+  if (snsAgainstBtn) {
+    snsAgainstBtn.addEventListener('click', () => {
+      setSnsDirActive(false);
+      callbacks.onSnsDirectionModeChange?.('against');
+    });
+  }
+  if (snsWithBtn) {
+    snsWithBtn.addEventListener('click', () => {
+      setSnsDirActive(true);
+      callbacks.onSnsDirectionModeChange?.('with');
     });
   }
 
@@ -2516,6 +2576,18 @@ export function getStrategyTf() {
 }
 
 /**
+ * Iter 104 — Reflect the persisted SNS direction mode ('with' | 'against')
+ * on the segmented button so state survives page reloads.
+ */
+export function setSnsDirectionMode(mode) {
+  const withCandle = mode === 'with';
+  const againstBtn = document.getElementById(`${P}snsDirAgainst`);
+  const withBtn = document.getElementById(`${P}snsDirWith`);
+  if (againstBtn) againstBtn.classList.toggle('active', !withCandle);
+  if (withBtn) withBtn.classList.toggle('active', withCandle);
+}
+
+/**
  * Iter 103 — Network latency widget renderer.
  *
  * Called by the poller in `networkLatencyPoller.js` on every refresh with
@@ -2614,4 +2686,5 @@ export default {
   setStrategyTf,
   getStrategyTf,
   updateNetworkLatency,
+  setSnsDirectionMode,
 };

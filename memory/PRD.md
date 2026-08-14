@@ -1,3 +1,76 @@
+# AI's Elite PO Traders Bot — Feb 2026 (Iter 104-105: SNS Direction Mode + Kyle & Glosten-Milgrom Models)
+
+## Iter 104 (Feb 2026) — SNS Direction Mode (fire WITH / AGAINST candle)
+
+### User request
+> "Add within the Tampermonkey script the candle direction or against the candle direction option button for the seconds strategy — in the TM window display there is no option for the selection."
+
+### What shipped
+- **Panel UI (Trade tab)** — new segmented "Direction Mode" section directly below the Seconds-Number Timing slider with two buttons:
+  - `↺ Against Candle` (default) — contrarian, fires opposite the current 1m body
+  - `↻ With Candle` — with-trend, fires the same direction as the body
+- Buttons are colour-coded (purple/cyan active gradient) and toggle-styled.
+- Callback `onSnsDirectionModeChange` flips `twentyOneSecondReversal.setConfig({ invertSignal: withCandle })`. Because the strategy's native output is contrarian, `invertSignal:true` means "with the candle".
+- Persisted to `state._snsDirectionMode` in GM_setValue-backed state, restored on boot via `setSnsDirectionMode()`.
+
+### Files touched
+- `/app/tampermonkey-src/src/ui/panel.js` (HTML + CSS + click handlers + `setSnsDirectionMode` exporter)
+- `/app/tampermonkey-src/src/index.js` (`onSnsDirectionModeChange` callback + boot restore)
+- `/app/tampermonkey-src/version.txt` → **8.133.0**
+- Bundle rebuilt & deployed to both filenames
+
+---
+
+## Iter 105 (Feb 2026) — Kyle (1985) & Glosten-Milgrom (1985) Models (Option C)
+
+### What shipped
+Two classical microstructure models as pure-math services + REST endpoints for use as diagnostic panels and signal-confidence adjusters.
+
+### Math primitives (`/app/backend/microstructure_models.py`)
+- **`compute_kyle_from_returns(log_returns, signed_flow, mid_price)`**
+  - σ_v = std(log_returns) (informed variance)
+  - σ_u = std(signed_flow) (noise variance)
+  - λ = σ_v / (2·σ_u) (price impact)
+  - β = σ_u / σ_v (informed intensity)
+  - informed_profit = σ_v·σ_u / 2
+  - illiquidity_bps + interpretation buckets (low/moderate/high)
+- **`compute_glosten_milgrom(v_center, v_high, v_low, alpha, prior)`**
+  - Bayesian update per direction
+  - Ask = E[V | buy], Bid = E[V | sell]
+  - adverse_selection_pct = spread / (v_high − v_low) × 100
+  - Interpretation buckets (no / moderate / high / toxic adverse selection)
+
+### Data adapters
+- `kyle_for_asset(asset, lookback=60)` — pulls last N candles from `otc_candles_5s` (MongoDB fallback), builds log-returns + bar-body sign-flow, calls the primitive.
+- `glosten_milgrom_for_asset(asset, lookback=40, alpha_informed=?)` — estimates v_center from SMA, v_high/v_low from ±2σ, prior from last-close position in the band, α from same-side body fraction (or override).
+
+### REST endpoints (`/app/backend/routes/microstructure.py`)
+- `GET /api/microstructure/kyle?asset=<A>&lookback=60`
+- `GET /api/microstructure/glosten_milgrom?asset=<A>&lookback=40&alpha_informed=<0..1|omit>`
+- `GET /api/microstructure/models?asset=<A>&lookback=60` — convenience wrapper returning both
+
+### Tests
+- `test_iter104_sns_dir_and_iter105_models.py` — **18 tests, all pass**:
+  - Bundle wiring (`sns-direction-mode`, `sns-dir-with`, `sns-dir-against`, `onSnsDirectionModeChange`, `setSnsDirectionMode`, `_snsDirectionMode`)
+  - Kyle math (insufficient-data guard, λ = σ_v/(2σ_u), interpretation buckets)
+  - GM math (α=0 → zero spread, α=1 → max spread, monotonicity in α, response shape)
+  - HTTP endpoints reachable & return correct shape
+  - Version guardrails and no-regression from Iter 100-103
+
+### Verification
+- Endpoints alive: `curl /api/microstructure/kyle?asset=EURUSD_OTC` returns `{success:false, reason:"insufficient_data"}` when no candle cache yet — expected shape.
+- **Full regression suite Iter 100–105: 55/55 pass in 1.0s**
+- Bundle v8.133.0 verified via `head -5` — SNS direction markers present.
+
+### Files touched
+- `/app/backend/microstructure_models.py` (new — 320 lines)
+- `/app/backend/routes/microstructure.py` (+ 3 endpoints)
+- `/app/backend/tests/test_iter104_sns_dir_and_iter105_models.py` (new — 18 tests)
+- `/app/backend/tests/test_iter100_cyclemode_purge.py` (loosened hard-coded version check)
+
+---
+
+
 # AI's Elite PO Traders Bot — Feb 2026 (Iter 102-103: Algo Strategy Pack + Network Latency Probe)
 
 ## Iter 102 (Feb 2026) — Algorithmic Trading Strategy Pack (Option A)

@@ -6,7 +6,7 @@
 import { CONFIG } from './core/config.js';
 import { state, setState, loadState, saveState, resetStats } from './core/state.js';
 import { log, info, warn, success, error } from './core/logger.js';
-import { createPanel, initPanelEvents, updateStatsDisplay, updateInvertDisplay, updateStatusDot, cleanupPanel, populateStrategies, setStrategyTf, getStrategyTf, update21sReversalDisplay, set51sTimingSlider, updateActiveAsset, setToggleActive, setSignalPreview, updateStatusStrip, updateLiveCountdown, updateNetworkLatency } from './ui/panel.js';
+import { createPanel, initPanelEvents, updateStatsDisplay, updateInvertDisplay, updateStatusDot, cleanupPanel, populateStrategies, setStrategyTf, getStrategyTf, update21sReversalDisplay, set51sTimingSlider, updateActiveAsset, setToggleActive, setSignalPreview, updateStatusStrip, updateLiveCountdown, updateNetworkLatency, setSnsDirectionMode } from './ui/panel.js';
 import { strategyManager } from './strategies/manager.js';
 import { tradeExecutor } from './trading/executor.js';
 import { tradeResultWatcher } from './trading/tradeResultWatcher.js';
@@ -273,6 +273,19 @@ class EliteTradingBot {
         info(`[51s] Timing changed → fire at ${secondsLeft}s left`);
         saveState();
       },
+
+      // Iter 104 — SNS Direction Mode: fire WITH or AGAINST current 1m candle body
+      onSnsDirectionModeChange: (mode) => {
+        const withCandle = mode === 'with';
+        // twentyOneSecondReversal's config.invertSignal semantics:
+        //   invertSignal:false → strategy's native contrarian pick (AGAINST the candle body)
+        //   invertSignal:true  → swap CALL↔PUT → fires WITH the candle body
+        twentyOneSecondReversal.setConfig({ invertSignal: withCandle });
+        state._twentyOneSConfig = { ...twentyOneSecondReversal.config };
+        state._snsDirectionMode = mode;
+        info(`[SNS] Direction mode → ${withCandle ? 'WITH candle' : 'AGAINST candle'}`);
+        saveState();
+      },
       onAmountChange: (amount) => {
         tradeExecutor.setBaseAmount(amount);
         saveState();
@@ -487,6 +500,12 @@ class EliteTradingBot {
       try {
         const savedMs = state._twentyOneSConfig?.fireAtMsLeft ?? 49_000;
         set51sTimingSlider(Math.round(savedMs / 1000));
+      } catch (_e) { /* ignore */ }
+      // Iter 104 — Restore SNS direction mode button visual
+      try {
+        const mode = state._snsDirectionMode
+          || (state._twentyOneSConfig?.invertSignal ? 'with' : 'against');
+        setSnsDirectionMode(mode);
       } catch (_e) { /* ignore */ }
 
       // v8.72.0 — Restore the MM trade-amount input value from saved
