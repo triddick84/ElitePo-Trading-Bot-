@@ -37,7 +37,12 @@ BASE_URL = (os.environ.get("REACT_APP_BACKEND_URL") or "http://localhost:8001").
 class TestIter101FavoritesBarIsSourceOfTruth:
     def test_version_advanced(self):
         v = Path("/app/tampermonkey-src/version.txt").read_text().strip()
-        assert v == "8.131.0", f"expected 8.131.0, got {v}"
+        # Loose check — any 8.131+ version proves the Iter 101 fix shipped.
+        # (Later iters keep bumping the number; we only care it didn't regress.)
+        parts = v.split(".")
+        assert len(parts) >= 3, f"unexpected version format: {v}"
+        major, minor, patch = int(parts[0]), int(parts[1]), int(parts[2])
+        assert (major, minor, patch) >= (8, 131, 0), f"expected ≥ 8.131.0, got {v}"
 
     def test_favorites_cycle_exposes_click_asset(self):
         src = Path("/app/tampermonkey-src/src/trading/favoritesCycle.js").read_text()
@@ -102,5 +107,12 @@ class TestIter101Endpoint:
         except requests.RequestException as e:
             pytest.skip(f"backend unreachable: {e}")
         assert r.status_code == 200, r.status_code
-        assert "@version      8.131.0" in r.text, "endpoint served the wrong version"
+        # Loose check — any 8.131+ header proves the Iter 101 fix shipped.
+        import re
+        m = re.search(r"@version\s+(\d+)\.(\d+)\.(\d+)", r.text)
+        assert m, "no @version header in served bundle"
+        major, minor, patch = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        assert (major, minor, patch) >= (8, 131, 0), (
+            f"endpoint served an older bundle ({major}.{minor}.{patch})"
+        )
         assert "clickAsset" in r.text, "endpoint served a bundle without clickAsset"

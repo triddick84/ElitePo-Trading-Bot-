@@ -463,6 +463,60 @@ function injectCSS() {
       border: 1px solid rgba(251, 191, 36, 0.25) !important;
       border-radius: 6px !important;
     }
+    /* Iter 103 — Network Latency widget */
+    .${P}netlatrow {
+      display: grid !important;
+      grid-template-columns: repeat(4, 1fr) !important;
+      gap: 6px !important;
+      align-items: stretch !important;
+    }
+    .${P}netlatpair {
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      padding: ${mobile ? '3px 4px' : '4px 6px'} !important;
+      background: rgba(56, 189, 248, 0.06) !important;
+      border: 1px solid rgba(56, 189, 248, 0.25) !important;
+      border-radius: 5px !important;
+    }
+    .${P}netlatk {
+      font-size: ${mobile ? 8 : 9}px !important;
+      font-weight: 700 !important;
+      letter-spacing: 0.4px !important;
+      color: #64748b !important;
+      text-transform: uppercase !important;
+    }
+    .${P}netlatv {
+      font-size: ${mobile ? 11 : 12}px !important;
+      font-weight: 800 !important;
+      color: #38bdf8 !important;
+      font-variant-numeric: tabular-nums !important;
+      margin-top: 1px !important;
+    }
+    .${P}netlatv.warn { color: #fbbf24 !important; }
+    .${P}netlatv.bad  { color: #f87171 !important; }
+    .${P}netlatv.good { color: #4ade80 !important; }
+    .${P}netlatmeta {
+      display: flex !important;
+      align-items: center !important;
+      margin-top: 4px !important;
+      font-size: ${mobile ? 9 : 10}px !important;
+      color: #64748b !important;
+      font-weight: 600 !important;
+    }
+    .${P}netlatstate {
+      padding: 1px 6px !important;
+      border-radius: 3px !important;
+      background: rgba(100, 116, 139, 0.15) !important;
+      color: #94a3b8 !important;
+      text-transform: uppercase !important;
+      letter-spacing: 0.4px !important;
+    }
+    .${P}netlatstate.good  { background: rgba(74, 222, 128, 0.12) !important; color: #4ade80 !important; }
+    .${P}netlatstate.warn  { background: rgba(251, 191, 36, 0.14) !important; color: #fbbf24 !important; }
+    .${P}netlatstate.bad   { background: rgba(248, 113, 113, 0.14) !important; color: #f87171 !important; }
+    .${P}netlatspacer { flex: 1; }
+    .${P}netlatstats { color: #64748b !important; font-variant-numeric: tabular-nums !important; }
     .${P}latlbl {
       font-size: ${mobile ? 9 : 10}px !important;
       color: #fbbf24 !important;
@@ -1356,6 +1410,21 @@ export function createPanel() {
               <span id="${P}asset">—</span>
               <span class="${P}assetsp"></span>
               <span id="${P}assetcnt" class="${P}assetcnt">0</span>
+            </div>
+          </div>
+          <!-- Iter 103 — Network Latency widget -->
+          <div class="${P}section" data-testid="network-latency-widget" title="Backend-measured TCP round-trip to Pocket Option hosts. Rolling percentiles refresh every 5s.">
+            <div class="${P}sectionttl">Network Latency <span id="${P}netlatlbl" style="color:#64748b;font-weight:500;font-size:9px;margin-left:4px;">(pocketoption.com)</span></div>
+            <div class="${P}netlatrow" data-testid="netlat-current">
+              <span class="${P}netlatpair"><span class="${P}netlatk">now</span><span id="${P}netlatnow" class="${P}netlatv">—</span></span>
+              <span class="${P}netlatpair"><span class="${P}netlatk">p50</span><span id="${P}netlatp50" class="${P}netlatv">—</span></span>
+              <span class="${P}netlatpair"><span class="${P}netlatk">p99</span><span id="${P}netlatp99" class="${P}netlatv">—</span></span>
+              <span class="${P}netlatpair"><span class="${P}netlatk">p99.9</span><span id="${P}netlatp999" class="${P}netlatv">—</span></span>
+            </div>
+            <div class="${P}netlatmeta" data-testid="netlat-meta">
+              <span id="${P}netlatstate" class="${P}netlatstate">—</span>
+              <span class="${P}netlatspacer"></span>
+              <span id="${P}netlatstats" class="${P}netlatstats">— samples</span>
             </div>
           </div>
         </div>
@@ -2446,6 +2515,93 @@ export function getStrategyTf() {
   return sel ? sel.value : '5s';
 }
 
+/**
+ * Iter 103 — Network latency widget renderer.
+ *
+ * Called by the poller in `networkLatencyPoller.js` on every refresh with
+ * the JSON payload from GET /api/latency/network. Renders:
+ *   now / p50 / p99 / p99.9  latency values, plus a state chip
+ *   (good/warn/bad) and a sample-count footer.
+ *
+ * Thresholds:
+ *   good  : p99  < 120 ms
+ *   warn  : 120 <= p99 < 300 ms
+ *   bad   : p99 >= 300 ms  OR  failure_count > 0
+ */
+export function updateNetworkLatency(stats) {
+  const nowEl  = document.getElementById(`${P}netlatnow`);
+  const p50El  = document.getElementById(`${P}netlatp50`);
+  const p99El  = document.getElementById(`${P}netlatp99`);
+  const p999El = document.getElementById(`${P}netlatp999`);
+  const stateEl = document.getElementById(`${P}netlatstate`);
+  const statsEl = document.getElementById(`${P}netlatstats`);
+  if (!nowEl || !stateEl) return;
+
+  // Accept either the single-target payload (`{success, stats: {…}}`) or
+  // the all-targets payload (`{success, stats: {label: {…}, …}}`). Pick
+  // the pocketoption entry when present, else the first row.
+  let row = stats;
+  if (stats && stats.pocketoption) row = stats.pocketoption;
+  else if (stats && typeof stats === 'object' && !('sample_count' in stats)) {
+    const keys = Object.keys(stats);
+    if (keys.length) row = stats[keys[0]];
+  }
+  if (!row || typeof row !== 'object') return;
+
+  const fmt = (ms) => (ms == null || !isFinite(ms) ? '—' : ms < 10 ? ms.toFixed(1) : String(Math.round(ms)));
+  const now  = row.last_ms;
+  const p50  = row.p50_ms;
+  const p99  = row.p99_ms;
+  const p999 = row.p999_ms;
+
+  nowEl.textContent  = fmt(now)  + (now  != null ? ' ms' : '');
+  p50El.textContent  = fmt(p50)  + (p50  != null ? ' ms' : '');
+  p99El.textContent  = fmt(p99)  + (p99  != null ? ' ms' : '');
+  p999El.textContent = fmt(p999) + (p999 != null ? ' ms' : '');
+
+  // Colour-code each cell
+  const paint = (el, v) => {
+    el.classList.remove('good', 'warn', 'bad');
+    if (v == null || !isFinite(v)) return;
+    if (v < 120) el.classList.add('good');
+    else if (v < 300) el.classList.add('warn');
+    else el.classList.add('bad');
+  };
+  paint(nowEl, now);
+  paint(p50El, p50);
+  paint(p99El, p99);
+  paint(p999El, p999);
+
+  // Overall state chip
+  stateEl.classList.remove('good', 'warn', 'bad');
+  let stateTxt = 'idle';
+  const fc = Number(row.failure_count || 0);
+  if (row.sample_count > 0) {
+    if (fc > 0 && (fc / Math.max(row.probe_count || 1, 1)) > 0.15) {
+      stateEl.classList.add('bad');
+      stateTxt = 'flaky';
+    } else if (p99 != null && p99 >= 300) {
+      stateEl.classList.add('bad');
+      stateTxt = 'slow';
+    } else if (p99 != null && p99 >= 120) {
+      stateEl.classList.add('warn');
+      stateTxt = 'ok';
+    } else if (p99 != null) {
+      stateEl.classList.add('good');
+      stateTxt = 'fast';
+    } else {
+      stateTxt = 'warming';
+    }
+  }
+  stateEl.textContent = stateTxt;
+
+  if (statsEl) {
+    const nS = row.sample_count || 0;
+    const nF = row.failure_count || 0;
+    statsEl.textContent = `${nS} sample${nS === 1 ? '' : 's'} · ${nF} fail`;
+  }
+}
+
 
 export default {
   createPanel,
@@ -2457,4 +2613,5 @@ export default {
   populateStrategies,
   setStrategyTf,
   getStrategyTf,
+  updateNetworkLatency,
 };

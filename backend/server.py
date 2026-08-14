@@ -4119,7 +4119,19 @@ async def startup_event():
             logger.error(f"Failed to start sentiment loop: {e}")
 
     asyncio.create_task(start_sentiment_loop())
-    
+
+    # Iter 103 — Network latency probe (TCP-RTT to Pocket Option hosts)
+    async def start_network_latency_probe():
+        await asyncio.sleep(20)  # let network + DNS stabilise
+        try:
+            from latency_probe_service import network_latency_probe
+            network_latency_probe.start()
+            logger.info("📡 Network latency probe started")
+        except Exception as e:
+            logger.error(f"Failed to start network latency probe: {e}")
+
+    asyncio.create_task(start_network_latency_probe())
+
     # Return immediately so server can start accepting health checks
     logger.info("⚡ Server startup complete - initialization running in background")
 
@@ -4135,5 +4147,11 @@ async def shutdown_db_client():
     await shutdown_ssid_service()
     # Shutdown Telegram notifier
     await shutdown_telegram_notifier()
+    # Iter 103 — stop the network latency probe
+    try:
+        from latency_probe_service import network_latency_probe
+        await network_latency_probe.stop()
+    except Exception:
+        pass
     # Close database connection
     client.close()

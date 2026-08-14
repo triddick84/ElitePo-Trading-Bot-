@@ -221,6 +221,21 @@ class StrategyRegistry:
             except Exception as e:
                 logger.warning(f"Could not load Triple Confirmation: {e}")
             
+            # Iter 102 — Algorithmic Trading Strategy Pack
+            # Four foundational algo strategies aligned to the classical
+            # taxonomy (trend/momentum, mean-reversion, order-flow, volatility).
+            try:
+                from strategies.strategy_algo_pack import ALGO_STRATEGIES
+                for _sid, _sobj in ALGO_STRATEGIES.items():
+                    self.strategies[_sid] = _sobj
+                logger.info(
+                    "✅ Loaded Algo Strategy Pack (%d strategies): %s",
+                    len(ALGO_STRATEGIES),
+                    ", ".join(ALGO_STRATEGIES.keys()),
+                )
+            except Exception as e:
+                logger.warning(f"Could not load Algo Strategy Pack: {e}")
+
             # Legacy strategies (keep for backward compatibility)
             self.strategies['enhanced_rsi_bb_volume'] = None  # Placeholder
             self.strategies['enhanced_stoch_macd_pattern'] = None  # Placeholder

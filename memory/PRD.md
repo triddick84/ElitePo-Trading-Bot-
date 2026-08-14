@@ -1,3 +1,93 @@
+# AI's Elite PO Traders Bot — Feb 2026 (Iter 102-103: Algo Strategy Pack + Network Latency Probe)
+
+## Iter 102 (Feb 2026) — Algorithmic Trading Strategy Pack (Option A)
+
+### User request
+Implement the algo trading taxonomy from the Feb 2026 knowledge dump (trend/momentum, mean-reversion, arbitrage, order-flow/microstructure, volatility, ML/AI, etc.) into the current build.
+
+### What shipped
+Four new strategy modules in `/app/backend/strategies/strategy_algo_pack.py`, each following the existing class pattern (`name`, `timeframe`, `accuracy_target`, `beta`, `generate_signal(df) → {direction, confidence, reason, strategy, timeframe, indicators, meta}`):
+
+1. **`algo_trend_momentum`** (1m, target 72%) — EMA(9)/EMA(21) cross + MACD histogram + 20-bar breakout. Three-way confluence gate.
+2. **`algo_mean_reversion`** (1m, target 74%) — Bollinger(20, 2.5σ) + RSI-2 extreme + rejection wick (≥1.5× body).
+3. **`algo_order_flow_imbalance`** (30s, target 70%) — Bar-delta proxy `(close-open)/(high-low)` × volume, cumulative window, volume-expansion gate + range gate.
+4. **`algo_volatility_regime`** (1m, target 68%) — ATR-percentile bandpass (35–70% sweet spot); direction from SMA(20) slope + close side.
+
+**Registration**:
+- `/app/backend/strategy_registry.py` — imports `ALGO_STRATEGIES` and adds all 4 to the registry
+- `/app/backend/strategy_selection_service.py` — new entries in the `30s` and `1m` picker payloads so users can select them from the TM panel dropdown
+- Endpoints `/api/strategies/available/30s` and `/api/strategies/available/1m` return the new IDs — verified in test
+
+### Tests
+`test_iter102_algo_strategy_pack.py` — **11/11 pass**:
+- Each strategy produces a well-formed signal on synthetic OHLC
+- Each strategy is NEUTRAL on insufficient data (< N bars)
+- Registry integration: all 4 IDs load, `execute_strategy` works end-to-end
+- Picker wiring: IDs present in 30s / 1m dropdowns
+- Endpoint smoke: `/api/strategies/available/<tf>` returns them
+
+---
+
+## Iter 103 (Feb 2026) — Network Latency Probe & TM Widget (Option D)
+
+### User request (from Option D)
+"Real-time TCP/UDP ping to Pocket Option's WS host with p50/p99/p99.9 in the panel, so you know when your edge degrades."
+
+### What shipped
+
+**Backend probe** (`/app/backend/latency_probe_service.py`):
+- `NetworkLatencyProbe` class — background asyncio task, TCP-connect probe (via `asyncio.to_thread` so the FastAPI loop never blocks).
+- Rolling window of 300 samples per target (~15 min at 3s cadence).
+- Targets: `pocketoption.com:443`, `po.market:443`.
+- Percentiles computed via nearest-rank (matches the Python snippets the user pasted).
+- Lifecycle wired into `server.py`: starts 20s after boot; stopped on shutdown.
+
+**REST endpoints** (`/app/backend/routes/latency.py`):
+- `GET  /api/latency/network` — rolling stats per target (or single via `?label=`)
+- `POST /api/latency/network/measure` — fire an immediate probe & return the fresh sample
+
+**TM widget** (Live tab):
+- 4-cell display: NOW / P50 / P99 / P99.9 with per-cell colour thresholds (green<120 / yellow<300 / red≥300 ms).
+- State chip: `fast` / `ok` / `slow` / `flaky` / `warming`.
+- Sample-count + failure-count footer.
+- Poller: `networkLatencyPoller.js`, 5s cadence, backs off to 15s after 3 consecutive fetch failures, recovers on success.
+- Bundle: **v8.132.0**
+
+### Tests
+`test_iter103_network_latency.py` — **10/10 pass**:
+- Probe service records samples for reachable hosts, failures for unreachable
+- Percentile math is deterministic (verified against 1..100 ms fixture)
+- `/api/latency/network` returns the correct shape (per-target rows with all percentiles)
+- `?label=pocketoption` returns single-target payload
+- `POST /measure` returns fresh sample
+- Bundle version bumped, contains `netlat` marker + `/latency/network` path + `updateNetworkLatency` widget markers
+- No regression on Iter 100–102 (cycleMode still gone, clickAsset still present, favCycle still wired)
+
+### Verification
+- Live probe from container hit `pocketoption.com:443` at ~101 ms — endpoint returns real data
+- TM panel widget rendered correctly in Playwright screenshot (Live tab, 4-cell grid, state chip)
+- **Combined Iter 95–103 regression: 75/75 pass in 3.1s**
+
+### Files touched
+- `/app/backend/strategies/strategy_algo_pack.py` (new — 4 algo strategies)
+- `/app/backend/strategy_registry.py` (register algo pack)
+- `/app/backend/strategy_selection_service.py` (picker wiring for 30s + 1m)
+- `/app/backend/latency_probe_service.py` (new — TCP probe service)
+- `/app/backend/routes/latency.py` (add `/latency/network` + `.../measure`)
+- `/app/backend/server.py` (startup wiring for the probe)
+- `/app/tampermonkey-src/src/ui/panel.js` (widget HTML + CSS + `updateNetworkLatency`)
+- `/app/tampermonkey-src/src/trading/networkLatencyPoller.js` (new — 5s poller with backoff)
+- `/app/tampermonkey-src/src/index.js` (import + start/stop wiring)
+- `/app/tampermonkey-src/version.txt` → **8.132.0**
+- `/app/frontend/public/pocket-option-auto-trader.user.js` (rebuilt)
+- `/app/frontend/public/pocket-option-auto-trader-modular.user.js` (rebuilt)
+- `/app/backend/tests/test_iter102_algo_strategy_pack.py` (new — 11 tests)
+- `/app/backend/tests/test_iter103_network_latency.py` (new — 10 tests)
+- `/app/backend/tests/test_iter101_favorites_source_of_truth.py` (loosened hard-coded version checks so future bumps don't false-fail)
+
+---
+
+
 # AI's Elite PO Traders Bot — Feb 2026 (Iter 101: Favorites Bar = Source of Truth)
 
 ## Iter 101 (Feb 2026) — No more dropdown, ever, when favorites are taught

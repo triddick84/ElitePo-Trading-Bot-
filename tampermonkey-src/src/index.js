@@ -6,7 +6,7 @@
 import { CONFIG } from './core/config.js';
 import { state, setState, loadState, saveState, resetStats } from './core/state.js';
 import { log, info, warn, success, error } from './core/logger.js';
-import { createPanel, initPanelEvents, updateStatsDisplay, updateInvertDisplay, updateStatusDot, cleanupPanel, populateStrategies, setStrategyTf, getStrategyTf, update21sReversalDisplay, set51sTimingSlider, updateActiveAsset, setToggleActive, setSignalPreview, updateStatusStrip, updateLiveCountdown } from './ui/panel.js';
+import { createPanel, initPanelEvents, updateStatsDisplay, updateInvertDisplay, updateStatusDot, cleanupPanel, populateStrategies, setStrategyTf, getStrategyTf, update21sReversalDisplay, set51sTimingSlider, updateActiveAsset, setToggleActive, setSignalPreview, updateStatusStrip, updateLiveCountdown, updateNetworkLatency } from './ui/panel.js';
 import { strategyManager } from './strategies/manager.js';
 import { tradeExecutor } from './trading/executor.js';
 import { tradeResultWatcher } from './trading/tradeResultWatcher.js';
@@ -18,6 +18,7 @@ import { livePriceTracker } from './trading/livePriceTracker.js';
 import { favoritesCycle } from './trading/favoritesCycle.js';
 import { chartTypeSwitcher } from './trading/chartTypeSwitcher.js';
 import { appSignalPoller } from './trading/appSignalPoller.js';
+import { networkLatencyPoller } from './trading/networkLatencyPoller.js';
 import { scanMarkets } from './utils/api.js';
 import { get, post } from './utils/api.js';
 import { getCurrentAsset, getCurrentPrice, waitForElement } from './utils/dom.js';
@@ -124,6 +125,11 @@ class EliteTradingBot {
     // Live signal-quality preview poller — gives the user a "should I press
     // GO?" cue right above the GO button (Iter 55, Apr 25, 2026).
     this.startSignalPreview();
+
+    // Iter 103 — Network latency poller (updates the Live-tab widget)
+    try {
+      networkLatencyPoller.start(updateNetworkLatency);
+    } catch (_e) { /* non-fatal — widget just stays "—" */ }
 
     // Allow tradeResultWatcher to bump the count on every arm (= every fire)
     window.__eliteBotIncFireCount = (asset) => {
@@ -877,6 +883,7 @@ class EliteTradingBot {
     twentyOneSecondReversal.disable();
     favoritesCycle.stop();
     appSignalPoller.stop();
+    try { networkLatencyPoller.stop(); } catch (_e) { /* ignore */ }
     cleanupPanel();
 
     if (this.statsInterval) clearInterval(this.statsInterval);

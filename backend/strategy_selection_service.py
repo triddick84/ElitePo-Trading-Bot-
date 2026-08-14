@@ -59,6 +59,7 @@ class StrategySelectionService:
         ],
         '30s': [
             {'id': 'default', 'name': 'Default 30s Strategy', 'description': 'SuperTrend + MA Crossover'},
+            {'id': 'algo_order_flow_imbalance', 'name': '📊 Algo Order-Flow Imbalance [Iter 102]', 'description': 'Bar-delta + volume expansion + range gate. Microstructure proxy without L2. Fires when buyer/seller aggression converges with volume.', 'win_rate': '70%+ (target)', 'beta': True, 'family': 'order_flow'},
             {'id': 'holly_crossover_30s', 'name': '⭐⭐⭐ Holly Crossover 30s', 'description': 'EMA(12) x WMA(23) reversal crossover with S/R confirmation. Catches trend reversals.', 'win_rate': '75-85%'},
             {'id': 'golden_one_moment', 'name': '⭐⭐⭐ Golden One Moment', 'description': 'RSI(2) + Stochastic(4,3,3) mean reversion crossover. Precise 30s entries.', 'win_rate': '75-85%'},
             {'id': '30s_fibonacci_confluence', 'name': '🆕 Fibonacci Confluence 30s [BETA]', 'description': 'Fib levels (23.6/38.2/50/61.8/78.6) + trend EMA + reversal candle + volume spike. 3/4 confirms required.', 'win_rate': '75%+ (target)', 'beta': True},
@@ -74,6 +75,9 @@ class StrategySelectionService:
         ],
         '1m': [
             {'id': 'default', 'name': 'Default 1m Strategy', 'description': 'High Accuracy strategies (Triple Confirmation, Williams/MACD, Smart Money)'},
+            {'id': 'algo_trend_momentum', 'name': '🧭 Algo Trend / Momentum [Iter 102]', 'description': 'EMA(9)/EMA(21) cross + MACD histogram + 20-bar breakout. Three-way momentum confluence. Classic algo trend-following.', 'win_rate': '72%+ (target)', 'beta': True, 'family': 'trend_momentum'},
+            {'id': 'algo_mean_reversion', 'name': '🌀 Algo Mean Reversion [Iter 102]', 'description': 'Bollinger(20, 2.5σ) + RSI-2 extreme + rejection wick. Pure reversion setup — fires only on 2.5σ excursions with confirmed wick.', 'win_rate': '74%+ (target)', 'beta': True, 'family': 'mean_reversion'},
+            {'id': 'algo_volatility_regime', 'name': '🌡️ Algo Volatility Regime [Iter 102]', 'description': 'ATR-percentile bandpass filter (35-70%). Only trades in the volatility sweet spot; direction from SMA(20) slope.', 'win_rate': '68%+ (target)', 'beta': True, 'family': 'volatility_regime'},
             {'id': '1m_21s_reversal', 'name': '⭐⭐⭐ 21-Second Reversal', 'description': 'Timing contrarian — fires opposite 4-5s trade at 21s-left on 1m candle. Paired with Tampermonkey for precise execution.', 'win_rate': '65-78%'},
             {'id': '1m_fibonacci_confluence', 'name': '🆕 Fibonacci Confluence 1m [BETA]', 'description': 'Fib levels + EMA20 trend + engulfing/hammer candle + volume spike. 3/4 confirms required.', 'win_rate': '75%+ (target)', 'beta': True},
             {'id': '1m_triple_confirmation', 'name': '🆕 Triple Confirmation 1m [BETA]', 'description': 'Supply/Demand zones + trend + reversal candle + Volume Oscillator. All 3 layers must agree.', 'win_rate': '78%+ (target)', 'beta': True},
