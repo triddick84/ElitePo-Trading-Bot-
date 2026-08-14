@@ -103,9 +103,9 @@ frontend/node_modules/.cache/default-development/13.pack
 frontend/node_modules/.cache/default-development/11.pack
 frontend/node_modules/.cache/default-development/16.pack
 frontend/node_modules/.cache/default-development/17.pack
-.env
-.env
-.env.*
-*.env
+# NOTE: .env files ARE required for Emergent deployment (auto-updated at deploy time).
+# The bare '.env', '.env.*', '*.env' entries that used to live here were BLOCKING
+# them from getting committed — removed on Iter 106 to unblock production deploy.
+# Keep only .env.local + explicit secret files below if you ever add them.
 frontend/node_modules/.cache/default-development/10.pack
 frontend/node_modules/.cache/default-development/18.pack
