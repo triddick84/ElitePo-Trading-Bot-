@@ -1,3 +1,52 @@
+# AI's Elite PO Traders Bot — Feb 2026 (Iter 108: Latency-Driven Abstain + Microstructure Dashboard)
+
+## Iter 108 (Feb 2026) — Latency-Driven Abstain Gate (TM) + Microstructure Analytics (React)
+
+### User request
+> "Add a latency-driven abstain gate to pause trades when the network is degraded, and expose the Kyle / Glosten-Milgrom microstructure data via a dedicated React dashboard tab."
+
+### What shipped
+
+**A. Tampermonkey — Latency-Driven Abstain Gate**
+- New `latencyAbstainGate.js` (111 lines) — reads the network-latency probe (p50/p99/p999) and evaluates a user-configured threshold. Returns `{allow, state, reason}`.
+- Wired into `appSignalPoller._tick()` — trades ABORT with `latency_abstain` reason when p99 exceeds the configured threshold.
+- Config-tab **Latency Abstain Threshold slider** (50 – 1000 ms), state chip (fast/ok/slow/abstain), persisted via `state._latencyAbstainThresholdMs` and restored on boot.
+
+**B. React — Microstructure Analytics Dashboard**
+- New `MicrostructureDashboard.jsx` — sidebar-mounted route ("📡 Microstructure").
+- Kyle Model card: λ, β, σ_v, σ_u, illiquidity bps + interpretation bucket.
+- Glosten-Milgrom card: adverse selection %, informed intensity, ask/bid, spread bps.
+- Primary-asset picker (8 OTC forex presets + custom input) + Lookback slider.
+- Cross-Asset Comparison table — pin up to 4 extras alongside the primary asset.
+- Full test-id coverage: `microstructure-page`, `kyle-card`, `gm-card`, `refresh-btn`, `lookback-slider`, `asset-preset-EURUSD`.
+
+### Tests
+- `test_iter108_latency_abstain_and_microstructure_dashboard.py` — **12/12 pass** (bundle wiring, threshold slider, state chip, boot-restore, version ≥ 8.136.0, React component + route + testids, endpoint returns both kyle_result + gm_result, no-regression).
+- **Full Iter 100–108 regression: 97/97 pass in 1.2s**.
+
+### Verification
+- TM script served at `/api/tampermonkey/script` returns `@version 8.136.0` with all latency-abstain markers.
+- `/api/microstructure/models?asset=EURUSD_OTC` → HTTP 200 with `kyle_result` + `gm_result` keys.
+- Playwright screenshot of `/microstructure` route renders correctly: hero + Iter 105 + Iter 108 pills + Kyle card + GM card + cross-asset table.
+
+### Files touched
+- `/app/tampermonkey-src/src/trading/latencyAbstainGate.js` (new — 111 lines)
+- `/app/tampermonkey-src/src/trading/appSignalPoller.js` (gate integration)
+- `/app/tampermonkey-src/src/ui/panel.js` (threshold slider + state chip)
+- `/app/tampermonkey-src/src/index.js` (boot-restore of `_latencyAbstainThresholdMs`)
+- `/app/tampermonkey-src/version.txt` → **8.136.0**
+- `/app/frontend/src/components/MicrostructureDashboard.jsx` (new)
+- `/app/frontend/src/App.js` (route wiring + sidebar entry)
+- `/app/backend/tests/test_iter108_latency_abstain_and_microstructure_dashboard.py` (new — 12 tests)
+- `/app/frontend/public/pocket-option-auto-trader.user.js` (compiled)
+- `/app/frontend/public/pocket-option-auto-trader-modular.user.js` (compiled)
+
+### Note on test CWD
+Iter 102/103/104 tests use bare `from strategies...` / `from latency_probe_service` imports — these MUST be run from `/app/backend` (`cd /app/backend && pytest tests/`). Running from `/app` triggers `ModuleNotFoundError` (not a regression).
+
+---
+
+
 # AI's Elite PO Traders Bot — Feb 2026 (Iter 107: Extension-Style TM Redesign)
 
 ## Iter 107 (Feb 2026) — TM Panel Extension-Style Redesign + Snappier Auto-Invert

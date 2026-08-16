@@ -18,6 +18,7 @@ import PerformancePage from "./components/PerformancePage";
 import SettingsPage from "./components/SettingsPage";
 import PocketOptionPage from "./components/PocketOptionPage";
 import MobileAutoTraderPage from "./components/MobileAutoTraderPage";
+import MicrostructureDashboard from "./components/MicrostructureDashboard";
 import IntegrationsPage from "./components/IntegrationsPage";
 import SignalRoutingPage from "./components/SignalRoutingPage";
 import TmaAdminPage from "./components/TmaAdminPage";
@@ -168,6 +169,7 @@ function ProtectedApp() {
     { id: "telegram-bot", label: "Telegram Bot", icon: "📱" },
     { id: "pocket-option", label: "Pocket Option", icon: "🎰" },
     { id: "mobile-trader", label: "Mobile Auto-Trade", icon: "📲" },
+    { id: "microstructure", label: "Microstructure", icon: "📡" },
     { id: "integrations", label: "Integrations", icon: "🔗" },
     { id: "signal-routing", label: "Signal Routing", icon: "🔀" },
     { id: "tma-admin", label: "TMA KYC Admin", icon: "🛡️" },
@@ -198,6 +200,8 @@ function ProtectedApp() {
         return <PocketOptionPage />;
       case "mobile-trader":
         return <MobileAutoTraderPage />;
+      case "microstructure":
+        return <MicrostructureDashboard />;
       case "integrations":
         return <IntegrationsPage />;
       case "signal-routing":

@@ -1763,6 +1763,24 @@ export function createPanel() {
               </div>
             </div>
 
+            <!-- Iter 108 — Latency-Driven Abstain threshold slider -->
+            <div class="${P}section" data-testid="latency-abstain-section" title="Auto-pause NEW trades when the p99 network latency crosses this threshold. Set to OFF to disable. Trades resume automatically when latency normalises.">
+              <div class="${P}sectionttl">Latency Abstain</div>
+              <div style="font-size:${mobile ? 9 : 10}px;color:#94a3b8;margin-bottom:6px;line-height:1.5;">
+                Pause trades if p99 latency > <span id="${P}latAbsVal" style="color:#22d3ee;font-weight:800;">300</span> ms.
+                <span id="${P}latAbsOff" style="color:#f87171;font-weight:700;display:none;">Currently OFF</span>
+              </div>
+              <input id="${P}latAbsThresh" data-testid="latency-abstain-slider" type="range" min="0" max="1000" step="50" value="300" style="width:100%;" />
+              <div style="display:flex;justify-content:space-between;font-size:${mobile ? 8 : 9}px;color:#64748b;margin-top:2px;font-weight:600;">
+                <span>OFF · 0</span>
+                <span>strict · 300ms</span>
+                <span>lenient · 1000ms</span>
+              </div>
+              <div id="${P}latAbsState" data-testid="latency-abstain-state" style="margin-top:6px;padding:5px 8px;border-radius:5px;font-size:${mobile ? 10 : 11}px;font-weight:700;text-align:center;background:rgba(74,222,128,0.1);color:#4ade80;border:1px solid rgba(74,222,128,0.3);">
+                ✓ TRADING — latency healthy
+              </div>
+            </div>
+
             <div class="${P}section">
               <div class="${P}sectionttl">Strategy Selector</div>
               <div class="${P}stratrow" style="display:flex;gap:6px;align-items:center;">
@@ -2305,6 +2323,23 @@ export function initPanelEvents(callbacks = {}) {
       const v = parseInt(invThresh.value, 10);
       renderInvThresh(v);
       callbacks.onInvertThresholdChange?.(v);
+    });
+  }
+
+  // Iter 108 — Latency Abstain threshold slider (Config tab)
+  const latAbs = q('latAbsThresh');
+  const latAbsVal = q('latAbsVal');
+  const latAbsOff = q('latAbsOff');
+  const renderLatAbs = (v) => {
+    if (latAbsVal) latAbsVal.textContent = String(v);
+    if (latAbsOff) latAbsOff.style.display = v === 0 ? 'inline' : 'none';
+  };
+  if (latAbs) {
+    renderLatAbs(parseInt(latAbs.value, 10));
+    latAbs.addEventListener('input', () => {
+      const v = parseInt(latAbs.value, 10);
+      renderLatAbs(v);
+      callbacks.onLatencyAbstainThresholdChange?.(v);
     });
   }
 
@@ -2864,6 +2899,44 @@ export function setInvertThreshold(v) {
 }
 
 /**
+ * Iter 108 — Reflect the persisted latency-abstain threshold value on the
+ * slider so state survives page reloads.
+ */
+export function setLatencyAbstainThreshold(v) {
+  const sl = document.getElementById(`${P}latAbsThresh`);
+  const val = document.getElementById(`${P}latAbsVal`);
+  const off = document.getElementById(`${P}latAbsOff`);
+  const n = Math.max(0, Math.min(1000, parseInt(v, 10) || 0));
+  if (sl) sl.value = String(n);
+  if (val) val.textContent = String(n);
+  if (off) off.style.display = n === 0 ? 'inline' : 'none';
+}
+
+/**
+ * Iter 108 — Update the latency-abstain state chip.
+ *   'healthy'  → green ✓ TRADING — latency healthy
+ *   'paused'   → red ⛔ PAUSED — latency exceeded
+ *   'off'      → grey ○ DISABLED — abstain OFF
+ */
+export function setLatencyAbstainState(state, extra = '') {
+  const chip = document.getElementById(`${P}latAbsState`);
+  if (!chip) return;
+  const map = {
+    healthy: { bg: 'rgba(74,222,128,0.1)', color: '#4ade80', border: 'rgba(74,222,128,0.3)',
+               txt: '✓ TRADING — latency healthy' },
+    paused:  { bg: 'rgba(248,113,113,0.14)', color: '#f87171', border: 'rgba(248,113,113,0.4)',
+               txt: '⛔ PAUSED — latency exceeded' },
+    off:     { bg: 'rgba(100,116,139,0.12)', color: '#94a3b8', border: 'rgba(100,116,139,0.3)',
+               txt: '○ DISABLED — abstain OFF' },
+  };
+  const c = map[state] || map.off;
+  chip.style.background = c.bg;
+  chip.style.color = c.color;
+  chip.style.borderColor = c.border;
+  chip.textContent = extra ? `${c.txt} · ${extra}` : c.txt;
+}
+
+/**
  * Iter 107 — Update the AI Analysis tab with a fresh signal-preview payload.
  * Called by `aiAnalysisPoller.js` every 3s.
  *
@@ -3079,4 +3152,6 @@ export default {
   setChartTypeManual,
   setInvertThreshold,
   updateAITab,
+  setLatencyAbstainThreshold,
+  setLatencyAbstainState,
 };

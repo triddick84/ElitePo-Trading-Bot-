@@ -6,7 +6,7 @@
 import { CONFIG } from './core/config.js';
 import { state, setState, loadState, saveState, resetStats } from './core/state.js';
 import { log, info, warn, success, error } from './core/logger.js';
-import { createPanel, initPanelEvents, updateStatsDisplay, updateInvertDisplay, updateStatusDot, cleanupPanel, populateStrategies, setStrategyTf, getStrategyTf, update21sReversalDisplay, set51sTimingSlider, updateActiveAsset, setToggleActive, setSignalPreview, updateStatusStrip, updateLiveCountdown, updateNetworkLatency, setSnsDirectionMode, setChartTypeManual, setInvertThreshold, updateAITab } from './ui/panel.js';
+import { createPanel, initPanelEvents, updateStatsDisplay, updateInvertDisplay, updateStatusDot, cleanupPanel, populateStrategies, setStrategyTf, getStrategyTf, update21sReversalDisplay, set51sTimingSlider, updateActiveAsset, setToggleActive, setSignalPreview, updateStatusStrip, updateLiveCountdown, updateNetworkLatency, setSnsDirectionMode, setChartTypeManual, setInvertThreshold, updateAITab, setLatencyAbstainThreshold, setLatencyAbstainState } from './ui/panel.js';
 import { strategyManager } from './strategies/manager.js';
 import { tradeExecutor } from './trading/executor.js';
 import { tradeResultWatcher } from './trading/tradeResultWatcher.js';
@@ -21,6 +21,7 @@ import { appSignalPoller } from './trading/appSignalPoller.js';
 import { networkLatencyPoller } from './trading/networkLatencyPoller.js';
 import { heartbeatReporter } from './trading/heartbeatReporter.js';
 import { aiAnalysisPoller } from './trading/aiAnalysisPoller.js';
+import { latencyAbstainGate } from './trading/latencyAbstainGate.js';
 import { scanMarkets } from './utils/api.js';
 import { get, post } from './utils/api.js';
 import { getCurrentAsset, getCurrentPrice, waitForElement } from './utils/dom.js';
@@ -144,6 +145,14 @@ class EliteTradingBot {
     try {
       aiAnalysisPoller.start(updateAITab);
     } catch (_e) { /* non-fatal */ }
+
+    // Iter 108 — Tick the latency abstain gate every 4s so the state chip
+    // reflects reality even when nothing else calls isPaused().
+    try {
+      this._latAbstainInterval = setInterval(() => {
+        try { latencyAbstainGate.isPaused(); } catch (_e) { /* silent */ }
+      }, 4000);
+    } catch (_e) { /* ignore */ }
 
     // Allow tradeResultWatcher to bump the count on every arm (= every fire)
     window.__eliteBotIncFireCount = (asset) => {
@@ -328,6 +337,18 @@ class EliteTradingBot {
         CONFIG.INVERT_REVERT_AFTER_LOSSES = val;
         state._invertThreshold = val;
         info(`[AutoInvert] threshold → ${val} loss${val > 1 ? 'es' : ''} (activate + revert both)`);
+        saveState();
+      },
+
+      // Iter 108 — Latency-Driven Abstain threshold (0..1000 ms; 0 = OFF).
+      // Persisted to state so it survives reloads. The gate itself lives in
+      // latencyAbstainGate.js and is queried by appSignalPoller before every
+      // trade.
+      onLatencyAbstainThresholdChange: (n) => {
+        const val = Math.max(0, Math.min(1000, parseInt(n, 10) || 0));
+        latencyAbstainGate.setThreshold(val);
+        state._latencyAbstainThreshold = val;
+        info(`[LatAbstain] threshold → ${val === 0 ? 'OFF' : val + 'ms'}`);
         saveState();
       },
       onAmountChange: (amount) => {
@@ -560,6 +581,14 @@ class EliteTradingBot {
         CONFIG.INVERT_AFTER_CONSECUTIVE_LOSSES = thr;
         CONFIG.INVERT_REVERT_AFTER_LOSSES = thr;
         setInvertThreshold(thr);
+      } catch (_e) { /* ignore */ }
+      // Iter 108 — Restore latency-abstain threshold + register UI subscriber
+      try {
+        const savedLat = parseInt(state._latencyAbstainThreshold, 10);
+        const thr = Number.isFinite(savedLat) ? Math.max(0, Math.min(1000, savedLat)) : 300;
+        latencyAbstainGate.setThreshold(thr);
+        setLatencyAbstainThreshold(thr);
+        latencyAbstainGate.register(setLatencyAbstainState);
       } catch (_e) { /* ignore */ }
 
       // v8.72.0 — Restore the MM trade-amount input value from saved
@@ -959,6 +988,9 @@ class EliteTradingBot {
     try { networkLatencyPoller.stop(); } catch (_e) { /* ignore */ }
     try { heartbeatReporter.stop(); } catch (_e) { /* ignore */ }
     try { aiAnalysisPoller.stop(); } catch (_e) { /* ignore */ }
+    try {
+      if (this._latAbstainInterval) { clearInterval(this._latAbstainInterval); this._latAbstainInterval = null; }
+    } catch (_e) { /* ignore */ }
     cleanupPanel();
 
     if (this.statsInterval) clearInterval(this.statsInterval);

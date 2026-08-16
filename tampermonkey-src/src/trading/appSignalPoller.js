@@ -14,6 +14,7 @@ import { fetchSignal, fetchActiveTarget } from '../utils/api.js';
 import { tradeExecutor } from './executor.js';
 import { chartTypeSwitcher } from './chartTypeSwitcher.js';
 import { favoritesCycle } from './favoritesCycle.js';
+import { latencyAbstainGate } from './latencyAbstainGate.js';
 import { getCurrentAsset, switchAsset, switchAssetViaPicker, switchAssetViaSearch } from '../utils/dom.js';
 
 const DEFAULT_POLL_MS = 5_000;
@@ -120,6 +121,21 @@ class AppSignalPoller {
       this.lastSignalTs = Date.now();
 
       info(`[APP] signal received: ${signal.direction} ${signal.symbol || signal.asset || '?'} @ ${signal.confidence || '?'}% [${signal.strategy || 'app'}] · target=${scopeAsset}`);
+
+      // Iter 108 — Latency-Driven Abstain: refuse to fire when p99 latency
+      // has crossed the user's threshold. Never burn balance on a bad pipe.
+      if (latencyAbstainGate.isPaused()) {
+        this.skippedCount++;
+        warn(`[APP] ⛔ ABORT — latency abstain gate engaged (${latencyAbstainGate.getExtra()})`);
+        state.lastSignal = {
+          direction: (signal.direction || '').toUpperCase(),
+          symbol: signal.symbol || signal.asset || scopeAsset,
+          confidence: signal.confidence,
+          strategy: signal.strategy,
+          aborted_reason: 'latency_abstain',
+        };
+        return;
+      }
 
       // Decide how to route
       if (!state.autoTradeEnabled) {
