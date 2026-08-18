@@ -19,6 +19,7 @@ import SettingsPage from "./components/SettingsPage";
 import PocketOptionPage from "./components/PocketOptionPage";
 import MobileAutoTraderPage from "./components/MobileAutoTraderPage";
 import MicrostructureDashboard from "./components/MicrostructureDashboard";
+import EliteScreener from "./components/EliteScreener";
 import IntegrationsPage from "./components/IntegrationsPage";
 import SignalRoutingPage from "./components/SignalRoutingPage";
 import TmaAdminPage from "./components/TmaAdminPage";
@@ -170,6 +171,7 @@ function ProtectedApp() {
     { id: "pocket-option", label: "Pocket Option", icon: "🎰" },
     { id: "mobile-trader", label: "Mobile Auto-Trade", icon: "📲" },
     { id: "microstructure", label: "Microstructure", icon: "📡" },
+    { id: "elite-screener", label: "Elite Screener", icon: "🔍" },
     { id: "integrations", label: "Integrations", icon: "🔗" },
     { id: "signal-routing", label: "Signal Routing", icon: "🔀" },
     { id: "tma-admin", label: "TMA KYC Admin", icon: "🛡️" },
@@ -202,6 +204,8 @@ function ProtectedApp() {
         return <MobileAutoTraderPage />;
       case "microstructure":
         return <MicrostructureDashboard />;
+      case "elite-screener":
+        return <EliteScreener />;
       case "integrations":
         return <IntegrationsPage />;
       case "signal-routing":

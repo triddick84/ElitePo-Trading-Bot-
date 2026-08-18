@@ -264,8 +264,15 @@ export function saveState() {
       modelThresholds: state.modelThresholds || null,
       // Iter 63 — trade latency offset (sec, range -15..+15)
       latencyOffsetSec: typeof state.latencyOffsetSec === 'number' ? state.latencyOffsetSec : 0,
+      // Iter 107 — Auto-Invert Threshold slider
+      invertThreshold: typeof state._invertThreshold === 'number' ? state._invertThreshold : null,
+      // Iter 108 — Latency-Driven Abstain gate threshold (ms; 0 = OFF)
+      latencyAbstainThreshold: typeof state._latencyAbstainThreshold === 'number' ? state._latencyAbstainThreshold : null,
+      // Iter 109 — Elite Score gate config
+      eliteGateThreshold: typeof state._eliteGateThreshold === 'number' ? state._eliteGateThreshold : null,
+      eliteGateEnforceDirection: typeof state._eliteGateEnforceDirection === 'boolean' ? state._eliteGateEnforceDirection : null,
       // Save schema version so future migrations can reset cleanly
-      _v: 6,
+      _v: 7,
       _savedAt: Date.now(),
     }));
   }
@@ -322,6 +329,20 @@ export function loadState() {
           // Snap legacy integer saves onto the 0.5 grid
           v = Math.round(v * 2) / 2;
           state.latencyOffsetSec = v;
+        }
+        // Iter 107/108/109 — Restore gate thresholds so slider positions
+        // survive page reloads
+        if (typeof parsed.invertThreshold === 'number') {
+          state._invertThreshold = parsed.invertThreshold;
+        }
+        if (typeof parsed.latencyAbstainThreshold === 'number') {
+          state._latencyAbstainThreshold = parsed.latencyAbstainThreshold;
+        }
+        if (typeof parsed.eliteGateThreshold === 'number') {
+          state._eliteGateThreshold = parsed.eliteGateThreshold;
+        }
+        if (typeof parsed.eliteGateEnforceDirection === 'boolean') {
+          state._eliteGateEnforceDirection = parsed.eliteGateEnforceDirection;
         }
         // Expose meta for debug / restore log
         state._lastSavedAt = parsed._savedAt || null;

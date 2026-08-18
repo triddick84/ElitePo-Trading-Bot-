@@ -6,7 +6,7 @@
 import { CONFIG } from './core/config.js';
 import { state, setState, loadState, saveState, resetStats } from './core/state.js';
 import { log, info, warn, success, error } from './core/logger.js';
-import { createPanel, initPanelEvents, updateStatsDisplay, updateInvertDisplay, updateStatusDot, cleanupPanel, populateStrategies, setStrategyTf, getStrategyTf, update21sReversalDisplay, set51sTimingSlider, updateActiveAsset, setToggleActive, setSignalPreview, updateStatusStrip, updateLiveCountdown, updateNetworkLatency, setSnsDirectionMode, setChartTypeManual, setInvertThreshold, updateAITab, setLatencyAbstainThreshold, setLatencyAbstainState } from './ui/panel.js';
+import { createPanel, initPanelEvents, updateStatsDisplay, updateInvertDisplay, updateStatusDot, cleanupPanel, populateStrategies, setStrategyTf, getStrategyTf, update21sReversalDisplay, set51sTimingSlider, updateActiveAsset, setToggleActive, setSignalPreview, updateStatusStrip, updateLiveCountdown, updateNetworkLatency, setSnsDirectionMode, setChartTypeManual, setInvertThreshold, updateAITab, setLatencyAbstainThreshold, setLatencyAbstainState, setEliteGateThreshold, setEliteGateEnforceDirection, setEliteGateState } from './ui/panel.js';
 import { strategyManager } from './strategies/manager.js';
 import { tradeExecutor } from './trading/executor.js';
 import { tradeResultWatcher } from './trading/tradeResultWatcher.js';
@@ -22,6 +22,7 @@ import { networkLatencyPoller } from './trading/networkLatencyPoller.js';
 import { heartbeatReporter } from './trading/heartbeatReporter.js';
 import { aiAnalysisPoller } from './trading/aiAnalysisPoller.js';
 import { latencyAbstainGate } from './trading/latencyAbstainGate.js';
+import { eliteScoreGate } from './trading/eliteScoreGate.js';
 import { scanMarkets } from './utils/api.js';
 import { get, post } from './utils/api.js';
 import { getCurrentAsset, getCurrentPrice, waitForElement } from './utils/dom.js';
@@ -351,6 +352,24 @@ class EliteTradingBot {
         info(`[LatAbstain] threshold → ${val === 0 ? 'OFF' : val + 'ms'}`);
         saveState();
       },
+
+      // Iter 109 — Elite Score Gate: block trades whose asset scores below
+      // the user's threshold. `enforceDir` also blocks direction mismatches
+      // between the incoming signal and the Elite bias.
+      onEliteGateThresholdChange: (n) => {
+        const val = Math.max(0, Math.min(100, parseInt(n, 10) || 0));
+        eliteScoreGate.setThreshold(val);
+        state._eliteGateThreshold = val;
+        info(`[EliteGate] threshold → ${val === 0 ? 'OFF' : val}`);
+        saveState();
+      },
+      onEliteGateEnforceDirectionChange: (v) => {
+        const on = !!v;
+        eliteScoreGate.setEnforceDirection(on);
+        state._eliteGateEnforceDirection = on;
+        info(`[EliteGate] enforce direction → ${on ? 'ON' : 'OFF'}`);
+        saveState();
+      },
       onAmountChange: (amount) => {
         tradeExecutor.setBaseAmount(amount);
         saveState();
@@ -589,6 +608,19 @@ class EliteTradingBot {
         latencyAbstainGate.setThreshold(thr);
         setLatencyAbstainThreshold(thr);
         latencyAbstainGate.register(setLatencyAbstainState);
+      } catch (_e) { /* ignore */ }
+
+      // Iter 109 — Restore Elite Score gate threshold + enforce-direction flag
+      try {
+        const savedElite = parseInt(state._eliteGateThreshold, 10);
+        const thr = Number.isFinite(savedElite) ? Math.max(0, Math.min(100, savedElite)) : 0;
+        eliteScoreGate.setThreshold(thr);
+        setEliteGateThreshold(thr);
+        const enfSaved = state._eliteGateEnforceDirection;
+        const enforce = (enfSaved === undefined || enfSaved === null) ? true : !!enfSaved;
+        eliteScoreGate.setEnforceDirection(enforce);
+        setEliteGateEnforceDirection(enforce);
+        eliteScoreGate.register(setEliteGateState);
       } catch (_e) { /* ignore */ }
 
       // v8.72.0 — Restore the MM trade-amount input value from saved

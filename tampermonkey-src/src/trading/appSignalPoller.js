@@ -15,6 +15,7 @@ import { tradeExecutor } from './executor.js';
 import { chartTypeSwitcher } from './chartTypeSwitcher.js';
 import { favoritesCycle } from './favoritesCycle.js';
 import { latencyAbstainGate } from './latencyAbstainGate.js';
+import { eliteScoreGate } from './eliteScoreGate.js';
 import { getCurrentAsset, switchAsset, switchAssetViaPicker, switchAssetViaSearch } from '../utils/dom.js';
 
 const DEFAULT_POLL_MS = 5_000;
@@ -135,6 +136,33 @@ class AppSignalPoller {
           aborted_reason: 'latency_abstain',
         };
         return;
+      }
+
+      // Iter 109 — Elite Score Gate: block trades below the user's minimum
+      // Elite composite score (or when direction disagrees). This is the
+      // "quality gate" — the app-signal poller must consult the screener
+      // BEFORE burning capital.
+      if (eliteScoreGate.getThreshold() > 0) {
+        const scopeSymbol = signal.symbol || signal.asset || scopeAsset;
+        try {
+          const gate = await eliteScoreGate.check(scopeSymbol, signal.direction);
+          if (!gate.allow) {
+            this.skippedCount++;
+            warn(`[APP] ⛔ ABORT — elite gate: ${gate.reason}`);
+            state.lastSignal = {
+              direction: (signal.direction || '').toUpperCase(),
+              symbol: scopeSymbol,
+              confidence: signal.confidence,
+              strategy: signal.strategy,
+              elite_score: gate.score,
+              aborted_reason: 'elite_gate',
+              elite_reason: gate.reason,
+            };
+            return;
+          }
+        } catch (e) {
+          warn(`[APP] elite gate check errored (fail-open): ${e.message}`);
+        }
       }
 
       // Decide how to route

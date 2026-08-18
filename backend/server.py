@@ -3954,6 +3954,7 @@ from routes.accuracy_engine import router as accuracy_engine_router
 from routes.microstructure import router as microstructure_router
 from routes.latency import router as latency_router
 from routes.signal_prewarm import router as signal_prewarm_router
+from routes.screener import router as screener_router
 
 api_router.include_router(strategies_router)
 api_router.include_router(signals_router)
@@ -3972,6 +3973,7 @@ api_router.include_router(accuracy_engine_router)
 api_router.include_router(microstructure_router)
 api_router.include_router(latency_router)
 api_router.include_router(signal_prewarm_router)
+api_router.include_router(screener_router)
 
 app.include_router(api_router)
 

@@ -1781,6 +1781,28 @@ export function createPanel() {
               </div>
             </div>
 
+            <!-- Iter 109 — Elite Score Gate (composite quality filter) -->
+            <div class="${P}section" data-testid="elite-gate-section" title="Only allow trades when the Elite Composite Score (SMT + Sweep + ATR band + OB/FVG + microstructure) is above this threshold. Set to OFF to disable. When ON, also enforces direction agreement between the signal and the Elite bias.">
+              <div class="${P}sectionttl">Elite Score Gate</div>
+              <div style="font-size:${mobile ? 9 : 10}px;color:#94a3b8;margin-bottom:6px;line-height:1.5;">
+                Only trade when Elite Score ≥ <span id="${P}eliteGateVal" style="color:#34d399;font-weight:800;">0</span>.
+                <span id="${P}eliteGateOff" style="color:#f87171;font-weight:700;">Currently OFF</span>
+              </div>
+              <input id="${P}eliteGateThresh" data-testid="elite-gate-slider" type="range" min="0" max="100" step="5" value="0" style="width:100%;" />
+              <div style="display:flex;justify-content:space-between;font-size:${mobile ? 8 : 9}px;color:#64748b;margin-top:2px;font-weight:600;">
+                <span>OFF · 0</span>
+                <span>balanced · 50</span>
+                <span>elite · 80+</span>
+              </div>
+              <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:${mobile ? 10 : 11}px;color:#cbd5e1;cursor:pointer;" data-testid="elite-gate-enforcedir-label">
+                <input id="${P}eliteGateEnforceDir" data-testid="elite-gate-enforce-direction" type="checkbox" checked style="cursor:pointer;" />
+                Enforce direction agreement (block CALL/PUT mismatches)
+              </label>
+              <div id="${P}eliteGateState" data-testid="elite-gate-state" style="margin-top:6px;padding:5px 8px;border-radius:5px;font-size:${mobile ? 10 : 11}px;font-weight:700;text-align:center;background:rgba(100,116,139,0.15);color:#94a3b8;border:1px solid rgba(100,116,139,0.3);">
+                ○ Gate disabled
+              </div>
+            </div>
+
             <div class="${P}section">
               <div class="${P}sectionttl">Strategy Selector</div>
               <div class="${P}stratrow" style="display:flex;gap:6px;align-items:center;">
@@ -2340,6 +2362,29 @@ export function initPanelEvents(callbacks = {}) {
       const v = parseInt(latAbs.value, 10);
       renderLatAbs(v);
       callbacks.onLatencyAbstainThresholdChange?.(v);
+    });
+  }
+
+  // Iter 109 — Elite Score Gate threshold slider + enforce-direction toggle
+  const eliteG = q('eliteGateThresh');
+  const eliteGVal = q('eliteGateVal');
+  const eliteGOff = q('eliteGateOff');
+  const eliteGEnf = q('eliteGateEnforceDir');
+  const renderEliteG = (v) => {
+    if (eliteGVal) eliteGVal.textContent = String(v);
+    if (eliteGOff) eliteGOff.style.display = v === 0 ? 'inline' : 'none';
+  };
+  if (eliteG) {
+    renderEliteG(parseInt(eliteG.value, 10));
+    eliteG.addEventListener('input', () => {
+      const v = parseInt(eliteG.value, 10);
+      renderEliteG(v);
+      callbacks.onEliteGateThresholdChange?.(v);
+    });
+  }
+  if (eliteGEnf) {
+    eliteGEnf.addEventListener('change', () => {
+      callbacks.onEliteGateEnforceDirectionChange?.(!!eliteGEnf.checked);
     });
   }
 
@@ -2913,6 +2958,61 @@ export function setLatencyAbstainThreshold(v) {
 }
 
 /**
+ * Iter 109 — Reflect the persisted Elite-gate threshold + enforce-direction
+ * flag on the panel so state survives page reloads.
+ */
+export function setEliteGateThreshold(v) {
+  const sl = document.getElementById(`${P}eliteGateThresh`);
+  const val = document.getElementById(`${P}eliteGateVal`);
+  const off = document.getElementById(`${P}eliteGateOff`);
+  const n = Math.max(0, Math.min(100, parseInt(v, 10) || 0));
+  if (sl) sl.value = String(n);
+  if (val) val.textContent = String(n);
+  if (off) off.style.display = n === 0 ? 'inline' : 'none';
+}
+
+export function setEliteGateEnforceDirection(v) {
+  const cb = document.getElementById(`${P}eliteGateEnforceDir`);
+  if (cb) cb.checked = !!v;
+}
+
+/**
+ * Iter 109 — Update the Elite-gate status chip based on the last decision.
+ * `event` is the last object returned by `eliteScoreGate.check(...)`:
+ *   { asset, allow, score, direction, threshold, reason }
+ */
+export function setEliteGateState(event) {
+  const chip = document.getElementById(`${P}eliteGateState`);
+  if (!chip) return;
+  if (!event) {
+    chip.style.background = 'rgba(100,116,139,0.15)';
+    chip.style.color = '#94a3b8';
+    chip.style.borderColor = 'rgba(100,116,139,0.3)';
+    chip.textContent = '○ Gate disabled';
+    return;
+  }
+  if (event.reason === 'gate_off' || event.score == null) {
+    chip.style.background = 'rgba(100,116,139,0.15)';
+    chip.style.color = '#94a3b8';
+    chip.style.borderColor = 'rgba(100,116,139,0.3)';
+    chip.textContent = '○ Gate disabled';
+    return;
+  }
+  const s = Number(event.score || 0).toFixed(1);
+  if (event.allow) {
+    chip.style.background = 'rgba(74,222,128,0.1)';
+    chip.style.color = '#4ade80';
+    chip.style.borderColor = 'rgba(74,222,128,0.3)';
+    chip.textContent = `✓ ALLOW ${event.asset || ''} · Elite ${s} · ${event.direction || 'NEUTRAL'}`;
+  } else {
+    chip.style.background = 'rgba(248,113,113,0.14)';
+    chip.style.color = '#f87171';
+    chip.style.borderColor = 'rgba(248,113,113,0.4)';
+    chip.textContent = `⛔ BLOCK · ${event.reason || 'below threshold'}`;
+  }
+}
+
+/**
  * Iter 108 — Update the latency-abstain state chip.
  *   'healthy'  → green ✓ TRADING — latency healthy
  *   'paused'   → red ⛔ PAUSED — latency exceeded
@@ -3154,4 +3254,7 @@ export default {
   updateAITab,
   setLatencyAbstainThreshold,
   setLatencyAbstainState,
+  setEliteGateThreshold,
+  setEliteGateEnforceDirection,
+  setEliteGateState,
 };
