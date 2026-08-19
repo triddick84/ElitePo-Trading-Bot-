@@ -1504,29 +1504,75 @@ async def train_ai_models(background_tasks: BackgroundTasks,
 async def train_ml_model(request: TrainModelRequest, background_tasks: BackgroundTasks):
     """
     Train a high-accuracy ML model using collected real data.
-    
-    Args:
-        asset: Asset symbol (e.g., 'EURUSD_otc')
-        timeframe: Timeframe ('5s', '1m', '5m')
-        confidence_threshold: Minimum confidence for signals (0.5-0.95)
-        min_samples: Minimum samples required for training
+
+    Iter 110 — accepts fine-tuning params: `days`, `feature_groups`,
+    `rf_weight`, `gb_weight`, `model_types`, `lookahead`, `test_size`.
     """
     try:
         trainer = get_ml_trainer()
-        
+
         result = await trainer.train_model(
             asset=request.asset,
             timeframe=request.timeframe,
             confidence_threshold=request.confidence_threshold,
-            min_samples=request.min_samples
+            min_samples=request.min_samples,
+            days=request.days or 30,
+            feature_groups=request.feature_groups,
+            rf_weight=request.rf_weight if request.rf_weight is not None else 0.5,
+            gb_weight=request.gb_weight if request.gb_weight is not None else 0.5,
+            model_types=request.model_types,
+            lookahead=request.lookahead or 1,
+            test_size=request.test_size or 0.2,
         )
-        
+
         return result
     except Exception as e:
         logger.error(f"Error training model: {e}")
         import traceback
         traceback.print_exc()
         return {"success": False, "error": str(e)}
+
+
+@router.post("/ml-trainer/train-comparison")
+async def train_ml_model_comparison(request: TrainModelRequest):
+    """
+    Iter 110 — Train RF-only, GB-only, and Ensemble on the SAME data
+    for a diagnostic side-by-side accuracy comparison. Nothing is
+    persisted; call `/ml-trainer/train` afterwards with your preferred
+    config to actually save the model.
+    """
+    try:
+        trainer = get_ml_trainer()
+        result = await trainer.train_comparison(
+            asset=request.asset,
+            timeframe=request.timeframe,
+            confidence_threshold=request.confidence_threshold,
+            days=request.days or 30,
+            min_samples=request.min_samples or 500,
+            feature_groups=request.feature_groups,
+            lookahead=request.lookahead or 1,
+            test_size=request.test_size or 0.2,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Error running comparison: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/ml-trainer/feature-groups")
+async def get_feature_groups():
+    """Iter 110 — return the master list of feature groups (with defaults)."""
+    from real_data_trainer import AdvancedFeatureEngineer
+    return {
+        "success": True,
+        "groups": [
+            {"id": g, "default": True,
+             "label": g.replace("_", " ").title()}
+            for g in AdvancedFeatureEngineer.FEATURE_GROUPS
+        ],
+    }
 
 
 

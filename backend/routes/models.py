@@ -71,6 +71,14 @@ class TrainModelRequest(BaseModel):
     timeframe: str
     confidence_threshold: Optional[float] = 0.75
     min_samples: Optional[int] = 500
+    # Iter 110 — fine-tuning parameters
+    days: Optional[int] = 30
+    feature_groups: Optional[Dict[str, bool]] = None
+    rf_weight: Optional[float] = 0.5
+    gb_weight: Optional[float] = 0.5
+    model_types: Optional[List[str]] = None  # subset of ['rf','gb']
+    lookahead: Optional[int] = 1
+    test_size: Optional[float] = 0.2
 
 
 class GenerateSignalRequest(BaseModel):

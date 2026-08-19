@@ -1,3 +1,83 @@
+# AI's Elite PO Traders Bot — Feb 2026 (Iter 110: AI Fine-Tuning + Data Audit + Master Toggle)
+
+## Iter 110 (Feb 2026) — AI Models Data Display Fix + Model Fine-Tuning + Training Flow Audit + Master Auto-Trade Toggle
+
+### User request (4 items, tackled top-down)
+1. AI Models page data display broken — only EURUSD_OTC 1MIN visible
+2. Model Selection needs full fine-tuning control (all options: per-asset, TF, feature toggles, training window, ensemble weight, comparison view)
+3. Audit AI models training flow — verify accurate data reaches correct models
+4. Master Auto-Trade toggle: ONE tap enables SCAN + AUTO + APP + CYCLE together
+
+### What shipped
+
+**A. Data Display Bug — `/api/data-collector/stats` KeyError** (`historical_data_collector.py`)
+- Root cause: 100 legacy candle docs in `historical_candles` had no `asset` field → aggregation `_id` missing key → **KeyError: 'asset'** → endpoint returned `{"success": false}` → UI table went empty
+- Fix: `$match` gate on `asset != null` + defensive `.get()` on aggregation `_id`
+- Bonus: same endpoint now ALSO merges `otc_candles_5s` (uses `symbol` field) into the stats — the user's 42K OTC 5s candles were previously invisible
+
+**B. Model Fine-Tuning — 6 new controls on the Real Data Training tab**
+- **Training Window slider** (3–90 days)
+- **Look-ahead slider** (1–10 bars — how far the target label predicts)
+- **Validation Split** (10–40%)
+- **Min Samples** (100–5000)
+- **Ensemble Weight** RF vs GB slider (0-100 blend, live labels)
+- **Feature Group Toggles**: 6 pills (Trend · Momentum · Volatility · Price Action · Divergence · Support Resistance) — flip any OFF to test whether that family is helping/hurting
+- **Train + Save button** (persists model) · **Compare RF · GB · Ensemble button** (diagnostic side-by-side)
+- New endpoints: `POST /api/ml-trainer/train` (accepts all 6 params), `POST /api/ml-trainer/train-comparison`, `GET /api/ml-trainer/feature-groups`
+- `HighAccuracyEnsemble` now supports `rf_weight` / `gb_weight` (normalised) and `model_types=['rf','gb']` for partial ensembles
+- `create_features()` accepts `groups={trend, momentum, volatility, price_action, divergence, support_resistance: bool}` — turning momentum off cuts ~14 columns
+
+**C. Training-Flow Audit + Fix** (`historical_data_collector.py`)
+- **Audit finding**: Two disconnected data collectors. `historical_data_collector` writes to `historical_candles` (asset+timeframe schema), while `auto_retrain_scheduler` and `botai_simulator` write to `otc_candles_5s` (symbol+timeframe schema). ML trainer only read from the former → **42K OTC candles were invisible to training**.
+- **Fix**: `get_training_data()` now has a 3-tier fallback:
+  1. Try `historical_candles` with `days` filter
+  2. If empty → try same collection with alias variants (`_OTC`/`_otc` case-flip, upper/lower)
+  3. If empty → drop time filter (rescues data older than the window)
+  4. Final fallback → `otc_candles_5s` with `symbol` field, normalising ISO-string timestamps back to Unix seconds
+- Verified: `USDCZK_OTC 5s` trains from `otc_candles_5s` (474 samples, 45.5% WR); `EURUSD_OTC 1m` still trains from `historical_candles` (1987 samples)
+
+**D. Master Auto-Trade Toggle** (TM script `panel.js`)
+- **Header pill** (always visible): `⏻ OFF` (red) / `● LIVE` (glowing green). Small pulse animation.
+- **Big Trade-tab button**: full-width, shows `⏻ TAP TO GO LIVE` / `🟢 ALL SYSTEMS LIVE — TAP TO STOP` / `⚠ PARTIAL — TAP TO GO FULL`
+- Sub-label: live status of all 4 sub-toggles: `SCAN ● AUTO ● APP ● CYCLE ●`
+- Tap logic:
+  - If ALL 4 OFF → turn ALL ON
+  - If ALL 4 ON → turn ALL OFF
+  - If SOME ON → escalate to ALL ON (finish the enable)
+- Auto-sync: taps on individual SCAN / AUTO / APP / CYCLE buttons update the master pill state within 0ms
+- Both buttons share the same handler (`handleMasterTap`)
+- Iter 110 CSS: `.masterbtn` pill + `.masterbig` prominent Trade-tab button with matching glowing led
+
+### Tests — `test_iter110_ai_finetune_master_toggle.py` (13/13 pass)
+- Feature engineer: full groups return ≥30 cols · toggling off shrinks frame · FEATURE_GROUPS constant
+- Ensemble: default 50/50 · weight normalisation · GB-only sets rf_weight=0 · RF-only sets gb_weight=0
+- Request schema: `TrainModelRequest` accepts days/lookahead/test_size/rf_weight/gb_weight/feature_groups/model_types
+- TM bundle: version ≥ 8.138.0 · all 6 master-toggle markers · panel.js source has `handleMasterTap`
+- No-regression: Iter 109 elite gate + Iter 108 latency abstain still present
+
+**Full Iter 100–110 regression: 130/130 pass in 3.9 s**.
+
+### Files touched
+- `/app/backend/historical_data_collector.py` (KeyError fix + otc_candles_5s merge + get_training_data fallback chain)
+- `/app/backend/real_data_trainer.py` (FEATURE_GROUPS + groups= param + tunable ensemble weights + train_comparison + get_feature_importance fallback)
+- `/app/backend/routes/models.py` (TrainModelRequest fields)
+- `/app/backend/server.py` (TrainModelRequest fields — duplicate model)
+- `/app/backend/routes/ml.py` (train endpoint passes new params + train-comparison + feature-groups endpoints)
+- `/app/frontend/src/components/DataCollectionDashboard.jsx` (6 fine-tuning controls + comparison table)
+- `/app/tampermonkey-src/src/ui/panel.js` (Master pill in header + big Trade-tab button + CSS + handler)
+- `/app/tampermonkey-src/version.txt` → **8.138.0**
+- `/app/backend/tests/test_iter110_ai_finetune_master_toggle.py` (new — 13 tests)
+- `/app/frontend/public/pocket-option-auto-trader.user.js` (rebuilt at 425 KB)
+
+### Impact
+1. **Data now visible** — `/api/data-collector/stats` returns 110 asset/timeframe combos (was returning error). User can see all their collected data.
+2. **True fine-tuning** — user can now A/B test feature groups, tune ensemble mix, run comparison scans, and match model settings to specific pairs.
+3. **Training pipeline unified** — ML trainer now reads from both candle collections. 42K OTC 5s candles unlocked for training.
+4. **UX shortcut** — Master toggle turns "everything on" a one-tap action from anywhere in the panel; useful during fast setup or emergency halt.
+
+---
+
+
 # AI's Elite PO Traders Bot — Feb 2026 (Iter 109: Elite Screener + Elite Score Gate)
 
 ## Iter 109 (Feb 2026) — Proprietary "Elite Composite" Screener + Quality-Gated Auto-Trade

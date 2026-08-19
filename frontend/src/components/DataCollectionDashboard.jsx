@@ -78,6 +78,20 @@ const DataCollectionDashboard = () => {
   const [trainingTimeframe, setTrainingTimeframe] = useState('1m');
   const [confidenceThreshold, setConfidenceThreshold] = useState([0.75]);
 
+  // Iter 110 — fine-tuning state
+  const [trainingDays, setTrainingDays] = useState([30]);
+  const [lookaheadBars, setLookaheadBars] = useState([1]);
+  const [testSize, setTestSize] = useState([0.2]);
+  const [rfWeight, setRfWeight] = useState([0.5]);
+  const [minSamples, setMinSamples] = useState([500]);
+  const [featureGroups, setFeatureGroups] = useState({
+    trend: true, momentum: true, volatility: true,
+    price_action: true, divergence: true, support_resistance: true,
+  });
+  const [lastTrainingResult, setLastTrainingResult] = useState(null);
+  const [comparisonResult, setComparisonResult] = useState(null);
+  const [isComparing, setIsComparing] = useState(false);
+
   // Loading
   const [isLoading, setIsLoading] = useState(true);
 
@@ -226,13 +240,23 @@ const DataCollectionDashboard = () => {
 
   const handleTrainModel = async () => {
     setIsTraining(true);
+    setLastTrainingResult(null);
     try {
-      const response = await axios.post(`${API}/ml-trainer/train`, {
+      const payload = {
         asset: trainingAsset,
         timeframe: trainingTimeframe,
         confidence_threshold: confidenceThreshold[0],
-        min_samples: 500,
-      });
+        min_samples: minSamples[0],
+        // Iter 110 fine-tuning params
+        days: trainingDays[0],
+        lookahead: lookaheadBars[0],
+        test_size: testSize[0],
+        rf_weight: rfWeight[0],
+        gb_weight: 1 - rfWeight[0],
+        feature_groups: featureGroups,
+      };
+      const response = await axios.post(`${API}/ml-trainer/train`, payload);
+      setLastTrainingResult(response.data);
       if (response.data.success) {
         toast.success(`🎯 Model trained! Win rate: ${response.data.performance?.win_rate?.toFixed(1) || 'N/A'}%`);
         await fetchStats();
@@ -240,10 +264,42 @@ const DataCollectionDashboard = () => {
         toast.error(response.data.error || 'Training failed');
       }
     } catch (error) {
-      toast.error('Failed to train model');
+      toast.error(`Training error: ${error.message}`);
     } finally {
       setIsTraining(false);
     }
+  };
+
+  const handleCompareModels = async () => {
+    setIsComparing(true);
+    setComparisonResult(null);
+    try {
+      const payload = {
+        asset: trainingAsset,
+        timeframe: trainingTimeframe,
+        confidence_threshold: confidenceThreshold[0],
+        min_samples: minSamples[0],
+        days: trainingDays[0],
+        lookahead: lookaheadBars[0],
+        test_size: testSize[0],
+        feature_groups: featureGroups,
+      };
+      const response = await axios.post(`${API}/ml-trainer/train-comparison`, payload);
+      setComparisonResult(response.data);
+      if (response.data.success) {
+        toast.success(`🏁 Comparison done — winner: ${response.data.best}`);
+      } else {
+        toast.error(response.data.error || 'Comparison failed');
+      }
+    } catch (error) {
+      toast.error(`Comparison error: ${error.message}`);
+    } finally {
+      setIsComparing(false);
+    }
+  };
+
+  const toggleFeatureGroup = (g) => {
+    setFeatureGroups((prev) => ({ ...prev, [g]: !prev[g] }));
   };
 
   const formatNumber = (num) => {
@@ -533,31 +589,205 @@ const DataCollectionDashboard = () => {
               max={0.95}
               step={0.05}
               className="w-full"
+              data-testid="conf-slider"
             />
             <p className="text-xs text-muted-foreground mt-1">
               Higher threshold = fewer signals but higher accuracy
             </p>
           </div>
 
-          {/* Train Button */}
-          <Button
-            onClick={handleTrainModel}
-            disabled={isTraining}
-            className="w-full bg-gradient-to-r from-blue-600 to-purple-600"
-            data-testid="train-model-btn"
-          >
-            {isTraining ? (
-              <>
-                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                Training...
-              </>
-            ) : (
-              <>
-                <Zap className="w-4 h-4 mr-2" />
-                Train Model
-              </>
-            )}
-          </Button>
+          {/* Iter 110 — Fine-tuning grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-slate-700/50">
+            <div>
+              <div className="flex justify-between mb-2">
+                <Label>Training Window</Label>
+                <span className="text-sm font-medium">{trainingDays[0]} days</span>
+              </div>
+              <Slider value={trainingDays} onValueChange={setTrainingDays}
+                      min={3} max={90} step={1} className="w-full"
+                      data-testid="days-slider" />
+              <p className="text-xs text-muted-foreground mt-1">More days = more samples, but stale regimes may hurt.</p>
+            </div>
+            <div>
+              <div className="flex justify-between mb-2">
+                <Label>Look-ahead (bars)</Label>
+                <span className="text-sm font-medium">{lookaheadBars[0]}</span>
+              </div>
+              <Slider value={lookaheadBars} onValueChange={setLookaheadBars}
+                      min={1} max={10} step={1} className="w-full"
+                      data-testid="lookahead-slider" />
+              <p className="text-xs text-muted-foreground mt-1">Bars ahead the target label predicts.</p>
+            </div>
+            <div>
+              <div className="flex justify-between mb-2">
+                <Label>Validation Split</Label>
+                <span className="text-sm font-medium">{(testSize[0] * 100).toFixed(0)}%</span>
+              </div>
+              <Slider value={testSize} onValueChange={setTestSize}
+                      min={0.1} max={0.4} step={0.05} className="w-full"
+                      data-testid="testsize-slider" />
+              <p className="text-xs text-muted-foreground mt-1">Fraction held out for accuracy measurement.</p>
+            </div>
+            <div>
+              <div className="flex justify-between mb-2">
+                <Label>Min Samples</Label>
+                <span className="text-sm font-medium">{minSamples[0]}</span>
+              </div>
+              <Slider value={minSamples} onValueChange={setMinSamples}
+                      min={100} max={5000} step={50} className="w-full"
+                      data-testid="min-samples-slider" />
+              <p className="text-xs text-muted-foreground mt-1">Abort training below this candle count.</p>
+            </div>
+          </div>
+
+          {/* Ensemble weights */}
+          <div className="pt-3 border-t border-slate-700/50">
+            <div className="flex justify-between mb-2">
+              <Label>Ensemble Weight — Random Forest vs Gradient Boosting</Label>
+              <span className="text-sm font-medium">
+                RF <span className="text-emerald-400 font-bold">{(rfWeight[0] * 100).toFixed(0)}%</span> · GB <span className="text-cyan-400 font-bold">{((1 - rfWeight[0]) * 100).toFixed(0)}%</span>
+              </span>
+            </div>
+            <Slider value={rfWeight} onValueChange={setRfWeight}
+                    min={0} max={1} step={0.05} className="w-full"
+                    data-testid="rf-weight-slider" />
+            <p className="text-xs text-muted-foreground mt-1">
+              Slide fully left → GB-only model. Fully right → RF-only. Middle → 50/50 blend.
+            </p>
+          </div>
+
+          {/* Feature groups */}
+          <div className="pt-3 border-t border-slate-700/50">
+            <Label className="mb-2 block">Feature Groups (indicators fed into the model)</Label>
+            <div className="flex flex-wrap gap-2" data-testid="feature-groups">
+              {Object.entries(featureGroups).map(([g, on]) => (
+                <Button
+                  key={g}
+                  size="sm"
+                  variant={on ? 'default' : 'outline'}
+                  onClick={() => toggleFeatureGroup(g)}
+                  className="text-[11px] h-7"
+                  data-testid={`feature-${g}`}
+                >
+                  {on ? '✓' : '○'} {g.replace(/_/g, ' ')}
+                </Button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              Toggle groups OFF to test whether that indicator family is helping or hurting your win rate.
+            </p>
+          </div>
+
+          {/* Train + Compare buttons */}
+          <div className="flex gap-2 pt-3">
+            <Button
+              onClick={handleTrainModel}
+              disabled={isTraining || isComparing}
+              className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600"
+              data-testid="train-model-btn"
+            >
+              {isTraining ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  Training...
+                </>
+              ) : (
+                <>
+                  <Zap className="w-4 h-4 mr-2" />
+                  Train + Save
+                </>
+              )}
+            </Button>
+            <Button
+              onClick={handleCompareModels}
+              disabled={isTraining || isComparing}
+              variant="outline"
+              className="flex-1"
+              data-testid="compare-btn"
+            >
+              {isComparing ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  Comparing...
+                </>
+              ) : (
+                <>
+                  <BarChart3 className="w-4 h-4 mr-2" />
+                  Compare RF · GB · Ensemble
+                </>
+              )}
+            </Button>
+          </div>
+
+          {/* Last training result + feature importance */}
+          {lastTrainingResult?.success && (
+            <div className="mt-3 p-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5" data-testid="training-result-card">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-sm font-semibold text-emerald-400">✓ Trained {lastTrainingResult.asset} {lastTrainingResult.timeframe}</span>
+                <span className="text-lg font-bold text-emerald-400">{lastTrainingResult.performance?.win_rate?.toFixed(1) || '?'}%</span>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                <div>Samples: <span className="font-mono text-slate-300">{lastTrainingResult.samples_used}</span></div>
+                <div>Signals: <span className="font-mono text-slate-300">{lastTrainingResult.performance?.total_signals ?? 0}</span></div>
+                <div>Precision: <span className="font-mono text-slate-300">{(lastTrainingResult.performance?.precision * 100 || 0).toFixed(1)}%</span></div>
+                <div>Recall: <span className="font-mono text-slate-300">{(lastTrainingResult.performance?.recall * 100 || 0).toFixed(1)}%</span></div>
+              </div>
+              {lastTrainingResult.feature_importance && Object.keys(lastTrainingResult.feature_importance).length > 0 && (
+                <div className="mt-2 pt-2 border-t border-emerald-500/20">
+                  <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Top Features</div>
+                  <div className="flex flex-wrap gap-1">
+                    {Object.entries(lastTrainingResult.feature_importance).slice(0, 8).map(([f, v]) => (
+                      <Badge key={f} variant="outline" className="text-[10px] font-mono">
+                        {f}: {(v * 100).toFixed(1)}%
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Comparison result */}
+          {comparisonResult?.success && (
+            <div className="mt-3 p-3 rounded-lg border border-cyan-500/30 bg-cyan-500/5" data-testid="comparison-result-card">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-sm font-semibold text-cyan-400">🏁 Model Comparison — {comparisonResult.asset} {comparisonResult.timeframe}</span>
+                {comparisonResult.best && (
+                  <Badge className="bg-emerald-500 text-black">
+                    Best: {comparisonResult.best}
+                  </Badge>
+                )}
+              </div>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-slate-400 uppercase tracking-wider">
+                    <th className="text-left py-1">Model</th>
+                    <th className="text-right py-1">Win Rate</th>
+                    <th className="text-right py-1">Precision</th>
+                    <th className="text-right py-1">Recall</th>
+                    <th className="text-right py-1">Signals</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(comparisonResult.results).map(([label, r]) => (
+                    <tr key={label} className={`border-t border-cyan-500/10 ${label === comparisonResult.best ? 'bg-emerald-500/10' : ''}`}>
+                      <td className="py-1 font-mono text-slate-200">{label}</td>
+                      {r.success ? (
+                        <>
+                          <td className="py-1 text-right font-bold text-emerald-400">{r.win_rate?.toFixed(1)}%</td>
+                          <td className="py-1 text-right text-slate-300">{(r.precision * 100).toFixed(1)}%</td>
+                          <td className="py-1 text-right text-slate-300">{(r.recall * 100).toFixed(1)}%</td>
+                          <td className="py-1 text-right font-mono text-slate-400">{r.total_signals}</td>
+                        </>
+                      ) : (
+                        <td colSpan={4} className="py-1 text-right text-rose-400">{r.error}</td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </CardContent>
       </Card>
 

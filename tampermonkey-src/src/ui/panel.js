@@ -149,6 +149,66 @@ function injectCSS() {
       background: #30363d !important;
       color: #e6edf3 !important;
     }
+    /* Iter 110 — Master Auto-Trade pill */
+    .${P}masterbtn {
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 5px !important;
+      padding: ${mobile ? '4px 10px' : '3px 9px'} !important;
+      height: ${mobile ? 28 : 22}px !important;
+      background: #21262d !important;
+      border: 1px solid #f85149 !important;
+      color: #f85149 !important;
+      border-radius: 999px !important;
+      font-size: ${mobile ? 10 : 9}px !important;
+      font-weight: 800 !important;
+      letter-spacing: 0.6px !important;
+      cursor: pointer !important;
+      transition: all 0.2s !important;
+      -webkit-tap-highlight-color: transparent !important;
+    }
+    .${P}masterbtn.active {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+      border-color: #10b981 !important;
+      color: #ffffff !important;
+      box-shadow: 0 0 8px rgba(16,185,129,0.55) !important;
+    }
+    .${P}masterbtn:hover { filter: brightness(1.15) !important; }
+    .${P}masterled {
+      width: 7px !important;
+      height: 7px !important;
+      border-radius: 50% !important;
+      background: currentColor !important;
+      box-shadow: 0 0 4px currentColor !important;
+    }
+    .${P}masterbtn.active .${P}masterled { animation: ${P}pulse 1.4s infinite !important; }
+    /* Big Master toggle inside the Trade tab */
+    .${P}masterbig {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      gap: 8px !important;
+      width: 100% !important;
+      padding: ${mobile ? '12px' : '10px'} !important;
+      background: linear-gradient(135deg, #7f1d1d 0%, #991b1b 100%) !important;
+      border: 1.5px solid #f87171 !important;
+      color: #fecaca !important;
+      border-radius: 8px !important;
+      font-weight: 800 !important;
+      font-size: ${mobile ? 14 : 13}px !important;
+      letter-spacing: 1px !important;
+      text-transform: uppercase !important;
+      cursor: pointer !important;
+      transition: all 0.25s !important;
+      -webkit-tap-highlight-color: transparent !important;
+    }
+    .${P}masterbig.active {
+      background: linear-gradient(135deg, #065f46 0%, #10b981 100%) !important;
+      border-color: #34d399 !important;
+      color: #ffffff !important;
+      box-shadow: 0 0 12px rgba(16,185,129,0.5) !important;
+    }
+    .${P}masterbig:hover { filter: brightness(1.1) !important; }
     .${P}dot {
       width: ${mobile ? 12 : 10}px !important;
       height: ${mobile ? 12 : 10}px !important;
@@ -1529,6 +1589,11 @@ export function createPanel() {
       <div class="${P}header" id="${P}header" data-testid="tm-panel-header">
         <span class="${P}title">${titleShort}</span>
         <div class="${P}hright">
+          <!-- Iter 110 — Master Auto-Trade toggle: ONE tap enables/disables
+               SCAN + AUTO + APP + CYCLE together. Big pill for quick access. -->
+          <button class="${P}masterbtn" id="${P}master" data-testid="tm-master-toggle" title="Master switch — turns SCAN, AUTO, APP and CYCLE all ON or all OFF at once.">
+            <span class="${P}masterled"></span><span id="${P}masterlbl">OFF</span>
+          </button>
           <span class="${P}dot" id="${P}dot" title="Bot connection status"></span>
           <button class="${P}expandbtn" id="${P}expandbtn" data-testid="tm-panel-expand" title="Expand to fullscreen / restore compact view">⛶</button>
           <button class="${P}minbtn" id="${P}minbtn" data-testid="tm-panel-minimize" title="Minimize panel">_</button>
@@ -1608,6 +1673,17 @@ export function createPanel() {
 
         <!-- ═════════════════ TAB: TRADE ═════════════════ -->
         <div class="${P}tabpanel" data-tab-panel="trade" data-testid="tab-panel-trade">
+          <!-- Iter 110 — Master Auto-Trade toggle: single tap flips SCAN + AUTO + APP + CYCLE together. -->
+          <div class="${P}section" data-testid="master-toggle-section" title="Turn EVERYTHING on: SCAN, AUTO, APP, and CYCLE. Tap again to instantly halt every auto-trading module.">
+            <div class="${P}sectionttl">Master Auto-Trade</div>
+            <button id="${P}masterBig" class="${P}masterbig" data-testid="tm-master-toggle-big">
+              <span class="${P}masterled"></span>
+              <span id="${P}masterBigLbl">TAP TO GO LIVE</span>
+            </button>
+            <div id="${P}masterBigSub" style="font-size:${mobile ? 9 : 10}px;color:#94a3b8;text-align:center;margin-top:6px;line-height:1.4;">
+              SCAN · AUTO · APP · CYCLE — all off. Tap the button to enable them all.
+            </div>
+          </div>
           <div class="${P}section">
             <div class="${P}sectionttl">Primary Controls</div>
             <div class="${P}row">
@@ -2267,6 +2343,86 @@ export function initPanelEvents(callbacks = {}) {
       callbacks.onAppSignalToggle?.(!isActive);
     });
   }
+
+  // Iter 110 — Master Auto-Trade toggle: header pill + big Trade-tab button
+  // both flip SCAN + AUTO + APP + CYCLE together. Any of the four already-ON
+  // makes the master pill appear active. Tap it and the world lights up.
+  const masterBtn = q('master');
+  const masterBig = q('masterBig');
+  const masterLbl = q('masterlbl');
+  const masterBigLbl = q('masterBigLbl');
+  const masterBigSub = q('masterBigSub');
+
+  const _allEnabled = () => {
+    const scanOn = q('scan')?.classList.contains('active');
+    const autoOn = q('auto')?.classList.contains('active');
+    const appOn  = q('app')?.classList.contains('active');
+    const cycleOn = q('cycle')?.classList.contains('active');
+    return { scanOn, autoOn, appOn, cycleOn,
+             anyOn: scanOn || autoOn || appOn || cycleOn,
+             allOn: scanOn && autoOn && appOn && cycleOn };
+  };
+
+  const renderMaster = () => {
+    const s = _allEnabled();
+    const on = s.anyOn;
+    if (masterBtn) {
+      masterBtn.classList.toggle('active', on);
+      if (masterLbl) masterLbl.textContent = on ? 'LIVE' : 'OFF';
+    }
+    if (masterBig) {
+      masterBig.classList.toggle('active', on);
+      if (masterBigLbl) masterBigLbl.textContent = on
+        ? (s.allOn ? '🟢 ALL SYSTEMS LIVE — TAP TO STOP' : '⚠ PARTIAL — TAP TO GO FULL')
+        : '⏻ TAP TO GO LIVE';
+      if (masterBigSub) {
+        const parts = [
+          `SCAN ${s.scanOn ? '●' : '○'}`,
+          `AUTO ${s.autoOn ? '●' : '○'}`,
+          `APP ${s.appOn ? '●' : '○'}`,
+          `CYCLE ${s.cycleOn ? '●' : '○'}`,
+        ];
+        masterBigSub.textContent = parts.join(' · ') +
+          (on ? '' : ' — tap to enable all');
+      }
+    }
+  };
+
+  const handleMasterTap = () => {
+    const s = _allEnabled();
+    // If ANY of the four is on → turn ALL off.
+    // If ALL four are off → turn ALL on.
+    // If some are on but not all → escalate to ALL on (finish the enable).
+    const target = !s.anyOn ? true : (s.allOn ? false : true);
+    // Sync each toggle button visually + fire its callback so the app-state
+    // (state.scanEnabled etc.) stays in lock-step with the UI.
+    const setBtn = (id, on, cb) => {
+      const btn = q(id);
+      if (!btn) return;
+      const isOn = btn.classList.contains('active');
+      if (isOn === on) return;
+      btn.classList.toggle('active', on);
+      cb?.(on);
+    };
+    setBtn('scan',  target, callbacks.onScanToggle);
+    setBtn('auto',  target, callbacks.onAutoToggle);
+    setBtn('app',   target, callbacks.onAppSignalToggle);
+    setBtn('cycle', target, callbacks.onCycleToggle);
+    renderMaster();
+    callbacks.onMasterToggle?.(target);
+  };
+
+  if (masterBtn) masterBtn.addEventListener('click', handleMasterTap);
+  if (masterBig) masterBig.addEventListener('click', handleMasterTap);
+
+  // Auto-sync the master pill whenever ANY of the 4 sub-toggles changes,
+  // so if a user taps SCAN individually the master pill reflects it too.
+  ['scan', 'auto', 'app', 'cycle'].forEach((id) => {
+    const b = q(id);
+    if (b) b.addEventListener('click', () => setTimeout(renderMaster, 0));
+  });
+  // Initial paint
+  setTimeout(renderMaster, 50);
 
   // Auto-invert toggle
   const ainvBtn = q('ainv');

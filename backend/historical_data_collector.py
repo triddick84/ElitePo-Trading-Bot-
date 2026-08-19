@@ -358,14 +358,113 @@ class HistoricalDataCollector:
                                  days: int = 7) -> Optional[Dict]:
         """
         Get data formatted for ML training.
-        
+
         Returns data as pandas-compatible dict with arrays for each OHLCV column.
+
+        Iter 110 — asset name matching is now case-insensitive on the `_OTC`
+        suffix so the frontend's `EURUSD_OTC` finds legacy `EURUSD_otc` rows.
         """
         start_time = datetime.now(timezone.utc) - timedelta(days=days)
         candles = await self.get_candles(asset, timeframe, start_time=start_time, limit=50000)
-        
+
+        # Iter 110 — fall back to lowercase-suffix and legacy variants when
+        # the initial lookup returns nothing. Keeps the UI backwards-
+        # compatible with candles collected under different case conventions.
         if not candles or len(candles) < 100:
-            logger.warning(f"Insufficient data for {asset} {timeframe}: {len(candles)} candles")
+            variants = []
+            if "_OTC" in asset:
+                variants.append(asset.replace("_OTC", "_otc"))
+            if "_otc" in asset:
+                variants.append(asset.replace("_otc", "_OTC"))
+            # Also try flipping just the asset part
+            if asset != asset.upper():
+                variants.append(asset.upper())
+            if asset != asset.lower():
+                variants.append(asset.lower())
+            for v in variants:
+                if v == asset:
+                    continue
+                alt = await self.get_candles(v, timeframe, start_time=start_time, limit=50000)
+                if alt and len(alt) >= 100:
+                    logger.info(f"[collector] asset alias match: {asset} → {v} ({len(alt)} candles)")
+                    candles = alt
+                    asset = v
+                    break
+
+        # Iter 110 — if the days-window filter yields nothing useful but the
+        # collection DOES have data (stored under older timestamps), drop
+        # the time filter and grab the most recent 50k candles. This makes
+        # training resilient when container clocks drift or when data was
+        # collected long ago but the user still wants to train on it.
+        if not candles or len(candles) < 100:
+            all_variants = [asset]
+            if "_OTC" in asset:
+                all_variants.append(asset.replace("_OTC", "_otc"))
+            if "_otc" in asset:
+                all_variants.append(asset.replace("_otc", "_OTC"))
+            for v in all_variants:
+                alt = await self.get_candles(v, timeframe, limit=50000)
+                if alt and len(alt) >= 100:
+                    logger.info(f"[collector] time-window empty; falling back "
+                                f"to all-time data for {v} ({len(alt)} candles)")
+                    candles = alt
+                    asset = v
+                    break
+
+        if not candles or len(candles) < 100:
+            logger.warning(f"Insufficient data for {asset} {timeframe}: {len(candles) if candles else 0} candles")
+            # Iter 110 — final fallback: pull directly from otc_candles_5s
+            # (uses `symbol` field, populated by the auto-retrain scheduler
+            # and BotAI simulator). This unlocks 40k+ candles for training
+            # that were previously invisible to the ML trainer.
+            try:
+                otc_col = self.candles_collection.database.otc_candles_5s
+                q_syms = [asset, asset.replace("_OTC", "_otc"),
+                          asset.replace("_otc", "_OTC"),
+                          asset.upper(), asset.lower()]
+                q_syms = list(dict.fromkeys([s for s in q_syms if s]))
+                for sym in q_syms:
+                    docs = await otc_col.find(
+                        {"symbol": sym, "timeframe": timeframe},
+                        {"_id": 0},
+                    ).sort("timestamp", 1).limit(50000).to_list(50000)
+                    if docs and len(docs) >= 100:
+                        logger.info(f"[collector] otc_candles_5s fallback: "
+                                    f"{sym} · {timeframe} · {len(docs)} candles")
+                        # Normalise field names (OHLCV expected downstream)
+                        # and coerce datetime timestamps → Unix seconds so
+                        # `pd.to_datetime(..., unit='s')` upstream works.
+                        candles = []
+                        for d in docs:
+                            ts = d.get("timestamp")
+                            if hasattr(ts, "timestamp"):
+                                ts = int(ts.timestamp())
+                            elif isinstance(ts, str):
+                                try:
+                                    from datetime import datetime as _dt
+                                    ts = int(_dt.fromisoformat(
+                                        ts.replace("Z", "+00:00")
+                                    ).timestamp())
+                                except Exception:
+                                    continue
+                            elif isinstance(ts, (int, float)):
+                                ts = int(ts)
+                            else:
+                                continue
+                            candles.append({
+                                "timestamp": ts,
+                                "open": d.get("open"),
+                                "high": d.get("high"),
+                                "low": d.get("low"),
+                                "close": d.get("close"),
+                                "volume": d.get("volume", 0),
+                            })
+                        asset = sym
+                        break
+            except Exception as e:  # pragma: no cover
+                logger.debug("otc_candles_5s fallback skipped: %s", e)
+
+        if not candles or len(candles) < 100:
             return None
         
         # Convert to arrays
@@ -388,11 +487,22 @@ class HistoricalDataCollector:
         }
     
     async def get_collection_stats(self) -> Dict[str, Any]:
-        """Get statistics about collected data"""
+        """Get statistics about collected data.
+
+        Aggregates across BOTH the primary `historical_candles` collection
+        (asset+timeframe schema) AND the legacy `otc_candles_5s` collection
+        (symbol+timeframe schema) so users see EVERY collected candle in the
+        UI regardless of which pipeline captured it.
+        """
         stats = {}
-        
-        # Get unique asset/timeframe combinations
+
+        # ── Primary historical_candles pipeline ─────────────────────────
+        # Guard against legacy docs missing the `asset` field — a $match
+        # gate + defensive dict.get() keeps the endpoint from 500'ing when
+        # partial docs exist (the older collector wrote candles without
+        # `asset` before v8.72).
         pipeline = [
+            {"$match": {"asset": {"$exists": True, "$ne": None}}},
             {"$group": {
                 "_id": {"asset": "$asset", "timeframe": "$timeframe"},
                 "count": {"$sum": 1},
@@ -401,24 +511,81 @@ class HistoricalDataCollector:
                 "avg_ticks": {"$avg": "$tick_count"}
             }}
         ]
-        
+
         async for doc in self.candles_collection.aggregate(pipeline):
-            key = f"{doc['_id']['asset']}_{doc['_id']['timeframe']}"
+            _id = doc.get("_id") or {}
+            asset = _id.get("asset")
+            tf = _id.get("timeframe")
+            if not asset or not tf:
+                continue
+            key = f"{asset}_{tf}"
+            first_ts = doc.get("first_ts") or 0
+            last_ts = doc.get("last_ts") or 0
+            try:
+                first_iso = datetime.fromtimestamp(float(first_ts), tz=timezone.utc).isoformat()
+                last_iso = datetime.fromtimestamp(float(last_ts), tz=timezone.utc).isoformat()
+            except (TypeError, ValueError, OSError):
+                first_iso = last_iso = ""
             stats[key] = {
-                "asset": doc['_id']['asset'],
-                "timeframe": doc['_id']['timeframe'],
-                "total_candles": doc['count'],
-                "first_candle": datetime.fromtimestamp(doc['first_ts'], tz=timezone.utc).isoformat(),
-                "last_candle": datetime.fromtimestamp(doc['last_ts'], tz=timezone.utc).isoformat(),
-                "avg_tick_count": round(doc['avg_ticks'], 2)
+                "asset": asset,
+                "timeframe": tf,
+                "total_candles": doc.get("count", 0),
+                "first_candle": first_iso,
+                "last_candle": last_iso,
+                "avg_tick_count": round(doc.get("avg_ticks") or 0, 2),
+                "source": "historical_candles",
             }
-        
+
+        # ── Legacy otc_candles_5s pipeline (uses `symbol` not `asset`) ──
+        # Merges into the same stats dict so the UI table shows the
+        # user's real historical OTC 5s tape (typically 40k+ candles)
+        # instead of an empty result.
+        try:
+            db = self.candles_collection.database
+            otc_col = db.otc_candles_5s
+            otc_pipeline = [
+                {"$match": {"symbol": {"$exists": True, "$ne": None}}},
+                {"$group": {
+                    "_id": {"symbol": "$symbol", "timeframe": "$timeframe"},
+                    "count": {"$sum": 1},
+                    "first_ts": {"$min": "$timestamp"},
+                    "last_ts": {"$max": "$timestamp"},
+                }},
+            ]
+            async for doc in otc_col.aggregate(otc_pipeline):
+                _id = doc.get("_id") or {}
+                sym = _id.get("symbol")
+                tf = _id.get("timeframe") or "5s"
+                if not sym:
+                    continue
+                key = f"{sym}_{tf}"
+                if key in stats:
+                    continue  # already captured by primary pipeline
+                first_ts = doc.get("first_ts") or 0
+                last_ts = doc.get("last_ts") or 0
+                try:
+                    first_iso = datetime.fromtimestamp(float(first_ts), tz=timezone.utc).isoformat()
+                    last_iso = datetime.fromtimestamp(float(last_ts), tz=timezone.utc).isoformat()
+                except (TypeError, ValueError, OSError):
+                    first_iso = last_iso = ""
+                stats[key] = {
+                    "asset": sym,
+                    "timeframe": tf,
+                    "total_candles": doc.get("count", 0),
+                    "first_candle": first_iso,
+                    "last_candle": last_iso,
+                    "avg_tick_count": 0,
+                    "source": "otc_candles_5s",
+                }
+        except Exception as e:  # pragma: no cover - best-effort merge
+            logger.debug("otc_candles_5s merge skipped: %s", e)
+
         # Add session stats
         session = {}
         for asset, timeframes in self.session_stats.items():
             for tf, count in timeframes.items():
                 session[f"{asset}_{tf}"] = count
-        
+
         return {
             "collection_enabled": self.enabled,
             "collecting_assets": self.collecting_assets,

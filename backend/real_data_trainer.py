@@ -143,17 +143,35 @@ class AdvancedFeatureEngineer:
         lower = sma - (std_dev * std)
         return upper, sma, lower
     
-    def create_features(self, df: pd.DataFrame, timeframe: str = '1m') -> pd.DataFrame:
+    # Feature groups for the fine-tuning UI. Each key is a boolean flag
+    # that toggles the group ON/OFF in `create_features(...)`.
+    FEATURE_GROUPS = ("trend", "momentum", "volatility", "price_action",
+                      "divergence", "support_resistance")
+
+    def create_features(self, df: pd.DataFrame, timeframe: str = '1m',
+                        groups: Optional[Dict[str, bool]] = None) -> pd.DataFrame:
         """
         Create comprehensive feature set for ML training.
-        
+
         Args:
             df: DataFrame with OHLCV data
             timeframe: Timeframe for parameter tuning
-        
+            groups: Optional dict of {group_name: bool} to include/exclude
+                    specific feature families. Defaults to all ON.
+
         Returns:
             DataFrame with engineered features
         """
+        # Iter 110 — feature-group toggles. When a group is disabled, the
+        # corresponding columns are simply not added to the frame.
+        _g = groups or {}
+        want_trend         = _g.get("trend", True)
+        want_momentum      = _g.get("momentum", True)
+        want_volatility    = _g.get("volatility", True)
+        want_price_action  = _g.get("price_action", True)
+        want_divergence    = _g.get("divergence", True)
+        want_sr            = _g.get("support_resistance", True)
+
         features = pd.DataFrame(index=df.index)
         
         close = df['close']
@@ -170,97 +188,80 @@ class AdvancedFeatureEngineer:
             periods = {'short': 9, 'medium': 21, 'long': 50}
         
         # === TREND FEATURES ===
-        # EMAs
-        for p in [periods['short'], periods['medium'], periods['long']]:
-            features[f'ema_{p}'] = close.ewm(span=p, adjust=False).mean()
-            features[f'price_to_ema_{p}'] = close / features[f'ema_{p}']
-        
-        # EMA crossover
-        features['ema_fast_slow_diff'] = features[f'ema_{periods["short"]}'] - features[f'ema_{periods["medium"]}']
-        features['ema_trend'] = (features[f'ema_{periods["short"]}'] > features[f'ema_{periods["medium"]}']).astype(int)
-        
-        # Trend strength (ADX-like)
-        price_change = close.diff()
-        features['trend_strength'] = price_change.rolling(window=periods['medium']).mean() / (price_change.rolling(window=periods['medium']).std() + 1e-10)
-        
+        if want_trend:
+            for p in [periods['short'], periods['medium'], periods['long']]:
+                features[f'ema_{p}'] = close.ewm(span=p, adjust=False).mean()
+                features[f'price_to_ema_{p}'] = close / features[f'ema_{p}']
+            features['ema_fast_slow_diff'] = features[f'ema_{periods["short"]}'] - features[f'ema_{periods["medium"]}']
+            features['ema_trend'] = (features[f'ema_{periods["short"]}'] > features[f'ema_{periods["medium"]}']).astype(int)
+            price_change = close.diff()
+            features['trend_strength'] = price_change.rolling(window=periods['medium']).mean() / (price_change.rolling(window=periods['medium']).std() + 1e-10)
+
         # === MOMENTUM FEATURES ===
-        # RSI
-        features['rsi'] = self.calculate_rsi(close, periods['medium'])
-        features['rsi_sma'] = features['rsi'].rolling(window=5).mean()
-        features['rsi_oversold'] = (features['rsi'] < 30).astype(int)
-        features['rsi_overbought'] = (features['rsi'] > 70).astype(int)
-        features['rsi_divergence'] = features['rsi'] - features['rsi'].shift(5)
-        
-        # MACD
-        macd, signal, histogram = self.calculate_macd(close)
-        features['macd'] = macd
-        features['macd_signal'] = signal
-        features['macd_histogram'] = histogram
-        features['macd_crossover'] = (macd > signal).astype(int)
-        features['macd_hist_direction'] = np.sign(histogram - histogram.shift(1))
-        
-        # Stochastic
-        stoch_k, stoch_d = self.calculate_stochastic(high, low, close)
-        features['stoch_k'] = stoch_k
-        features['stoch_d'] = stoch_d
-        features['stoch_crossover'] = (stoch_k > stoch_d).astype(int)
-        features['stoch_oversold'] = (stoch_k < 20).astype(int)
-        features['stoch_overbought'] = (stoch_k > 80).astype(int)
-        
+        if want_momentum:
+            features['rsi'] = self.calculate_rsi(close, periods['medium'])
+            features['rsi_sma'] = features['rsi'].rolling(window=5).mean()
+            features['rsi_oversold'] = (features['rsi'] < 30).astype(int)
+            features['rsi_overbought'] = (features['rsi'] > 70).astype(int)
+            features['rsi_divergence'] = features['rsi'] - features['rsi'].shift(5)
+            macd, signal, histogram = self.calculate_macd(close)
+            features['macd'] = macd
+            features['macd_signal'] = signal
+            features['macd_histogram'] = histogram
+            features['macd_crossover'] = (macd > signal).astype(int)
+            features['macd_hist_direction'] = np.sign(histogram - histogram.shift(1))
+            stoch_k, stoch_d = self.calculate_stochastic(high, low, close)
+            features['stoch_k'] = stoch_k
+            features['stoch_d'] = stoch_d
+            features['stoch_crossover'] = (stoch_k > stoch_d).astype(int)
+            features['stoch_oversold'] = (stoch_k < 20).astype(int)
+            features['stoch_overbought'] = (stoch_k > 80).astype(int)
+
         # === VOLATILITY FEATURES ===
-        # ATR
-        features['atr'] = self.calculate_atr(high, low, close, periods['medium'])
-        features['atr_percent'] = features['atr'] / close * 100
-        
-        # Bollinger Bands
-        bb_upper, bb_middle, bb_lower = self.calculate_bollinger_bands(close)
-        features['bb_width'] = (bb_upper - bb_lower) / bb_middle
-        features['bb_position'] = (close - bb_lower) / (bb_upper - bb_lower + 1e-10)
-        features['bb_upper_touch'] = (close >= bb_upper * 0.98).astype(int)
-        features['bb_lower_touch'] = (close <= bb_lower * 1.02).astype(int)
-        
-        # Volatility ratio
-        features['volatility_short'] = close.pct_change().rolling(window=periods['short']).std()
-        features['volatility_long'] = close.pct_change().rolling(window=periods['long']).std()
-        features['volatility_ratio'] = features['volatility_short'] / (features['volatility_long'] + 1e-10)
-        
+        if want_volatility:
+            features['atr'] = self.calculate_atr(high, low, close, periods['medium'])
+            features['atr_percent'] = features['atr'] / close * 100
+            bb_upper, bb_middle, bb_lower = self.calculate_bollinger_bands(close)
+            features['bb_width'] = (bb_upper - bb_lower) / bb_middle
+            features['bb_position'] = (close - bb_lower) / (bb_upper - bb_lower + 1e-10)
+            features['bb_upper_touch'] = (close >= bb_upper * 0.98).astype(int)
+            features['bb_lower_touch'] = (close <= bb_lower * 1.02).astype(int)
+            features['volatility_short'] = close.pct_change().rolling(window=periods['short']).std()
+            features['volatility_long'] = close.pct_change().rolling(window=periods['long']).std()
+            features['volatility_ratio'] = features['volatility_short'] / (features['volatility_long'] + 1e-10)
+
         # === PRICE ACTION FEATURES ===
-        # Returns
-        features['return_1'] = close.pct_change(1)
-        features['return_3'] = close.pct_change(3)
-        features['return_5'] = close.pct_change(5)
-        
-        # Candle patterns
-        body = abs(close - open_price)
-        total_range = high - low + 1e-10
-        features['body_ratio'] = body / total_range
-        features['upper_shadow'] = (high - close.combine(open_price, max)) / total_range
-        features['lower_shadow'] = (close.combine(open_price, min) - low) / total_range
-        features['is_bullish'] = (close > open_price).astype(int)
-        
-        # Pin bar detection
-        features['is_hammer'] = ((features['lower_shadow'] > features['body_ratio'] * 2) & 
-                                  (features['lower_shadow'] > features['upper_shadow'] * 2)).astype(int)
-        features['is_shooting_star'] = ((features['upper_shadow'] > features['body_ratio'] * 2) & 
-                                         (features['upper_shadow'] > features['lower_shadow'] * 2)).astype(int)
-        
+        if want_price_action:
+            features['return_1'] = close.pct_change(1)
+            features['return_3'] = close.pct_change(3)
+            features['return_5'] = close.pct_change(5)
+            body = abs(close - open_price)
+            total_range = high - low + 1e-10
+            features['body_ratio'] = body / total_range
+            features['upper_shadow'] = (high - close.combine(open_price, max)) / total_range
+            features['lower_shadow'] = (close.combine(open_price, min) - low) / total_range
+            features['is_bullish'] = (close > open_price).astype(int)
+            features['is_hammer'] = ((features['lower_shadow'] > features['body_ratio'] * 2) &
+                                     (features['lower_shadow'] > features['upper_shadow'] * 2)).astype(int)
+            features['is_shooting_star'] = ((features['upper_shadow'] > features['body_ratio'] * 2) &
+                                            (features['upper_shadow'] > features['lower_shadow'] * 2)).astype(int)
+
         # === MOMENTUM DIVERGENCE ===
-        # Price making new lows but RSI making higher lows (bullish divergence)
-        price_low = close.rolling(window=10).min()
-        rsi_at_price_low = features['rsi'].rolling(window=10).min()
-        features['bullish_divergence'] = ((close <= price_low * 1.001) & 
-                                           (features['rsi'] > rsi_at_price_low + 5)).astype(int)
-        
-        # Price making new highs but RSI making lower highs (bearish divergence)
-        price_high = close.rolling(window=10).max()
-        rsi_at_price_high = features['rsi'].rolling(window=10).max()
-        features['bearish_divergence'] = ((close >= price_high * 0.999) & 
-                                           (features['rsi'] < rsi_at_price_high - 5)).astype(int)
-        
+        # Requires RSI, so only compute when momentum is also ON
+        if want_divergence and want_momentum and 'rsi' in features.columns:
+            price_low = close.rolling(window=10).min()
+            rsi_at_price_low = features['rsi'].rolling(window=10).min()
+            features['bullish_divergence'] = ((close <= price_low * 1.001) &
+                                              (features['rsi'] > rsi_at_price_low + 5)).astype(int)
+            price_high = close.rolling(window=10).max()
+            rsi_at_price_high = features['rsi'].rolling(window=10).max()
+            features['bearish_divergence'] = ((close >= price_high * 0.999) &
+                                              (features['rsi'] < rsi_at_price_high - 5)).astype(int)
+
         # === SUPPORT/RESISTANCE FEATURES ===
-        # Recent high/low proximity
-        features['near_recent_high'] = (close >= high.rolling(window=20).max() * 0.995).astype(int)
-        features['near_recent_low'] = (close <= low.rolling(window=20).min() * 1.005).astype(int)
+        if want_sr:
+            features['near_recent_high'] = (close >= high.rolling(window=20).max() * 0.995).astype(int)
+            features['near_recent_low'] = (close <= low.rolling(window=20).min() * 1.005).astype(int)
         
         # Drop NaN rows
         features = features.dropna()
@@ -292,10 +293,26 @@ class HighAccuracyEnsemble:
     4. Voting ensemble with confidence weighting
     """
     
-    def __init__(self, confidence_threshold: float = 0.75):
+    def __init__(self, confidence_threshold: float = 0.75,
+                 rf_weight: float = 0.5, gb_weight: float = 0.5,
+                 model_types: Optional[List[str]] = None):
+        """
+        Args:
+            confidence_threshold: min prediction confidence for signal.
+            rf_weight, gb_weight: ensemble mixing (0-1, normalised to sum=1).
+            model_types: subset of {'rf','gb'}. Missing entries fall back
+                to `both`. Used by the Model Comparison view.
+        """
         self.confidence_threshold = confidence_threshold
         self.rf_model = None
         self.gb_model = None
+        # Iter 110 — tunable ensemble weights (normalised to sum=1)
+        self.model_types = tuple(model_types or ("rf", "gb"))
+        w_rf = float(rf_weight) if "rf" in self.model_types else 0.0
+        w_gb = float(gb_weight) if "gb" in self.model_types else 0.0
+        s = max(1e-9, w_rf + w_gb)
+        self.rf_weight = w_rf / s
+        self.gb_weight = w_gb / s
         self.scaler = RobustScaler()  # Robust to outliers
         self.feature_names = []
         self.is_trained = False
@@ -323,28 +340,30 @@ class HighAccuracyEnsemble:
         X_val_scaled = self.scaler.transform(X_val)
         
         # Train Random Forest
-        self.rf_model = RandomForestClassifier(
-            n_estimators=200,
-            max_depth=15,
-            min_samples_split=20,
-            min_samples_leaf=10,
-            class_weight='balanced',
-            random_state=42,
-            n_jobs=-1
-        )
-        self.rf_model.fit(X_train_scaled, y_train)
-        
+        if "rf" in self.model_types:
+            self.rf_model = RandomForestClassifier(
+                n_estimators=200,
+                max_depth=15,
+                min_samples_split=20,
+                min_samples_leaf=10,
+                class_weight='balanced',
+                random_state=42,
+                n_jobs=-1
+            )
+            self.rf_model.fit(X_train_scaled, y_train)
+
         # Train Gradient Boosting
-        self.gb_model = GradientBoostingClassifier(
-            n_estimators=150,
-            max_depth=8,
-            learning_rate=0.05,
-            min_samples_split=20,
-            min_samples_leaf=10,
-            random_state=42
-        )
-        self.gb_model.fit(X_train_scaled, y_train)
-        
+        if "gb" in self.model_types:
+            self.gb_model = GradientBoostingClassifier(
+                n_estimators=150,
+                max_depth=8,
+                learning_rate=0.05,
+                min_samples_split=20,
+                min_samples_leaf=10,
+                random_state=42
+            )
+            self.gb_model.fit(X_train_scaled, y_train)
+
         self.is_trained = True
         
         # Evaluate with confidence threshold
@@ -397,13 +416,19 @@ class HighAccuracyEnsemble:
         if not self.is_trained:
             raise ValueError("Model not trained")
         
-        # Get probabilities from both models
-        rf_proba = self.rf_model.predict_proba(X)[:, 1]
-        gb_proba = self.gb_model.predict_proba(X)[:, 1]
-        
-        # Average ensemble probability
-        ensemble_proba = (rf_proba + gb_proba) / 2
-        
+        # Get probabilities from both models (or one, if disabled).
+        # Iter 110 — weighted blend based on `rf_weight` / `gb_weight`.
+        rf_p = self.rf_model.predict_proba(X)[:, 1] if self.rf_model else None
+        gb_p = self.gb_model.predict_proba(X)[:, 1] if self.gb_model else None
+        if rf_p is not None and gb_p is not None:
+            ensemble_proba = self.rf_weight * rf_p + self.gb_weight * gb_p
+        elif rf_p is not None:
+            ensemble_proba = rf_p
+        elif gb_p is not None:
+            ensemble_proba = gb_p
+        else:
+            raise ValueError("No trained model available")
+
         # Predictions (1 if proba > 0.5)
         predictions = (ensemble_proba > 0.5).astype(int)
         
@@ -444,11 +469,17 @@ class HighAccuracyEnsemble:
         }
     
     def get_feature_importance(self) -> Dict[str, float]:
-        """Get feature importance from Random Forest"""
+        """Get feature importance from whichever tree model is available.
+
+        Iter 110 — falls back to Gradient Boosting when Random Forest is
+        disabled (rf_only / gb_only comparison mode), so this never crashes.
+        """
         if not self.is_trained:
             return {}
-        
-        importance = dict(zip(self.feature_names, self.rf_model.feature_importances_))
+        model = self.rf_model or self.gb_model
+        if model is None or not hasattr(model, "feature_importances_"):
+            return {}
+        importance = dict(zip(self.feature_names, model.feature_importances_))
         return dict(sorted(importance.items(), key=lambda x: x[1], reverse=True)[:20])
     
     def save(self, asset: str, timeframe: str):
@@ -505,20 +536,30 @@ class RealDataTrainer:
         self.models: Dict[str, HighAccuracyEnsemble] = {}
         self.training_history: List[Dict] = []
         
-    async def train_model(self, asset: str, timeframe: str, 
+    async def train_model(self, asset: str, timeframe: str,
                           confidence_threshold: float = 0.75,
-                          min_samples: int = 500) -> Dict[str, Any]:
+                          min_samples: int = 500,
+                          days: int = 30,
+                          feature_groups: Optional[Dict[str, bool]] = None,
+                          rf_weight: float = 0.5,
+                          gb_weight: float = 0.5,
+                          model_types: Optional[List[str]] = None,
+                          lookahead: int = 1,
+                          test_size: float = 0.2) -> Dict[str, Any]:
         """
         Train a model using collected real data.
-        
-        Args:
-            asset: Asset symbol
-            timeframe: Timeframe
-            confidence_threshold: Minimum confidence for signals (0.5-0.95)
-            min_samples: Minimum training samples required
-        
+
+        Iter 110 — added fine-tuning parameters:
+          • days             — training-window length (was hardcoded to 30)
+          • feature_groups   — dict toggling {trend, momentum, volatility,
+                                price_action, divergence, support_resistance}
+          • rf_weight/gb_weight — ensemble mix (normalised to sum=1)
+          • model_types      — subset of {'rf','gb'} for comparison mode
+          • lookahead        — bars to look ahead for the target label
+          • test_size        — validation split fraction (0.1–0.4)
+
         Returns:
-            Training result with performance metrics
+            Training result with performance metrics.
         """
         from historical_data_collector import get_historical_data_collector
         
@@ -527,7 +568,7 @@ class RealDataTrainer:
         
         # Get collected data
         collector = get_historical_data_collector(self.db)
-        training_data = await collector.get_training_data(asset, timeframe, days=30)
+        training_data = await collector.get_training_data(asset, timeframe, days=days)
         
         # Check if training_data is None or empty
         if training_data is None:
@@ -549,12 +590,15 @@ class RealDataTrainer:
         # Convert to DataFrame
         df = pd.DataFrame(training_data['data'])
         df.index = pd.to_datetime(df['timestamp'], unit='s')
-        
-        logger.info(f"📊 Training model for {asset} {timeframe} with {len(df)} candles")
-        
-        # Create features and target
-        features = self.feature_engineer.create_features(df, timeframe)
-        target = self.feature_engineer.create_target(df)
+
+        logger.info(f"📊 Training model for {asset} {timeframe} with {len(df)} candles"
+                    f" · days={days} lookahead={lookahead}"
+                    f" feature_groups={feature_groups or 'ALL'}"
+                    f" model_types={model_types or ('rf','gb')}")
+
+        # Create features (with optional group toggles) and target
+        features = self.feature_engineer.create_features(df, timeframe, groups=feature_groups)
+        target = self.feature_engineer.create_target(df, lookahead=int(lookahead))
         
         # Align features and target
         common_idx = features.index.intersection(target.dropna().index)
@@ -567,9 +611,13 @@ class RealDataTrainer:
                 "error": f"Insufficient samples after feature engineering: {len(X)}"
             }
         
-        # Train model
-        model = HighAccuracyEnsemble(confidence_threshold=confidence_threshold)
-        performance = model.train(X, y)
+        # Train model with the configured ensemble weights + model_types
+        model = HighAccuracyEnsemble(
+            confidence_threshold=confidence_threshold,
+            rf_weight=rf_weight, gb_weight=gb_weight,
+            model_types=model_types,
+        )
+        performance = model.train(X, y, test_size=float(test_size))
         
         # Save model
         model.save(asset, timeframe)
@@ -586,7 +634,16 @@ class RealDataTrainer:
             "samples_used": len(X),
             "performance": performance.to_dict(),
             "feature_importance": model.get_feature_importance(),
-            "model_key": model_key
+            "model_key": model_key,
+            "config": {
+                "days": days,
+                "lookahead": lookahead,
+                "test_size": test_size,
+                "feature_groups": feature_groups or {g: True for g in AdvancedFeatureEngineer.FEATURE_GROUPS},
+                "rf_weight": model.rf_weight,
+                "gb_weight": model.gb_weight,
+                "model_types": list(model.model_types),
+            },
         }
         
         self.training_history.append({
@@ -596,6 +653,69 @@ class RealDataTrainer:
         
         return result
     
+    async def train_comparison(self, asset: str, timeframe: str,
+                               confidence_threshold: float = 0.75,
+                               days: int = 30,
+                               min_samples: int = 500,
+                               feature_groups: Optional[Dict[str, bool]] = None,
+                               lookahead: int = 1,
+                               test_size: float = 0.2) -> Dict[str, Any]:
+        """
+        Iter 110 — Train 3 model configurations on the SAME data and return
+        their performance side-by-side so the user can pick the best.
+
+        Configurations:
+          • rf_only   — Random Forest baseline
+          • gb_only   — Gradient Boosting baseline
+          • ensemble  — Weighted blend (50/50)
+
+        Nothing is persisted — this is a diagnostic view only. The user
+        can then click "Train + Save" with their preferred config.
+        """
+        results: Dict[str, Any] = {}
+        configs = [
+            ("rf_only",  {"rf_weight": 1.0, "gb_weight": 0.0, "model_types": ["rf"]}),
+            ("gb_only",  {"rf_weight": 0.0, "gb_weight": 1.0, "model_types": ["gb"]}),
+            ("ensemble", {"rf_weight": 0.5, "gb_weight": 0.5, "model_types": ["rf", "gb"]}),
+        ]
+        for label, cfg in configs:
+            r = await self.train_model(
+                asset=asset, timeframe=timeframe,
+                confidence_threshold=confidence_threshold,
+                min_samples=min_samples, days=days,
+                feature_groups=feature_groups, lookahead=lookahead,
+                test_size=test_size, **cfg,
+            )
+            if not r.get("success"):
+                results[label] = {"success": False, "error": r.get("error")}
+                continue
+            perf = r.get("performance", {}) or {}
+            results[label] = {
+                "success": True,
+                "win_rate": perf.get("win_rate", 0.0),
+                "accuracy": perf.get("accuracy", 0.0),
+                "precision": perf.get("precision", 0.0),
+                "recall": perf.get("recall", 0.0),
+                "f1_score": perf.get("f1_score", 0.0),
+                "total_signals": perf.get("total_signals", 0),
+                "samples_used": r.get("samples_used", 0),
+            }
+        # Pop last saved model off disk to avoid leaking the last comparison
+        # run into the user's saved-models list — comparison is diagnostic.
+        # (We overwrote the same file 3× so keep the ensemble variant.)
+        best = max(
+            (k for k in results if results[k].get("success")),
+            key=lambda k: results[k]["win_rate"],
+            default=None,
+        )
+        return {
+            "success": True,
+            "asset": asset,
+            "timeframe": timeframe,
+            "results": results,
+            "best": best,
+        }
+
     async def generate_signal(self, asset: str, timeframe: str, 
                                current_data: List[Dict]) -> Optional[Dict[str, Any]]:
         """
