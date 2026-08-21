@@ -1,3 +1,41 @@
+# AI's Elite PO Traders Bot — Feb 2026 (Iter 111: Microstructure/Screener Live-Data Fix)
+
+## Iter 111 (Feb 2026) — Fix Elite Screener + Microstructure "0.0 / insufficient_data" Bug
+
+### User report
+> "The elite screener and the microstructure features on the application are not working properly."
+
+### Root cause
+`_fetch_recent_candles()` in `microstructure_models.py` queried `otc_candles_5s` on the `asset` field, but that collection **stores rows under `symbol`**. Result: every microstructure lookup and every Elite Screener row returned `n_candles: 0` → Kyle/GM → `insufficient_data` → Elite Score forced to baseline 20.0 with NEUTRAL direction.
+
+### Fix (`microstructure_models.py`)
+1. **Query the correct field** — `db.otc_candles_5s.find({"symbol": {"$in": variants}})`
+2. **Asset-name variants** — with/without `_OTC`, upper/lower case
+3. **Legacy fallback** — try `asset` field on same collection, then `historical_candles` (asset+timeframe schema)
+4. **Timestamp normalisation** — ISO strings → Unix seconds so `pd.to_datetime(..., unit='s')` downstream doesn't crash
+
+### Verification
+- Before: `n_candles: 0`, kyle/gm both `insufficient_data`, all Elite rows scored 20.0 / NEUTRAL
+- After: `n_candles: 60`, Kyle λ = 0.687, illiquidity 6867 bps, GM adverse selection 8%, EURJPY_OTC now scoring **30.9 · CALL**, EURUSD_OTC **21.8 · CALL**
+- Screenshots confirm both pages populate live
+
+### Tests — `test_iter111_microstructure_candle_field_fix.py` (4/4 pass)
+- Source-level check: fetcher uses `symbol` field with case variants + historical_candles fallback + `fromisoformat` timestamp normalisation
+- Endpoint shape: `/microstructure/models` returns full wrapper (no 500)
+- Endpoint shape: `/screener/scan` returns rows for EURUSD_OTC + GBPUSD_OTC
+
+**Full Iter 100–111 regression: 134/134 pass in 4.0 s**.
+
+### Files touched
+- `/app/backend/microstructure_models.py` (`_fetch_recent_candles` rewrite — field + variants + fallback + ts normalisation)
+- `/app/backend/tests/test_iter111_microstructure_candle_field_fix.py` (new — 4 tests)
+
+### Note for user
+This fix is in preview. To activate on production (elitepotradingbot.com) you'll need to **redeploy** from the Emergent UI — the bug is currently live there too since both features shipped in Iter 108/109. Backend-only change, no TM bundle rebuild required.
+
+---
+
+
 # AI's Elite PO Traders Bot — Feb 2026 (Iter 110: AI Fine-Tuning + Data Audit + Master Toggle)
 
 ## Iter 110 (Feb 2026) — AI Models Data Display Fix + Model Fine-Tuning + Training Flow Audit + Master Auto-Trade Toggle

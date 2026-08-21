@@ -366,6 +366,11 @@ async def glosten_milgrom_for_asset(
 async def _fetch_recent_candles(microstructure_svc, asset: str, n: int) -> List[Dict[str, Any]]:
     """Best-effort candle fetch — tries the microstructure service's cache
     first, then falls back to the OTC candle collection in MongoDB.
+
+    Iter 111 — `otc_candles_5s` stores rows under the `symbol` field (NOT
+    `asset`). Previous code queried the wrong field and every asset came
+    back empty. Now we try both fields with case variants so both the Elite
+    Screener and the Microstructure Dashboard actually see live data.
     """
     try:
         import os
@@ -376,12 +381,65 @@ async def _fetch_recent_candles(microstructure_svc, asset: str, n: int) -> List[
         client = AsyncIOMotorClient(mongo_url)
         db_name = os.environ.get("DB_NAME", "trading_bot")
         db = client[db_name]
-        # Match by asset name variants (with/without _OTC prefix)
+
+        # Build name variants: with / without _OTC suffix, upper / lower case
+        base = asset.upper()
+        stripped = base.replace("_OTC", "")
+        variants = list(dict.fromkeys([
+            asset, base, base.lower(),
+            stripped, stripped + "_OTC",
+            (stripped + "_OTC").lower(),
+        ]))
+
+        # otc_candles_5s uses `symbol` field (populated by realtime OTC
+        # collector + auto-retrain scheduler + BotAI simulator).
         cursor = db.otc_candles_5s.find(
-            {"asset": {"$in": [asset, asset.replace("_OTC", ""), f"{asset}_OTC"]}}
+            {"symbol": {"$in": variants}}
         ).sort("timestamp", -1).limit(n)
         docs = await cursor.to_list(length=n)
-        docs.reverse()  # oldest first
-        return docs
+
+        # Legacy: some older docs used `asset` — fall through if none matched
+        if not docs:
+            cursor2 = db.otc_candles_5s.find(
+                {"asset": {"$in": variants}}
+            ).sort("timestamp", -1).limit(n)
+            docs = await cursor2.to_list(length=n)
+
+        # Also fall back to `historical_candles` (asset+timeframe schema)
+        # so 1m/5m data trained by the ML pipeline is reusable here.
+        if not docs:
+            cursor3 = db.historical_candles.find(
+                {"asset": {"$in": variants}}
+            ).sort("timestamp", -1).limit(n)
+            docs = await cursor3.to_list(length=n)
+
+        # Normalise timestamps: Kyle/GM expects Unix seconds (int/float).
+        # otc_candles_5s stores ISO strings, historical_candles stores int.
+        from datetime import datetime as _dt
+        norm: List[Dict[str, Any]] = []
+        for d in docs:
+            ts = d.get("timestamp")
+            if hasattr(ts, "timestamp"):
+                ts_num = float(ts.timestamp())
+            elif isinstance(ts, str):
+                try:
+                    ts_num = float(_dt.fromisoformat(
+                        ts.replace("Z", "+00:00")).timestamp())
+                except Exception:
+                    continue
+            elif isinstance(ts, (int, float)):
+                ts_num = float(ts)
+            else:
+                continue
+            norm.append({
+                "timestamp": ts_num,
+                "open":   d.get("open"),
+                "high":   d.get("high"),
+                "low":    d.get("low"),
+                "close":  d.get("close"),
+                "volume": d.get("volume", 0),
+            })
+        norm.reverse()  # oldest first
+        return norm
     except Exception:
         return []
