@@ -22,10 +22,11 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-# Telegram Configuration
-TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '8342619832:AAEdHnS_HKKariaDQaKHH6OT_pnLfp9dfIQ')
-TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID', '6434316177')
-TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
+# Telegram Configuration — hardcoded fallbacks removed for production safety.
+# Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in backend/.env.
+TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')
+TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID', '')
+TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}" if TELEGRAM_BOT_TOKEN else ""
 
 
 class TradeDirection(str, Enum):
