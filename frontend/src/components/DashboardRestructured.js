@@ -42,6 +42,7 @@ import SignalFeedWidget from './SignalFeedWidget';
 import OTCDataHealthWidget from './OTCDataHealthWidget';
 import SSIDStatusWidget from './SSIDStatusWidget';
 import WinRateWidget from './WinRateWidget';
+import AutoScanPanel from './AutoScanPanel';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -806,6 +807,12 @@ const DashboardRestructured = ({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
         <SSIDStatusWidget />
         <WinRateWidget />
+      </div>
+
+      {/* Iter 112 — Auto-Scan & Route: continuously scans the dashboard
+          universe and routes the best signal to the TM script. */}
+      <div className="mb-6">
+        <AutoScanPanel selectedAssets={config.selected_assets || []} />
       </div>
 
       {/* Live Signal Feed */}

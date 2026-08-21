@@ -3963,6 +3963,7 @@ from routes.microstructure import router as microstructure_router
 from routes.latency import router as latency_router
 from routes.signal_prewarm import router as signal_prewarm_router
 from routes.screener import router as screener_router
+from routes.auto_scan import router as auto_scan_router
 
 api_router.include_router(strategies_router)
 api_router.include_router(signals_router)
@@ -3982,6 +3983,7 @@ api_router.include_router(microstructure_router)
 api_router.include_router(latency_router)
 api_router.include_router(signal_prewarm_router)
 api_router.include_router(screener_router)
+api_router.include_router(auto_scan_router)
 
 app.include_router(api_router)
 
@@ -4122,6 +4124,16 @@ async def startup_event():
                 logger.info("[SignalPrewarm] background refresher started")
             except Exception as _pwe:
                 logger.warning("[SignalPrewarm] refresher failed to start: %s", _pwe)
+
+            # Iter 112 — Auto-Scan & Route: bind DB + restore persisted config
+            # so the loop auto-resumes when the user had it toggled ON.
+            try:
+                from auto_scan_service import auto_scan_service
+                auto_scan_service.bind_db(db)
+                await auto_scan_service.load_persisted_config()
+                logger.info("[AutoScan] bound to DB and config restored")
+            except Exception as _ase:
+                logger.warning("[AutoScan] init failed: %s", _ase)
 
             # Iter 93 — Hot-collection indexes. Adaptive-offset (Iter 91) and
             # /signals/latest both do frequent per-asset queries; without

@@ -1,3 +1,85 @@
+# AI's Elite PO Traders Bot — Feb 2026 (Iter 112: Auto-Scan & Route)
+
+## Iter 112 (Feb 2026) — Dashboard Auto-Scan → TM Handoff
+
+### User request
+> "The dashboard auto-generate signals with the auto-generate settings should scan ALL assets selected at the top of the dashboard and find signals that match strategies, then place trades through the tampermonkey script for that asset's signal — so tampermonkey needs to cycle or switch to the correct asset that signals are found."
+
+### What shipped
+
+**A. `AutoScanService` singleton** (`/app/backend/auto_scan_service.py` — 270 lines)
+- Concurrently scans a user-configured asset universe using the existing flexible-crossover strategy
+- Enriches each row with the Iter 109 **Elite Score** for tie-breaking + optional gating
+- Ranks matches by confidence desc, with Elite Score as the tiebreaker
+- Writes the winner to `tampermonkey_settings.active_target` — the existing TM `appSignalPoller` (Iter 106+) already reads this key and switches the chart before executing
+- Persists config in `auto_scan_config` (singleton doc), auto-resumes background loop on server restart
+
+**B. REST endpoints** (`/app/backend/routes/auto_scan.py`)
+- `GET /api/signals/auto-scan/status` — running state + last winner + last scan results + stats
+- `GET/POST /api/signals/auto-scan/config` — persist scan config
+- `POST /api/signals/auto-scan/start` — kick off background loop
+- `POST /api/signals/auto-scan/stop` — halt loop
+- `POST /api/signals/auto-scan/scan-now` — one-shot on-demand scan
+
+**C. React `AutoScanPanel.jsx`** (mounted in `DashboardRestructured.js`)
+- Live status badge (● LIVE / ○ IDLE) + Iter 112 pill
+- Auto-populates the scanning universe from `config.selected_assets` (dashboard-top asset picker)
+- 3 sliders: **Scan Interval** (5–120s) · **Min Confidence** (50–95%) · **Min Elite Score** (0–100, 0 = OFF)
+- Actions: `▶ Start Auto-Scan` · `■ Stop` · `⟲ Scan Now`
+- Winner banner: 🎯 asset · direction badge · confidence % · elite score
+- Full sortable results table per scan (matched rows highlighted, winner row emerald-tinted)
+- Poll cadence 3s for status; 15s default for scan loop
+
+**D. TM script — zero changes**
+The existing `appSignalPoller` already fetches `active_target`, calls `activeAsset.setActiveAsset(asset, timeframe)` to switch the chart, then fires the trade. This means Iter 112 is a **backend + frontend only drop** — no bundle rebuild needed.
+
+### Data-flow overview
+```
+User selects assets at top of Dashboard
+        ↓
+config.selected_assets → AutoScanPanel props
+        ↓
+POST /api/signals/auto-scan/start
+        ↓
+AutoScanService._loop() every 15s:
+   scan each asset (flexible-crossover strategy, run in thread)
+   + attach Elite Score via elite_screener_service
+   sort by (confidence desc, elite desc)
+   winner → tampermonkey_settings.active_target (asset, direction, TTL 60s)
+        ↓
+TM appSignalPoller polls /api/tampermonkey/active-target
+        ↓
+Switches chart → routes trade → fires GO
+```
+
+### Tests — `test_iter112_auto_scan_route.py` (14/14 pass)
+- Service: singleton exists · default config shape · deep-merge strategy dict · empty universe → error · `_route_to_tm()` writes correct singleton doc
+- Endpoints: `status` shape · `set_config` roundtrip · payload validation (interval < 3 rejected, confidence > 1 rejected)
+- Frontend wiring: component exists with all testids · DashboardRestructured imports + mounts panel
+- Server registration: router registered · startup binds DB + restores config
+- No-regression: Iter 111 microstructure fix intact · Iter 110 master toggle intact
+
+**Full Iter 100–112 regression: 148/148 pass in 3.7 s**.
+
+### Verification
+- `POST /api/signals/auto-scan/scan-now` returns full-shape results per asset
+- `_route_to_tm()` verified live: winner `EURJPY_OTC CALL @ 0.78` → `tampermonkey_settings.active_target` updated with `source: "auto_scan"`
+- Screenshot: Auto-Scan panel renders in Dashboard between Win Rate row and Live Signal Feed
+
+### Files touched
+- `/app/backend/auto_scan_service.py` (new — 270 lines)
+- `/app/backend/routes/auto_scan.py` (new — 91 lines)
+- `/app/backend/server.py` (router registration + startup bind)
+- `/app/frontend/src/components/AutoScanPanel.jsx` (new — 320 lines)
+- `/app/frontend/src/components/DashboardRestructured.js` (import + mount)
+- `/app/backend/tests/test_iter112_auto_scan_route.py` (new — 14 tests)
+
+### Note for user
+Backend + frontend only — **no TM script rebuild required**. To activate on production, redeploy from Emergent UI. Once redeployed, the TM script's existing `appSignalPoller` will start honouring the `active_target` set by Auto-Scan without any Tampermonkey update.
+
+---
+
+
 # AI's Elite PO Traders Bot — Feb 2026 (Iter 111: Microstructure/Screener Live-Data Fix)
 
 ## Iter 111 (Feb 2026) — Fix Elite Screener + Microstructure "0.0 / insufficient_data" Bug

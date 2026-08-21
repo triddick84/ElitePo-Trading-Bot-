@@ -856,6 +856,10 @@ const Dashboard = ({ botStatus, liveSignals, setLiveSignals, notificationSetting
         </div>
       )}
 
+      {/* Iter 112 — Auto-Scan & Route: continuously scans the dashboard
+          universe and pushes the best signal to the TM script. */}
+      <AutoScanPanel selectedAssets={config?.selected_assets || []} />
+
       {/* Live Signals Display - New Primary Section */}
       <LiveSignalsDisplay 
         botStatus={botStatus} 
