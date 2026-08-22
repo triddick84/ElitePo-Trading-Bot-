@@ -48,14 +48,30 @@ class SmartInvertEngine {
    * losses (global, ANY asset, ANY direction) → flip immediately. No cooldown.
    * Same-direction grouping and per-asset gating have been removed.
    *
+   * Iter 113 — Auto-invert wasn't firing for some users. Root cause was
+   * silent early-returns from guards. We now WARN loudly with the exact
+   * reason so users can see WHY auto-invert didn't fire (visible in the
+   * TM script's console + AI-Analysis tab).
+   *
    * @param {string} asset - Current asset (kept for reason text only)
    */
   evaluateInversion(asset) {
-    if (!CONFIG.AUTO_INVERT_ENABLED) return;
-    if (!state.autoInvertEnabled) return;
+    // Iter 113 — surface every guard so users can debug why it doesn't fire
+    if (!CONFIG.AUTO_INVERT_ENABLED) {
+      warn(`[AutoInvert] BLOCKED — CONFIG.AUTO_INVERT_ENABLED is false`);
+      return;
+    }
+    if (!state.autoInvertEnabled) {
+      warn(`[AutoInvert] BLOCKED — state.autoInvertEnabled is false (A-INV button OFF)`);
+      return;
+    }
 
     const inv = state.inversion;
-    if (inv.manualOverride) return;
+    if (inv.manualOverride) {
+      warn(`[AutoInvert] BLOCKED — manualOverride is true (user forced INVERT). ` +
+           `Tap INVERT again to release manual lock.`);
+      return;
+    }
 
     // Global consecutive-loss streak (negative when losing).
     // Stats.currentStreak is decremented on every loss in core/state.js.
@@ -64,9 +80,9 @@ class SmartInvertEngine {
       : 0;
     const threshold = CONFIG.INVERT_AFTER_CONSECUTIVE_LOSSES;  // default 2
 
-    if (lossStreak > 0) {
-      info(`Auto-Invert check: global loss streak = ${lossStreak} (threshold: ${threshold})`);
-    }
+    info(`[AutoInvert] check: lossStreak=${lossStreak} · threshold=${threshold} · ` +
+         `isInverted=${inv.isInverted} · autoInvertEnabled=${state.autoInvertEnabled} · ` +
+         `currentStreak=${state.stats.currentStreak}`);
 
     if (!inv.isInverted) {
       // Not inverted: invert as soon as the threshold is hit, no matter what.
@@ -74,6 +90,8 @@ class SmartInvertEngine {
         this._activate(
           `${lossStreak} consecutive losses (any asset/direction) — flipping signal`
         );
+      } else if (lossStreak > 0) {
+        info(`[AutoInvert] ${lossStreak}/${threshold} losses — need ${threshold - lossStreak} more to flip`);
       }
     } else {
       // Currently inverted — revert when inversion has played out.
@@ -209,6 +227,58 @@ class SmartInvertEngine {
         : 0,
       manualOverride: inv.manualOverride,
     };
+  }
+
+  /**
+   * Iter 113 — Diagnostic snapshot for the AI-Analysis tab + console.
+   * Returns everything a user needs to see to understand WHY auto-invert
+   * is or isn't firing. Also exposed as `window.__aiEliteInvertDiag()` so
+   * the user can drop that into DevTools console.
+   */
+  diagnose() {
+    const inv = state.inversion;
+    const lossStreak = state.stats.currentStreak < 0
+      ? Math.abs(state.stats.currentStreak)
+      : 0;
+    const threshold = CONFIG.INVERT_AFTER_CONSECUTIVE_LOSSES;
+    const reasons = [];
+    if (!CONFIG.AUTO_INVERT_ENABLED) reasons.push("CONFIG.AUTO_INVERT_ENABLED=false");
+    if (!state.autoInvertEnabled) reasons.push("state.autoInvertEnabled=false (A-INV button OFF)");
+    if (inv.manualOverride) reasons.push("manualOverride=true (release with INVERT tap)");
+    if (lossStreak < threshold) reasons.push(`streak ${lossStreak} < threshold ${threshold}`);
+    return {
+      ok: reasons.length === 0 && lossStreak >= threshold,
+      lossStreak,
+      threshold,
+      currentStreak: state.stats.currentStreak,
+      isInverted: inv.isInverted,
+      autoInvertEnabled: state.autoInvertEnabled,
+      configEnabled: CONFIG.AUTO_INVERT_ENABLED,
+      manualOverride: inv.manualOverride,
+      wouldFire: !inv.isInverted && lossStreak >= threshold && reasons.length === 0,
+      blockers: reasons,
+    };
+  }
+
+  /**
+   * Iter 113 — Test the pipeline end-to-end. Simulates N losses via
+   * `recordTradeResult(false)` and calls `evaluateInversion`. Called by
+   * the "Test Auto-Invert" button in the panel Config tab.
+   */
+  runSelfTest(n = null) {
+    const t = n || CONFIG.INVERT_AFTER_CONSECUTIVE_LOSSES || 1;
+    const before = { streak: state.stats.currentStreak,
+                     isInverted: state.inversion.isInverted };
+    // Prime a loss streak
+    for (let i = 0; i < t; i++) {
+      state.stats.currentStreak = Math.min(-1, state.stats.currentStreak - 1);
+    }
+    this.evaluateInversion("__SELF_TEST__");
+    const after = { streak: state.stats.currentStreak,
+                    isInverted: state.inversion.isInverted };
+    return { before, after,
+             fired: after.isInverted && !before.isInverted,
+             threshold: t };
   }
 }
 

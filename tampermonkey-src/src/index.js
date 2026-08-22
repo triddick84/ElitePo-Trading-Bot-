@@ -83,6 +83,22 @@ class EliteTradingBot {
     smartInvert.onInvertChange((isInverted, reason) => {
       updateInvertDisplay(isInverted, reason);
     });
+
+    // Iter 113 — Expose auto-invert diagnostics on window so users can
+    // paste `__aiEliteInvertDiag()` into DevTools console to see WHY the
+    // engine did or didn't fire.
+    try {
+      window.__aiEliteInvertDiag = () => {
+        const d = smartInvert.diagnose();
+        console.table(d);
+        return d;
+      };
+      window.__aiEliteInvertTest = (n) => {
+        const r = smartInvert.runSelfTest(n);
+        console.log("Auto-Invert self-test →", r);
+        return r;
+      };
+    } catch (_e) { /* headless */ }
     
     // Create and inject UI panel
     this.createUI();
@@ -339,6 +355,33 @@ class EliteTradingBot {
         state._invertThreshold = val;
         info(`[AutoInvert] threshold → ${val} loss${val > 1 ? 'es' : ''} (activate + revert both)`);
         saveState();
+      },
+
+      // Iter 113 — "Diag" button: return a snapshot showing WHY auto-invert
+      // did or didn't fire. Rendered inline in the Config-tab section AND
+      // dumped to console via `console.table`.
+      onAutoInvertDiagnose: () => {
+        try {
+          const d = smartInvert.diagnose();
+          console.table(d);
+          return d;
+        } catch (e) {
+          warn(`[AutoInvert] diagnose error: ${e.message}`);
+          return null;
+        }
+      },
+
+      // Iter 113 — "Test Flip" button: simulate threshold-worth of losses
+      // and confirm the engine flips. Handy first-time sanity check.
+      onAutoInvertSelfTest: () => {
+        try {
+          const r = smartInvert.runSelfTest();
+          console.log('[AutoInvert] self-test →', r);
+          return r;
+        } catch (e) {
+          warn(`[AutoInvert] self-test error: ${e.message}`);
+          return { fired: false };
+        }
       },
 
       // Iter 108 — Latency-Driven Abstain threshold (0..1000 ms; 0 = OFF).

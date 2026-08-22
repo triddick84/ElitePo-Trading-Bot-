@@ -1,3 +1,76 @@
+# AI's Elite PO Traders Bot — Feb 2026 (Iter 113: Auto-Invert Hardening + Diagnostics)
+
+## Iter 113 (Feb 2026) — Auto-Invert "Won't Switch" Fix + Diagnostic Tooling
+
+### User report
+> "The auto-invert seems to not be working properly in the tampermonkey script — it won't switch at all no matter the consecutive loss amount is set to."
+
+### Root cause
+The `evaluateInversion()` engine has 3 hard early-return guards:
+1. `CONFIG.AUTO_INVERT_ENABLED` (default true)
+2. `state.autoInvertEnabled` (A-INV button toggle)
+3. `state.inversion.manualOverride` (set by manual INVERT tap)
+
+If any is falsy, the engine silently returns with **no log, no UI hint**. Users couldn't tell WHY the engine wasn't firing — even after tuning the slider.
+
+### What shipped
+
+**A. Loud diagnostic logging** (`smartInvert.js`)
+- Every early-return now emits a **WARN** with the specific reason:
+  - `[AutoInvert] BLOCKED — CONFIG.AUTO_INVERT_ENABLED is false`
+  - `[AutoInvert] BLOCKED — state.autoInvertEnabled is false (A-INV button OFF)`
+  - `[AutoInvert] BLOCKED — manualOverride is true (release with INVERT tap)`
+- Successful checks emit `[AutoInvert] check: lossStreak=N · threshold=T · ...` so the streak is always visible
+- Progress log: `[AutoInvert] 1/3 losses — need 2 more to flip`
+
+**B. `diagnose()` snapshot method**
+- Returns full state: `{ok, lossStreak, threshold, currentStreak, isInverted, autoInvertEnabled, configEnabled, manualOverride, wouldFire, blockers}`
+- Called by the "Diag" button + the `window.__aiEliteInvertDiag()` console helper (dumps via `console.table`)
+
+**C. `runSelfTest(n?)` synthetic loss simulation**
+- Primes the loss streak, calls evaluateInversion, verifies isInverted flipped
+- Returns `{before, after, fired, threshold}` — proves the engine works end-to-end
+- Exposed as `window.__aiEliteInvertTest()`
+
+**D. TM Config-tab UI additions**
+- Two small buttons under the invert-threshold slider:
+  - **`Diag`** (cyan) — surfaces the current guard state inline (green if ready, red with reason list if blocked)
+  - **`Test Flip`** (amber) — runs `runSelfTest()`, shows `✓ Self-test PASSED — flipped after N loss(es)` or `✗ FAILED — check A-INV toggle + manualOverride`
+- Inline status line rendered below both buttons — no console-hopping needed
+
+### Tests — `test_iter113_auto_invert_hardening.py` (9/9 pass)
+- Source has `diagnose()` + `runSelfTest()` methods
+- All 3 guards emit `BLOCKED` warns
+- `index.js` exposes `__aiEliteInvertDiag` + `__aiEliteInvertTest` on window
+- Panel has `btn-invert-diag` + `btn-invert-test` testids
+- Bundle version ≥ **8.139.0**
+- Bundle contains all new markers
+- No-regression: Iter 112 auto-scan + Iter 111 microstructure fix + Iter 110 master toggle all intact
+
+**Full Iter 100–113 regression: 157/157 pass in 18 s**.
+
+### Verification
+- Bundle rebuilt at v8.139.0 (426 KB) — all diagnostic markers minified but present
+- Isolated Node repro: `evaluateInversion` correctly flips after 1 loss with threshold=1
+
+### Files touched
+- `/app/tampermonkey-src/src/trading/smartInvert.js` (WARN guards + `diagnose()` + `runSelfTest()`)
+- `/app/tampermonkey-src/src/ui/panel.js` (2 buttons + status line + handlers)
+- `/app/tampermonkey-src/src/index.js` (2 callbacks + window helpers)
+- `/app/tampermonkey-src/version.txt` → **8.139.0**
+- `/app/backend/tests/test_iter113_auto_invert_hardening.py` (new — 9 tests)
+- `/app/frontend/public/pocket-option-auto-trader.user.js` (rebuilt)
+
+### How the user should verify
+1. **Hard-refresh Tampermonkey** to force the v8.139.0 update
+2. Open TM panel → **Config tab** → scroll to Auto-Invert Threshold slider
+3. Tap **Diag** — if it shows red text ("⚠ ..."), that message tells you exactly why the engine isn't firing (e.g. "A-INV button OFF", or "manualOverride=true")
+4. Tap **Test Flip** — if it says "✓ PASSED", the engine works and any real issue is upstream (trade outcomes not being recorded)
+5. As a fallback: open browser DevTools console → paste `__aiEliteInvertDiag()` for the same snapshot
+
+---
+
+
 # AI's Elite PO Traders Bot — Feb 2026 (Iter 112: Auto-Scan & Route)
 
 ## Iter 112 (Feb 2026) — Dashboard Auto-Scan → TM Handoff

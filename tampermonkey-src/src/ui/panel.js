@@ -1837,6 +1837,14 @@ export function createPanel() {
                 <span>3 · balanced</span>
                 <span>5 · tolerant</span>
               </div>
+              <!-- Iter 113 — Diagnose + self-test buttons: click "Test" to
+                   simulate the threshold-worth of losses and confirm the
+                   engine flips. Click "Diag" to see WHY it may not flip. -->
+              <div style="display:flex;gap:5px;margin-top:8px;">
+                <button id="${P}invDiag" data-testid="btn-invert-diag" class="${P}btn" style="flex:1;font-size:${mobile ? 10 : 9}px;padding:5px 6px;background:#1e293b !important;color:#22d3ee !important;border:1px solid #22d3ee !important;" title="Print a diagnostic snapshot to the console (why auto-invert did or didn't fire)">Diag</button>
+                <button id="${P}invSelfTest" data-testid="btn-invert-test" class="${P}btn" style="flex:1;font-size:${mobile ? 10 : 9}px;padding:5px 6px;background:#1e293b !important;color:#f59e0b !important;border:1px solid #f59e0b !important;" title="Simulate the threshold-worth of losses and confirm the engine actually flips">Test Flip</button>
+              </div>
+              <div id="${P}invDiagOut" style="margin-top:6px;font-size:${mobile ? 9 : 10}px;color:#94a3b8;font-family:ui-monospace,monospace;line-height:1.4;min-height:14px;"></div>
             </div>
 
             <!-- Iter 108 — Latency-Driven Abstain threshold slider -->
@@ -2501,6 +2509,42 @@ export function initPanelEvents(callbacks = {}) {
       const v = parseInt(invThresh.value, 10);
       renderInvThresh(v);
       callbacks.onInvertThresholdChange?.(v);
+    });
+  }
+
+  // Iter 113 — Auto-Invert diagnostic + self-test buttons
+  const invDiagBtn = q('invDiag');
+  const invDiagOut = q('invDiagOut');
+  const invSelfTestBtn = q('invSelfTest');
+  const renderDiag = (d) => {
+    if (!invDiagOut) return;
+    if (!d) { invDiagOut.textContent = ''; return; }
+    if (d.ok || d.wouldFire) {
+      invDiagOut.style.color = '#4ade80';
+      invDiagOut.textContent = `✓ Ready · streak ${d.lossStreak}/${d.threshold} · isInverted=${d.isInverted}`;
+    } else {
+      invDiagOut.style.color = '#f87171';
+      invDiagOut.textContent = `⚠ ${d.blockers.join(' · ')} · streak=${d.currentStreak} · isInverted=${d.isInverted}`;
+    }
+  };
+  if (invDiagBtn) {
+    invDiagBtn.addEventListener('click', () => {
+      const d = callbacks.onAutoInvertDiagnose?.();
+      renderDiag(d);
+    });
+  }
+  if (invSelfTestBtn) {
+    invSelfTestBtn.addEventListener('click', () => {
+      const r = callbacks.onAutoInvertSelfTest?.();
+      if (invDiagOut) {
+        if (r?.fired) {
+          invDiagOut.style.color = '#4ade80';
+          invDiagOut.textContent = `✓ Self-test PASSED — flipped after ${r.threshold} simulated loss${r.threshold > 1 ? 'es' : ''}`;
+        } else {
+          invDiagOut.style.color = '#f87171';
+          invDiagOut.textContent = `✗ Self-test FAILED — engine didn't flip. Check A-INV toggle + manualOverride.`;
+        }
+      }
     });
   }
 
