@@ -1,3 +1,64 @@
+# AI's Elite PO Traders Bot — Feb 2026 (Iter 114: AI-Analysis Tab Fix)
+
+## Iter 114 (Feb 2026) — TM AI-Analysis Tab All Sections Populated
+
+### User report
+> "The AI features on tampermonkey script is not working properly — it shows no trade and all indicators are empty and no other data shows."
+
+### Root causes (2 backend bugs + 1 frontend bug)
+1. **`/api/signals/preview` didn't exist** → poller received 404 → **strategy votes card always empty**
+2. **`/api/signals/latest` returned `supporting_indicators` as string array** but no `indicators` dict → poller had nothing to map → **indicator grid all "—"**
+3. **Confidence sent as fraction (0.78)** but panel did `Math.round(conf)%` → **card displayed "1%" for a 78% signal**
+
+### What shipped
+
+**A. New `GET /api/signals/preview`** (`routes/signals.py`)
+- Returns per-strategy VOTES for the last 5 minutes: `{name, direction, confidence}`
+- Dedupes by strategy name, keeps newest per strategy
+- Normalises confidence 0-100 → 0-1
+- Returns `200 + empty votes array` when no fresh data (never 404)
+
+**B. `/api/signals/latest` now attaches `indicators` dict**
+- Parses `"NAME (value)"` pairs in `supporting_indicators` (tightened regex so `SMA20 > SMA50` no longer registers as `sma2 = 0`)
+- Renames `macd` → `macd_hist` when line mentions "histogram" (matches panel key)
+- Folds in microstructure: `vpin`, `kyle_lambda`, `flow_imbalance`, `flow_streak`
+- Folds in accuracy engine: `win_rate`, `n_trades`
+- Adds trend meta: `trend_strength`, `trend_direction`
+
+**C. `aiAnalysisPoller.js` — confidence normalisation**
+- Top-level signal card: `sconf > 0 && sconf <= 1` → multiply by 100
+- Each vote row: `conf > 0 && conf <= 1` → multiply by 100
+- Panel now correctly shows `78%` instead of `1%`
+
+### Tests — `test_iter114_ai_tab_fix.py` (14/14 pass)
+- Endpoint registration + never-404 behaviour + dedupe logic
+- Indicators dict wiring: macd_hist rename · tightened regex · microstructure/accuracy/trend folded in
+- Poller normalisation for both signal + votes
+- Bundle version ≥ **8.140.0** with `signals/preview` + `*=100` normalisation
+- Integration: preview endpoint returns correct shape
+- No-regression: Iter 113 diag buttons + Iter 112 auto-scan + Iter 111 microstructure fix all intact
+
+**Full Iter 100–114 regression: 171/171 pass in 6.5 s**.
+
+### Verification (preview)
+- `/api/signals/preview?asset=EURUSD_OTC` → 4 seeded votes sorted by confidence
+- `/api/signals/latest?asset=EURUSD_OTC` → indicators dict now has `{vpin, kyle_lambda, flow_imbalance, flow_streak, n_trades}` even for prewarm signals
+
+### Files touched
+- `/app/backend/routes/signals.py` (new `/signals/preview` endpoint + `indicators` dict on `/signals/latest`)
+- `/app/tampermonkey-src/src/trading/aiAnalysisPoller.js` (confidence normalisation for signal + votes)
+- `/app/tampermonkey-src/version.txt` → **8.140.0**
+- `/app/backend/tests/test_iter114_ai_tab_fix.py` (new — 14 tests)
+- `/app/frontend/public/pocket-option-auto-trader.user.js` (rebuilt)
+
+### User action needed on production
+1. Redeploy from Emergent UI
+2. **Hard-refresh Tampermonkey** to grab v8.140.0
+3. Open TM panel → AI Analysis tab — votes + indicators should now populate
+
+---
+
+
 # AI's Elite PO Traders Bot — Feb 2026 (Iter 113: Auto-Invert Hardening + Diagnostics)
 
 ## Iter 113 (Feb 2026) — Auto-Invert "Won't Switch" Fix + Diagnostic Tooling

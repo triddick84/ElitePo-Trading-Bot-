@@ -1098,6 +1098,52 @@ async def get_latest_signal(
         except Exception as _ao_err:
             logger.debug("Adaptive-offset attach skipped: %s", _ao_err)
 
+        # ------------------------------------------------------------------
+        # Iter 114 — Attach a `indicators` dict for the TM AI-Analysis tab.
+        # The tab expected `signal.indicators.{rsi,macd,atr,bb,ema_fast,ema_slow}`
+        # but the enhanced_oanda pipeline only emits `supporting_indicators`
+        # as a list of strings. Parse those strings + fold in microstructure
+        # + accuracy_engine values so the grid actually populates.
+        # ------------------------------------------------------------------
+        try:
+            import re as _re
+            indicators: Dict[str, Any] = {}
+            # Only capture "NAME (value)" — parenthesised numeric readings.
+            # Avoids garbage like "SMA20 > SMA50" being read as `sma2 = 0`.
+            _rx = _re.compile(r"([A-Za-z][A-Za-z0-9_]*)[^()]*\(([-+]?\d*\.?\d+)\)")
+            for line in latest_signal.get("supporting_indicators", []) or []:
+                if not isinstance(line, str):
+                    continue
+                for m in _rx.finditer(line):
+                    key = m.group(1).lower()
+                    # `MACD histogram positive (0.00002)` → macd_hist (matches
+                    # what the TM AI-Analysis tab renders)
+                    if key == "macd" and "histogram" in line.lower():
+                        key = "macd_hist"
+                    try:
+                        indicators[key] = float(m.group(2))
+                    except ValueError:
+                        indicators[key] = m.group(2)
+            # Fold in microstructure summary numbers
+            ms = latest_signal.get("microstructure") or {}
+            for k in ("vpin", "kyle_lambda", "flow_imbalance", "flow_streak"):
+                if ms.get(k) is not None:
+                    indicators[k] = ms.get(k)
+            # Fold in accuracy engine summary
+            ae = latest_signal.get("accuracy_engine") or {}
+            if ae.get("win_rate") is not None:
+                indicators["win_rate"] = ae.get("win_rate")
+            if ae.get("n_trades") is not None:
+                indicators["n_trades"] = ae.get("n_trades")
+            # Trend meta
+            if latest_signal.get("trend_strength"):
+                indicators["trend_strength"] = latest_signal["trend_strength"]
+            if latest_signal.get("trend_direction"):
+                indicators["trend_direction"] = latest_signal["trend_direction"]
+            latest_signal["indicators"] = indicators
+        except Exception as _ind_err:
+            logger.debug("Indicator dict build skipped: %s", _ind_err)
+
         return {
             "success": True,
             "signal": latest_signal,
@@ -1111,6 +1157,79 @@ async def get_latest_signal(
             "error": str(e),
             "signal": None
         }
+
+
+@router.get("/signals/preview")
+async def get_signal_preview(asset: Optional[str] = Query(None),
+                             timeframe: str = Query("1m"),
+                             limit: int = Query(6, ge=1, le=20)):
+    """
+    Iter 114 — Returns per-strategy VOTES for the TM AI-Analysis tab.
+
+    Each vote is a triple `{name, direction, confidence}` covering the
+    strategies that ran in the last minute or two. Empty list when there
+    are no fresh strategy results. Never returns 404 — the poller expects
+    a JSON body either way.
+    """
+    try:
+        cutoff_ts = int(datetime.now(timezone.utc).timestamp()) - 300
+        query: Dict[str, Any] = {"timestamp": {"$gte": cutoff_ts}}
+        if asset:
+            # Support both `symbol` and `asset` fields (schema varies)
+            query["$or"] = [{"symbol": asset}, {"asset": asset}]
+        if timeframe:
+            query.setdefault("timeframe", timeframe)
+
+        votes: List[Dict[str, Any]] = []
+        try:
+            cursor = db.trading_signals.find(query).sort("timestamp", -1).limit(50)
+            docs = await cursor.to_list(length=50)
+        except Exception:
+            docs = []
+
+        # De-dupe by strategy name, keeping the newest per strategy
+        seen: set = set()
+        for d in docs:
+            strat = (d.get("strategy") or d.get("strategy_name") or
+                     d.get("model") or "unknown")
+            if not strat or strat in seen:
+                continue
+            direction = str(d.get("direction") or d.get("signal") or "").upper()
+            if direction not in ("CALL", "PUT"):
+                continue
+            conf = d.get("confidence") or d.get("probability") or 0
+            try:
+                conf = float(conf)
+            except (TypeError, ValueError):
+                conf = 0.0
+            # Normalise 0-100 → 0-1
+            if conf > 1.0:
+                conf = conf / 100.0
+            seen.add(strat)
+            votes.append({
+                "name": strat, "direction": direction,
+                "confidence": round(conf, 4),
+                "timestamp": d.get("timestamp"),
+            })
+
+        # Iter 102 algo strategy pack — also poll live snapshots if empty
+        if not votes and asset:
+            try:
+                from strategies.algo_pack import ALGO_STRATEGIES  # noqa: F401
+                # If the algo pack module exists we can synthesise votes here
+                # in a future iter. For now, silently pass.
+            except Exception:
+                pass
+
+        # Sort by confidence desc and cap
+        votes.sort(key=lambda v: v["confidence"], reverse=True)
+        return {"success": True, "asset": asset, "timeframe": timeframe,
+                "votes": votes[:limit], "count": len(votes)}
+    except Exception as e:
+        logger.error(f"Error building signal preview: {e}")
+        return {"success": False, "error": str(e),
+                "votes": [], "count": 0}
+
 
 
 

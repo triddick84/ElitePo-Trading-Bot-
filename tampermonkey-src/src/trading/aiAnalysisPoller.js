@@ -79,9 +79,13 @@ class AIAnalysisPoller {
     if (sigR.status === 'fulfilled' && sigR.value) {
       const s = sigR.value.signal || sigR.value.data || sigR.value;
       if (s && typeof s === 'object') {
+        // Iter 114 — normalise confidence (backend sends 0.78 fraction)
+        let sconf = Number(s.confidence ?? 0);
+        if (!Number.isFinite(sconf)) sconf = 0;
+        if (sconf > 0 && sconf <= 1) sconf *= 100;
         payload.signal = {
           direction: s.direction,
-          confidence: s.confidence,
+          confidence: sconf,
           symbol: s.symbol || s.asset,
           strategy: s.strategy,
         };
@@ -98,11 +102,19 @@ class AIAnalysisPoller {
                  : Array.isArray(p.strategies) ? p.strategies
                  : Array.isArray(p.data) ? p.data : [];
       payload.votes = raw
-        .map((v) => ({
-          name: v.name || v.strategy || v.strategy_name || 'unknown',
-          direction: (v.direction || v.signal || '').toString().toUpperCase(),
-          confidence: Number(v.confidence ?? v.conf ?? 0),
-        }))
+        .map((v) => {
+          // Iter 114 — normalise confidence to 0-100 for the panel.
+          // Backend sends 0.78 (fraction); panel renders `Math.round(conf)%`
+          // and would show "1%". Multiply so 0.78 → 78.
+          let conf = Number(v.confidence ?? v.conf ?? 0);
+          if (!Number.isFinite(conf)) conf = 0;
+          if (conf > 0 && conf <= 1) conf *= 100;
+          return {
+            name: v.name || v.strategy || v.strategy_name || 'unknown',
+            direction: (v.direction || v.signal || '').toString().toUpperCase(),
+            confidence: conf,
+          };
+        })
         .filter((v) => v.direction === 'CALL' || v.direction === 'PUT')
         .sort((a, b) => b.confidence - a.confidence)
         .slice(0, 3);
