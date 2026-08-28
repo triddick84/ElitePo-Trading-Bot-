@@ -454,24 +454,21 @@ async def tma_kyc_upload(
     if ext not in _ALLOWED_KYC_EXT:
         raise HTTPException(status_code=400, detail=f"Only {sorted(_ALLOWED_KYC_EXT)} allowed")
 
-    # Stream to disk with a size guard
+    # Iter 116 — Store KYC screenshots as base64 in Mongo (deploy-safe;
+    # pod-local disk was ephemeral). Kept behind an 8MB guard.
+    import base64 as _b64
     kyc_id = str(uuid.uuid4())
-    dest_dir = UPLOAD_ROOT / str(user["telegram_user_id"])
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    dest = dest_dir / f"{kyc_id}.{ext}"
+    buf = bytearray()
+    while True:
+        chunk = await file.read(1024 * 1024)
+        if not chunk:
+            break
+        buf.extend(chunk)
+        if len(buf) > _MAX_KYC_BYTES:
+            raise HTTPException(status_code=413, detail="File too large (max 8 MB)")
 
-    total = 0
-    with dest.open("wb") as fh:  # noqa: E501 (pre-existing: KYC storage — deferred migration to Emergent object storage; local pod-only)
-        while True:
-            chunk = await file.read(1024 * 1024)
-            if not chunk:
-                break
-            total += len(chunk)
-            if total > _MAX_KYC_BYTES:
-                fh.close()
-                dest.unlink(missing_ok=True)
-                raise HTTPException(status_code=413, detail="File too large (max 8 MB)")
-            fh.write(chunk)
+    data_b64 = _b64.b64encode(bytes(buf)).decode("ascii")
+    total = len(buf)
 
     now = datetime.now(timezone.utc).isoformat()
     await db.tma_kyc.insert_one({
@@ -479,7 +476,9 @@ async def tma_kyc_upload(
         "user_id": user["id"],
         "telegram_user_id": user["telegram_user_id"],
         "status": "pending",
-        "screenshot_path": str(dest),
+        "data_b64": data_b64,
+        "storage": "mongo_b64",
+        "extension": ext,
         "file_size": total,
         "content_type": file.content_type,
         "original_filename": file.filename,
@@ -545,10 +544,20 @@ async def tma_admin_kyc_image(
     doc = await db.tma_kyc.find_one({"id": kyc_id})
     if not doc:
         raise HTTPException(status_code=404, detail="KYC not found")
-    path = Path(doc["screenshot_path"])
-    if not path.exists():
-        raise HTTPException(status_code=410, detail="Screenshot missing on disk")
-    return FileResponse(path)
+    # Iter 116 — image now stored as base64 in Mongo
+    if doc.get("data_b64"):
+        import base64 as _b64
+        from fastapi.responses import Response
+        raw = _b64.b64decode(doc["data_b64"])
+        content_type = doc.get("content_type") or f"image/{doc.get('extension','png')}"
+        return Response(content=raw, media_type=content_type)
+    # Legacy disk fallback for pre-Iter-116 records
+    legacy_path = doc.get("screenshot_path")
+    if legacy_path:
+        p = Path(legacy_path)
+        if p.exists():
+            return FileResponse(p)
+    raise HTTPException(status_code=410, detail="Screenshot missing")
 
 
 @router.post("/admin/kyc/{kyc_id}/review")

@@ -142,7 +142,7 @@ class PocketOptionTradingBot:
         try:
             payout = self.driver.find_element(By.CLASS_NAME, 'value__val-start').text
             return int(payout.replace('%', '').strip())
-        except:
+        except Exception:
             return 0
     
     def check_payout(self, asset: str) -> bool:
@@ -164,7 +164,7 @@ class PocketOptionTradingBot:
             )
             if 'exp-mode-2.svg' in time_style.get_attribute('data-src'):
                 time_style.click()
-        except:
+        except Exception:
             pass
     
     def set_amount_icon(self):
@@ -179,7 +179,7 @@ class PocketOptionTradingBot:
                 amount_style.find_element(By.CLASS_NAME, 'currency-icon--usd')
             except NoSuchElementException:
                 amount_style.click()
-        except:
+        except Exception:
             pass
     
     def set_trade_amount(self, amount: int):
@@ -509,7 +509,7 @@ class PocketOptionTradingBot:
         if self.driver:
             try:
                 self.driver.quit()
-            except:
+            except Exception:
                 pass
         logger.info("🛑 Bot stopped")
 

@@ -1,4 +1,40 @@
-# AI's Elite PO Traders Bot — Feb 2026 (Iter 115: AI Enhancement Gates)
+# AI's Elite PO Traders Bot — Feb 2026 (Iter 116: Mobile Auto-Trader Refresh)
+
+## Iter 116 (Feb 2026) — Mobile Auto-Trader Page Overhaul
+
+### User report (3 annotated screenshots)
+- Trading Strategy card: stale 10 hardcoded entries; needed live strategy registry
+- Tampermonkey Button Guide + Script Information: showed **v8.4** while bundle was **v8.140**
+- Session Statistics: always 0 wins / 0 losses / INACTIVE — never populated
+- Applied to both preview AND production; user will redeploy after preview fix
+
+### What shipped
+1. **`GET /api/tampermonkey/strategies`** — now sourced from `strategy_selection_service` (73 strategies, was 10); supports `?timeframe=` filter; sorts by win-rate desc with graceful string-value handling
+2. **`GET /api/tampermonkey/version`** — new endpoint reads `/app/tampermonkey-src/version.txt` + returns curated feature list (14 items, current as of v8.141)
+3. **TM userscript v8.141.0** — `state.recordTradeResult()` now accepts trade meta and pushes `/api/tampermonkey/stats` with wins/losses/streak/session_profit/auto_invert_active/trade_history (fire-and-forget, keepalive:true) after every WIN/LOSS
+4. **`TampermonkeyControlPanel.jsx` rewrite**:
+   - Trading Strategy: timeframe filter chips (all, 5s, 15s, 30s, 1m, 2m, 3m, 5m), refresh button, count badge, WR + BETA sub-badges, scrollable 4-col grid
+   - Script Information: live `v{scriptVersion}` badge, dynamic feature list, "Current Strategy" now resolves via `strategies.find(...)`
+   - Button Guide: full rewrite matching actual v8.141 buttons — Master (TAP TO GO LIVE), Primary (SCAN/AUTO/GO), Inversion Row (SNS/A-INV/INVERT), Multi-Asset/Source (CYCLE/APP), Money Management, updated Recommended Setups
+5. **KYC storage refactor** (`tma.py`): pod-local `uploads/tma_kyc/` → base64 in Mongo with legacy fallback (deploy-safe)
+
+### Tests — 5/5 pass in `test_iter116_mobile_auto_trader.py`
+- `/tampermonkey/strategies` dynamic & ≥ 40 entries
+- `/tampermonkey/strategies?timeframe=5s` filter works
+- `/tampermonkey/version` matches `version.txt` + features array
+- `/tampermonkey/stats` POST/GET roundtrip with new fields
+- Deployed TM bundle at `/pocket-option-auto-trader-modular.user.js` has correct `@version` header + `/api/tampermonkey/stats` snippet
+
+### Files touched
+- **MOD** `backend/server.py` (dynamic strategies + new `/tampermonkey/version` endpoint)
+- **MOD** `backend/routes/tma.py` (KYC base64 storage refactor)
+- **NEW** `backend/tests/test_iter116_mobile_auto_trader.py`
+- **MOD** `tampermonkey-src/src/core/state.js` (stats push in recordTradeResult)
+- **MOD** `tampermonkey-src/src/trading/executor.js` (pass meta to recordTradeResult, rename local `profit` → `outcomeProfit`)
+- **MOD** `tampermonkey-src/version.txt` → **8.141.0**
+- **REBUILT** `/app/frontend/public/pocket-option-auto-trader{-modular,}.user.js`
+- **MOD** `frontend/src/components/TampermonkeyControlPanel.jsx` (major)
+
 
 ## Iter 115 (Feb 2026) — ADX Regime + HA Confluence + Feedback Loop + LightGBM Meta
 

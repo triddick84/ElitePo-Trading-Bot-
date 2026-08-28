@@ -30,6 +30,9 @@ const TampermonkeyControlPanel = () => {
   const [lastUpdate, setLastUpdate] = useState(null);
   const [connectionActive, setConnectionActive] = useState(false);
   const [strategies, setStrategies] = useState([]);
+  const [strategyTfFilter, setStrategyTfFilter] = useState('all');
+  const [scriptVersion, setScriptVersion] = useState('—');
+  const [scriptFeatures, setScriptFeatures] = useState([]);
   // Iter 94 — rich Force-Generate result modal
   const [forceGenResult, setForceGenResult] = useState(null);
   const [forceGenModalOpen, setForceGenModalOpen] = useState(false);
@@ -67,6 +70,20 @@ const TampermonkeyControlPanel = () => {
       }
     } catch (error) {
       console.error('Failed to fetch strategies:', error);
+    }
+  }, []);
+
+  // Iter 116 — Live TM script version + feature list
+  const fetchScriptVersion = useCallback(async () => {
+    try {
+      const response = await fetch(`${API}/tampermonkey/version`);
+      const data = await response.json();
+      if (data.success) {
+        setScriptVersion(data.version || '—');
+        setScriptFeatures(data.features || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch TM version:', error);
     }
   }, []);
 
@@ -117,6 +134,7 @@ const TampermonkeyControlPanel = () => {
     fetchStatus();
     fetchStrategies();
     fetchStats();
+    fetchScriptVersion();
     
     // Poll for updates every 5 seconds
     const interval = setInterval(() => {
@@ -126,7 +144,7 @@ const TampermonkeyControlPanel = () => {
     }, 5000);
     
     return () => clearInterval(interval);
-  }, [fetchSettings, fetchStatus, fetchStrategies, fetchStats]);
+  }, [fetchSettings, fetchStatus, fetchStrategies, fetchStats, fetchScriptVersion]);
 
   // Reset stats
   const resetStats = async () => {
@@ -388,117 +406,200 @@ const TampermonkeyControlPanel = () => {
       </Card>
 
       {/* Strategy Selection */}
-      <Card className="bg-slate-800/50 border-slate-700">
+      <Card className="bg-slate-800/50 border-slate-700" data-testid="tm-trading-strategy-card">
         <CardHeader>
-          <CardTitle className="text-white">🎯 Trading Strategy</CardTitle>
-          <CardDescription>Select which strategy Tampermonkey should use</CardDescription>
+          <CardTitle className="text-white flex items-center justify-between flex-wrap gap-2">
+            <span>🎯 Trading Strategy</span>
+            <div className="flex items-center gap-2">
+              <Badge className="bg-slate-700 border-slate-600 text-slate-200 text-xs" data-testid="strategy-count-badge">
+                {strategies.length} available
+              </Badge>
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs border-slate-600 h-7"
+                onClick={fetchStrategies}
+                data-testid="refresh-strategies-btn"
+              >
+                🔄 Refresh
+              </Button>
+            </div>
+          </CardTitle>
+          <CardDescription>
+            Live from the same registry the Strategy Selection tool uses — filter by timeframe below.
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            {strategies.map(strategy => (
-              <button
-                key={strategy.id}
-                onClick={() => updateSettings({ ...settings, selected_strategy: strategy.id })}
-                className={`p-3 rounded-lg border-2 text-left transition-all ${
-                  settings.selected_strategy === strategy.id
-                    ? 'border-green-500 bg-green-900/30'
-                    : 'border-slate-600 bg-slate-800 hover:border-slate-500'
-                }`}
-                data-testid={`strategy-${strategy.id}`}
+          {/* Timeframe filter row */}
+          <div className="flex flex-wrap gap-2 mb-4" data-testid="strategy-tf-filter-row">
+            {['all', '5s', '15s', '30s', '1m', '2m', '3m', '5m'].map(tf => (
+              <Button
+                key={tf}
+                size="sm"
+                variant={strategyTfFilter === tf ? 'default' : 'outline'}
+                className={strategyTfFilter === tf
+                  ? 'bg-purple-600 hover:bg-purple-700 h-7 text-xs'
+                  : 'border-slate-600 text-slate-400 h-7 text-xs'}
+                onClick={() => setStrategyTfFilter(tf)}
+                data-testid={`strategy-tf-filter-${tf}`}
               >
-                <div className="text-sm font-medium text-white">{strategy.name}</div>
-                <div className="text-xs text-slate-400 mt-1">{strategy.description}</div>
-                {strategy.timeframes && (
-                  <div className="flex flex-wrap gap-1 mt-2">
-                    {strategy.timeframes.map(tf => (
-                      <span key={tf} className="text-xs bg-slate-700 px-1.5 py-0.5 rounded">{tf}</span>
-                    ))}
-                  </div>
-                )}
-              </button>
+                {tf === 'all' ? '🌐 All' : tf}
+              </Button>
             ))}
           </div>
+
+          {strategies.length === 0 ? (
+            <div className="text-slate-400 text-sm py-6 text-center">
+              Loading strategies from the backend registry…
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-[520px] overflow-y-auto pr-1" data-testid="strategy-grid">
+              {strategies
+                .filter(s => strategyTfFilter === 'all' || (s.timeframes || []).includes(strategyTfFilter))
+                .map(strategy => (
+                <button
+                  key={strategy.id}
+                  onClick={() => updateSettings({ ...settings, selected_strategy: strategy.id })}
+                  className={`p-3 rounded-lg border-2 text-left transition-all ${
+                    settings.selected_strategy === strategy.id
+                      ? 'border-green-500 bg-green-900/30'
+                      : 'border-slate-600 bg-slate-800 hover:border-slate-500'
+                  }`}
+                  data-testid={`strategy-${strategy.id}`}
+                >
+                  <div className="text-sm font-medium text-white">{strategy.name}</div>
+                  {strategy.description && (
+                    <div className="text-xs text-slate-400 mt-1 line-clamp-2">{strategy.description}</div>
+                  )}
+                  <div className="flex flex-wrap items-center gap-1 mt-2">
+                    {(strategy.timeframes || []).slice(0, 5).map(tf => (
+                      <span key={tf} className="text-[10px] bg-slate-700 px-1.5 py-0.5 rounded">{tf}</span>
+                    ))}
+                    {strategy.win_rate !== undefined && strategy.win_rate !== null && (() => {
+                      const raw = strategy.win_rate;
+                      let display = null;
+                      if (typeof raw === 'number') {
+                        display = `${Math.round(raw > 1 ? raw : raw * 100)}%`;
+                      } else if (typeof raw === 'string') {
+                        const m = raw.match(/(\d+(?:\.\d+)?)/);
+                        if (m) display = `${Math.round(parseFloat(m[1]))}%`;
+                      }
+                      return display ? (
+                        <span className="text-[10px] bg-emerald-900/60 text-emerald-300 px-1.5 py-0.5 rounded ml-auto">
+                          WR {display}
+                        </span>
+                      ) : null;
+                    })()}
+                    {strategy.beta && (
+                      <span className="text-[10px] bg-amber-900/60 text-amber-300 px-1.5 py-0.5 rounded">
+                        BETA
+                      </span>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Button Logic Guide v8.4 */}
-      <Card className="bg-slate-800/50 border-slate-700">
+      {/* Button Logic Guide — live version */}
+      <Card className="bg-slate-800/50 border-slate-700" data-testid="tm-button-guide-card">
         <CardHeader>
-          <CardTitle className="text-white">📖 Tampermonkey Button Guide v8.4</CardTitle>
-          <CardDescription>Complete guide to bot controls on Pocket Option</CardDescription>
+          <CardTitle className="text-white flex items-center justify-between flex-wrap gap-2">
+            <span>📖 Tampermonkey Button Guide</span>
+            <Badge className="bg-purple-600 text-white font-mono" data-testid="tm-guide-version-badge">
+              v{scriptVersion}
+            </Badge>
+          </CardTitle>
+          <CardDescription>Every button in the userscript UI, grouped exactly as they appear on the panel.</CardDescription>
         </CardHeader>
         <CardContent className="text-slate-300 text-sm space-y-3">
-          {/* Main Control Buttons */}
+          {/* Master toggle */}
           <div className="space-y-2">
-            <h4 className="text-white font-semibold text-xs uppercase tracking-wide">Main Controls</h4>
-            <div className="bg-green-900/30 border border-green-600 rounded p-3">
-              <strong className="text-green-400">📡 AUTO</strong> - Receives APP signals only
-              <p className="text-xs mt-1 text-green-200">Listens for signals from this dashboard. No local scanning.</p>
+            <h4 className="text-white font-semibold text-xs uppercase tracking-wide">Master</h4>
+            <div className="bg-emerald-900/30 border border-emerald-600 rounded p-3">
+              <strong className="text-emerald-400">🟢 TAP TO GO LIVE</strong> — one-tap master switch
+              <p className="text-xs mt-1 text-emerald-200">Enables SCAN · AUTO · APP · CYCLE all at once. Tap again to shut every mode off.</p>
             </div>
+          </div>
+
+          {/* Primary Controls — SCAN / AUTO / GO */}
+          <div className="space-y-2 mt-4">
+            <h4 className="text-white font-semibold text-xs uppercase tracking-wide">Primary Controls</h4>
             <div className="bg-pink-900/30 border border-pink-600 rounded p-3">
-              <strong className="text-pink-400">🔍 SCAN</strong> - Local signal generation
-              <p className="text-xs mt-1 text-pink-200">Generates signals using live Pocket Option prices (RSI, EMA, Stochastic). 30s cooldown.</p>
+              <strong className="text-pink-400">🔍 SCAN</strong> — Local signal generation
+              <p className="text-xs mt-1 text-pink-200">Scans markets on-device using live Pocket Option prices (RSI · EMA · Stochastic · MACD · BB · ADX + ensemble). 30 s cooldown between trades.</p>
+            </div>
+            <div className="bg-green-900/30 border border-green-600 rounded p-3">
+              <strong className="text-green-400">📡 AUTO</strong> — Automatic trade execution
+              <p className="text-xs mt-1 text-green-200">When a signal arrives (from any source below), AUTO clicks CALL/PUT with the correct expiry. Turn off to review manually before firing.</p>
             </div>
             <div className="bg-yellow-900/30 border border-yellow-600 rounded p-3">
-              <strong className="text-yellow-400">⚡ GO</strong> - Force generate signal
-              <p className="text-xs mt-1 text-yellow-200">Immediately generates a signal for the current asset using backend AI analysis.</p>
+              <strong className="text-yellow-400">⚡ GO</strong> — Force-generate now
+              <p className="text-xs mt-1 text-yellow-200">Tries local signal engines first for the current asset, falls back to the backend `/signals/force-generate` for a fresh AI signal.</p>
             </div>
           </div>
-          
-          {/* Secondary Controls */}
+
+          {/* Secondary row — SNS / A-INV / INVERT */}
           <div className="space-y-2 mt-4">
-            <h4 className="text-white font-semibold text-xs uppercase tracking-wide">Secondary Controls</h4>
-            <div className="bg-cyan-900/30 border border-cyan-600 rounded p-3">
-              <strong className="text-cyan-400">🔁 CYCLE</strong> - Auto-rotate favorites
-              <p className="text-xs mt-1 text-cyan-200">Automatically clicks through each favorite asset, dwells 30s scanning, trades on signal, moves to next.</p>
+            <h4 className="text-white font-semibold text-xs uppercase tracking-wide">Inversion Row</h4>
+            <div className="bg-fuchsia-900/30 border border-fuchsia-600 rounded p-3">
+              <strong className="text-fuchsia-400">🎯 SNS</strong> — Seconds-Number Strategy
+              <p className="text-xs mt-1 text-fuchsia-200">Fires an opposite-direction 5 s trade at a configurable second of every 1 m candle (dip-scalp).</p>
             </div>
-            <div className="bg-slate-700 border border-slate-600 rounded p-3">
-              <strong className="text-slate-300">📋 LOG</strong> - Debug console
-              <p className="text-xs mt-1 text-slate-400">Opens floating console showing price scraping, signal generation, and trade execution logs.</p>
+            <div className="bg-orange-900/30 border border-orange-600 rounded p-3">
+              <strong className="text-orange-400">🔁 A-INV</strong> — Auto-Invert on N losses
+              <p className="text-xs mt-1 text-orange-200">Watches the loss streak. When it hits the threshold (default 2), it flips CALL↔PUT automatically until a win. Includes momentum-check gate + built-in Diagnostic / Self-Test buttons.</p>
             </div>
             <div className="bg-red-900/30 border border-red-600 rounded p-3">
-              <strong className="text-red-400">🗑 RESET</strong> - Clear all stats
-              <p className="text-xs mt-1 text-red-200">Resets wins, losses, profit, and martingale step to zero.</p>
+              <strong className="text-red-400">🔄 INVERT</strong> — Manual global flip
+              <p className="text-xs mt-1 text-red-200">Hard-flip every signal CALL↔PUT until you toggle it off. Overrides both the app inversion switch and A-INV.</p>
             </div>
           </div>
-          
-          {/* Invert Modes */}
+
+          {/* Tertiary — CYCLE / APP */}
           <div className="space-y-2 mt-4">
-            <h4 className="text-white font-semibold text-xs uppercase tracking-wide">3-Mode Invert Control</h4>
-            <div className="grid grid-cols-3 gap-2">
-              <div className="bg-slate-700 rounded p-2 text-center">
-                <div className="text-slate-300 font-bold text-sm">OFF</div>
-                <div className="text-xs text-slate-400">Normal signals</div>
-              </div>
-              <div className="bg-orange-900/50 border border-orange-500 rounded p-2 text-center">
-                <div className="text-orange-400 font-bold text-sm">AUTO</div>
-                <div className="text-xs text-orange-200">Momentum-aware</div>
-              </div>
-              <div className="bg-red-900/50 border border-red-500 rounded p-2 text-center">
-                <div className="text-red-400 font-bold text-sm">ON</div>
-                <div className="text-xs text-red-200">Always invert</div>
-              </div>
+            <h4 className="text-white font-semibold text-xs uppercase tracking-wide">Multi-Asset / Signal Source</h4>
+            <div className="bg-cyan-900/30 border border-cyan-600 rounded p-3">
+              <strong className="text-cyan-400">🔁 CYCLE</strong> — Rotate favorites, trade the best
+              <p className="text-xs mt-1 text-cyan-200">Clicks through every favorite asset, dwells 30 s scanning each, trades the highest-payout signal, moves to the next.</p>
             </div>
-            <p className="text-xs text-slate-400 mt-2">
-              <strong>AUTO mode:</strong> Uses backend momentum-check API + local RSI/EMA analysis. Automatically inverts when detecting trend reversal or loss streaks.
-            </p>
+            <div className="bg-indigo-900/30 border border-indigo-600 rounded p-3">
+              <strong className="text-indigo-400">📱 APP</strong> — Follow app signals
+              <p className="text-xs mt-1 text-indigo-200">Polls `/api/signals/latest` and auto-executes anything the app publishes (respects abstain gates like ADX regime, HA confluence, latency).</p>
+            </div>
           </div>
-          
+
+          {/* Money management */}
+          <div className="space-y-2 mt-4">
+            <h4 className="text-white font-semibold text-xs uppercase tracking-wide">Money Management</h4>
+            <div className="bg-slate-900 border border-slate-700 rounded p-3">
+              <div className="text-slate-200 text-xs"><strong className="text-slate-100">MM $</strong> — base amount tracked internally (set the actual trade amount inside Pocket Option's UI).</div>
+              <div className="text-slate-200 text-xs mt-1"><strong className="text-slate-100">Step</strong> — current martingale rung.</div>
+              <div className="text-slate-200 text-xs mt-1"><strong className="text-emerald-300">WIN</strong> / <strong className="text-red-300">LOSS</strong> — manually record a result if auto-detection missed the balance change.</div>
+            </div>
+          </div>
+
           {/* Recommended Setups */}
           <div className="bg-gradient-to-r from-purple-900/30 to-blue-900/30 border border-purple-600 rounded p-3 mt-4">
             <strong className="text-white">Recommended Setups:</strong>
             <ul className="text-xs mt-2 space-y-1.5">
               <li className="flex items-center gap-2">
-                <span className="bg-green-600 text-white px-2 py-0.5 rounded text-xs">Best</span>
-                <span><strong>CYCLE</strong> + <strong>AUTO Invert</strong> = Fully automated multi-asset trading</span>
+                <span className="bg-green-600 text-white px-2 py-0.5 rounded text-xs">Elite</span>
+                <span><strong>APP</strong> + <strong>A-INV</strong> + AI Gates on (dashboard) = hands-off, gated app signals with loss-streak safety</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="bg-emerald-600 text-white px-2 py-0.5 rounded text-xs">Best</span>
+                <span><strong>CYCLE</strong> + <strong>A-INV</strong> = fully automated multi-asset rotation with smart inversion</span>
               </li>
               <li className="flex items-center gap-2">
                 <span className="bg-blue-600 text-white px-2 py-0.5 rounded text-xs">Good</span>
-                <span><strong>SCAN</strong> + <strong>AUTO Invert</strong> = Single asset with smart inversion</span>
+                <span><strong>SCAN</strong> + <strong>AUTO</strong> = single asset, local engine, auto-fire</span>
               </li>
               <li className="flex items-center gap-2">
                 <span className="bg-slate-600 text-white px-2 py-0.5 rounded text-xs">Manual</span>
-                <span><strong>GO</strong> button only = On-demand signal generation</span>
+                <span><strong>GO</strong> only = on-demand signal, review before every trade</span>
               </li>
             </ul>
           </div>
@@ -765,15 +866,20 @@ const TampermonkeyControlPanel = () => {
         </CardContent>
       </Card>
 
-      {/* Script Info */}
-      <Card className="bg-slate-800/50 border-slate-700">
+      {/* Script Info — live version */}
+      <Card className="bg-slate-800/50 border-slate-700" data-testid="tm-script-info-card">
         <CardHeader>
-          <CardTitle className="text-white">📄 Script Information v8.4</CardTitle>
+          <CardTitle className="text-white flex items-center justify-between flex-wrap gap-2">
+            <span>📄 Script Information</span>
+            <Badge className="bg-purple-600 text-white font-mono" data-testid="tm-info-version-badge">
+              v{scriptVersion}
+            </Badge>
+          </CardTitle>
         </CardHeader>
         <CardContent className="text-slate-300 text-sm space-y-2">
           <div className="flex justify-between">
             <span>Script Version:</span>
-            <span className="text-purple-400 font-mono">v8.4.0</span>
+            <span className="text-purple-400 font-mono" data-testid="tm-info-version-value">v{scriptVersion}</span>
           </div>
           <div className="flex justify-between">
             <span>Connection:</span>
@@ -791,7 +897,9 @@ const TampermonkeyControlPanel = () => {
           </div>
           <div className="flex justify-between">
             <span>Current Strategy:</span>
-            <span className="text-purple-400">{settings.selected_strategy || 'Auto'}</span>
+            <span className="text-purple-400">
+              {strategies.find(s => s.id === settings.selected_strategy)?.name || settings.selected_strategy || 'Auto'}
+            </span>
           </div>
           <div className="flex justify-between">
             <span>Signal Source:</span>
@@ -824,25 +932,18 @@ const TampermonkeyControlPanel = () => {
             </p>
           </div>
           
-          {/* Features List */}
-          <div className="mt-4 p-3 bg-gradient-to-r from-purple-900/20 to-blue-900/20 rounded-lg border border-purple-500/30">
-            <p className="text-xs text-purple-300 font-semibold mb-2">v8.8.0 Features:</p>
-            <ul className="text-xs text-slate-400 space-y-1">
-              <li>✅ <strong>6 Local Signal Strategies</strong> (no backend needed for OTC)</li>
-              <li className="pl-3">General Multi-Indicator (RSI, MACD, Stoch, BB, EMA, ADX)</li>
-              <li className="pl-3">Keltner-MACD 5s (KC EMA20 + MACD 13/24/11)</li>
-              <li className="pl-3">IQ-720 Ensemble (8 weighted strategies + regime detection)</li>
-              <li className="pl-3">Holly Crossover (EMA12 x WMA23 reversal)</li>
-              <li className="pl-3">Golden One Moment 30s (RSI2 + Stoch mean reversion)</li>
-              <li className="pl-3">Momentum Buster 15s (momentum period 3)</li>
-              <li>✅ <strong>GO button</strong> tries local signals FIRST, backend API fallback</li>
-              <li>✅ <strong>KC-5s button</strong> for dedicated Keltner-MACD quick trade</li>
-              <li>✅ CYCLE mode with auto-invert and expiry detection</li>
-              <li>✅ Session-aware trading with London/NY overlap boost</li>
-              <li>✅ Balance-based WIN/LOSS detection from PO UI</li>
-              <li>✅ Latency sync with backend timing config</li>
-              <li>✅ Settings persistence across page refreshes</li>
-            </ul>
+          {/* Features List — live */}
+          <div className="mt-4 p-3 bg-gradient-to-r from-purple-900/20 to-blue-900/20 rounded-lg border border-purple-500/30" data-testid="tm-features-list">
+            <p className="text-xs text-purple-300 font-semibold mb-2">v{scriptVersion} Features:</p>
+            {scriptFeatures.length === 0 ? (
+              <p className="text-xs text-slate-400">Loading feature list from backend…</p>
+            ) : (
+              <ul className="text-xs text-slate-400 space-y-1">
+                {scriptFeatures.map((f, i) => (
+                  <li key={i}>✅ {f}</li>
+                ))}
+              </ul>
+            )}
           </div>
         </CardContent>
       </Card>

@@ -278,7 +278,7 @@ class PocketOptionDataCollector:
         if self.driver:
             try:
                 self.driver.quit()
-            except:
+            except Exception:
                 pass
         
         logger.info("🛑 Data Collector stopped")

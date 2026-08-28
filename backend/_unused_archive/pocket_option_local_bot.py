@@ -211,7 +211,7 @@ class PocketOptionLocalBot:
                     logger.info("   Accepted cookies")
                     await asyncio.sleep(1)
                     break
-        except:
+        except Exception:
             pass
         
         # Find and fill login form - try multiple selector patterns
@@ -265,7 +265,7 @@ class PocketOptionLocalBot:
                     password_filled = True
                     logger.info(f"   Password filled using: {selector}")
                     break
-            except:
+            except Exception:
                 continue
         
         if not password_filled:
@@ -295,7 +295,7 @@ class PocketOptionLocalBot:
                     login_clicked = True
                     logger.info(f"   Login button clicked using: {selector}")
                     break
-            except:
+            except Exception:
                 continue
         
         if not login_clicked:
@@ -331,7 +331,7 @@ class PocketOptionLocalBot:
                         error_text = await el.first.text_content()
                         logger.error(f"❌ Login error: {error_text}")
                         break
-                except:
+                except Exception:
                     continue
             raise Exception("Login failed - still on login page")
     
@@ -380,7 +380,7 @@ class PocketOptionLocalBot:
                     logger.info(f"   Found trading element: {selector}")
                     found = True
                     break
-            except:
+            except Exception:
                 continue
         
         if not found:
@@ -400,7 +400,7 @@ class PocketOptionLocalBot:
                     text = await btn.text_content()
                     classes = await btn.get_attribute('class') or ''
                     logger.info(f"   Button {i}: text='{text[:30] if text else ''}' class='{classes[:50]}'")
-                except:
+                except Exception:
                     pass
         except Exception as e:
             logger.debug(f"   Debug info error: {e}")
@@ -430,9 +430,9 @@ class PocketOptionLocalBot:
                                 self.state.balance = float(match.group())
                                 logger.debug(f"   Balance updated: ${self.state.balance:.2f}")
                                 return
-                except:
+                except Exception:
                     continue
-        except:
+        except Exception:
             pass
     
     async def _signal_loop(self):
@@ -557,7 +557,7 @@ class PocketOptionLocalBot:
                 await self.page.keyboard.type(str(int(amount)))
                 logger.info("   Amount set via keyboard")
                 return True
-        except:
+        except Exception:
             pass
         
         logger.warning("   Could not find amount input - using default")
@@ -684,7 +684,7 @@ class PocketOptionLocalBot:
                             await btn.click()
                             logger.info(f"   ✅ Clicked PUT button (text fallback)")
                             return True
-                except:
+                except Exception:
                     continue
         except Exception as e:
             logger.error(f"   Visual detection failed: {e}")
@@ -723,7 +723,7 @@ class PocketOptionLocalBot:
                 await self.browser.close()
             if self.playwright:
                 await self.playwright.stop()
-        except:
+        except Exception:
             pass
         
         logger.info("✅ Cleanup complete")

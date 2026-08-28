@@ -3812,31 +3812,115 @@ async def tampermonkey_heartbeat(data: dict = Body(default={})):
         return {"success": False, "message": str(e)}
 
 @api_router.get("/tampermonkey/strategies")
-async def get_tampermonkey_strategies():
+async def get_tampermonkey_strategies(timeframe: Optional[str] = Query(None)):
     """
     Get available strategies for Tampermonkey to use.
+
+    Iter 116 — Now dynamically sourced from the same registry the Strategy
+    Selection Tool uses, so the Mobile Auto-Trader page stays in sync with
+    every strategy shipped (~100+, not the hardcoded 10 it used to return).
+    Optional `?timeframe=5s|15s|30s|1m|2m|3m|5m` filter.
     """
     try:
-        strategies = [
-            {"id": "auto", "name": "Auto (AI Selection)", "description": "AI automatically selects best strategy"},
-            {"id": "micro_compression", "name": "Micro Compression", "timeframes": ["5s"], "description": "Quick 5s scalping"},
-            {"id": "keltner_breakout", "name": "Keltner Breakout", "timeframes": ["5s", "15s"], "description": "Volatility breakouts"},
-            {"id": "candlestick_patterns", "name": "Candlestick Patterns", "timeframes": ["5s", "15s", "30s"], "description": "Classic patterns"},
-            {"id": "triple_supertrend", "name": "Triple SuperTrend", "timeframes": ["1m", "2m"], "description": "Multi-timeframe trend"},
-            {"id": "ema_pullback", "name": "EMA Pullback", "timeframes": ["1m", "3m"], "description": "Trend pullbacks"},
-            {"id": "zigzag_double_ma", "name": "ZigZag + Double MA", "timeframes": ["1m", "5m"], "description": "Swing reversals"},
-            {"id": "rsi_divergence", "name": "RSI Divergence", "timeframes": ["15s", "30s", "1m"], "description": "Momentum divergence"},
-            {"id": "macd_crossover", "name": "MACD Crossover", "timeframes": ["30s", "1m", "2m"], "description": "Trend momentum"},
-            {"id": "bollinger_squeeze", "name": "Bollinger Squeeze", "timeframes": ["15s", "30s", "1m"], "description": "Volatility expansion"}
-        ]
-        
-        return {
-            "success": True,
-            "strategies": strategies
-        }
+        from strategy_selection_service import strategy_selection_service
+
+        # Always-first: the "Auto (AI Selection)" meta-choice.
+        out = [{
+            "id": "auto",
+            "name": "Auto (AI Selection)",
+            "description": "AI automatically selects best strategy",
+            "timeframes": ["5s", "15s", "30s", "1m", "2m", "3m", "5m"],
+        }]
+
+        seen_ids = {"auto"}
+        try:
+            grouped = strategy_selection_service.get_all_available_strategies()
+        except Exception as _ge:
+            logger.warning(f"strategy_selection_service failed: {_ge}")
+            grouped = {}
+
+        # If a timeframe is requested, filter to just that one; otherwise
+        # merge across timeframes, dedupe by id, and record every tf the
+        # strategy is available on.
+        by_id: Dict[str, Dict[str, Any]] = {}
+        for tf, arr in (grouped or {}).items():
+            if timeframe and tf != timeframe:
+                continue
+            for s in arr or []:
+                sid = str(s.get("id") or s.get("name") or "").strip()
+                if not sid or sid in seen_ids:
+                    # already present — just add the tf
+                    if sid in by_id:
+                        tfs = set(by_id[sid].get("timeframes") or [])
+                        tfs.add(tf)
+                        by_id[sid]["timeframes"] = sorted(tfs)
+                    continue
+                by_id[sid] = {
+                    "id": sid,
+                    "name": s.get("name") or sid,
+                    "description": s.get("description") or "",
+                    "timeframes": [tf],
+                    "win_rate": s.get("win_rate"),
+                    "beta": bool(s.get("beta")) if s.get("beta") is not None else None,
+                    "family": s.get("family"),
+                }
+        # Sort: highest win_rate first (unknowns at end), then alpha
+        def _wr(x):
+            wr = x.get("win_rate")
+            try:
+                return -float(wr) if wr is not None else 1.0  # unknowns to end
+            except (TypeError, ValueError):
+                return 1.0
+        merged = sorted(
+            by_id.values(),
+            key=lambda x: (_wr(x), (x.get("name") or "").lower()),
+        )
+        out.extend(merged)
+
+        return {"success": True, "strategies": out, "count": len(out)}
     except Exception as e:
         logger.error(f"Error getting strategies: {e}")
-        return {"success": False, "strategies": []}
+        return {"success": False, "strategies": [], "error": str(e)}
+
+
+@api_router.get("/tampermonkey/version")
+async def get_tampermonkey_version():
+    """
+    Iter 116 — Return the current TM userscript version so the Mobile
+    Auto-Trader page can render live version everywhere it's shown.
+    Reads `/app/tampermonkey-src/version.txt`.
+    """
+    import pathlib as _pl
+    version_path = _pl.Path("/app/tampermonkey-src/version.txt")
+    version = "unknown"
+    try:
+        if version_path.exists():
+            version = version_path.read_text().strip()
+    except Exception as _ve:
+        logger.warning(f"version.txt read failed: {_ve}")
+    return {
+        "success": True,
+        "version": version,
+        "version_short": ".".join(version.split(".")[:2]) if version != "unknown" else version,
+        "modular_script_url": "/pocket-option-auto-trader-modular.user.js",
+        "legacy_script_url": "/pocket-option-auto-trader.user.js",
+        "features": [
+            "AI Enhancement Gates (Iter 115): ADX regime · HA confluence · Feedback multiplier · LightGBM meta",
+            "Auto-Scan & Route — winning signal auto-pushed to TM (Iter 112)",
+            "Auto-Invert engine + diagnostic buttons (Iter 113)",
+            "AI-Analysis Tab live: indicators, votes, strategy vote, confidence (Iter 114)",
+            "Latency Abstain Gate: p99 > threshold → server abstains",
+            "Microstructure toxicity gate (VPIN, Kyle-λ, flow imbalance)",
+            "Pair Confluence booster (up to ±15% confidence tilt)",
+            "Elite Score gate + direction enforcement",
+            "Session-aware trading with London/NY overlap boost",
+            "Master toggle: SCAN · AUTO · APP · CYCLE combined",
+            "Balance-based WIN/LOSS auto-detection from Pocket Option UI",
+            "Adaptive latency-offset per asset (recommended_offset_sec)",
+            "Settings persistence across page refreshes + backend sync",
+            "Signal source selectable: App AI · TradingView · MT4 · MT5 · TM Scan",
+        ],
+    }
 
 # Tampermonkey win/loss stats storage
 tampermonkey_stats = {

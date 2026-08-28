@@ -14,7 +14,7 @@ import threading
 import logging
 from datetime import datetime
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, DISABLED, END, Y
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -237,7 +237,7 @@ class TradingBotGUI:
         # Parse martingale list
         try:
             mart_list = [int(x.strip()) for x in self.martingale_list.get().split(',')]
-        except:
+        except Exception:
             mart_list = [1, 3, 7, 15, 32, 67]
         
         return {

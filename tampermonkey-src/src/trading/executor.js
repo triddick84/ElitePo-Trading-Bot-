@@ -325,9 +325,6 @@ class TradeExecutor {
    * @param {Object} [opts] - optional tagging (e.g. auto-resolved)
    */
   recordResult(isWin, opts = {}) {
-    // Core stats
-    recordTradeResult(isWin);
-    
     // Get the trade we're recording for. Priority: pending trade > last executed trade > last signal
     const trade = this.pendingTrades.length > 0 ? this.pendingTrades.shift() : state.lastTrade;
     const lastSignal = state.lastSignal || {};
@@ -335,6 +332,15 @@ class TradeExecutor {
     const direction = trade?.direction || lastSignal.direction || 'UNKNOWN';
     const confidence = trade?.confidence || lastSignal.confidence || 0;
     const strategy = trade?.strategy || lastSignal.strategy || 'Unknown';
+    const amount = typeof trade?.amount === 'number' ? trade.amount : (state.moneyManagement?.currentAmount || null);
+    // Approx profit: win = amount * (payout - 1) with payout ~ 0.85 by default,
+    // loss = -amount. Overridden by trade.profit if the executor already set it.
+    const profit = typeof trade?.profit === 'number'
+      ? trade.profit
+      : (amount != null ? (isWin ? amount * 0.85 : -amount) : null);
+
+    // Core stats (Iter 116 — meta now propagates to backend push)
+    recordTradeResult(isWin, { direction, asset, amount, profit });
     
     if (trade) {
       trade.result = isWin ? 'WIN' : 'LOSS';
@@ -394,14 +400,14 @@ class TradeExecutor {
 
     // Post WIN/LOSS to /api/trades/outcome so the WinRate widget can compute
     // real rolling accuracy (matches the most recent tm_trade_reports row).
-    const profit = trade
+    const outcomeProfit = trade
       ? (isWin ? trade.amount * ((trade.payout || 80) / 100) : -trade.amount)
       : null;
     reportTradeOutcome({
       outcome: isWin ? 'WIN' : 'LOSS',
       asset,
       strategy,
-      profit,
+      profit: outcomeProfit,
     }).then(resp => {
       if (resp && resp.success) {
         log(`Outcome synced to backend${resp.matched_trade ? ` (matched ${resp.trade_strategy || 'trade'})` : ' (orphan)'}`);

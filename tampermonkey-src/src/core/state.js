@@ -158,8 +158,9 @@ export function resetStats() {
 /**
  * Record trade result
  * @param {boolean} isWin - Whether trade was a win
+ * @param {Object} [meta] - Optional {direction, amount, asset, profit}
  */
-export function recordTradeResult(isWin) {
+export function recordTradeResult(isWin, meta = {}) {
   state.stats.totalTrades++;
   
   if (isWin) {
@@ -170,6 +171,52 @@ export function recordTradeResult(isWin) {
     state.stats.losses++;
     state.stats.currentStreak = Math.min(-1, state.stats.currentStreak - 1);
     state.stats.maxLossStreak = Math.max(state.stats.maxLossStreak, Math.abs(state.stats.currentStreak));
+  }
+
+  // Append to rolling trade_history for backend Session-Statistics card
+  if (!Array.isArray(state.stats.trade_history)) state.stats.trade_history = [];
+  state.stats.trade_history.push({
+    result: isWin ? 'win' : 'loss',
+    direction: meta.direction || null,
+    amount: typeof meta.amount === 'number' ? meta.amount : null,
+    asset: meta.asset || null,
+    profit: typeof meta.profit === 'number' ? meta.profit : null,
+    ts: Date.now(),
+  });
+  if (state.stats.trade_history.length > 50) {
+    state.stats.trade_history = state.stats.trade_history.slice(-50);
+  }
+  if (typeof meta.profit === 'number') {
+    state.stats.session_profit = (state.stats.session_profit || 0) + meta.profit;
+  }
+  state.stats.last_result = isWin ? 'win' : 'loss';
+
+  // Iter 116 — Push to backend so the Mobile Auto-Trader page's Session
+  // Statistics card fills in (previously always 0). Fire-and-forget.
+  try {
+    // Backend origin: prefer BACKEND_URL constant from ../config if present,
+    // else fall back to the current tab origin (works when TM runs against
+    // production directly and against preview from the same origin).
+    const backend =
+      (typeof window !== 'undefined' && window.__ELITE_PO_BACKEND__) ||
+      'https://elitepotradingbot.com';
+    fetch(`${backend}/api/tampermonkey/stats`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        wins: state.stats.wins,
+        losses: state.stats.losses,
+        consecutive_wins: state.stats.currentStreak > 0 ? state.stats.currentStreak : 0,
+        consecutive_losses: state.stats.currentStreak < 0 ? Math.abs(state.stats.currentStreak) : 0,
+        session_profit: state.stats.session_profit || 0,
+        last_result: state.stats.last_result,
+        auto_invert_active: !!(state.inversion && state.inversion.isInverted),
+        trade_history: state.stats.trade_history,
+      }),
+      keepalive: true,
+    }).catch(() => {});
+  } catch (_e) {
+    /* silent — TM script never blocks trading on telemetry push */
   }
 }
 
