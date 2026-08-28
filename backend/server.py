@@ -188,7 +188,7 @@ def _convert_numpy_types(obj):
             if isinstance(item_val, float):
                 return safe_float(item_val)
             return item_val
-        except:
+        except Exception:
             return 0.0
     else:
         return obj
@@ -582,7 +582,7 @@ async def get_performance_history(days: int = 30):
         
         metrics = await db.performance_metrics.find({
             "date": {"$gte": start_date}
-        }).sort("date", -1).to_list(length=None)
+        }, {"_id": 0}).sort("date", -1).to_list(length=None)
         
         return {"metrics": metrics}
         
@@ -2579,7 +2579,7 @@ async def get_training_data(
 
 
 @api_router.get("/data-collector/quality/{asset}/{timeframe}")
-async def get_data_quality_report(
+async def get_data_quality_report_v2(
     asset: str,
     timeframe: str,
     days: int = Query(default=1, ge=1, le=7)
@@ -3964,6 +3964,7 @@ from routes.latency import router as latency_router
 from routes.signal_prewarm import router as signal_prewarm_router
 from routes.screener import router as screener_router
 from routes.auto_scan import router as auto_scan_router
+from routes.ai_enhancements import router as ai_enhancements_router
 
 api_router.include_router(strategies_router)
 api_router.include_router(signals_router)
@@ -3984,6 +3985,7 @@ api_router.include_router(latency_router)
 api_router.include_router(signal_prewarm_router)
 api_router.include_router(screener_router)
 api_router.include_router(auto_scan_router)
+api_router.include_router(ai_enhancements_router)
 
 app.include_router(api_router)
 

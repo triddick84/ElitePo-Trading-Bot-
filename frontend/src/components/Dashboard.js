@@ -15,6 +15,8 @@ import AutomatedTradingPanel from './AutomatedTradingPanel';
 import AIMLTradingPanel from './AIMLTradingPanel';
 import MoneyManagementPanel from './MoneyManagementPanel';
 import AdaptiveStrategyResults from './AdaptiveStrategyResults';
+import AutoScanPanel from './AutoScanPanel';
+import AiGatesPanel from './AiGatesPanel';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -859,6 +861,10 @@ const Dashboard = ({ botStatus, liveSignals, setLiveSignals, notificationSetting
       {/* Iter 112 — Auto-Scan & Route: continuously scans the dashboard
           universe and pushes the best signal to the TM script. */}
       <AutoScanPanel selectedAssets={config?.selected_assets || []} />
+
+      {/* Iter 115 — AI Enhancement Gates: ADX regime, HA confluence,
+          feedback multiplier, LightGBM meta-model. */}
+      <AiGatesPanel primaryAsset={config?.selected_assets?.[0] || 'EURUSD_OTC'} />
 
       {/* Live Signals Display - New Primary Section */}
       <LiveSignalsDisplay 

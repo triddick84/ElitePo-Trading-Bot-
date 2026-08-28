@@ -43,6 +43,7 @@ import OTCDataHealthWidget from './OTCDataHealthWidget';
 import SSIDStatusWidget from './SSIDStatusWidget';
 import WinRateWidget from './WinRateWidget';
 import AutoScanPanel from './AutoScanPanel';
+import AiGatesPanel from './AiGatesPanel';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -813,6 +814,7 @@ const DashboardRestructured = ({
           universe and routes the best signal to the TM script. */}
       <div className="mb-6">
         <AutoScanPanel selectedAssets={config.selected_assets || []} />
+        <AiGatesPanel primaryAsset={config.selected_assets?.[0] || 'EURUSD_OTC'} />
       </div>
 
       {/* Live Signal Feed */}

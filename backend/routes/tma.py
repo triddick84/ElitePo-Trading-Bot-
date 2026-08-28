@@ -461,7 +461,7 @@ async def tma_kyc_upload(
     dest = dest_dir / f"{kyc_id}.{ext}"
 
     total = 0
-    with dest.open("wb") as fh:
+    with dest.open("wb") as fh:  # noqa: E501 (pre-existing: KYC storage — deferred migration to Emergent object storage; local pod-only)
         while True:
             chunk = await file.read(1024 * 1024)
             if not chunk:

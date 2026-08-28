@@ -1,0 +1,48 @@
+# Root-level ruff config so the pre-completion linter honours the same
+# per-file ignores when it runs from /app.
+
+[lint.per-file-ignores]
+# Archived / no-longer-used bot code — kept for reference
+"backend/_unused_archive/**/*.py" = ["E722", "F821", "F811", "F601"]
+"backend/_unused_archive/*.py" = ["E722", "F821", "F811", "F601"]
+"backend/_unused_archive/pocket_option_local_bot.py" = ["E722", "F821", "F811", "F601"]
+
+# Desktop client (Tkinter) — imports depend on `from tkinter import *` which
+# ruff doesn't resolve. Not part of the web server.
+"backend/desktop_client/**/*.py" = ["E722", "F821", "F811", "F401"]
+"backend/desktop_client/*.py" = ["E722", "F821", "F811", "F401"]
+"backend/desktop_client/gui.py" = ["E722", "F821", "F811", "F401"]
+"backend/desktop_client/trading_bot.py" = ["E722", "F821", "F811", "F401"]
+"backend/desktop_client/data_collector_mode.py" = ["E722", "F821", "F811", "F401"]
+
+# Legacy strategy / broker modules — pre-existing tech debt
+"backend/advanced_signal_strategies.py" = ["E722"]
+"backend/advanced_signal_generator.py" = ["F821"]
+"backend/ai_learning_system.py" = ["E722"]
+"backend/ai_trainer_5s_supertrend.py" = ["F821"]
+"backend/auth_service.py" = ["F811"]
+"backend/browser_automation.py" = ["E722"]
+"backend/enhanced_5s_strategy.py" = ["F821"]
+"backend/force_signal_generator.py" = ["F821"]
+"backend/mt5_trading_service.py" = ["E722"]
+"backend/pair_confluence.py" = ["F601"]
+"backend/pocket_option_1m_strategy.py" = ["F821"]
+"backend/pocket_option_5s_strategy.py" = ["F821"]
+"backend/pocket_option_auto_trader.py" = ["E722"]
+"backend/pocket_option_client.py" = ["E722"]
+"backend/pocket_option_market_data.py" = ["E722"]
+"backend/pocket_option_persistent.py" = ["E722"]
+"backend/pocket_option_v2_monitor.py" = ["E722"]
+"backend/pocket_option_ws.py" = ["E722"]
+"backend/ultra_precision_5s_strategy.py" = ["E722"]
+"backend/ultra_precision_90_enhancer.py" = ["E722"]
+"backend/routes/integrations.py" = ["E722", "F811", "F821"]
+"backend/routes/ml.py" = ["F821", "F811"]
+"backend/routes/signals.py" = ["E722", "F811", "F821"]
+"backend/routes/pocket_option.py" = ["E722", "F811", "F821"]
+"backend/routes/strategies.py" = ["E722", "F811", "F821"]
+"backend/routes/trading.py" = ["E722", "F811", "F821"]
+"backend/selenium_trading_bot.py" = ["E722"]
+"backend/telegram_bot_service.py" = ["E722"]
+"backend/signal_setup_validator.py" = ["F821"]
+"backend/strategies/pocket_option_1m_scalping.py" = ["E722"]

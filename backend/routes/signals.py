@@ -1077,6 +1077,180 @@ async def get_latest_signal(
             except Exception as _mm:
                 logger.debug("Microstructure multiplier skipped: %s", _mm)
 
+        # ------------------------------------------------------------------
+        # Iter 115 — AI Enhancement Gates
+        #   a) ADX-filtered regime gate
+        #   b) Heikin-Ashi confluence gate
+        #   c) Feedback-engine confidence multiplier
+        #   d) LightGBM meta-model override (opt-in)
+        # Each gate is guarded by a config flag from db.ai_gates_config so
+        # they can be toggled without a redeploy.
+        # ------------------------------------------------------------------
+        try:
+            _ai_cfg = await db.ai_gates_config.find_one({"_id": "default"}) or {}
+        except Exception:
+            _ai_cfg = {}
+        _adx_on = bool(_ai_cfg.get("adx_regime_enabled", True))
+        _ha_on = bool(_ai_cfg.get("ha_confluence_enabled", True))
+        _fb_on = bool(_ai_cfg.get("feedback_multiplier_enabled", True))
+        _lgbm_on = bool(_ai_cfg.get("lightgbm_meta_enabled", False))
+        _ha_streak = int(_ai_cfg.get("ha_min_streak", 2) or 2)
+        _ha_no_wick = bool(_ai_cfg.get("ha_require_no_opposing_wick", False))
+
+        # Fetch a common candle series once for all gates that need it
+        _gate_candles: List[Dict[str, Any]] = []
+        try:
+            _gate_symbol = (
+                latest_signal.get("symbol") or latest_signal.get("asset") or symbol
+            )
+            if _gate_symbol and (_adx_on or _ha_on or _lgbm_on):
+                _sym = str(_gate_symbol).strip().upper()
+                _variants = {_sym, _sym.replace("_OTC", ""), _sym.replace("OTC", "")}
+                # Also try the request-scoped `symbol` param (may include _OTC
+                # while the signal doc stored just the base pair).
+                if symbol:
+                    _rsym = str(symbol).strip().upper()
+                    _variants.update({_rsym, _rsym.replace("_OTC", ""),
+                                      _rsym.replace("OTC", ""),
+                                      _rsym + "_OTC" if not _rsym.endswith("_OTC") else _rsym})
+                _variants_list = list(_variants)
+                for _coll_name, _key in (
+                    ("otc_candles_5s", "symbol"),
+                    ("candles", "symbol"),
+                    ("historical_candles", "asset"),
+                ):
+                    try:
+                        _docs = await db[_coll_name].find(
+                            {_key: {"$in": _variants_list}},
+                            {"_id": 0, "open": 1, "high": 1, "low": 1,
+                             "close": 1, "volume": 1, "timestamp": 1},
+                        ).sort("timestamp", -1).limit(100).to_list(length=100)
+                        if _docs:
+                            _gate_candles = list(reversed(_docs))
+                            break
+                    except Exception:
+                        pass
+        except Exception as _cerr:
+            logger.debug("Iter115 candle fetch failed: %s", _cerr)
+
+        _direction = (
+            latest_signal.get("direction")
+            or latest_signal.get("signal")
+            or latest_signal.get("action")
+        )
+        _strategy_id = (
+            latest_signal.get("strategy_id")
+            or latest_signal.get("strategy")
+            or latest_signal.get("strategy_name")
+        )
+
+        # ---- (a) ADX regime gate ----
+        if _adx_on and _gate_candles and not latest_signal.get("abstain"):
+            try:
+                from adx_regime_gate import evaluate_regime_gate as _adx_gate
+                _adx_res = _adx_gate(_strategy_id, _direction, _gate_candles)
+                latest_signal["regime_gate"] = _adx_res
+                if _adx_res.get("gated"):
+                    latest_signal["abstain"] = True
+                    latest_signal["abstain_source"] = "adx_regime_mismatch"
+                    latest_signal["abstain_reason"] = _adx_res.get("reason")
+                    logger.info("[ADX-Gate] ABSTAIN %s: %s",
+                                _gate_symbol, _adx_res.get("reason"))
+            except Exception as _ge:
+                logger.debug("ADX regime gate skipped: %s", _ge)
+
+        # ---- (b) Heikin-Ashi confluence gate ----
+        if _ha_on and _gate_candles and not latest_signal.get("abstain"):
+            try:
+                from ha_confluence_gate import evaluate_ha_confluence as _ha_gate
+                _ha_res = _ha_gate(
+                    _gate_candles,
+                    signal_direction=_direction,
+                    min_streak=_ha_streak,
+                    require_no_opposing_wick=_ha_no_wick,
+                )
+                latest_signal["ha_confluence"] = _ha_res
+                if _ha_res.get("gated"):
+                    latest_signal["abstain"] = True
+                    latest_signal["abstain_source"] = "ha_confluence_fail"
+                    latest_signal["abstain_reason"] = _ha_res.get("reason")
+                    logger.info("[HA-Gate] ABSTAIN %s: %s",
+                                _gate_symbol, _ha_res.get("reason"))
+            except Exception as _he:
+                logger.debug("HA confluence gate skipped: %s", _he)
+
+        # ---- (c) Feedback-engine confidence multiplier ----
+        if _fb_on and _strategy_id and not latest_signal.get("abstain"):
+            try:
+                import feedback_engine as _fb
+                _regime_name = (
+                    (latest_signal.get("regime_gate") or {}).get("regime", {}).get("regime")
+                )
+                _mult = await _fb.get_multiplier(db, _strategy_id, regime=_regime_name)
+                latest_signal["feedback_multiplier"] = _mult
+                if _mult != 1.0:
+                    _orig = float(latest_signal.get("confidence", 85))
+                    latest_signal["confidence"] = round(
+                        min(99.0, max(1.0, _orig * _mult)), 1
+                    )
+            except Exception as _fe:
+                logger.debug("Feedback multiplier skipped: %s", _fe)
+
+        # ---- (d) LightGBM meta-model override (opt-in) ----
+        if _lgbm_on and _gate_candles and not latest_signal.get("abstain"):
+            try:
+                from lightgbm_meta_service import get_lightgbm_service as _lgbs
+                _svc = _lgbs()
+                if _svc.is_ready():
+                    _closes = [float(c["close"]) for c in _gate_candles]
+                    _highs = [float(c["high"]) for c in _gate_candles]
+                    _lows = [float(c["low"]) for c in _gate_candles]
+                    from adx_regime_gate import compute_adx as _cadx, classify_adx_regime as _cregime
+                    _adx_i = _cadx(_highs, _lows, _closes, period=14)
+                    _reg_i = _cregime(_adx_i["adx"], _adx_i["plus_di"], _adx_i["minus_di"])
+                    _ha_info = latest_signal.get("ha_confluence") or {}
+                    _regime_map = {"CHOPPY": 0, "NEUTRAL": 1, "TREND": 2}
+                    _feat = {
+                        "rsi": 50.0,
+                        "macd": 0.0,
+                        "macd_hist": 0.0,
+                        "atr": float(np.mean([h - l for h, l in zip(_highs[-14:], _lows[-14:])])) if len(_highs) >= 14 else 0.0,
+                        "ema_fast": _closes[-1] if _closes else 0.0,
+                        "ema_slow": _closes[-1] if _closes else 0.0,
+                        "bb_pos": 0.5,
+                        "adx": _adx_i["adx"],
+                        "plus_di": _adx_i["plus_di"],
+                        "minus_di": _adx_i["minus_di"],
+                        "ha_streak_bull": _ha_info.get("ha_streak", 0) if _ha_info.get("ha_color") == "GREEN" else 0,
+                        "ha_streak_bear": _ha_info.get("ha_streak", 0) if _ha_info.get("ha_color") == "RED" else 0,
+                        "kyle_lambda": 0.0,
+                        "vpin": 0.0,
+                        "flow_imbalance": 0.0,
+                        "vote_up": 1.0 if str(_direction).lower() in ("up", "call", "buy") else 0.0,
+                        "vote_down": 1.0 if str(_direction).lower() in ("down", "put", "sell") else 0.0,
+                        "mean_confidence": float(latest_signal.get("confidence", 50)) / 100.0,
+                        "max_confidence": float(latest_signal.get("confidence", 50)) / 100.0,
+                        "regime_code": _regime_map.get(_reg_i["regime"], 1),
+                    }
+                    _p_up = _svc.predict_proba(_feat)
+                    if _p_up is not None:
+                        latest_signal["lightgbm_prob_up"] = round(_p_up, 4)
+                        _lgbm_dir = "UP" if _p_up >= 0.5 else "DOWN"
+                        _sig_up = str(_direction).lower() in ("up", "call", "buy")
+                        _agrees = (_lgbm_dir == "UP") == _sig_up
+                        latest_signal["lightgbm_agrees"] = bool(_agrees)
+                        # Boost confidence if agree, dampen if disagree.
+                        _delta = abs(_p_up - 0.5) * 200.0  # 0..100
+                        _mult2 = 1.0 + (_delta / 500.0 if _agrees else -_delta / 500.0)
+                        _mult2 = max(0.7, min(1.25, _mult2))
+                        _orig = float(latest_signal.get("confidence", 85))
+                        latest_signal["confidence"] = round(
+                            min(99.0, max(1.0, _orig * _mult2)), 1
+                        )
+                        latest_signal["lightgbm_multiplier"] = round(_mult2, 4)
+            except Exception as _lge:
+                logger.debug("LightGBM override skipped: %s", _lge)
+
         # Iter 91 — Attach per-asset adaptive latency-offset recommendation.
         # TM script (when rebuilt) can consume `recommended_offset_sec` to
         # replace the global +3.5 s constant. Never blocks the response.
