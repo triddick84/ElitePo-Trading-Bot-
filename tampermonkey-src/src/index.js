@@ -314,6 +314,21 @@ class EliteTradingBot {
         saveState();
       },
 
+      // Iter 117 — SNS multi-second targets (up to 3). When empty, strategy
+      // falls back to the single-value slider (`fireAtMsLeft`).
+      onSnsMultiSecondsChange: (secondsList) => {
+        const clean = Array.isArray(secondsList)
+          ? secondsList.map((v) => parseInt(v, 10))
+              .filter((v) => Number.isFinite(v) && v >= 1 && v <= 59)
+              .slice(0, 3)
+          : [];
+        twentyOneSecondReversal.setConfig({ fireAtSecondsList: clean });
+        state._twentyOneSConfig = { ...twentyOneSecondReversal.config };
+        state._snsMultiSeconds = clean;
+        info(`[SNS] Multi-second targets → [${clean.join(',')}]`);
+        saveState();
+      },
+
       // Iter 104 — SNS Direction Mode: fire WITH or AGAINST current 1m candle body
       onSnsDirectionModeChange: (mode) => {
         const withCandle = mode === 'with';
@@ -633,6 +648,16 @@ class EliteTradingBot {
         const mode = state._snsDirectionMode
           || (state._twentyOneSConfig?.invertSignal ? 'with' : 'against');
         setSnsDirectionMode(mode);
+      } catch (_e) { /* ignore */ }
+      // Iter 117 — Restore SNS multi-second targets (up to 3) into both the
+      // strategy config and the panel chip UI
+      try {
+        const savedMulti = Array.isArray(state._snsMultiSeconds)
+          ? state._snsMultiSeconds : [];
+        twentyOneSecondReversal.setConfig({ fireAtSecondsList: savedMulti });
+        if (typeof window !== 'undefined' && typeof window.__snsSetMultiTargets === 'function') {
+          window.__snsSetMultiTargets(savedMulti);
+        }
       } catch (_e) { /* ignore */ }
       // Iter 107 — Restore manual chart-type override + auto-invert threshold
       try {

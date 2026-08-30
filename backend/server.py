@@ -21,7 +21,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import pandas as pd
 
 # Import our trading bot components
@@ -3470,6 +3470,12 @@ async def set_tampermonkey_active_target(payload: dict = Body(...)):
     Explicitly override the app-selected trading target. When set, this
     takes precedence over /api/config. Send `{asset: null}` (or empty dict)
     to clear the override.
+
+    Iter 117 — Now also accepts optional trade-signal fields so callers
+    like Elite Screener and Auto-Scan can push an actual trade instruction
+    (not just an asset switch). When `direction` + `confidence` are present
+    the TM script's APP mode will fire the trade instead of waiting for a
+    fresh signal.
     """
     try:
         global tampermonkey_settings
@@ -3488,18 +3494,59 @@ async def set_tampermonkey_active_target(payload: dict = Body(...)):
             return {"success": True, "active_target": None, "message": "override cleared"}
 
         norm = _normalize_asset(asset)
-        target = {
+        now_iso = datetime.now(timezone.utc).isoformat()
+
+        target: Dict[str, Any] = {
             "asset": norm,
             "timeframe": str(tf),
             "expiry_seconds": int(expiry) if expiry is not None else _tf_to_expiry_seconds(tf),
+            "set_at": now_iso,
         }
+
+        # Iter 117 — optional trade-signal payload
+        direction = payload.get("direction")
+        if direction:
+            d = str(direction).upper()
+            if d in ("CALL", "PUT", "UP", "DOWN", "BUY", "SELL"):
+                target["direction"] = "CALL" if d in ("CALL", "UP", "BUY") else "PUT"
+        confidence = payload.get("confidence")
+        if confidence is not None:
+            try:
+                c = float(confidence)
+                if c > 1.0:
+                    c = c / 100.0
+                target["confidence"] = max(0.0, min(1.0, c))
+            except (TypeError, ValueError):
+                pass
+        elite_score = payload.get("elite_score")
+        if elite_score is not None:
+            try:
+                target["elite_score"] = float(elite_score)
+            except (TypeError, ValueError):
+                pass
+        target["source"] = str(payload.get("source") or "manual")
+        ttl = int(payload.get("target_ttl_seconds") or 60)
+        target["expires_at"] = (
+            datetime.now(timezone.utc) + timedelta(seconds=max(10, min(600, ttl)))
+        ).isoformat()
+
         tampermonkey_settings["active_target"] = target
-        tampermonkey_settings["last_updated"] = datetime.now(timezone.utc).isoformat()
+        tampermonkey_settings["last_updated"] = now_iso
         await db.tampermonkey_settings.update_one(
             {"_id": "default"},
             {"$set": {"active_target": target, "last_updated": tampermonkey_settings["last_updated"]}},
             upsert=True,
         )
+        # Iter 117 — also mirror into the singleton doc auto_scan_service uses,
+        # so both listeners see the same target regardless of upstream.
+        try:
+            await db.tampermonkey_settings.update_one(
+                {"_id": "singleton"},
+                {"$set": {"active_target": target, "last_updated": now_iso}},
+                upsert=True,
+            )
+        except Exception:
+            pass
         return {"success": True, "active_target": target}
     except Exception as e:
         logger.error(f"set active-target error: {e}")

@@ -1915,6 +1915,15 @@ export function createPanel() {
                   <span>of the 1m candle</span>
                 </div>
               </div>
+              <!-- Iter 117 — Multi-second SNS chip picker (max 3) -->
+              <div class="${P}snsmulti" data-testid="sns-multi-picker" style="margin-top:8px;padding:6px;background:rgba(0,0,0,0.25);border-radius:6px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;font-size:${mobile ? 9 : 10}px;color:#94a3b8;margin-bottom:4px;">
+                  <span style="font-weight:600;">Multi-second targets <span style="color:#64748b;">(tap up to 3)</span></span>
+                  <button type="button" id="${P}snsMultiClear" data-testid="sns-multi-clear" style="background:transparent;border:1px solid #334155;color:#94a3b8;padding:1px 6px;border-radius:4px;font-size:9px;cursor:pointer;">Clear</button>
+                </div>
+                <div id="${P}snsMultiChips" data-testid="sns-multi-chips" style="display:flex;flex-wrap:wrap;gap:3px;"></div>
+                <div style="font-size:9px;color:#64748b;margin-top:4px;" id="${P}snsMultiSummary" data-testid="sns-multi-summary">Using slider (single target)</div>
+              </div>
               <!-- Iter 104 — Direction Mode: fire WITH or AGAINST current 1m candle -->
               <div class="${P}snsdir" data-testid="sns-direction-mode" title="Choose whether SNS fires WITH the current 1m candle direction (with-trend) or AGAINST it (contrarian). Default: AGAINST.">
                 <div style="font-size:${mobile ? 9 : 10}px;color:#94a3b8;margin-bottom:4px;font-weight:600;">Direction Mode</div>
@@ -2465,6 +2474,67 @@ export function initPanelEvents(callbacks = {}) {
       renderTiming(v);
       callbacks.on51sTimingChange?.(v);
     });
+  }
+
+  // Iter 117 — Multi-second SNS chip picker (max 3 targets)
+  const snsMultiChipsEl = q('snsMultiChips');
+  const snsMultiSummaryEl = q('snsMultiSummary');
+  const snsMultiClearBtn = q('snsMultiClear');
+  const snsMultiState = { targets: [] };
+  const renderSnsMulti = () => {
+    if (!snsMultiChipsEl) return;
+    // Popular seconds: every 2s from 5 to 55 (26 chips) — fits mobile.
+    const values = [];
+    for (let v = 5; v <= 55; v += 2) values.push(v);
+    snsMultiChipsEl.innerHTML = values.map((v) => {
+      const active = snsMultiState.targets.includes(v);
+      const bg = active ? '#0891b2' : 'rgba(255,255,255,0.03)';
+      const brd = active ? '#22d3ee' : '#334155';
+      const clr = active ? '#e0f2fe' : '#94a3b8';
+      const fw = active ? '700' : '500';
+      return `<button type="button" data-sns-sec="${v}" data-testid="sns-multi-chip-${v}" style="background:${bg};border:1px solid ${brd};color:${clr};font-weight:${fw};padding:2px 6px;border-radius:4px;font-size:10px;cursor:pointer;min-width:26px;">${v}s</button>`;
+    }).join('');
+    if (snsMultiSummaryEl) {
+      snsMultiSummaryEl.textContent = snsMultiState.targets.length === 0
+        ? 'Using slider (single target)'
+        : `Fires at ${snsMultiState.targets.map(v => ':' + String(v).padStart(2, '0')).join(' + ')}`;
+    }
+  };
+  if (snsMultiChipsEl) {
+    renderSnsMulti();
+    snsMultiChipsEl.addEventListener('click', (e) => {
+      const btn = e.target && e.target.closest('button[data-sns-sec]');
+      if (!btn) return;
+      const v = parseInt(btn.getAttribute('data-sns-sec'), 10);
+      if (!Number.isFinite(v)) return;
+      const idx = snsMultiState.targets.indexOf(v);
+      if (idx >= 0) {
+        snsMultiState.targets.splice(idx, 1);
+      } else {
+        if (snsMultiState.targets.length >= 3) {
+          snsMultiState.targets.shift(); // drop oldest
+        }
+        snsMultiState.targets.push(v);
+      }
+      renderSnsMulti();
+      callbacks.onSnsMultiSecondsChange?.([...snsMultiState.targets]);
+    });
+  }
+  if (snsMultiClearBtn) {
+    snsMultiClearBtn.addEventListener('click', () => {
+      snsMultiState.targets = [];
+      renderSnsMulti();
+      callbacks.onSnsMultiSecondsChange?.([]);
+    });
+  }
+  // expose for restore-from-persisted-state
+  if (typeof window !== 'undefined') {
+    window.__snsSetMultiTargets = (arr) => {
+      snsMultiState.targets = Array.isArray(arr)
+        ? arr.map(v => parseInt(v, 10)).filter(v => Number.isFinite(v) && v >= 1 && v <= 59).slice(0, 3)
+        : [];
+      renderSnsMulti();
+    };
   }
 
   // Iter 107 — SNS Direction Mode segmented buttons

@@ -1339,29 +1339,58 @@ async def get_signal_preview(asset: Optional[str] = Query(None),
                              limit: int = Query(6, ge=1, le=20)):
     """
     Iter 114 — Returns per-strategy VOTES for the TM AI-Analysis tab.
-
-    Each vote is a triple `{name, direction, confidence}` covering the
-    strategies that ran in the last minute or two. Empty list when there
-    are no fresh strategy results. Never returns 404 — the poller expects
-    a JSON body either way.
+    Iter 117 — Fixes: (a) timestamps in `trading_signals` are stored as ISO
+    strings, not unix ints, so the previous cutoff comparison always missed;
+    (b) asset variants (EURUSD vs EURUSD_OTC) weren't normalised; (c) widen
+    fresh window to 60 min and fall back to newest N (any age) with a
+    `stale=true` flag so the panel never has an empty AI section.
     """
     try:
-        cutoff_ts = int(datetime.now(timezone.utc).timestamp()) - 300
-        query: Dict[str, Any] = {"timestamp": {"$gte": cutoff_ts}}
-        if asset:
-            # Support both `symbol` and `asset` fields (schema varies)
-            query["$or"] = [{"symbol": asset}, {"asset": asset}]
-        if timeframe:
-            query.setdefault("timeframe", timeframe)
+        # Build a 60-minute cutoff that works against both ISO-string and
+        # numeric timestamps. We include BOTH representations in the $or.
+        now = datetime.now(timezone.utc)
+        cutoff_iso = (now - timedelta(minutes=60)).isoformat()
+        cutoff_int = int((now - timedelta(minutes=60)).timestamp())
 
-        votes: List[Dict[str, Any]] = []
+        base_asset_filter: Optional[Dict[str, Any]] = None
+        if asset:
+            sym = str(asset).strip().upper()
+            variants = list({sym, sym.replace("_OTC", ""), sym.replace("OTC", ""),
+                             sym + "_OTC" if not sym.endswith("_OTC") else sym})
+            base_asset_filter = {
+                "$or": [{"symbol": {"$in": variants}}, {"asset": {"$in": variants}}]
+            }
+
+        def _build_query(with_freshness: bool) -> Dict[str, Any]:
+            q: Dict[str, Any] = {"$and": []}
+            if with_freshness:
+                q["$and"].append({"$or": [
+                    {"timestamp": {"$gte": cutoff_iso}},
+                    {"timestamp": {"$gte": cutoff_int}},
+                    {"timestamp": {"$gte": cutoff_int * 1000}},  # ms
+                    {"created_at": {"$gte": cutoff_iso}},
+                ]})
+            if base_asset_filter:
+                q["$and"].append(base_asset_filter)
+            if not q["$and"]:
+                return {}
+            return q
+
+        stale = False
+        docs: List[Dict[str, Any]] = []
         try:
-            cursor = db.trading_signals.find(query).sort("timestamp", -1).limit(50)
-            docs = await cursor.to_list(length=50)
+            cursor = db.trading_signals.find(_build_query(True)).sort("timestamp", -1).limit(80)
+            docs = await cursor.to_list(length=80)
+            if not docs:
+                # Fallback — grab the newest signals for the asset regardless of age
+                stale = True
+                cursor2 = db.trading_signals.find(_build_query(False)).sort("timestamp", -1).limit(80)
+                docs = await cursor2.to_list(length=80)
         except Exception:
             docs = []
 
         # De-dupe by strategy name, keeping the newest per strategy
+        votes: List[Dict[str, Any]] = []
         seen: set = set()
         for d in docs:
             strat = (d.get("strategy") or d.get("strategy_name") or
@@ -1386,19 +1415,11 @@ async def get_signal_preview(asset: Optional[str] = Query(None),
                 "timestamp": d.get("timestamp"),
             })
 
-        # Iter 102 algo strategy pack — also poll live snapshots if empty
-        if not votes and asset:
-            try:
-                from strategies.algo_pack import ALGO_STRATEGIES  # noqa: F401
-                # If the algo pack module exists we can synthesise votes here
-                # in a future iter. For now, silently pass.
-            except Exception:
-                pass
-
         # Sort by confidence desc and cap
         votes.sort(key=lambda v: v["confidence"], reverse=True)
         return {"success": True, "asset": asset, "timeframe": timeframe,
-                "votes": votes[:limit], "count": len(votes)}
+                "votes": votes[:limit], "count": len(votes),
+                "stale": stale}
     except Exception as e:
         logger.error(f"Error building signal preview: {e}")
         return {"success": False, "error": str(e),
@@ -6119,9 +6140,11 @@ async def get_recent_outcomes(
     """
     Return the last N reported trade outcomes (WIN/LOSS/PENDING).
 
-    Reads the same `trade_reports` collection populated by /trades/report +
-    /trades/outcome. Sorted newest-first. Used by the TM panel's AI tab
-    (aiAnalysisPoller) and any React widget that wants a quick trade log.
+    Reads the `trade_reports` collection populated by /trades/report +
+    /trades/outcome. Iter 117 — when that collection is empty, falls back
+    to the `tampermonkey_stats.trade_history` buffer populated by the
+    Iter 116 TM stats-push so the AI-Analysis tab shows real user trades
+    without waiting for the explicit /trades/outcome roundtrip.
     """
     try:
         query = {}
@@ -6153,6 +6176,45 @@ async def get_recent_outcomes(
                     or d.get("created_at")
                 ),
             })
+
+        # Iter 117 fallback — read from tampermonkey_stats.trade_history
+        # (populated by TM Iter 116 stats push after every WIN/LOSS)
+        if not outcomes:
+            try:
+                stats_doc = await db.tampermonkey_stats.find_one({"_id": "default"})
+                hist = (stats_doc or {}).get("trade_history") or []
+                # newest first
+                for t in reversed(hist[-int(limit):]):
+                    if asset and str(t.get("asset") or "").upper() != asset.upper():
+                        continue
+                    d = str(t.get("direction") or "").upper()
+                    if d in ("UP", "BUY"):
+                        d = "CALL"
+                    elif d in ("DOWN", "SELL"):
+                        d = "PUT"
+                    r = str(t.get("result") or "").upper()
+                    if r == "WIN":
+                        result = "WIN"
+                    elif r == "LOSS":
+                        result = "LOSS"
+                    else:
+                        result = r
+                    outcomes.append({
+                        "asset": t.get("asset") or "",
+                        "direction": d,
+                        "result": result,
+                        "confidence": t.get("confidence"),
+                        "strategy": t.get("strategy"),
+                        "time": (
+                            t.get("ts") and datetime.fromtimestamp(
+                                float(t["ts"]) / 1000 if t["ts"] > 1e12 else float(t["ts"]),
+                                tz=timezone.utc,
+                            ).isoformat()
+                        ) or None,
+                    })
+            except Exception as _fbe:
+                logger.debug(f"trade_history fallback failed: {_fbe}")
+
         return {"success": True, "count": len(outcomes), "outcomes": outcomes}
     except Exception as e:
         logger.error(f"trades/recent-outcomes error: {e}")

@@ -97,16 +97,30 @@ const EliteScreener = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoRefresh, assets, timeframe, minScore]);
 
-  const switchTmTarget = async (asset) => {
+  const switchTmTarget = async (row) => {
     try {
+      const asset = typeof row === 'string' ? row : row.asset;
+      const direction = typeof row === 'object' ? row.direction : null;
+      const confidence = typeof row === 'object' ? row.confidence : null;
+      const elite_score = typeof row === 'object' ? row.elite_score : null;
       const r = await fetch(`${API}/api/tampermonkey/active-target`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ asset, timeframe }),
+        body: JSON.stringify({
+          asset,
+          timeframe,
+          direction,
+          confidence,
+          elite_score,
+          source: 'elite_screener',
+          target_ttl_seconds: 90,
+        }),
       });
       const j = await r.json();
       if (j.success !== false) {
-        toast.success(`TM target → ${asset} @ ${timeframe}`);
+        const dirLabel = direction ? ` · ${direction}` : '';
+        const confLabel = confidence != null ? ` (${Math.round(confidence * (confidence > 1 ? 1 : 100))}%)` : '';
+        toast.success(`TM → ${asset} @ ${timeframe}${dirLabel}${confLabel} — trade will fire when TM APP mode is on`);
       } else {
         toast.error(`Failed: ${j.error || 'unknown'}`);
       }
@@ -372,7 +386,7 @@ const EliteScreener = () => {
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={(e) => { e.stopPropagation(); switchTmTarget(r.asset); }}
+                          onClick={(e) => { e.stopPropagation(); switchTmTarget(r); }}
                           className="h-7 px-2 text-xs bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/30"
                           data-testid={`switch-${r.asset}`}
                         >

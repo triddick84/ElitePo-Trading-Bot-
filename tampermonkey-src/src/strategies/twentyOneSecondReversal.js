@@ -423,7 +423,17 @@ class TwentyOneSecondReversal {
       // Direction is HARD-LOCKED to opposite-of-candle-color. Auto-invert /
       // INVERT toggles never alter the Time Strategy's direction — the user
       // explicitly wants the strategy to always fade the current candle.
+      // Iter 117 — SNS multi-second support. `fireAtSecondsList` (array of
+      // up to 3 seconds in 1..59) takes precedence when present. When the
+      // list is empty we fall back to the legacy single-value `fireAtMsLeft`.
       const triggerSec = Math.max(1, Math.min(59, Math.round((this.config.fireAtMsLeft || FIRE_AT_MS_LEFT) / 1000)));
+      const targetList = Array.isArray(this.config.fireAtSecondsList)
+        ? this.config.fireAtSecondsList
+            .map(v => parseInt(v, 10))
+            .filter(v => Number.isFinite(v) && v >= 1 && v <= 59)
+            .slice(0, 3)
+        : [];
+      const activeTargets = targetList.length > 0 ? targetList : [triggerSec];
 
       // poSecondsLeft is the TOTAL seconds left in the current PO candle.
       // For a M3 candle showing "2:21", totalSeconds=141. The minutes
@@ -446,18 +456,18 @@ class TwentyOneSecondReversal {
 
       let inWindow = false;
       let matchSource = '';
-      if (secondsDigit !== null && secondsDigit === triggerSec && this._lastFireKey !== fireKey) {
+      if (secondsDigit !== null && activeTargets.includes(secondsDigit) && this._lastFireKey !== fireKey) {
         inWindow = true;
         matchSource = `po=${minutesDigit}:${secondsDigit}`;
       }
 
       // Wall-clock fallback: only used when PO countdown is unreadable.
-      // Uses 60s as the modulus so we still fire on every XX:triggerSec
+      // Uses 60s as the modulus so we still fire on every XX:target
       // when the chart timeframe is hidden from us.
       if (!inWindow && poSecondsLeft === null) {
         const wallSecInMinute = 60 - (Math.floor(now / 1000) % 60);
-        const wallKey = `w:${Math.floor(now / 60000)}`;
-        if (wallSecInMinute === triggerSec && this._lastFireKey !== wallKey) {
+        const wallKey = `w:${Math.floor(now / 60000)}:${wallSecInMinute}`;
+        if (activeTargets.includes(wallSecInMinute) && this._lastFireKey !== wallKey) {
           inWindow = true;
           matchSource = `wall=${wallSecInMinute}s(min=${Math.floor(now/60000)})`;
           this._lastFireKey = wallKey;
@@ -466,7 +476,7 @@ class TwentyOneSecondReversal {
 
       // TRIGGER HIT log (emits once per slot, not every 100ms tick)
       if (inWindow) {
-        info(`[Time-Reversal] TRIGGER HIT — ${matchSource} target=${triggerSec}s`);
+        info(`[Time-Reversal] TRIGGER HIT — ${matchSource} targets=[${activeTargets.join(',')}]s`);
       }
       if (!inWindow) return;
 

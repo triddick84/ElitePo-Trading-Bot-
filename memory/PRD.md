@@ -1,4 +1,48 @@
-# AI's Elite PO Traders Bot — Feb 2026 (Iter 116: Mobile Auto-Trader Refresh)
+# AI's Elite PO Traders Bot — Feb 2026 (Iter 117: Screener→TM + SNS Multi + AI-Tab Fix)
+
+## Iter 117 (Feb 2026) — Elite Screener trade routing · SNS multi-second · AI-tab data
+
+### User reports (all 3 in one turn)
+1. Elite Screener "TM" button doesn't place trades even when pushed
+2. SNS strategy in TM should support up to 3 target seconds (e.g. 21, 41, 51) instead of just one
+3. AI section in TM always shows "no trades yet" / empty technical analysis
+
+### Root causes found
+1. `POST /api/tampermonkey/active-target` was silently stripping `direction`, `confidence`, `elite_score` — only `{asset, timeframe, expiry}` was persisted. TM saw an asset switch, never a trade instruction. (auto-scan does it correctly — screener didn't.)
+2. `twentyOneSecondReversal` config supported only a single `fireAtMsLeft` scalar; the UI was a slider, not a multi-selector.
+3. `GET /api/signals/preview` used `timestamp: {$gte: int_unix}` but the DB stores timestamps as **ISO 8601 strings** → filter never matched → always empty votes. Plus asset variants weren't normalised.
+
+### What shipped
+1. **Elite Screener trade routing** — `POST /api/tampermonkey/active-target` extended to accept + persist `direction` (with `UP/DOWN/BUY/SELL→CALL/PUT` coercion), `confidence` (0-1 or 0-100 auto-normalised), `elite_score`, `source`, `expires_at` (from `target_ttl_seconds`); mirrors into both `_id:"default"` and `_id:"singleton"` docs. Screener `switchTmTarget` now passes the full row.
+2. **SNS multi-second (up to 3 targets)** — new `fireAtSecondsList` config in `twentyOneSecondReversal.js`, fires when `secondsDigit ∈ list`. Panel gets a chip grid (5→55 step 2, 26 chips) with tap-to-toggle max-3 (4th tap drops oldest) + "Clear" button + human-readable summary. State persisted across refreshes. Legacy single-value slider still works when list is empty.
+3. **AI-tab data fix** — `/signals/preview` now: (a) ISO-aware cutoff, (b) window widened 5→60 min, (c) stale fallback returns newest N with `stale:true` when window empty, (d) asset variant match; `/trades/recent-outcomes` falls back to `tampermonkey_stats.trade_history` (populated by Iter 116 TM stats push) when `trade_reports` is empty.
+4. **TM bundle rebuilt to v8.142.0** with the multi-second chip picker + all Iter 116 stats push.
+
+### Tests — 7/7 pass in `test_iter117_screener_sns_ai_tab.py`
+- active-target persists direction/confidence/elite_score
+- UP/DOWN/BUY/SELL → CALL/PUT coercion
+- 87 → 0.87 confidence normalisation
+- TM bundle contains `sns-multi-picker/chips/clear` markers + v8.142+ header
+- `/signals/preview` returns success with `stale` flag
+- Variant matching returns lists for both EURUSD and EURUSD_OTC
+- `/trades/recent-outcomes` fallback uses tm history
+
+### Verification (preview)
+- Elite Screener → clicked TM on EURJPY_OTC CALL → toast: **"TM → EURJPY_OTC @ 1m · CALL — trade will fire when TM APP mode is on"**
+- `active-target` GET now returns `{direction:CALL, confidence:0.87, elite_score:78.5, source:"elite_screener", expires_at:...}`
+- `/signals/preview?asset=EURUSD_OTC` now returns votes (1 fresh, stale=false)
+
+### Files touched
+- **MOD** `backend/server.py` (active-target signal fields; add `timedelta` import)
+- **MOD** `backend/routes/signals.py` (`/signals/preview` fix + `/trades/recent-outcomes` fallback)
+- **MOD** `frontend/src/components/EliteScreener.jsx` (`switchTmTarget(row)` passes full row)
+- **MOD** `tampermonkey-src/src/strategies/twentyOneSecondReversal.js` (`fireAtSecondsList` support)
+- **MOD** `tampermonkey-src/src/ui/panel.js` (SNS multi-chip picker UI)
+- **MOD** `tampermonkey-src/src/index.js` (`onSnsMultiSecondsChange` callback + restore-from-state)
+- **MOD** `tampermonkey-src/version.txt` → **8.142.0**
+- **REBUILT** `/app/frontend/public/pocket-option-auto-trader{-modular,}.user.js`
+- **NEW** `backend/tests/test_iter117_screener_sns_ai_tab.py`
+
 
 ## Iter 116 (Feb 2026) — Mobile Auto-Trader Page Overhaul
 
