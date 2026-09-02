@@ -31,6 +31,9 @@ import feedback_engine
 from lightgbm_meta_service import (
     get_lightgbm_service,
     train_from_historical_candles,
+    record_live_sample,
+    get_live_samples_stats,
+    _retrain_from_live_samples,
 )
 
 
@@ -102,6 +105,73 @@ async def set_gates_config(payload: GatesConfig):
         upsert=True,
     )
     return {"success": True, "config": payload.model_dump()}
+
+
+# Iter 118 — AI Gates Presets (Conservative / Balanced / Aggressive)
+_GATE_PRESETS: Dict[str, Dict[str, Any]] = {
+    "conservative": {
+        # Every gate on, tight thresholds — few but very high-quality signals
+        "adx_regime_enabled": True,
+        "ha_confluence_enabled": True,
+        "ha_min_streak": 3,
+        "ha_require_no_opposing_wick": True,
+        "feedback_multiplier_enabled": True,
+        "lightgbm_meta_enabled": True,
+    },
+    "balanced": {
+        # Default recommended stance — the sweet spot
+        "adx_regime_enabled": True,
+        "ha_confluence_enabled": True,
+        "ha_min_streak": 2,
+        "ha_require_no_opposing_wick": False,
+        "feedback_multiplier_enabled": True,
+        "lightgbm_meta_enabled": False,
+    },
+    "aggressive": {
+        # ADX regime OFF (allow trades in any regime), HA looser — more volume,
+        # rely on feedback multiplier to still tune per strategy
+        "adx_regime_enabled": False,
+        "ha_confluence_enabled": False,
+        "ha_min_streak": 1,
+        "ha_require_no_opposing_wick": False,
+        "feedback_multiplier_enabled": True,
+        "lightgbm_meta_enabled": False,
+    },
+}
+
+
+@router.get("/ai/gates/presets")
+async def get_gate_presets():
+    """List the preset gate configurations available."""
+    return {
+        "success": True,
+        "presets": [
+            {"id": k, "label": k.capitalize(), "config": v}
+            for k, v in _GATE_PRESETS.items()
+        ],
+    }
+
+
+class PresetApply(BaseModel):
+    preset: str
+
+
+@router.post("/ai/gates/apply-preset")
+async def apply_gate_preset(payload: PresetApply):
+    """Overwrite the ai_gates_config with a named preset."""
+    preset = _GATE_PRESETS.get(payload.preset.lower())
+    if not preset:
+        raise HTTPException(
+            status_code=400,
+            detail=f"unknown preset — choose one of {list(_GATE_PRESETS)}",
+        )
+    cfg = GatesConfig(**preset)
+    await db.ai_gates_config.replace_one(
+        {"_id": "default"},
+        {"_id": "default", **cfg.model_dump(), "applied_preset": payload.preset.lower()},
+        upsert=True,
+    )
+    return {"success": True, "preset": payload.preset.lower(), "config": cfg.model_dump()}
 
 
 # ---------------------------------------------------------------------------
@@ -239,3 +309,40 @@ async def lightgbm_predict(payload: LightGBMPredictPayload):
         "direction": direction,
         "confidence": round(abs(prob_up - 0.5) * 200.0, 2),  # 0..100 confidence
     }
+
+
+# ---------------------------------------------------------------------------
+# Iter 118 — Live-trade retrain
+# ---------------------------------------------------------------------------
+class LiveSamplePayload(BaseModel):
+    features: Dict[str, Any] = Field(default_factory=dict)
+    outcome: str  # WIN / LOSS
+    metadata: Optional[Dict[str, Any]] = None
+
+
+@router.post("/ml/lightgbm/record-live-sample")
+async def lightgbm_record_live_sample(payload: LiveSamplePayload):
+    """Append a labeled live-trade sample. Auto-triggers retrain on threshold."""
+    result = await record_live_sample(
+        db, payload.features, payload.outcome, payload.metadata
+    )
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error"))
+    return result
+
+
+@router.post("/ml/lightgbm/retrain-live")
+async def lightgbm_retrain_live():
+    """Force a retrain from accumulated live samples."""
+    try:
+        metrics = await _retrain_from_live_samples(db)
+        return metrics
+    except Exception as e:
+        logger.exception("live retrain failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/ml/lightgbm/live-samples/stats")
+async def lightgbm_live_samples_stats():
+    stats = await get_live_samples_stats(db)
+    return {"success": True, **stats}

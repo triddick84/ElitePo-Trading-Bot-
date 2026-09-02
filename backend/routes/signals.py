@@ -4901,6 +4901,9 @@ async def report_trade(report: TrampermonkeyTradeReport):
     Receive a trade audit event from the Tampermonkey script.
     Stores to Mongo collection `tm_trade_reports` (TTL 30 days) and also
     updates the strategy_tracker_data collection if a strategy is tagged.
+
+    Iter 118 — Also snapshots ADX/HA features from live candles at trade
+    time so /trades/outcome can label them for LightGBM retrain.
     """
     try:
         now_iso = datetime.now(timezone.utc).isoformat()
@@ -4912,6 +4915,55 @@ async def report_trade(report: TrampermonkeyTradeReport):
             if a.endswith("OTC") and not a.endswith("_OTC"):
                 a = a[:-3] + "_OTC"
             doc["asset_normalized"] = a
+
+        # Iter 118 — snapshot features for LightGBM retrain
+        try:
+            from adx_regime_gate import compute_adx, classify_adx_regime
+            sym = doc.get("asset_normalized") or doc.get("asset") or ""
+            sym_variants = list({sym, sym.replace("_OTC", ""), sym + "_OTC" if not sym.endswith("_OTC") else sym})
+            candles = []
+            for coll_name, key in (("otc_candles_5s", "symbol"), ("candles", "symbol"), ("historical_candles", "asset")):
+                try:
+                    docs_c = await db[coll_name].find(
+                        {key: {"$in": sym_variants}},
+                        {"_id": 0, "open": 1, "high": 1, "low": 1, "close": 1, "volume": 1, "timestamp": 1},
+                    ).sort("timestamp", -1).limit(60).to_list(60)
+                    if docs_c:
+                        candles = list(reversed(docs_c))
+                        break
+                except Exception:
+                    pass
+            if candles and len(candles) >= 30:
+                highs = [float(c["high"]) for c in candles]
+                lows = [float(c["low"]) for c in candles]
+                closes = [float(c["close"]) for c in candles]
+                adx_info = compute_adx(highs, lows, closes, period=14)
+                regime = classify_adx_regime(adx_info["adx"], adx_info["plus_di"], adx_info["minus_di"])
+                _regime_map = {"CHOPPY": 0, "NEUTRAL": 1, "TREND": 2}
+                doc["features"] = {
+                    "rsi": 50.0,  # placeholder — richer builder can be added
+                    "macd": 0.0,
+                    "macd_hist": 0.0,
+                    "atr": float(sum(h - l for h, l in zip(highs[-14:], lows[-14:])) / 14) if len(highs) >= 14 else 0.0,
+                    "ema_fast": closes[-1],
+                    "ema_slow": closes[-1],
+                    "bb_pos": 0.5,
+                    "adx": adx_info["adx"],
+                    "plus_di": adx_info["plus_di"],
+                    "minus_di": adx_info["minus_di"],
+                    "ha_streak_bull": 0,
+                    "ha_streak_bear": 0,
+                    "kyle_lambda": 0.0,
+                    "vpin": 0.0,
+                    "flow_imbalance": 0.0,
+                    "vote_up": 1.0 if str(doc.get("direction") or "").upper() in ("CALL", "UP", "BUY") else 0.0,
+                    "vote_down": 1.0 if str(doc.get("direction") or "").upper() in ("PUT", "DOWN", "SELL") else 0.0,
+                    "mean_confidence": (float(doc.get("confidence") or 50) / 100.0) if doc.get("confidence") is not None else 0.5,
+                    "max_confidence": (float(doc.get("confidence") or 50) / 100.0) if doc.get("confidence") is not None else 0.5,
+                    "regime_code": _regime_map.get(regime["regime"], 1),
+                }
+        except Exception as _fs_err:
+            logger.debug(f"trades/report feature snapshot failed: {_fs_err}")
 
         coll = db["tm_trade_reports"]
         try:
@@ -6116,6 +6168,25 @@ async def record_tm_trade_outcome(report: TrampermonkeyOutcome):
                 "outcome_recorded_at": datetime.now(timezone.utc).isoformat(),
             }}
         )
+
+        # Iter 118 — auto-append live sample to LightGBM training buffer.
+        # The features are best-effort snapshot: whatever indicators/regime
+        # info we captured at signal-time (stored on the trade report if the
+        # publisher included them).
+        try:
+            from lightgbm_meta_service import record_live_sample as _rls
+            features = doc.get("features") or {}
+            metadata = {
+                "asset": doc.get("asset_normalized") or doc.get("asset"),
+                "direction": doc.get("direction") or report.direction,
+                "confidence": doc.get("confidence"),
+                "strategy": doc.get("strategy") or report.strategy,
+                "signal_id": str(doc.get("_id")),
+            }
+            await _rls(db, features, outcome, metadata=metadata)
+        except Exception as _lrls_err:
+            logger.debug(f"live-sample record failed: {_lrls_err}")
+
         return {
             "success": True,
             "stored": True,

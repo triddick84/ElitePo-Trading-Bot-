@@ -211,8 +211,105 @@ def get_lightgbm_service() -> LightGBMMetaService:
 
 
 # ---------------------------------------------------------------------------
+# Live-trade retrain (Iter 118)
+# ---------------------------------------------------------------------------
+async def record_live_sample(
+    db,
+    features: Dict[str, Any],
+    outcome: str,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    Append a labeled training sample coming from a real closed trade.
+    Auto-triggers a retrain once we have accumulated >= 25 new samples
+    since the last retrain (or a total of >= 100 if never trained live).
+    """
+    outcome_norm = str(outcome or "").upper()
+    if outcome_norm not in ("WIN", "LOSS"):
+        return {"success": False, "error": "outcome must be WIN or LOSS"}
+
+    # Direction is inferred from metadata — a WIN with direction=CALL means
+    # price went UP, a WIN with direction=PUT means price went DOWN.
+    direction = str((metadata or {}).get("direction") or "").upper()
+    if direction in ("CALL", "UP", "BUY"):
+        label = 1 if outcome_norm == "WIN" else 0
+    elif direction in ("PUT", "DOWN", "SELL"):
+        label = 0 if outcome_norm == "WIN" else 1
+    else:
+        # Fallback — treat WIN as CALL-favoured (best-effort)
+        label = 1 if outcome_norm == "WIN" else 0
+
+    sample = {
+        "features": {k: features.get(k, 0.0) for k in FEATURE_ORDER},
+        "label": int(label),
+        "outcome": outcome_norm,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "metadata": metadata or {},
+    }
+    await db.lightgbm_live_samples.insert_one(sample)
+
+    # Check pending count
+    total = await db.lightgbm_live_samples.count_documents({})
+    since_retrain = await db.lightgbm_live_samples.count_documents({"used_in_retrain": {"$ne": True}})
+
+    retrained = None
+    should_retrain = (since_retrain >= 25 and total >= 50) or (since_retrain >= 100)
+    if should_retrain:
+        try:
+            retrained = await _retrain_from_live_samples(db)
+        except Exception as e:
+            logger.warning("[LightGBMLive] auto-retrain failed: %s", e)
+
+    return {
+        "success": True,
+        "sample_stored": True,
+        "total_live_samples": total,
+        "unused_since_last_retrain": since_retrain,
+        "auto_retrained": retrained is not None,
+        "retrain_metrics": retrained,
+    }
+
+
+async def _retrain_from_live_samples(db) -> Dict[str, Any]:
+    """Pull all labeled live samples and retrain the LightGBM meta-model."""
+    cursor = db.lightgbm_live_samples.find({}, {"_id": 0, "features": 1, "label": 1})
+    docs = await cursor.to_list(length=100_000)
+    if len(docs) < 50:
+        return {"success": False, "error": f"only {len(docs)} live samples"}
+
+    X = [d["features"] for d in docs]
+    y = [int(d["label"]) for d in docs]
+
+    svc = get_lightgbm_service()
+    metrics = svc.train(X, y)
+    # Mark all samples as used
+    await db.lightgbm_live_samples.update_many(
+        {"used_in_retrain": {"$ne": True}},
+        {"$set": {"used_in_retrain": True, "retrained_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    metrics["success"] = True
+    metrics["samples_used"] = len(X)
+    metrics["source"] = "live_trades"
+    return metrics
+
+
+async def get_live_samples_stats(db) -> Dict[str, Any]:
+    total = await db.lightgbm_live_samples.count_documents({})
+    unused = await db.lightgbm_live_samples.count_documents({"used_in_retrain": {"$ne": True}})
+    latest_doc = await db.lightgbm_live_samples.find_one(
+        {}, sort=[("created_at", -1)]
+    )
+    return {
+        "total": total,
+        "unused_since_last_retrain": unused,
+        "latest_at": (latest_doc or {}).get("created_at"),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Historical-data trainer helper
 # ---------------------------------------------------------------------------
+
 async def train_from_historical_candles(
     db,
     max_samples: int = 5000,

@@ -1,4 +1,53 @@
-# AI's Elite PO Traders Bot — Feb 2026 (Iter 117: Screener→TM + SNS Multi + AI-Tab Fix)
+# AI's Elite PO Traders Bot — Feb 2026 (Iter 118: Stakes · Live-Retrain · Gate Presets)
+
+## Iter 118 (Feb 2026) — Confidence-Tiered Stakes · Live LGBM Retrain · Gate Presets
+
+### User request
+> "b, d then a" — Confidence-Tiered Stakes, then Live-Trade LightGBM Retrain, then AI Gates Presets. Deploy of v8.142 verified working on production.
+
+### What shipped
+1. **Confidence-Tiered Stakes** (task B)
+   - Backend: `GET/POST /api/tampermonkey/stake-tiers`, stored on `tampermonkey_settings` singleton. Sanitisation: max 5 tiers, sorted asc by `min_conf`, `amount>0`, `min_conf<=max_conf` auto-fix.
+   - TM script: new `tmSettingsPoller` fetches config every 30s (backoff 120s on 3 fails). Executor pattern-matches signal confidence into a tier and, when `auto_set=true`, calls `setTradeAmount()` from `utils/dom.js` to write the value into PO's input right before the CALL/PUT click. Advisory-only when `auto_set=false` (logs only).
+   - Frontend: new `StakeTiersPanel.jsx` mounted below TM Control Panel on Mobile Auto-Trader page. 3 presets (Conservative / Balanced / Aggressive), inline tier editor (min%, max%, amount, label), fallback amount, auto-set toggle, live preview strip.
+2. **Live-Trade LightGBM Retrain** (task D)
+   - New collection `lightgbm_live_samples` (features + label + created_at + used_in_retrain).
+   - `record_live_sample(db, features, outcome, metadata)` in `lightgbm_meta_service.py` — infers label from direction × outcome, auto-triggers `_retrain_from_live_samples` at 25 unused samples (or 100 total).
+   - `/api/ml/lightgbm/record-live-sample`, `/retrain-live`, `/live-samples/stats` routes.
+   - `/trades/report` now snapshots ADX/HA features at trade time; `/trades/outcome` labels the match with WIN/LOSS and calls `record_live_sample` fire-and-forget.
+3. **AI Gates Presets** (task A)
+   - `_GATE_PRESETS` dict with Conservative (all gates on, tight thresholds), Balanced (default), Aggressive (ADX+HA off, feedback still on).
+   - `GET /api/ai/gates/presets`, `POST /api/ai/gates/apply-preset {preset: "..."}` routes.
+   - `AiGatesPanel.jsx` gets a 3-button preset row (🛡 Conservative / ⚖️ Balanced / 🔥 Aggressive) above the individual toggles.
+4. TM bundle rebuilt to **v8.143.0** with the stake-tier poller.
+
+### Tests — 5/5 pass in `test_iter118_stakes_lgbm_presets.py`
+- Stake-tier POST/GET roundtrip
+- Bad-tier sanitisation
+- Live-sample record → stats → force-retrain endpoint contract
+- Presets list + apply (unknown preset → 400)
+- Bundle v8.143 contains stake-tiers plumbing
+
+### Verification (preview)
+- StakeTiersPanel: rendered on Mobile Auto-Trader page with 3 presets + editor + preview `90-100% → $5`
+- AiGatesPanel: preset row visible on Dashboard; clicking "🔥 Aggressive" flipped ADX + HA off with toast "Applied 'Aggressive' preset"
+- Live-sample endpoint: POST → 200, stats endpoint returns `total=1`
+
+### Files touched
+- **MOD** `backend/server.py` (`stake_tiers*` defaults + `/tampermonkey/stake-tiers` GET/POST)
+- **MOD** `backend/routes/ai_enhancements.py` (`/ai/gates/presets` + `/apply-preset` + LightGBM live endpoints)
+- **MOD** `backend/routes/signals.py` (`/trades/report` feature snapshot + `/trades/outcome` live-sample hook)
+- **MOD** `backend/lightgbm_meta_service.py` (`record_live_sample`, `_retrain_from_live_samples`, `get_live_samples_stats`)
+- **NEW** `tampermonkey-src/src/trading/tmSettingsPoller.js`
+- **MOD** `tampermonkey-src/src/trading/executor.js` (stake-tier lookup + auto-set)
+- **MOD** `tampermonkey-src/src/index.js` (start `tmSettingsPoller`)
+- **MOD** `tampermonkey-src/version.txt` → **8.143.0**
+- **REBUILT** `/app/frontend/public/pocket-option-auto-trader{-modular,}.user.js`
+- **NEW** `frontend/src/components/StakeTiersPanel.jsx`
+- **MOD** `frontend/src/components/MobileAutoTraderPage.jsx` (mount StakeTiersPanel + fragment wrapper fix)
+- **MOD** `frontend/src/components/AiGatesPanel.jsx` (preset row)
+- **NEW** `backend/tests/test_iter118_stakes_lgbm_presets.py`
+
 
 ## Iter 117 (Feb 2026) — Elite Screener trade routing · SNS multi-second · AI-tab data
 

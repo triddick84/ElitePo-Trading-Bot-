@@ -21,6 +21,7 @@ import { appSignalPoller } from './trading/appSignalPoller.js';
 import { networkLatencyPoller } from './trading/networkLatencyPoller.js';
 import { heartbeatReporter } from './trading/heartbeatReporter.js';
 import { aiAnalysisPoller } from './trading/aiAnalysisPoller.js';
+import { tmSettingsPoller } from './trading/tmSettingsPoller.js';
 import { latencyAbstainGate } from './trading/latencyAbstainGate.js';
 import { eliteScoreGate } from './trading/eliteScoreGate.js';
 import { scanMarkets } from './utils/api.js';
@@ -161,6 +162,12 @@ class EliteTradingBot {
     // Iter 107 — AI Analysis poller (feeds the new AI tab)
     try {
       aiAnalysisPoller.start(updateAITab);
+    } catch (_e) { /* non-fatal */ }
+
+    // Iter 118 — Stake-tier settings poller (Confidence-Tiered Stakes).
+    // Populates state._stakeTiersConfig for the trade executor.
+    try {
+      tmSettingsPoller.start();
     } catch (_e) { /* non-fatal */ }
 
     // Iter 108 — Tick the latency abstain gate every 4s so the state chip

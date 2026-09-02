@@ -165,7 +165,36 @@ class TradeExecutor {
       //   3) Money-management sliders fighting the user's intent
       // The internal `state.moneyManagement.currentAmount` is still tracked
       // for win/loss stats display, but it doesn't drive the UI anymore.
-      const amount = state.moneyManagement.currentAmount;  // for logs/reports only
+      //
+      // Iter 118 — Optional exception: Confidence-Tiered Stakes. When the
+      // user has enabled `stake_tiers_enabled` AND `stake_tiers_auto_set`,
+      // we DO write the tier-matched amount into PO's input before the
+      // click. If the input isn't found we log and fall through to whatever
+      // the user last typed. `stake_tiers_auto_set=false` keeps this
+      // advisory-only (logged but not applied).
+      let amount = state.moneyManagement.currentAmount;  // for logs/reports only
+      try {
+        const stakeCfg = state._stakeTiersConfig || null;
+        if (stakeCfg && stakeCfg.enabled && Array.isArray(stakeCfg.tiers) && stakeCfg.tiers.length > 0) {
+          const rawConf = Number(signal.confidence || 0);
+          const confPct = rawConf > 0 && rawConf <= 1 ? rawConf * 100 : rawConf;
+          const matched = stakeCfg.tiers.find(
+            (t) => confPct >= (t.min_conf || 0) && confPct <= (t.max_conf || 100)
+          );
+          const tierAmount = matched ? matched.amount : (stakeCfg.fallback || amount);
+          amount = tierAmount;
+          state.moneyManagement.currentAmount = tierAmount;
+          const label = matched ? (matched.label || `${matched.min_conf}-${matched.max_conf}%`) : 'fallback';
+          if (stakeCfg.auto_set !== false) {
+            const ok = setTradeAmount(tierAmount);
+            info(`[exec:${source}] Iter 118 stake tier "${label}" → $${tierAmount} at ${Math.round(confPct)}% conf ${ok ? '(applied)' : '(input not found — advisory)'}`);
+          } else {
+            info(`[exec:${source}] Iter 118 stake tier "${label}" → $${tierAmount} recommended at ${Math.round(confPct)}% conf (auto-set OFF)`);
+          }
+        }
+      } catch (_e) {
+        // never block a trade on a stake-tier lookup failure
+      }
       // Iter 63 — Trade latency offset: positive = sleep N seconds before
       // clicking CALL/PUT. Negative offsets are advisory (applied as freshness-
       // budget widening in the signal poller; here we just log them).

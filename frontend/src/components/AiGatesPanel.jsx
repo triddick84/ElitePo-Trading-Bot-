@@ -70,6 +70,19 @@ export default function AiGatesPanel({ primaryAsset = 'EURUSD_OTC' }) {
     saveConfig({ ...config, [key]: !config[key] });
   };
 
+  const applyPreset = async (preset) => {
+    try {
+      setSaving(true);
+      const { data } = await axios.post(`${API}/ai/gates/apply-preset`, { preset });
+      setConfig(data.config);
+      toast.success(`Applied "${preset.charAt(0).toUpperCase() + preset.slice(1)}" preset`);
+    } catch (e) {
+      toast.error(`Preset failed: ${e?.response?.data?.detail || e.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const trainLightGBM = async () => {
     try {
       setTraining(true);
@@ -124,6 +137,32 @@ export default function AiGatesPanel({ primaryAsset = 'EURUSD_OTC' }) {
             </p>
           </div>
         )}
+      </div>
+
+      {/* Iter 118 — One-tap presets */}
+      <div className="mt-1 mb-4 pt-4 border-t border-white/5 flex flex-wrap items-center gap-2" data-testid="ai-gate-presets-row">
+        <span className="text-xs text-white/50 mr-1">Presets:</span>
+        <Button
+          size="sm" variant="outline"
+          className="text-xs border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10"
+          onClick={() => applyPreset('conservative')} disabled={saving}
+          data-testid="ai-gate-preset-conservative"
+        >🛡 Conservative</Button>
+        <Button
+          size="sm" variant="outline"
+          className="text-xs border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/10"
+          onClick={() => applyPreset('balanced')} disabled={saving}
+          data-testid="ai-gate-preset-balanced"
+        >⚖️ Balanced</Button>
+        <Button
+          size="sm" variant="outline"
+          className="text-xs border-orange-500/30 text-orange-300 hover:bg-orange-500/10"
+          onClick={() => applyPreset('aggressive')} disabled={saving}
+          data-testid="ai-gate-preset-aggressive"
+        >🔥 Aggressive</Button>
+        <span className="text-[10px] text-white/40 ml-auto hidden sm:inline">
+          Presets flip all 4 gates + thresholds in one tap
+        </span>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

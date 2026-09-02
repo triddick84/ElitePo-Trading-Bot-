@@ -4,6 +4,7 @@ import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import TampermonkeyControlPanel from './TampermonkeyControlPanel';
 import TampermonkeyConnectionDashboard from './TampermonkeyConnectionDashboard';
+import StakeTiersPanel from './StakeTiersPanel';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -61,7 +62,10 @@ const MobileAutoTraderPage = () => {
 
         {/* Control Panel or Setup Guide */}
         {!showSetup ? (
-          <TampermonkeyControlPanel />
+          <>
+            <TampermonkeyControlPanel />
+            <StakeTiersPanel />
+          </>
         ) : (
           <>
             {/* Why This Works */}

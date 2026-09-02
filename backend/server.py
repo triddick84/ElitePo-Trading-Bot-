@@ -3318,6 +3318,15 @@ tampermonkey_settings = {
     "connection_active": False,  # Updated by Tampermonkey heartbeat
     "last_heartbeat": None,  # Last time Tampermonkey checked in
     "favorites_list": [],  # User's favorite assets from PO
+    # Iter 118 — Confidence-Tiered Stakes
+    "stake_tiers_enabled": False,
+    "stake_tiers": [
+        {"min_conf": 80, "max_conf": 89, "amount": 1.0, "label": "Good"},
+        {"min_conf": 90, "max_conf": 95, "amount": 2.0, "label": "Great"},
+        {"min_conf": 96, "max_conf": 100, "amount": 5.0, "label": "Elite"},
+    ],
+    "stake_tiers_fallback": 1.0,  # amount when confidence doesn't fit any tier
+    "stake_tiers_auto_set": True,  # actually push amount into PO input (vs. advisory only)
     "last_updated": None
 }
 
@@ -3928,6 +3937,92 @@ async def get_tampermonkey_strategies(timeframe: Optional[str] = Query(None)):
     except Exception as e:
         logger.error(f"Error getting strategies: {e}")
         return {"success": False, "strategies": [], "error": str(e)}
+
+
+# Iter 118 — Confidence-Tiered Stakes endpoints
+@api_router.get("/tampermonkey/stake-tiers")
+async def get_tampermonkey_stake_tiers():
+    """Return the current stake-tiers configuration."""
+    try:
+        stored = await db.tampermonkey_settings.find_one({"_id": "default"}) or {}
+        tiers = stored.get("stake_tiers") or tampermonkey_settings.get("stake_tiers", [])
+        return {
+            "success": True,
+            "enabled": bool(stored.get("stake_tiers_enabled", tampermonkey_settings.get("stake_tiers_enabled", False))),
+            "auto_set": bool(stored.get("stake_tiers_auto_set", tampermonkey_settings.get("stake_tiers_auto_set", True))),
+            "fallback": float(stored.get("stake_tiers_fallback", tampermonkey_settings.get("stake_tiers_fallback", 1.0))),
+            "tiers": tiers,
+        }
+    except Exception as e:
+        logger.error(f"get stake-tiers error: {e}")
+        return {"success": False, "error": str(e), "tiers": []}
+
+
+@api_router.post("/tampermonkey/stake-tiers")
+async def set_tampermonkey_stake_tiers(payload: dict = Body(...)):
+    """
+    Update stake-tiers. Body:
+    {
+      enabled: bool,
+      auto_set: bool,   # actually push amount into PO's input
+      fallback: float,  # amount when confidence doesn't match any tier
+      tiers: [{min_conf: 80, max_conf: 89, amount: 1.0, label?: "Good"}, ...]
+    }
+    Server enforces max 5 tiers, sorted by min_conf asc, non-overlapping.
+    """
+    try:
+        raw_tiers = payload.get("tiers") or []
+        if not isinstance(raw_tiers, list):
+            raise HTTPException(status_code=400, detail="tiers must be a list")
+
+        cleaned: List[Dict[str, Any]] = []
+        for t in raw_tiers[:5]:
+            try:
+                lo = int(t.get("min_conf", 0))
+                hi = int(t.get("max_conf", 0))
+                amt = float(t.get("amount", 0))
+            except (TypeError, ValueError):
+                continue
+            lo = max(0, min(100, lo))
+            hi = max(0, min(100, hi))
+            if lo > hi:
+                lo, hi = hi, lo
+            if amt <= 0:
+                continue
+            cleaned.append({
+                "min_conf": lo, "max_conf": hi, "amount": amt,
+                "label": str(t.get("label") or ""),
+            })
+        cleaned.sort(key=lambda x: x["min_conf"])
+
+        enabled = bool(payload.get("enabled", False))
+        auto_set = bool(payload.get("auto_set", True))
+        try:
+            fallback = float(payload.get("fallback", 1.0))
+            if fallback < 0:
+                fallback = 1.0
+        except (TypeError, ValueError):
+            fallback = 1.0
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        update = {
+            "stake_tiers_enabled": enabled,
+            "stake_tiers_auto_set": auto_set,
+            "stake_tiers_fallback": fallback,
+            "stake_tiers": cleaned,
+            "last_updated": now_iso,
+        }
+        tampermonkey_settings.update(update)
+        await db.tampermonkey_settings.update_one(
+            {"_id": "default"}, {"$set": update}, upsert=True
+        )
+        return {"success": True, "enabled": enabled, "auto_set": auto_set,
+                "fallback": fallback, "tiers": cleaned}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"set stake-tiers error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @api_router.get("/tampermonkey/version")
