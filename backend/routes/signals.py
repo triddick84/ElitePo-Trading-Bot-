@@ -1202,36 +1202,12 @@ async def get_latest_signal(
                 from lightgbm_meta_service import get_lightgbm_service as _lgbs
                 _svc = _lgbs()
                 if _svc.is_ready():
-                    _closes = [float(c["close"]) for c in _gate_candles]
-                    _highs = [float(c["high"]) for c in _gate_candles]
-                    _lows = [float(c["low"]) for c in _gate_candles]
-                    from adx_regime_gate import compute_adx as _cadx, classify_adx_regime as _cregime
-                    _adx_i = _cadx(_highs, _lows, _closes, period=14)
-                    _reg_i = _cregime(_adx_i["adx"], _adx_i["plus_di"], _adx_i["minus_di"])
-                    _ha_info = latest_signal.get("ha_confluence") or {}
-                    _regime_map = {"CHOPPY": 0, "NEUTRAL": 1, "TREND": 2}
-                    _feat = {
-                        "rsi": 50.0,
-                        "macd": 0.0,
-                        "macd_hist": 0.0,
-                        "atr": float(np.mean([h - l for h, l in zip(_highs[-14:], _lows[-14:])])) if len(_highs) >= 14 else 0.0,
-                        "ema_fast": _closes[-1] if _closes else 0.0,
-                        "ema_slow": _closes[-1] if _closes else 0.0,
-                        "bb_pos": 0.5,
-                        "adx": _adx_i["adx"],
-                        "plus_di": _adx_i["plus_di"],
-                        "minus_di": _adx_i["minus_di"],
-                        "ha_streak_bull": _ha_info.get("ha_streak", 0) if _ha_info.get("ha_color") == "GREEN" else 0,
-                        "ha_streak_bear": _ha_info.get("ha_streak", 0) if _ha_info.get("ha_color") == "RED" else 0,
-                        "kyle_lambda": 0.0,
-                        "vpin": 0.0,
-                        "flow_imbalance": 0.0,
-                        "vote_up": 1.0 if str(_direction).lower() in ("up", "call", "buy") else 0.0,
-                        "vote_down": 1.0 if str(_direction).lower() in ("down", "put", "sell") else 0.0,
-                        "mean_confidence": float(latest_signal.get("confidence", 50)) / 100.0,
-                        "max_confidence": float(latest_signal.get("confidence", 50)) / 100.0,
-                        "regime_code": _regime_map.get(_reg_i["regime"], 1),
-                    }
+                    from feature_builder import build_features as _bf
+                    _feat = _bf(
+                        _gate_candles,
+                        direction=_direction,
+                        signal_confidence=latest_signal.get("confidence"),
+                    )
                     _p_up = _svc.predict_proba(_feat)
                     if _p_up is not None:
                         latest_signal["lightgbm_prob_up"] = round(_p_up, 4)
@@ -1239,7 +1215,6 @@ async def get_latest_signal(
                         _sig_up = str(_direction).lower() in ("up", "call", "buy")
                         _agrees = (_lgbm_dir == "UP") == _sig_up
                         latest_signal["lightgbm_agrees"] = bool(_agrees)
-                        # Boost confidence if agree, dampen if disagree.
                         _delta = abs(_p_up - 0.5) * 200.0  # 0..100
                         _mult2 = 1.0 + (_delta / 500.0 if _agrees else -_delta / 500.0)
                         _mult2 = max(0.7, min(1.25, _mult2))
@@ -1250,6 +1225,82 @@ async def get_latest_signal(
                         latest_signal["lightgbm_multiplier"] = round(_mult2, 4)
             except Exception as _lge:
                 logger.debug("LightGBM override skipped: %s", _lge)
+
+        # ---- (e) Iter 119 — Expected-Value gate ----
+        # EV per $1 stake:  p * payout - (1 - p)
+        # We use LightGBM's calibrated probability when available, else the
+        # signal's own confidence (normalised to 0-1). Payout comes from the
+        # signal (`payout` field, 0-1) or falls back to config default.
+        try:
+            _ev_cfg = await db.ai_ev_gate_config.find_one({"_id": "default"}) or {}
+            _ev_on = bool(_ev_cfg.get("enabled", True))
+        except Exception:
+            _ev_on = True
+            _ev_cfg = {}
+        if _ev_on and not latest_signal.get("abstain"):
+            try:
+                _p = latest_signal.get("lightgbm_prob_up")
+                if _p is None:
+                    _c = latest_signal.get("confidence")
+                    if _c is not None:
+                        _p = float(_c)
+                        if _p > 1.0:
+                            _p = _p / 100.0
+                if _p is not None:
+                    _sig_up = str(_direction).lower() in ("up", "call", "buy")
+                    _p_win = _p if _sig_up else 1.0 - _p
+                    _payout_raw = latest_signal.get("payout")
+                    try:
+                        _payout = float(_payout_raw) if _payout_raw is not None else float(_ev_cfg.get("default_payout", 0.85))
+                    except (TypeError, ValueError):
+                        _payout = float(_ev_cfg.get("default_payout", 0.85))
+                    if _payout > 1.0:
+                        _payout = _payout / 100.0
+                    _ev = _p_win * _payout - (1.0 - _p_win)
+                    latest_signal["expected_value"] = round(_ev, 4)
+                    latest_signal["ev_prob_win"] = round(_p_win, 4)
+                    latest_signal["ev_payout"] = round(_payout, 4)
+                    _min_ev = float(_ev_cfg.get("min_ev", 0.02))
+                    latest_signal["ev_min"] = _min_ev
+                    if _ev < _min_ev:
+                        latest_signal["abstain"] = True
+                        latest_signal["abstain_source"] = "expected_value_gate"
+                        latest_signal["abstain_reason"] = (
+                            f"EV {round(_ev, 4)} < min {_min_ev} "
+                            f"(p_win={round(_p_win, 3)} payout={round(_payout, 3)})"
+                        )
+                        logger.info("[EV-Gate] ABSTAIN %s EV=%.4f < %.4f",
+                                    _gate_symbol, _ev, _min_ev)
+            except Exception as _eve:
+                logger.debug("EV gate skipped: %s", _eve)
+
+        # ---- (f) Iter 119 — Shadow-mode pick log ----
+        # Every signal decision — fire or abstain — is logged for later
+        # A/B analysis via /api/ai/shadow-mode/report. The `actual_outcome`
+        # field is filled in later by /trades/outcome when the trade closes.
+        try:
+            await db.ai_shadow_picks.insert_one({
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "asset": _gate_symbol,
+                "direction": _direction,
+                "confidence": latest_signal.get("confidence"),
+                "would_fire": not bool(latest_signal.get("abstain")),
+                "ev_gate_passed": bool(_ev_on) and (
+                    latest_signal.get("abstain_source") != "expected_value_gate"
+                ),
+                "adx_gate_passed": (latest_signal.get("regime_gate") or {}).get("gated") is False,
+                "ha_gate_passed": (latest_signal.get("ha_confluence") or {}).get("gated") is False,
+                "lgbm_agrees": latest_signal.get("lightgbm_agrees"),
+                "lightgbm_prob_up": latest_signal.get("lightgbm_prob_up"),
+                "expected_value": latest_signal.get("expected_value"),
+                "abstain_source": latest_signal.get("abstain_source"),
+                "abstain_reason": latest_signal.get("abstain_reason"),
+                "payout": latest_signal.get("payout"),
+                "stake": 1.0,
+                "actual_outcome": None,
+            })
+        except Exception as _spe:
+            logger.debug("shadow-pick log skipped: %s", _spe)
 
         # Iter 91 — Attach per-asset adaptive latency-offset recommendation.
         # TM script (when rebuilt) can consume `recommended_offset_sec` to
@@ -6170,9 +6221,6 @@ async def record_tm_trade_outcome(report: TrampermonkeyOutcome):
         )
 
         # Iter 118 — auto-append live sample to LightGBM training buffer.
-        # The features are best-effort snapshot: whatever indicators/regime
-        # info we captured at signal-time (stored on the trade report if the
-        # publisher included them).
         try:
             from lightgbm_meta_service import record_live_sample as _rls
             features = doc.get("features") or {}
@@ -6186,6 +6234,26 @@ async def record_tm_trade_outcome(report: TrampermonkeyOutcome):
             await _rls(db, features, outcome, metadata=metadata)
         except Exception as _lrls_err:
             logger.debug(f"live-sample record failed: {_lrls_err}")
+
+        # Iter 119 — Label the most-recent matching shadow pick with the
+        # actual outcome so /ai/shadow-mode/report can compute real win-rate.
+        try:
+            asset_norm = doc.get("asset_normalized") or doc.get("asset")
+            direction_norm = str(doc.get("direction") or report.direction or "").upper()
+            latest_pick = await db.ai_shadow_picks.find_one(
+                {"asset": asset_norm, "direction": direction_norm, "actual_outcome": None},
+                sort=[("created_at", -1)],
+            )
+            if latest_pick:
+                await db.ai_shadow_picks.update_one(
+                    {"_id": latest_pick["_id"]},
+                    {"$set": {
+                        "actual_outcome": outcome,
+                        "outcome_recorded_at": datetime.now(timezone.utc).isoformat(),
+                    }},
+                )
+        except Exception as _sp_upd_err:
+            logger.debug(f"shadow-pick outcome update failed: {_sp_upd_err}")
 
         return {
             "success": True,

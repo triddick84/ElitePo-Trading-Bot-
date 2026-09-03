@@ -28,19 +28,28 @@ export default function AiGatesPanel({ primaryAsset = 'EURUSD_OTC' }) {
   const [feedbackStats, setFeedbackStats] = useState([]);
   const [training, setTraining] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Iter 119 — EV gate + shadow-mode
+  const [evConfig, setEvConfig] = useState(null);
+  const [shadow, setShadow] = useState(null);
+  const [savingEv, setSavingEv] = useState(false);
+  const [backfilling, setBackfilling] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [cfg, reg, lgbm, fb] = await Promise.all([
+      const [cfg, reg, lgbm, fb, ev, sh] = await Promise.all([
         axios.get(`${API}/ai/gates/config`),
         axios.get(`${API}/regime/current`, { params: { symbol: primaryAsset } }),
         axios.get(`${API}/ml/lightgbm/status`),
         axios.get(`${API}/feedback/weights`),
+        axios.get(`${API}/ai/ev-gate/config`),
+        axios.get(`${API}/ai/shadow-mode/report`, { params: { hours: 24 } }),
       ]);
       setConfig(cfg.data.config);
       setRegime(reg.data.regime);
       setLgbmStatus(lgbm.data);
       setFeedbackStats(fb.data.stats || []);
+      setEvConfig(ev.data.config);
+      setShadow(sh.data);
     } catch (e) {
       console.error('AI Gates load failed', e);
     }
@@ -101,6 +110,43 @@ export default function AiGatesPanel({ primaryAsset = 'EURUSD_OTC' }) {
       toast.error(`Training failed: ${e?.response?.data?.detail || e.message}`);
     } finally {
       setTraining(false);
+    }
+  };
+
+  // Iter 119 — EV gate + backfill handlers
+  const saveEv = async (next) => {
+    try {
+      setSavingEv(true);
+      const { data } = await axios.post(`${API}/ai/ev-gate/config`, next);
+      setEvConfig(data.config);
+      toast.success('EV gate settings saved');
+    } catch (e) {
+      toast.error(`EV save failed: ${e?.response?.data?.detail || e.message}`);
+    } finally {
+      setSavingEv(false);
+    }
+  };
+
+  const runBackfill = async () => {
+    try {
+      setBackfilling(true);
+      toast.info('Backfilling from tm_trade_reports — up to 60 s...');
+      const { data } = await axios.post(`${API}/ml/lightgbm/backfill`, {
+        max_samples: 6000,
+        candle_lookback: 60,
+      });
+      if (data.success) {
+        toast.success(
+          `Backfill OK · +${data.backfill_stored || 0} samples · AUC ${data.auc}`
+        );
+        await load();
+      } else {
+        toast.warning(`Backfill: ${data.error || 'no new samples'}`);
+      }
+    } catch (e) {
+      toast.error(`Backfill failed: ${e?.response?.data?.detail || e.message}`);
+    } finally {
+      setBackfilling(false);
     }
   };
 
@@ -278,6 +324,133 @@ export default function AiGatesPanel({ primaryAsset = 'EURUSD_OTC' }) {
           </div>
         </div>
       )}
+
+      {/* Iter 119 — EV Gate + Shadow Mode */}
+      <div
+        className="mt-6 pt-4 border-t border-white/5"
+        data-testid="ev-shadow-section"
+      >
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+          <div>
+            <p className="text-white font-medium text-sm">
+              Iter 119 · Expected-Value Gate + Shadow Mode
+            </p>
+            <p className="text-white/50 text-xs mt-0.5">
+              Only fires when p·payout − (1−p) ≥ min-EV. Every decision logged for A/B.
+            </p>
+          </div>
+          <Button
+            size="sm" variant="outline"
+            className="text-xs border-purple-400/40 text-purple-300 hover:bg-purple-500/10"
+            onClick={runBackfill} disabled={backfilling}
+            data-testid="btn-lgbm-backfill"
+          >
+            {backfilling ? 'Backfilling…' : '↻ Backfill LightGBM'}
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {/* EV controls */}
+          <div className="p-3 rounded-lg bg-slate-900/50 border border-white/5">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-white/80 text-xs font-medium">EV Gate</span>
+              <Switch
+                checked={!!evConfig?.enabled}
+                onCheckedChange={() => saveEv({ ...evConfig, enabled: !evConfig?.enabled })}
+                disabled={savingEv || !evConfig}
+                data-testid="toggle-ev-gate"
+              />
+            </div>
+            {evConfig && (
+              <div className="space-y-2">
+                <label className="block text-[11px] text-white/60">
+                  Min EV per $1 stake
+                  <span className="ml-2 text-emerald-300 font-mono" data-testid="ev-min-value">
+                    {Number(evConfig.min_ev).toFixed(3)}
+                  </span>
+                </label>
+                <input
+                  type="range" min="-0.1" max="0.3" step="0.005"
+                  value={evConfig.min_ev}
+                  onChange={(e) => setEvConfig({ ...evConfig, min_ev: Number(e.target.value) })}
+                  onMouseUp={() => saveEv(evConfig)}
+                  onTouchEnd={() => saveEv(evConfig)}
+                  className="w-full accent-purple-500"
+                  data-testid="ev-min-slider"
+                />
+                <label className="block text-[11px] text-white/60">
+                  Default payout
+                  <span className="ml-2 text-cyan-300 font-mono">
+                    {(Number(evConfig.default_payout) * 100).toFixed(0)}%
+                  </span>
+                </label>
+                <input
+                  type="range" min="0.5" max="0.95" step="0.01"
+                  value={evConfig.default_payout}
+                  onChange={(e) => setEvConfig({ ...evConfig, default_payout: Number(e.target.value) })}
+                  onMouseUp={() => saveEv(evConfig)}
+                  onTouchEnd={() => saveEv(evConfig)}
+                  className="w-full accent-cyan-500"
+                  data-testid="ev-payout-slider"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Shadow-mode stats */}
+          <div
+            className="p-3 rounded-lg bg-slate-900/50 border border-white/5"
+            data-testid="shadow-mode-card"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-white/80 text-xs font-medium">Shadow Mode · 24h</span>
+              {shadow?.sim_win_rate != null ? (
+                <Badge
+                  className="bg-emerald-500/20 text-emerald-300 border-emerald-400/40 text-[10px]"
+                  data-testid="shadow-winrate-badge"
+                >
+                  WR {(shadow.sim_win_rate * 100).toFixed(1)}%
+                </Badge>
+              ) : (
+                <Badge className="bg-slate-500/20 text-slate-300 border-slate-400/40 text-[10px]">
+                  no resolved yet
+                </Badge>
+              )}
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div>
+                <p className="text-white/50 text-[10px] uppercase">Picks</p>
+                <p className="text-white text-lg font-mono" data-testid="shadow-total">
+                  {shadow?.total_shadow_picks ?? '—'}
+                </p>
+              </div>
+              <div>
+                <p className="text-white/50 text-[10px] uppercase">Would fire</p>
+                <p className="text-emerald-300 text-lg font-mono" data-testid="shadow-would-fire">
+                  {shadow?.would_fire ?? '—'}
+                </p>
+              </div>
+              <div>
+                <p className="text-white/50 text-[10px] uppercase">Sim P&L</p>
+                <p
+                  className={`text-lg font-mono ${
+                    (shadow?.sim_pnl ?? 0) >= 0 ? 'text-emerald-300' : 'text-red-300'
+                  }`}
+                  data-testid="shadow-sim-pnl"
+                >
+                  {shadow?.sim_pnl != null ? `${shadow.sim_pnl >= 0 ? '+' : ''}${shadow.sim_pnl}` : '—'}
+                </p>
+              </div>
+            </div>
+            {lgbmStatus?.metrics && (
+              <p className="text-[10px] text-white/40 mt-2 text-center">
+                LightGBM AUC {lgbmStatus.metrics.auc} · {lgbmStatus.metrics.validation}
+                {lgbmStatus.metrics.calibrated ? ' · calibrated' : ''}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
     </Card>
   );
 }

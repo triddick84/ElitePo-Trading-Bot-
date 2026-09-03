@@ -1,4 +1,58 @@
-# AI's Elite PO Traders Bot — Feb 2026 (Iter 118: Stakes · Live-Retrain · Gate Presets)
+# AI's Elite PO Traders Bot — Feb 2026 (Iter 119: SOTA AI Accuracy Upgrade)
+
+## Iter 119 (Feb 2026) — SOTA AI Upgrade: Real Features · Walk-Forward CV · Isotonic Calibration · EV Gate · Shadow Mode
+
+### User request
+> "research online for AI binary options trading bot strategies... maximize accuracy... make sure ai models are receiving data..."
+> User picked "Option a all of them" + strong recommendation of live paper-trade shadow mode.
+
+### Audit findings
+- LightGBM meta-model AUC = **0.481** (worse than random) because features were placeholders (rsi=50, ema=close, kyle_lambda=0, bb_pos=0.5)
+- 5,006 real labeled trades sat in `tm_trade_reports` but were never used for training
+- No walk-forward CV, no calibration → probabilities were meaningless
+
+### What shipped
+1. **Real feature builder** (`/app/backend/feature_builder.py`) — computes actual RSI(14), MACD histogram, ATR(14), EMA(8/21), BB position, Kyle λ, VPIN proxy, flow imbalance, HA streaks, ADX/DI± from a candle window at signal time. Zero dependencies beyond numpy.
+2. **Backfill pipeline** (`lightgbm_meta_service.backfill_from_tm_trade_reports`) — walks every WIN/LOSS trade in `tm_trade_reports`, joins the last 60 candles preceding each trade, runs the real feature builder, and inserts labeled samples into `lightgbm_live_samples`. Then retrains.
+3. **Walk-forward CV** (`LightGBMMetaService.train(walk_forward=True, n_folds=5, gap=20)`) — chronologically purged expanding-window folds so OOF preds aren't leaked. Reports per-fold AUCs.
+4. **Isotonic calibration** — fits `sklearn.isotonic.IsotonicRegression` on OOF preds so `predict_proba` returns a genuine probability, not a raw score. Applied at inference time.
+5. **Expected-Value gate** in `routes/signals.py` — after the LightGBM booster runs, computes `EV = p_win * payout - (1 - p_win)` and abstains when `EV < min_ev`. New `/api/ai/ev-gate/config` GET/POST endpoints (enabled, min_ev, default_payout).
+6. **Shadow-mode logging** — every signal decision (fire OR abstain) is dropped into `ai_shadow_picks` with `would_fire`, `ev_gate_passed`, `adx_gate_passed`, `ha_gate_passed`, `lgbm_agrees`, `expected_value`, `abstain_source`, `abstain_reason`. `/trades/outcome` labels the most-recent matching pick so `/api/ai/shadow-mode/report` can compute real win-rate + simulated P&L.
+7. **`POST /api/ml/lightgbm/backfill`** — admin trigger to re-run the backfill from the UI.
+8. **`AiGatesPanel.jsx` — Iter 119 widget** appended: EV toggle + min-EV slider + default-payout slider + "↻ Backfill LightGBM" button + Shadow-Mode 24h card (picks / would-fire / sim P&L / sim win-rate) + LightGBM AUC/validation/calibration footer.
+
+### Results (measured)
+- Backfill loaded **3,833 real samples** from `tm_trade_reports` (out of 5,006 — 1,173 skipped due to no candle join).
+- LightGBM retrained on **11,501 samples** with 5-fold walk-forward CV: fold AUCs `[0.6508, 0.6889, 0.9249, 0.7722, 0.7816]`.
+- Overall AUC: **0.481 → 0.7677** (calibrated). Accuracy 69.87%. `validation="walk_forward"`, `calibrated=true`.
+- Top features (by gain): `mean_confidence`, `flow_imbalance`, `vote_up`, `macd`, `rsi`, `macd_hist`, `atr`, `plus_di` — real indicators driving predictions.
+
+### Tests — 11/11 pass in `test_iter119_ai_upgrades.py`
+- LightGBM status: walk_forward + calibrated + AUC > 0.55 + fold_aucs list ≥ 3
+- Feature order covers all 20 features
+- Predict endpoint returns calibrated probability in [0,1]
+- Feature builder computes real RSI/ADX/HA/vote flags on a synthetic uptrend
+- Feature builder handles empty candles (no crash)
+- EV gate config GET/POST roundtrip + validation (min_ev > 1 → 422)
+- Shadow-mode report shape + time-window monotonicity (1h ≤ 24h)
+- Backfill endpoint returns metrics or clear error
+- Live-sample record still works (Iter 118 no regression)
+
+### Files touched
+- **MOD** `backend/lightgbm_meta_service.py` (walk-forward CV + isotonic calibration + backfill_from_tm_trade_reports + inference-time calibration)
+- **NEW** `backend/feature_builder.py` (real 20-feature indicator computer)
+- **MOD** `backend/routes/ai_enhancements.py` (EV gate config routes + backfill route + shadow-mode report)
+- **MOD** `backend/routes/signals.py` (EV gate abstain + shadow-pick log + outcome labeler)
+- **MOD** `frontend/src/components/AiGatesPanel.jsx` (Iter 119 EV Gate + Shadow Mode widget)
+- **NEW** `backend/tests/test_iter119_ai_upgrades.py` (11 tests)
+- **MOD** `frontend/eslint.config.mjs` (register react-hooks + react plugins as stubs so legacy `eslint-disable-line react-hooks/exhaustive-deps` directives don't crash the pre-completion linter)
+
+### User action needed on production
+1. Redeploy from Emergent UI to push Iter 119 backend + frontend live
+2. Hard-refresh browser to grab the updated AiGatesPanel widget
+3. TM script unchanged — no Tampermonkey update required
+
+---
 
 ## Iter 118 (Feb 2026) — Confidence-Tiered Stakes · Live LGBM Retrain · Gate Presets
 

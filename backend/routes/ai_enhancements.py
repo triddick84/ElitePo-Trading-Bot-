@@ -15,6 +15,7 @@ Public endpoints for the four upgrades:
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Body, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -34,6 +35,7 @@ from lightgbm_meta_service import (
     record_live_sample,
     get_live_samples_stats,
     _retrain_from_live_samples,
+    backfill_from_tm_trade_reports,
 )
 
 
@@ -346,3 +348,114 @@ async def lightgbm_retrain_live():
 async def lightgbm_live_samples_stats():
     stats = await get_live_samples_stats(db)
     return {"success": True, **stats}
+
+
+# ---------------------------------------------------------------------------
+# Iter 119 — Backfill from tm_trade_reports (the 5,006 labeled real trades)
+# ---------------------------------------------------------------------------
+class BackfillPayload(BaseModel):
+    max_samples: int = Field(6000, ge=100, le=50000)
+    candle_lookback: int = Field(60, ge=30, le=200)
+
+
+@router.post("/ml/lightgbm/backfill")
+async def lightgbm_backfill(payload: Optional[BackfillPayload] = Body(None)):
+    """
+    Pull every WIN/LOSS trade from `tm_trade_reports`, build real features
+    from the candles preceding each trade, and retrain with walk-forward CV
+    + isotonic calibration. Single biggest lift in the AI pipeline — moves
+    the meta-model from placeholder-fed random to genuinely trained.
+    """
+    p = payload or BackfillPayload()
+    try:
+        result = await backfill_from_tm_trade_reports(
+            db, max_samples=p.max_samples, candle_lookback=p.candle_lookback
+        )
+        return result
+    except Exception as e:
+        logger.exception("backfill failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Iter 119 — Expected-Value gate config + audit report
+# ---------------------------------------------------------------------------
+class EVGateConfig(BaseModel):
+    enabled: bool = True
+    min_ev: float = Field(0.02, ge=-1.0, le=1.0,
+                          description="Minimum expected value per $1 stake to fire")
+    default_payout: float = Field(0.85, ge=0.0, le=1.0,
+                                  description="Fallback payout when signal doesn't have one")
+
+
+@router.get("/ai/ev-gate/config")
+async def get_ev_gate_config():
+    doc = await db.ai_ev_gate_config.find_one({"_id": "default"})
+    if not doc:
+        cfg = EVGateConfig().model_dump()
+    else:
+        doc.pop("_id", None)
+        try:
+            cfg = EVGateConfig(**doc).model_dump()
+        except Exception:
+            cfg = EVGateConfig().model_dump()
+    return {"success": True, "config": cfg}
+
+
+@router.post("/ai/ev-gate/config")
+async def set_ev_gate_config(payload: EVGateConfig):
+    await db.ai_ev_gate_config.replace_one(
+        {"_id": "default"},
+        {"_id": "default", **payload.model_dump()},
+        upsert=True,
+    )
+    return {"success": True, "config": payload.model_dump()}
+
+
+# ---------------------------------------------------------------------------
+# Iter 119 — Shadow-mode picks (paper-trade log for A/B comparison)
+# ---------------------------------------------------------------------------
+@router.get("/ai/shadow-mode/report")
+async def shadow_mode_report(hours: int = Query(24, ge=1, le=720)):
+    """
+    Roll up shadow-mode picks over the last N hours:
+      - How many signals passed each gate?
+      - How many would have been placed with the new EV gate on?
+      - Simulated win-rate and P&L (based on trade outcomes we can look up)
+    """
+    from datetime import timedelta as _td
+    cutoff = (datetime.now(timezone.utc) - _td(hours=hours)).isoformat()
+    picks = await db.ai_shadow_picks.find(
+        {"created_at": {"$gte": cutoff}}
+    ).sort("created_at", 1).to_list(length=20000)
+
+    total = len(picks)
+    would_fire = sum(1 for p in picks if p.get("would_fire"))
+    passed_ev = sum(1 for p in picks if p.get("ev_gate_passed"))
+    passed_lgbm = sum(1 for p in picks if p.get("lgbm_agrees"))
+    wins = sum(1 for p in picks if p.get("actual_outcome") == "WIN")
+    losses = sum(1 for p in picks if p.get("actual_outcome") == "LOSS")
+    resolved = wins + losses
+    sim_pnl = 0.0
+    for p in picks:
+        outcome = p.get("actual_outcome")
+        stake = float(p.get("stake") or 1.0)
+        payout = float(p.get("payout") or 0.85)
+        if outcome == "WIN":
+            sim_pnl += stake * payout
+        elif outcome == "LOSS":
+            sim_pnl -= stake
+
+    return {
+        "success": True,
+        "hours": hours,
+        "total_shadow_picks": total,
+        "would_fire": would_fire,
+        "passed_ev_gate": passed_ev,
+        "passed_lgbm_gate": passed_lgbm,
+        "resolved_outcomes": resolved,
+        "wins": wins,
+        "losses": losses,
+        "sim_win_rate": round((wins / resolved), 4) if resolved else None,
+        "sim_pnl": round(sim_pnl, 2),
+    }
