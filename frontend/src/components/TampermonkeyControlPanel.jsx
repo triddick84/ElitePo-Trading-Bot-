@@ -47,6 +47,9 @@ const TampermonkeyControlPanel = () => {
   });
   const [ridicolousSaving, setRidicolousSaving] = useState(false);
   const [ridicolousDirty, setRidicolousDirty] = useState(false);
+  // Iter 120d — Confidence-threshold autotuner
+  const [autotuneRunning, setAutotuneRunning] = useState(false);
+  const [autotuneResult, setAutotuneResult] = useState(null);
   
   // Win/Loss Stats - v6.6.0
   const [stats, setStats] = useState({
@@ -249,6 +252,67 @@ const TampermonkeyControlPanel = () => {
       console.error('Failed to save Ridicolous config:', e);
     } finally {
       setRidicolousSaving(false);
+    }
+  };
+
+  // Iter 120d — Autotune min-confidence
+  const runAutotune = async () => {
+    try {
+      setAutotuneRunning(true);
+      setAutotuneResult(null);
+      const r = await fetch(`${API}/strategies/autotune-confidence`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          strategy_id: 'ridicolous_breakout_prediction',
+          asset: backtestAsset || 'EURUSD_OTC',
+          timeframe: '1m',
+          days: Number(backtestDays) || 30,
+          max_candles: 3000,
+          min_history: 60,
+          payout: 0.85,
+          stride: 3,
+          conf_min: 50,
+          conf_max: 90,
+          conf_step: 5,
+          min_sample_size: 15,
+          params: { perc: ridicolousCfg.perc, levels: ridicolousCfg.levels },
+        }),
+      });
+      const d = await r.json();
+      setAutotuneResult(d);
+    } catch (e) {
+      setAutotuneResult({ success: false, error: e.message });
+    } finally {
+      setAutotuneRunning(false);
+    }
+  };
+
+  const applyAutotuneRecommendation = async () => {
+    if (!autotuneResult?.recommendation) return;
+    try {
+      const r = await fetch(`${API}/strategies/autotune-confidence/apply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          strategy_id: 'ridicolous_breakout_prediction',
+          asset: backtestAsset || 'EURUSD_OTC',
+          timeframe: '1m',
+          threshold: autotuneResult.recommendation.threshold,
+        }),
+      });
+      const d = await r.json();
+      if (d.success && d.config) {
+        setRidicolousCfg({
+          perc: Number(d.config.perc),
+          levels: Number(d.config.levels),
+          min_history: Number(d.config.min_history),
+          min_confidence: Number(d.config.min_confidence),
+        });
+        setRidicolousDirty(false);
+      }
+    } catch (e) {
+      console.error('Failed to apply autotune:', e);
     }
   };
 
@@ -670,6 +734,105 @@ const TampermonkeyControlPanel = () => {
                 <p className="text-[10px] text-slate-500">
                   Changes are used in the next Backtest run immediately. Click <span className="text-emerald-400">Save & apply live</span> to also apply them to live signal generation.
                 </p>
+
+                {/* Iter 120d — Autotune min-confidence */}
+                <div className="mt-2 pt-3 border-t border-purple-500/20" data-testid="autotune-panel">
+                  <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+                    <p className="text-xs font-medium text-purple-200">
+                      🎯 Autotune min-confidence · sweeps 50-90% on the current asset
+                    </p>
+                    <Button
+                      size="sm"
+                      onClick={runAutotune}
+                      disabled={autotuneRunning}
+                      className="bg-fuchsia-600 hover:bg-fuchsia-700 h-7 text-xs"
+                      data-testid="run-autotune-btn"
+                    >
+                      {autotuneRunning ? 'Sweeping…' : '⚡ Run autotune'}
+                    </Button>
+                  </div>
+
+                  {autotuneResult && !autotuneResult.success && (
+                    <div className="text-xs text-rose-300" data-testid="autotune-error">
+                      ✗ {autotuneResult.error || 'autotune failed'}
+                    </div>
+                  )}
+
+                  {autotuneResult && autotuneResult.success && (
+                    <div className="space-y-2" data-testid="autotune-result">
+                      {autotuneResult.recommendation ? (
+                        <div className="p-2 rounded bg-emerald-950/40 border border-emerald-500/40 flex items-center justify-between flex-wrap gap-2">
+                          <div className="text-xs">
+                            <span className="text-emerald-300 font-bold" data-testid="autotune-recommendation">
+                              Recommended: {autotuneResult.recommendation.threshold}%
+                            </span>
+                            <span className="text-slate-400 ml-2">
+                              → WR {(autotuneResult.recommendation.win_rate * 100).toFixed(1)}% ·
+                              Sim P&L {autotuneResult.recommendation.sim_pnl >= 0 ? '+' : ''}{autotuneResult.recommendation.sim_pnl} ·
+                              n={autotuneResult.recommendation.n}
+                            </span>
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={applyAutotuneRecommendation}
+                            className="bg-emerald-600 hover:bg-emerald-700 h-7 text-xs"
+                            data-testid="apply-autotune-btn"
+                          >
+                            ✓ Apply {autotuneResult.recommendation.threshold}%
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="p-2 rounded bg-slate-800/70 border border-slate-600 text-xs text-slate-400">
+                          No threshold in the 50-90% band cleared break-even + min-sample gates.
+                          Try widening the day range or lowering `min_sample_size`.
+                        </div>
+                      )}
+
+                      <table className="w-full text-[11px] border-collapse" data-testid="autotune-sweep-table">
+                        <thead>
+                          <tr className="text-slate-400 border-b border-slate-700">
+                            <th className="text-left py-1 pr-2">Min conf</th>
+                            <th className="text-right px-2">n</th>
+                            <th className="text-right px-2">WR</th>
+                            <th className="text-right px-2">Sim P&L</th>
+                            <th className="text-right px-2">Eligible</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {autotuneResult.sweep.map(row => (
+                            <tr key={row.threshold}
+                                className={`border-b border-slate-800 ${
+                                  autotuneResult.recommendation?.threshold === row.threshold
+                                    ? 'bg-emerald-900/30' : ''
+                                }`}
+                                data-testid={`autotune-row-${row.threshold}`}>
+                              <td className="py-0.5 pr-2 text-slate-300 font-mono">{row.threshold}%</td>
+                              <td className="text-right px-2 text-slate-300 font-mono">{row.n}</td>
+                              <td className={`text-right px-2 font-mono ${
+                                row.win_rate == null ? 'text-slate-500'
+                                  : row.win_rate >= 0.556 ? 'text-emerald-300' : 'text-rose-300'
+                              }`}>
+                                {row.win_rate != null ? `${(row.win_rate * 100).toFixed(1)}%` : '—'}
+                              </td>
+                              <td className={`text-right px-2 font-mono ${
+                                row.sim_pnl > 0 ? 'text-emerald-300' : row.sim_pnl < 0 ? 'text-rose-300' : 'text-slate-500'
+                              }`}>
+                                {row.sim_pnl > 0 ? '+' : ''}{row.sim_pnl}
+                              </td>
+                              <td className="text-right px-2">
+                                {row.eligible ? <span className="text-emerald-400">✓</span> : <span className="text-slate-600">—</span>}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <p className="text-[10px] text-slate-500">
+                        Eligible = sample ≥ 15 AND WR &gt; break-even ({((1 / (1 + (autotuneResult.payout || 0.85))) * 100).toFixed(1)}%).
+                        Recommendation picks highest Sim P&amp;L among eligibles.
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 

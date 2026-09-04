@@ -21,6 +21,7 @@ CALL/PUT signal, and returns:
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -102,11 +103,13 @@ def _simulate(
     min_history: int,
     payout: float,
     stride: int,
+    return_trades: bool = False,
 ) -> Dict[str, Any]:
     """Walk chronologically, run generate_signal on candles[:i+1], score against candles[i+1]."""
     n = len(df)
     total = calls = puts = neutrals = wins = losses = 0
     conf_sum = 0.0
+    trades: List[Dict[str, Any]] = []
     conf_by_bucket: Dict[str, Dict[str, int]] = {
         "50-60": {"w": 0, "l": 0}, "60-70": {"w": 0, "l": 0},
         "70-80": {"w": 0, "l": 0}, "80-90": {"w": 0, "l": 0},
@@ -166,6 +169,8 @@ def _simulate(
         b = _bucket(conf)
         if b:
             conf_by_bucket[b]["w" if won else "l"] += 1
+        if return_trades:
+            trades.append({"confidence": conf, "won": bool(won), "side": side})
 
     resolved = wins + losses
     win_rate = round(wins / resolved, 4) if resolved else None
@@ -196,6 +201,7 @@ def _simulate(
         "payout_used": payout,
         "avg_confidence": round(conf_sum / (calls + puts), 2) if (calls + puts) else None,
         "confidence_buckets": bucket_table,
+        "trades": trades if return_trades else None,
     }
 
 
@@ -296,6 +302,8 @@ async def backtest_strategy(payload: BacktestPayload):
         payout=payload.payout,
         stride=payload.stride,
     )
+    # Internal-only field; drop from public response
+    sim.pop("trades", None)
 
     extra: Dict[str, Any] = {}
     if payload.strategy_id == "ridicolous_breakout_prediction":
@@ -372,3 +380,209 @@ async def set_ridicolous_config(payload: RidicolousConfig):
         upsert=True,
     )
     return {"success": True, "config": effective}
+
+
+
+# ---------------------------------------------------------------------------
+# Iter 120d — Confidence-threshold autotuner
+# ---------------------------------------------------------------------------
+class AutotunePayload(BaseModel):
+    strategy_id: str
+    asset: str = "EURUSD_OTC"
+    timeframe: str = "1m"
+    days: int = Field(30, ge=1, le=365)
+    max_candles: int = Field(3000, ge=100, le=20000)
+    min_history: int = Field(60, ge=20, le=1000)
+    payout: float = Field(0.85, ge=0.5, le=0.99)
+    stride: int = Field(3, ge=1, le=20)
+    # Sweep range
+    conf_min: float = Field(50.0, ge=40.0, le=95.0)
+    conf_max: float = Field(90.0, ge=40.0, le=99.0)
+    conf_step: float = Field(5.0, ge=1.0, le=25.0)
+    min_sample_size: int = Field(20, ge=5, le=1000,
+                                 description="Reject thresholds that produce fewer than N resolved trades")
+    # Strategy params passthrough (Ridicolous perc/levels stay fixed for the sweep)
+    params: Optional[Dict[str, Any]] = None
+
+
+def _sweep_thresholds(trades: List[Dict[str, Any]], thresholds: List[float],
+                       payout: float, min_sample: int) -> List[Dict[str, Any]]:
+    """For each threshold, count trades whose confidence >= t and compute WR + sim_pnl."""
+    out = []
+    for t in thresholds:
+        subset = [tr for tr in trades if tr["confidence"] >= t]
+        w = sum(1 for tr in subset if tr["won"])
+        l = len(subset) - w
+        n = w + l
+        wr = round(w / n, 4) if n else None
+        pnl = round(w * payout - l, 2)
+        # Break-even at 85% payout ≈ 54.05% WR. Round up to a comfy 55.6%.
+        break_even = 1.0 / (1.0 + payout)  # e.g. 0.5405
+        eligible = (n >= min_sample) and (wr is not None) and (wr > break_even)
+        out.append({
+            "threshold": round(t, 1),
+            "n": n,
+            "wins": w,
+            "losses": l,
+            "win_rate": wr,
+            "sim_pnl": pnl,
+            "eligible": eligible,
+        })
+    return out
+
+
+def _pick_recommendation(sweep: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Highest sim_pnl among eligible rows; tiebreaker = higher WR, then lower threshold."""
+    eligibles = [r for r in sweep if r["eligible"]]
+    if not eligibles:
+        return None
+    eligibles.sort(
+        key=lambda r: (-r["sim_pnl"], -(r["win_rate"] or 0), r["threshold"])
+    )
+    return eligibles[0]
+
+
+@router.post("/strategies/autotune-confidence")
+async def autotune_confidence(payload: AutotunePayload):
+    """Sweep min_confidence to find the EV-maximising threshold for a strategy+asset."""
+    from strategy_registry import strategy_registry
+
+    base_strategy = strategy_registry.get_strategy(payload.strategy_id)
+    if base_strategy is None:
+        raise HTTPException(status_code=404,
+                            detail=f"strategy '{payload.strategy_id}' not registered")
+
+    # For Ridicolous, we need to lower the strategy's own min_confidence to 40
+    # (below every sweep step) so the raw trade stream includes low-conf signals
+    # for post-hoc filtering.
+    strategy = base_strategy
+    if payload.strategy_id == "ridicolous_breakout_prediction":
+        try:
+            from strategies.strategy_ridicolous_breakout import RidicolousBreakoutPrediction
+            strategy = RidicolousBreakoutPrediction()
+            base_cfg = base_strategy.get_config()
+            override = {**base_cfg, "min_confidence": 40.0}
+            if payload.params:
+                override.update(payload.params)
+                override["min_confidence"] = 40.0  # force wide net for sweep
+            strategy.apply_config(override)
+        except Exception as e:
+            logger.warning("autotune ridicolous override failed: %s", e)
+            strategy = base_strategy
+
+    tf_seconds = {"5s": 5, "15s": 15, "30s": 30, "1m": 60, "2m": 120, "3m": 180, "5m": 300}.get(payload.timeframe, 60)
+    est_candles = int(payload.days * 86400 // tf_seconds)
+    limit = min(payload.max_candles, max(est_candles, 300))
+
+    candles = await _load_candles(payload.asset, payload.timeframe, limit)
+    if not candles or len(candles) < payload.min_history + 10:
+        return {
+            "success": False,
+            "error": "insufficient historical candles",
+            "candles_loaded": len(candles),
+            "asset": payload.asset,
+            "timeframe": payload.timeframe,
+        }
+
+    df = pd.DataFrame(candles)
+    sim = _simulate(strategy, df,
+                    min_history=payload.min_history,
+                    payout=payload.payout,
+                    stride=payload.stride,
+                    return_trades=True)
+    trades = sim.get("trades") or []
+
+    if payload.conf_min >= payload.conf_max:
+        raise HTTPException(status_code=422, detail="conf_min must be < conf_max")
+    thresholds: List[float] = []
+    t = payload.conf_min
+    while t <= payload.conf_max + 1e-9:
+        thresholds.append(round(t, 2))
+        t += payload.conf_step
+
+    sweep = _sweep_thresholds(trades, thresholds, payload.payout, payload.min_sample_size)
+    recommendation = _pick_recommendation(sweep)
+
+    # Persist the winner for later apply
+    doc_id = f"{payload.strategy_id}::{payload.asset}::{payload.timeframe}"
+    if recommendation:
+        try:
+            await db.strategy_autotune_recs.replace_one(
+                {"_id": doc_id},
+                {
+                    "_id": doc_id,
+                    "strategy_id": payload.strategy_id,
+                    "asset": payload.asset,
+                    "timeframe": payload.timeframe,
+                    "recommendation": recommendation,
+                    "days": payload.days,
+                    "candles_used": len(df),
+                    "trades_evaluated": len(trades),
+                    "computed_at": datetime.now(timezone.utc).isoformat(),
+                },
+                upsert=True,
+            )
+        except Exception as e:
+            logger.warning("autotune persistence failed: %s", e)
+
+    return {
+        "success": True,
+        "strategy_id": payload.strategy_id,
+        "asset": payload.asset,
+        "timeframe": payload.timeframe,
+        "days": payload.days,
+        "candles_used": len(df),
+        "trades_evaluated": len(trades),
+        "sweep": sweep,
+        "recommendation": recommendation,
+        "min_sample_size": payload.min_sample_size,
+        "payout": payload.payout,
+    }
+
+
+@router.get("/strategies/autotune-confidence/recommendation")
+async def get_autotune_recommendation(
+    strategy_id: str, asset: str, timeframe: str = "1m",
+):
+    doc_id = f"{strategy_id}::{asset}::{timeframe}"
+    doc = await db.strategy_autotune_recs.find_one({"_id": doc_id})
+    if not doc:
+        return {"success": True, "recommendation": None}
+    doc.pop("_id", None)
+    return {"success": True, **doc}
+
+
+class ApplyAutotunePayload(BaseModel):
+    strategy_id: str = "ridicolous_breakout_prediction"
+    asset: str = "EURUSD_OTC"
+    timeframe: str = "1m"
+    threshold: Optional[float] = Field(None, ge=40.0, le=95.0,
+                                       description="Explicit override; otherwise use the saved recommendation")
+
+
+@router.post("/strategies/autotune-confidence/apply")
+async def apply_autotune_recommendation(payload: ApplyAutotunePayload):
+    """Apply the recommended min_confidence to the live Ridicolous singleton + persist to config."""
+    if payload.strategy_id != "ridicolous_breakout_prediction":
+        raise HTTPException(
+            status_code=400,
+            detail="apply-autotune currently supports ridicolous_breakout_prediction only"
+        )
+
+    threshold = payload.threshold
+    if threshold is None:
+        doc_id = f"{payload.strategy_id}::{payload.asset}::{payload.timeframe}"
+        doc = await db.strategy_autotune_recs.find_one({"_id": doc_id})
+        rec = (doc or {}).get("recommendation")
+        if not rec:
+            raise HTTPException(status_code=404, detail="no recommendation stored — run autotune first")
+        threshold = float(rec["threshold"])
+
+    from strategies.strategy_ridicolous_breakout import ridicolous_breakout_prediction
+    effective = ridicolous_breakout_prediction.apply_config({"min_confidence": threshold})
+    await db.strategy_configs.replace_one(
+        {"_id": _RIDI_CFG_DOC_ID},
+        {"_id": _RIDI_CFG_DOC_ID, **effective},
+        upsert=True,
+    )
+    return {"success": True, "applied_threshold": threshold, "config": effective}

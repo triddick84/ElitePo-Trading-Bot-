@@ -1,3 +1,62 @@
+# AI's Elite PO Traders Bot — Feb 2026 (Iter 120d: Confidence Autotuner)
+
+## Iter 120d (Feb 2026) — Confidence-Threshold Autotuner
+
+### Context
+Previously (Iter 120b) we shipped a backtest runner. It showed by confidence bucket that Ridicolous · EURUSD_OTC hit 57% WR in the 70-80% bucket. This iteration turns that insight into a one-click auto-optimiser.
+
+### What shipped
+- **`POST /api/strategies/autotune-confidence`** — sweeps `min_confidence` from 50-90% (5% steps by default; `conf_min`/`conf_max`/`conf_step` all knobs). Runs the strategy ONCE on the full 30-day window (collecting `(confidence, won)` tuples per trade), then computes wins/losses/sim_pnl at every threshold via post-hoc filtering. Zero re-runs = fast. Response returns the full sweep + a `recommendation`.
+- **Eligibility rule** — `sample ≥ min_sample_size (default 15)` AND `win_rate > 1/(1+payout)` (54.05% at 85% payout). Recommendation = highest `sim_pnl` among eligibles (tiebreak higher WR, then lower threshold).
+- **Persistence** — winners saved to `db.strategy_autotune_recs` keyed by `{strategy}::{asset}::{timeframe}`.
+- **`GET /api/strategies/autotune-confidence/recommendation`** — fetch the persisted winner.
+- **`POST /api/strategies/autotune-confidence/apply`** — one-click apply the recommendation (or an explicit `threshold`) to the live Ridicolous singleton + persist to `db.strategy_configs`.
+- **Frontend**: added an "🎯 Autotune min-confidence" section inside the Ridicolous tunables panel with:
+  - `⚡ Run autotune` button (fuchsia)
+  - Recommended pick pill (emerald) with `✓ Apply X%` one-click button
+  - Full sweep table (color-coded WR, Sim P&L, eligible check-mark) — winning row highlighted in emerald
+  - Break-even footnote
+
+### Live-verified in preview
+Ridicolous · EURUSD_OTC · 30d sweep:
+| Min conf | n   | WR    | Sim P&L | Eligible |
+|----------|-----|-------|---------|----------|
+| 50%      | 141 | 47.5% | -17.05  | —        |
+| 55%      | 141 | 47.5% | -17.05  | —        |
+| 60%      | 114 | 47.4% | -14.10  | —        |
+| **65%**  | 60  | 55.0% | +1.05   | ✓        |
+| **70%**  | 23  | 56.5% | +1.05   | ✓ ← rec  |
+| 75%      | 2   | 50.0% | -0.15   | —        |
+
+**Recommendation: 70%** — a 22 point-per-100-trades improvement over the current 55% default.
+
+### Tests — 10/10 pass in `test_iter120d_autotune_confidence.py`
+- Sweep shape (9 rows, sorted, `n` non-increasing)
+- Recommendation ∈ eligible ∧ sim_pnl == max(eligible_pnl)
+- `_pick_recommendation` unit tests (eligible+max, none-eligible → None)
+- GET recommendation returns persisted doc
+- Apply endpoint updates live singleton via saved rec AND explicit threshold
+- Validation: `conf_min >= conf_max` → 422, unknown strategy → 404, non-Ridicolous apply → 400
+
+Full Iter 119-120d regression: **40/40 pass**.
+
+### Files touched
+- **MOD** `backend/routes/strategy_backtest.py`
+  - `datetime`/`timezone` imports
+  - `_simulate(return_trades=True)` now emits per-trade `(confidence, won, side)` for post-hoc threshold filtering
+  - `AutotunePayload` model, `_sweep_thresholds`, `_pick_recommendation`, 3 new routes
+  - `/backtest` still strips the internal `trades` field from its public response
+- **MOD** `frontend/src/components/TampermonkeyControlPanel.jsx` (`autotuneRunning`/`autotuneResult` state, `runAutotune`+`applyAutotuneRecommendation` handlers, autotune sub-panel inside Ridicolous tunables card)
+- **NEW** `backend/tests/test_iter120d_autotune_confidence.py` (10 tests)
+
+### How to use
+1. Trading Strategy card → Ridicolous
+2. Adjust asset + days if desired → click **⚡ Run autotune**
+3. Review the sweep table → click **✓ Apply X%** to snap the singleton to the winner
+4. Live signal generation now uses the tuned threshold
+
+---
+
 # AI's Elite PO Traders Bot — Feb 2026 (Iter 120c: Ridicolous Live Tunables)
 
 ## Iter 120c (Feb 2026) — Ridicolous Live-Tunable Config Sliders
