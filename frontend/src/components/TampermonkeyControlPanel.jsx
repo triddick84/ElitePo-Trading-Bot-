@@ -247,8 +247,22 @@ const TampermonkeyControlPanel = () => {
           params,
         }),
       });
-      const data = await res.json();
-      setBacktestResult(data);
+      // Iter 122 — decode HTTP errors so the UI can show the actual reason
+      let data;
+      try {
+        data = await res.json();
+      } catch (parseErr) {
+        data = { success: false, error: `HTTP ${res.status} · unparseable response` };
+      }
+      if (!res.ok) {
+        setBacktestResult({
+          success: false,
+          error: data?.detail || data?.error || `HTTP ${res.status}`,
+          http_status: res.status,
+        });
+      } else {
+        setBacktestResult(data);
+      }
     } catch (err) {
       setBacktestResult({ success: false, error: err.message });
     } finally {
@@ -864,13 +878,30 @@ const TampermonkeyControlPanel = () => {
             )}
 
             {backtestResult && !backtestResult.success && (
-              <div className="text-xs text-rose-300" data-testid="backtest-error">
-                ✗ {backtestResult.error || 'backtest failed'}
-                {backtestResult.candles_loaded !== undefined && (
-                  <span className="ml-2 text-slate-400">
-                    (candles loaded: {backtestResult.candles_loaded})
+              <div
+                className={`text-xs p-2 rounded-md border ${
+                  backtestResult.http_status === 400
+                    ? 'bg-amber-950/40 border-amber-500/40 text-amber-200'
+                    : 'bg-rose-950/40 border-rose-500/40 text-rose-200'
+                }`}
+                data-testid="backtest-error"
+              >
+                <div className="flex items-start gap-2">
+                  <span className="text-lg leading-none">
+                    {backtestResult.http_status === 400 ? '⚠️' : '✗'}
                   </span>
-                )}
+                  <div className="flex-1">
+                    <div className="font-medium">
+                      {backtestResult.http_status === 400 ? 'Not backtestable' : 'Backtest failed'}
+                    </div>
+                    <div className="mt-0.5 opacity-90 leading-snug">{backtestResult.error}</div>
+                    {backtestResult.candles_loaded !== undefined && (
+                      <div className="mt-1 text-slate-400">
+                        Candles loaded for {backtestResult.asset}: <span className="font-mono">{backtestResult.candles_loaded}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
 

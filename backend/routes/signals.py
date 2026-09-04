@@ -720,6 +720,67 @@ async def get_latest_signal(
     try:
         # Iter 95 — Fallback to app-side active_target when caller omits symbol.
         # This is the fix for "TM fires on wrong asset when PO is on the wrong chart".
+        # Iter 122 — Bug 3 fix: if the active_target carries a direction (pushed
+        # by Elite Screener / Auto-Scan), SYNTHESIZE a signal directly from it.
+        # Previously the direction was persisted but never routed anywhere, so
+        # the TM script only saw regular async signals and the "Send to TM" flow
+        # was a no-op.
+        def _norm(a: str) -> str:
+            s = str(a or "").strip().upper()
+            if s.endswith("OTC") and not s.endswith("_OTC"):
+                s = s[:-3] + "_OTC"
+            return s
+
+        try:
+            _stored = await db.tampermonkey_settings.find_one({"_id": "default"}) or {}
+            _override = _stored.get("active_target")
+            if _override and isinstance(_override, dict):
+                _tgt_asset = _override.get("asset")
+                _tgt_dir = _override.get("direction")
+                _tgt_conf = _override.get("confidence")
+                _tgt_source = _override.get("source") or "screener"
+                _tgt_expires = _override.get("expires_at")
+                # Filter by asset if caller specified one; otherwise use target's asset
+                _asset_matches = (not symbol) or (
+                    symbol and _tgt_asset
+                    and _norm(symbol) == _norm(_tgt_asset)
+                )
+                # Check not expired (expires_at may be a datetime or ISO string)
+                _still_valid = True
+                if _tgt_expires:
+                    try:
+                        if isinstance(_tgt_expires, str):
+                            _exp_dt = datetime.fromisoformat(_tgt_expires.replace("Z", "+00:00"))
+                        else:
+                            _exp_dt = _tgt_expires
+                        if _exp_dt.tzinfo is None:
+                            _exp_dt = _exp_dt.replace(tzinfo=timezone.utc)
+                        _still_valid = datetime.now(timezone.utc) < _exp_dt
+                    except Exception:
+                        _still_valid = True  # be permissive if parse fails
+                if _tgt_asset and _tgt_dir and _asset_matches and _still_valid:
+                    # De-dup: same target should not fire twice — key on (asset+dir+set_at)
+                    _sig_id = f"routed_{_tgt_asset}_{_tgt_dir}_{_override.get('set_at','')}"
+                    _conf_pct = float(_tgt_conf) * 100 if _tgt_conf and _tgt_conf <= 1.0 else float(_tgt_conf or 0)
+                    _synth = {
+                        "id": _sig_id,
+                        "signal_id": _sig_id,
+                        "symbol": _norm(_tgt_asset),
+                        "asset": _norm(_tgt_asset),
+                        "direction": str(_tgt_dir).upper(),
+                        "confidence": round(_conf_pct, 1),
+                        "timeframe": str(_override.get("timeframe") or "1m"),
+                        "timestamp": _override.get("set_at") or datetime.now(timezone.utc).isoformat(),
+                        "strategy": f"routed_from_{_tgt_source}",
+                        "source": f"routed:{_tgt_source}",
+                        "elite_score": _override.get("elite_score"),
+                        "routed_by": _tgt_source,
+                    }
+                    logger.info(f"[/signals/latest] SYNTHESIZED from active_target: {_synth}")
+                    return {"success": True, "signal": _synth, "source": "active_target_routed"}
+        except Exception as _rte:
+            logger.debug(f"/signals/latest active_target routing failed: {_rte}")
+
         if not symbol:
             try:
                 _stored = await db.tampermonkey_settings.find_one({"_id": "default"}) or {}

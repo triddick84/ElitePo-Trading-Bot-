@@ -16,6 +16,35 @@
 import { CONFIG } from '../core/config.js';
 import { state } from '../core/state.js';
 import { log, warn, info, success } from '../core/logger.js';
+import { post as apiPost } from '../utils/api.js';
+
+// Iter 122 — Bug 2 diagnostic: post every auto-invert transition to the
+// backend so we have an audit trail when users report "it says it's working
+// but doesn't switch". Fire-and-forget; never blocks the trading path.
+function _logInvertEvent(event, asset, extra = {}) {
+  try {
+    const inv = state.inversion;
+    const lossStreak = state.stats.currentStreak < 0 ? Math.abs(state.stats.currentStreak) : 0;
+    const payload = {
+      event,
+      reason: (extra.reason || inv.reason || '').toString().slice(0, 200),
+      is_inverted: !!inv.isInverted,
+      auto_invert_enabled: !!state.autoInvertEnabled,
+      config_enabled: !!CONFIG.AUTO_INVERT_ENABLED,
+      manual_override: !!inv.manualOverride,
+      current_streak: state.stats.currentStreak || 0,
+      loss_streak: lossStreak,
+      threshold: CONFIG.INVERT_AFTER_CONSECUTIVE_LOSSES || 2,
+      inverted_trade_count: inv.invertedTradeCount || 0,
+      inverted_wins: inv.invertedWins || 0,
+      inverted_losses: inv.invertedLosses || 0,
+      asset: asset || null,
+      tm_version: (typeof GM_info !== 'undefined' && GM_info?.script?.version) || null,
+      blockers: extra.blockers || null,
+    };
+    apiPost('/tampermonkey/invert-events/log', payload).catch(() => {});
+  } catch (_e) { /* never throw from telemetry */ }
+}
 
 class SmartInvertEngine {
   constructor() {
@@ -59,10 +88,12 @@ class SmartInvertEngine {
     // Iter 113 — surface every guard so users can debug why it doesn't fire
     if (!CONFIG.AUTO_INVERT_ENABLED) {
       warn(`[AutoInvert] BLOCKED — CONFIG.AUTO_INVERT_ENABLED is false`);
+      _logInvertEvent('BLOCKED', asset, { reason: 'CONFIG.AUTO_INVERT_ENABLED=false', blockers: ['config_disabled'] });
       return;
     }
     if (!state.autoInvertEnabled) {
       warn(`[AutoInvert] BLOCKED — state.autoInvertEnabled is false (A-INV button OFF)`);
+      _logInvertEvent('BLOCKED', asset, { reason: 'state.autoInvertEnabled=false', blockers: ['user_toggle_off'] });
       return;
     }
 
@@ -70,6 +101,7 @@ class SmartInvertEngine {
     if (inv.manualOverride) {
       warn(`[AutoInvert] BLOCKED — manualOverride is true (user forced INVERT). ` +
            `Tap INVERT again to release manual lock.`);
+      _logInvertEvent('BLOCKED', asset, { reason: 'manualOverride=true', blockers: ['manual_override'] });
       return;
     }
 
@@ -83,6 +115,11 @@ class SmartInvertEngine {
     info(`[AutoInvert] check: lossStreak=${lossStreak} · threshold=${threshold} · ` +
          `isInverted=${inv.isInverted} · autoInvertEnabled=${state.autoInvertEnabled} · ` +
          `currentStreak=${state.stats.currentStreak}`);
+    // Iter 122 — audit every evaluation so users can prove the engine is
+    // actually being called after each loss.
+    _logInvertEvent('EVALUATED', asset, {
+      reason: `lossStreak=${lossStreak}/${threshold}`,
+    });
 
     if (!inv.isInverted) {
       // Not inverted: invert as soon as the threshold is hit, no matter what.
@@ -147,6 +184,7 @@ class SmartInvertEngine {
     inv.manualOverride = false;
 
     warn(`INVERT ACTIVATED: ${reason}`);
+    _logInvertEvent('ACTIVATED', null, { reason });
     this._notifyChange();
   }
 
@@ -165,6 +203,7 @@ class SmartInvertEngine {
     inv.manualOverride = false;
 
     info(`INVERT DEACTIVATED: ${reason}`);
+    _logInvertEvent('DEACTIVATED', null, { reason });
     this._notifyChange();
   }
 

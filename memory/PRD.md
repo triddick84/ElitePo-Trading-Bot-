@@ -1,3 +1,66 @@
+# AI's Elite PO Traders Bot — Feb 2026 (Iter 122: Three-Bug Fix)
+
+## Iter 122 (Feb 2026) — Bug Fixes: Backtest UX · Auto-Invert Audit · Elite-Screener Routing
+
+### User bugs
+> 1. On mobile auto-trade page, the backtesting feature errors out a lot with "backtest failed" errors
+> 2. Tampermonkey script auto-invert on both preview and production won't switch over on losses — the INVERT button always stays on user's on/off selection
+> 3. Elite Screener shows a button to send trade signal to Tampermonkey but when pressed it doesn't send anything
+
+### Root causes found
+1. **Backtest** — Two failure modes surfaced as the same generic "failed" error:
+   - Many strategies exposed in the 1m/5s picker (`triple_confirmation_1m`, `holly_cross`, `keltner_macd`, etc.) route through the LIVE signal pipeline and don't implement `generate_signal(df)` → `/strategies/backtest` returned a 404 "not registered" — surfaced as red "backtest failed".
+   - Some assets (e.g. `BTCUSD_OTC`) have zero candles in the local DB → returned "insufficient historical candles" — also surfaced as red "backtest failed".
+2. **Auto-invert** — The engine logic is intact but there was NO server-side audit trail. Users couldn't tell whether the engine was firing but the UI wasn't reflecting it, whether it was blocked, or whether `evaluateInversion` wasn't being called at all.
+3. **Elite Screener** — The POST to `/api/tampermonkey/active-target` correctly stored `direction`/`confidence`/`elite_score` in `db.tampermonkey_settings.active_target`, but:
+   - The GET endpoint **stripped those fields out** (only returned asset/timeframe/chart_type).
+   - `/api/signals/latest` (the endpoint the TM script polls for the trade) read only the `asset` from active_target and then re-queried `db.trading_signals` for a separate signal — the pushed direction was thrown away.
+
+### Fixes shipped
+1. **Backtest UX (Bug 1)**:
+   - `/strategies/backtest` returns 400 with a clear message for picker-only strategies, pointing users to `ridicolous_breakout_prediction` / `algo_trend_momentum` / `algo_mean_reversion` / `algo_volatility_regime` that DO support backtest.
+   - Missing-candles error now says: "Not enough historical candles for BTCUSD_OTC @ 1m. Loaded 0, need at least 70. Try a different asset (EURUSD_OTC / GBPUSD_OTC / AUDCAD_OTC usually have the most data), a shorter day window, or a coarser timeframe."
+   - Frontend renders 400 errors as **amber** (not-backtestable) and other errors as **rose** (real failure) with a clean icon + message + candles-loaded metadata.
+2. **Auto-invert audit (Bug 2)**:
+   - New backend routes: `POST /api/tampermonkey/invert-events/log`, `GET /api/tampermonkey/invert-events/recent`, `GET /api/tampermonkey/invert-events/summary`. Backed by `db.tm_invert_events`.
+   - Tampermonkey `smartInvert.js` now posts an event on every ACTIVATED / DEACTIVATED / BLOCKED / EVALUATED transition. Payload includes reason, is_inverted, auto_invert_enabled, config_enabled, manual_override, current_streak, loss_streak, threshold, inverted_trade_count, asset, tm_version, and any blocker labels. Fire-and-forget — never blocks the trading path.
+   - TM script version bumped `8.143.0 → 8.144.0`.
+3. **Elite Screener routing (Bug 3)**:
+   - GET `/api/tampermonkey/active-target` now propagates `direction`, `confidence`, `elite_score`, `source_route` (renamed from `source` to avoid clobbering the top-level `source` field), and `expires_at` in the response.
+   - `/api/signals/latest` now **synthesizes** a signal directly from `active_target` when `direction` is set and the target isn't expired, marking the response `source: "active_target_routed"`. The synthesized signal carries `strategy: "routed_from_elite_screener"`, `routed_by`, `elite_score`, and de-dup ID keyed on `set_at`.
+
+### Tests — 9/9 pass in `test_iter122_three_bug_fixes.py`
+- Bug 1: unregistered strategy → 400 with helpful message ✓
+- Bug 1: missing candles → clear guidance text ✓
+- Bug 1: registered strategy still works ✓
+- Bug 2: log + summary endpoints round-trip ✓
+- Bug 2: recent events ordered DESC ✓
+- Bug 3: GET active-target exposes all trade-instruction fields ✓
+- Bug 3: /signals/latest synthesizes from active_target ✓
+- Bug 3: falls back correctly when no override ✓
+- Bug 3: routed signal expires correctly after TTL ✓
+
+Full Iter 119-122 regression: **59/59 pass**.
+
+### Files touched
+- **MOD** `backend/routes/strategy_backtest.py` (400 message + candles guidance)
+- **MOD** `backend/routes/signals.py` (active_target synthesis path with inline `_norm`)
+- **MOD** `backend/server.py` (GET active-target exposes direction+conf+elite_score+source_route; router registered)
+- **NEW** `backend/routes/invert_events.py` (POST log · GET recent · GET summary)
+- **MOD** `frontend/src/components/TampermonkeyControlPanel.jsx` (rich error UX + HTTP status handling)
+- **MOD** `tampermonkey-src/src/trading/smartInvert.js` (`_logInvertEvent` fire-and-forget on every state transition)
+- **MOD** `tampermonkey-src/version.txt` → 8.144.0 (compiled to `dist/pocket-option-auto-trader.user.js`)
+- **NEW** `backend/tests/test_iter122_three_bug_fixes.py` (9 tests)
+- **FIX** `backend/tests/test_iter120b_backtest_runner.py` (updated to expect 400 instead of 404)
+
+### User deploy note
+Redeploy from Emergent UI to push the fixes live. TM script version bumped — **users must hard-refresh Tampermonkey or click "Check for updates"** to pull v8.144.0.
+
+### How to verify Bug 2 in the wild
+Once on v8.144.0, take 2 losing trades. Then GET `/api/tampermonkey/invert-events/recent` — you should see EVALUATED entries for each loss and an ACTIVATED event when the streak crosses threshold. If no events appear, the TM script isn't reaching the backend at all. If BLOCKED events appear with `reason: "state.autoInvertEnabled=false"`, tap the A-INV button to enable it. If ACTIVATED appears but the UI doesn't reflect it, the display layer needs debugging.
+
+---
+
 # AI's Elite PO Traders Bot — Feb 2026 (Iter 121: Latency & Load)
 
 ## Iter 121 (Feb 2026) — Perf Overhaul (TM Latency · Dashboard Load · Backtest Speed · DB)

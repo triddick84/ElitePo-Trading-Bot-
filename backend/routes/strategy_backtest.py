@@ -263,8 +263,18 @@ async def backtest_strategy(payload: BacktestPayload):
 
     base_strategy = strategy_registry.get_strategy(payload.strategy_id)
     if base_strategy is None:
-        raise HTTPException(status_code=404,
-                            detail=f"strategy '{payload.strategy_id}' not registered")
+        # Iter 122 — Friendly message for picker-only strategies. Many 1m/5s
+        # picker entries route to the LIVE signal pipeline (no `generate_signal`),
+        # so they can't be walked chronologically.
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Strategy '{payload.strategy_id}' does not support offline backtesting. "
+                f"It runs through the live signal pipeline only. "
+                f"Try 'ridicolous_breakout_prediction', 'algo_trend_momentum', "
+                f"'algo_mean_reversion', or 'algo_volatility_regime' — those all support backtesting."
+            ),
+        )
 
     # Iter 120c — When per-run params are supplied for Ridicolous, use a
     # fresh instance so we don't mutate the live singleton used by the
@@ -295,7 +305,12 @@ async def backtest_strategy(payload: BacktestPayload):
     if not candles or len(candles) < payload.min_history + 10:
         return {
             "success": False,
-            "error": "insufficient historical candles",
+            "error": (
+                f"Not enough historical candles for {payload.asset} @ {payload.timeframe}. "
+                f"Loaded {len(candles)}, need at least {payload.min_history + 10}. "
+                f"Try a different asset (EURUSD_OTC / GBPUSD_OTC / AUDCAD_OTC usually have the most data), "
+                f"a shorter day window, or a coarser timeframe."
+            ),
             "candles_loaded": len(candles),
             "asset": payload.asset,
             "timeframe": payload.timeframe,

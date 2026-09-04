@@ -3450,6 +3450,17 @@ async def get_tampermonkey_active_target():
                 "expiry_seconds": int(override.get("expiry_seconds") or _tf_to_expiry_seconds(tf)),
                 "chart_type": override.get("chart_type") or "japanese_candles",
             }
+            # Iter 122 — Bug 3 fix: propagate optional trade-instruction fields
+            # so downstream (TM script + /signals/latest synthesis) can see them
+            # and actually FIRE the trade routed by Elite Screener / Auto-Scan.
+            for _fld in ("direction", "confidence", "elite_score", "source_route", "expires_at"):
+                _v = override.get(_fld if _fld != "source_route" else "source")
+                if _v is not None:
+                    # Rename `source` → `source_route` in the response to avoid
+                    # clobbering the top-level `source` field which describes
+                    # WHERE the override came from (override/config/fallback).
+                    _key = "source_route" if _fld == "source_route" else _fld
+                    result[_key] = _v
             await active_target_cache.set("default", result)
             return result
 
@@ -4210,6 +4221,7 @@ from routes.screener import router as screener_router
 from routes.auto_scan import router as auto_scan_router
 from routes.ai_enhancements import router as ai_enhancements_router
 from routes.strategy_backtest import router as strategy_backtest_router
+from routes.invert_events import router as invert_events_router
 
 api_router.include_router(strategies_router)
 api_router.include_router(signals_router)
@@ -4232,6 +4244,7 @@ api_router.include_router(screener_router)
 api_router.include_router(auto_scan_router)
 api_router.include_router(ai_enhancements_router)
 api_router.include_router(strategy_backtest_router)
+api_router.include_router(invert_events_router)
 
 app.include_router(api_router)
 

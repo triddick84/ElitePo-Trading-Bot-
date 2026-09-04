@@ -70,6 +70,8 @@ async def test_ridicolous_backtest_returns_full_shape():
 
 @pytest.mark.asyncio
 async def test_backtest_unknown_strategy_returns_404():
+    """Iter 122: was 404, now 400 with a friendly message pointing users to
+    backtestable strategies."""
     async with httpx.AsyncClient(timeout=15.0) as c:
         r = await c.post(f"{API}/strategies/backtest", json={
             "strategy_id": "nonexistent_strategy_xyz",
@@ -77,7 +79,8 @@ async def test_backtest_unknown_strategy_returns_404():
             "timeframe": "1m",
             "days": 30,
         })
-    assert r.status_code == 404
+    assert r.status_code == 400
+    assert "does not support offline backtesting" in r.json()["detail"]
 
 
 @pytest.mark.asyncio
