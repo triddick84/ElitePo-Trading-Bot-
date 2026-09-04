@@ -1,3 +1,56 @@
+# AI's Elite PO Traders Bot — Feb 2026 (Iter 120: Ridicolous Breakout Prediction)
+
+## Iter 120 (Feb 2026) — Ridicolous Breakout Prediction (1m Pine-Script Port)
+
+### User request
+> "I have uploaded a txt file that has a pinescript code for my indicator used in tradingview, I need you to generate a strategy under the 1 min timeframe strategies using this pinescript uploaded."
+
+### Source
+`Ridiculous Pinescript.txt` — "Ridicolous Breakout Predication v2.2" (© Ridicolous Trader, MPL 2.0). TradingView v6 indicator built for 1-min candle / 2-min trade / 1:55-min entry.
+
+### Strategy math (port)
+For every historical bar, condition on the LAST closed candle's color and record two events:
+- `hh_i`: current candle made a new high ≥ `prev_high + step*i`
+- `ll_i`: current candle made a new low ≤ `prev_low - step*i`
+
+Where `step = close * (perc/100)` (default 1%). Build two 5-level probability tables (green_bucket, red_bucket). At bar close:
+
+```
+bias = (max(hh0, ll0) == hh0) ? BULLISH(CALL) : BEARISH(PUT)
+confidence = winning_pct   ∈ [0, 100]
+```
+
+Same test regardless of the last candle color — the color just selects which bucket to read.
+
+### What shipped
+- **NEW** `/app/backend/strategies/strategy_ridicolous_breakout.py` — `RidicolousBreakoutPrediction` class + `RIDICOLOUS_STRATEGIES` singleton. Tunables: `perc=1.0`, `levels=5`, `min_history=60`, `min_confidence=55.0`.
+- Registered in `strategy_registry.py` (loads at boot) and tagged NEUTRAL family in `adx_regime_gate.py` (any regime allowed since it's a pure statistical prior).
+- Added to `strategy_selection_service.py` 1m picker as `🎯 Ridicolous Breakout Prediction [Iter 120]` with 68% target win-rate + BETA badge.
+- Emits standard signal contract (`direction`, `confidence`, `reason`, `indicators`, `meta`). `indicators` surfaces `last_candle_color`, `step_size`, both 5-level pyramid arrays (`hh_pct_pyramid`, `ll_pct_pyramid`), and sample size for transparency in the AI tab.
+
+### Tests — 9/9 pass in `test_iter120_ridicolous_breakout.py`
+- Registry load + executable via `execute_strategy`
+- Full signal-contract shape
+- Green-prior synthetic dataset with last=GREEN → CALL
+- Red-prior synthetic dataset with last=RED → PUT
+- Insufficient history + missing OHLC → NEUTRAL
+- 1m picker endpoint exposes the new strategy id
+- Random-walk data + 90% min-confidence gate → NEUTRAL (no false-fire)
+
+### Files touched
+- **NEW** `backend/strategies/strategy_ridicolous_breakout.py`
+- **MOD** `backend/strategy_registry.py` (load block for RIDICOLOUS_STRATEGIES)
+- **MOD** `backend/strategy_selection_service.py` (1m picker entry)
+- **MOD** `backend/adx_regime_gate.py` (STRATEGY_FAMILY tag)
+- **NEW** `backend/tests/test_iter120_ridicolous_breakout.py` (9 tests)
+
+### How to use
+1. Open the app → Strategy picker (1m timeframe) → select "🎯 Ridicolous Breakout Prediction [Iter 120]"
+2. The strategy needs ≥ 60 candles of history and 55%+ historical winning probability to fire — otherwise NEUTRAL
+3. Redeploy from Emergent UI to push to production. TM script needs no changes.
+
+---
+
 # AI's Elite PO Traders Bot — Feb 2026 (Iter 119: SOTA AI Accuracy Upgrade)
 
 ## Iter 119 (Feb 2026) — SOTA AI Upgrade: Real Features · Walk-Forward CV · Isotonic Calibration · EV Gate · Shadow Mode

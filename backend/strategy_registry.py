@@ -236,6 +236,19 @@ class StrategyRegistry:
             except Exception as e:
                 logger.warning(f"Could not load Algo Strategy Pack: {e}")
 
+            # Iter 120 — Ridicolous Breakout Prediction (1m Pine-script port)
+            try:
+                from strategies.strategy_ridicolous_breakout import RIDICOLOUS_STRATEGIES
+                for _sid, _sobj in RIDICOLOUS_STRATEGIES.items():
+                    self.strategies[_sid] = _sobj
+                logger.info(
+                    "✅ Loaded Ridicolous Breakout Prediction (%d strategy): %s",
+                    len(RIDICOLOUS_STRATEGIES),
+                    ", ".join(RIDICOLOUS_STRATEGIES.keys()),
+                )
+            except Exception as e:
+                logger.warning(f"Could not load Ridicolous Breakout: {e}")
+
             # Legacy strategies (keep for backward compatibility)
             self.strategies['enhanced_rsi_bb_volume'] = None  # Placeholder
             self.strategies['enhanced_stoch_macd_pattern'] = None  # Placeholder

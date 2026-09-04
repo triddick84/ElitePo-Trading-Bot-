@@ -56,6 +56,7 @@ STRATEGY_FAMILY: Dict[str, str] = {
     "candlestick_bible": "MEAN_REV",
     "heikin_fractal": "MEAN_REV",
     "keltner_macd": "MEAN_REV",
+    "ridicolous_breakout_prediction": "NEUTRAL",  # Iter 120 — statistical, works in any regime
     # Confluence / hybrid — always allowed
     "triple_confluence": "NEUTRAL",
     "multi_timeframe": "NEUTRAL",
