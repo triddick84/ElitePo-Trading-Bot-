@@ -1,3 +1,50 @@
+# AI's Elite PO Traders Bot — Feb 2026 (Iter 120b: Strategy Backtest Runner)
+
+## Iter 120b (Feb 2026) — Strategy Backtest Runner
+
+### User request
+> "Backtest Runner: Add a 'Backtest last 30 days' button to the strategy picker so you can compare the Ridicolous hit-rate vs the TradingView table before flipping it live."
+
+### What shipped
+- **New endpoint `POST /api/strategies/backtest`** (`backend/routes/strategy_backtest.py`) — walks any registered strategy chronologically over the last N days of candles (default 30) for a given asset+timeframe. For each CALL/PUT signal, scores against the NEXT bar close (WIN if direction agrees with the move). Returns:
+  - `signals: {total, calls, puts, neutrals}`
+  - `wins`, `losses`, `sample_size`, `win_rate`, `sim_pnl` (@85% payout)
+  - `avg_confidence`
+  - `confidence_buckets`: WR broken out by 50-60/60-70/70-80/80-90/90-100 bands
+  - `strategy_specific.ridicolous_table`: full 5-level green/red new-high/new-low probability table (mirrors the on-chart TradingView table)
+  - Payload knobs: `days ∈ [1,365]`, `max_candles ≤ 20000`, `stride` (evaluate every Nth candle for speed), `payout`, `min_history`.
+- **Frontend widget** in `TampermonkeyControlPanel.jsx` — a `🧪 Backtest last [N] days on [ASSET]` control strip is now the first thing on the Trading Strategy card, above the timeframe filter. Clicking "Run backtest" fires the endpoint for the currently-selected strategy and inline-renders:
+  - Headline metrics row (sample size, WR, sim P&L, CALL/PUT counts, avg conf)
+  - 5-column confidence-bucket table (color-coded WR ≥ 55.6% break-even)
+  - Ridicolous probability table (green_total / red_total counts + 5 levels) — one-click apples-to-apples check against the TradingView WIN/LOSS/Profitability panel
+
+### Live result verified
+Running Ridicolous · EURUSD_OTC · 30d in preview:
+- 141 resolved trades · WR 47.5% · Sim P&L -17.05 @ 85% · 76 calls / 68 puts / 15 neutrals · avg conf 62.8%
+- **70-80% bucket hit 57% WR** (n=23) — clear evidence higher-confidence signals filter better
+- Probability table: L0 → G↑ 66.12%, G↓ 38.37%, R↑ 43.15%, R↓ 62.9% — cross-checks directly against your TradingView chart
+
+### Tests — 4/4 pass in `test_iter120b_backtest_runner.py`
+- Full response shape (signals sum, wins+losses ≤ resolved, Ridicolous table shape)
+- Unknown strategy → 404
+- days > 365 → 422
+- Confidence bucket sums (wins+losses == n, 0 ≤ WR ≤ 1)
+
+Full Iter 120 (base + backtest): **13/13 pass**.
+
+### Files touched
+- **NEW** `backend/routes/strategy_backtest.py` (~230 lines: candle loader + simulator + Ridicolous stats helper + endpoint)
+- **MOD** `backend/server.py` (register `strategy_backtest_router`)
+- **MOD** `frontend/src/components/TampermonkeyControlPanel.jsx` (backtest state + `runBacktest` handler + `strategy-backtest-panel` UI block)
+- **NEW** `backend/tests/test_iter120b_backtest_runner.py` (4 tests)
+
+### How to use
+1. Mobile Auto-Trader page → Trading Strategy card → pick a strategy (e.g. Ridicolous Breakout Prediction)
+2. Above the timeframe filter, adjust days (default 30) + asset (default EURUSD_OTC) → click **Run backtest**
+3. Compare the printed win-rate and Ridicolous probability table against your TradingView chart's WIN/LOSS/Profitability panel — if they line up, flip the strategy live
+
+---
+
 # AI's Elite PO Traders Bot — Feb 2026 (Iter 120: Ridicolous Breakout Prediction)
 
 ## Iter 120 (Feb 2026) — Ridicolous Breakout Prediction (1m Pine-Script Port)

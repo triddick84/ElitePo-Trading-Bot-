@@ -4191,6 +4191,7 @@ from routes.signal_prewarm import router as signal_prewarm_router
 from routes.screener import router as screener_router
 from routes.auto_scan import router as auto_scan_router
 from routes.ai_enhancements import router as ai_enhancements_router
+from routes.strategy_backtest import router as strategy_backtest_router
 
 api_router.include_router(strategies_router)
 api_router.include_router(signals_router)
@@ -4212,6 +4213,7 @@ api_router.include_router(signal_prewarm_router)
 api_router.include_router(screener_router)
 api_router.include_router(auto_scan_router)
 api_router.include_router(ai_enhancements_router)
+api_router.include_router(strategy_backtest_router)
 
 app.include_router(api_router)
 

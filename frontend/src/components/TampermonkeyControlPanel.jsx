@@ -36,6 +36,11 @@ const TampermonkeyControlPanel = () => {
   // Iter 94 — rich Force-Generate result modal
   const [forceGenResult, setForceGenResult] = useState(null);
   const [forceGenModalOpen, setForceGenModalOpen] = useState(false);
+  // Iter 120 — Strategy backtest runner
+  const [backtestRunning, setBacktestRunning] = useState(false);
+  const [backtestResult, setBacktestResult] = useState(null);
+  const [backtestAsset, setBacktestAsset] = useState('EURUSD_OTC');
+  const [backtestDays, setBacktestDays] = useState(30);
   
   // Win/Loss Stats - v6.6.0
   const [stats, setStats] = useState({
@@ -153,6 +158,41 @@ const TampermonkeyControlPanel = () => {
       fetchStats();
     } catch (error) {
       console.error('Failed to reset stats:', error);
+    }
+  };
+
+  // Iter 120 — Run a strategy backtest against the last N days of candles
+  const runBacktest = async () => {
+    if (!settings.selected_strategy || settings.selected_strategy === 'auto') {
+      alert('Pick a specific strategy first — "Auto" cannot be backtested.');
+      return;
+    }
+    try {
+      setBacktestRunning(true);
+      setBacktestResult(null);
+      // Match candle timeframe to the strategy's declared timeframe when possible
+      const strat = strategies.find(s => s.id === settings.selected_strategy);
+      const tf = (strat?.timeframes || ['1m'])[0] || '1m';
+      const res = await fetch(`${API}/strategies/backtest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          strategy_id: settings.selected_strategy,
+          asset: backtestAsset || 'EURUSD_OTC',
+          timeframe: tf,
+          days: Number(backtestDays) || 30,
+          max_candles: 3000,
+          min_history: 60,
+          payout: 0.85,
+          stride: 3,
+        }),
+      });
+      const data = await res.json();
+      setBacktestResult(data);
+    } catch (err) {
+      setBacktestResult({ success: false, error: err.message });
+    } finally {
+      setBacktestRunning(false);
     }
   };
 
@@ -430,6 +470,174 @@ const TampermonkeyControlPanel = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {/* Iter 120 — Backtest runner */}
+          <div className="mb-4 p-3 rounded-lg bg-slate-900/70 border border-slate-700 space-y-2" data-testid="strategy-backtest-panel">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-slate-300 font-medium">🧪 Backtest last</span>
+              <input
+                type="number" min="1" max="180"
+                value={backtestDays}
+                onChange={(e) => setBacktestDays(e.target.value)}
+                className="w-14 text-xs bg-slate-800 border border-slate-600 rounded px-1 py-0.5 text-white"
+                data-testid="backtest-days-input"
+              />
+              <span className="text-xs text-slate-400">days on</span>
+              <input
+                type="text"
+                value={backtestAsset}
+                onChange={(e) => setBacktestAsset(e.target.value.toUpperCase())}
+                className="w-32 text-xs bg-slate-800 border border-slate-600 rounded px-2 py-0.5 text-white font-mono"
+                placeholder="EURUSD_OTC"
+                data-testid="backtest-asset-input"
+              />
+              <Button
+                size="sm"
+                onClick={runBacktest}
+                disabled={backtestRunning || !settings.selected_strategy || settings.selected_strategy === 'auto'}
+                className="bg-purple-600 hover:bg-purple-700 h-7 text-xs"
+                data-testid="run-backtest-btn"
+              >
+                {backtestRunning ? 'Running…' : 'Run backtest'}
+              </Button>
+              {settings.selected_strategy && settings.selected_strategy !== 'auto' && (
+                <span className="text-[11px] text-slate-500 truncate">
+                  Strategy: <span className="text-purple-300 font-mono">{settings.selected_strategy}</span>
+                </span>
+              )}
+            </div>
+
+            {backtestResult && !backtestResult.success && (
+              <div className="text-xs text-rose-300" data-testid="backtest-error">
+                ✗ {backtestResult.error || 'backtest failed'}
+                {backtestResult.candles_loaded !== undefined && (
+                  <span className="ml-2 text-slate-400">
+                    (candles loaded: {backtestResult.candles_loaded})
+                  </span>
+                )}
+              </div>
+            )}
+
+            {backtestResult && backtestResult.success && (
+              <div className="mt-2 text-xs text-slate-200 space-y-2" data-testid="backtest-result">
+                <div className="flex flex-wrap gap-3">
+                  <div>
+                    <span className="text-slate-400">Sample:</span>{' '}
+                    <span className="text-white font-mono">{backtestResult.sample_size}</span>
+                    <span className="text-slate-500 ml-1">
+                      / {backtestResult.candles_used} candles
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400">WR:</span>{' '}
+                    <span
+                      className={`font-mono font-bold ${
+                        (backtestResult.win_rate || 0) >= 0.556
+                          ? 'text-emerald-300'
+                          : 'text-rose-300'
+                      }`}
+                      data-testid="backtest-winrate"
+                    >
+                      {backtestResult.win_rate != null
+                        ? `${(backtestResult.win_rate * 100).toFixed(1)}%`
+                        : '—'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400">Sim P&L:</span>{' '}
+                    <span
+                      className={`font-mono font-bold ${
+                        (backtestResult.sim_pnl || 0) >= 0 ? 'text-emerald-300' : 'text-rose-300'
+                      }`}
+                      data-testid="backtest-pnl"
+                    >
+                      {(backtestResult.sim_pnl >= 0 ? '+' : '') + backtestResult.sim_pnl}
+                    </span>
+                    <span className="text-slate-500 ml-1">
+                      @ {(backtestResult.payout_used * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400">CALL/PUT:</span>{' '}
+                    <span className="text-emerald-300 font-mono">{backtestResult.signals?.calls}</span>
+                    {' / '}
+                    <span className="text-rose-300 font-mono">{backtestResult.signals?.puts}</span>
+                    <span className="text-slate-500 ml-1">
+                      ({backtestResult.signals?.neutrals} skip)
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400">Avg conf:</span>{' '}
+                    <span className="text-cyan-300 font-mono">
+                      {backtestResult.avg_confidence != null ? `${backtestResult.avg_confidence}%` : '—'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Confidence buckets */}
+                {backtestResult.confidence_buckets?.some(b => b.n > 0) && (
+                  <div>
+                    <p className="text-slate-400 mt-1 mb-1">Win-rate by confidence bucket</p>
+                    <div className="grid grid-cols-5 gap-1">
+                      {backtestResult.confidence_buckets.map(b => (
+                        <div
+                          key={b.bucket}
+                          className={`p-1 rounded text-center ${
+                            b.n === 0 ? 'bg-slate-800/40 text-slate-500'
+                              : (b.win_rate || 0) >= 0.556 ? 'bg-emerald-900/40 text-emerald-300'
+                                : 'bg-rose-900/30 text-rose-300'
+                          }`}
+                          data-testid={`bt-bucket-${b.bucket}`}
+                        >
+                          <div className="text-[10px] opacity-70">{b.bucket}%</div>
+                          <div className="font-mono text-xs">
+                            {b.win_rate != null ? `${(b.win_rate * 100).toFixed(0)}%` : '—'}
+                          </div>
+                          <div className="text-[9px] opacity-60">n={b.n}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Ridicolous — historical probability table */}
+                {backtestResult.strategy_specific?.ridicolous_table?.probability_table && (
+                  <div>
+                    <p className="text-slate-400 mt-2 mb-1">
+                      🎯 Ridicolous probability table · step {backtestResult.strategy_specific.ridicolous_table.step_pct}% ·
+                      green {backtestResult.strategy_specific.ridicolous_table.green_total} /
+                      red {backtestResult.strategy_specific.ridicolous_table.red_total}
+                    </p>
+                    <table className="w-full text-[11px] border-collapse" data-testid="ridicolous-table">
+                      <thead>
+                        <tr className="text-slate-400 border-b border-slate-700">
+                          <th className="text-left py-1 pr-2">Lvl</th>
+                          <th className="text-right px-2">G↑ new-high</th>
+                          <th className="text-right px-2">G↓ new-low</th>
+                          <th className="text-right px-2">R↑ new-high</th>
+                          <th className="text-right px-2">R↓ new-low</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {backtestResult.strategy_specific.ridicolous_table.probability_table.map(row => (
+                          <tr key={row.level} className="border-b border-slate-800">
+                            <td className="py-0.5 pr-2 text-slate-400">{row.level}</td>
+                            <td className="text-right px-2 text-emerald-300 font-mono">{row.green_new_high_pct}%</td>
+                            <td className="text-right px-2 text-rose-300 font-mono">{row.green_new_low_pct}%</td>
+                            <td className="text-right px-2 text-emerald-300 font-mono">{row.red_new_high_pct}%</td>
+                            <td className="text-right px-2 text-rose-300 font-mono">{row.red_new_low_pct}%</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <p className="text-[10px] text-slate-500 mt-1">
+                      Compare these values against the WIN/LOSS/Profitability table in your TradingView chart.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Timeframe filter row */}
           <div className="flex flex-wrap gap-2 mb-4" data-testid="strategy-tf-filter-row">
             {['all', '5s', '15s', '30s', '1m', '2m', '3m', '5m'].map(tf => (
