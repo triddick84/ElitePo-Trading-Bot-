@@ -65,14 +65,38 @@ const TampermonkeyConnectionDashboard = () => {
       }
     };
     load();
-    const iv = setInterval(() => load(), 4000);
-    return () => { cancelled = true; clearInterval(iv); };
+    // Iter 121 — pause polling when tab is hidden
+    let iv = null;
+    const start = () => { if (iv == null) iv = setInterval(() => load(), 4000); };
+    const stop = () => { if (iv != null) { clearInterval(iv); iv = null; } };
+    const onVis = () => {
+      if (document.visibilityState === 'visible') { load(); start(); }
+      else stop();
+    };
+    if (document.visibilityState === 'visible') start();
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      cancelled = true;
+      stop();
+      document.removeEventListener('visibilitychange', onVis);
+    };
   }, []);
 
-  // ---- 1-second ticker for "N seconds ago" display ----
+  // ---- 1-second ticker for "N seconds ago" display (pauses on tab hide) ----
   useEffect(() => {
-    const iv = setInterval(() => setTick((t) => t + 1), 1000);
-    return () => clearInterval(iv);
+    let iv = null;
+    const start = () => { if (iv == null) iv = setInterval(() => setTick((t) => t + 1), 1000); };
+    const stop = () => { if (iv != null) { clearInterval(iv); iv = null; } };
+    const onVis = () => {
+      if (document.visibilityState === 'visible') start();
+      else stop();
+    };
+    if (document.visibilityState === 'visible') start();
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      stop();
+      document.removeEventListener('visibilitychange', onVis);
+    };
   }, []);
 
   // Request notification permission once

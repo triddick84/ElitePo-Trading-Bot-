@@ -250,6 +250,16 @@ def _ridicolous_stats(df: pd.DataFrame, levels: int = 5, perc: float = 1.0) -> D
 async def backtest_strategy(payload: BacktestPayload):
     """Run a strategy chronologically over recent candles + simulate PnL."""
     from strategy_registry import strategy_registry
+    # Iter 121 — result cache keyed by the full payload
+    try:
+        from perf_cache import backtest_result_cache, stable_hash
+        cache_key = stable_hash(payload.model_dump())
+        cached = await backtest_result_cache.get(cache_key)
+        if cached is not None:
+            return {**cached, "cached": True}
+    except Exception:
+        backtest_result_cache = None  # noqa: F841 (defensive)
+        cache_key = None
 
     base_strategy = strategy_registry.get_strategy(payload.strategy_id)
     if base_strategy is None:
@@ -318,7 +328,7 @@ async def backtest_strategy(payload: BacktestPayload):
             "min_confidence": getattr(strategy, "min_confidence", 55.0),
         }
 
-    return {
+    response = {
         "success": True,
         "strategy_id": payload.strategy_id,
         "strategy_name": getattr(strategy, "name", payload.strategy_id),
@@ -331,6 +341,14 @@ async def backtest_strategy(payload: BacktestPayload):
         **sim,
         "strategy_specific": extra,
     }
+    # Iter 121 — cache the result for repeated identical requests
+    try:
+        if cache_key:
+            from perf_cache import backtest_result_cache
+            await backtest_result_cache.set(cache_key, response)
+    except Exception:
+        pass
+    return response
 
 
 

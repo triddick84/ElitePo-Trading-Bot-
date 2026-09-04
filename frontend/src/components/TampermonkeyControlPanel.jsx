@@ -169,15 +169,42 @@ const TampermonkeyControlPanel = () => {
     fetchStats();
     fetchScriptVersion();
     fetchRidicolousConfig();
-    
-    // Poll for updates every 5 seconds
-    const interval = setInterval(() => {
-      fetchSettings();
-      fetchStatus();
-      fetchStats();
-    }, 5000);
-    
-    return () => clearInterval(interval);
+
+    // Iter 121 — smart poll: 8 s interval, paused when the tab is hidden.
+    // Cuts API load ~40% and pauses entirely when user is on another tab.
+    let interval = null;
+    const start = () => {
+      if (interval) return;
+      interval = setInterval(() => {
+        fetchSettings();
+        fetchStatus();
+        fetchStats();
+      }, 8000);
+    };
+    const stop = () => {
+      if (interval) {
+        clearInterval(interval);
+        interval = null;
+      }
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        // refresh immediately then resume polling
+        fetchSettings();
+        fetchStatus();
+        fetchStats();
+        start();
+      } else {
+        stop();
+      }
+    };
+    if (document.visibilityState === 'visible') start();
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      stop();
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [fetchSettings, fetchStatus, fetchStrategies, fetchStats, fetchScriptVersion, fetchRidicolousConfig]);
 
   // Reset stats

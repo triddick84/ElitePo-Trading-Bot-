@@ -3423,11 +3423,18 @@ async def get_tampermonkey_active_target():
     Tampermonkey polls this to know what to fire trades on — INDEPENDENT of
     whatever asset/timeframe PocketOption's chart is currently displaying.
 
+    Iter 121 — Wrapped in a 750 ms in-process TTL cache since this endpoint
+    is the TM script's hottest call (polled every timing beat).
+
     Precedence:
       1. `tampermonkey_settings.active_target` (explicit override)
       2. `/api/config`.selected_assets[0] + selected_timeframe
       3. `EURUSD_OTC` / `1m` fallback
     """
+    from perf_cache import active_target_cache
+    cached = await active_target_cache.get("default")
+    if cached is not None:
+        return cached
     try:
         # 1. Explicit override
         stored = await db.tampermonkey_settings.find_one({"_id": "default"}) or {}
@@ -3435,7 +3442,7 @@ async def get_tampermonkey_active_target():
         if override and isinstance(override, dict) and override.get("asset"):
             asset = _normalize_asset(override["asset"])
             tf = str(override.get("timeframe") or "1m")
-            return {
+            result = {
                 "success": True,
                 "source": "override",
                 "asset": asset,
@@ -3443,6 +3450,8 @@ async def get_tampermonkey_active_target():
                 "expiry_seconds": int(override.get("expiry_seconds") or _tf_to_expiry_seconds(tf)),
                 "chart_type": override.get("chart_type") or "japanese_candles",
             }
+            await active_target_cache.set("default", result)
+            return result
 
         # 2. Fall back to /api/config
         cfg = await db.trading_configurations.find_one({"user_id": "default_user"}) or {}
@@ -3451,7 +3460,7 @@ async def get_tampermonkey_active_target():
         chart_type = cfg.get("chart_type") or "japanese_candles"
         first = selected_assets[0] if selected_assets else "EURUSD_OTC"
         asset = _normalize_asset(first)
-        return {
+        result = {
             "success": True,
             "source": "config" if selected_assets else "fallback",
             "asset": asset,
@@ -3459,6 +3468,8 @@ async def get_tampermonkey_active_target():
             "expiry_seconds": _tf_to_expiry_seconds(selected_tf),
             "chart_type": chart_type,  # Iter 99 — TM enforces this on the PO chart
         }
+        await active_target_cache.set("default", result)
+        return result
     except Exception as e:
         logger.error(f"active-target error: {e}")
         # Never fail — TM depends on this being resilient
@@ -3488,6 +3499,13 @@ async def set_tampermonkey_active_target(payload: dict = Body(...)):
     """
     try:
         global tampermonkey_settings
+        # Iter 121 — invalidate the GET cache immediately so the next TM poll
+        # sees the new target.
+        try:
+            from perf_cache import active_target_cache
+            active_target_cache.invalidate("default")
+        except Exception:
+            pass
         asset = payload.get("asset")
         tf = payload.get("timeframe") or "1m"
         expiry = payload.get("expiry_seconds")
@@ -4410,6 +4428,51 @@ async def startup_event():
                     db.tm_trade_reports.create_index(
                         [("asset", 1), ("timestamp", -1)],
                         name="asset_timestamp_desc", background=True,
+                    ),
+                    db.tm_trade_reports.create_index(
+                        [("outcome", 1), ("timestamp", -1)],
+                        name="outcome_timestamp_desc", background=True,
+                    ),
+                    # Iter 121 — hot Iter 119/120 collections
+                    db.lightgbm_live_samples.create_index(
+                        [("created_at", -1)],
+                        name="created_at_desc", background=True,
+                    ),
+                    db.lightgbm_live_samples.create_index(
+                        [("outcome", 1), ("created_at", -1)],
+                        name="outcome_created_at_desc", background=True,
+                    ),
+                    db.ai_shadow_picks.create_index(
+                        [("created_at", -1)],
+                        name="created_at_desc", background=True,
+                    ),
+                    db.ai_shadow_picks.create_index(
+                        [("asset", 1), ("created_at", -1)],
+                        name="asset_created_at_desc", background=True,
+                    ),
+                    db.ai_shadow_picks.create_index(
+                        [("would_fire", 1), ("created_at", -1)],
+                        name="would_fire_created_at_desc", background=True,
+                    ),
+                    db.otc_candles_5s.create_index(
+                        [("symbol", 1), ("timestamp", -1)],
+                        name="symbol_timestamp_desc", background=True,
+                    ),
+                    db.historical_candles.create_index(
+                        [("asset", 1), ("timeframe", 1), ("timestamp", -1)],
+                        name="asset_tf_timestamp_desc", background=True,
+                    ),
+                    db.candles.create_index(
+                        [("symbol", 1), ("timeframe", 1), ("timestamp", -1)],
+                        name="symbol_tf_timestamp_desc", background=True,
+                    ),
+                    db.active_targets.create_index(
+                        [("timestamp", -1)],
+                        name="timestamp_desc", background=True,
+                    ),
+                    db.tm_stats.create_index(
+                        [("timestamp", -1)],
+                        name="timestamp_desc", background=True,
                     ),
                 )
                 logger.info("[Indexes] hot-collection indexes verified")

@@ -64,8 +64,25 @@ const MicrostructureDashboard = () => {
     };
     load();
     if (timerRef.current) clearInterval(timerRef.current);
-    timerRef.current = setInterval(load, 8_000);
-    return () => { cancelled = true; if (timerRef.current) clearInterval(timerRef.current); };
+    // Iter 121 — pause polling when tab is hidden
+    const start = () => {
+      if (timerRef.current) return;
+      timerRef.current = setInterval(load, 8_000);
+    };
+    const stop = () => {
+      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    };
+    const onVis = () => {
+      if (document.visibilityState === 'visible') { load(); start(); }
+      else stop();
+    };
+    if (document.visibilityState === 'visible') start();
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      cancelled = true;
+      stop();
+      document.removeEventListener('visibilitychange', onVis);
+    };
   }, [selectedAsset, lookback]);
 
   // Comparison-mode fetcher (fires on demand only)

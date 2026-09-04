@@ -48,8 +48,28 @@ const AutoScanPanel = ({ selectedAssets = [], onOpenTMDashboard }) => {
 
   useEffect(() => {
     fetchStatus();
-    timerRef.current = setInterval(fetchStatus, 3000);
-    return () => timerRef.current && clearInterval(timerRef.current);
+    // Iter 121 — smart-poll: pause when tab is hidden
+    let timerId = null;
+    const tick = () => fetchStatus();
+    const start = () => {
+      if (timerId != null) return;
+      timerId = setInterval(tick, 3000);
+    };
+    const stop = () => {
+      if (timerId != null) { clearInterval(timerId); timerId = null; }
+    };
+    const onVis = () => {
+      if (document.visibilityState === 'visible') { tick(); start(); }
+      else stop();
+    };
+    if (document.visibilityState === 'visible') start();
+    document.addEventListener('visibilitychange', onVis);
+    timerRef.current = { stop, onVis };
+    return () => {
+      stop();
+      document.removeEventListener('visibilitychange', onVis);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Sync sliders from config once when it first arrives
