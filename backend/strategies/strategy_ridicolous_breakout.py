@@ -74,6 +74,31 @@ class RidicolousBreakoutPrediction:
         self.min_confidence = float(min_confidence)
 
     # ------------------------------------------------------------------
+    # Iter 120c — live-tunable config (persisted in db.strategy_configs)
+    # ------------------------------------------------------------------
+    def apply_config(self, cfg: Dict[str, Any]) -> Dict[str, Any]:
+        """Update in-place from a partial config dict. Returns the effective config."""
+        if "perc" in cfg and cfg["perc"] is not None:
+            v = float(cfg["perc"])
+            self.perc = float(np.clip(v, 0.05, 10.0))
+        if "levels" in cfg and cfg["levels"] is not None:
+            self.levels = int(np.clip(int(cfg["levels"]), 1, 5))
+        if "min_history" in cfg and cfg["min_history"] is not None:
+            self.min_history = int(np.clip(int(cfg["min_history"]), 30, 500))
+        if "min_confidence" in cfg and cfg["min_confidence"] is not None:
+            v = float(cfg["min_confidence"])
+            self.min_confidence = float(np.clip(v, 40.0, 95.0))
+        return self.get_config()
+
+    def get_config(self) -> Dict[str, Any]:
+        return {
+            "perc": self.perc,
+            "levels": self.levels,
+            "min_history": self.min_history,
+            "min_confidence": self.min_confidence,
+        }
+
+    # ------------------------------------------------------------------
     # Core stats build
     # ------------------------------------------------------------------
     @staticmethod

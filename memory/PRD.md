@@ -1,3 +1,48 @@
+# AI's Elite PO Traders Bot — Feb 2026 (Iter 120c: Ridicolous Live Tunables)
+
+## Iter 120c (Feb 2026) — Ridicolous Live-Tunable Config Sliders
+
+### User request
+> "Step And Levels Tunables: Expose Ridicolous step percent (1%) and level count (5) as sliders in the picker so you can A/B different step sizes without editing code."
+
+### What shipped
+- **`apply_config(dict)` + `get_config()`** helpers on `RidicolousBreakoutPrediction` — mutate the live singleton with bounds-clamping (perc ∈ [0.05, 10.0], levels ∈ [1, 5], min_history ∈ [30, 500], min_confidence ∈ [40, 95]).
+- **`GET /api/strategies/ridicolous/config`** — returns the current live singleton config.
+- **`POST /api/strategies/ridicolous/config`** — persists to `db.strategy_configs` (id: `ridicolous_breakout_prediction`) AND applies to the live singleton immediately. Bounds enforced by Pydantic (Field ge/le → 422 on out-of-range).
+- **Startup restore** — on server boot, `restore_ridicolous_config_from_db()` re-applies the last saved config so slider changes survive restarts.
+- **Backtest per-run `params`** — the existing `POST /api/strategies/backtest` now accepts an optional `params` object; when provided for Ridicolous it builds a **fresh per-run instance** (does NOT mutate the singleton). Response echoes `strategy_specific.effective_config` so the UI knows what was actually used.
+- **Frontend `TampermonkeyControlPanel.jsx`** — when Ridicolous is the selected strategy, a purple-bordered "🎯 Ridicolous tunables" panel appears inside the Trading Strategy card with 4 color-coded sliders (Step % cyan · Levels purple · Min confidence emerald · Min history amber). Any slider drag marks the state dirty and reveals a **💾 Save & apply live** button; unsaved changes are still passed as `params` on the next Backtest run so you can A/B without persisting.
+
+### How it flows
+1. User picks Ridicolous → tunables panel loads current live config from backend.
+2. User drags sliders → `dirty=true`, changes appear in the next backtest run as `params` overrides.
+3. User clicks Save → POSTs to `/strategies/ridicolous/config` → singleton updates + db persists → dirty resets.
+4. Next live signal generated via `execute_strategy` uses the new thresholds automatically.
+
+### Tests — 5/5 pass in `test_iter120c_ridicolous_tunables.py`
+- GET + POST config roundtrip (persists across GETs)
+- POST bounds validation (perc>10, levels>5, min_confidence<40 → 422)
+- `apply_config` clamps out-of-range values (never rejects)
+- `apply_config` partial-update leaves other fields untouched
+- Backtest with per-run `params` echoes `effective_config` AND does NOT mutate the singleton
+- Module-scope autouse fixture resets the singleton to defaults after tests so 120b regression stays clean
+
+Full Iter 119-120c regression: **30/30 pass**.
+
+### Files touched
+- **MOD** `backend/strategies/strategy_ridicolous_breakout.py` (`apply_config`, `get_config`)
+- **MOD** `backend/routes/strategy_backtest.py` (`RidicolousConfig` model, GET/POST config endpoints, `restore_ridicolous_config_from_db`, `params`-aware backtest handler with per-run instance)
+- **MOD** `backend/server.py` (startup hook: restore Ridicolous config from db)
+- **MOD** `frontend/src/components/TampermonkeyControlPanel.jsx` (`ridicolousCfg` state, `fetchRidicolousConfig` + `saveRidicolousConfig` handlers, purple tunables panel with 4 sliders, per-run params in `runBacktest`)
+- **NEW** `backend/tests/test_iter120c_ridicolous_tunables.py` (5 tests)
+
+### How to use
+1. Trading Strategy card → pick Ridicolous Breakout Prediction
+2. Slide the four tunables until they feel right → click "🧪 Run backtest" to see the new WR immediately (no save required)
+3. When satisfied, hit **💾 Save & apply live** to persist and apply to live signal generation
+
+---
+
 # AI's Elite PO Traders Bot — Feb 2026 (Iter 120b: Strategy Backtest Runner)
 
 ## Iter 120b (Feb 2026) — Strategy Backtest Runner

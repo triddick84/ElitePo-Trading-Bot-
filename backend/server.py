@@ -4273,6 +4273,15 @@ async def startup_event():
             # Create default admin user
             auth_service = get_auth_service(db)
             await auth_service.create_default_admin()
+
+            # Iter 120c — restore Ridicolous strategy config from db
+            try:
+                from routes.strategy_backtest import restore_ridicolous_config_from_db
+                cfg = await restore_ridicolous_config_from_db()
+                if cfg:
+                    logger.info(f"🎯 Ridicolous config restored: {cfg}")
+            except Exception as e:
+                logger.warning(f"Ridicolous config restore skipped: {e}")
             # Iter 97 — grandfather any users that pre-date the admin-approval
             # feature so they don't get locked out on first boot after upgrade.
             try:

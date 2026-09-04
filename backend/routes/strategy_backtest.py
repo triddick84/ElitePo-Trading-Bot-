@@ -87,6 +87,10 @@ class BacktestPayload(BaseModel):
     payout: float = Field(0.85, ge=0.5, le=0.99)
     stride: int = Field(1, ge=1, le=20,
                         description="Evaluate every Nth candle (speeds up long backtests)")
+    params: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Strategy-specific override params (e.g. Ridicolous {perc, levels, min_confidence, min_history})",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -241,10 +245,27 @@ async def backtest_strategy(payload: BacktestPayload):
     """Run a strategy chronologically over recent candles + simulate PnL."""
     from strategy_registry import strategy_registry
 
-    strategy = strategy_registry.get_strategy(payload.strategy_id)
-    if strategy is None:
+    base_strategy = strategy_registry.get_strategy(payload.strategy_id)
+    if base_strategy is None:
         raise HTTPException(status_code=404,
                             detail=f"strategy '{payload.strategy_id}' not registered")
+
+    # Iter 120c — When per-run params are supplied for Ridicolous, use a
+    # fresh instance so we don't mutate the live singleton used by the
+    # signal pipeline. Other strategies ignore `params`.
+    strategy = base_strategy
+    override_perc: Optional[float] = None
+    override_levels: Optional[int] = None
+    if payload.params and payload.strategy_id == "ridicolous_breakout_prediction":
+        try:
+            from strategies.strategy_ridicolous_breakout import RidicolousBreakoutPrediction
+            strategy = RidicolousBreakoutPrediction()
+            strategy.apply_config(payload.params)
+            override_perc = strategy.perc
+            override_levels = strategy.levels
+        except Exception as e:
+            logger.warning("failed to apply ridicolous params: %s", e)
+            strategy = base_strategy
 
     # Estimate candle count from timeframe seconds × days
     tf_seconds = {
@@ -278,7 +299,16 @@ async def backtest_strategy(payload: BacktestPayload):
 
     extra: Dict[str, Any] = {}
     if payload.strategy_id == "ridicolous_breakout_prediction":
-        extra["ridicolous_table"] = _ridicolous_stats(df)
+        # Use the effective params for the probability table (per-run override
+        # if provided, else the live singleton config)
+        _perc = override_perc if override_perc is not None else getattr(strategy, "perc", 1.0)
+        _levels = override_levels if override_levels is not None else getattr(strategy, "levels", 5)
+        extra["ridicolous_table"] = _ridicolous_stats(df, levels=_levels, perc=_perc)
+        extra["effective_config"] = {
+            "perc": _perc, "levels": _levels,
+            "min_history": getattr(strategy, "min_history", 60),
+            "min_confidence": getattr(strategy, "min_confidence", 55.0),
+        }
 
     return {
         "success": True,
@@ -293,3 +323,52 @@ async def backtest_strategy(payload: BacktestPayload):
         **sim,
         "strategy_specific": extra,
     }
+
+
+
+# ---------------------------------------------------------------------------
+# Iter 120c — Ridicolous live-tunable config
+# ---------------------------------------------------------------------------
+_RIDI_CFG_DOC_ID = "ridicolous_breakout_prediction"
+
+
+class RidicolousConfig(BaseModel):
+    perc: float = Field(1.0, ge=0.05, le=10.0,
+                        description="Percentage step size between probability levels")
+    levels: int = Field(5, ge=1, le=5,
+                        description="Number of probability levels (1-5)")
+    min_history: int = Field(60, ge=30, le=500,
+                             description="Minimum candles required before firing")
+    min_confidence: float = Field(55.0, ge=40.0, le=95.0,
+                                  description="Minimum winning percentage to fire")
+
+
+async def restore_ridicolous_config_from_db() -> Dict[str, Any]:
+    """Called from server startup to reapply the last saved config to the singleton."""
+    try:
+        doc = await db.strategy_configs.find_one({"_id": _RIDI_CFG_DOC_ID})
+        if doc:
+            doc.pop("_id", None)
+            from strategies.strategy_ridicolous_breakout import ridicolous_breakout_prediction
+            return ridicolous_breakout_prediction.apply_config(doc)
+    except Exception as e:
+        logger.warning("ridicolous config restore failed: %s", e)
+    return {}
+
+
+@router.get("/strategies/ridicolous/config")
+async def get_ridicolous_config():
+    from strategies.strategy_ridicolous_breakout import ridicolous_breakout_prediction
+    return {"success": True, "config": ridicolous_breakout_prediction.get_config()}
+
+
+@router.post("/strategies/ridicolous/config")
+async def set_ridicolous_config(payload: RidicolousConfig):
+    from strategies.strategy_ridicolous_breakout import ridicolous_breakout_prediction
+    effective = ridicolous_breakout_prediction.apply_config(payload.model_dump())
+    await db.strategy_configs.replace_one(
+        {"_id": _RIDI_CFG_DOC_ID},
+        {"_id": _RIDI_CFG_DOC_ID, **effective},
+        upsert=True,
+    )
+    return {"success": True, "config": effective}

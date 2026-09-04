@@ -41,6 +41,12 @@ const TampermonkeyControlPanel = () => {
   const [backtestResult, setBacktestResult] = useState(null);
   const [backtestAsset, setBacktestAsset] = useState('EURUSD_OTC');
   const [backtestDays, setBacktestDays] = useState(30);
+  // Iter 120c — Ridicolous live-tunable config
+  const [ridicolousCfg, setRidicolousCfg] = useState({
+    perc: 1.0, levels: 5, min_history: 60, min_confidence: 55.0,
+  });
+  const [ridicolousSaving, setRidicolousSaving] = useState(false);
+  const [ridicolousDirty, setRidicolousDirty] = useState(false);
   
   // Win/Loss Stats - v6.6.0
   const [stats, setStats] = useState({
@@ -134,12 +140,32 @@ const TampermonkeyControlPanel = () => {
     }
   }, []);
 
+  // Iter 120c — Fetch Ridicolous config (declared before useEffect that uses it)
+  const fetchRidicolousConfig = useCallback(async () => {
+    try {
+      const r = await fetch(`${API}/strategies/ridicolous/config`);
+      const d = await r.json();
+      if (d.success && d.config) {
+        setRidicolousCfg({
+          perc: Number(d.config.perc),
+          levels: Number(d.config.levels),
+          min_history: Number(d.config.min_history),
+          min_confidence: Number(d.config.min_confidence),
+        });
+        setRidicolousDirty(false);
+      }
+    } catch (e) {
+      console.error('Failed to fetch Ridicolous config:', e);
+    }
+  }, []);
+
   useEffect(() => {
     fetchSettings();
     fetchStatus();
     fetchStrategies();
     fetchStats();
     fetchScriptVersion();
+    fetchRidicolousConfig();
     
     // Poll for updates every 5 seconds
     const interval = setInterval(() => {
@@ -149,7 +175,7 @@ const TampermonkeyControlPanel = () => {
     }, 5000);
     
     return () => clearInterval(interval);
-  }, [fetchSettings, fetchStatus, fetchStrategies, fetchStats, fetchScriptVersion]);
+  }, [fetchSettings, fetchStatus, fetchStrategies, fetchStats, fetchScriptVersion, fetchRidicolousConfig]);
 
   // Reset stats
   const resetStats = async () => {
@@ -173,6 +199,9 @@ const TampermonkeyControlPanel = () => {
       // Match candle timeframe to the strategy's declared timeframe when possible
       const strat = strategies.find(s => s.id === settings.selected_strategy);
       const tf = (strat?.timeframes || ['1m'])[0] || '1m';
+      // Iter 120c — send Ridicolous tunables as per-run params
+      const params = settings.selected_strategy === 'ridicolous_breakout_prediction'
+        ? { ...ridicolousCfg } : undefined;
       const res = await fetch(`${API}/strategies/backtest`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -185,6 +214,7 @@ const TampermonkeyControlPanel = () => {
           min_history: 60,
           payout: 0.85,
           stride: 3,
+          params,
         }),
       });
       const data = await res.json();
@@ -193,6 +223,32 @@ const TampermonkeyControlPanel = () => {
       setBacktestResult({ success: false, error: err.message });
     } finally {
       setBacktestRunning(false);
+    }
+  };
+
+  // Iter 120c — Save Ridicolous config (fetch handler declared above the useEffect)
+  const saveRidicolousConfig = async () => {
+    try {
+      setRidicolousSaving(true);
+      const r = await fetch(`${API}/strategies/ridicolous/config`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(ridicolousCfg),
+      });
+      const d = await r.json();
+      if (d.success && d.config) {
+        setRidicolousCfg({
+          perc: Number(d.config.perc),
+          levels: Number(d.config.levels),
+          min_history: Number(d.config.min_history),
+          min_confidence: Number(d.config.min_confidence),
+        });
+        setRidicolousDirty(false);
+      }
+    } catch (e) {
+      console.error('Failed to save Ridicolous config:', e);
+    } finally {
+      setRidicolousSaving(false);
     }
   };
 
@@ -505,6 +561,117 @@ const TampermonkeyControlPanel = () => {
                 </span>
               )}
             </div>
+
+            {/* Iter 120c — Ridicolous live-tunable sliders */}
+            {settings.selected_strategy === 'ridicolous_breakout_prediction' && (
+              <div
+                className="mt-2 p-3 rounded-md bg-slate-950/60 border border-purple-500/30 space-y-3"
+                data-testid="ridicolous-tunables-panel"
+              >
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <p className="text-xs font-medium text-purple-200">
+                    🎯 Ridicolous tunables · applied live + used as backtest overrides
+                  </p>
+                  {ridicolousDirty && (
+                    <Button
+                      size="sm"
+                      onClick={saveRidicolousConfig}
+                      disabled={ridicolousSaving}
+                      className="bg-emerald-600 hover:bg-emerald-700 h-7 text-xs"
+                      data-testid="save-ridicolous-cfg-btn"
+                    >
+                      {ridicolousSaving ? 'Saving…' : '💾 Save & apply live'}
+                    </Button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {/* Step % */}
+                  <div>
+                    <div className="flex justify-between text-[11px] text-slate-400">
+                      <span>Step %</span>
+                      <span className="text-cyan-300 font-mono" data-testid="ridi-perc-value">
+                        {ridicolousCfg.perc.toFixed(2)}%
+                      </span>
+                    </div>
+                    <input
+                      type="range" min="0.05" max="5.0" step="0.05"
+                      value={ridicolousCfg.perc}
+                      onChange={(e) => {
+                        setRidicolousCfg(c => ({ ...c, perc: Number(e.target.value) }));
+                        setRidicolousDirty(true);
+                      }}
+                      className="w-full accent-cyan-500"
+                      data-testid="ridi-perc-slider"
+                    />
+                  </div>
+
+                  {/* Levels */}
+                  <div>
+                    <div className="flex justify-between text-[11px] text-slate-400">
+                      <span>Levels (probability pyramid)</span>
+                      <span className="text-purple-300 font-mono" data-testid="ridi-levels-value">
+                        {ridicolousCfg.levels}
+                      </span>
+                    </div>
+                    <input
+                      type="range" min="1" max="5" step="1"
+                      value={ridicolousCfg.levels}
+                      onChange={(e) => {
+                        setRidicolousCfg(c => ({ ...c, levels: Number(e.target.value) }));
+                        setRidicolousDirty(true);
+                      }}
+                      className="w-full accent-purple-500"
+                      data-testid="ridi-levels-slider"
+                    />
+                  </div>
+
+                  {/* Min confidence */}
+                  <div>
+                    <div className="flex justify-between text-[11px] text-slate-400">
+                      <span>Min confidence to fire</span>
+                      <span className="text-emerald-300 font-mono" data-testid="ridi-minconf-value">
+                        {ridicolousCfg.min_confidence.toFixed(1)}%
+                      </span>
+                    </div>
+                    <input
+                      type="range" min="40" max="90" step="1"
+                      value={ridicolousCfg.min_confidence}
+                      onChange={(e) => {
+                        setRidicolousCfg(c => ({ ...c, min_confidence: Number(e.target.value) }));
+                        setRidicolousDirty(true);
+                      }}
+                      className="w-full accent-emerald-500"
+                      data-testid="ridi-minconf-slider"
+                    />
+                  </div>
+
+                  {/* Min history */}
+                  <div>
+                    <div className="flex justify-between text-[11px] text-slate-400">
+                      <span>Min candle history</span>
+                      <span className="text-amber-300 font-mono" data-testid="ridi-minhist-value">
+                        {ridicolousCfg.min_history}
+                      </span>
+                    </div>
+                    <input
+                      type="range" min="30" max="300" step="10"
+                      value={ridicolousCfg.min_history}
+                      onChange={(e) => {
+                        setRidicolousCfg(c => ({ ...c, min_history: Number(e.target.value) }));
+                        setRidicolousDirty(true);
+                      }}
+                      className="w-full accent-amber-500"
+                      data-testid="ridi-minhist-slider"
+                    />
+                  </div>
+                </div>
+
+                <p className="text-[10px] text-slate-500">
+                  Changes are used in the next Backtest run immediately. Click <span className="text-emerald-400">Save & apply live</span> to also apply them to live signal generation.
+                </p>
+              </div>
+            )}
 
             {backtestResult && !backtestResult.success && (
               <div className="text-xs text-rose-300" data-testid="backtest-error">
