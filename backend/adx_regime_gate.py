@@ -57,6 +57,7 @@ STRATEGY_FAMILY: Dict[str, str] = {
     "heikin_fractal": "MEAN_REV",
     "keltner_macd": "MEAN_REV",
     "ridicolous_breakout_prediction": "NEUTRAL",  # Iter 120 — statistical, works in any regime
+    "rolling_micro_ml": "NEUTRAL",  # Iter 124 — RF adapts to whatever regime is present
     # Confluence / hybrid — always allowed
     "triple_confluence": "NEUTRAL",
     "multi_timeframe": "NEUTRAL",

@@ -249,6 +249,19 @@ class StrategyRegistry:
             except Exception as e:
                 logger.warning(f"Could not load Ridicolous Breakout: {e}")
 
+            # Iter 124 — Rolling Micro-ML (port from po_bot_ml.py philosophy)
+            try:
+                from strategies.strategy_rolling_micro_ml import ROLLING_ML_STRATEGIES
+                for _sid, _sobj in ROLLING_ML_STRATEGIES.items():
+                    self.strategies[_sid] = _sobj
+                logger.info(
+                    "✅ Loaded Rolling Micro-ML (%d strategy): %s",
+                    len(ROLLING_ML_STRATEGIES),
+                    ", ".join(ROLLING_ML_STRATEGIES.keys()),
+                )
+            except Exception as e:
+                logger.warning(f"Could not load Rolling Micro-ML: {e}")
+
             # Legacy strategies (keep for backward compatibility)
             self.strategies['enhanced_rsi_bb_volume'] = None  # Placeholder
             self.strategies['enhanced_stoch_macd_pattern'] = None  # Placeholder

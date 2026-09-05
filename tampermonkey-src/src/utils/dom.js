@@ -1146,6 +1146,28 @@ export function getAccountBalance() {
 
 /**
  * Scan DOM for trade result (win/loss) from deal history or notifications
+ *
+ * Iter 123 — REWRITE. Previous implementation had 4 false-positive paths that
+ * made losses read as wins:
+ *   1. `cls.includes('profit')` on the DEAL container matched EVERY deal
+ *      (PO uses `deals-list-item...profit-container` as a NEUTRAL layout class).
+ *   2. `text === '0'` only matched literal "0", not "0.00" / "$0.00" — so a
+ *      zero-payout loss was uncaught and the class-fallback then guessed WIN.
+ *   3. Popup regex `/\+\s*\$?\s*[\d,.]+/` matched anywhere in the toast, so
+ *      "+Stake returned" copy on a LOSS was scored as WIN.
+ *   4. Priority put ambiguous class-name heuristics BEFORE the strict signed
+ *      profit-value check.
+ *
+ * Rewritten priority order (strictest → weakest):
+ *   1. Explicit LOSS markers on profit element (loss/failed/red/negative)
+ *   2. Explicit WIN markers on profit element (success/win/green/positive)
+ *   3. Signed profit VALUE:  starts with '-' or profit==0 → LOSS
+ *                             starts with '+' AND value>0 → WIN
+ *   4. Explicit LOSS markers on deal container
+ *   5. Explicit WIN markers on deal container (excluding neutral 'profit-container')
+ *   6. Notification popups (strict signed number, whole-text match)
+ *   7. null (unknown — never guess)
+ *
  * @returns {boolean|null} true=WIN, false=LOSS, null=not found
  */
 export function scanDOMForTradeResult() {
@@ -1157,37 +1179,98 @@ export function scanDOMForTradeResult() {
     '[class*="history"] [class*="item"]:first-child',
   ];
 
+  // Words that unambiguously indicate a LOSS. Order matters — check these
+  // BEFORE win markers so that a class like "loss-red" isn't misread as win
+  // just because "red" is also in there.
+  const LOSS_MARKERS = /\b(loss|lost|failed?|red|negative|minus)\b/;
+  // Explicit WIN markers. Deliberately excludes 'profit' by itself because
+  // PO uses it as a neutral container class.
+  const WIN_MARKERS = /\b(win|won|success|green|positive)\b/;
+
   for (const sel of dealSelectors) {
     try {
       const deal = document.querySelector(sel);
       if (!deal || !deal.offsetParent) continue;
 
-      const profitEl = deal.querySelector('[class*="profit"], [class*="payout"], [class*="result"], [class*="amount"]');
+      const profitEl = deal.querySelector(
+        '[class*="profit"], [class*="payout"], [class*="result"], [class*="amount"]'
+      );
+
+      // Level 1-3: profit element inspection (highest signal density)
       if (profitEl) {
         const cls = (profitEl.className || '').toLowerCase();
         const text = (profitEl.textContent || '').trim();
-        if (cls.includes('success') || cls.includes('win') || cls.includes('green') || cls.includes('positive')) return true;
-        if (cls.includes('fail') || cls.includes('loss') || cls.includes('red') || cls.includes('negative')) return false;
-        if (text.match(/^\s*\+/)) return true;
-        if (text.match(/^\s*-/) || text === '0') return false;
+
+        // 1. Strict LOSS markers first
+        if (LOSS_MARKERS.test(cls)) return false;
+        // 2. Strict WIN markers
+        if (WIN_MARKERS.test(cls)) return true;
+
+        // 3. Signed number: parse the leading sign + numeric value
+        //    Strip currency + spaces first for a clean match.
+        //    Examples handled correctly:
+        //      "+$1.85"   → WIN
+        //      "-$2.00"   → LOSS
+        //      "$0.00"    → LOSS (zero payout)
+        //      "0.00"     → LOSS
+        //      "-"        → ambiguous → skip (falls through to container check)
+        const clean = text.replace(/[$,\s]/g, '');
+        const signed = clean.match(/^([+-])?(\d+(?:\.\d+)?)/);
+        if (signed) {
+          const sign = signed[1] || '';
+          const val = parseFloat(signed[2]);
+          if (val === 0) return false;                       // 0 payout = loss
+          if (sign === '-' && val > 0) return false;         // negative = loss
+          if (sign === '+' && val > 0) return true;          // positive = win
+          // Unsigned positive number is ambiguous (some UIs show bare stake
+          // value on losses) — do NOT decide here; let container check try.
+        }
       }
 
+      // Level 4-5: deal container class inspection (weaker signal)
       const cls = (deal.className || '').toLowerCase();
-      if (cls.includes('win') || cls.includes('success') || cls.includes('profit')) return true;
-      if (cls.includes('loss') || cls.includes('fail')) return false;
+      if (LOSS_MARKERS.test(cls)) return false;
+      // WIN markers on the deal container: require STRICT win markers,
+      // NOT the ambiguous 'profit' word which PO uses on losses too.
+      if (WIN_MARKERS.test(cls)) return true;
     } catch (e) { /* skip */ }
   }
 
-  // Popup/toast notifications
-  const popupSels = ['[class*="notification"][class*="deal"]', '[class*="trade-result"]', '[class*="toast"]'];
+  // Level 6: popup / toast notifications — require a WHOLE-STRING signed
+  // number match (no more "matches anywhere in the toast").
+  const popupSels = [
+    '[class*="notification"][class*="deal"]',
+    '[class*="trade-result"]',
+    '[class*="toast"]',
+  ];
   for (const sel of popupSels) {
     try {
       const popup = document.querySelector(sel);
       if (!popup || !popup.offsetParent) continue;
       const cls = (popup.className || '').toLowerCase();
       const text = (popup.textContent || '').trim();
-      if (cls.includes('win') || text.match(/\+\s*\$?\s*[\d,.]+/)) return true;
-      if (cls.includes('loss') || text.match(/-\s*\$?\s*[\d,.]+/)) return false;
+
+      // Explicit class wins over text parsing
+      if (LOSS_MARKERS.test(cls)) return false;
+      if (WIN_MARKERS.test(cls)) return true;
+
+      // Find the trade P/L number. Prefer numbers preceded by a `$` (currency)
+      // over bare numbers, so "+5% bonus" doesn't outrank "-$3.50".
+      const dollarMatches = [...text.matchAll(/([+-])\s*\$\s*(\d+(?:\.\d+)?)/g)];
+      const bareMatches = [...text.matchAll(/([+-])\s*(\d+(?:\.\d+)?)/g)];
+      const matches = dollarMatches.length ? dollarMatches : bareMatches;
+      if (matches.length) {
+        let best = null;
+        for (const m of matches) {
+          const val = parseFloat(m[2]);
+          if (val === 0) continue;
+          if (!best || val > best.val) best = { sign: m[1], val };
+        }
+        if (best) {
+          if (best.sign === '-') return false;
+          if (best.sign === '+') return true;
+        }
+      }
     } catch (e) { /* skip */ }
   }
 

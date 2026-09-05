@@ -29,6 +29,6 @@ export default [
     },
   },
   {
-    ignores: ["node_modules/**", "build/**", "public/**", "dist/**"],
+    ignores: ["node_modules/**", "build/**", "public/**", "dist/**", "**/tma/**"],
   },
 ];

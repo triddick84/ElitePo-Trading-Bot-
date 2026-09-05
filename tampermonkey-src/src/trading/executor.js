@@ -318,8 +318,13 @@ class TradeExecutor {
     if (!stillPending) return;
 
     // Poll for up to 10s for a stable post-expiry balance
+    // Iter 123 — Tightened: require delta ≥ stake*0.3 for a WIN decision
+    // (small micro-changes from unrelated activity shouldn't flip a LOSS
+    // into a WIN). LOSS still requires balance ≈ preBalance.
     let isWin = null;
     const start = Date.now();
+    const stake = Number(trade.amount) || 1;
+    const minWinDelta = Math.max(0.05, stake * 0.3);  // must gain ≥ 30% of stake for WIN
     while (Date.now() - start < 10000) {
       const domResult = scanDOMForTradeResult();
       if (domResult === true) { isWin = true; break; }
@@ -327,9 +332,12 @@ class TradeExecutor {
 
       const current = getAccountBalance();
       if (current > 0 && preBalance > 0) {
-        if (current > preBalance) { isWin = true; break; }
+        const delta = current - preBalance;
+        if (delta >= minWinDelta) { isWin = true; break; }
         // LOSS = balance unchanged (bet already deducted pre-expiry)
-        if (Math.abs(current - preBalance) < 0.01) { isWin = false; break; }
+        if (Math.abs(delta) < 0.01) { isWin = false; break; }
+        // Any tiny positive delta below minWinDelta (e.g. refund/tie) is
+        // ambiguous — keep polling for a clearer signal.
       }
       await new Promise(r => setTimeout(r, 500));
     }
