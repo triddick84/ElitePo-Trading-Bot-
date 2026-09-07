@@ -52,7 +52,10 @@ class AIAnalysisPoller {
   getLast() { return this.lastPayload; }
 
   async _tick() {
-    const asset = (state && state.currentAsset) || '';
+    // Iter 125 — Bug 1 fix: /microstructure/models now REQUIRES an asset param.
+    // When state.currentAsset is empty (script just loaded, no chart selected),
+    // fall back to a sensible default so the tab isn't blank.
+    const asset = (state && state.currentAsset) || 'EURUSD_OTC';
     const params = new URLSearchParams();
     if (asset) params.set('asset', asset);
 
@@ -60,7 +63,7 @@ class AIAnalysisPoller {
     const [sigR, prevR, msR, recR] = await Promise.allSettled([
       get('/signals/latest' + (asset ? `?asset=${encodeURIComponent(asset)}` : '')),
       get('/signals/preview' + (asset ? `?asset=${encodeURIComponent(asset)}` : '')),
-      get(asset ? `/microstructure/models?asset=${encodeURIComponent(asset)}` : '/microstructure/models'),
+      get(`/microstructure/models?asset=${encodeURIComponent(asset)}`),
       get('/trades/recent-outcomes?limit=5'),
     ]);
 

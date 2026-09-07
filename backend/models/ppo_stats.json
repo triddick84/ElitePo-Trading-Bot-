@@ -1,1 +1,1 @@
-{"accuracy": 13.445321923898884, "total_predictions": 146, "is_trained": true, "state_dim": 262, "training_stats": {"avg_reward": 53.84, "avg_win_rate": 13.45, "total_episodes": 10, "final_trades": 814, "trained_at": "2026-08-22T18:30:46.390182+00:00"}}
+{"accuracy": 11.804080848995897, "total_predictions": 146, "is_trained": true, "state_dim": 262, "training_stats": {"avg_reward": 43.79, "avg_win_rate": 11.8, "total_episodes": 10, "final_trades": 673, "trained_at": "2026-09-06T04:02:09.586797+00:00"}}

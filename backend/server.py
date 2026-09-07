@@ -3416,6 +3416,39 @@ def _normalize_asset(a: str) -> str:
     return a
 
 
+@api_router.get("/tampermonkey/active-target-queue")
+async def get_tampermonkey_active_target_queue():
+    """
+    Iter 125 — Multi-asset queue endpoint. Returns the top-N winners the
+    auto-scan service is currently routing, so the TM script can cycle
+    through and trade each asset (previously routing was single-slot).
+    """
+    try:
+        cursor = db.active_target_queue.find(
+            {}, {"_id": 0}
+        ).sort("rank", 1).limit(20)
+        rows = await cursor.to_list(length=20)
+        # Filter out any expired entries defensively
+        now = datetime.now(timezone.utc)
+        alive = []
+        for r in rows:
+            exp = r.get("expires_at")
+            if not exp:
+                alive.append(r); continue
+            try:
+                exp_dt = datetime.fromisoformat(str(exp).replace("Z", "+00:00"))
+                if exp_dt.tzinfo is None:
+                    exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+                if exp_dt > now:
+                    alive.append(r)
+            except Exception:
+                alive.append(r)
+        return {"success": True, "count": len(alive), "queue": alive}
+    except Exception as e:
+        return {"success": False, "error": str(e), "queue": []}
+
+
+
 @api_router.get("/tampermonkey/active-target")
 async def get_tampermonkey_active_target():
     """
@@ -4222,6 +4255,7 @@ from routes.auto_scan import router as auto_scan_router
 from routes.ai_enhancements import router as ai_enhancements_router
 from routes.strategy_backtest import router as strategy_backtest_router
 from routes.invert_events import router as invert_events_router
+from routes.telegram_routes import router as telegram_router
 
 api_router.include_router(strategies_router)
 api_router.include_router(signals_router)
@@ -4245,6 +4279,7 @@ api_router.include_router(auto_scan_router)
 api_router.include_router(ai_enhancements_router)
 api_router.include_router(strategy_backtest_router)
 api_router.include_router(invert_events_router)
+api_router.include_router(telegram_router)
 
 app.include_router(api_router)
 
@@ -4313,6 +4348,13 @@ async def startup_event():
                     logger.info(f"🎯 Ridicolous config restored: {cfg}")
             except Exception as e:
                 logger.warning(f"Ridicolous config restore skipped: {e}")
+
+            # Iter 126 — Start Telegram bot (bidirectional signals)
+            try:
+                from telegram_service import start_telegram_bot
+                await start_telegram_bot()
+            except Exception as e:
+                logger.warning(f"Telegram bot startup skipped: {e}")
             # Iter 97 — grandfather any users that pre-date the admin-approval
             # feature so they don't get locked out on first boot after upgrade.
             try:

@@ -1,3 +1,85 @@
+# AI's Elite PO Traders Bot — Feb 2026 (Iter 126: Telegram Integration Live)
+
+## Iter 126 (Feb 2026) — Telegram Bot: Send Signals + Receive Signals → Auto-Trade
+
+### User request
+> Research how to connect Telegram and Pocket Option — apply changes to properly place and generate signals through the Telegram integration.
+
+### What shipped
+**Bidirectional Telegram bridge (`python-telegram-bot` v22.8)**:
+- **SEND (App → Telegram)**: Auto-scan winners and manual `/api/telegram/send` alerts pushed to the user's chat with HTML-formatted asset / direction / expiry cards.
+- **RECEIVE (Telegram → App → Pocket Option)**: `MessageHandler` listens on the configured chat, `parse_signal()` extracts `ASSET DIRECTION EXPIRY` from free-text (`CALL/PUT/UP/DOWN/BUY/SELL`, seconds or minutes, `EURUSDOTC` normalized → `EURUSD_OTC`), routes to `tampermonkey_settings.active_target` (`_id: "default"`), and invalidates the TTL cache so the TM script picks it up on the next poll.
+- **Audit trail**: every parsed inbound signal logged to `db.telegram_signals_received` with raw text + timestamp.
+- **Non-blocking startup**: `application.initialize()` → `start()` → `updater.start_polling()` inside the FastAPI startup event (no `run_polling()` blocking the loop). Graceful shutdown wired.
+
+### Files added / modified
+- **NEW** `backend/telegram_service.py` — bot lifecycle, `parse_signal()`, `send_message()`, `_route_to_active_target()`, message + error handlers.
+- **NEW** `backend/routes/telegram_routes.py` — `GET /api/telegram/status`, `POST /api/telegram/send`, `GET /api/telegram/received-signals`.
+- **NEW** `backend/tests/test_iter126_telegram.py` — 9 tests (6 parser + 3 REST).
+- **MOD** `backend/server.py` — includes `telegram_router`, invokes `start_telegram_bot()` on startup.
+- **MOD** `backend/auto_scan_service.py` — winner routing also notifies Telegram.
+- **NEW** `/app/.oxlintrc.json` — root-level oxlint config with ignore patterns for `frontend/public/**` and known browser globals.
+
+### Env vars (already in `backend/.env`)
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_CHAT_ID` (int)
+
+### Tests
+- **Local pytest**: `tests/test_iter126_telegram.py` — **9/9 pass** (parser edge cases, REST endpoints reachable, live send returns `{"success": true, "sent": true}`).
+- **Live smoke**: `POST /api/telegram/send` sent a real message to chat `6434316177` — confirmed delivery.
+- **Backend log confirms**: `[telegram] ✅ bot polling started · chat_id=6434316177`.
+
+---
+
+## Iter 125 (Feb 2026) — Multi-Asset Auto-Trading + Fix AI Tab Blank Indicators
+
+### User bugs
+> 1. TM script's AI features tab doesn't have any working indicators, microstructure doesn't show anything.
+> 2. Auto-trading system needs redesigned: only trades a single asset slowly. Should scan across all selected assets and place trades through TM script.
+> 3. App should auto-connect to PO platform for everything it needs. **DEFERRED to next iteration.**
+
+### Root causes
+1. **`aiAnalysisPoller.js` sent `/microstructure/models` WITHOUT `?asset=`** when `state.currentAsset` was empty (script boot). The endpoint now requires `asset` → 422 → all AI-tab indicators went blank.
+2. **THE key bug**: `auto_scan_service._route_to_tm` wrote `active_target` to Mongo with `_id: "singleton"` but every reader (server.py, signals.py) queries `_id: "default"`. Auto-scan winners were WRITTEN AND NEVER READ. That's why auto-trading placed no trades.
+3. **Only one winner ever routed**. Even if the DB key were correct, auto_scan picked `matched[0]` and routed only that. The multi-asset scan was cosmetic.
+4. **Interval 15s** meant slow trade cadence.
+
+### Fixes shipped
+
+**Bug 1 — TM AI Tab**:
+- `aiAnalysisPoller.js` now falls back to `EURUSD_OTC` when `currentAsset` is empty and always includes `?asset=` in the microstructure URL. AI tab populates on script boot.
+- TM version bumped **8.145.0 → 8.146.0** (compiled to `dist/pocket-option-auto-trader.user.js`).
+
+**Bug 2 — Multi-Asset Routing**:
+- `_route_to_tm` fixed to write to `_id: "default"` (the correct key). Also invalidates the in-process TTL cache so the next TM poll sees the new target immediately.
+- Added `rotation_index` to `AutoScanState`. `scan_once` now sorts matched winners by confidence desc, keeps the top 5, and routes `top_n[rotation_index % len(top_n)]` — rotating through all matched assets on successive scans.
+- New `_push_multi_asset_queue` writes all top-5 winners to `db.active_target_queue` as a rolling queue (atomic replace: `delete_many` + `insert_many`).
+- New `GET /api/tampermonkey/active-target-queue` endpoint exposes the queue for TM/observability. Filters expired entries defensively.
+- Default `interval_seconds` cut **15s → 5s** so rotation cycles fast enough (5 assets * 5s = full universe every 25s vs previous 75s for a single asset).
+
+### Tests
+- **Local**: `test_iter125_multi_asset_routing.py` — 6/6 pass (static check of `_id="default"`, queue endpoint reachable, rotation field present, scan-now returns rotation_index, default interval == 5, TM poller always sends asset).
+- **Testing agent** (`/app/test_reports/iteration_59.json`): validated all 11 tasks — **10 passed, 1 skipped** in `test_iter125_review.py`. `retest_needed: False`, no action items.
+- **Full regression Iter 119-125**: 77/77 pass locally.
+
+### Files touched
+- **MOD** `backend/auto_scan_service.py` (route-to-tm _id, rotation logic, queue push, interval default)
+- **MOD** `backend/server.py` (new GET /tampermonkey/active-target-queue)
+- **MOD** `tampermonkey-src/src/trading/aiAnalysisPoller.js` (asset fallback)
+- **MOD** `tampermonkey-src/version.txt` → 8.146.0
+- **NEW** `backend/tests/test_iter125_multi_asset_routing.py` (6 tests)
+
+### User deploy note
+Redeploy from Emergent UI. Users MUST hard-refresh Tampermonkey ("Check for updates") to pull **v8.146.0** or the AI tab fix does nothing.
+
+### What's still missing (Bug 3 — deferred)
+The user asked for auto-connect to PO platform. That requires a PO WebSocket / DOM handshake layer that goes beyond a single-iteration scope. Ideas for the next iteration:
+- Auto-detect PO login state on TM boot + prompt to log in if needed
+- Auto-select the "OTC" market group and desired timeframe on chart load
+- Watchdog: if getCurrentAsset() returns null for 60s, force a chart reload
+
+---
+
 # AI's Elite PO Traders Bot — Feb 2026 (Iter 124: Rolling Micro-ML)
 
 ## Iter 124 (Feb 2026) — Rolling Micro-ML Strategy (Port from Vitaly's po_bot_ml.py)

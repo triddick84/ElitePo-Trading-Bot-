@@ -31,3 +31,10 @@ To add more seed admins, comma-separate the `SEED_ADMINS` env var in `backend/.e
 ```
 SEED_ADMINS=seedtest@elitepo.com:SeedPass123!,newadmin@elitepo.com:AdminPass2!
 ```
+
+
+## Telegram integration (Iter 126)
+- **Bot Token**: `8342619832:AAEdHnS_HKKariaDQaKHH6OT_pnLfp9dfIQ` (in `backend/.env` as `TELEGRAM_BOT_TOKEN`)
+- **Chat ID**: `6434316177` (in `backend/.env` as `TELEGRAM_CHAT_ID`)
+- **Bot Username**: `@ElitePocket_bot`
+- **Endpoints**: `GET /api/telegram/status`, `POST /api/telegram/send`, `GET /api/telegram/received-signals`

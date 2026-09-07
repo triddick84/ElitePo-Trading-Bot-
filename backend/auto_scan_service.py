@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_CONFIG: Dict[str, Any] = {
     "enabled": False,
-    "interval_seconds": 15,
+    "interval_seconds": 5,  # Iter 125 — was 15s; multi-asset rotation needs faster ticks
     "chart_timeframe": "1m",
     "trade_duration_seconds": 82,
     "min_confidence": 0.65,
@@ -55,6 +55,9 @@ class _State:
     total_routed: int = 0
     error_count: int = 0
     last_error: Optional[str] = None
+    # Iter 125 — rotate through top-N winners on consecutive scans so the TM
+    # script places trades across multiple assets, not just the same one.
+    rotation_index: int = 0
 
 
 class AutoScanService:
@@ -250,7 +253,15 @@ class AutoScanService:
             return (-round(r["confidence"], 6),
                     -(elite if cfg.get("prefer_elite_on_tie", True) else 0))
         matched.sort(key=_key)
-        winner = matched[0] if matched else None
+
+        # Iter 125 — Rotate through top-5 winners on consecutive scans so
+        # the TM script trades across multiple assets, not just the same one.
+        top_n = matched[:5]
+        if top_n:
+            winner = top_n[self._state.rotation_index % len(top_n)]
+            self._state.rotation_index = (self._state.rotation_index + 1) % max(1, len(top_n))
+        else:
+            winner = None
 
         # Update state
         self._state.last_scan_ts = datetime.now(timezone.utc).timestamp()
@@ -263,9 +274,50 @@ class AutoScanService:
             self._state.last_winner = winner
             self._state.total_routed += 1
 
+        # Iter 125 — Multi-asset queue. Persist the TOP N matched winners as
+        # a rolling queue that the TM script cycles through (switching PO
+        # chart per asset). Previously only ONE winner ever routed, so users
+        # complained that "auto-trading only trades on a single asset".
+        try:
+            await self._push_multi_asset_queue(top_n, cfg)
+        except Exception as e:
+            logger.warning(f"[auto_scan] multi-asset queue push failed: {e}")
+
         return {"success": True, "results": rows, "winner": winner,
                 "universe_size": len(universe),
-                "matched_count": len(matched)}
+                "matched_count": len(matched),
+                "rotation_index": self._state.rotation_index}
+
+    async def _push_multi_asset_queue(self, winners: list, cfg: Dict[str, Any]) -> None:
+        """Persist top-N winners as a rolling queue in `active_target_queue`.
+        The TM script polls `/api/tampermonkey/active-target-queue` and cycles
+        through each entry, switching PO chart + firing per asset."""
+        if self._db is None or not winners:
+            return
+        ttl = int(cfg.get("target_ttl_seconds", 60))
+        now = datetime.now(timezone.utc)
+        expires_at = (now + timedelta(seconds=ttl)).isoformat()
+        docs = []
+        for rank, w in enumerate(winners):
+            docs.append({
+                "asset": w["asset"],
+                "timeframe": cfg.get("chart_timeframe", "1m"),
+                "direction": w["direction"],
+                "confidence": w["confidence"],
+                "elite_score": w.get("elite_score"),
+                "rank": rank,
+                "source": "auto_scan",
+                "set_at": now.isoformat(),
+                "expires_at": expires_at,
+            })
+        # Atomic replace: drop old queue + insert new one
+        await self._db.active_target_queue.delete_many({})
+        await self._db.active_target_queue.insert_many(docs)
+        try:
+            from perf_cache import active_target_cache
+            active_target_cache.invalidate("queue")
+        except Exception:
+            pass
 
     async def _route_to_tm(self, winner: Dict[str, Any], cfg: Dict[str, Any]) -> None:
         """Set `tampermonkey_settings.active_target` so the TM script switches
@@ -286,15 +338,38 @@ class AutoScanService:
             "set_at": datetime.now(timezone.utc).isoformat(),
         }
         try:
+            # Iter 125 — BUG FIX: previous code wrote to _id="singleton" but
+            # every reader (server.py, signals.py) queries _id="default", so
+            # auto_scan winners were WRITTEN AND NEVER READ. This is the
+            # primary reason auto-scan wasn't placing trades.
             await self._db.tampermonkey_settings.update_one(
-                {"_id": "singleton"},
+                {"_id": "default"},
                 {"$set": {"active_target": target,
                           "last_updated": target["set_at"]}},
                 upsert=True,
             )
+            # Also invalidate the in-process TTL cache so the next TM poll
+            # sees the new target immediately.
+            try:
+                from perf_cache import active_target_cache
+                active_target_cache.invalidate("default")
+            except Exception:
+                pass
             logger.info(f"[auto_scan] 🎯 ROUTED to TM · {winner['asset']} · "
                         f"{winner['direction']} · conf={winner['confidence']:.2f} · "
                         f"elite={winner.get('elite_score') or '—'}")
+            # Iter 126 — Telegram notification (fire-and-forget)
+            try:
+                from telegram_service import send_message
+                await send_message(
+                    f"🎯 <b>Auto-Scan Winner</b>\n"
+                    f"Asset: <code>{winner['asset']}</code>\n"
+                    f"Direction: <b>{winner['direction']}</b>\n"
+                    f"Confidence: {winner['confidence']:.1%}\n"
+                    f"Elite: {winner.get('elite_score') or '—'}"
+                )
+            except Exception:
+                pass
         except Exception as e:
             logger.warning(f"[auto_scan] route failed: {e}")
 

@@ -1,0 +1,7 @@
+node_modules
+build
+dist
+public/**
+public/tma/**
+**/tma/**
+**/*.min.js
