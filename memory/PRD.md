@@ -1,4 +1,28 @@
-# AI's Elite PO Traders Bot — Feb 2026 (Iter 126: Telegram Integration Live)
+# AI's Elite PO Traders Bot — Feb 2026 (Iter 127: Telegram Command Menu)
+
+## Iter 127 (Feb 2026) — Telegram Command Menu (/pause /resume /status /stake)
+
+### User request
+> Let the same chat run /pause, /resume, /status, and /stake so you can pilot the bot from your phone without opening the app.
+
+### What shipped
+- **/status** — running state, interval, asset count, fallback stake, last winner, active target.
+- **/pause** — calls `auto_scan_service.stop()`, persists `enabled=false`.
+- **/resume** — calls `auto_scan_service.start()`, persists `enabled=true`.
+- **/stake &lt;amt&gt;** — validates `0.1 ≤ amt ≤ 10000`, updates `tampermonkey_settings.stake_tiers_fallback`, invalidates the active-target cache so the TM script sees the new amount on next poll.
+- **/help + /start** — inline usage crib.
+- **Telegram-side menu**: `bot.set_my_commands(...)` registers the "/" button in the Telegram client so the commands are discoverable.
+- **Chat-ID authorization guard**: `_authorized()` short-circuits any command coming from an unknown chat.
+
+### Files touched
+- **MOD** `backend/telegram_service.py` — added `CommandHandler` imports, five command handlers, `_authorized()` guard, `set_my_commands()` registration.
+- **NEW** `backend/tests/test_iter127_telegram_commands.py` — 10 tests (registration, unauthorized-chat guard, pause/resume delegate to auto_scan_service, /stake success + bad-input + out-of-range + no-args, /status rendering, /help listing).
+
+### Tests
+- **Local pytest**: 10/10 pass in `test_iter127_telegram_commands.py`; 19/19 pass across Iter 126 + Iter 127.
+- **Live smoke**: bot polling confirmed post-restart (`[telegram] ✅ bot polling started · chat_id=6434316177`), announcement `POST /api/telegram/send` delivered to phone.
+
+---
 
 ## Iter 126 (Feb 2026) — Telegram Bot: Send Signals + Receive Signals → Auto-Trade
 
