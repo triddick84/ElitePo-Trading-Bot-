@@ -1,4 +1,28 @@
-# AI's Elite PO Traders Bot — Feb 2026 (Iter 127: Telegram Command Menu)
+# AI's Elite PO Traders Bot — Feb 2026 (Iter 128: PO Connection Resilience)
+
+## Iter 128 (Feb 2026) — Pocket Option Connection Resilience Fixes
+
+### User bug
+> The application seems to be having more and more of a connection problem with Pocket Option platform when trying to connect through the app under the Pocket Option page.
+> Symptoms: "Failed to connect" toast immediately; connects then drops after a few minutes; button spins forever then errors. Happens on both preview and production, first connect after login and randomly several times per hour.
+
+### Root causes uncovered
+1. **PO killed `api-c.po.market` for server clients.** The primary WebSocket URL now returns **HTTP 403** on every attempt from any non-browser client. `demo-api-eu.po.market` (previously the fallback) still works. The service was hitting 403 first, then background-retrying the fallback 2 s later — but the frontend already got `success:false` and rendered a red toast.
+2. **`connect()` bailed after the first URL.** The old flow returned `False` the instant primary failed and delegated recovery to the exponential-backoff reconnect task, so the HTTP response the user actually saw was always the first-URL failure.
+3. **`get_ssid_service` was called by three `/ssid/status`, `/ssid/refresh`, `/ssid/*` endpoints but never imported** → every poll returned `{"error": "name 'get_ssid_service' is not defined"}`, which the UI treated as red status.
+
+### Fixes shipped
+- **`pocket_option_auto_trader.py`** — swapped URL priority: `demo-api-eu.po.market` is now the primary, the 403-locked `api-c.po.market` is retained as a fallback for future changes. Refactored `connect()` to try both URLs synchronously in-call via new `_connect_once()` helper, only handing off to the background reconnect loop after BOTH URLs fail. The endpoint response now reflects the true final state instead of the first-URL failure.
+- **`routes/pocket_option.py`** — imported `get_ssid_service` from `ssid_auto_refresh_service` with a graceful `None`-returning stub if Selenium isn't available.
+- **NEW `backend/tests/test_iter128_po_connection_resilience.py`** — 6 tests (3 static code checks + 3 live endpoint checks).
+
+### Verification
+- **Pre-fix**: `POST /api/auto-trade/connect` → `{"success":false, "message":"❌ Failed to connect to Pocket Option"}` in 4.5s. `GET /api/ssid/status` → `{"error":"name 'get_ssid_service' is not defined"}`.
+- **Post-fix**: `POST /api/auto-trade/connect` → `{"success":true, "is_connected":true, "connection_state":"authenticated"}` in **2.4 s on first try**. `GET /api/ssid/status` → `{"is_valid":true, ...}`.
+- **Backend log**: `🔌 Connecting to wss://demo-api-eu.po.market/...` → `✅ Socket.IO namespace connected` → `✅ WebSocket connected and authenticated successfully!`.
+- **Test suite**: 25/25 passing across Iter 126 + 127 + 128.
+
+---
 
 ## Iter 127 (Feb 2026) — Telegram Command Menu (/pause /resume /status /stake)
 

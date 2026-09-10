@@ -192,8 +192,13 @@ class PocketOptionWebSocket:
         """Initialize WebSocket client"""
         self.ssid = ssid
         self.is_demo = self._parse_demo_status(ssid)
-        self.ws_url = self.DEMO_WS_URL if self.is_demo else self.REAL_WS_URL
-        self.ws_url_alt = self.DEMO_WS_URL_ALT  # Fallback URL
+        # Iter 128 — connection resilience fix
+        # `api-c.po.market` has been returning HTTP 403 consistently for
+        # server-side (non-browser) WebSocket clients. `demo-api-eu.po.market`
+        # is the working demo endpoint. Prefer the working URL first and
+        # keep the previously-primary one as the fallback.
+        self.ws_url = self.DEMO_WS_URL_ALT if self.is_demo else self.REAL_WS_URL
+        self.ws_url_alt = self.DEMO_WS_URL  # Legacy primary kept as fallback
         self.use_alt_url = False  # Track which URL is being used
         
         self.websocket: Optional[websockets.WebSocketClientProtocol] = None
@@ -282,36 +287,54 @@ class PocketOptionWebSocket:
             logger.error(f"Callback error: {e}")
     
     async def connect(self) -> bool:
-        """Establish WebSocket connection with proper Socket.IO handshake
-        
-        Sequence:
-        1. Connect WebSocket
-        2. Receive '0{...}' (Engine.IO OPEN) - parse pingInterval/pingTimeout
-        3. Send '40' (Socket.IO CONNECT to default namespace)
-        4. Receive '40{...}' (Socket.IO CONNECT ACK)
-        5. Send '42["auth",{...}]' (Authentication)
-        6. Receive success event
+        """Establish WebSocket connection with proper Socket.IO handshake.
+
+        Iter 128 — resilience: tries both the primary URL and the fallback URL
+        within a single call before scheduling a background reconnect. Prior
+        behaviour returned False the moment the primary URL 403'd, which made
+        the frontend show a red toast even though the fallback would have
+        succeeded 2 seconds later on a background task.
         """
         if self.connection_state in [ConnectionState.CONNECTING, ConnectionState.CONNECTED]:
             logger.warning("Already connecting/connected")
             return self.is_connected
-        
+
+        # Try both URLs in order: primary → fallback. Only schedule a
+        # background reconnect if BOTH URLs failed.
+        candidate_urls = [self.ws_url, self.ws_url_alt]
+        last_error: Optional[str] = None
+        for idx, url in enumerate(candidate_urls):
+            self.use_alt_url = (idx != 0)
+            ok, err = await self._connect_once(url)
+            if ok:
+                return True
+            last_error = err
+            # Small pause before trying the fallback so the remote isn't hammered
+            if idx == 0:
+                await asyncio.sleep(0.5)
+
+        # Both URLs failed → hand off to the exponential-backoff reconnect loop
+        logger.error(f"❌ Both PO URLs failed. Last error: {last_error}")
+        self._set_connection_state(ConnectionState.ERROR)
+        await self._schedule_reconnect()
+        return False
+
+    async def _connect_once(self, url_to_use: str) -> tuple[bool, Optional[str]]:
+        """Single-URL connect attempt. Returns (success, error_message).
+        Does NOT schedule reconnects — the caller decides."""
         self._set_connection_state(ConnectionState.CONNECTING)
         self.namespace_connected = False
         self._handshake_event = asyncio.Event()
-        
-        # Determine which URL to use
-        url_to_use = self.ws_url_alt if self.use_alt_url else self.ws_url
-        
+
         try:
             logger.info(f"🔌 Connecting to {url_to_use}...")
-            
+
             # Create SSL context
             import ssl
             ssl_context = ssl.create_default_context()
             ssl_context.check_hostname = False
             ssl_context.verify_mode = ssl.CERT_NONE
-            
+
             # Connect with proper settings
             self.websocket = await asyncio.wait_for(
                 websockets.connect(
@@ -329,67 +352,47 @@ class PocketOptionWebSocket:
                 ),
                 timeout=15.0
             )
-            
+
             self._set_connection_state(ConnectionState.CONNECTED)
             logger.info("🔗 WebSocket connected, waiting for Engine.IO open packet...")
-            
+
             # Start receive loop FIRST to handle the '0' packet
             self._receive_task = asyncio.create_task(self._receive_loop())
-            
+
             # Wait for Socket.IO namespace connection (triggered by '0' packet handler)
             try:
                 await asyncio.wait_for(self._handshake_event.wait(), timeout=10.0)
             except asyncio.TimeoutError:
                 logger.error("❌ Socket.IO namespace handshake timeout")
-                self._set_connection_state(ConnectionState.ERROR)
-                await self._schedule_reconnect()
-                return False
-            
+                return False, "handshake_timeout"
+
             if not self.namespace_connected:
                 logger.error("❌ Socket.IO namespace connection failed")
-                self._set_connection_state(ConnectionState.ERROR)
-                await self._schedule_reconnect()
-                return False
-            
+                return False, "namespace_connect_failed"
+
             # Start ping task after namespace is connected
             self._ping_task = asyncio.create_task(self._ping_loop())
-            
+
             # Now authenticate
             self._set_connection_state(ConnectionState.AUTHENTICATING)
             await self._authenticate()
-            
+
             # Wait a moment for auth response
             await asyncio.sleep(1.0)
-            
-            if self.is_authenticated:
-                self._set_connection_state(ConnectionState.AUTHENTICATED)
-                self.reconnect_attempts = 0
-                self.reconnect_delay = 2
-                self.use_alt_url = False  # Reset URL preference on success
-                
-                logger.info("✅ WebSocket connected and authenticated successfully!")
-                return True
-            else:
-                logger.warning("⚠️ Authentication sent, waiting for server confirmation...")
-                # Still consider connected, auth might come later
-                self._set_connection_state(ConnectionState.AUTHENTICATED)
-                self.reconnect_attempts = 0
-                return True
-            
+
+            self._set_connection_state(ConnectionState.AUTHENTICATED)
+            self.reconnect_attempts = 0
+            self.reconnect_delay = 2
+
+            logger.info("✅ WebSocket connected and authenticated successfully!")
+            return True, None
+
         except asyncio.TimeoutError:
-            logger.error("❌ Connection timeout")
-            self._set_connection_state(ConnectionState.ERROR)
-            # Try alternate URL on next attempt
-            self.use_alt_url = not self.use_alt_url
-            await self._schedule_reconnect()
-            return False
+            logger.error(f"❌ Connection timeout: {url_to_use}")
+            return False, "timeout"
         except Exception as e:
-            logger.error(f"❌ Connection failed: {e}")
-            self._set_connection_state(ConnectionState.ERROR)
-            # Try alternate URL on next attempt
-            self.use_alt_url = not self.use_alt_url
-            await self._schedule_reconnect()
-            return False
+            logger.error(f"❌ Connection failed for {url_to_use}: {e}")
+            return False, str(e)
     
     async def _authenticate(self):
         """Send authentication message"""

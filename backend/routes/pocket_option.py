@@ -19,6 +19,13 @@ router = APIRouter()
 
 from routes.models import QuickAuthTestRequest, SSIDConnectRequest, DataCollectionStartRequest, BotStartRequest
 from pocket_option_client import get_pocket_option_client
+# Iter 128 — fix NameError: `get_ssid_service` referenced by /ssid/status &
+# related endpoints but never imported.
+try:
+    from ssid_auto_refresh_service import get_ssid_service
+except Exception:  # pragma: no cover — Selenium/service optional
+    def get_ssid_service():
+        return None
 import time
 import base64
 from io import BytesIO
