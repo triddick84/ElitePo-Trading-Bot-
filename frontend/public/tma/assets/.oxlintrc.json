@@ -1,0 +1,13 @@
+{
+  "env": {
+    "browser": true,
+    "es2022": true
+  },
+  "globals": {
+    "__REACT_DEVTOOLS_GLOBAL_HOOK__": "readonly",
+    "MSApp": "readonly"
+  },
+  "rules": {
+    "no-undef": "off"
+  }
+}
