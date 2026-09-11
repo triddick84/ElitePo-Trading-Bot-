@@ -1,4 +1,26 @@
-# AI's Elite PO Traders Bot — Feb 2026 (Iter 129: TMA + 3-MA Crossover)
+# AI's Elite PO Traders Bot — Feb 2026 (Iter 130: Guppy MA Presets)
+
+## Iter 130 (Feb 2026) — Guppy MA Presets for the 3-MA Crossover
+
+### User request
+> Add a one-click "Guppy MA" preset that seeds the 3-MA crossover with the classic 3/5/8/13/21 ribbon so you can start trading it in one tap.
+
+### What shipped
+- **New `TRIPLE_MA_PRESETS` constant** in `StrategyBuilder.jsx` — 6 one-tap ribbons that seed all six parameters (fast/medium/slow type + period) at once:
+  - **Guppy Short (3/8/21)** — Daryl Guppy's short-term ribbon anchors, quick reversals on 1-5 m OTC.
+  - **Guppy Balanced (5/13/21)** — Fibonacci-spaced sweet spot between speed and noise-rejection.
+  - **Guppy Hybrid (5/13/21 · EMA+WMA+TMA)** — shows off Iter 129's per-line MA-type flexibility; WMA responds faster on the middle, TMA smooths the slow anchor.
+  - **Guppy Long (30/50/60)** — long-term investor band anchors for HTF confirmation.
+  - **Golden Cross (50/100/200)** — classic swing/positional 3-EMA stack.
+  - **Reset (5/13/34)** — restore template defaults.
+- **Preset row** rendered inline above the parameter grid **only when the indicator is `TRIPLE_MA_CROSSOVER`** — zero clutter for other indicators. Each preset button carries `data-testid="triple-ma-preset-{id}"` and a `title` tooltip; the container has `data-testid="triple-ma-presets-{condition.id}"`.
+- Click behaviour: `onUpdate({...condition, parameters: {...condition.parameters, ...preset.params}})` — merges into existing parameters so unrelated fields aren't wiped.
+
+### Tests
+- `backend/tests/test_iter130_guppy_presets.py` — 5/5 pass (constant declared, all 6 presets present with correct periods, conditional render guard, all-6-parameter merge, testids for automation).
+- **Regression**: 42/42 pass across Iter 126 + 127 + 128 + 129 + 130.
+
+---
 
 ## Iter 129 (Feb 2026) — Strategy Builder: Add TMA + 3-MA Crossover
 

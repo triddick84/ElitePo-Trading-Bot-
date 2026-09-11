@@ -759,6 +759,74 @@ const INDICATOR_TEMPLATES = {
   },
 };
 
+// =====================================================
+// Iter 130 — TRIPLE_MA_CROSSOVER quick-tap presets
+// =====================================================
+// Each preset seeds all 6 parameters (fast/medium/slow type + period).
+// Classic Guppy uses EMAs. "Golden Cross" is the swing-trader standard.
+const TRIPLE_MA_PRESETS = [
+  {
+    id: 'guppy-short',
+    label: 'Guppy Short (3/8/21)',
+    description: "Daryl Guppy's short-term ribbon anchor points — quick reversals, works well on 1-5m OTC",
+    params: {
+      fast_type: 'EMA', fast_period: 3,
+      medium_type: 'EMA', medium_period: 8,
+      slow_type: 'EMA', slow_period: 21,
+    },
+  },
+  {
+    id: 'guppy-balanced',
+    label: 'Guppy Balanced (5/13/21)',
+    description: 'Fibonacci-spaced Guppy anchors — the sweet spot between speed and noise-rejection',
+    params: {
+      fast_type: 'EMA', fast_period: 5,
+      medium_type: 'EMA', medium_period: 13,
+      slow_type: 'EMA', slow_period: 21,
+    },
+  },
+  {
+    id: 'guppy-hybrid',
+    label: 'Guppy Hybrid (5/13/21 · EMA+WMA+TMA)',
+    description: 'Same Guppy periods but each line uses a different MA type — WMA responds faster than EMA on the middle, TMA smooths the slow anchor',
+    params: {
+      fast_type: 'EMA', fast_period: 5,
+      medium_type: 'WMA', medium_period: 13,
+      slow_type: 'TMA', slow_period: 21,
+    },
+  },
+  {
+    id: 'guppy-long',
+    label: 'Guppy Long (30/50/60)',
+    description: "Daryl Guppy's long-term investor band anchor points — trend confirmation on higher timeframes",
+    params: {
+      fast_type: 'EMA', fast_period: 30,
+      medium_type: 'EMA', medium_period: 50,
+      slow_type: 'EMA', slow_period: 60,
+    },
+  },
+  {
+    id: 'golden-cross',
+    label: 'Golden Cross (50/100/200)',
+    description: 'Classic swing/positional 3-EMA stack — 200 acts as the trend gate',
+    params: {
+      fast_type: 'EMA', fast_period: 50,
+      medium_type: 'EMA', medium_period: 100,
+      slow_type: 'EMA', slow_period: 200,
+    },
+  },
+  {
+    id: 'default',
+    label: 'Reset (5/13/34)',
+    description: 'Reset to the template defaults',
+    params: {
+      fast_type: 'EMA', fast_period: 5,
+      medium_type: 'WMA', medium_period: 13,
+      slow_type: 'TMA', slow_period: 34,
+    },
+  },
+];
+
 // Timeframe options
 const timeframes = [
   { value: '5s', label: '5 Seconds' },
@@ -911,6 +979,36 @@ const ConditionCard = ({ condition, onRemove, onUpdate, index }) => {
           </div>
         )}
       </div>
+
+      {/* Iter 130 — Guppy MA presets: one-click seed the 3-MA crossover
+          with classic ribbon anchor points. Only shows for TRIPLE_MA_CROSSOVER. */}
+      {condition.indicator === 'TRIPLE_MA_CROSSOVER' && (
+        <div className="mb-3 p-2.5 rounded-md bg-slate-900/40 border border-slate-700/60" data-testid={`triple-ma-presets-${condition.id}`}>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xs font-medium text-cyan-300">One-tap presets</span>
+            <span className="text-[10px] text-slate-500">Guppy MA ribbons + classics</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {TRIPLE_MA_PRESETS.map((preset) => (
+              <Button
+                key={preset.id}
+                type="button"
+                size="sm"
+                variant="ghost"
+                data-testid={`triple-ma-preset-${preset.id}`}
+                onClick={() => onUpdate({
+                  ...condition,
+                  parameters: { ...condition.parameters, ...preset.params },
+                })}
+                className="h-7 px-2 text-xs bg-slate-800/60 border border-slate-700 hover:bg-cyan-500/10 hover:border-cyan-500/40 hover:text-cyan-300 rounded"
+                title={preset.description}
+              >
+                {preset.label}
+              </Button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Parameters */}
       {template && Object.keys(template.parameters).length > 0 && (
