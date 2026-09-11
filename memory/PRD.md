@@ -1,4 +1,43 @@
-# AI's Elite PO Traders Bot — Feb 2026 (Iter 134: Cleanup + Perf + Docs)
+# AI's Elite PO Traders Bot — Feb 2026 (Iter 135: RF AUC Audit + Live Perf Pill)
+
+## Iter 135 (Feb 2026) — Per-Asset RF AUC Audit + Live Perf Pill
+
+### User request
+> RF AUC Audit: Score all 60 per-asset random forests on holdout data and drop or de-weight anything below 0.52 so the ensemble only trusts models that beat coin-flip.
+> Live Perf Widget: Show the yf-cache hit-rate as a tiny pill on the Dashboard so you can watch the speed win pay off in real time.
+
+### 1 · RF AUC Audit
+- **NEW** `backend/rf_audit_service.py` — full audit pipeline:
+  - Discovers every `rf_<ASSET>_<TIMEFRAME>.pkl` in `/app/backend/ml_models/`.
+  - Loads via `RestrictedUnpickler` (safe deserialization) → runs `FeatureEngineer` on fresh holdout data → computes `roc_auc_score` on next-bar direction labels.
+  - **Dual-source holdout**: yfinance first, then falls back to Mongo's `otc_candles_5s` (42 k rows across all OTC assets) and `historical_candles` when yfinance's `curl_cffi` impersonation fails or the pair isn't tradable on Yahoo.
+  - Fills missing volume features with `0.0` (neutral) so FX pairs — which yfinance reports with `Volume=0` — don't error out.
+  - **Weight policy**: `_weight_from_auc()`:
+    - `AUC ≥ 0.55` → weight `1.0` (trusted)
+    - `0.52 ≤ AUC < 0.55` → linear scale `0.0 → 1.0` (de-weighted)
+    - `AUC < 0.52` → weight `0.0` (dropped — worse than coin-flip)
+  - Persists rows to Mongo `rf_audit` collection: `{asset, timeframe, auc, n_samples, status, weight, audited_at, reason?}`.
+  - On startup, `load_weights_from_db()` warm-loads previous audit results so the ensemble immediately uses last known trust levels.
+  - `get_effective_weight(asset, timeframe)` — public API for the ensemble to consume (defaults to `1.0` for never-audited models, preserving existing behaviour).
+- **REST endpoints** in `backend/routes/perf_routes.py`:
+  - `POST /api/rf-audit/run?limit=N` — score every model, return summary + full results sorted by AUC.
+  - `GET /api/rf-audit/latest` — most recent audit rows, sorted by AUC desc.
+  - `GET /api/rf-audit/weight?asset=&timeframe=` — single-model weight lookup.
+- **Live audit output**: 56 models discovered, 38 successfully scored, **10 trusted** (top: GBPUSD_OTC 5s at **AUC 0.90**), **15 de-weighted**, **13 dropped** (bottom: USDJPY_OTC 30s at 0.42), 18 errors (mostly forex pairs without stored history).
+
+### 2 · Live Perf Pill
+- **NEW** `frontend/src/components/PerfPill.jsx` — compact header pill:
+  - Polls `/api/perf/yf-cache` every 6 s.
+  - `⚡ <hitrate>% cache`.
+  - Colour ramp: **emerald** ≥ 70 %, **amber** ≥ 40 %, **grey** below.
+  - Hover tooltip: full stats (hits/misses/size/max/TTL).
+- Wired into the sticky app header between "Live Data" pill and the user menu.
+
+### Tests
+- **NEW** `backend/tests/test_iter135_rf_audit.py` — 13 tests covering: weight policy (full trust ≥ 0.55, linear 0.52–0.55, dropped < 0.52, None-safe), asset→yfinance mapping (forex `=X`, crypto `-USD`, OTC-suffix stripping, slash/dash normalization), model-list discovery, default weight lookup, live REST endpoints, PerfPill component wiring.
+- **Regression**: 65/65 pass across Iter 129 + 130 + 131 + 133 + 134 + 135.
+
+---
 
 ## Iter 134 (Feb 2026) — Codebase Sweep, Perf Wins, Full Docs
 

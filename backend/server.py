@@ -4469,6 +4469,16 @@ async def startup_event():
             except Exception as _rge:
                 logger.warning("[RiskGuard] init failed: %s", _rge)
 
+            # Iter 135 — RF AUC Audit: bind DB and preload weights from
+            # any prior audit rows so the ensemble immediately uses the
+            # last known trust levels.
+            try:
+                from rf_audit_service import rf_audit_service
+                rf_audit_service.bind_db(db)
+                await rf_audit_service.load_weights_from_db()
+            except Exception as _rae:
+                logger.warning("[rf_audit] init failed: %s", _rae)
+
             # Iter 93 — Hot-collection indexes. Adaptive-offset (Iter 91) and
             # /signals/latest both do frequent per-asset queries; without
             # indexes each poll was a full collscan on 5-40 k documents, which

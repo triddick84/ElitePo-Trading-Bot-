@@ -20,6 +20,7 @@ import PocketOptionPage from "./components/PocketOptionPage";
 import MobileAutoTraderPage from "./components/MobileAutoTraderPage";
 import RiskGuardPage from "./components/RiskGuardPage";
 import BotLogo from "./components/BotLogo";
+import PerfPill from "./components/PerfPill";
 import MicrostructureDashboard from "./components/MicrostructureDashboard";
 import EliteScreener from "./components/EliteScreener";
 import IntegrationsPage from "./components/IntegrationsPage";
@@ -296,6 +297,9 @@ function ProtectedApp() {
                   <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-lg shadow-green-500/50"></span>
                   <span>Live Data</span>
                 </div>
+
+                {/* Iter 135 — Live perf pill (yfinance cache hit rate) */}
+                <PerfPill />
                 
                 {/* User Menu */}
                 <div className="flex items-center space-x-2 bg-[#1a1a24] px-4 py-2 rounded-lg border border-[#2a2a35]">
