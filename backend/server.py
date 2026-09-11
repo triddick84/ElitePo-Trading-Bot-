@@ -8,6 +8,15 @@ from fastapi import FastAPI, APIRouter, HTTPException, BackgroundTasks, Query, R
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 
+# Iter 134 — install cross-strategy yfinance TTL cache BEFORE any strategy
+# module imports (otherwise they'd capture the un-patched Ticker.history).
+try:
+    import yf_cache
+    yf_cache.install()
+except Exception as _yfe:
+    import logging as _l
+    _l.getLogger(__name__).warning(f"[yf_cache] install failed: {_yfe}")
+
 # Load environment variables BEFORE any other imports that might need them
 load_dotenv()
 
@@ -4257,6 +4266,7 @@ from routes.strategy_backtest import router as strategy_backtest_router
 from routes.invert_events import router as invert_events_router
 from routes.telegram_routes import router as telegram_router
 from routes.riskguard_routes import router as riskguard_router
+from routes.perf_routes import router as perf_router
 
 api_router.include_router(strategies_router)
 api_router.include_router(signals_router)
@@ -4282,6 +4292,7 @@ api_router.include_router(strategy_backtest_router)
 api_router.include_router(invert_events_router)
 api_router.include_router(telegram_router)
 api_router.include_router(riskguard_router)
+api_router.include_router(perf_router)
 
 app.include_router(api_router)
 

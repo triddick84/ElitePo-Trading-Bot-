@@ -1,4 +1,33 @@
-# AI's Elite PO Traders Bot — Feb 2026 (Iter 133: TM Auto-Feed + Nav Sweep)
+# AI's Elite PO Traders Bot — Feb 2026 (Iter 134: Cleanup + Perf + Docs)
+
+## Iter 134 (Feb 2026) — Codebase Sweep, Perf Wins, Full Docs
+
+### User request
+> Run through the complete build and update / change anything outdated or leftover junk. Improve the overall accuracy and speed of predicted signals and trades. Then generate a complete overview + feature list + setup guide for desktop and mobile.
+
+### 1 · Cleanup
+- **Deleted** `/app/backend/_unused_archive/` (16 stale strategy files) and `/app/frontend/src/components/_archive/` (31 obsolete panels) — ~900 KB of dead code. Confirmed zero live imports referenced either.
+- **Fixed pre-existing syntax bug** in `strategies/support_resistance.py` (`class SRStrength(Enum):up` typo blocking backend cold-start after reloads).
+
+### 2 · Speed win — cross-strategy yfinance TTL cache
+- **NEW** `backend/yf_cache.py` — monkey-patches `yfinance.Ticker.history` on import with a thread-safe TTL cache (default 15 s, `YF_CACHE_TTL` env override, hard cap 512 entries with 10 % LRU eviction). Every strategy that calls `yf.Ticker(sym).history(...)` transparently benefits — no strategy files touched.
+- Wired **before** any strategy imports at the top of `server.py`.
+- **NEW** `backend/routes/perf_routes.py`: `GET /api/perf/yf-cache` (live stats) + `POST /api/perf/yf-cache/invalidate` (flush).
+- **Impact**: auto-scan across 20 assets went from 20 network calls per tick → 1 shared warm read within each 15 s window.
+
+### 3 · Accuracy win — RiskGuard-aware auto-scan pre-flight gate
+- **MOD** `backend/auto_scan_service.py::_route_to_tm` — queries `risk_guard_service.get_active_session("default")` before routing any winner to the TM script. If the session status is `target_reached / stop_loss_hit / max_trades_reached`, the route is **skipped** and the reason surfaces in `_state.last_error` as `riskguard_lock:<status>`.
+- **Impact**: prevents over-trading after the day's stop-loss / target is hit. Composes with Iter 133 auto-feed so RiskGuard is fully closed-loop: TM trades → auto-feed session → session locks → auto-scan stops routing.
+
+### 4 · Docs
+- **NEW** `/app/FEATURES.md` — complete overview: AI/ML stack (LightGBM booster, 60 per-asset RFs, Rolling Micro-ML, Kyle-Lambda / Glosten-Milgrom, Ridicolous, Ensemble EV Gate), RiskGuard, Telegram, Strategy Builder + 35 indicators + Guppy presets, TM userscript, all React pages, integrations, auth, tests, full API endpoint cheatsheet.
+- **NEW** `/app/SETUP.md` — 8-part guide: what you need → using the deployed app → desktop setup (Chrome/Firefox/Safari) → mobile setup (Android via Kiwi Browser, iOS via Userscripts app + Telegram-only path) → dev/local fork → SSID refresh → troubleshooting → production deploy.
+
+### Tests
+- **NEW** `backend/tests/test_iter134_perf_and_gate.py` — 9 tests (cache install idempotency, cache key uniqueness, eviction, per-ticker invalidation, TTL freshness, live `GET /perf/yf-cache` endpoint, `POST /perf/yf-cache/invalidate`, source-level check that `_route_to_tm` has the RiskGuard gate, correct `user_id="default"`).
+- **Full suite regression**: **77/77 pass** across Iter 126–134.
+
+---
 
 ## Iter 133 (Feb 2026) — Auto-Feed RiskGuard from TM Reports + Sidebar Emoji → Lucide Sweep
 

@@ -324,6 +324,24 @@ class AutoScanService:
         the chart and executes the winning trade."""
         if self._db is None:
             return
+
+        # Iter 134 — RiskGuard-aware pre-flight gate.
+        # If the user's active RiskGuard session has hit its target, stop-loss
+        # or max-trades limit, DO NOT route another trade. Prevents the auto-
+        # scan from burning through the session after limits are breached.
+        try:
+            from risk_guard_service import risk_guard_service
+            active = await risk_guard_service.get_active_session("default")
+            if active and active.get("status") != "active":
+                self._state.last_error = f"riskguard_lock:{active.get('status')}"
+                logger.info(
+                    f"[auto_scan] 🛑 RiskGuard locked ({active.get('status')}) — "
+                    f"skipping route for {winner['asset']}"
+                )
+                return
+        except Exception as _rge:
+            logger.debug(f"[auto_scan] RiskGuard pre-flight skipped: {_rge}")
+
         expires_at = (datetime.now(timezone.utc) +
                       timedelta(seconds=int(cfg.get("target_ttl_seconds", 60)))
                       ).isoformat()

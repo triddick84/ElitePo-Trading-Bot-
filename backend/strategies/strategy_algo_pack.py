@@ -198,8 +198,8 @@ class AlgoMeanReversion:
         self.bb_period = 20
         self.bb_std = 2.5
         self.rsi_period = 2
-        self.rsi_extreme_low = 5.0
-        self.rsi_extreme_high = 95.0
+        self.rsi_extreme_low = 15.0
+        self.rsi_extreme_high = 85.0
         self.wick_ratio_min = 1.5  # wick must be 1.5× body size for rejection
 
     def generate_signal(self, df: pd.DataFrame) -> Dict[str, Any]:

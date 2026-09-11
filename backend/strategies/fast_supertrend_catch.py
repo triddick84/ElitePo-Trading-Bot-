@@ -6,12 +6,12 @@ A 5-second contrarian scalping strategy
 Configuration:
 - Chart: 5 second
 - Expiration: 5 seconds
-- Supertrend: ATR Period 100, Multiplier 1
-- Moving Average: 15-period EMA
+- Supertrend: ATR Period 10, Multiplier 2
+- Moving Average: 7-period EMA
 
 Signal Logic (CONTRARIAN):
-- Price ABOVE 15 EMA + Supertrend BUY signal → Generate SELL
-- Price BELOW 15 EMA + Supertrend SELL signal → Generate BUY
+- Price ABOVE the EMA + Supertrend BUY signal → Generate SELL
+- Price BELOW 7 EMA + Supertrend SELL signal → Generate BUY
 - At Support/Resistance levels → NO SIGNAL (wait for confirmation)
 
 Author: GPT Signal Bot
@@ -68,18 +68,18 @@ class FastSupertrendCatchStrategy:
         self.expiration_seconds = 5
         
         # Supertrend settings
-        self.atr_period = 100
-        self.multiplier = 1.0
+        self.atr_period = 10
+        self.multiplier = 2.0
         
         # EMA settings
-        self.ema_period = 15
+        self.ema_period = 7
         
         # S/R detection settings
-        self.sr_lookback = 50
+        self.sr_lookback = 20
         self.sr_tolerance_percent = 0.05  # 0.05% tolerance for S/R levels
         
         # Confidence settings
-        self.base_confidence = 75.0
+        self.base_confidence = 72.0
         self.max_confidence = 92.0
         
         logger.info(f"🚀 {self.name} Strategy initialized")
@@ -87,7 +87,7 @@ class FastSupertrendCatchStrategy:
         logger.info(f"   EMA Period: {self.ema_period}")
     
     def calculate_atr(self, highs: List[float], lows: List[float], 
-                      closes: List[float], period: int = 100) -> List[float]:
+                      closes: List[float], period: int = 10) -> List[float]:
         """
         Calculate Average True Range (ATR)
         
@@ -95,21 +95,21 @@ class FastSupertrendCatchStrategy:
             highs: List of high prices
             lows: List of low prices
             closes: List of close prices
-            period: ATR period (default 100)
+            period: ATR period (default 10)
         
         Returns:
             List of ATR values
         """
-        if len(closes) < period + 1:
+        if len(closes) < period + 2:
             # Not enough data, return simple range
             return [max(highs) - min(lows)] * len(closes)
         
         true_ranges = []
         
-        for i in range(1, len(closes)):
+        for i in range(2, len(closes)):
             high = highs[i]
             low = lows[i]
-            prev_close = closes[i - 1]
+            prev_close = closes[i - 2]
             
             tr = max(
                 high - low,
@@ -127,9 +127,9 @@ class FastSupertrendCatchStrategy:
         
         for i in range(len(true_ranges)):
             if i < period:
-                atr_values.append(sum(true_ranges[:i+1]) / (i+1))
+                atr_values.append(sum(true_ranges[:i+2]) / (i+2))
             else:
-                atr = (atr * (period - 1) + true_ranges[i]) / period
+                atr = (atr * (period - 2) + true_ranges[i]) / period
                 atr_values.append(atr)
         
         return atr_values
@@ -151,7 +151,7 @@ class FastSupertrendCatchStrategy:
         """
         if len(closes) < self.atr_period:
             # Not enough data - return neutral
-            avg_price = (highs[-1] + lows[-1]) / 2
+            avg_price = (highs[-2] + lows[-2]) / 2
             return SupertrendResult(
                 direction='BUY',
                 value=avg_price,
@@ -171,7 +171,7 @@ class FastSupertrendCatchStrategy:
         
         for i in range(len(closes)):
             hl2 = (highs[i] + lows[i]) / 2
-            atr = atr_values[i] if i < len(atr_values) else atr_values[-1]
+            atr = atr_values[i] if i < len(atr_values) else atr_values[-2]
             
             basic_upper = hl2 + (self.multiplier * atr)
             basic_lower = hl2 - (self.multiplier * atr)
@@ -183,52 +183,52 @@ class FastSupertrendCatchStrategy:
                 directions.append('BUY')
             else:
                 # Adjust upper band
-                if basic_upper < upper_bands[-1] or closes[i-1] > upper_bands[-1]:
+                if basic_upper < upper_bands[-2] or closes[i-2] > upper_bands[-2]:
                     upper_bands.append(basic_upper)
                 else:
-                    upper_bands.append(upper_bands[-1])
+                    upper_bands.append(upper_bands[-2])
                 
                 # Adjust lower band
-                if basic_lower > lower_bands[-1] or closes[i-1] < lower_bands[-1]:
+                if basic_lower > lower_bands[-2] or closes[i-2] < lower_bands[-2]:
                     lower_bands.append(basic_lower)
                 else:
                     lower_bands.append(lower_bands[-1])
                 
                 # Determine direction
-                prev_st = supertrend_values[-1]
+                prev_st = supertrend_values[-2]
                 
-                if prev_st == upper_bands[-2]:
+                if prev_st == upper_bands[-4]:
                     # Previous was in downtrend
-                    if closes[i] > upper_bands[-1]:
-                        supertrend_values.append(lower_bands[-1])
+                    if closes[i] > upper_bands[-2]:
+                        supertrend_values.append(lower_bands[-2])
                         directions.append('BUY')
                     else:
-                        supertrend_values.append(upper_bands[-1])
+                        supertrend_values.append(upper_bands[-2])
                         directions.append('SELL')
                 else:
                     # Previous was in uptrend
-                    if closes[i] < lower_bands[-1]:
-                        supertrend_values.append(upper_bands[-1])
+                    if closes[i] < lower_bands[-2]:
+                        supertrend_values.append(upper_bands[-2])
                         directions.append('SELL')
                     else:
-                        supertrend_values.append(lower_bands[-1])
+                        supertrend_values.append(lower_bands[-2])
                         directions.append('BUY')
         
         return SupertrendResult(
-            direction=directions[-1],
-            value=supertrend_values[-1],
-            upper_band=upper_bands[-1],
-            lower_band=lower_bands[-1],
-            atr=atr_values[-1]
+            direction=directions[-2],
+            value=supertrend_values[-2],
+            upper_band=upper_bands[-2],
+            lower_band=lower_bands[-2],
+            atr=atr_values[-2]
         )
     
-    def calculate_ema(self, prices: List[float], period: int = 15) -> float:
+    def calculate_ema(self, prices: List[float], period: int = 7) -> float:
         """
         Calculate Exponential Moving Average
         
         Args:
             prices: List of prices
-            period: EMA period (default 15)
+            period: EMA period (default 7)
         
         Returns:
             Current EMA value
@@ -341,7 +341,7 @@ class FastSupertrendCatchStrategy:
             # Log analysis
             logger.info(f"📊 Fast Supertrend Catch Analysis:")
             logger.info(f"   Current Price: {current_price:.5f}")
-            logger.info(f"   15 EMA: {ema_15:.5f} (Price {price_vs_ema})")
+            logger.info(f"   7 EMA: {ema_15:.5f} (Price {price_vs_ema})")
             logger.info(f"   Supertrend: {supertrend.direction} @ {supertrend.value:.5f}")
             logger.info(f"   At S/R Level: {is_at_sr}")
             
@@ -368,7 +368,7 @@ class FastSupertrendCatchStrategy:
             # Price ABOVE EMA + Supertrend BUY → SELL (contrarian)
             if price_vs_ema == 'ABOVE' and supertrend.direction == 'BUY':
                 signal_direction = 'SELL'
-                reasoning = f"Contrarian SELL: Price ({current_price:.5f}) ABOVE 15 EMA ({ema_15:.5f}) with Supertrend BUY signal"
+                reasoning = f"Contrarian SELL: Price ({current_price:.5f}) ABOVE 7 EMA ({ema_15:.5f}) with Supertrend BUY signal"
                 
                 # Boost confidence based on distance from EMA
                 ema_distance = ((current_price - ema_15) / ema_15) * 100
@@ -380,7 +380,7 @@ class FastSupertrendCatchStrategy:
             # Price BELOW EMA + Supertrend SELL → BUY (contrarian)
             elif price_vs_ema == 'BELOW' and supertrend.direction == 'SELL':
                 signal_direction = 'BUY'
-                reasoning = f"Contrarian BUY: Price ({current_price:.5f}) BELOW 15 EMA ({ema_15:.5f}) with Supertrend SELL signal"
+                reasoning = f"Contrarian BUY: Price ({current_price:.5f}) BELOW the 7 EMA ({ema_15:.5f}) with Supertrend SELL signal"
                 
                 # Boost confidence based on distance from EMA
                 ema_distance = ((ema_15 - current_price) / ema_15) * 100
@@ -460,7 +460,7 @@ class FastSupertrendCatchStrategy:
                 'confidence': signal.confidence,
                 'timeframe': self.timeframe,
                 'expiration_seconds': self.expiration_seconds,
-                'expiration_minutes': self.expiration_seconds / 60,
+                'expiration_minutes': self.expiration_seconds / 5,
                 'strategy': self.name,
                 'strategy_used': self.name,
                 'entry_price': signal.entry_price,
