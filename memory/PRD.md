@@ -1,4 +1,61 @@
-# AI's Elite PO Traders Bot — Feb 2026 (Iter 130: Guppy MA Presets)
+# AI's Elite PO Traders Bot — Feb 2026 (Iter 132: Modern AI-Bot Logo)
+
+## Iter 132 (Feb 2026) — Modern AI-Bot Logo Across the App
+
+### User request
+> Let's change the icons from the login page all the way through the build with a more modern realistic AI bot picture or icon.
+
+### What shipped
+- **NEW** `frontend/src/components/BotLogo.jsx` — single reusable pure-SVG component. Angular chamfered helmet, glowing cyan→magenta visor eye, antenna with pulsing top-node, circuit-trace cheek details, chin grille. Scales cleanly from 20 px favicon → 96 px hero. Props: `size`, `glow` (drop-shadow), `minimal` (hides antenna + cheek details for tiny sizes), `dataTestId`.
+- **Replaced 🤖 emoji + purple gradient tile** at three visible touchpoints in `App.js`:
+  - Login-screen hero (88 px with glow).
+  - Sticky header (44 px with glow).
+  - Loading screen (96 px with glow).
+  - Title gradient upgraded from purple→purple to `cyan-300 → sky-400 → fuchsia-400`.
+- **Replaced Shield icon** in `AuthComponents.jsx` LoginPage card header (56 px with glow, `data-testid="login-card-logo"`).
+- **Favicon**: new `public/favicon.svg` matching the mark; `<link rel="icon" type="image/svg+xml">` wired into `public/index.html`.
+- **useId** correctly used inside `BotLogo` so multiple instances on the same page have unique gradient IDs (originally used a conditional hook which failed eslint react-hooks/rules-of-hooks).
+
+### Verification
+- Screenshot: login hero, card, and post-login sticky header all render the new mark with pulsing antenna and glowing visor.
+- Login flow still succeeds (`testuser` / `test123` → "Welcome back, testuser!" toast).
+- **35/35 regression pass** across Iter 129 + 130 + 131.
+
+---
+
+## Iter 131 (Feb 2026) — RiskGuard: Trade Sizing + Session Discipline
+
+### User request
+> Crawl https://www.capitalguardpro.com/ and generate a comparable feature to the build.
+
+### What shipped
+A full "risk management + session discipline" module modelled on Capital Guard Pro. Three core pillars:
+
+1. **Minimum-next-trade calculator**
+   `POST /api/riskguard/calculate` — inputs: `capital`, `payout_pct`, `target_profit`, `stop_loss`, `max_trades`, `trades_taken`, `current_pnl`. Returns the safe next stake, clamped by (a) MIN_STAKE floor, (b) `MAX_STAKE_FRACTION * capital` (25 %) ceiling, and (c) remaining stop-loss budget. Auto-locks when target / stop-loss / max_trades limits are reached.
+2. **Session tracker**
+   - `POST /riskguard/session/start` (only one active session per user; supersedes previous)
+   - `GET /riskguard/session/current`
+   - `POST /riskguard/session/record-trade` (`win` / `loss` / `draw`) — auto-closes the session when a hard limit triggers
+   - `POST /riskguard/session/close` (manual)
+   - `GET /riskguard/sessions/history?limit=…`
+3. **Performance analytics**
+   - `GET /riskguard/stats/summary` — total sessions, total trades, WR, cumulative P&L, sessions_hit_target, sessions_hit_stop_loss.
+
+### Files
+- **NEW** `backend/risk_guard_service.py` — pure calculator + `RiskGuardService` class with Mongo persistence to `risk_guard_sessions` collection.
+- **NEW** `backend/routes/riskguard_routes.py` — 7 REST endpoints + Pydantic schemas.
+- **NEW** `backend/tests/test_iter131_riskguard.py` — 18 tests (calculator math, status derivation, summarization, live REST lifecycle inc. auto-close on target/stop-loss).
+- **NEW** `frontend/src/components/RiskGuardPage.jsx` — hero "Minimum next trade $X.XX" card, 5-tile session stats (progress, stop-loss, target, WR, account gain), Record Win/Loss/Draw action bar, config form (capital / payout / target / stop / max_trades) with big Start Session CTA, history table with account-gain % + status pills, 10-s auto-refresh polling.
+- **MOD** `backend/server.py` — includes `riskguard_router`, binds `risk_guard_service` to DB on startup.
+- **MOD** `frontend/src/App.js` — new "RiskGuard" nav item (🛡️ icon) + render case.
+
+### Tests / verification
+- **18/18 pytest pass** in `test_iter131_riskguard.py`.
+- Live curl walkthrough: calc returned $117.65 for the reference $1000/0.85/500/300/5 config; recorded a win → +$85 P&L, a loss → net $-15, summary aggregated correctly across sessions.
+- Screenshot confirms: nav highlights, hero card renders live $117.65, empty session state displays properly, all action buttons correctly disabled until a session starts.
+
+---
 
 ## Iter 130 (Feb 2026) — Guppy MA Presets for the 3-MA Crossover
 

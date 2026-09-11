@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Badge } from './ui/badge';
 import { toast } from 'sonner';
 import { User, Lock, Mail, LogOut, Shield } from 'lucide-react';
+import BotLogo from './BotLogo';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL || '';
 
@@ -202,7 +203,7 @@ export const LoginPage = ({ onClose }) => {
       <Card className="w-full max-w-md bg-slate-900/90 border-slate-700">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-2">
-            <Shield className="w-12 h-12 text-purple-500" />
+            <BotLogo size={56} glow dataTestId="login-card-logo" />
           </div>
           <CardTitle className="text-2xl text-white">AI's Elite PO Traders Bot</CardTitle>
           <CardDescription>Sign in to access your trading dashboard</CardDescription>

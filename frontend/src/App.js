@@ -18,6 +18,8 @@ import PerformancePage from "./components/PerformancePage";
 import SettingsPage from "./components/SettingsPage";
 import PocketOptionPage from "./components/PocketOptionPage";
 import MobileAutoTraderPage from "./components/MobileAutoTraderPage";
+import RiskGuardPage from "./components/RiskGuardPage";
+import BotLogo from "./components/BotLogo";
 import MicrostructureDashboard from "./components/MicrostructureDashboard";
 import EliteScreener from "./components/EliteScreener";
 import IntegrationsPage from "./components/IntegrationsPage";
@@ -144,10 +146,10 @@ function ProtectedApp() {
       <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center p-4">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <div className="w-20 h-20 bg-gradient-to-br from-purple-600 to-purple-800 rounded-2xl flex items-center justify-center shadow-lg mx-auto mb-4">
-              <span className="text-4xl">🤖</span>
+            <div className="mx-auto mb-4 flex justify-center">
+              <BotLogo size={88} glow dataTestId="app-login-logo" />
             </div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-purple-600 bg-clip-text text-transparent">AI's Elite PO Traders Bot</h1>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-cyan-300 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">AI's Elite PO Traders Bot</h1>
             <p className="text-slate-500 mt-2">AI-Powered Trading System</p>
           </div>
           <LoginPage />
@@ -170,6 +172,7 @@ function ProtectedApp() {
     { id: "telegram-bot", label: "Telegram Bot", icon: "📱" },
     { id: "pocket-option", label: "Pocket Option", icon: "🎰" },
     { id: "mobile-trader", label: "Mobile Auto-Trade", icon: "📲" },
+    { id: "riskguard", label: "RiskGuard", icon: "🛡️" },
     { id: "microstructure", label: "Microstructure", icon: "📡" },
     { id: "elite-screener", label: "Elite Screener", icon: "🔍" },
     { id: "integrations", label: "Integrations", icon: "🔗" },
@@ -202,6 +205,8 @@ function ProtectedApp() {
         return <PocketOptionPage />;
       case "mobile-trader":
         return <MobileAutoTraderPage />;
+      case "riskguard":
+        return <RiskGuardPage />;
       case "microstructure":
         return <MicrostructureDashboard />;
       case "elite-screener":
@@ -243,7 +248,10 @@ function ProtectedApp() {
     return (
       <div className="min-h-screen bg-[#0a0a0f] trading-grid flex items-center justify-center">
         <div className="text-center space-y-4">
-          <div className="animate-spin w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full mx-auto glow-purple"></div>
+          <div className="mx-auto flex justify-center">
+            <BotLogo size={96} glow dataTestId="app-loading-logo" />
+          </div>
+          <div className="animate-spin w-10 h-10 border-4 border-cyan-500 border-t-transparent rounded-full mx-auto"></div>
           <p className="text-slate-300 text-lg font-medium">Loading AI's Elite PO Traders Bot...</p>
           <p className="text-slate-500 text-sm">Initializing trading systems...</p>
         </div>
@@ -259,11 +267,9 @@ function ProtectedApp() {
           <div className="container mx-auto px-6 py-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
-                <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-purple-800 rounded-xl flex items-center justify-center shadow-lg glow-purple">
-                  <span className="text-white font-bold text-lg">🤖</span>
-                </div>
+                <BotLogo size={44} glow dataTestId="app-header-logo" />
                 <div>
-                  <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-purple-600 bg-clip-text text-transparent">AI's Elite PO Traders Bot</h1>
+                  <h1 className="text-2xl font-bold bg-gradient-to-r from-cyan-300 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">AI's Elite PO Traders Bot</h1>
                   <p className="text-slate-500 text-sm">AI-Powered Trading System • Real Market Data</p>
                 </div>
               </div>

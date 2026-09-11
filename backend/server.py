@@ -4256,6 +4256,7 @@ from routes.ai_enhancements import router as ai_enhancements_router
 from routes.strategy_backtest import router as strategy_backtest_router
 from routes.invert_events import router as invert_events_router
 from routes.telegram_routes import router as telegram_router
+from routes.riskguard_routes import router as riskguard_router
 
 api_router.include_router(strategies_router)
 api_router.include_router(signals_router)
@@ -4280,6 +4281,7 @@ api_router.include_router(ai_enhancements_router)
 api_router.include_router(strategy_backtest_router)
 api_router.include_router(invert_events_router)
 api_router.include_router(telegram_router)
+api_router.include_router(riskguard_router)
 
 app.include_router(api_router)
 
@@ -4446,6 +4448,15 @@ async def startup_event():
                 logger.info("[AutoScan] bound to DB and config restored")
             except Exception as _ase:
                 logger.warning("[AutoScan] init failed: %s", _ase)
+
+            # Iter 131 — RiskGuard: bind DB for the Capital-Guard-Pro-style
+            # session tracker + trade-size calculator.
+            try:
+                from risk_guard_service import risk_guard_service
+                risk_guard_service.bind_db(db)
+                logger.info("[RiskGuard] bound to DB")
+            except Exception as _rge:
+                logger.warning("[RiskGuard] init failed: %s", _rge)
 
             # Iter 93 — Hot-collection indexes. Adaptive-offset (Iter 91) and
             # /signals/latest both do frequent per-asset queries; without
