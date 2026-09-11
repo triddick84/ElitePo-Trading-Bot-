@@ -191,6 +191,23 @@ class IndicatorCalculator:
             
             elif indicator == "WMA":
                 return self._calculate_wma(closes, parameters.get("period", 14))
+
+            elif indicator == "TMA":
+                # Iter 129 — Triangular MA
+                return self._calculate_tma(closes, parameters.get("period", 14))
+
+            elif indicator == "TRIPLE_MA_CROSSOVER":
+                # Iter 129 — 3-MA ribbon with per-line type selection
+                result = self._calculate_triple_ma_crossover(
+                    closes,
+                    parameters.get("fast_type", "EMA"),
+                    parameters.get("fast_period", 5),
+                    parameters.get("medium_type", "WMA"),
+                    parameters.get("medium_period", 13),
+                    parameters.get("slow_type", "TMA"),
+                    parameters.get("slow_period", 34),
+                )
+                return result.get(output, result.get("alignment"))
             
             elif indicator == "VWAP":
                 return self._calculate_vwap(highs, lows, closes, volumes)
@@ -600,6 +617,73 @@ class IndicatorCalculator:
         recent = prices[-period:]
         weights = np.arange(1, period + 1)
         return float(np.sum(np.array(recent) * weights) / weights.sum())
+
+    def _calculate_tma(self, prices: List[float], period: int) -> float:
+        """Iter 129 — Triangular Moving Average (double-smoothed SMA).
+
+        TMA[t] = SMA( SMA(prices, period), period )
+        Returns the most recent TMA value. Centre-weighted, less noisy than
+        SMA/EMA which makes it a strong high-timeframe trend filter."""
+        if len(prices) < period:
+            return float(np.mean(prices)) if prices else 0.0
+        arr = np.asarray(prices, dtype=float)
+        # First-pass rolling SMA (need at least `period` values behind us for
+        # the final SMA-of-SMA to be well-defined).
+        first_pass_len = min(len(arr) - period + 1, period)
+        smas = np.empty(first_pass_len)
+        for i in range(first_pass_len):
+            end = len(arr) - i
+            start = end - period
+            smas[first_pass_len - 1 - i] = arr[start:end].mean()
+        # Second-pass average of the first-pass SMAs
+        return float(smas.mean())
+
+    def _ma_by_type(self, prices: List[float], ma_type: str, period: int) -> float:
+        """Iter 129 — dispatch to the right MA calculator by type name."""
+        t = (ma_type or "EMA").upper()
+        if t == "SMA":
+            return self._calculate_sma(prices, period)
+        if t == "EMA":
+            return self._calculate_ema(prices, period)
+        if t == "WMA":
+            return self._calculate_wma(prices, period)
+        if t == "TMA":
+            return self._calculate_tma(prices, period)
+        # Unknown type falls back to EMA (matches frontend default)
+        return self._calculate_ema(prices, period)
+
+    def _calculate_triple_ma_crossover(
+        self,
+        prices: List[float],
+        fast_type: str, fast_period: int,
+        medium_type: str, medium_period: int,
+        slow_type: str, slow_period: int,
+    ) -> Dict[str, float]:
+        """Iter 129 — 3-MA ribbon. Any combination of SMA/EMA/WMA/TMA per line.
+
+        Returns dict with the three MA values plus an `alignment` scalar:
+            +1  → fast > medium > slow  (strong uptrend ribbon)
+            -1  → fast < medium < slow  (strong downtrend ribbon)
+             0  → mixed / not aligned
+        """
+        fast = self._ma_by_type(prices, fast_type, int(fast_period))
+        medium = self._ma_by_type(prices, medium_type, int(medium_period))
+        slow = self._ma_by_type(prices, slow_type, int(slow_period))
+
+        if fast > medium > slow:
+            alignment = 1.0
+        elif fast < medium < slow:
+            alignment = -1.0
+        else:
+            alignment = 0.0
+
+        return {
+            "fast": float(fast),
+            "medium": float(medium),
+            "slow": float(slow),
+            "alignment": alignment,
+            "value": alignment,  # default output (used when caller omits `output`)
+        }
     
     def _calculate_vwap(self, highs: List[float], lows: List[float],
                         closes: List[float], volumes: List[float]) -> float:

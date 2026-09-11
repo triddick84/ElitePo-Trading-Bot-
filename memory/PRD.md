@@ -1,4 +1,38 @@
-# AI's Elite PO Traders Bot — Feb 2026 (Iter 128: PO Connection Resilience)
+# AI's Elite PO Traders Bot — Feb 2026 (Iter 129: TMA + 3-MA Crossover)
+
+## Iter 129 (Feb 2026) — Strategy Builder: Add TMA + 3-MA Crossover
+
+### User request
+> Under the strategy builder indicators add the moving average TMA to the list of indicators, and a 3 moving averages crossover, and have different moving averages for selection — for example 3-MA crossover with EMA/WMA/TMA or EMA/SMA/WMA crossovers.
+
+### What shipped
+**Frontend `StrategyBuilder.jsx`**:
+- New **TMA (Triangular Moving Average)** template — double-smoothed SMA, centre-weighted, less noisy than SMA/EMA. Ships with 4 conditions (price crosses above/below, price above/below).
+- New **3 Moving Averages Crossover** template with 6 tunable parameters: `fast_type / fast_period`, `medium_type / medium_period`, `slow_type / slow_period`. Each of the three type slots is a dropdown with **SMA / EMA / WMA / TMA**, so users can build any combo (EMA+WMA+TMA, EMA+SMA+WMA, SMA+SMA+SMA, etc.). 8 conditions cover the full ribbon: full-alignment CALL/PUT, fast-crosses-medium and medium-crosses-slow triggers, and price-above/below-all filters.
+- Parameter renderer refactored to switch on `param.type` — now supports both `number` and `select` inputs. Existing `data-testid` conventions preserved (`param-select-{id}-{key}`, `param-input-{id}-{key}`).
+
+**Backend `custom_strategy_service.py`**:
+- Registered `TMA` and `TRIPLE_MA_CROSSOVER` in `AVAILABLE_INDICATORS` with matching parameter schemas.
+
+**Backend `custom_strategy_executor.py`**:
+- Added `_calculate_tma()` — `TMA[t] = SMA(SMA(prices, period), period)`, with graceful fallback on short input.
+- Added `_ma_by_type()` — dispatches to `_calculate_sma / _calculate_ema / _calculate_wma / _calculate_tma` by string type; unknown type falls back to EMA.
+- Added `_calculate_triple_ma_crossover()` — returns `{fast, medium, slow, alignment, value}` where `alignment = +1` (fast>medium>slow), `-1` (fast<medium<slow), or `0` (mixed).
+- Wired both new indicators into the top-level `calculate()` dispatcher; supports all outputs (`fast`, `medium`, `slow`, `alignment`).
+
+### Tests
+- **`backend/tests/test_iter129_tma_and_triple_ma.py`**: 12/12 pass.
+  - Schema registration for TMA + TRIPLE_MA_CROSSOVER (all 4 MA types selectable per slot).
+  - TMA math matches the double-SMA reference formula.
+  - TMA smoother than SMA on noisy random-walk data (variance check).
+  - TMA short-input fallback.
+  - 3-MA bull/bear alignment on synthetic trends.
+  - Every one of 4³ = 64 MA-type combinations produces finite outputs.
+  - Top-level dispatcher routes TMA and every TRIPLE_MA output.
+  - Frontend schema check.
+- **Regression**: 37/37 pass across Iter 126 + 127 + 128 + 129.
+
+---
 
 ## Iter 128 (Feb 2026) — Pocket Option Connection Resilience Fixes
 

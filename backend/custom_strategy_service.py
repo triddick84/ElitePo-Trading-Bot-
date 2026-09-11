@@ -90,6 +90,31 @@ AVAILABLE_INDICATORS = {
         },
         "outputs": ["value"]
     },
+    "TMA": {
+        # Iter 129 — Triangular Moving Average (double-smoothed SMA).
+        # Centre-weighted, low-noise trend filter.
+        "name": "Triangular Moving Average",
+        "category": IndicatorCategory.TREND,
+        "parameters": {
+            "period": {"type": "int", "default": 14, "min": 2, "max": 500, "description": "Period length"}
+        },
+        "outputs": ["value"]
+    },
+    "TRIPLE_MA_CROSSOVER": {
+        # Iter 129 — 3-MA ribbon with per-line type selection.
+        # e.g. fast=EMA(5), medium=WMA(13), slow=TMA(34) or any combination.
+        "name": "3 Moving Averages Crossover",
+        "category": IndicatorCategory.TREND,
+        "parameters": {
+            "fast_type":     {"type": "select", "default": "EMA", "options": ["SMA", "EMA", "WMA", "TMA"], "description": "Fast MA type"},
+            "fast_period":   {"type": "int",    "default": 5,     "min": 2, "max": 100, "description": "Fast period"},
+            "medium_type":   {"type": "select", "default": "WMA", "options": ["SMA", "EMA", "WMA", "TMA"], "description": "Medium MA type"},
+            "medium_period": {"type": "int",    "default": 13,    "min": 2, "max": 200, "description": "Medium period"},
+            "slow_type":     {"type": "select", "default": "TMA", "options": ["SMA", "EMA", "WMA", "TMA"], "description": "Slow MA type"},
+            "slow_period":   {"type": "int",    "default": 34,    "min": 2, "max": 400, "description": "Slow period"},
+        },
+        "outputs": ["fast", "medium", "slow", "alignment"]
+    },
     "VWMA": {
         "name": "Volume Weighted Moving Average",
         "category": IndicatorCategory.TREND,

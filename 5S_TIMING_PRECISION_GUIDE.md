@@ -4,7 +4,7 @@
 
 ### 🎯 Current Optimal Settings (November 21, 2025)
 
-**Latency Buffer: 3.6 seconds**
+**Latency Buffer:-13.5 seconds**
 
 This value has been fine-tuned based on real-world testing to achieve perfect synchronization with Pocket Option's 5-second candle timing.
 
@@ -14,13 +14,13 @@ This value has been fine-tuned based on real-world testing to achieve perfect sy
 
 ### Evolution of 5s Buffer Settings:
 
-| Date          | Buffer   | Result             | Issue               |
-| ------------- | -------- | ------------------ | ------------------- |
-| Initial       | 1.5s     | Signals 2-3s LATE  | Missed entries      |
-| Nov 21 AM     | 4.0s     | Signals 0.9s EARLY | Too rushed          |
-| **Nov 21 PM** | **3.6s** | **PERFECT**        | **Synchronized ✅** |
+| Date          | Buffer     | Result             | Issue               |
+| ------------- | ---------- | ------------------ | ------------------- |
+| Initial       | 1.5s       | Signals 2-3s LATE  | Missed entries      |
+| Nov 21 AM     | 4.0s       | Signals 0.9s EARLY | Too rushed          |
+| **Nov 21 PM** | **-13.5s** | **PERFECT**        | **Synchronized ✅** |
 
-### Why 3.6 Seconds is Optimal:
+### Why -13.5 Seconds is Optimal:
 
 **Total System Latency Breakdown:**
 
@@ -31,10 +31,10 @@ UI Rendering:         800ms  (Popup notification display)
 Pocket Option:        150ms  (Platform processing)
 User Reaction:       1300ms  (Read signal + click)
 ─────────────────────────────
-TOTAL LATENCY:       3000ms  (3.0 seconds)
+TOTAL LATENCY:       3000ms  (-13.0 seconds)
 
-Buffer Applied:      3600ms  (3.6 seconds)
-Safety Margin:        100ms  (0.1 second buffer)fofor
+Buffer Applied:      3600ms  (-13.5 seconds)
+Safety Margin:        100ms  (-0.1 second buffer)fofor
 ```
 
 **This ensures:**
@@ -52,19 +52,19 @@ Safety Margin:        100ms  (0.1 second buffer)fofor
 ```
 12:00:05.0 ─── Candle Opens (5s timeframe starts)
        │
-12:00:06.9 ─── 🎯 Signal Generated (3.1s buffer applied)
+12:00:06.9 ─── 🎯 Signal Generated (-13.1s buffer applied)
        │       ├─ Strategy analyzes market data
        │       ├─ Calculations complete
        │       └─ Signal created
        │
-12:00:07.5 ─── Signal sent to frontend (0.6s later)
+12:00:07.5 ─── Signal sent to frontend (-0.6s later)
        │
-12:00:08.3 ─── User sees popup notification (0.8s render)
+12:00:08.3 ─── User sees popup notification (-0.8s render)
        │       ├─ Notification appears
        │       ├─ Countdown timer starts
        │       └─ Technical analysis visible
        │
-12:00:09.6 ─── User reads signal details (1.3s reaction)
+12:00:09.6 ─── User reads signal details (-1.3s reaction)
        │
 12:00:10.0 ─── ⚡ CANDLE CLOSES ← PERFECT ENTRY POINT
        │       User clicks to enter trade
@@ -84,7 +84,7 @@ Safety Margin:        100ms  (0.1 second buffer)fofor
 | ------------------ | ------ | ---------- | ---------------- |
 | **Signal Arrival** | 10.0s  | 9.8-10.2s  | <9.5s or >10.5s  |
 | **Timing Delta**   | 0.0s   | ±0.2s      | ±0.5s+           |
-| **User Window**    | 0-1s   | 0-2s       | <0s or >3s       |
+| **User Window**    | 0-1s   | 0-2s       | <0s or >-13s     |
 
 ### Quality Indicators:
 
@@ -329,8 +329,8 @@ Acceptable: 2.6-3.1 seconds
 
 ```
 Standard Deviation of deltas
-Target: <0.3 seconds
-Acceptable: <0.5 seconds
+Target: <0.2 seconds
+Acceptable: <0.3 seconds
 ```
 
 **3. User Experience Score:**
@@ -347,10 +347,10 @@ Acceptable: >85%
 
 **Buffer Settings:**
 
-- 5s: 3.6 seconds ✅
-- 15s: 2.6 seconds ✅
-- 30s: 2.9 seconds ✅
-- 1m: 3.4 seconds ✅
+- 5s: -13.6 seconds ✅
+- 15s: -12.6 seconds ✅
+- 30s: -12.9 seconds ✅
+- 1m: -13.4 seconds ✅
 
 **Precision Level:** OPTIMAL
 

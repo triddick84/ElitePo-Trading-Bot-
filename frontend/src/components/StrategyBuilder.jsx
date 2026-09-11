@@ -645,6 +645,51 @@ const INDICATOR_TEMPLATES = {
     ]
   },
 
+  // TMA — Iter 129
+  TMA: {
+    name: 'TMA (Triangular Moving Average)',
+    category: 'trend',
+    icon: '🔺',
+    description: 'Double-smoothed SMA - centre-weighted, less noisy than SMA/EMA',
+    parameters: {
+      period: { label: 'Period', type: 'number', default: 14, min: 2, max: 200 }
+    },
+    conditions: [
+      { id: 'price_crosses_above', label: 'Price crosses above TMA', signal: 'CALL', description: 'Bullish crossover — smoother than EMA/SMA' },
+      { id: 'price_crosses_below', label: 'Price crosses below TMA', signal: 'PUT', description: 'Bearish crossover — smoother than EMA/SMA' },
+      { id: 'price_above', label: 'Price above TMA', signal: 'CALL', description: 'Uptrend filter — high-conviction trend confirmation' },
+      { id: 'price_below', label: 'Price below TMA', signal: 'PUT', description: 'Downtrend filter — high-conviction trend confirmation' },
+    ]
+  },
+
+  // Triple MA Crossover — Iter 129
+  // Pick ANY three MA types (SMA/EMA/WMA/TMA) for fast/medium/slow. Classic
+  // "guppy"-style ribbon: strongest signal when all three align and cross.
+  TRIPLE_MA_CROSSOVER: {
+    name: '3 Moving Averages Crossover',
+    category: 'trend',
+    icon: '🎯',
+    description: 'Fast/medium/slow MA ribbon — pick any MA type per line (EMA+WMA+TMA, EMA+SMA+WMA, etc.)',
+    parameters: {
+      fast_type:   { label: 'Fast MA Type',   type: 'select', default: 'EMA', options: ['SMA', 'EMA', 'WMA', 'TMA'] },
+      fast_period: { label: 'Fast Period',    type: 'number', default: 5,  min: 2, max: 100 },
+      medium_type:   { label: 'Medium MA Type', type: 'select', default: 'WMA', options: ['SMA', 'EMA', 'WMA', 'TMA'] },
+      medium_period: { label: 'Medium Period',  type: 'number', default: 13, min: 2, max: 200 },
+      slow_type:   { label: 'Slow MA Type',   type: 'select', default: 'TMA', options: ['SMA', 'EMA', 'WMA', 'TMA'] },
+      slow_period: { label: 'Slow Period',    type: 'number', default: 34, min: 2, max: 400 },
+    },
+    conditions: [
+      { id: 'triple_bull_align',   label: 'All three MAs aligned bullish (Fast > Medium > Slow)', signal: 'CALL', description: 'Strong uptrend ribbon — highest-conviction long' },
+      { id: 'triple_bear_align',   label: 'All three MAs aligned bearish (Fast < Medium < Slow)', signal: 'PUT',  description: 'Strong downtrend ribbon — highest-conviction short' },
+      { id: 'fast_crosses_above_medium', label: 'Fast crosses above Medium (early trigger)',    signal: 'CALL', description: 'Fastest entry — front-runs the full alignment' },
+      { id: 'fast_crosses_below_medium', label: 'Fast crosses below Medium (early trigger)',    signal: 'PUT',  description: 'Fastest exit/reverse — front-runs the breakdown' },
+      { id: 'medium_crosses_above_slow', label: 'Medium crosses above Slow (trend confirmed)',  signal: 'CALL', description: 'Mid-timeframe trend flip up — confirmed reversal' },
+      { id: 'medium_crosses_below_slow', label: 'Medium crosses below Slow (trend confirmed)',  signal: 'PUT',  description: 'Mid-timeframe trend flip down — confirmed reversal' },
+      { id: 'price_above_all',     label: 'Price above all three MAs',                          signal: 'CALL', description: 'Full-stack bullish filter — ride the ribbon' },
+      { id: 'price_below_all',     label: 'Price below all three MAs',                          signal: 'PUT',  description: 'Full-stack bearish filter — ride the ribbon' },
+    ]
+  },
+
   // Bulls Power
   BULLS_POWER: {
     name: 'Bulls Power',
@@ -873,18 +918,41 @@ const ConditionCard = ({ condition, onRemove, onUpdate, index }) => {
           {Object.entries(template.parameters).map(([key, param]) => (
             <div key={key}>
               <Label className="text-xs text-slate-500">{param.label}</Label>
-              <Input
-                type="number"
-                value={condition.parameters?.[key] ?? param.default}
-                onChange={(e) => onUpdate({
-                  ...condition,
-                  parameters: { ...condition.parameters, [key]: parseFloat(e.target.value) || param.default }
-                })}
-                min={param.min}
-                max={param.max}
-                step={param.step || 1}
-                className="h-8 bg-slate-700/50 border-slate-600 text-sm"
-              />
+              {param.type === 'select' ? (
+                <Select
+                  value={String(condition.parameters?.[key] ?? param.default)}
+                  onValueChange={(v) => onUpdate({
+                    ...condition,
+                    parameters: { ...condition.parameters, [key]: v }
+                  })}
+                >
+                  <SelectTrigger
+                    data-testid={`param-select-${condition.id}-${key}`}
+                    className="h-8 bg-slate-700/50 border-slate-600 text-sm"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(param.options || []).map(opt => (
+                      <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  data-testid={`param-input-${condition.id}-${key}`}
+                  type="number"
+                  value={condition.parameters?.[key] ?? param.default}
+                  onChange={(e) => onUpdate({
+                    ...condition,
+                    parameters: { ...condition.parameters, [key]: parseFloat(e.target.value) || param.default }
+                  })}
+                  min={param.min}
+                  max={param.max}
+                  step={param.step || 1}
+                  className="h-8 bg-slate-700/50 border-slate-600 text-sm"
+                />
+              )}
             </div>
           ))}
         </div>
