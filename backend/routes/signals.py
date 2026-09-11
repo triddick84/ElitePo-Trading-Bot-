@@ -5084,6 +5084,27 @@ async def report_trade(report: TrampermonkeyTradeReport):
             pass
         await coll.insert_one(doc)
 
+        # Iter 133 — Auto-feed RiskGuard.
+        # When the TM report carries a real outcome (win/loss/draw) + amount,
+        # push it into the active RiskGuard session so the user's session
+        # tracker updates without them tapping Record Win/Loss manually.
+        try:
+            outcome_raw = str(doc.get("outcome") or "").lower()
+            amount_raw = doc.get("amount")
+            if outcome_raw in ("win", "loss", "draw") and amount_raw and float(amount_raw) > 0:
+                from risk_guard_service import risk_guard_service
+                # Only push if there IS an active session — no-op otherwise.
+                active = await risk_guard_service.get_active_session("default")
+                if active:
+                    await risk_guard_service.record_trade(
+                        user_id="default",
+                        outcome=outcome_raw,
+                        amount=float(amount_raw),
+                        note=f"auto · TM · {doc.get('asset')} {doc.get('direction')}",
+                    )
+        except Exception as _rg:
+            logger.debug(f"[RiskGuard] auto-feed skipped: {_rg}")
+
         # If this report carries a WIN/LOSS outcome, invalidate the
         # AccuracyEngine cache so the next /signals/latest call recomputes
         # the rolling win-rate with the freshest data.
@@ -6280,6 +6301,25 @@ async def record_tm_trade_outcome(report: TrampermonkeyOutcome):
                 "outcome_recorded_at": datetime.now(timezone.utc).isoformat(),
             }}
         )
+
+        # Iter 133 — Auto-feed RiskGuard when the outcome lands here (i.e.
+        # the initial /trades/report was outcomeless so RiskGuard wasn't
+        # notified back then). Guarded so it only fires if there's an active
+        # RiskGuard session.
+        try:
+            amount_raw = doc.get("amount")
+            if amount_raw and float(amount_raw) > 0:
+                from risk_guard_service import risk_guard_service
+                active = await risk_guard_service.get_active_session("default")
+                if active:
+                    await risk_guard_service.record_trade(
+                        user_id="default",
+                        outcome=outcome.lower(),
+                        amount=float(amount_raw),
+                        note=f"auto · TM outcome · {doc.get('asset_normalized') or doc.get('asset')}",
+                    )
+        except Exception as _rg:
+            logger.debug(f"[RiskGuard] auto-feed on outcome skipped: {_rg}")
 
         # Iter 118 — auto-append live sample to LightGBM training buffer.
         try:

@@ -26,6 +26,11 @@ import IntegrationsPage from "./components/IntegrationsPage";
 import SignalRoutingPage from "./components/SignalRoutingPage";
 import TmaAdminPage from "./components/TmaAdminPage";
 import { AuthProvider, LoginPage, useAuth } from "./components/AuthComponents";
+import {
+  LayoutDashboard, Send, LineChart, Smartphone, Shield, Waves,
+  SearchCode, Plug, Route, UserCheck, Target, Brain, FlaskConical,
+  Zap, Users, BarChart3, Settings as SettingsIcon,
+} from "lucide-react";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
 const API = BACKEND_URL ? `${BACKEND_URL}/api` : '';
@@ -168,23 +173,23 @@ function ProtectedApp() {
   };
 
   const navigation = [
-    { id: "dashboard", label: "Dashboard", icon: "📊" },
-    { id: "telegram-bot", label: "Telegram Bot", icon: "📱" },
-    { id: "pocket-option", label: "Pocket Option", icon: "🎰" },
-    { id: "mobile-trader", label: "Mobile Auto-Trade", icon: "📲" },
-    { id: "riskguard", label: "RiskGuard", icon: "🛡️" },
-    { id: "microstructure", label: "Microstructure", icon: "📡" },
-    { id: "elite-screener", label: "Elite Screener", icon: "🔍" },
-    { id: "integrations", label: "Integrations", icon: "🔗" },
-    { id: "signal-routing", label: "Signal Routing", icon: "🔀" },
-    { id: "tma-admin", label: "TMA KYC Admin", icon: "🛡️" },
-    { id: "strategies", label: "Strategies", icon: "🎯" },
-    { id: "ai-models", label: "AI Models", icon: "🧠" },
-    { id: "ml-lab", label: "ML Lab", icon: "🧪" },
-    { id: "latency", label: "Latency", icon: "⚡" },
-    { id: "user-approvals", label: "User Approvals", icon: "👥", adminOnly: true },
-    { id: "performance", label: "Performance", icon: "📈" },
-    { id: "settings", label: "Settings", icon: "⚙️" }
+    { id: "dashboard",      label: "Dashboard",         Icon: LayoutDashboard },
+    { id: "telegram-bot",   label: "Telegram Bot",      Icon: Send },
+    { id: "pocket-option",  label: "Pocket Option",     Icon: LineChart },
+    { id: "mobile-trader",  label: "Mobile Auto-Trade", Icon: Smartphone },
+    { id: "riskguard",      label: "RiskGuard",         Icon: Shield },
+    { id: "microstructure", label: "Microstructure",    Icon: Waves },
+    { id: "elite-screener", label: "Elite Screener",    Icon: SearchCode },
+    { id: "integrations",   label: "Integrations",      Icon: Plug },
+    { id: "signal-routing", label: "Signal Routing",    Icon: Route },
+    { id: "tma-admin",      label: "TMA KYC Admin",     Icon: UserCheck },
+    { id: "strategies",     label: "Strategies",        Icon: Target },
+    { id: "ai-models",      label: "AI Models",         Icon: Brain },
+    { id: "ml-lab",         label: "ML Lab",            Icon: FlaskConical },
+    { id: "latency",        label: "Latency",           Icon: Zap },
+    { id: "user-approvals", label: "User Approvals",    Icon: Users, adminOnly: true },
+    { id: "performance",    label: "Performance",       Icon: BarChart3 },
+    { id: "settings",       label: "Settings",          Icon: SettingsIcon },
   ];
 
   const renderActiveView = () => {
@@ -317,29 +322,39 @@ function ProtectedApp() {
               <div className="space-y-2">
                 {navigation
                   .filter((item) => !item.adminOnly || isAdmin)
-                  .map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => setActiveView(item.id)}
-                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 group ${
-                      activeView === item.id
-                        ? 'bg-purple-600/20 text-purple-400 border border-purple-500/30 shadow-lg glow-purple'
-                        : 'text-slate-400 hover:text-white hover:bg-[#1a1a24] hover:border hover:border-[#2a2a35]'
-                    }`}
-                    data-testid={`nav-${item.id}`}
-                  >
-                    <span className="text-lg group-hover:scale-110 transition-transform duration-200">{item.icon}</span>
-                    <span className="font-medium flex-1 text-left">{item.label}</span>
-                    {item.id === 'user-approvals' && pendingUserCount > 0 && (
-                      <span
-                        className="ml-auto flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-rose-500 text-white text-[10px] font-bold shadow-lg shadow-rose-500/50"
-                        data-testid="pending-users-badge"
+                  .map((item) => {
+                    const IconCmp = item.Icon;
+                    const isActive = activeView === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => setActiveView(item.id)}
+                        className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 group ${
+                          isActive
+                            ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 shadow-lg shadow-cyan-500/10'
+                            : 'text-slate-400 hover:text-white hover:bg-[#1a1a24] hover:border hover:border-[#2a2a35]'
+                        }`}
+                        data-testid={`nav-${item.id}`}
                       >
-                        {pendingUserCount > 99 ? '99+' : pendingUserCount}
-                      </span>
-                    )}
-                  </button>
-                ))}
+                        {IconCmp && (
+                          <IconCmp
+                            className={`w-4 h-4 shrink-0 group-hover:scale-110 transition-transform duration-200 ${
+                              isActive ? 'text-cyan-300' : 'text-slate-400 group-hover:text-cyan-300'
+                            }`}
+                          />
+                        )}
+                        <span className="font-medium flex-1 text-left">{item.label}</span>
+                        {item.id === 'user-approvals' && pendingUserCount > 0 && (
+                          <span
+                            className="ml-auto flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-rose-500 text-white text-[10px] font-bold shadow-lg shadow-rose-500/50"
+                            data-testid="pending-users-badge"
+                          >
+                            {pendingUserCount > 99 ? '99+' : pendingUserCount}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
               </div>
             </div>
           </nav>

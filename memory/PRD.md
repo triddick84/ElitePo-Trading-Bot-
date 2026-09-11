@@ -1,4 +1,35 @@
-# AI's Elite PO Traders Bot — Feb 2026 (Iter 132: Modern AI-Bot Logo)
+# AI's Elite PO Traders Bot — Feb 2026 (Iter 133: TM Auto-Feed + Nav Sweep)
+
+## Iter 133 (Feb 2026) — Auto-Feed RiskGuard from TM Reports + Sidebar Emoji → Lucide Sweep
+
+### User request
+> Auto-Feed From TM Reports: Wire the TM script's `tm_trade_reports` into RiskGuard so wins/losses record automatically.
+> Sweep Nav Emoji: The left sidebar still uses 📊 📞 📲 🛡️ etc. — replace with matching lucide icons so the whole nav feels consistent with the new bot mark.
+
+### What shipped
+
+**Task 1 — Auto-feed** (`backend/routes/signals.py`):
+- **`POST /api/trades/report`** hook: when the incoming TM report carries `outcome ∈ {win, loss, draw}` and a positive `amount`, and there's an active RiskGuard session for `user_id="default"`, the trade is immediately pushed into `risk_guard_service.record_trade()` with a note tagged `auto · TM · <asset> <direction>`.
+- **`POST /api/trades/outcome`** hook: two-stage trades (report first without outcome, outcome arriving later) are handled by mirroring the auto-feed in the outcome endpoint using the matched report's stored `amount`. Guarded to no-op when no session is active.
+- Zero double-counting: outcomeless first-stage reports do NOT feed RiskGuard, so the later outcome-stage feed is the single source of truth for that trade.
+
+**Task 2 — Sidebar sweep** (`frontend/src/App.js`):
+- Every one of 17 nav items now uses a **lucide-react** component instead of the old emoji: `LayoutDashboard`, `Send`, `LineChart`, `Smartphone`, `Shield`, `Waves`, `SearchCode`, `Plug`, `Route`, `UserCheck`, `Target`, `Brain`, `FlaskConical`, `Zap`, `Users`, `BarChart3`, `Settings`.
+- Nav item render: 4x4 lucide icon at 16 px, `text-slate-400` idle → `text-cyan-300` on hover/active, keeps the existing `data-testid="nav-<id>"` for automation.
+- Active state colour palette swapped from purple to the new cyan theme (`bg-cyan-500/15 text-cyan-300 border-cyan-500/30`), matching the Iter 132 bot logo.
+
+### Tests
+- **NEW** `backend/tests/test_iter133_autofeed_and_nav.py` — 8 tests:
+  - Auto-feed via `/trades/report` records win/loss into active session with correct P&L math.
+  - Outcomeless first-stage report leaves session untouched.
+  - `/trades/outcome` matched update auto-feeds using the stored amount.
+  - No-active-session case is a silent no-op (report still stored).
+  - Nav uses lucide `Icon:` refs and no `icon: "📊"` emoji entries remain.
+  - Every used lucide icon is imported.
+  - Active nav uses the cyan theme (no purple leftover).
+- **Regression**: 43/43 pass across Iter 129 + 130 + 131 + 133.
+
+---
 
 ## Iter 132 (Feb 2026) — Modern AI-Bot Logo Across the App
 
