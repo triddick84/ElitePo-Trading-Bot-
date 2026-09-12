@@ -1,4 +1,89 @@
-# AI's Elite PO Traders Bot — Feb 2026 (Iter 139: Smart Money + Mean Reversion)
+# AI's Elite PO Traders Bot — Feb 2026 (Iter 140: Auto-Scan × Confluence Gate)
+
+## Iter 140 (Feb 2026) — Auto-Scan Now Gated by the Confluence Engine
+
+### User request
+> Wire All Signals Into Auto-Scan: Pipe patterns + smart-money + mean-reversion through the confluence gate so auto-scan only fires when 3+ sources agree.
+
+### 1 · New method `AutoScanService._confluence_evaluate(asset, row, cfg)`
+For every matched row, assembles a signal list from **five distinct sources** and scores it through the Iter 137 engine:
+
+| # | Source                        | Iter | Weight family |
+|---|-------------------------------|------|---------------|
+| 1 | Strategy vote (`flexible_crossover`) | Existing | `strategy` |
+| 2 | Elite Screener (dir + score/100)     | 109      | `elite` |
+| 3 | Chart patterns (H&S, wedge, break-retest, gap) | 137 | `pattern` |
+| 4 | Smart Money (liquidity sweep, stop hunt, OB, breaker) | 139 | `smart_money` |
+| 5 | Mean-reversion strategy (regime-aware) | 139 | `strategy` |
+
+Then calls `score_confluence(signals, min_sources=cfg.min_sources)` and `should_fire(result, threshold, min_sources)` — **threshold and min_sources come live from `get_confluence_config()`** so the user's CONFIG-tab slider takes effect immediately without a restart.
+
+Runs candles through `_load_candles_from_db` — 5s → `otc_candles_5s`, else `historical_candles`. Late-imports every module so a broken confluence stack can't crash the whole auto-scan loop.
+
+### 2 · Wiring into `scan_once`
+- After `_score_asset` builds each row, it now attaches `row["confluence"]` when the row matched.
+- After sort + elite-filter, a new **gate pass** drops rows where `confluence.fires == False`. Rows with `confluence == None` (candles unavailable) are **kept** — bot must not silently stop trading on data outages.
+- The gate is on by default (`confluence_gate_enabled: True` in `DEFAULT_CONFIG`) and can be flipped via the existing `set_config()` API.
+- When rows are dropped by the gate, logs: `[auto_scan] 🔮 confluence gate dropped X/Y winners`.
+
+### 3 · Routed target includes confluence transparency
+`_route_to_tm` now embeds the winner's confluence stack into `tampermonkey_settings.active_target`:
+```
+target = {
+  ...existing fields...,
+  "confluence": <score_confluence result>,   # direction, per-side scores, sources, timeframes
+  "confluence_score": <float>,
+}
+```
+So the TM panel / dashboard can render **"why this trade fired"** — which sources agreed, aligned timeframes, and the winning score. Router log line updated to `… · confluence=<score>`.
+
+### 4 · New config keys
+```
+"confluence_gate_enabled": True,     # master switch
+"confluence_candle_limit": 200,       # how many bars to pull per gate check
+```
+
+### 5 · Tests — 9/9 pass in `tests/test_iter140_autoscan_confluence_gate.py`
+- Gate filtering logic: keep-when-fires, drop-when-not, keep-when-no-result, mixed-rows.
+- `_confluence_evaluate` returns None when no candles (mocked loader).
+- Assembles ≥ 2 signals when strategy + elite both vote.
+- Strategy alone still scores (but fires=False due to min_sources gate).
+- NEUTRAL elite is dropped from signals.
+- DEFAULT_CONFIG carries new flags.
+
+### 6 · Full regression
+**128/128 pass** (Iter 131 + 133 + 134 + 135 + 136 + 137 + 138 + 139 + 140). Zero regressions.
+
+### 7 · Live smoke
+`POST /api/signals/auto-scan/scan-now` with 3 OTC pairs returns clean rows; no crashes; confluence evaluation activates the moment a strategy match is present. `_confluence_evaluate` skips gracefully when the strategy row didn't match.
+
+### Files touched
+- **MOD** `backend/auto_scan_service.py` — added `DEFAULT_CONFIG` keys, `_confluence_evaluate()`, gate filter block in `scan_once()`, confluence embed in `_route_to_tm()`
+- **NEW** `backend/tests/test_iter140_autoscan_confluence_gate.py` (9 tests)
+
+### End-to-end signal flow after Iter 140
+```
+For each asset in universe:
+  strategy.generate_signal()          → matched? confidence? direction?
+  elite_screener.score_asset()        → elite_score, elite_direction
+  IF matched:
+    candles = _load_candles_from_db()
+    signals = [
+      strategy vote,
+      elite vote (if directional),
+      *chart-pattern hits,
+      *smart-money hits,
+      mean-reversion vote (if regime allows)
+    ]
+    confluence = score_confluence(signals, min_sources)
+    fires = should_fire(confluence, threshold, min_sources)
+sort rows by (confidence desc, elite tie-break)
+DROP rows where confluence.fires == False
+route rotation-index-th winner from surviving top-5
+active_target.confluence = winning stack (for panel display)
+```
+
+---
 
 ## Iter 139 (Feb 2026) — Smart-Money Detectors + Mean-Reversion Playbook
 

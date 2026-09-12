@@ -41,6 +41,13 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     },
     "force_signal": False,
     "target_ttl_seconds": 60,       # how long the routed target stays valid
+    # Iter 140 — Confluence gate. When enabled, the auto-scan winner must
+    # ALSO pass the Iter 137 confluence engine (patterns + smart-money +
+    # mean-reversion + strategy signal → weighted score) before a trade
+    # can be routed. Threshold + min_sources come from confluence_routes'
+    # get_confluence_config() so the CONFIG-tab slider takes effect live.
+    "confluence_gate_enabled": True,
+    "confluence_candle_limit": 200, # how many candles to pull per gate check
 }
 
 
@@ -213,7 +220,111 @@ class AutoScanService:
         except Exception:
             row["elite_score"] = None
 
+        # Iter 140 — Confluence gate enrichment. Runs the Iter 137 patterns +
+        # Iter 139 smart-money detectors + mean-reversion + the strategy
+        # signal itself through score_confluence(). Result is stored on the
+        # row so scan_once() can filter by should_fire() when the gate is on.
+        if row.get("matched"):
+            try:
+                row["confluence"] = await self._confluence_evaluate(asset, row, cfg)
+            except Exception as _ce:
+                logger.debug(f"[auto_scan] {asset} confluence skipped: {_ce}")
+                row["confluence"] = None
         return row
+
+    async def _confluence_evaluate(
+        self, asset: str, row: Dict[str, Any], cfg: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """Build a signal list from patterns + smart-money + mean-reversion +
+        strategy + elite, and score it through the Iter 137 confluence engine.
+
+        Returns:
+            {
+                "result": <score_confluence output dict>,
+                "fires": bool,
+                "threshold": float, "min_sources": int,
+                "n_signals": int,
+            }
+            or None when we can't evaluate (no candles / import failure).
+        """
+        # Late imports keep the auto-scan service loadable even if these
+        # modules haven't fully initialised on server start.
+        from routes.confluence_routes import _load_candles_from_db, get_confluence_config
+        from confluence_service import score_confluence, should_fire, signals_from_patterns
+        from pattern_detector import detect_all as detect_patterns
+        from smart_money import detect_all_smart_money
+        from strategies.mean_reversion import mean_reversion_signal
+
+        timeframe = cfg.get("chart_timeframe", "1m")
+        limit = int(cfg.get("confluence_candle_limit", 200))
+        df = await _load_candles_from_db(asset, timeframe, limit)
+        if df is None or df.empty:
+            return None
+
+        signals: List[Dict[str, Any]] = []
+
+        # 1. The strategy's own vote — carries its own confidence.
+        if row.get("direction") in ("CALL", "PUT"):
+            signals.append({
+                "source": "strategy:flexible_crossover",
+                "direction": row["direction"],
+                "confidence": float(row.get("confidence") or 0.0),
+                "asset": asset,
+                "timeframe": timeframe,
+            })
+
+        # 2. Elite score — treat it as a directional signal when it has one.
+        elite_dir = (row.get("elite_direction") or "").upper()
+        elite = row.get("elite_score")
+        if elite_dir in ("CALL", "PUT") and elite is not None and elite > 0:
+            signals.append({
+                "source": "elite",
+                "direction": elite_dir,
+                "confidence": min(1.0, float(elite) / 100.0 if elite > 1 else float(elite)),
+                "asset": asset,
+                "timeframe": timeframe,
+            })
+
+        # 3. Chart patterns (Iter 137)
+        pattern_hits = [h.to_dict() for h in detect_patterns(df)]
+        signals.extend(signals_from_patterns(pattern_hits, asset=asset, timeframe=timeframe))
+
+        # 4. Smart money (Iter 139)
+        sm_hits = [h.to_dict() for h in detect_all_smart_money(df)]
+        for h in sm_hits:
+            d = (h.get("direction") or "").upper()
+            if d in ("CALL", "PUT"):
+                signals.append({
+                    "source": f"smart_money:{h.get('pattern')}",
+                    "direction": d,
+                    "confidence": float(h.get("confidence") or 0.0),
+                    "asset": asset,
+                    "timeframe": timeframe,
+                })
+
+        # 5. Mean reversion (Iter 139)
+        mr = mean_reversion_signal(df)
+        if mr.direction in ("CALL", "PUT"):
+            signals.append({
+                "source": "strategy:mean_reversion",
+                "direction": mr.direction,
+                "confidence": float(mr.confidence or 0.0),
+                "asset": asset,
+                "timeframe": timeframe,
+            })
+
+        gate_cfg = get_confluence_config()
+        threshold = float(gate_cfg.get("threshold", 0.65))
+        min_sources = int(gate_cfg.get("min_sources", 3))
+        result = score_confluence(signals, min_sources=min_sources)
+        fires = should_fire(result, threshold=threshold, min_sources=min_sources)
+        return {
+            "result": result,
+            "fires": fires,
+            "threshold": threshold,
+            "min_sources": min_sources,
+            "n_signals": len(signals),
+        }
 
     async def scan_once(self, assets: Optional[List[str]] = None,
                         cfg_override: Optional[Dict[str, Any]] = None
@@ -246,6 +357,24 @@ class AutoScanService:
         min_elite = float(cfg.get("min_elite_score", 0) or 0)
         matched = [r for r in rows if r.get("matched") and r.get("direction")
                    and (min_elite == 0 or (r.get("elite_score") or 0) >= min_elite)]
+
+        # Iter 140 — Confluence gate. Drop winners whose combined signal
+        # stack didn't clear the threshold. This is the primary noise filter:
+        # a strategy signal alone is no longer enough — patterns / smart
+        # money / mean-reversion / elite must corroborate.
+        gate_active = bool(cfg.get("confluence_gate_enabled", True))
+        if gate_active:
+            before = len(matched)
+            matched = [
+                r for r in matched
+                if r.get("confluence") is None or r["confluence"].get("fires", False)
+                # We keep rows with confluence=None (evaluation couldn't run —
+                # no candles etc.) so the bot still trades when data is thin.
+                # Rows that DID evaluate but didn't fire are the ones dropped.
+            ]
+            dropped = before - len(matched)
+            if dropped > 0:
+                logger.info(f"[auto_scan] 🔮 confluence gate dropped {dropped}/{before} winners")
 
         # Sort by confidence desc, prefer higher elite score on tie
         def _key(r):
@@ -354,6 +483,11 @@ class AutoScanService:
             "source": "auto_scan",
             "expires_at": expires_at,
             "set_at": datetime.now(timezone.utc).isoformat(),
+            # Iter 140 — expose the confluence stack so the TM panel / dashboard
+            # can render "why this trade fired": which sources agreed, score,
+            # timeframes aligned, etc.
+            "confluence": (winner.get("confluence") or {}).get("result"),
+            "confluence_score": (winner.get("confluence") or {}).get("result", {}).get("confluence_score"),
         }
         try:
             # Iter 125 — BUG FIX: previous code wrote to _id="singleton" but
@@ -375,7 +509,8 @@ class AutoScanService:
                 pass
             logger.info(f"[auto_scan] 🎯 ROUTED to TM · {winner['asset']} · "
                         f"{winner['direction']} · conf={winner['confidence']:.2f} · "
-                        f"elite={winner.get('elite_score') or '—'}")
+                        f"elite={winner.get('elite_score') or '—'} · "
+                        f"confluence={target.get('confluence_score') or '—'}")
             # Iter 126 — Telegram notification (fire-and-forget)
             try:
                 from telegram_service import send_message
