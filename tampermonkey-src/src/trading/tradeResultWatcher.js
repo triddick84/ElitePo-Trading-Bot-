@@ -53,18 +53,27 @@ function _rowId(el) {
 }
 
 /** Parse a deal row into { asset, direction, amount, isWin }.
- *  Returns null when any critical field can't be extracted so we don't
- *  match a random row to the wrong armed trade. */
+ *  Iter 141: Robust WIN/LOSS detection — prefers color/class markers over
+ *  numeric parsing because PO's payout column shows `$2.85` (no `+` sign)
+ *  for wins and often nothing for losses. Old regex-based approach missed
+ *  every WIN.
+ *  Returns null only when direction OR asset can't be extracted. When
+ *  isWin can't be determined we fall back to the class/color scanner. */
 function _parseDealRow(row) {
   try {
     const text = (row.textContent || '').replace(/\s+/g, ' ').trim();
 
-    // Direction — PO rows always contain UP/CALL/HIGHER or DOWN/PUT/LOWER
+    // ---- Direction ----
     let direction = null;
     if (/\b(UP|CALL|HIGHER|BUY)\b/i.test(text)) direction = 'CALL';
     else if (/\b(DOWN|PUT|LOWER|SELL)\b/i.test(text)) direction = 'PUT';
+    // Arrow-based fallback (PO often uses ▲ ▼ or ↑ ↓ icons)
+    if (!direction) {
+      if (/[▲↑⬆]/.test(text)) direction = 'CALL';
+      else if (/[▼↓⬇]/.test(text)) direction = 'PUT';
+    }
 
-    // Asset — pick the longest all-caps token 3-8 chars that looks like a pair
+    // ---- Asset ----
     const upper = row.textContent.match(/\b[A-Z]{3,8}(?:[/_-]?OTC)?\b/g) || [];
     let asset = null;
     for (const cand of upper) {
@@ -72,34 +81,89 @@ function _parseDealRow(row) {
       if (n.length >= 6 && n.length <= 12) { asset = n; break; }
     }
 
-    // Amount + outcome from the row's numeric fields
-    // PO usually shows: "<stake>  <payout>" where payout is 0 on loss.
+    // ---- Numeric fields (stake + payout) ----
+    // Extract every dollar-ish number. Payout is the LAST one (rightmost in
+    // the row), stake is one of the earlier ones. On WINS payout > stake;
+    // on LOSSES payout is 0 or absent.
     const nums = [...text.matchAll(/([+-]?)\s*\$?\s*(\d+(?:\.\d+)?)/g)]
-      .map(m => ({ sign: m[1], val: parseFloat(m[2]) }))
-      .filter(x => Number.isFinite(x.val));
+      .map((m) => ({ sign: m[1], val: parseFloat(m[2]) }))
+      .filter((x) => Number.isFinite(x.val) && x.val < 100000);
+    // Stake is typically the smallest positive value ≥ 1 that appears
+    // before larger numbers, but the simpler heuristic is: take the FIRST
+    // dollar-prefixed value or the smallest unsigned value.
     let amount = null;
-    let isWin = null;
-    // The stake is the LARGEST unsigned positive < 10000. The payout is
-    // signed. Fall back to the DOM class-based scanner for isWin.
-    if (nums.length >= 2) {
-      const unsigned = nums.filter(x => !x.sign && x.val > 0);
-      amount = unsigned.length ? Math.max(...unsigned.map(x => x.val)) : null;
-      const signed = nums.filter(x => x.sign);
-      if (signed.length) {
-        const s = signed[signed.length - 1];   // last signed = final payout
-        if (s.sign === '+' && s.val > 0) isWin = true;
-        else if (s.sign === '-' || s.val === 0) isWin = false;
+    if (nums.length >= 1) {
+      const unsigned = nums.filter((x) => !x.sign && x.val > 0);
+      if (unsigned.length) {
+        // Stake ≠ price → stake is usually < 1000 and NOT a decimal quote.
+        // Pick the smallest sensible stake candidate (0.5..1000).
+        const stakes = unsigned
+          .map((x) => x.val)
+          .filter((v) => v >= 0.5 && v <= 1000);
+        amount = stakes.length ? Math.min(...stakes) : null;
       }
     }
 
-    // Fallback: class-based
+    // ---- WIN / LOSS — try multiple strategies, in order ----
+    let isWin = null;
+    // Strategy A: explicit +/- sign on a payout number
+    const signed = nums.filter((x) => x.sign);
+    if (signed.length) {
+      const s = signed[signed.length - 1];
+      if (s.sign === '+' && s.val > 0) isWin = true;
+      else if (s.sign === '-' || s.val === 0) isWin = false;
+    }
+    // Strategy B: class/color markers on the row itself (most reliable on PO)
     if (isWin === null) {
       const cls = (row.className || '').toLowerCase();
-      if (/\b(loss|lost|failed?|red|negative|minus)\b/.test(cls)) isWin = false;
-      else if (/\b(win|won|success|green|positive)\b/.test(cls)) isWin = true;
+      if (/\b(loss|lost|failed?|red|negative|minus|down)\b/.test(cls)) isWin = false;
+      else if (/\b(win|won|success|green|positive|profit|up)\b/.test(cls)) isWin = true;
+    }
+    // Strategy C: scan child element classes/text — PO often puts the
+    // payout in a span with a color class like `.value_up` / `.value_down`
+    if (isWin === null) {
+      try {
+        const winEl = row.querySelector(
+          '[class*="win" i], [class*="won" i], [class*="success" i], '
+          + '[class*="profit" i], [class*="green" i], [class*="value_up" i]'
+        );
+        const lossEl = row.querySelector(
+          '[class*="loss" i], [class*="lost" i], [class*="fail" i], '
+          + '[class*="red" i], [class*="value_down" i]'
+        );
+        if (winEl && !lossEl) isWin = true;
+        else if (lossEl && !winEl) isWin = false;
+      } catch (_e) { /* querySelector on odd rows can throw */ }
+    }
+    // Strategy D: numeric heuristic — if we identified a stake AND there's
+    // a LARGER positive number after it in the row, PO paid a profit → WIN.
+    if (isWin === null && amount != null && nums.length >= 2) {
+      const positives = nums.filter((x) => x.val > 0 && !x.sign);
+      const anyLarger = positives.some((x) => x.val > amount * 1.1);
+      // Explicit $0.00 anywhere after the stake → loss
+      const anyZero = nums.slice(-3).some((x) => x.val === 0);
+      if (anyLarger && !anyZero) isWin = true;
+      else if (anyZero) isWin = false;
+    }
+    // Strategy E: RGB color of the row / a descendant — final fallback.
+    if (isWin === null && typeof window !== 'undefined' && window.getComputedStyle) {
+      try {
+        const candidates = [row, ...row.querySelectorAll('*')].slice(0, 12);
+        for (const el of candidates) {
+          const color = window.getComputedStyle(el).color || '';
+          // rgb(46,160,67) / rgb(63,185,80) — greens
+          const m = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)/);
+          if (m) {
+            const [r, g, b] = [+m[1], +m[2], +m[3]];
+            if (g > 130 && g > r + 25 && g > b + 25) { isWin = true; break; }
+            if (r > 130 && r > g + 25 && r > b + 25) { isWin = false; break; }
+          }
+        }
+      } catch (_e) { /* getComputedStyle can throw on detached nodes */ }
     }
 
-    if (!direction || !asset || isWin === null) return null;
+    if (!direction || !asset) return null;
+    // isWin may still be null — the caller will decide whether to retry.
     return { asset, direction, amount, isWin };
   } catch (_e) {
     return null;
@@ -204,19 +268,29 @@ class TradeResultWatcher {
     for (const row of rows) {
       const id = _rowId(row);
       if (this.seenRows.has(id)) continue;
-      this.seenRows.add(id);
       const parsed = _parseDealRow(row);
       if (!parsed) continue;
+      // Iter 141: if isWin is null the row hasn't fully rendered yet (PO
+      // sometimes streams the payout in a second frame). DON'T mark it
+      // seen — the next observer tick will re-parse.
+      if (parsed.isWin === null) {
+        log(`[ResultWatcher] deferring row (no outcome yet) — ${parsed.direction} ${parsed.asset}`);
+        continue;
+      }
+      this.seenRows.add(id);
       this._matchAndResolve(parsed, row);
     }
   }
 
   /** Find the oldest un-resolved armed trade matching this parsed row.
-   *  Matches on (asset, direction) and — when amount is available — also
-   *  the stake within a 5-cent tolerance. Falls back to (asset, direction)
-   *  only when the row didn't yield a clean amount. */
+   *  Iter 141: matching is now LENIENT — asset+direction always required,
+   *  amount used only as a tie-breaker when both sides provide one.
+   *  Prior behaviour REQUIRED amount match within 5¢, but PO's DOM often
+   *  omits the stake in the row summary, causing every trade to go
+   *  unmatched. */
   _matchAndResolve(parsed, row) {
-    const idx = this.armedQueue.findIndex(a => {
+    // First pass — exact match on (asset, direction, amount)
+    let idx = this.armedQueue.findIndex((a) => {
       if (a.resolved) return false;
       if (_normAsset(a.trade.asset) !== parsed.asset) return false;
       if (a.trade.direction !== parsed.direction) return false;
@@ -225,8 +299,16 @@ class TradeResultWatcher {
       }
       return true;
     });
+    // Second pass — same asset+direction, ignore amount (row may not carry it)
     if (idx === -1) {
-      log(`[ResultWatcher] no armed match for ${parsed.direction} ${parsed.asset} @$${parsed.amount ?? '?'}`);
+      idx = this.armedQueue.findIndex((a) => (
+        !a.resolved
+        && _normAsset(a.trade.asset) === parsed.asset
+        && a.trade.direction === parsed.direction
+      ));
+    }
+    if (idx === -1) {
+      log(`[ResultWatcher] no armed match for ${parsed.direction} ${parsed.asset} @$${parsed.amount ?? '?'} (queue=${this.armedQueue.length})`);
       return;
     }
     const arm = this.armedQueue[idx];

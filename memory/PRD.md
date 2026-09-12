@@ -1,4 +1,68 @@
-# AI's Elite PO Traders Bot — Feb 2026 (Iter 140: Auto-Scan × Confluence Gate)
+# AI's Elite PO Traders Bot — Feb 2026 (Iter 141: Win/Loss Fix + Compact UI)
+
+## Iter 141 (Feb 2026) — TM Win/Loss Detection Fix + Compact UI + Dual-Edge Resize
+
+### User reports
+> Tampermonkey script the auto invert is not recognizing anything now.  
+> The win lose detection is not working.  
+> Need to redesign the layout... needs to be a small ui design, free-floating window with adjustable side to drag on both sides.
+
+### 1 · Root cause — win/loss detection silently broken
+The Iter 136 rewrite of `tradeResultWatcher.js._parseDealRow` required `isWin !== null` OR else returned `null`. Detection relied on a **signed** dollar-amount regex (`+$2.85`), but PocketOption renders wins as plain `$2.85` (no `+`). Every WIN failed to parse → row returned `null` → no match → no result recorded → A-INV never received a loss streak → engine appeared "not recognizing anything".
+
+### 2 · Fix — 5-strategy `_parseDealRow`
+Now attempts win/loss detection in order:
+- **A**: explicit `+/-` on a payout number (legacy fast path)
+- **B**: row `className` regex for `win|won|success|green|profit` / `loss|lost|failed|red|down`
+- **C**: `querySelector` for `[class*="value_up"]` / `[class*="value_down"]` PO markers
+- **D**: numeric heuristic — if a positive number > `stake × 1.1` appears after the stake → WIN; a `$0.00` in the last three numbers → LOSS
+- **E**: **RGB colour probe via `getComputedStyle`** on up to 12 descendants — dominant green → WIN, dominant red → LOSS
+
+Also added arrow-icon fallback for direction (▲ ▼ ↑ ↓).
+
+### 3 · Fix — lenient matching in `_matchAndResolve`
+Previous code required amount within 5¢. Now:
+- **First pass**: exact (asset, direction, amount).
+- **Second pass**: (asset, direction) only — PO's deal-history row sometimes omits the stake summary. This restores matches for the most common failure mode.
+
+### 4 · Fix — defer rather than mark-seen when outcome is null
+`_scanNewRows` no longer adds rows to `seenRows` until `_parseDealRow` returns a valid `isWin`. PO streams the payout in a second animation frame, so we now wait for it instead of consuming the row prematurely.
+
+### 5 · UI redesign — Compact + Drag-Anywhere + Dual-Edge Resize
+- **Compact default width**: desktop 440 px → **320 px**; mobile 300 px → 290 px. Buttons: `7px 6px` padding, 11 px font (was `9px 8px`, 12 px).
+- **Left + Right resize handles**: 6 px-wide invisible strips on both vertical edges. Hover shows a blue vertical bar. Left handle keeps the right edge fixed while resizing so the anchor doesn't jump. Widths persisted to `GM_setValue(epb_panelW)`.
+- **Drag from anywhere**: mousedown/touchstart bound to `#epb-panel` (was: title bar only). `shouldSkipDrag()` skips interactive descendants (button/input/textarea/select/a/label + all `.epb-btn/.epb-tabbtn/.epb-masterbtn/.epb-masterbig/.epb-minbtn/.epb-sideresize/.epb-resize`) so clicks on toggles still work.
+- Tabs (LIVE / TRADE / AI / CONFIG) preserved as requested.
+
+### 6 · Version bump + deploy
+- `version.txt`: 8.149.0 → **8.150.0**
+- Webpack rebuild → 446 KiB. Copied to `frontend/public/pocket-option-auto-trader{,-modular}.user.js`.
+- `/api/tampermonkey/script` serves 8.150.0 with the correct API URL + expanded @connect (Iter 138 fix still active).
+- User must **Check for updates** in TM dashboard to pull 8.150.0.
+
+### 7 · Tests
+- **NEW** `tests/test_iter141_watcher_and_ui.py` — 9 tests:
+  - Watcher source uses `value_up/value_down` + `getComputedStyle` strategies.
+  - Watcher defers rows when `isWin` is null.
+  - Second-pass amount-less matcher exists.
+  - Panel default width is compact (`W = mobile ? 290 : 320`).
+  - Dual side-resize handles wired (`resize-handle-left`, `resize-handle-right`, `_bindSideResize`).
+  - Drag-from-anywhere plumbing present (`dragSurface`, `shouldSkipDrag`, `NO_DRAG`).
+  - Bundle carries `@version 8.150.0`.
+  - Bundle has both side-resize test-ids.
+  - Bundle preserves `value_up` + `getComputedStyle` strategies.
+- Iter 138 expected version bumped to 8.150.0 (regression guard follows the current build).
+- **137/137 pass** across Iter 131 + 133 + 134 + 135 + 136 + 137 + 138 + 139 + 140 + 141. Zero regressions.
+
+### Files touched
+- **MOD** `tampermonkey-src/src/trading/tradeResultWatcher.js` — 5-strategy parse, defer-when-null, lenient match
+- **MOD** `tampermonkey-src/src/ui/panel.js` — compact width, dual side-resize, drag-anywhere
+- **MOD** `tampermonkey-src/version.txt` — 8.150.0
+- **REGEN** `frontend/public/pocket-option-auto-trader{,-modular}.user.js`
+- **MOD** `backend/tests/test_iter138_stealth_mode.py` — EXPECTED_VERSION → 8.150.0
+- **NEW** `backend/tests/test_iter141_watcher_and_ui.py` (9 tests)
+
+---
 
 ## Iter 140 (Feb 2026) — Auto-Scan Now Gated by the Confluence Engine
 

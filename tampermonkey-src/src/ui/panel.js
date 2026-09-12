@@ -26,13 +26,12 @@ function isMobile() {
  */
 function injectCSS() {
   const mobile = isMobile();
-  // Iter 107 — "extension-style" defaults: wider panel + larger touch targets
-  // so users don't complain about hard-to-hit buttons. Original 300px was
-  // too cramped for the growing tab set + AI TA cards.
-  const W = mobile ? 300 : 440;
-  const FONT = mobile ? 12 : 13;
-  const BTN_PAD = mobile ? '12px 8px' : '9px 8px';
-  const BTN_FONT = mobile ? 13 : 12;
+  // Iter 141 — Compact 320 px default (user request "small UI").
+  // Users retain full resize via the new dual-edge handles (left + right).
+  const W = mobile ? 290 : 320;
+  const FONT = mobile ? 11 : 12;
+  const BTN_PAD = mobile ? '10px 6px' : '7px 6px';
+  const BTN_FONT = mobile ? 12 : 11;
 
   const css = `
     #${P}host {
@@ -89,6 +88,27 @@ function injectCSS() {
         transparent 60%, transparent 70%,
         #3b82f6 70%, #3b82f6 80%,
         transparent 80%) !important;
+    }
+    /* Iter 141 — side resize handles (left + right edges). Thin invisible
+       strips that show a blue vertical bar on hover. */
+    .${P}sideresize {
+      position: absolute !important;
+      top: 32px !important;
+      bottom: 20px !important;
+      width: 6px !important;
+      cursor: ew-resize !important;
+      z-index: 9 !important;
+      background: transparent !important;
+      touch-action: none !important;
+      -webkit-tap-highlight-color: transparent !important;
+    }
+    .${P}sideresize.left { left: -3px !important; }
+    .${P}sideresize.right { right: -3px !important; }
+    .${P}sideresize:hover {
+      background: linear-gradient(90deg, transparent, #58a6ff, transparent) !important;
+    }
+    .${P}sideresize.active {
+      background: linear-gradient(90deg, transparent, #3b82f6, transparent) !important;
     }
     #${P}host * {
       box-sizing: border-box !important;
@@ -2014,6 +2034,8 @@ export function createPanel() {
         </div>
       </div>
       <div class="${P}resize" id="${P}resize" data-testid="resize-handle" title="Drag to resize panel width. Saved across reloads."></div>
+      <div class="${P}sideresize left" id="${P}resizeL" data-testid="resize-handle-left" title="Drag left/right to resize (grows toward the left)."></div>
+      <div class="${P}sideresize right" id="${P}resizeR" data-testid="resize-handle-right" title="Drag left/right to resize (grows toward the right)."></div>
     </div>
   `;
 
@@ -2297,6 +2319,61 @@ export function initPanelEvents(callbacks = {}) {
     document.addEventListener('touchmove', onMove, { passive: false });
     document.addEventListener('touchend', onUp);
   }
+
+  // Iter 141 — Left / Right side resize handles. The panel is anchored at
+  // right:5px so we resize width AND also nudge `left`/`right` so the
+  // opposite edge stays put visually.
+  const _bindSideResize = (id, side) => {
+    const el = q(id);
+    if (!el || !hostEl) return;
+    let resizing = false, startX = 0, startW = 0, startRight = 0, startLeft = 0;
+    const getX = (ev) => (ev.touches && ev.touches[0]) ? ev.touches[0].clientX : ev.clientX;
+    const onDown = (ev) => {
+      resizing = true;
+      el.classList.add('active');
+      startX = getX(ev);
+      const r = hostEl.getBoundingClientRect();
+      startW = r.width;
+      startRight = window.innerWidth - r.right;
+      startLeft = r.left;
+      ev.preventDefault();
+      ev.stopPropagation();
+    };
+    const onMove = (ev) => {
+      if (!resizing) return;
+      const dx = getX(ev) - startX;
+      let newW;
+      if (side === 'right') {
+        newW = Math.max(240, Math.min(720, startW + dx));
+        hostEl.style.setProperty('width', `${newW}px`, 'important');
+      } else {
+        newW = Math.max(240, Math.min(720, startW - dx));
+        hostEl.style.setProperty('width', `${newW}px`, 'important');
+        // Keep the RIGHT edge visually stable when dragging the LEFT handle
+        hostEl.style.setProperty('right', `${startRight}px`, 'important');
+        hostEl.style.setProperty('left', 'auto', 'important');
+      }
+      ev.preventDefault();
+    };
+    const onUp = () => {
+      if (!resizing) return;
+      resizing = false;
+      el.classList.remove('active');
+      try {
+        if (typeof GM_setValue !== 'undefined') {
+          GM_setValue(`${P}panelW`, String(Math.round(hostEl.getBoundingClientRect().width)));
+        }
+      } catch (_e) { /* ignore */ }
+    };
+    el.addEventListener('mousedown', onDown);
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    el.addEventListener('touchstart', onDown, { passive: false });
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onUp);
+  };
+  _bindSideResize('resizeL', 'left');
+  _bindSideResize('resizeR', 'right');
 
   // Scan
   const scanBtn = q('scan');
@@ -3112,9 +3189,31 @@ export function updateStatusDot(status) {
 function makeDraggable() {
   const header = q('header');
   const host = document.getElementById(`${P}host`);
+  const panel = q('panel');
   if (!header || !host) return;
 
   let dragging = false, startX, startY, origLeft, origTop;
+  // Iter 141 — drag from ANY panel surface. Ignore anything the user is
+  // interacting with (buttons, inputs, sliders, links, side-resize handles).
+  const NO_DRAG = /^(BUTTON|INPUT|TEXTAREA|SELECT|A|LABEL|OPTION)$/;
+  function shouldSkipDrag(target) {
+    if (!target) return false;
+    let el = target;
+    while (el && el !== host) {
+      if (el.classList && (
+        el.classList.contains(`${P}sideresize`)
+        || el.classList.contains(`${P}resize`)
+        || el.classList.contains(`${P}btn`)
+        || el.classList.contains(`${P}tabbtn`)
+        || el.classList.contains(`${P}masterbtn`)
+        || el.classList.contains(`${P}masterbig`)
+        || el.classList.contains(`${P}minbtn`)
+      )) return true;
+      if (NO_DRAG.test(el.tagName || '')) return true;
+      el = el.parentElement;
+    }
+    return false;
+  }
 
   function getPos(e) {
     if (e.touches && e.touches.length > 0) {
@@ -3124,6 +3223,7 @@ function makeDraggable() {
   }
 
   function onStart(e) {
+    if (shouldSkipDrag(e.target)) return;
     dragging = true;
     const pos = getPos(e);
     const rect = host.getBoundingClientRect();
@@ -3152,13 +3252,14 @@ function makeDraggable() {
     dragging = false;
   }
 
-  // Mouse events
-  header.addEventListener('mousedown', onStart);
+  // Mouse events — attach to the whole PANEL so drag works from anywhere
+  const dragSurface = panel || header;
+  dragSurface.addEventListener('mousedown', onStart);
   document.addEventListener('mousemove', onMove);
   document.addEventListener('mouseup', onEnd);
 
   // Touch events
-  header.addEventListener('touchstart', onStart, { passive: false });
+  dragSurface.addEventListener('touchstart', onStart, { passive: false });
   document.addEventListener('touchmove', onMove, { passive: false });
   document.addEventListener('touchend', onEnd);
 }

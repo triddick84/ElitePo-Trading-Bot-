@@ -19,7 +19,7 @@ BUNDLE_PATHS = [
     Path("/app/frontend/public/pocket-option-auto-trader-modular.user.js"),
 ]
 
-EXPECTED_VERSION = "8.149.0"
+EXPECTED_VERSION = "8.150.0"
 
 
 def _read_bundle(p: Path) -> str:
