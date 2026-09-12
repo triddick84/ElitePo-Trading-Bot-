@@ -1,0 +1,40 @@
+{
+  "summary": "Backend-only static/source-code regression testing for iter136 tradeResultWatcher rewrite (Tampermonkey userscript bugfix — multi-trade FIFO queue replaces balance-delta detection). All 11 iter136 assertions pass. Full regression stack (iter131, iter133, iter134, iter135, iter136) = 59/59 passing. No frontend testing performed (per request — userscript runs only inside a real browser on pocketoption.com).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter136_watcher_rewrite.py",
+    "/app/test_reports/pytest/iter136_regression.xml"
+  ],
+  "verified_claims": [
+    "version.txt == 8.147.0 (bumped from 8.146.0)",
+    "compiled bundle /app/frontend/public/pocket-option-auto-trader.user.js contains '@version 8.147.0' and 0 references to 'preBalance'",
+    "tradeResultWatcher.js contains 0 references to getAccountBalance / preBalance / balance-up / balance-flat (balance polling fully removed)",
+    "tradeResultWatcher.js uses `this.armedQueue.push(...)` FIFO instead of single `this.armed` slot — supports concurrent overlapping trades",
+    "_matchAndResolve matches new deal rows to OLDEST armed trade with same asset/direction/amount (~5c tolerance)",
+    "executor.js `_scheduleOutcomeResolution` gutted to a no-op stub with DEPRECATED docstring; body no longer calls getAccountBalance()",
+    "getQueueSnapshot() helper exposed for AI panel UI",
+    "iter136: 11/11 passing; full regression iter131+133+134+135+136: 59/59 passing"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Fix addresses the reported bug at the correct layer: replacing balance-delta polling (which is inherently ambiguous when trades overlap) with DOM-row matching against a FIFO of armed trades is the right architectural choice.",
+    "Executor still calls the deprecated _scheduleOutcomeResolution stub — safe (no-op) but consider removing the call site entirely in a future cleanup to avoid dead-code confusion.",
+    "Note: static-source tests cannot detect runtime edge cases (e.g. DOM selector drift on pocketoption.com, race between MutationObserver and interval scan, duplicate row matching under identical asset/direction/amount trades). A manual smoke test with two overlapping 60s trades on the same asset is still recommended once the extension is loaded in a browser."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (59/59)", "frontend": "not tested (userscript — requires live browser on pocketoption.com)"},
+  "test_credentials": "none required",
+  "seed_data_creation": "none",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "iter136 covers Tampermonkey userscript trade-outcome detection rewrite. Tests are pure static/source assertions (no live pocketoption.com interaction possible in sandbox). Regression order used: iter131,133,134,135,136 — all green. If iter131/133 shared-state timing issue resurfaces, that ordering avoids the collision (iter131 uses user_id 'riskguard_pytest', iter133 uses 'default' and wipes at end).",
+  "rca of the issue": "Original bug: balance-delta detection (preBalance vs postBalance after expirySeconds) was inherently unreliable because (a) only one armed trade tracked at a time (this.armed single slot), and (b) if a new trade's stake was deducted before the previous trade's payout landed, the delta became ambiguous (net negative/positive of two trades). Fix: (1) armedQueue FIFO holds all pending trades; (2) MutationObserver + periodic scan of the deals table parses new rows and matches them to the OLDEST armed trade with matching (asset, direction, amount within ~5c); (3) balance polling entirely removed; (4) executor's redundant balance-based resolver reduced to a documented no-op stub."
+}

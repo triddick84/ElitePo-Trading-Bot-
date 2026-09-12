@@ -1,4 +1,35 @@
-# AI's Elite PO Traders Bot — Feb 2026 (Iter 135: RF AUC Audit + Live Perf Pill)
+# AI's Elite PO Traders Bot — Feb 2026 (Iter 136: Multi-Trade Result Watcher)
+
+## Iter 136 (Feb 2026) — Trade-Outcome Detection Rewrite (No More Balance)
+
+### User bug
+> Tampermonkey script can't use the balance for win or lose detection due to balance goes down on trade for amount to trade and then goes up on win or stays, but if another trade is placed after the 1st trade expires then the detection of wins or losses off of the balance would be messed up.
+
+### Root cause
+Two separate detectors both used balance-delta polling with a single armed-trade slot:
+1. `tradeResultWatcher.js` — `this.armed = {…}` (one slot). Any second trade wiped the first arm, silently losing that trade's outcome. Balance-delta ambiguous whenever stake B was deducted before payout A landed.
+2. `executor.js::_scheduleOutcomeResolution()` — also balance-polling, same failure mode.
+
+### Fix shipped
+**`tampermonkey-src/src/trading/tradeResultWatcher.js` — full rewrite:**
+- **`armedQueue` FIFO** — supports arbitrary overlapping trades (`MAX_QUEUE=16` prevents leaks).
+- **`seenRows` snapshot on `enable()` + on each `armResolver()`** so only rows that appear *after* arming count.
+- **`_parseDealRow()`** — extracts `(asset, direction, amount, isWin)` from any newly-added deal row: parses direction from `UP/CALL/HIGHER/BUY` vs `DOWN/PUT/LOWER/SELL`, asset from all-caps tokens, amount from unsigned max in row, outcome from signed profit number (fallback to class markers).
+- **`_matchAndResolve()`** matches each new row to the *oldest* armed trade with the same `(asset, direction)` and amount within a 5-cent tolerance.
+- **`MutationObserver` + belt-and-suspenders 800 ms interval** rescan the deals list; per-row identity via `data-id/id` or textContent hash prevents double-firing.
+- **Balance polling entirely removed** — no more `preBalance`, `getAccountBalance`, `balance-up`, or `balance-flat`.
+- **`getQueueSnapshot()`** exposes pending-trades state so the AI panel can render "3 trades pending".
+
+**`tampermonkey-src/src/trading/executor.js`** — `_scheduleOutcomeResolution()` gutted to a documented no-op stub (call-site preserved to avoid churn).
+
+**`tampermonkey-src/version.txt`** — bumped **8.146.0 → 8.147.0**; webpack rebuilt; bundle copied to `frontend/public/pocket-option-auto-trader.user.js`.
+
+### Tests / verification
+- **NEW** `backend/tests/test_iter136_watcher_rewrite.py` — **11/11 pass**: version bump, bundle version-header, zero balance refs in source AND bundle, `armedQueue.push` used, `_matchAndResolve` w/ 5c tolerance, `seenRows.add` snapshot, `MAX_QUEUE` leak guard, direction+asset regex families, `getQueueSnapshot()` exposed.
+- **testing_agent** subagent invoked (`/app/test_reports/iteration_60.json`): confirmed **59/59** full regression pass across iter131/133/134/135/136, zero critical or minor issues, RCA matches the fix. `retest_needed: false`.
+- Reminder: users on the browser side must **hard-refresh Tampermonkey** ("Check for updates" on the userscript row) to pull the new v8.147.0 bundle.
+
+---
 
 ## Iter 135 (Feb 2026) — Per-Asset RF AUC Audit + Live Perf Pill
 

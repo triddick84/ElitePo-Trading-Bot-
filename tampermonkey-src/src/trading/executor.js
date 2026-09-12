@@ -293,67 +293,18 @@ class TradeExecutor {
   }
   
   /**
-   * Schedule an outcome auto-resolver for a placed trade.
-   * Captures balance snapshots before/after expiry and triggers recordResult.
-   * Silently skips if another handler already resolved it (pendingTrades drained).
-   * @param {Object} trade - Trade record from execute()
-   * @param {number} expirySeconds - Expected trade expiry (default 60s)
+   * Iter 136 — DEPRECATED.
+   * Old design polled account balance for win/loss detection. That breaks
+   * catastrophically when trades overlap because a later trade's stake
+   * deduction masks an earlier trade's payout. The `tradeResultWatcher`
+   * (multi-trade queue, DOM-only) is the sole detector now.
+   *
+   * Kept as a no-op to preserve the call-site contract in `execute()`.
    */
   async _scheduleOutcomeResolution(trade, expirySeconds = 60) {
-    // Avoid double-resolution if caller already records manually
-    trade._autoResolverArmed = true;
-
-    // Snapshot balance ~1.5s post click (after bet deducted)
-    await new Promise(r => setTimeout(r, 1500));
-    const preBalance = getAccountBalance();
-    trade._preBalance = preBalance;
-
-    // Wait expiry + safety buffer (3s)
-    const waitMs = (expirySeconds * 1000) + 3000;
-    await new Promise(r => setTimeout(r, waitMs));
-
-    // If user already clicked WIN/LOSS manually OR 21s reversal resolved it,
-    // pendingTrades no longer contains this trade.
-    const stillPending = this.pendingTrades.includes(trade);
-    if (!stillPending) return;
-
-    // Poll for up to 10s for a stable post-expiry balance
-    // Iter 123 — Tightened: require delta ≥ stake*0.3 for a WIN decision
-    // (small micro-changes from unrelated activity shouldn't flip a LOSS
-    // into a WIN). LOSS still requires balance ≈ preBalance.
-    let isWin = null;
-    const start = Date.now();
-    const stake = Number(trade.amount) || 1;
-    const minWinDelta = Math.max(0.05, stake * 0.3);  // must gain ≥ 30% of stake for WIN
-    while (Date.now() - start < 10000) {
-      const domResult = scanDOMForTradeResult();
-      if (domResult === true) { isWin = true; break; }
-      if (domResult === false) { isWin = false; break; }
-
-      const current = getAccountBalance();
-      if (current > 0 && preBalance > 0) {
-        const delta = current - preBalance;
-        if (delta >= minWinDelta) { isWin = true; break; }
-        // LOSS = balance unchanged (bet already deducted pre-expiry)
-        if (Math.abs(delta) < 0.01) { isWin = false; break; }
-        // Any tiny positive delta below minWinDelta (e.g. refund/tie) is
-        // ambiguous — keep polling for a clearer signal.
-      }
-      await new Promise(r => setTimeout(r, 500));
-    }
-
-    if (isWin === null) {
-      warn(`[auto-resolve] timed out on ${trade.asset} ${trade.direction} — skipping (record manually with WIN/LOSS buttons)`);
-      return;
-    }
-
-    // Remove from pending so recordResult sees the same trade object
-    const idx = this.pendingTrades.indexOf(trade);
-    if (idx >= 0) this.pendingTrades.splice(idx, 1);
-    // Re-prepend so recordResult still picks it up
-    this.pendingTrades.unshift(trade);
-
-    this.recordResult(isWin, { autoResolved: true });
+    trade._autoResolverArmed = true;   // still marks so double-arm guards pass
+    // Intentionally empty — see tradeResultWatcher.armResolver(trade)
+    return;
   }
 
   /**

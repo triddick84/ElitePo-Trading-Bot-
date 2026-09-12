@@ -5,7 +5,9 @@
     "dist",
     "public/**",
     "**/tma/**",
-    "**/*.min.js"
+    "**/*.min.js",
+    "**/*.user.js",
+    "**/pocket-option-auto-trader*.js"
   ],
   "env": {
     "browser": true,

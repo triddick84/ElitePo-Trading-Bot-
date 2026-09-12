@@ -29,6 +29,15 @@ export default [
     },
   },
   {
-    ignores: ["node_modules/**", "build/**", "public/**", "dist/**", "**/tma/**"],
+    ignores: [
+      "node_modules/**",
+      "build/**",
+      "public/**",
+      "dist/**",
+      "**/tma/**",
+      "**/*.user.js",
+      "**/*.min.js",
+      "**/pocket-option-auto-trader*.js",
+    ],
   },
 ];
