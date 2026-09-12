@@ -42,6 +42,10 @@ const userscriptHeader = `// ==UserScript==
 // @grant        GM_log
 // @connect      momentum-trade-test.preview.emergentagent.com
 // @connect      preview.emergentagent.com
+// @connect      auto-invert-engine.preview.emergentagent.com
+// @connect      emergentagent.com
+// @connect      elitepotradingbot.com
+// @connect      *
 // @run-at       document-start
 // @noframes
 // ==/UserScript==
