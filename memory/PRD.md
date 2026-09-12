@@ -1,4 +1,83 @@
-# AI's Elite PO Traders Bot — Feb 2026 (Iter 137: Pattern Suite + Confluence Engine)
+# AI's Elite PO Traders Bot — Feb 2026 (Iter 138: Stealth Mode + Expanded @connect)
+
+## Iter 138 (Feb 2026) — TM Stealth Mode + `@connect` Wildcard Fix
+
+### User context
+User reported PocketOption serving **HTTP 403 "Access to pocketoption.com is forbidden"** while the TM script was enabled (screenshot confirmed). Root cause: PO's WAF/edge blocked the IP (geo / behavioural / VPN). Not a script bug directly, but the script's background chatter (heartbeat every 15 s, latency probe every 5 s, tm-settings every 30 s) contributes to the "automated" fingerprint. User picked option **A — ship Stealth Mode**.
+
+### 1 · New module `tampermonkey-src/src/core/stealthMode.js`
+- Persisted via `GM_setValue('epb_stealth_mode', bool)` — survives reloads.
+- `isActive()`, `getMultiplier()` (returns 3 when on, 1 when off), `toggle()`, `setActive()`.
+- **`shouldSkipBackgroundProbe(isUserActive)`** — returns true when stealth is on AND the user hasn't enabled any trading toggle. Pollers use this to pause completely while idle.
+- **`scheduleDomRetry(cb, ms)`** — swaps `setTimeout` for `requestIdleCallback` (with `timeout: max(ms, 250)`) when stealth is on, so DOM retries piggyback on browser idle time instead of competing with PO renders.
+- `onChange(cb)` pub/sub so pollers can reschedule immediately when the flag flips.
+
+### 2 · Poller integration (heartbeat, latency, tm-settings)
+Each poller now:
+- Imports `stealthMode`.
+- Computes `_effectivePollMs() = this.pollMs * stealthMode.getMultiplier()`.
+- At the top of `_tick()`, computes `isUserActive` from the trading toggles (`autoTradeEnabled | scanEnabled | appSignalEnabled | cycleEnabled | _twentyOneSEnabled`) and skips when `shouldSkipBackgroundProbe(isUserActive)` is true.
+- Subscribes to `stealthMode.onChange` so flipping the toggle reschedules the interval instantly.
+
+Effective cadence (stealth ON, user active):
+- Heartbeat: 15 s → **45 s**
+- Network latency: 5 s → **15 s**
+- TM settings: 30 s → **90 s**
+
+Effective cadence (stealth ON, user idle): all three **pause entirely**.
+
+### 3 · UI toggle (`ui/panel.js`, CONFIG tab)
+- New section pinned at the top of CONFIG: **🥷 Stealth Mode**
+- One button (`data-testid="btn-stealth-toggle"`) shows OFF/ON; status line shows current multiplier + "Probes skip while idle: yes/no".
+- Bootstrapped in `initPanelEvents` — reads current state from `stealthMode.isActive()`, subscribes to `onChange` so DevTools helper (`__aiEliteStealth(true|false)`) keeps the panel in sync.
+
+### 4 · Expanded `@connect` allow-list (v8.148 + v8.149)
+Old header only allowed 2 hosts, so the current preview URL `auto-invert-engine.preview.emergentagent.com` triggered TM's "This request has been forbidden" prompt — indistinguishable from a PO 403 for a non-technical user. New header:
+```
+// @connect      momentum-trade-test.preview.emergentagent.com
+// @connect      preview.emergentagent.com
+// @connect      auto-invert-engine.preview.emergentagent.com
+// @connect      emergentagent.com
+// @connect      elitepotradingbot.com
+// @connect      *
+```
+Wildcard makes it future-proof against preview-URL rotation.
+
+### 5 · Version bump + deploy
+- `version.txt`: `8.147.0` → **`8.149.0`** (v8.148 was the interim @connect-only fix).
+- Webpack rebuild → 446 KiB bundle.
+- Copied to `/app/frontend/public/pocket-option-auto-trader{,-modular}.user.js`.
+- `GET /api/tampermonkey/script` serves 8.149.0 with the correct `API_URL` and expanded `@connect` (self-healing endpoint from Iter 93 still works).
+
+### 6 · Tests — 13/13 pass in `tests/test_iter138_stealth_mode.py`
+- All 3 bundle paths carry `@version 8.149.0`.
+- All 3 bundles contain the `epb_stealth_mode` storage key.
+- All 3 bundles carry the `data-testid="btn-stealth-toggle"` marker.
+- All 3 bundles have the expanded `@connect` list including `*` wildcard.
+- Live `/api/tampermonkey/script` end-to-end curl matches the built bundle byte-for-byte.
+
+### 7 · Full regression
+**99/99 pass** across Iter 131 + 133 + 134 + 135 + 136 + 137 + 138. No regressions.
+
+### Files touched
+- **NEW** `tampermonkey-src/src/core/stealthMode.js`
+- **NEW** `backend/tests/test_iter138_stealth_mode.py` (13 tests)
+- **MOD** `tampermonkey-src/webpack.config.js` — expanded `@connect`
+- **MOD** `tampermonkey-src/version.txt` — 8.149.0
+- **MOD** `tampermonkey-src/src/index.js` — imports + `stealthMode.init()` + `window.__aiEliteStealth`
+- **MOD** `tampermonkey-src/src/trading/heartbeatReporter.js` — multiplier + idle skip
+- **MOD** `tampermonkey-src/src/trading/networkLatencyPoller.js` — multiplier + idle skip
+- **MOD** `tampermonkey-src/src/trading/tmSettingsPoller.js` — multiplier + idle skip
+- **MOD** `tampermonkey-src/src/ui/panel.js` — new stealth section + toggle handler
+- **REGEN** compiled bundle copied to `frontend/public/`
+
+### How the user turns it on
+1. TM dashboard → *AI's Elite PO Traders Bot* → **Check for updates** (must see 8.149.0).
+2. Reload the PocketOption tab.
+3. Panel → **CONFIG** tab → **🥷 Stealth Mode** → click **OFF** to flip to **ON**.
+4. (Or from DevTools: `__aiEliteStealth(true)`.)
+
+---
 
 ## Iter 137 (Feb 2026) — Chart-Pattern Suite + Confluence Scoring Engine
 

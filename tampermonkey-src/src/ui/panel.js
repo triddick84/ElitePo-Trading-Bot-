@@ -10,6 +10,7 @@
 import { CONFIG } from '../core/config.js';
 import { state, setState, saveState } from '../core/state.js';
 import { log, setLogContainer } from '../core/logger.js';
+import { stealthMode } from '../core/stealthMode.js';
 
 let panelEl = null;
 let watchdogInterval = null;
@@ -1778,6 +1779,20 @@ export function createPanel() {
         <!-- ═════════════════ TAB: CONFIG ═════════════════ -->
         <div class="${P}tabpanel" data-tab-panel="config" data-testid="tab-panel-config">
           <div class="${P}advanced" id="${P}advanced">
+
+            <!-- Iter 138 — Stealth Mode toggle -->
+            <div class="${P}section" data-testid="stealth-mode-section" title="Reduces the bot's observable footprint on PocketOption's tab: 3× longer poll intervals for heartbeat/latency/settings, and background probes pause entirely while auto-trade is OFF. Turn ON if PO's WAF has been rate-limiting or 403'ing your session.">
+              <div class="${P}sectionttl">🥷 Stealth Mode</div>
+              <div style="display:flex;gap:8px;align-items:center;justify-content:space-between;">
+                <div style="font-size:${mobile ? 10 : 11}px;color:#cbd5e1;flex:1;line-height:1.4;">
+                  Slow background traffic to look less bot-like on PO.
+                </div>
+                <button id="${P}stealthBtn" class="${P}btn" data-testid="btn-stealth-toggle" style="flex:0 0 auto;min-width:64px;">OFF</button>
+              </div>
+              <div id="${P}stealthStatus" style="margin-top:6px;font-size:${mobile ? 9 : 10}px;color:#94a3b8;padding:6px 8px;background:rgba(0,0,0,0.25);border-radius:6px;">
+                Multiplier: <span id="${P}stealthMult" style="color:#e6edf3;font-weight:700;">1×</span> · Probes skip while idle: <span id="${P}stealthSkip" style="color:#e6edf3;font-weight:700;">no</span>
+              </div>
+            </div>
             <div class="${P}section">
               <div class="${P}sectionttl">Favorites Cycle (Iter 98)</div>
               <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
@@ -2076,6 +2091,29 @@ export function initPanelEvents(callbacks = {}) {
       }
     }
   } catch (_e) { /* ignore */ }
+
+  // Iter 138 — Stealth Mode toggle
+  const stealthBtn = q('stealthBtn');
+  const stealthMult = q('stealthMult');
+  const stealthSkip = q('stealthSkip');
+  const _renderStealth = () => {
+    const active = stealthMode.isActive();
+    if (stealthBtn) {
+      stealthBtn.textContent = active ? 'ON' : 'OFF';
+      stealthBtn.classList.toggle('active', active);
+    }
+    if (stealthMult) stealthMult.textContent = `${stealthMode.getMultiplier()}×`;
+    if (stealthSkip) stealthSkip.textContent = active ? 'yes' : 'no';
+  };
+  _renderStealth();
+  if (stealthBtn) {
+    stealthBtn.addEventListener('click', () => {
+      stealthMode.toggle();
+      _renderStealth();
+    });
+  }
+  // Keep the UI in sync if another source (DevTools helper) flips the flag
+  try { stealthMode.onChange(() => _renderStealth()); } catch (_e) { /* ignore */ }
 
   // Iter 96 — Expand-to-fullscreen (mobile/tap-to-focus)
   const expandBtn = q('expandbtn');

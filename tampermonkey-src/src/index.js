@@ -6,6 +6,7 @@
 import { CONFIG } from './core/config.js';
 import { state, setState, loadState, saveState, resetStats } from './core/state.js';
 import { log, info, warn, success, error } from './core/logger.js';
+import { stealthMode } from './core/stealthMode.js';
 import { createPanel, initPanelEvents, updateStatsDisplay, updateInvertDisplay, updateStatusDot, cleanupPanel, populateStrategies, setStrategyTf, getStrategyTf, update21sReversalDisplay, set51sTimingSlider, updateActiveAsset, setToggleActive, setSignalPreview, updateStatusStrip, updateLiveCountdown, updateNetworkLatency, setSnsDirectionMode, setChartTypeManual, setInvertThreshold, updateAITab, setLatencyAbstainThreshold, setLatencyAbstainState, setEliteGateThreshold, setEliteGateEnforceDirection, setEliteGateState } from './ui/panel.js';
 import { strategyManager } from './strategies/manager.js';
 import { tradeExecutor } from './trading/executor.js';
@@ -79,6 +80,15 @@ class EliteTradingBot {
     
     // Load saved state
     loadState();
+
+    // Iter 138 — Stealth Mode: init early so every poller sees the flag
+    // when it starts.
+    stealthMode.init();
+    // Expose a manual toggle via DevTools so users can flip it without a
+    // panel button too:  __aiEliteStealth(true|false)
+    try {
+      window.__aiEliteStealth = (v) => stealthMode.setActive(!!v);
+    } catch (_e) { /* ignore */ }
     
     // Register smart-invert UI callback
     smartInvert.onInvertChange((isInverted, reason) => {

@@ -26,6 +26,7 @@
 import { log, info, warn } from '../core/logger.js';
 import { post } from '../utils/api.js';
 import { state } from '../core/state.js';
+import { stealthMode } from '../core/stealthMode.js';
 import { ssidBridge } from './ssidBridge.js';
 import { getCurrentAsset } from '../utils/dom.js';
 
@@ -65,21 +66,36 @@ class HeartbeatReporter {
   start() {
     if (this.started) return;
     this.started = true;
-    // Fire immediately then on cadence
+    // Fire immediately then on cadence (respecting stealth multiplier)
     this._tick();
-    this.timer = setInterval(() => this._tick(), this.pollMs);
-    info('[heartbeat] reporter started — pinging /api/tampermonkey/heartbeat every ' + this.pollMs + 'ms');
+    this.timer = setInterval(() => this._tick(), this._effectivePollMs());
+    info('[heartbeat] reporter started — pinging /api/tampermonkey/heartbeat every ' + this._effectivePollMs() + 'ms');
+    // Reschedule when stealth toggles
+    this._unsub = stealthMode.onChange(() => this._reschedule(this.pollMs));
   }
 
   stop() {
     if (this.timer) { clearInterval(this.timer); this.timer = null; }
+    if (this._unsub) { try { this._unsub(); } catch (_e) {} this._unsub = null; }
     this.started = false;
+  }
+
+  _effectivePollMs() {
+    return this.pollMs * stealthMode.getMultiplier();
   }
 
   getLastAckAt() { return this.lastAckAt; }
   getLastPayload() { return this.lastPayload; }
 
   async _tick() {
+    // Iter 138 — Stealth Mode: skip probe entirely when idle
+    const isActive = !!(state && (
+      state.autoTradeEnabled || state.scanEnabled ||
+      state.appSignalEnabled || state.cycleEnabled ||
+      state._twentyOneSEnabled
+    ));
+    if (stealthMode.shouldSkipBackgroundProbe(isActive)) return;
+
     // Build fresh payload every tick — reflects LIVE state
     let currentAsset = '';
     try { currentAsset = getCurrentAsset() || ''; } catch (_e) { /* silent */ }
@@ -130,8 +146,8 @@ class HeartbeatReporter {
   _reschedule(newMs) {
     this.pollMs = newMs;
     if (this.timer) { clearInterval(this.timer); this.timer = null; }
-    this.timer = setInterval(() => this._tick(), this.pollMs);
-    log(`[heartbeat] cadence -> ${newMs}ms`);
+    this.timer = setInterval(() => this._tick(), this._effectivePollMs());
+    log(`[heartbeat] cadence -> ${this._effectivePollMs()}ms (base=${this.pollMs}, mult=${stealthMode.getMultiplier()}x)`);
   }
 }
 

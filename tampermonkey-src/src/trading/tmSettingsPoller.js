@@ -12,6 +12,7 @@
 import { get } from '../utils/api.js';
 import { log, warn } from '../core/logger.js';
 import { state } from '../core/state.js';
+import { stealthMode } from '../core/stealthMode.js';
 
 const HEALTHY_MS = 30_000;
 const BACKOFF_MS = 120_000;
@@ -24,22 +25,37 @@ class TmSettingsPoller {
     this.failures = 0;
     this.pollMs = HEALTHY_MS;
     this.started = false;
+    this._unsub = null;
   }
 
   start() {
     if (this.started) return;
     this.started = true;
     this._tick();
-    this.timer = setInterval(() => this._tick(), this.pollMs);
-    log('[tmSettings] poller started — /api/tampermonkey/stake-tiers every ' + this.pollMs + 'ms');
+    this.timer = setInterval(() => this._tick(), this._effectivePollMs());
+    log('[tmSettings] poller started — /api/tampermonkey/stake-tiers every ' + this._effectivePollMs() + 'ms');
+    this._unsub = stealthMode.onChange(() => this._reschedule(this.pollMs));
   }
 
   stop() {
     if (this.timer) { clearInterval(this.timer); this.timer = null; }
+    if (this._unsub) { try { this._unsub(); } catch (_e) {} this._unsub = null; }
     this.started = false;
   }
 
+  _effectivePollMs() {
+    return this.pollMs * stealthMode.getMultiplier();
+  }
+
   async _tick() {
+    // Iter 138 — Stealth Mode: skip when idle
+    const isActive = !!(state && (
+      state.autoTradeEnabled || state.scanEnabled ||
+      state.appSignalEnabled || state.cycleEnabled ||
+      state._twentyOneSEnabled
+    ));
+    if (stealthMode.shouldSkipBackgroundProbe(isActive)) return;
+
     try {
       const resp = await get('/tampermonkey/stake-tiers');
       if (!resp || resp.success === false) {
@@ -70,7 +86,7 @@ class TmSettingsPoller {
   _reschedule(newMs) {
     this.pollMs = newMs;
     if (this.timer) { clearInterval(this.timer); this.timer = null; }
-    this.timer = setInterval(() => this._tick(), this.pollMs);
+    this.timer = setInterval(() => this._tick(), this._effectivePollMs());
   }
 }
 

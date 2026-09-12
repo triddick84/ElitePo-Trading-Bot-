@@ -15,6 +15,8 @@
 
 import { get } from '../utils/api.js';
 import { log, warn } from '../core/logger.js';
+import { state } from '../core/state.js';
+import { stealthMode } from '../core/stealthMode.js';
 
 const POLL_MS_HEALTHY = 5_000;
 const POLL_MS_BACKOFF = 15_000;
@@ -29,6 +31,7 @@ class NetworkLatencyPoller {
     this.started = false;
     this.lastStats = null;
     this._render = null;
+    this._unsub = null;
   }
 
   /**
@@ -41,15 +44,29 @@ class NetworkLatencyPoller {
     this._render = renderFn || null;
     // Immediate probe on start so the widget populates fast
     this._tick();
-    this.timer = setInterval(() => this._tick(), this.pollMs);
+    this.timer = setInterval(() => this._tick(), this._effectivePollMs());
+    this._unsub = stealthMode.onChange(() => this._reschedule(this.pollMs));
   }
 
   stop() {
     if (this.timer) { clearInterval(this.timer); this.timer = null; }
+    if (this._unsub) { try { this._unsub(); } catch (_e) {} this._unsub = null; }
     this.started = false;
   }
 
+  _effectivePollMs() {
+    return this.pollMs * stealthMode.getMultiplier();
+  }
+
   async _tick() {
+    // Iter 138 — Stealth Mode: skip when user is idle
+    const isActive = !!(state && (
+      state.autoTradeEnabled || state.scanEnabled ||
+      state.appSignalEnabled || state.cycleEnabled ||
+      state._twentyOneSEnabled
+    ));
+    if (stealthMode.shouldSkipBackgroundProbe(isActive)) return;
+
     try {
       const resp = await get('/latency/network');
       if (!resp || resp.success === false) {
@@ -79,8 +96,8 @@ class NetworkLatencyPoller {
   _reschedule(newMs) {
     this.pollMs = newMs;
     if (this.timer) { clearInterval(this.timer); this.timer = null; }
-    this.timer = setInterval(() => this._tick(), this.pollMs);
-    log(`[netlat] poll cadence -> ${newMs}ms`);
+    this.timer = setInterval(() => this._tick(), this._effectivePollMs());
+    log(`[netlat] poll cadence -> ${this._effectivePollMs()}ms (base=${newMs}, mult=${stealthMode.getMultiplier()}x)`);
   }
 
   getLast() { return this.lastStats; }
