@@ -1,4 +1,67 @@
-# AI's Elite PO Traders Bot — Feb 2026 (Iter 136: Multi-Trade Result Watcher)
+# AI's Elite PO Traders Bot — Feb 2026 (Iter 137: Pattern Suite + Confluence Engine)
+
+## Iter 137 (Feb 2026) — Chart-Pattern Suite + Confluence Scoring Engine
+
+### User request
+> Pattern Suite: Add Head & Shoulders, Rising/Falling Wedge, Break & Retest, and Gap detectors as new inputs to the confluence engine.
+> Confluence Engine: Build a scoring engine that combines RSI, MACD, S/R, patterns, and AUC-weighted signals so only high-alignment trades fire.
+
+### 1 · Pattern Suite (`backend/pattern_detector.py`)
+Stateless numpy/pandas detectors — each returns `PatternHit(pattern, direction, confidence [0..1], entry, stop, target, anchor_bar, meta)`:
+- **`find_swings(df, left, right)`** — shared ZigZag pivot detector, right-strict so ties don't produce duplicate swings. Default `left=right=2` (tunable).
+- **`detect_head_and_shoulders`** — classic **PUT** on neckline break below the two-shoulder pattern; **inverse H&S** fires **CALL** on break up. Shoulder-symmetry bonus + measured-move target (`neckline ± head_height`).
+- **`detect_wedge`** — rising wedge (both slopes +, upper flatter → converging) fires **PUT**; falling wedge (both –, upper falls faster → converging) fires **CALL**. Wedge lines evaluated at the **last swing** so near-apex breaks still count. Volume-fade bonus when `volume` is present.
+- **`detect_break_and_retest`** — 50-bar S/R structure; break through resistance/support followed by retest within `retest_bars * tolerance_atr` fires CALL/PUT.
+- **`detect_gap`** — open-vs-prev-close gap ≥ `min_gap_atr × ATR`; trades the **gap-fill** direction (gap up → PUT, gap down → CALL).
+- **`detect_all(df)`** — runs every detector and returns the merged hit list; input-validated (missing OHLC → empty).
+
+### 2 · Confluence Engine (`backend/confluence_service.py`)
+- **`_DEFAULT_WEIGHTS`** by source family: `ml=1.2`, `smart_money=1.1`, `pattern=1.0`, `sr=0.8`, `macd=0.7`, `rsi/bollinger/vwap=0.6`, `ma/adx=0.5`, `sentiment=0.4`, default `0.5`.
+- **`_rf_audit_multiplier`** — for any `ml:*` source, looks up the **per-asset AUC weight from Iter 135's RF Audit**. Bad models (AUC<0.52) get weight 0 and drop out; good models (AUC≥0.55) get 1.0.
+- **`score_confluence(signals, min_sources, tf_bonus, stack_bonus)`**:
+  1. Ignores NEUTRAL signals.
+  2. `effective_weight = base_weight × rf_audit_weight × signal_confidence`.
+  3. Splits weight into CALL vs PUT totals; picks the winner.
+  4. Normalises score to `[0, 1]` (winner_effective / total_possible_weight).
+  5. **Bonuses**: `+stack_bonus (0.10)` when ≥ `min_sources` distinct sources agree; `+tf_bonus (0.12)` when ≥ 2 timeframes agree.
+  6. Returns direction, score, per-side scores, source list, timeframe list, reason.
+- **`should_fire(result, threshold, min_sources)`** — hard gate: score ≥ threshold AND distinct-source count on winning side ≥ min_sources.
+- **`signals_from_patterns(hits, asset, timeframe)`** — turns pattern-detector output into confluence signals with source `pattern:<name>`.
+
+### 3 · REST endpoints (`backend/routes/confluence_routes.py`)
+- `POST /api/patterns/detect` — payload `{candles: [{open,high,low,close,volume,timestamp}]}`; returns pattern hits.
+- `GET /api/patterns/detect?asset=&timeframe=&limit=` — reads live candles from Mongo (`otc_candles_5s` for 5s, `historical_candles` otherwise) and runs the detectors.
+- `POST /api/confluence/score` — score arbitrary signals; response includes `fires` boolean gate.
+- `GET/POST /api/confluence/config` — live threshold + min_sources gate, persisted to `db.strategy_configs` (`_id="confluence_gate"`), restored on startup via `restore_confluence_config_from_db()`.
+
+### 4 · Tests — 27/27 pass in `tests/test_iter137_patterns_confluence.py`
+- Swing detection: peaks + troughs on synthetic data; short-frame edge case.
+- H&S: broken classic → PUT with head_height target; inverse → CALL.
+- Wedges: rising → PUT on break; falling → CALL on break; parallel channels rejected.
+- Break & retest: up-break/retest → CALL; pure range → no hits.
+- Gap: up → PUT, down → CALL; small gaps ignored.
+- Empty frame / missing columns → empty (no crash).
+- Confluence: neutral when empty; CALL/PUT winner picking; conflict reduces score; multi-timeframe bonus; stack bonus; threshold gate; min-sources gate; positive fire case.
+- Route module import + config accessor.
+
+### 5 · Regression
+- **86/86 pass** across Iter 131 + 133 + 134 + 135 + 136 + 137. Zero regressions.
+- Live smoke: `GET /api/patterns/detect?asset=EURUSD_OTC&timeframe=5s` returns 200 with 0 hits on quiet market (expected). `POST /api/confluence/score` with 3 aligned CALLs returns `direction=CALL, confluence_score=1.0, fires=true`.
+
+### Files touched
+- **NEW** `backend/pattern_detector.py` (~400 lines)
+- **NEW** `backend/confluence_service.py` (~200 lines)
+- **NEW** `backend/routes/confluence_routes.py` (~180 lines)
+- **NEW** `backend/tests/test_iter137_patterns_confluence.py` (27 tests)
+- **MOD** `backend/server.py` — imports + `include_router(confluence_router)` + startup `restore_confluence_config_from_db`
+
+### How the confluence gate composes with existing pipeline
+1. Any strategy still generates its own signal.
+2. Auto-scan (or Strategy Builder) can now optionally build a `signals[]` payload from RSI/MACD/S-R/**Iter 137 patterns**/ML models and call `score_confluence()`.
+3. If `should_fire()` returns False, the trade is skipped — no more single-indicator noise trades.
+4. `pattern:*` sources carry the highest base weight (1.0) after ML; `ml:*` sources also get the per-asset RF Audit multiplier so proven-good models dominate the vote.
+
+---
 
 ## Iter 136 (Feb 2026) — Trade-Outcome Detection Rewrite (No More Balance)
 

@@ -4267,6 +4267,7 @@ from routes.invert_events import router as invert_events_router
 from routes.telegram_routes import router as telegram_router
 from routes.riskguard_routes import router as riskguard_router
 from routes.perf_routes import router as perf_router
+from routes.confluence_routes import router as confluence_router
 
 api_router.include_router(strategies_router)
 api_router.include_router(signals_router)
@@ -4293,6 +4294,7 @@ api_router.include_router(invert_events_router)
 api_router.include_router(telegram_router)
 api_router.include_router(riskguard_router)
 api_router.include_router(perf_router)
+api_router.include_router(confluence_router)
 
 app.include_router(api_router)
 
@@ -4361,6 +4363,14 @@ async def startup_event():
                     logger.info(f"🎯 Ridicolous config restored: {cfg}")
             except Exception as e:
                 logger.warning(f"Ridicolous config restore skipped: {e}")
+
+            # Iter 137 — restore Confluence gate from db
+            try:
+                from routes.confluence_routes import restore_confluence_config_from_db
+                await restore_confluence_config_from_db()
+                logger.info("🔮 Confluence gate restored")
+            except Exception as e:
+                logger.warning(f"Confluence config restore skipped: {e}")
 
             # Iter 126 — Start Telegram bot (bidirectional signals)
             try:
