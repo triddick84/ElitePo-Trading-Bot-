@@ -4269,6 +4269,7 @@ from routes.riskguard_routes import router as riskguard_router
 from routes.perf_routes import router as perf_router
 from routes.confluence_routes import router as confluence_router
 from routes.smart_money_routes import router as smart_money_router
+from routes.forex_routes import router as forex_router
 
 api_router.include_router(strategies_router)
 api_router.include_router(signals_router)
@@ -4297,6 +4298,7 @@ api_router.include_router(riskguard_router)
 api_router.include_router(perf_router)
 api_router.include_router(confluence_router)
 api_router.include_router(smart_money_router)
+api_router.include_router(forex_router)
 
 app.include_router(api_router)
 
@@ -4373,6 +4375,16 @@ async def startup_event():
                 logger.info("🔮 Confluence gate restored")
             except Exception as e:
                 logger.warning(f"Confluence config restore skipped: {e}")
+
+            # Iter 142 — bootstrap Forex engine (indexes + config restore)
+            try:
+                from forex.engine import get_engine as get_forex_engine
+                fe = get_forex_engine(db=db)
+                await fe.ensure_indexes()
+                cfg = await fe.load_config()
+                logger.info(f"💱 Forex engine ready · surface={cfg.execution_surface.value} · enabled={cfg.enabled}")
+            except Exception as e:
+                logger.warning(f"Forex engine bootstrap skipped: {e}")
 
             # Iter 126 — Start Telegram bot (bidirectional signals)
             try:

@@ -1,4 +1,88 @@
-# AI's Elite PO Traders Bot — Feb 2026 (Iter 141: Win/Loss Fix + Compact UI)
+# AI's Elite PO Traders Bot — Feb 2026 (Iter 142: Forex Engine Foundation)
+
+## Iter 142 (Feb 2026) — Forex Trading Foundation Shipped
+
+### User request
+> Now we need to create into the build a AI forex automated trading for placing automation trades thru pocket option trading platforms forex, not quick trades or binary options trades on expiration timeframes but actually forex trades thru forex mt5 or mt4 within pocket option trading platform still utilizing tampermonkey script to automate trades.
+> **Scope picked: 1c (TM + MT5 Python), 2d (all 3 exit modes), 3d (all 3 sizing modes), 4a (reuse all signals), 5c (full stack now).**
+
+**Confirmed via web research**: PocketOption offers MT4 + MT5 for real forex (spreads from 1.1 pips) — switched from the account menu on the platform.
+
+### 1 · New module: `backend/forex/`
+```
+forex/
+├── __init__.py
+├── models.py        # ForexSignal / ForexOrder / ForexPosition + all enums + configs
+├── risk.py          # pip helpers, SL/TP calcs (Fixed/ATR/Trailing), sizing (Fixed/Risk%/Kelly), trailing-stop tick, P&L
+├── mt5_bridge.py    # MetaTrader5 Python facade with graceful fallback when pkg missing
+├── executor.py      # dispatch PAPER / MT5_PYTHON / TAMPERMONKEY paths
+└── engine.py        # public API: on_signal, tick, close_position, list_open/closed
+```
+
+### 2 · Three exit modes (`ExitMode`)
+- **FIXED** — user-specified `sl_pips` / `tp_pips`.
+- **ATR** (default) — `sl = entry ∓ sl_atr_mult × ATR`, `tp = entry ± tp_atr_mult × ATR`. Defaults 1.5× / 3× for 2:1 RR.
+- **TRAILING** — SL follows price with `trail_pips` distance. Never widens. Optional `trail_activate_pips` delays arming until profit exists.
+
+### 3 · Three sizing modes (`SizingMode`)
+- **FIXED_LOTS** — always `sizing.fixed_lots`.
+- **RISK_PCT** (default) — `lots = (equity × risk_pct / 100) / (sl_pips × pip_value_per_lot)`. Falls back to fixed when SL missing.
+- **KELLY** — `f* = (edge / b) × kelly_scale` where `b = 2` (assumed R:R), scaled through the RISK_PCT path. Falls back on negative edge.
+All modes clamp to `[min_lots, max_lots]` and round to 0.01 lot precision (MT5 step).
+
+### 4 · Three execution surfaces (`ExecutionSurface`)
+- **PAPER** (default) — simulated fills, persisted to Mongo.
+- **MT5_PYTHON** — via the `MetaTrader5` Python lib against a local Windows MT5 terminal. `market_order`, `modify_sl`, `close_position` implemented. Auto-falls back to PAPER when the package isn't available (Linux dev pod).
+- **TAMPERMONKEY** — persists to `forex_orders_pending` for TM userscript pickup. Full TM DOM-click flow ships in Iter 143 once we've probed PO's web-MT5 markup.
+
+### 5 · Risk gates (in `ForexEngine.on_signal`)
+- Symbol allow-list (default: 7 majors).
+- Max concurrent positions (default 5).
+- **Daily loss cap** — computed from today's closed P&L; blocks new signals when equity draw reaches `max_daily_loss_pct` (default 3 %).
+
+### 6 · REST endpoints (`routes/forex_routes.py` — prefix `/api/forex/*`)
+- `GET /health` — MT5 availability + current config
+- `GET/POST /config` — persist engine config to `forex_config._id="singleton"`
+- `POST /signal` — accept a ForexSignal, run gates + sizing + SL/TP + execute → returns position
+- `POST /tick` — advance SL/TP/trailing for all OPEN positions in a symbol
+- `GET /positions/open?symbol=...`, `GET /positions/closed?limit=...`
+- `POST /positions/{id}/close`
+
+### 7 · Startup wiring
+`server.py` includes `forex_router` and bootstraps the engine at startup:
+- creates Mongo indexes on `forex_positions`, `forex_signals`, `forex_orders_pending`
+- restores config from Mongo
+- logs `💱 Forex engine ready · surface=PAPER · enabled=false`
+
+### 8 · Tests — 25/25 pass in `tests/test_iter142_forex.py`
+Pip helpers (5), SL/TP calcs (5), sizing (5), trailing stop (3), P&L (2), paper executor (1), engine end-to-end (2), route smoke (1), MT5 fallback smoke (1).
+
+### 9 · Live smoke — full lifecycle proven
+- `GET /api/forex/health` → mt5_available=false, surface=PAPER ✅
+- `POST /api/forex/signal` (EURUSD BUY entry=1.10 atr=0.001 conf=0.8 equity=$10k) → **accepted**, position opened with **0.67 lots**, SL=1.0985, TP=1.103 ✅
+- `POST /api/forex/tick` (EURUSD @ 1.103) → position closed on TP with **$201 P&L over 30 pips** ✅
+- `GET /api/forex/positions/closed` → returns the closed position with full audit ✅
+
+### 10 · Full regression
+**162/162 pass** across Iter 131 + 133 + 134 + 135 + 136 + 137 + 138 + 139 + 140 + 141 + 142. Zero regressions.
+
+### What's NOT in this iter (deferred to Iter 143+)
+- **TM MT5 DOM selectors** — needs live probing of PO's web-MT5 markup. Executor persists PENDING orders to `forex_orders_pending` so the TM script can poll & execute when Iter 143 ships.
+- **Forex dashboard tab** — backend end-to-end is proven; a dedicated `/forex` page with live positions + config sliders comes in the next iter.
+- **Signal auto-generation** from the confluence engine → forex signal (translator that maps CALL/PUT + entry to ForexSignal). Currently only `POST /forex/signal` accepts manual signals.
+
+### Files touched
+- **NEW** `backend/forex/__init__.py`
+- **NEW** `backend/forex/models.py`
+- **NEW** `backend/forex/risk.py`
+- **NEW** `backend/forex/mt5_bridge.py`
+- **NEW** `backend/forex/executor.py`
+- **NEW** `backend/forex/engine.py`
+- **NEW** `backend/routes/forex_routes.py`
+- **NEW** `backend/tests/test_iter142_forex.py` (25 tests)
+- **MOD** `backend/server.py` — imports + include_router + startup engine bootstrap
+
+---
 
 ## Iter 141 (Feb 2026) — TM Win/Loss Detection Fix + Compact UI + Dual-Edge Resize
 
