@@ -4268,6 +4268,7 @@ from routes.telegram_routes import router as telegram_router
 from routes.riskguard_routes import router as riskguard_router
 from routes.perf_routes import router as perf_router
 from routes.confluence_routes import router as confluence_router
+from routes.smart_money_routes import router as smart_money_router
 
 api_router.include_router(strategies_router)
 api_router.include_router(signals_router)
@@ -4295,6 +4296,7 @@ api_router.include_router(telegram_router)
 api_router.include_router(riskguard_router)
 api_router.include_router(perf_router)
 api_router.include_router(confluence_router)
+api_router.include_router(smart_money_router)
 
 app.include_router(api_router)
 

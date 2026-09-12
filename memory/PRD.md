@@ -1,4 +1,72 @@
-# AI's Elite PO Traders Bot — Feb 2026 (Iter 138: Stealth Mode + Expanded @connect)
+# AI's Elite PO Traders Bot — Feb 2026 (Iter 139: Smart Money + Mean Reversion)
+
+## Iter 139 (Feb 2026) — Smart-Money Detectors + Mean-Reversion Playbook
+
+### User request
+> Smart Money Tools: Detect liquidity sweeps, stop hunts, and order blocks so the bot stops falling for retail traps.
+> Mean Reversion Playbook: Regime-aware z-score + BB + RSI strategy for ranging OTC pairs.
+
+### 1 · Smart Money (`backend/smart_money.py`)
+All detectors reuse `PatternHit` from Iter 137 so hits compose through the confluence engine as `smart_money:*` sources.
+
+- **`detect_liquidity_sweep(df, lookback=30, max_bars_since_sweep=2)`**
+  - Sweeps ALL swings in the lookback window (not just the last one) — tries the highest swing-high / lowest swing-low first as they're the primary liquidity targets.
+  - Bar must WICK past the swing but CLOSE back inside; current close must still be on the correct side.
+  - Confidence: base 0.55 + wick/ATR bonus + body-vs-wick rejection bonus.
+- **`detect_stop_hunt(df, lookback=20, wick_atr_multiple=0.8)`**
+  - Sweep of prior N-bar high/low with wick ≥ `wick_atr_multiple × ATR`.
+  - **Round-level bonus (+0.10)** when the swept level is within 0.5×ATR of the nearest psychological round number (via `_nearest_round_level()` — auto-scales step size to price magnitude).
+- **`detect_order_block(df, displacement_atr=2.0, lookback=20, retest_tolerance_atr=0.5)`**
+  - Identifies runs of consecutive same-direction candles whose net displacement ≥ `displacement_atr × ATR` (the "impulse").
+  - The candle immediately BEFORE the impulse is the OB. Bullish OB = bearish candle before rally → CALL when price retests it. Bearish OB = bullish candle before drop → PUT.
+  - Deduped to the most recent hit per side.
+- **`detect_breaker_block(df, displacement_atr=2.0, lookback=30)`**
+  - Same run detection as OB, then checks if a subsequent bar CLOSED THROUGH the OB → the OB is now a "breaker". Retest fires in the OPPOSITE direction to the original OB.
+- **`detect_all_smart_money(df)`** — runs all 4 detectors, returns merged list.
+
+### 2 · Mean Reversion Playbook (`backend/strategies/mean_reversion.py`)
+- **`mean_reversion_signal(df, ema_period=20, z_threshold=2.0, adx_max=20.0, ...)`** — regime-aware fire-if-range strategy.
+- **Regime filter first**: uses Wilder's ADX (`_adx`) — if ADX ≥ `adx_max`, returns NEUTRAL with reason `"trending regime (ADX=... ≥ ...)"`. Smoke-tested live on EURUSD_OTC: 5s stream showed ADX=62.9 → correctly skipped.
+- Requires **≥ 2 of 3 filters** to agree on direction:
+  1. **Z-score** of price vs EMA_N ≥ `z_threshold` (or ≤ −z_threshold).
+  2. **RSI** ≥ 70 (or ≤ 30).
+  3. **Bollinger tag** — last bar's high pierces upper band (or low pierces lower).
+- **Volume-fade bonus (+0.10)** when last bar's volume < 90% of 20-bar mean.
+- **Low-ADX bonus (+0.10)** when ADX < 60% of `adx_max` (quiet market → highest-quality mean reversion).
+- Returns `MeanReversionSignal(direction, confidence, reason, entry, stop, target, meta)` with target = current EMA (revert to the mean).
+
+### 3 · REST endpoints (`backend/routes/smart_money_routes.py`)
+- `POST /api/smart-money/detect` — payload of candles → pattern hits.
+- `GET /api/smart-money/detect?asset=&timeframe=&limit=` — live from Mongo.
+- `POST /api/strategies/mean-reversion` — payload of candles → signal.
+- `GET /api/strategies/mean-reversion?asset=&timeframe=&limit=&ema_period=&z_threshold=&adx_max=` — live.
+
+All wired into `server.py` with `include_router(smart_money_router)`.
+
+### 4 · Tests — 20/20 pass in `tests/test_iter139_smart_money_and_mean_reversion.py`
+Liquidity sweep (3): low → CALL, high → PUT, no-signal on real breakout.
+Stop hunt (3): high → PUT, low → CALL, tiny wick ignored; round-level helper sanity-check.
+Order block (3): bullish → CALL, bearish → PUT, weak displacement rejected.
+Breaker block (1): bullish breaker → CALL.
+detect_all wrapper (2): empty & missing-columns → empty.
+Mean reversion (6): trending skip, PUT at upper extreme, CALL at lower extreme, insufficient-data neutral, single-filter neutral, indicators sanity.
+Route module smoke (1).
+
+### 5 · Full regression
+**119/119 pass** across Iter 131 + 133 + 134 + 135 + 136 + 137 + 138 + 139. Zero regressions.
+
+### 6 · Live smoke
+- `GET /api/smart-money/detect?asset=EURUSD_OTC&timeframe=5s&limit=200` → 200 candles, 0 hits (quiet market, expected).
+- `GET /api/strategies/mean-reversion?asset=EURUSD_OTC&timeframe=5s&limit=200` → NEUTRAL with reason "trending regime (ADX=62.9 ≥ 20.0)". Regime filter working exactly as designed.
+
+### Files touched
+- **NEW** `backend/smart_money.py` (~340 lines)
+- **NEW** `backend/strategies/mean_reversion.py` (~200 lines)
+- **NEW** `backend/routes/smart_money_routes.py` (~90 lines)
+- **NEW** `backend/tests/test_iter139_smart_money_and_mean_reversion.py` (20 tests)
+- **MOD** `backend/server.py` — imports + `include_router(smart_money_router)`
+
+---
 
 ## Iter 138 (Feb 2026) — TM Stealth Mode + `@connect` Wildcard Fix
 
