@@ -129,3 +129,73 @@ async def health() -> Dict[str, Any]:
         "config": eng.config().model_dump(mode="json"),
         "surface": eng.config().execution_surface.value,
     }
+
+
+# ---------------------------------------------------------------------------
+# Iter 143 — Signal Auto-Bridge
+# ---------------------------------------------------------------------------
+
+class BridgeRequest(BaseModel):
+    symbol: str
+    timeframe: str = "1m"
+    limit: int = Field(default=200, ge=30, le=2000)
+    equity_usd: float = 10_000.0
+    surface: Optional[ExecutionSurface] = None
+    emit: bool = True
+
+
+class BridgeLoopConfig(BaseModel):
+    symbols: List[str] = Field(default_factory=list)
+    interval_s: int = Field(default=30, ge=5, le=600)
+    timeframe: str = "1m"
+
+
+@router.post("/bridge/once")
+async def bridge_once(req: BridgeRequest) -> Dict[str, Any]:
+    """Run the auto-bridge for a single symbol synchronously and return
+    the decision + (if emitted) the resulting position."""
+    from forex.signal_bridge import bridge_symbol
+    return await bridge_symbol(
+        req.symbol,
+        timeframe=req.timeframe,
+        limit=req.limit,
+        equity_usd=req.equity_usd,
+        surface=req.surface,
+        emit=req.emit,
+    )
+
+
+@router.post("/bridge/loop/configure")
+async def bridge_loop_configure(cfg: BridgeLoopConfig) -> Dict[str, Any]:
+    from forex.signal_bridge import get_bridge_loop
+    loop = get_bridge_loop()
+    loop.configure(symbols=cfg.symbols, interval_s=cfg.interval_s, timeframe=cfg.timeframe)
+    return {"symbols": loop.symbols, "interval_s": loop.interval_s, "timeframe": loop.timeframe, "running": loop.is_running()}
+
+
+@router.post("/bridge/loop/start")
+async def bridge_loop_start() -> Dict[str, Any]:
+    from forex.signal_bridge import get_bridge_loop
+    loop = get_bridge_loop()
+    await loop.start()
+    return {"running": loop.is_running(), "symbols": loop.symbols, "interval_s": loop.interval_s}
+
+
+@router.post("/bridge/loop/stop")
+async def bridge_loop_stop() -> Dict[str, Any]:
+    from forex.signal_bridge import get_bridge_loop
+    loop = get_bridge_loop()
+    await loop.stop()
+    return {"running": loop.is_running()}
+
+
+@router.get("/bridge/status")
+async def bridge_status() -> Dict[str, Any]:
+    from forex.signal_bridge import get_bridge_loop
+    loop = get_bridge_loop()
+    return {
+        "running": loop.is_running(),
+        "symbols": loop.symbols,
+        "interval_s": loop.interval_s,
+        "timeframe": loop.timeframe,
+    }

@@ -1,4 +1,57 @@
-# AI's Elite PO Traders Bot — Feb 2026 (Iter 142: Forex Engine Foundation)
+# AI's Elite PO Traders Bot — Feb 2026 (Iter 143: Signal Auto-Bridge)
+
+## Iter 143 (Feb 2026) — Confluence → Forex Auto-Bridge
+
+### User request
+> Signal Auto-Bridge: Translator that turns confluence-engine CALL/PUT into a ForexSignal so all our existing signals (patterns + smart-money + mean-reversion) auto-feed the forex engine.
+
+### 1 · New module: `backend/forex/signal_bridge.py`
+The whole existing signal brain now drives forex trades — zero duplicated logic.
+
+**`bridge_symbol(symbol, timeframe, limit, equity_usd, surface, emit)`** — one-shot pipeline:
+1. Load candles via existing `_load_candles_from_db` (Iter 137).
+2. Run all detectors in parallel-thinking (sequential in code): chart patterns (Iter 137), smart money (Iter 139), mean reversion (Iter 139). Each detector's failure is logged at DEBUG and swallowed so a broken detector can't block the pipe.
+3. Assemble `signals[]` — same shape the confluence engine already consumes.
+4. Pull live `threshold` + `min_sources` from `get_confluence_config()` (Iter 137).
+5. `score_confluence()` → `should_fire()`. On block, returns `accepted=False, reason=confluence_gate_blocked`.
+6. On fire, translate: `direction → OrderSide` (CALL→BUY, PUT→SELL), `entry = last close`, `atr = 14-bar ATR`, sources deduped, `symbol = _mt5_symbol(asset)` (strips `_OTC`).
+7. Emit via `forex.engine.on_signal()` — reuses ALL Iter 142 gates (allow-list, max concurrent, daily-loss cap, sizing, SL/TP).
+8. When `emit=False` returns the ForexSignal + confluence result for dry-run inspection.
+
+**`BridgeLoop`** — optional scheduler ticking `bridge_symbol` for every configured symbol on a fixed interval (clamped to `[5, 600]s`). Off by default. Cancel-safe.
+
+### 2 · New REST endpoints (added to `/api/forex/*`)
+- `POST /forex/bridge/once` — synchronous single-symbol pipeline
+- `POST /forex/bridge/loop/configure` — set symbols/interval/timeframe
+- `POST /forex/bridge/loop/start` / `POST /forex/bridge/loop/stop`
+- `GET /forex/bridge/status`
+
+### 3 · Symbol normalisation
+`_mt5_symbol()` — strips `_OTC / -OTC / OTC` suffix and any `/_-` separators so binary-side keys like `EURUSD_OTC` map cleanly to MT5 keys like `EURUSD`.
+
+### 4 · Tests — 12/12 pass in `tests/test_iter143_signal_bridge.py`
+- Symbol normalisation (2)
+- ATR helper edge cases (2)
+- `bridge_symbol` no-candles / no-signals / CALL→BUY translation / gate blocks on high threshold (4)
+- `BridgeLoop` configure + status + interval clamp + start/stop (3)
+- Route module exposes all 5 bridge endpoints (1)
+
+### 5 · Live smoke — full flow proven
+- `POST /forex/bridge/once` (EURUSD_OTC, 5s, emit=false) → 0 signals on quiet market (expected)
+- `POST /forex/bridge/loop/configure` (EURUSD_OTC + GBPUSD_OTC, 15s, 5s) → configured
+- `POST /forex/bridge/loop/start` → `{running: true, symbols: [...], interval_s: 15}` ✅
+- `GET /forex/bridge/status` → running=true with correct config
+- `POST /forex/bridge/loop/stop` → `{running: false}` ✅
+
+### 6 · Full regression
+**174/174 pass** (Iter 131 + 133 + 134 + 135 + 136 + 137 + 138 + 139 + 140 + 141 + 142 + 143). Zero regressions.
+
+### Files touched
+- **NEW** `backend/forex/signal_bridge.py` (~200 lines)
+- **MOD** `backend/routes/forex_routes.py` — 5 new bridge endpoints
+- **NEW** `backend/tests/test_iter143_signal_bridge.py` (12 tests)
+
+---
 
 ## Iter 142 (Feb 2026) — Forex Trading Foundation Shipped
 
