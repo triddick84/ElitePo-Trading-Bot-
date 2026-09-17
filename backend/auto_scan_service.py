@@ -313,6 +313,20 @@ class AutoScanService:
                 "timeframe": timeframe,
             })
 
+        # 6. TQNet — Iter 146 (RevIN + Temporal Query attention).
+        # Adds a distribution-shift-robust ML view alongside the classical
+        # detectors above. Softly gated: dropped when confidence < 0.05 so
+        # near-flat forecasts don't inflate the source count.
+        try:
+            from tqnet_service import tqnet_score_for_df
+            tq_sig = tqnet_score_for_df(
+                df, t=int(len(df)), asset=asset, timeframe=timeframe, window=30,
+            )
+            if tq_sig.get("direction") in ("CALL", "PUT") and float(tq_sig.get("confidence") or 0.0) >= 0.05:
+                signals.append(tq_sig)
+        except Exception as _e:
+            pass
+
         gate_cfg = get_confluence_config()
         threshold = float(gate_cfg.get("threshold", 0.65))
         min_sources = int(gate_cfg.get("min_sources", 3))

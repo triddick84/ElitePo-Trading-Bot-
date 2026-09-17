@@ -82,7 +82,7 @@ def test_panel_drag_from_anywhere():
 def test_bundle_version_bumped():
     src = _read(BUNDLE)
     m = re.search(r"//\s*@version\s+(\d+\.\d+\.\d+)", src)
-    assert m and m.group(1) == "8.150.0", f"expected 8.150.0, got {m and m.group(1)}"
+    assert m and m.group(1) == "8.151.0", f"expected 8.151.0, got {m and m.group(1)}"
 
 
 def test_bundle_has_side_resize_testids():

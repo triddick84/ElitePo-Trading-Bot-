@@ -123,6 +123,20 @@ async def bridge_symbol(
     except Exception as e:
         logger.debug(f"[bridge] mean_reversion skipped for {symbol}: {e}")
 
+    # 4. TQNet — Iter 146. RevIN + Temporal Query attention. Cheap,
+    # deterministic, adds a distribution-shift-robust view on top of the
+    # classical detectors above. Signals with confidence < 0.05 are dropped
+    # so we don't fatten the source count with near-flat forecasts.
+    try:
+        from tqnet_service import tqnet_score_for_df
+        tq_sig = tqnet_score_for_df(
+            df, t=int(len(df)), asset=symbol, timeframe=timeframe, window=30,
+        )
+        if tq_sig.get("direction") in ("CALL", "PUT") and float(tq_sig.get("confidence") or 0.0) >= 0.05:
+            signals.append(tq_sig)
+    except Exception as e:
+        logger.debug(f"[bridge] tqnet skipped for {symbol}: {e}")
+
     if not signals:
         return {"symbol": symbol, "accepted": False, "reason": "no_signals", "n_signals": 0}
 

@@ -25,3 +25,34 @@
 - `server.py:3484` hardcodes a preview userscript URL
   (`https://auto-invert-engine.preview.emergentagent.com/...`). Harmless for
   preview but would point to the wrong host in production — candidate cleanup.
+
+
+## v8.152.0 — Feb 12, 2026 — Iter 145 + 146: Forex MT5 end-to-end + TQNet accuracy boosters
+### Iter 145 — Forex MT5 execution completed (TM side)
+- Backend `/api/forex/orders/pending` + `mark-picked` + `mark-filled` + `mark-rejected` + `queue-stats` endpoints (in `routes/forex_routes.py`) close the loop between the Iter 142/143 Forex backend and the Tampermonkey userscript.
+- New TM modules:
+  - `src/trading/mt5Adapter.js` — DOM adapter for PO's web-MT5. Three-layered selector resolution (user-taught → curated fallbacks → text heuristics). Supports symbol picker, lot input, SL/TP inputs, BUY/SELL buttons. Handles cross-origin iframes gracefully.
+  - `src/trading/forexOrderPoller.js` — 5s polling loop that claims pending orders, calls `mt5Adapter.placeOrder`, and reports fill/rejection back with DOM match diagnostics.
+- Wired both into `src/index.js` + cleanup handler. Exposed on `window.__aiEliteForexStart(ms)`, `window.__aiEliteForexStop()`, `window.__aiEliteForexStats()`, `window.__aiEliteMt5Diag()`.
+- 5 new pytests in `tests/test_iter145_forex_tm_orders.py`.
+
+### Iter 146 — TQNet-inspired accuracy boosters (mql5 article 19157)
+- New `backend/ml/revin.py` — Reversible Instance Normalization (numpy). Handles 1D/2D/3D windows, per-channel stats, round-trip invert. Biggest single win against distribution shift.
+- New `backend/ml/temporal_query.py` — Numpy port of TQ-MHA + shallow MLP + GeLU (single-head, deterministic). Queries come from trainable periodic vectors θ_TQ indexed by `t mod W`; Keys/Values from raw window.
+- New `backend/tqnet_service.py` — Adapter that wraps `TQNetPredictor` into a confluence-engine signal (`source="ml:tqnet"`).
+- New `backend/routes/tqnet_routes.py` — `/api/tqnet/predict`, `/api/tqnet/predict-symbol`, `/api/tqnet/health`.
+- Wired TQNet as a new confluence source in **both**:
+  - `forex/signal_bridge.py` (drives MT5 forex trades)
+  - `auto_scan_service.py` (drives binary-options auto-scan)
+- Registered `ml:tqnet` weight (1.25) in `confluence_service.py`.
+- 15 new pytests in `tests/test_iter146_revin_tqnet.py`.
+
+### Validation
+- **110/110 tests pass** in the iter137→146 regression chain (Pytest).
+- Live smoke: `curl /api/tqnet/health` returns a valid signal; `/api/forex/orders/queue-stats` reports empty pending queue.
+- Webpack build clean; bundle bumped `v8.151.0 → v8.152.0`; served at `frontend/public/pocket-option-auto-trader{,-modular}.user.js`.
+
+### Known limitations & next steps
+- **MT5 iframe cross-origin**: If PO renders MT5 in a cross-origin iframe, `mt5Adapter._mt5Doc()` returns `kind='cross-origin'` and rejects the order. Real-world fix requires PO to same-origin the iframe (out of our control) OR user needs to open MT5 as a top-level tab.
+- **TQNet weights are randomly initialised** (numpy). θ_TQ is zero-init as recommended by the paper, so the layer starts as identity+noise → never hurts, may not help until trained. Adding a training loop that fits θ_TQ + projection matrices from historical candles is the next high-value iteration.
+- **No teach-mode UI in panel yet** for MT5 selectors — power users can call `window.__aiEliteMt5Teach('buy_btn')` from DevTools; a UI ships in v8.153 once selectors are proven on live PO layouts.

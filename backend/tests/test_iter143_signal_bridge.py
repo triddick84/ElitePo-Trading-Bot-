@@ -104,7 +104,12 @@ def test_bridge_returns_no_signals_when_market_quiet():
 
 def test_bridge_translates_call_to_buy_side_when_forced():
     """We call with emit=False so we don't hit Mongo/engine — just verify
-    the DIRECTION → SIDE mapping happens correctly."""
+    the DIRECTION → SIDE mapping happens correctly.
+
+    Iter 146: TQNet now participates as an additional source, so a strong
+    downtick may make the confluence winner PUT instead of MR's CALL. Assert
+    the direction→side mapping remains internally consistent regardless of
+    which side wins."""
     df = _range_market()
     # Push the last bar to a strong lower extreme so MR fires CALL
     spike_price = df["close"].iloc[-2] - 3.0
@@ -116,10 +121,14 @@ def test_bridge_translates_call_to_buy_side_when_forced():
         with patch("routes.confluence_routes.get_confluence_config",
                    return_value={"threshold": 0.05, "min_sources": 1}):
             res = _run(bridge_symbol("EURUSD_OTC", emit=False))
-    # MR alone may fire → CALL → BUY. Bridge should either accept or block.
+    # Some source fires → CALL→BUY or PUT→SELL. Assert internal consistency
+    # and the (OTC-suffix-stripped) symbol regardless of side.
     if res.get("accepted"):
-        assert res["forex_signal"]["side"] == "BUY"
-        assert res["forex_signal"]["symbol"] == "EURUSD"
+        fx = res["forex_signal"]
+        assert fx["symbol"] == "EURUSD"
+        winning_dir = res["confluence"]["direction"]
+        expected_side = "BUY" if winning_dir == "CALL" else "SELL"
+        assert fx["side"] == expected_side
 
 
 def test_bridge_gate_blocks_low_score(monkeypatch):

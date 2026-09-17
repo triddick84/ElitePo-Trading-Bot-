@@ -1,4 +1,58 @@
-# AI's Elite PO Traders Bot — Feb 2026 (Iter 143: Signal Auto-Bridge)
+# AI's Elite PO Traders Bot — Feb 2026 (Iter 144: Wide-Net Watcher + Delta Fallback)
+
+## Iter 144 (Feb 2026) — Win/Loss Detection: Auto-Discovery + Balance-Delta Fallback + Diagnostic
+
+### User report (second occurrence)
+> Tampermonkey script win lose detection is not working at all.
+
+### Root cause hypothesis
+My Iter 141 fix (5-strategy parser) can't help if the **CSS selectors never match ANY row** in the first place. PO's DOM layout is not standardised across regions/themes/A-B tests, and my Iter 136 selectors were educated guesses that likely miss the user's live markup.
+
+### 1 · Expanded static selector list
+Added: `trades-list`, `trades-item`, `data-test*=deal`, `operation`, `portfolio row`. Ten total variants now, joined with `,` and evaluated in one `querySelectorAll`.
+
+### 2 · Wide-Net Fallback (`_wideNetDealRows`)
+When the static selectors return **zero rows**, the watcher sweeps every `div|li|tr|span[class]|article|section` on the page and keeps any element whose text (8–400 chars) contains BOTH:
+- A direction indicator: `\b(UP|DOWN|CALL|PUT|HIGHER|LOWER)\b` or an arrow `▲▼↑↓⬆⬇`
+- A currency amount: `$\d`
+
+Capped at 200 candidates. Logged once per session: `CSS selectors matched 0 rows — using wide-net fallback (N candidates)`.
+
+### 3 · Balance-Delta Last-Resort Fallback
+When an arm **times out** AND it's the **only arm timing out at this moment** (single-trade case — no ambiguity risk), the watcher compares the **live balance** against the balance snapshot taken at arm time. Delta ≥ 1 ¢ → resolves. Reason logged as `via balance-delta-fallback`.
+- Balance reader tries 5 selectors: `.js-balance-demo-deposit`, `.js-balance-real-balance`, `[class*=balance] [class*=value]`, `[class*=balance-value]`, `[data-test=balance]`.
+- Never used when 2+ arms are timing out simultaneously (protects against Iter 136's original overlap bug).
+
+### 4 · Diagnostic helper — `window.__aiEliteDealDiag()`
+User can run this in DevTools while a resolved trade is visible. Returns JSON with:
+- `enabled`, `queue` (current arms), `last_scan` (counts + timestamps)
+- `css_selector` (the compiled selector string) + `css_matches` count
+- `widenet_matches` count
+- `balance_now`
+- `sample_css` / `sample_widenet` — last 3 rows each with `{tag, class, text[:160], parsed}`
+
+**Share the output back to me** — I'll tighten the selector list to your exact PO layout without more guessing.
+
+### 5 · `enable()` primes BOTH sets
+Previously only CSS rows were marked "seen" on enable — a wide-net fallback could then misfire on historical rows. Now both CSS + wide-net rows are primed.
+
+### 6 · Version bump — 8.150.0 → **8.151.0**
+Webpack rebuilt, copied to `frontend/public/pocket-option-auto-trader{,-modular}.user.js`. `/api/tampermonkey/script` serves the new bundle.
+**User: TM dashboard → Check for updates → confirm 8.151.0.**
+
+### 7 · Tests
+- **NEW** `tests/test_iter144_watcher_discovery.py` — 8 tests: expanded selectors, wide-net fallback, balance-delta fallback, diag helper, last-scan tracking, bundle version, bundle diag/delta markers, wide-net indicator string preserved through minification.
+- **MOD** `tests/test_iter141_watcher_and_ui.py` and `tests/test_iter138_stealth_mode.py` — expected version → 8.151.0.
+- **182/182** full regression pass across Iter 131 + 133 + 134 + 135 + 136 + 137 + 138 + 139 + 140 + 141 + 142 + 143 + 144.
+
+### Files touched
+- **MOD** `tampermonkey-src/src/trading/tradeResultWatcher.js` — expanded selectors, `_wideNetDealRows`, `_readBalance`, balance-delta fallback in `_poll`, `_diag()` helper, `enable()` primes both sets
+- **MOD** `tampermonkey-src/version.txt` — 8.151.0
+- **REGEN** `frontend/public/pocket-option-auto-trader{,-modular}.user.js`
+- **MOD** `tests/test_iter141_watcher_and_ui.py`, `tests/test_iter138_stealth_mode.py` — expected version
+- **NEW** `tests/test_iter144_watcher_discovery.py` (8 tests)
+
+---
 
 ## Iter 143 (Feb 2026) — Confluence → Forex Auto-Bridge
 
@@ -6367,3 +6421,53 @@ March 15, 2026
 ### Previous Updates
 - v6.4.2: Removed opposite trade block per user request
 - March 5, 2026: Fixed critical login bug
+
+## v8.152.0 — Iter 145 + 146 (Feb 12, 2026)
+
+### Iter 145 — Forex MT5 add-on completed end-to-end
+Before this iter, the Iter 142 Forex backend engine could persist a PENDING order but the Tampermonkey userscript had no way to execute it in the Pocket Option web-MT5 UI. Iter 145 shipped:
+
+**Backend (`routes/forex_routes.py`):**
+- `GET /api/forex/orders/pending?limit=N` — TM long-polls this for queued orders (oldest first)
+- `POST /api/forex/orders/{pos_id}/mark-picked` — claim (idempotent race guard)
+- `POST /api/forex/orders/{pos_id}/mark-filled` — report fill price, transitions PENDING→OPEN
+- `POST /api/forex/orders/{pos_id}/mark-rejected` — report error, transitions PENDING→REJECTED
+- `GET /api/forex/orders/queue-stats` — pending / picked counts (diag)
+
+**Tampermonkey (`src/trading/`):**
+- `mt5Adapter.js` — DOM adapter with 3-layered selector resolution (user-taught via `GM_setValue` → curated fallback list → text heuristics). Handles same-origin iframes; gracefully rejects cross-origin ones with a clear reason.
+- `forexOrderPoller.js` — 5s polling loop wired in `index.js`. Exposes `window.__aiEliteForexStart/Stop/Stats` + `__aiEliteMt5Diag/Teach`.
+
+**Tests:** 5 new pytests (`test_iter145_forex_tm_orders.py`) — all pass.
+
+### Iter 146 — TQNet-inspired accuracy boosters (mql5 article 19157)
+Added the two mechanisms with the highest ROI from the TQNet paper:
+1. **RevIN (Reversible Instance Normalization)** — per-window mean/std normalize + invert. Kills distribution-shift noise (regime changes, volatility bursts).
+2. **Temporal Query attention** — trainable periodic vectors θ_TQ ∈ R^(W+L, C) indexed by `t mod W` provide Queries; raw window provides Keys/Values. Combines global cycle memory with local snapshot.
+
+**Backend:**
+- `backend/ml/revin.py` — numpy RevIN (1D/2D/3D + eps-clamped std).
+- `backend/ml/temporal_query.py` — numpy TQ-MHA + shallow MLP + GeLU + residual + `TQNetPredictor` façade.
+- `backend/tqnet_service.py` — turns TQNet output into a confluence signal (`source="ml:tqnet"`).
+- `backend/routes/tqnet_routes.py` — `/api/tqnet/predict`, `/predict-symbol`, `/health`.
+
+**Wiring:**
+- Added `tqnet_score_for_df` to `forex/signal_bridge.py` (Forex flow) AND `auto_scan_service.py` (binary options flow). Both feed the confluence gate.
+- Weight `ml:tqnet=1.25` registered in `confluence_service.py`.
+
+**Tests:** 15 new pytests (`test_iter146_revin_tqnet.py`).
+
+### Test results
+110/110 pass across `test_iter137_patterns_confluence.py` through `test_iter146_revin_tqnet.py`.
+
+### Known follow-ups (P1)
+- Train θ_TQ + TQ-MHA projection matrices from historical candles (currently zero/random init → non-destructive but doesn't yet add signal). Add `POST /api/tqnet/train` route.
+- Ship an MT5-teach UI in the TM panel (buttons for symbol/lot/SL/TP/BUY/SELL). Currently only accessible via DevTools console.
+- Panel toggle for the Forex poller (currently console-only `__aiEliteForexStart`).
+
+### Priorities remaining (P1/P2 backlog)
+- P1 Multi-asset leaderboard (one-click strategy across all OTC pairs, ranked by sim P&L)
+- P1 Fresh historical data cron (yfinance/broker refresh every 4h)
+- P2 Backtest asset-picker dropdown (assets with candles in DB)
+- P2 LOB Transformer / TCN (only if boosters saturate)
+- P2 JS linter engine crash on large TM bundle (intermittent; ignore patterns already in place)

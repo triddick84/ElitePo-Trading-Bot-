@@ -50,6 +50,7 @@ _DEFAULT_WEIGHTS: Dict[str, float] = {
     "sr": 0.8,                          # support / resistance level touches
     "pattern": 1.0,                     # any chart pattern hit
     "ml": 1.2,                          # any ML prediction (LightGBM, RF, etc.)
+    "ml:tqnet": 1.25,                   # Iter 146 — RevIN + Temporal Query attention
     "smart_money": 1.1,                 # order block / liquidity sweep signals
     "tf": 0.9,                          # multi-timeframe alignment tag
     "sentiment": 0.4,                   # news / macro sentiment
@@ -64,10 +65,14 @@ DEFAULT_THRESHOLD = 0.65
 
 
 def _base_weight_for(source: str) -> float:
-    """Look up the base weight by source family — the prefix before ':'."""
+    """Look up the base weight by source family — the prefix before ':'.
+    Exact keys (e.g. ``ml:tqnet``) take precedence over family fallbacks."""
     if not source:
         return _DEFAULT_WEIGHTS["default"]
-    family = source.split(":", 1)[0].lower()
+    key = source.lower()
+    if key in _DEFAULT_WEIGHTS:
+        return _DEFAULT_WEIGHTS[key]
+    family = key.split(":", 1)[0]
     return _DEFAULT_WEIGHTS.get(family, _DEFAULT_WEIGHTS["default"])
 
 

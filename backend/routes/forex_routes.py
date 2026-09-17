@@ -199,3 +199,101 @@ async def bridge_status() -> Dict[str, Any]:
         "interval_s": loop.interval_s,
         "timeframe": loop.timeframe,
     }
+
+
+# ---------------------------------------------------------------------------
+# Iter 145 — TM-side order queue (Tampermonkey executes MT5 orders in the PO UI)
+# ---------------------------------------------------------------------------
+
+class TMOrderResult(BaseModel):
+    fill_price: Optional[float] = None
+    fill_lots: Optional[float] = None
+    error: Optional[str] = None
+    dom_matches: Optional[Dict[str, Any]] = None    # what TM saw when it clicked
+
+
+@router.get("/orders/pending")
+async def list_pending_orders(limit: int = Query(10, ge=1, le=50)) -> Dict[str, Any]:
+    """Orders the Python engine queued for the Tampermonkey userscript to
+    execute inside PO's web-MT5 UI. TM should long-poll this endpoint.
+
+    Returns oldest-first so races don't skip stale orders. Each entry includes
+    both the raw ForexOrder fields and its `position_id`.
+    """
+    eng = get_engine()
+    if eng.db is None:
+        return {"count": 0, "orders": []}
+    cursor = eng.db.forex_orders_pending.find({"status": {"$ne": "picked"}}).sort("queued_at", 1)
+    docs = await cursor.to_list(length=limit)
+    for d in docs:
+        d.pop("_id", None)
+    return {"count": len(docs), "orders": docs}
+
+
+@router.post("/orders/{position_id}/mark-picked")
+async def mark_order_picked(position_id: str) -> Dict[str, Any]:
+    """TM claims an order so no second TM instance also fires it."""
+    eng = get_engine()
+    if eng.db is None:
+        raise HTTPException(500, "db unavailable")
+    r = await eng.db.forex_orders_pending.update_one(
+        {"position_id": position_id, "status": {"$ne": "picked"}},
+        {"$set": {"status": "picked"}},
+    )
+    return {"position_id": position_id, "claimed": r.modified_count == 1}
+
+
+@router.post("/orders/{position_id}/mark-filled")
+async def mark_order_filled(position_id: str, result: TMOrderResult) -> Dict[str, Any]:
+    """TM reports the DOM click succeeded and the trade is now live in
+    PO's web-MT5. We update the tentative PENDING position → OPEN with
+    the actual fill price if reported."""
+    eng = get_engine()
+    if eng.db is None:
+        raise HTTPException(500, "db unavailable")
+    upd = {"status": "OPEN"}
+    if result.fill_price is not None:
+        upd["entry"] = float(result.fill_price)
+    if result.fill_lots is not None:
+        upd["lots"] = float(result.fill_lots)
+    if result.dom_matches is not None:
+        upd["meta.dom_matches"] = result.dom_matches
+    r = await eng.db.forex_positions.update_one(
+        {"position_id": position_id},
+        {"$set": upd},
+    )
+    # Clear pending queue entry
+    await eng.db.forex_orders_pending.delete_one({"position_id": position_id})
+    return {"position_id": position_id, "updated": r.modified_count == 1}
+
+
+@router.post("/orders/{position_id}/mark-rejected")
+async def mark_order_rejected(position_id: str, result: TMOrderResult) -> Dict[str, Any]:
+    """TM couldn't place the trade (buttons missing, iframe not loaded,
+    lot input rejected, etc). Position → REJECTED, pending queue cleared."""
+    eng = get_engine()
+    if eng.db is None:
+        raise HTTPException(500, "db unavailable")
+    upd = {
+        "status": "REJECTED",
+        "close_reason": (result.error or "tm_rejected")[:200],
+    }
+    if result.dom_matches is not None:
+        upd["meta.dom_matches"] = result.dom_matches
+    r = await eng.db.forex_positions.update_one(
+        {"position_id": position_id},
+        {"$set": upd},
+    )
+    await eng.db.forex_orders_pending.delete_one({"position_id": position_id})
+    return {"position_id": position_id, "updated": r.modified_count == 1}
+
+
+@router.get("/orders/queue-stats")
+async def order_queue_stats() -> Dict[str, Any]:
+    """Handy diag: how many pending, how many picked-not-yet-filled."""
+    eng = get_engine()
+    if eng.db is None:
+        return {"pending": 0, "picked": 0}
+    pending = await eng.db.forex_orders_pending.count_documents({"status": {"$ne": "picked"}})
+    picked = await eng.db.forex_orders_pending.count_documents({"status": "picked"})
+    return {"pending": pending, "picked": picked}

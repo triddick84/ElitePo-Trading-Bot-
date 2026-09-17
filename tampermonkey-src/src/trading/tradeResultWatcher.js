@@ -35,12 +35,72 @@ const DEAL_ROW_SELECTOR = [
   '[class*="deals-list"] > div',
   '[class*="deal-item"]',
   '[class*="history"] [class*="item"]',
+  // Iter 144 — additional PO markup variants
+  '[class*="trades-list"] [class*="trades-item"]',
+  '[class*="trades-list"] > div',
+  '[data-test*="deal" i]',
+  '[class*="operation"] [class*="item"]',
+  '[class*="portfolio"] [class*="row"]',
 ].join(', ');
+
+/** Iter 144 — Wide-net fallback used when the CSS selectors return zero
+ *  rows. Walks visible elements looking for anything whose text carries
+ *  BOTH a direction indicator (▲▼ / UP-DOWN / CALL-PUT) AND a currency
+ *  amount ($X.XX). Returns [] when nothing matches. */
+function _wideNetDealRows() {
+  try {
+    const out = [];
+    const seen = new WeakSet();
+    const walker = document.querySelectorAll(
+      'div, li, tr, span[class], article, section'
+    );
+    for (const el of walker) {
+      if (seen.has(el)) continue;
+      // Only look at leaf-ish rows — big containers have too much text
+      const txt = (el.textContent || '').replace(/\s+/g, ' ');
+      if (txt.length < 8 || txt.length > 400) continue;
+      const hasDir = /\b(UP|DOWN|CALL|PUT|HIGHER|LOWER)\b/i.test(txt) || /[▲▼↑↓⬆⬇]/.test(txt);
+      const hasMoney = /\$\s*\d/.test(txt);
+      if (hasDir && hasMoney) {
+        out.push(el);
+        seen.add(el);
+        if (out.length > 200) break;
+      }
+    }
+    return out;
+  } catch (_e) {
+    return [];
+  }
+}
 
 /** Normalize `EURUSD-OTC`, `EUR/USD OTC`, `EURUSDotc` → `EURUSDOTC` */
 function _normAsset(a) {
   return String(a || '').toUpperCase().replace(/[\s/_-]/g, '');
 }
+
+/** Iter 144 — Minimal balance reader used ONLY as a last-resort resolver
+ *  when the deal-row DOM parse failed AND the queue has exactly one arm
+ *  (so the balance-delta is unambiguous). */
+function _readBalance() {
+  try {
+    const selectors = [
+      '.js-balance-demo-deposit',
+      '.js-balance-real-balance',
+      '[class*="balance"] [class*="value"]',
+      '[class*="balance-value"]',
+      '[data-test="balance"]',
+    ];
+    for (const sel of selectors) {
+      const el = document.querySelector(sel);
+      if (!el) continue;
+      const raw = (el.textContent || '').replace(/[^0-9.\-]/g, '');
+      const v = parseFloat(raw);
+      if (Number.isFinite(v)) return v;
+    }
+    return null;
+  } catch (_e) { return null; }
+}
+
 
 /** Extract a stable-ish per-row identity — textContent is idempotent across
  *  mutations of unrelated siblings; adding a "starts-with-timestamp" bucket
@@ -186,8 +246,17 @@ class TradeResultWatcher {
     document.querySelectorAll(DEAL_ROW_SELECTOR).forEach(r => {
       this.seenRows.add(_rowId(r));
     });
+    // Iter 144 — also prime wide-net rows so a fallback discovery doesn't
+    // treat existing history as "new" trades.
+    _wideNetDealRows().forEach(r => this.seenRows.add(_rowId(r)));
     this._installObserver();
-    success('[ResultWatcher] enabled — multi-trade queue, DOM-only (no balance)');
+    // Iter 144 — expose diagnostic helper for the user to run in DevTools.
+    try {
+      if (typeof window !== 'undefined') {
+        window.__aiEliteDealDiag = () => this._diag();
+      }
+    } catch (_e) { /* ignore */ }
+    success('[ResultWatcher] enabled — multi-trade queue with wide-net fallback');
   }
 
   disable() {
@@ -238,6 +307,14 @@ class TradeResultWatcher {
     document.querySelectorAll(DEAL_ROW_SELECTOR).forEach(r => {
       this.seenRows.add(_rowId(r));
     });
+    // Iter 144 — also prime wide-net so a discovery fallback sees only NEW rows
+    _wideNetDealRows().forEach(r => this.seenRows.add(_rowId(r)));
+
+    // Iter 144 — snapshot balance for the delta-fallback (used only when
+    // the queue holds exactly ONE arm at the timeout moment).
+    try {
+      arm.balanceAtArm = _readBalance();
+    } catch (_e) { arm.balanceAtArm = null; }
 
     if (!this.pollId) {
       this.pollId = setInterval(() => this._poll(), POLL_INTERVAL_MS);
@@ -263,23 +340,39 @@ class TradeResultWatcher {
 
   _scanNewRows() {
     let rows;
-    try { rows = document.querySelectorAll(DEAL_ROW_SELECTOR); }
-    catch (_e) { return; }
+    try { rows = Array.from(document.querySelectorAll(DEAL_ROW_SELECTOR)); }
+    catch (_e) { rows = []; }
+    // Iter 144 — CSS selectors returned nothing? Fall back to a full-DOM
+    // heuristic sweep. The moment ANY row parses, we log the winning
+    // element so a future selector list update targets it precisely.
+    if (rows.length === 0) {
+      rows = _wideNetDealRows();
+      if (rows.length && !this._widenetLogged) {
+        this._widenetLogged = true;
+        log(`[ResultWatcher] CSS selectors matched 0 rows — using wide-net fallback (${rows.length} candidates)`);
+      }
+    }
+    let matched = 0;
     for (const row of rows) {
       const id = _rowId(row);
       if (this.seenRows.has(id)) continue;
       const parsed = _parseDealRow(row);
       if (!parsed) continue;
-      // Iter 141: if isWin is null the row hasn't fully rendered yet (PO
-      // sometimes streams the payout in a second frame). DON'T mark it
-      // seen — the next observer tick will re-parse.
       if (parsed.isWin === null) {
         log(`[ResultWatcher] deferring row (no outcome yet) — ${parsed.direction} ${parsed.asset}`);
         continue;
       }
       this.seenRows.add(id);
       this._matchAndResolve(parsed, row);
+      matched++;
     }
+    // Iter 144 — expose the last scan for diagnostics
+    this._lastScan = {
+      css_matches: rows.length,
+      resolved_this_tick: matched,
+      queue_len: this.armedQueue.length,
+      at: Date.now(),
+    };
   }
 
   /** Find the oldest un-resolved armed trade matching this parsed row.
@@ -330,16 +423,55 @@ class TradeResultWatcher {
     for (const arm of this.armedQueue) {
       if (arm.resolved) continue;
       if (now > arm.deadline) {
+        // Iter 144 — balance-delta LAST RESORT fallback. Only safe when
+        // this arm is the ONLY one currently timing out (else deltas can
+        // conflate different trades). Uses the pre-arm balance snapshot.
+        const isSoloTimeout = this.armedQueue.filter((a) => !a.resolved && now > a.deadline).length === 1;
+        if (isSoloTimeout && arm.balanceAtArm != null) {
+          const bal = _readBalance();
+          if (bal != null && Math.abs(bal - arm.balanceAtArm) >= 0.01) {
+            const isWin = bal > arm.balanceAtArm;
+            log(`[ResultWatcher] resolved via balance-delta fallback: ${arm.trade.direction} ${arm.trade.asset} · $${arm.balanceAtArm.toFixed(2)} → $${bal.toFixed(2)}`);
+            this._resolve(arm, isWin, 'balance-delta-fallback');
+            continue;
+          }
+        }
         warn(`[ResultWatcher] timeout: ${arm.trade.direction} ${arm.trade.asset} — no deal row matched`);
         if (ABANDON_AFTER_TIMEOUT) {
           this._resolve(arm, false, 'timeout-loss');
         }
-        // else drop silently
         continue;
       }
       still.push(arm);
     }
     this.armedQueue = still;
+  }
+
+  /** Iter 144 — Diagnostic snapshot for `window.__aiEliteDealDiag()`.
+   *  Run this in DevTools while a resolved trade is visible; share the
+   *  output so we can tighten selectors for your PO layout. */
+  _diag() {
+    let cssRows = [];
+    try { cssRows = Array.from(document.querySelectorAll(DEAL_ROW_SELECTOR)); }
+    catch (_e) { /* ignore */ }
+    const wideRows = _wideNetDealRows();
+    const sample = (rows, k = 3) => rows.slice(-k).map((r) => ({
+      tag: r.tagName,
+      class: (r.className || '').toString().slice(0, 120),
+      text: (r.textContent || '').replace(/\s+/g, ' ').slice(0, 160),
+      parsed: _parseDealRow(r),
+    }));
+    return {
+      enabled: this.enabled,
+      queue: this.getQueueSnapshot(),
+      last_scan: this._lastScan || null,
+      css_selector: DEAL_ROW_SELECTOR,
+      css_matches: cssRows.length,
+      widenet_matches: wideRows.length,
+      balance_now: _readBalance(),
+      sample_css: sample(cssRows),
+      sample_widenet: sample(wideRows),
+    };
   }
 
   _resolve(arm, isWin, source) {

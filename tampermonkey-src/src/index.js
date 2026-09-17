@@ -30,6 +30,8 @@ import { get, post } from './utils/api.js';
 import { getCurrentAsset, getCurrentPrice, waitForElement } from './utils/dom.js';
 import * as domUtils from './utils/dom.js';
 import { priceScraper } from './trading/priceScraper.js';
+import { forexOrderPoller } from './trading/forexOrderPoller.js';
+import { mt5Adapter } from './trading/mt5Adapter.js';
 
 // Iter 62 — build query string for per-model thresholds (skips zeros)
 function buildThresholdQuery() {
@@ -1105,6 +1107,7 @@ class EliteTradingBot {
     try { networkLatencyPoller.stop(); } catch (_e) { /* ignore */ }
     try { heartbeatReporter.stop(); } catch (_e) { /* ignore */ }
     try { aiAnalysisPoller.stop(); } catch (_e) { /* ignore */ }
+    try { forexOrderPoller.stop(); } catch (_e) { /* ignore */ }
     try {
       if (this._latAbstainInterval) { clearInterval(this._latAbstainInterval); this._latAbstainInterval = null; }
     } catch (_e) { /* ignore */ }
@@ -1155,6 +1158,16 @@ window.eliteBotFavoritesCycle = favoritesCycle;
 window.eliteBotChartTypeSwitcher = chartTypeSwitcher;
 window.eliteBotAppSignal = appSignalPoller;
 window.eliteBotDom = domUtils;
+
+// Iter 145 — Forex MT5 automation exposed on window so power users can
+// enable/diagnose without a new UI toggle (a panel button ships in v8.153
+// once the DOM selectors are proven on live PO layouts).
+window.__aiEliteForexStart = (ms) => forexOrderPoller.start(ms || 5000);
+window.__aiEliteForexStop = () => forexOrderPoller.stop();
+window.__aiEliteForexStats = () => forexOrderPoller.getStats();
+window.__aiEliteMt5 = mt5Adapter;
+window.eliteBotForexPoll = forexOrderPoller;
+window.eliteBotMt5 = mt5Adapter;
 
 // One-shot diagnostic — run in console and paste output if prices fail to flow
 window.eliteBotDiagnose = function () {
