@@ -14,6 +14,11 @@ signal-scoring plumbing. Produces a confluence-source dict:
 Because the predictor is stateless-per-call, we can safely fan out across
 symbols/timeframes without any locking.
 
+Iter 147 upgrade — the service now auto-loads trained weights from
+`/app/backend/data/tqnet_weights/<SYMBOL>_<TF>.npz` when they exist,
+so freshly-trained models take effect on the next signal without any
+process restart. Auto-load is idempotent per predictor instance.
+
 Also ships:
     * `tqnet_score_for_df(df, t, ...)` — one-liner used by the signal bridge
     * `TQNET_CYCLE_HINTS` — reasonable W picks for common intraday timeframes
@@ -22,6 +27,7 @@ Also ships:
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any, Dict, Optional
 
 import pandas as pd
@@ -29,6 +35,7 @@ import pandas as pd
 from ml.temporal_query import (
     TQConfig, TQNetPredictor, TQNetPredictorResult, get_default_predictor,
 )
+from ml.tqnet_trainer import _weight_path, load_weights_if_exists
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +77,7 @@ def tqnet_score_for_df(
 
     W = TQNET_CYCLE_HINTS.get(timeframe, 24)
     cfg = TQConfig(channels=1, window=window, period=W)
-    pred = predictor or _shared_predictor(cfg)
+    pred = predictor or _shared_predictor(cfg, asset=asset, timeframe=timeframe)
 
     # `t` = absolute bar index for cyclic θ_TQ lookup. In production we'd
     # pass an epoch-derived bucket; when the caller doesn't supply one we
@@ -106,15 +113,49 @@ def tqnet_score_for_df(
 _predictor_cache: Dict[str, TQNetPredictor] = {}
 
 
-def _shared_predictor(cfg: TQConfig) -> TQNetPredictor:
-    """Cache one predictor per (window, period) combo — weight-random init
-    is deterministic but rebuilding matrices per-tick is wasteful."""
-    key = f"w{cfg.window}_p{cfg.period}_c{cfg.channels}"
+def _shared_predictor(cfg: TQConfig,
+                      asset: Optional[str] = None,
+                      timeframe: Optional[str] = None) -> TQNetPredictor:
+    """Cache one predictor per (window, period, asset, timeframe) combo.
+
+    Auto-loads trained weights from the on-disk cache when `asset` +
+    `timeframe` are supplied. Missing weight file → predictor stays at
+    random init (identity-plus-noise; non-destructive).
+    """
+    tag = f"w{cfg.window}_p{cfg.period}_c{cfg.channels}"
+    key = f"{tag}::{asset or 'default'}::{timeframe or 'na'}"
     p = _predictor_cache.get(key)
     if p is None:
         p = TQNetPredictor(cfg)
+        # Try to auto-load trained weights
+        if asset and timeframe:
+            path = _weight_path(asset, timeframe)
+            if load_weights_if_exists(p, path):
+                logger.info(f"[tqnet_service] loaded trained weights: {path}")
         _predictor_cache[key] = p
     return p
+
+
+def invalidate_predictor_cache(asset: Optional[str] = None,
+                               timeframe: Optional[str] = None) -> int:
+    """Drop cached predictors so a fresh training run takes effect on the
+    next signal. Returns the number of entries dropped."""
+    global _predictor_cache
+    if asset is None and timeframe is None:
+        n = len(_predictor_cache)
+        _predictor_cache = {}
+        return n
+    a = (asset or "default").upper() if asset else None
+    dropped = 0
+    for key in list(_predictor_cache.keys()):
+        parts = key.split("::")
+        if len(parts) < 3:
+            continue
+        _, cached_asset, cached_tf = parts[0], parts[1], parts[2]
+        if (a is None or cached_asset.upper() == a) and (timeframe is None or cached_tf == timeframe):
+            _predictor_cache.pop(key, None)
+            dropped += 1
+    return dropped
 
 
 def _neutral(asset: Optional[str], timeframe: str, reason: str) -> Dict[str, Any]:

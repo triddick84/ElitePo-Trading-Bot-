@@ -6471,3 +6471,43 @@ Added the two mechanisms with the highest ROI from the TQNet paper:
 - P2 Backtest asset-picker dropdown (assets with candles in DB)
 - P2 LOB Transformer / TCN (only if boosters saturate)
 - P2 JS linter engine crash on large TM bundle (intermittent; ignore patterns already in place)
+
+## v8.153.0 — Iter 147 (Feb 12, 2026)
+
+### Iter 147a — TQNet training pipeline (P0 done)
+Before this iter, the TQNet layer had zero-init θ_TQ + random projection matrices — non-destructive but adding no real signal. This iter closed the loop:
+
+- `backend/ml/tqnet_trainer.py`:
+  - Fully vectorised numpy forward pass (`_batched_loss`) over all sliding windows
+  - Fits with **scipy L-BFGS-B** — 215 params for the default config, converges in <20 iters
+  - Saves to `/app/backend/data/tqnet_weights/<SYMBOL>_<TF>.npz` + `.meta.json`
+  - `load_weights_if_exists()` validates shapes before overwriting
+
+- `tqnet_service._shared_predictor(cfg, asset, timeframe)` auto-loads weights on first call. `invalidate_predictor_cache()` evicts entries after training so a fresh run takes effect on the next signal.
+
+- New routes:
+  - `POST /api/tqnet/train` — background training from raw closes
+  - `POST /api/tqnet/train-symbol` — pulls Mongo candles + trains
+  - `GET /api/tqnet/train/status/{job_id}` — polls the in-memory job registry
+  - `GET /api/tqnet/weights` — lists trained weight files + reports
+  - `DELETE /api/tqnet/weights/{symbol}/{timeframe}` — drop + evict cache
+
+**Result on synthetic**: loss 1.22 → 0.07 (17× reduction), direction accuracy 47% → 57%. Real-market uplift TBD — awaits ingestion of 500+ candles per pair.
+
+### Iter 147b — MT5 Teach UI (P0 done)
+- New Forex tab in TM panel with:
+  - Start/Stop poller button + live 4-cell stats grid (Pending/Picked/Placed/Rejected)
+  - Point-to-Teach grid for 6 MT5 controls (Symbol/Lot/SL/TP/BUY/SELL) with per-cell status + clear button
+  - Diagnose + Clear All buttons + inline help
+- All wired via `_initForexTab()` — survives panel re-injection.
+
+### Test results
+123/123 pytests pass across `test_iter137_*` → `test_iter147_*`.
+
+### Remaining P1/P2 backlog
+- **P1 Multi-asset leaderboard** — one-click strategy across every OTC pair, sim-P&L ranked
+- **P1 Fresh candle cron** — yfinance/broker refresh every 4h so training set doesn't rot
+- **P2 Backtest asset-picker dropdown** — replace free-text with dropdown of assets with candles
+- **P2 LOB Transformer / TCN** — only if TQNet + boosters saturate
+- **P2 Training UI** — surface training progress + weights list inside the TM panel or app dashboard (currently API-only)
+- **P2 JS linter engine crash** on large TM bundle (intermittent; ignore rules already in place)

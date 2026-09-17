@@ -11,6 +11,9 @@ import { CONFIG } from '../core/config.js';
 import { state, setState, saveState } from '../core/state.js';
 import { log, setLogContainer } from '../core/logger.js';
 import { stealthMode } from '../core/stealthMode.js';
+import { forexOrderPoller } from '../trading/forexOrderPoller.js';
+import { mt5Adapter } from '../trading/mt5Adapter.js';
+import { get as apiGet } from '../utils/api.js';
 
 let panelEl = null;
 let watchdogInterval = null;
@@ -1628,6 +1631,7 @@ export function createPanel() {
         <button class="${P}tabbtn" data-tab="ai" data-testid="tab-ai" title="AI Technical Analysis — model votes, indicators, Kyle λ, mini-chart, recent trades"><span class="${P}tabicon">✧</span>AI</button>
         <button class="${P}tabbtn" data-tab="config" data-testid="tab-config"><span class="${P}tabicon">⚙</span>Config</button>
         <button class="${P}tabbtn" data-tab="stats" data-testid="tab-stats"><span class="${P}tabicon">▨</span>Stats</button>
+        <button class="${P}tabbtn" data-tab="forex" data-testid="tab-forex" title="Forex MT5 automation — poller + point-to-teach DOM selectors"><span class="${P}tabicon">₣</span>Forex</button>
       </div>
 
       <div class="${P}body" id="${P}body">
@@ -2032,6 +2036,49 @@ export function createPanel() {
 
           <button class="${P}resetbtn" id="${P}resetbtn" data-testid="reset-defaults-btn" title="Wipe saved settings and reload — restores recommended defaults">⟳ RESET TO DEFAULTS</button>
         </div>
+
+        <!-- ═════════════════ TAB: FOREX (Iter 147) ═════════════════ -->
+        <div class="${P}tabpanel" data-tab-panel="forex" data-testid="tab-panel-forex">
+
+          <div class="${P}section" data-testid="fx-poller-section" title="Toggle the Tampermonkey → MT5 order poller. When ON, the script long-polls the backend for queued Forex orders and executes them in the PO web-MT5 UI.">
+            <div class="${P}sectionttl">Forex Order Poller</div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+              <button id="${P}fxPollBtn" data-testid="fx-poll-toggle" class="${P}btn" style="flex:1;min-width:110px;">START</button>
+              <span id="${P}fxPollStatus" data-testid="fx-poll-status" style="font-size:11px;color:#94a3b8;">idle</span>
+            </div>
+            <div style="margin-top:8px;display:grid;grid-template-columns:repeat(4,1fr);gap:6px;font-size:10px;color:#cbd5e1;">
+              <div>Pending<br><span id="${P}fxStatPending" data-testid="fx-stat-pending" style="color:#22d3ee;font-weight:600;font-size:14px;">–</span></div>
+              <div>Picked<br><span id="${P}fxStatPicked" data-testid="fx-stat-picked" style="color:#22d3ee;font-weight:600;font-size:14px;">0</span></div>
+              <div>Placed<br><span id="${P}fxStatPlaced" data-testid="fx-stat-placed" style="color:#22c55e;font-weight:600;font-size:14px;">0</span></div>
+              <div>Rejected<br><span id="${P}fxStatRejected" data-testid="fx-stat-rejected" style="color:#ef4444;font-weight:600;font-size:14px;">0</span></div>
+            </div>
+          </div>
+
+          <div class="${P}section" data-testid="fx-teach-section" title="Point-to-teach MT5 controls. Click a Teach button then click the matching element inside PO's web-MT5 iframe — the CSS selector is saved locally and used for every future order.">
+            <div class="${P}sectionttl">MT5 Point-to-Teach Selectors</div>
+            <div style="font-size:10px;color:#94a3b8;margin-bottom:8px;">
+              Click <b>Teach</b>, then within 30 s click the corresponding MT5 control (input field or button). The CSS selector is saved to GM storage.
+            </div>
+            <div id="${P}fxTeachGrid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;"></div>
+            <div style="display:flex;gap:6px;margin-top:8px;">
+              <button id="${P}fxDiagBtn" data-testid="fx-diagnose-btn" class="${P}btn" style="flex:1;font-size:11px;">◉ DIAGNOSE</button>
+              <button id="${P}fxClearAllBtn" data-testid="fx-clear-all-btn" class="${P}btn" style="flex:1;font-size:11px;background:#7c2d12;">✕ CLEAR ALL</button>
+            </div>
+            <pre id="${P}fxDiagOut" data-testid="fx-diag-output" style="margin-top:8px;padding:6px;background:#0b1220;border:1px solid #1e293b;border-radius:4px;font-size:9px;color:#94a3b8;max-height:120px;overflow:auto;white-space:pre-wrap;display:none;"></pre>
+          </div>
+
+          <div class="${P}section" data-testid="fx-help-section">
+            <div class="${P}sectionttl">Quick Reference</div>
+            <div style="font-size:10px;color:#94a3b8;line-height:1.5;">
+              • Forex signals are queued by the backend confluence engine into <code>/api/forex/orders/pending</code>.<br>
+              • The poller claims each order, hands it to the MT5 adapter, and reports fill/rejection back.<br>
+              • If the MT5 iframe is <b>cross-origin</b>, DOM injection is blocked by the browser — open MT5 as a top-level tab to work around it.<br>
+              • Console helpers: <code>__aiEliteForexStart()</code>, <code>__aiEliteForexStats()</code>, <code>__aiEliteMt5Diag()</code>.
+            </div>
+          </div>
+
+        </div>
+        <!-- ═════════════════ /TAB: FOREX ═════════════════ -->
       </div>
       <div class="${P}resize" id="${P}resize" data-testid="resize-handle" title="Drag to resize panel width. Saved across reloads."></div>
       <div class="${P}sideresize left" id="${P}resizeL" data-testid="resize-handle-left" title="Drag left/right to resize (grows toward the left)."></div>
@@ -2056,6 +2103,144 @@ export function createPanel() {
 
 function q(id) {
   return document.getElementById(`${P}${id}`);
+}
+
+
+// ══════════════════════════════════════════════════════════════════════
+// Iter 147 — Forex tab: poller toggle + MT5 point-to-teach UI
+// Isolated helper so index.js / re-injection paths pick it up cleanly.
+// ══════════════════════════════════════════════════════════════════════
+
+const _MT5_CONTROLS = [
+  { key: 'symbol_search', label: 'Symbol' },
+  { key: 'lot_input',     label: 'Lot / Volume' },
+  { key: 'sl_input',      label: 'Stop Loss' },
+  { key: 'tp_input',      label: 'Take Profit' },
+  { key: 'buy_btn',       label: 'BUY button' },
+  { key: 'sell_btn',      label: 'SELL button' },
+];
+
+let _fxRefreshTimer = null;
+
+function _initForexTab() {
+  const pollBtn = q('fxPollBtn');
+  const pollStatus = q('fxPollStatus');
+  const grid = q('fxTeachGrid');
+  const diagBtn = q('fxDiagBtn');
+  const clearAllBtn = q('fxClearAllBtn');
+  const diagOut = q('fxDiagOut');
+  if (!pollBtn || !grid) return;   // tab not rendered (e.g. mid-reinject)
+
+  // ---- Poller toggle
+  const _renderPoller = () => {
+    const running = forexOrderPoller.isRunning();
+    pollBtn.textContent = running ? '■ STOP' : '▶ START';
+    pollBtn.classList.toggle('active', running);
+    pollBtn.style.background = running ? '#166534' : '';
+    if (pollStatus) {
+      pollStatus.textContent = running ? 'polling every 5 s' : 'idle';
+      pollStatus.style.color = running ? '#22c55e' : '#94a3b8';
+    }
+  };
+  pollBtn.addEventListener('click', () => {
+    if (forexOrderPoller.isRunning()) forexOrderPoller.stop();
+    else forexOrderPoller.start(5000);
+    _renderPoller();
+  });
+  _renderPoller();
+
+  // ---- Live stats refresh (queue-stats from backend + local poller counters)
+  const _refreshStats = async () => {
+    // Local counters (placed/rejected/picked, running flag)
+    const local = forexOrderPoller.getStats();
+    const setTxt = (id, val) => { const el = q(id); if (el) el.textContent = String(val); };
+    setTxt('fxStatPicked', local.picked || 0);
+    setTxt('fxStatPlaced', local.placed || 0);
+    setTxt('fxStatRejected', local.rejected || 0);
+    // Backend pending count
+    try {
+      const qs = await apiGet('/forex/orders/queue-stats');
+      if (qs && typeof qs.pending === 'number') setTxt('fxStatPending', qs.pending);
+    } catch (_e) { /* backend offline — leave "–" */ }
+  };
+  if (_fxRefreshTimer) clearInterval(_fxRefreshTimer);
+  _fxRefreshTimer = setInterval(_refreshStats, 3000);
+  _refreshStats();
+
+  // ---- Teach grid
+  grid.innerHTML = '';
+  _MT5_CONTROLS.forEach((c) => {
+    const cell = document.createElement('div');
+    cell.style.cssText = 'display:flex;flex-direction:column;gap:3px;padding:6px;background:#0f172a;border:1px solid #1e293b;border-radius:4px;';
+    cell.innerHTML = `
+      <div style="font-size:10px;color:#cbd5e1;font-weight:600;">${c.label}</div>
+      <div id="${P}fxTeachSel_${c.key}" data-testid="fx-teach-sel-${c.key}" style="font-size:9px;color:#64748b;word-break:break-all;min-height:12px;">not taught</div>
+      <div style="display:flex;gap:4px;">
+        <button id="${P}fxTeachBtn_${c.key}" data-testid="fx-teach-btn-${c.key}" class="${P}btn" style="flex:1;font-size:10px;padding:4px 6px;">Teach</button>
+        <button id="${P}fxClearBtn_${c.key}" data-testid="fx-clear-btn-${c.key}" class="${P}btn" style="width:28px;font-size:10px;padding:4px 4px;background:#7c2d12;">✕</button>
+      </div>
+    `;
+    grid.appendChild(cell);
+  });
+
+  const _renderTaught = () => {
+    _MT5_CONTROLS.forEach((c) => {
+      const sel = q(`fxTeachSel_${c.key}`);
+      if (!sel) return;
+      let val = null;
+      try {
+        val = (typeof GM_getValue === 'function')
+          ? GM_getValue('ai_elite_mt5_' + c.key, null)
+          : (window.localStorage.getItem('ai_elite_mt5_' + c.key) || null);
+      } catch (_e) { /* ignore */ }
+      sel.textContent = val ? val : 'not taught';
+      sel.style.color = val ? '#22d3ee' : '#64748b';
+    });
+  };
+  _renderTaught();
+
+  _MT5_CONTROLS.forEach((c) => {
+    const tBtn = q(`fxTeachBtn_${c.key}`);
+    const cBtn = q(`fxClearBtn_${c.key}`);
+    if (tBtn) {
+      tBtn.addEventListener('click', () => {
+        tBtn.textContent = '… click MT5 control';
+        tBtn.disabled = true;
+        mt5Adapter.startTeach(c.key, (res) => {
+          tBtn.disabled = false;
+          tBtn.textContent = res && res.success ? '✓ saved' : 'Teach';
+          _renderTaught();
+          setTimeout(() => { tBtn.textContent = 'Teach'; }, 1500);
+        });
+      });
+    }
+    if (cBtn) {
+      cBtn.addEventListener('click', () => {
+        mt5Adapter.clearTaught(c.key);
+        _renderTaught();
+      });
+    }
+  });
+
+  // ---- Diagnose
+  if (diagBtn) {
+    diagBtn.addEventListener('click', () => {
+      const out = mt5Adapter.diagnose();
+      if (diagOut) {
+        diagOut.style.display = 'block';
+        diagOut.textContent = JSON.stringify(out, null, 2);
+      }
+    });
+  }
+
+  // ---- Clear all
+  if (clearAllBtn) {
+    clearAllBtn.addEventListener('click', () => {
+      if (!window.confirm('Clear all taught MT5 selectors?')) return;
+      _MT5_CONTROLS.forEach((c) => mt5Adapter.clearTaught(c.key));
+      _renderTaught();
+    });
+  }
 }
 
 function startWatchdog() {
@@ -2136,6 +2321,11 @@ export function initPanelEvents(callbacks = {}) {
   }
   // Keep the UI in sync if another source (DevTools helper) flips the flag
   try { stealthMode.onChange(() => _renderStealth()); } catch (_e) { /* ignore */ }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // Iter 147 — Forex tab wiring (poller toggle + MT5 point-to-teach UI)
+  // ═══════════════════════════════════════════════════════════════════
+  _initForexTab();
 
   // Iter 96 — Expand-to-fullscreen (mobile/tap-to-focus)
   const expandBtn = q('expandbtn');

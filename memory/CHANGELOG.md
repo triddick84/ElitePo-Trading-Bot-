@@ -56,3 +56,36 @@
 - **MT5 iframe cross-origin**: If PO renders MT5 in a cross-origin iframe, `mt5Adapter._mt5Doc()` returns `kind='cross-origin'` and rejects the order. Real-world fix requires PO to same-origin the iframe (out of our control) OR user needs to open MT5 as a top-level tab.
 - **TQNet weights are randomly initialised** (numpy). θ_TQ is zero-init as recommended by the paper, so the layer starts as identity+noise → never hurts, may not help until trained. Adding a training loop that fits θ_TQ + projection matrices from historical candles is the next high-value iteration.
 - **No teach-mode UI in panel yet** for MT5 selectors — power users can call `window.__aiEliteMt5Teach('buy_btn')` from DevTools; a UI ships in v8.153 once selectors are proven on live PO layouts.
+
+
+## v8.153.0 — Feb 12, 2026 — Iter 147: TQNet Training + MT5 Teach UI
+### Iter 147a — TQNet offline training
+- New `backend/ml/tqnet_trainer.py` — fits `TQNetPredictor` weights (θ_TQ + all attention matrices + shallow MLP) via **scipy L-BFGS-B** with numerical gradients. Fully vectorised numpy forward pass across all sliding windows so the whole optimiser fits in a background thread.
+- Persistence: weights saved to `/app/backend/data/tqnet_weights/<SYMBOL>_<TF>.npz` + `.meta.json` sidecar with training report.
+- `tqnet_service._shared_predictor` now auto-loads trained weights on first call; a new `invalidate_predictor_cache(asset, tf)` API lets a fresh training run take effect on the next signal without a process restart.
+- New endpoints in `routes/tqnet_routes.py`:
+  - `POST /api/tqnet/train` — kicks off a background training job from a `closes` array
+  - `POST /api/tqnet/train-symbol` — pulls candles from Mongo for `symbol`/`timeframe` and trains
+  - `GET /api/tqnet/train/status/{job_id}` — poll job progress
+  - `GET /api/tqnet/weights` — list trained weight files with their training reports
+  - `DELETE /api/tqnet/weights/{symbol}/{timeframe}` — drop a weight file and evict its cache entry
+- Training results on synthetic sinusoidal drift: loss 1.22 → 0.07 (17× reduction), direction accuracy 47% → 57% on default config (215 params, 100 windows, 20 L-BFGS iters, ~14 s inline).
+- 13 new pytests in `test_iter147_tqnet_trainer.py`.
+
+### Iter 147b — MT5 Teach UI in TM script
+- New "**Forex**" tab in the TM panel (`src/ui/panel.js`) with three sections:
+  1. **Forex Order Poller** — Start/Stop button + live stats grid (Pending / Picked / Placed / Rejected), auto-refreshing every 3 s via `/api/forex/orders/queue-stats`.
+  2. **MT5 Point-to-Teach Selectors** — 2×3 grid of Teach buttons for Symbol / Lot / SL / TP / BUY / SELL. Each cell displays the currently taught CSS selector (or "not taught"), a Teach button that starts the click-capture within 30 s, and a ✕ clear button. Bottom: Diagnose (dumps `mt5Adapter.diagnose()` as pretty JSON) + Clear All.
+  3. **Quick Reference** — inline help + console command list.
+- Wired via new `_initForexTab()` in `panel.js`; auto re-initialises on panel re-injection.
+- Version bumped `v8.152.0 → v8.153.0`; served bundle at BOTH `pocket-option-auto-trader.user.js` and `pocket-option-auto-trader-modular.user.js` (build:deploy script fixed to copy to both).
+
+### Validation
+- **123/123 pytests pass** across iter137→147.
+- Live E2E: `POST /api/tqnet/train` completes a full training cycle in <20 s via BackgroundTasks; `GET /api/tqnet/weights` reflects the persisted file.
+- Bundle sanity: both `.user.js` files at 493 KB, `@version 8.153.0`, contain `fx-poll-toggle` + `fx-teach-btn` test IDs.
+
+### Known limitations & follow-ups
+- **Training takes ~14 s for 100 windows / 20 epochs**. Fine as a background job but not sub-second. If we hit scale we should port to analytic backprop (numpy) or add a torch fallback.
+- **Direction accuracy uplift on real market candles will likely be more modest** than on synthetic sinusoids — the acid test is running `POST /api/tqnet/train-symbol` on a live pair after 500+ candles have been ingested.
+- Panel Forex tab needs no CSS additions — it inherits the existing `.epb-btn` / `.epb-section` styles.

@@ -5,7 +5,7 @@
   "main": "src/index.js",
   "scripts": {
     "build": "webpack --mode production",
-    "build:deploy": "webpack --mode production && cp dist/pocket-option-auto-trader.user.js ../frontend/public/pocket-option-auto-trader-modular.user.js",
+    "build:deploy": "webpack --mode production && cp dist/pocket-option-auto-trader.user.js ../frontend/public/pocket-option-auto-trader.user.js && cp dist/pocket-option-auto-trader.user.js ../frontend/public/pocket-option-auto-trader-modular.user.js",
     "dev": "webpack --mode development --watch",
     "lint": "eslint src/"
   },
