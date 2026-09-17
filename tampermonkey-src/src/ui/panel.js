@@ -13,6 +13,7 @@ import { log, setLogContainer } from '../core/logger.js';
 import { stealthMode } from '../core/stealthMode.js';
 import { forexOrderPoller } from '../trading/forexOrderPoller.js';
 import { mt5Adapter } from '../trading/mt5Adapter.js';
+import { tradeResultWatcher } from '../trading/tradeResultWatcher.js';
 import { get as apiGet } from '../utils/api.js';
 
 let panelEl = null;
@@ -2040,6 +2041,20 @@ export function createPanel() {
         <!-- ═════════════════ TAB: FOREX (Iter 147) ═════════════════ -->
         <div class="${P}tabpanel" data-tab-panel="forex" data-testid="tab-panel-forex">
 
+          <!-- Iter 148 — Universal Win/Loss teach (applies to binary options too) -->
+          <div class="${P}section" data-testid="fx-result-teach-section" title="Point-to-teach the WIN and LOSS row markers from your deal history. Applies to BOTH binary options and Forex trades — fixes win/loss detection permanently for your PO layout.">
+            <div class="${P}sectionttl">🎓 Win/Loss Detection Teach (Universal)</div>
+            <div style="font-size:10px;color:#94a3b8;margin-bottom:8px;line-height:1.4;">
+              If wins/losses aren't being detected, click a <b>resolved WIN row</b> and a <b>resolved LOSS row</b> in your PO deal history to teach the bot exactly how your layout marks them. Also fixes A-INV (which depends on win/loss detection).
+            </div>
+            <div id="${P}resultTeachGrid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;"></div>
+            <div style="display:flex;gap:6px;margin-top:8px;">
+              <button id="${P}resultDiagBtn" data-testid="result-diag-btn" class="${P}btn" style="flex:1;font-size:11px;">◉ DIAG</button>
+              <button id="${P}resultClearAllBtn" data-testid="result-clear-all-btn" class="${P}btn" style="flex:1;font-size:11px;background:#7c2d12;">✕ CLEAR ALL</button>
+            </div>
+            <pre id="${P}resultDiagOut" data-testid="result-diag-output" style="margin-top:8px;padding:6px;background:#0b1220;border:1px solid #1e293b;border-radius:4px;font-size:9px;color:#94a3b8;max-height:140px;overflow:auto;white-space:pre-wrap;display:none;"></pre>
+          </div>
+
           <div class="${P}section" data-testid="fx-poller-section" title="Toggle the Tampermonkey → MT5 order poller. When ON, the script long-polls the backend for queued Forex orders and executes them in the PO web-MT5 UI.">
             <div class="${P}sectionttl">Forex Order Poller</div>
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
@@ -2120,7 +2135,97 @@ const _MT5_CONTROLS = [
   { key: 'sell_btn',      label: 'SELL button' },
 ];
 
+const _RESULT_TEACH_CONTROLS = [
+  { key: 'win',       label: '✓ WIN row',   colour: '#22c55e' },
+  { key: 'loss',      label: '✗ LOSS row',  colour: '#ef4444' },
+  { key: 'container', label: '📦 Container', colour: '#22d3ee' },
+];
+
 let _fxRefreshTimer = null;
+
+// Iter 148 — Universal Win/Loss teach section (top of Forex tab). Applies
+// to binary options too, since the tradeResultWatcher parses both.
+function _initResultTeachSection() {
+  const grid = q('resultTeachGrid');
+  const diagBtn = q('resultDiagBtn');
+  const clearAllBtn = q('resultClearAllBtn');
+  const diagOut = q('resultDiagOut');
+  if (!grid) return;
+
+  const _render = () => {
+    const taught = tradeResultWatcher.getTaught();
+    _RESULT_TEACH_CONTROLS.forEach((c) => {
+      const cell = document.getElementById(`${P}resultTeachCell_${c.key}`);
+      if (!cell) return;
+      const sel = document.getElementById(`${P}resultTeachSel_${c.key}`);
+      if (sel) {
+        const val = taught[c.key];
+        sel.textContent = val ? val : 'not taught';
+        sel.style.color = val ? c.colour : '#64748b';
+      }
+    });
+  };
+
+  grid.innerHTML = '';
+  _RESULT_TEACH_CONTROLS.forEach((c) => {
+    const cell = document.createElement('div');
+    cell.id = `${P}resultTeachCell_${c.key}`;
+    cell.style.cssText = 'display:flex;flex-direction:column;gap:3px;padding:6px;background:#0f172a;border:1px solid #1e293b;border-radius:4px;';
+    cell.innerHTML = `
+      <div style="font-size:10px;color:${c.colour};font-weight:600;">${c.label}</div>
+      <div id="${P}resultTeachSel_${c.key}" data-testid="result-teach-sel-${c.key}" style="font-size:9px;color:#64748b;word-break:break-all;min-height:12px;">not taught</div>
+      <div style="display:flex;gap:4px;">
+        <button id="${P}resultTeachBtn_${c.key}" data-testid="result-teach-btn-${c.key}" class="${P}btn" style="flex:1;font-size:10px;padding:4px 6px;">Teach</button>
+        <button id="${P}resultClearBtn_${c.key}" data-testid="result-clear-btn-${c.key}" class="${P}btn" style="width:28px;font-size:10px;padding:4px 4px;background:#7c2d12;">✕</button>
+      </div>
+    `;
+    grid.appendChild(cell);
+  });
+  _render();
+
+  _RESULT_TEACH_CONTROLS.forEach((c) => {
+    const tBtn = q(`resultTeachBtn_${c.key}`);
+    const cBtn = q(`resultClearBtn_${c.key}`);
+    if (tBtn) {
+      tBtn.addEventListener('click', () => {
+        tBtn.textContent = `… click ${c.key}`;
+        tBtn.disabled = true;
+        tradeResultWatcher.startTeach(c.key, (res) => {
+          tBtn.disabled = false;
+          tBtn.textContent = res && res.success ? '✓ saved' : 'Teach';
+          _render();
+          setTimeout(() => { tBtn.textContent = 'Teach'; }, 1500);
+        });
+      });
+    }
+    if (cBtn) {
+      cBtn.addEventListener('click', () => {
+        tradeResultWatcher.clearTaught(c.key);
+        _render();
+      });
+    }
+  });
+
+  if (diagBtn) {
+    diagBtn.addEventListener('click', () => {
+      let diag;
+      try { diag = tradeResultWatcher._diag(); }
+      catch (e) { diag = { error: e.message }; }
+      if (diagOut) {
+        diagOut.style.display = 'block';
+        diagOut.textContent = JSON.stringify(diag, null, 2);
+      }
+    });
+  }
+
+  if (clearAllBtn) {
+    clearAllBtn.addEventListener('click', () => {
+      if (!window.confirm('Clear all taught win/loss markers?')) return;
+      tradeResultWatcher.clearTaught();
+      _render();
+    });
+  }
+}
 
 function _initForexTab() {
   const pollBtn = q('fxPollBtn');
@@ -2130,6 +2235,9 @@ function _initForexTab() {
   const clearAllBtn = q('fxClearAllBtn');
   const diagOut = q('fxDiagOut');
   if (!pollBtn || !grid) return;   // tab not rendered (e.g. mid-reinject)
+
+  // ---- Iter 148 — Universal WIN/LOSS teach (top of the tab)
+  _initResultTeachSection();
 
   // ---- Poller toggle
   const _renderPoller = () => {

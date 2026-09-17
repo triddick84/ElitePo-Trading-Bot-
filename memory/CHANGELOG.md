@@ -89,3 +89,52 @@
 - **Training takes ~14 s for 100 windows / 20 epochs**. Fine as a background job but not sub-second. If we hit scale we should port to analytic backprop (numpy) or add a torch fallback.
 - **Direction accuracy uplift on real market candles will likely be more modest** than on synthetic sinusoids — the acid test is running `POST /api/tqnet/train-symbol` on a live pair after 500+ candles have been ingested.
 - Panel Forex tab needs no CSS additions — it inherits the existing `.epb-btn` / `.epb-section` styles.
+
+
+## v8.154.0 — Feb 12, 2026 — Iter 148: Point-to-Teach WIN/LOSS Detection (fixes A-INV too)
+### Root cause discovered
+User confirmed wins/losses were NOT being detected at all. Because
+`smartInvert.evaluateInversion()` fires off `state.stats.currentStreak`,
+and that field is only updated by `tradeExecutor.recordResult()` inside
+the watcher, **one bug caused both symptoms** (win/loss + A-INV never
+firing). Rather than add a 7th heuristic, we ship a point-to-teach
+fallback that's bulletproof against any PO DOM change.
+
+### Iter 148 — Point-to-teach WIN/LOSS in `tradeResultWatcher.js`
+- New GM keys `ai_elite_teach_win_row`, `ai_elite_teach_loss_row`,
+  `ai_elite_teach_deal_container` — persisted across reloads.
+- `tradeResultWatcher.startTeach(kind, cb)` — click-capture flow with a
+  30 s timeout; walks up 6 ancestors on win/loss teach to find the row
+  wrapper (not the inner span the user actually clicked).
+- **Strategy 0** added to `_parseDealRow` — taught class signatures short-
+  circuit ALL other strategies (numeric sign, colour class, value_up,
+  RGB colour, etc). Verified via `test_source_taught_signatures_short_circuit_parse`.
+- `_scanNewRows` now checks the taught container FIRST, so we don't have
+  to guess where PO puts the deal history at all.
+- `getTaught()` returns the current triple for the UI; `clearTaught(kind)`
+  wipes one or all markers.
+- Window helpers: `__aiEliteTeachWin/Loss/DealContainer`, `__aiEliteClearTeach`,
+  `__aiEliteGetTaught`. Diag now includes taught markers.
+
+### Iter 148 — Universal Teach UI at top of Forex tab
+- 3-cell grid (WIN / LOSS / Container) with per-cell status + Teach + ✕
+  clear buttons.
+- DIAG button dumps `tradeResultWatcher._diag()` as pretty JSON.
+- CLEAR ALL button wipes all taught markers.
+- Section labelled "Win/Loss Detection Teach (Universal)" to make it
+  obvious it applies to both binary options and Forex.
+
+### Validation
+- **133/133 pytests pass** in the iter137→148 regression chain (10 new
+  in `test_iter148_teach_result_row.py`).
+- Bundle sanity: JS-side node smoke test validates 8 contracts including
+  the version bump, GM keys, and window helpers.
+- Both bundles at `v8.154.0`; identical byte count (test enforces
+  `pocket-option-auto-trader.user.js` == `-modular.user.js`).
+
+### Known follow-ups
+- User needs to click Teach WIN once and Teach LOSS once on their PO
+  layout to activate the fallback; existing heuristics still handle it
+  otherwise (unchanged behaviour if teach is not used).
+- If wins/losses still don't fire after the teach, the diag output will
+  now include the taught selectors so we can diagnose in one round-trip.

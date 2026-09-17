@@ -29,6 +29,67 @@ const SAFETY_BUFFER_MS = 4_000;
 const ABANDON_AFTER_TIMEOUT = false;
 const MAX_QUEUE = 16;              // don't leak if PO stalls a bunch of trades
 
+// Iter 148 — Point-to-teach fallback so we're never blind to PO DOM changes.
+// The user clicks one resolved WIN row and one resolved LOSS row; we
+// capture (a) the row-level CSS class signature and (b) the parent
+// container's selector. The watcher then checks those taught signatures
+// FIRST, before every heuristic, guaranteeing correct outcome parsing on
+// any PO layout the user has actually verified.
+const TEACH_GM_KEYS = {
+  win: 'ai_elite_teach_win_row',
+  loss: 'ai_elite_teach_loss_row',
+  container: 'ai_elite_teach_deal_container',
+};
+
+function _gmGet(key) {
+  try {
+    if (typeof GM_getValue === 'function') return GM_getValue(key, null);
+    return window.localStorage.getItem(key);
+  } catch (_e) { return null; }
+}
+function _gmSet(key, val) {
+  try {
+    if (typeof GM_setValue === 'function') GM_setValue(key, val);
+    else window.localStorage.setItem(key, val);
+  } catch (_e) { /* ignore */ }
+}
+function _gmDel(key) {
+  try {
+    if (typeof GM_deleteValue === 'function') GM_deleteValue(key);
+    else window.localStorage.removeItem(key);
+  } catch (_e) { /* ignore */ }
+}
+
+/** Extract a stable CSS-class signature from an element — 2-3 distinctive
+ *  classes joined with dots. Filters out utility-noise classes (`ng-*`,
+ *  `_ngcontent-*`, hashed CSS-in-JS blobs, etc). */
+function _classSignature(el) {
+  if (!el || !el.className) return '';
+  const classes = String(el.className).split(/\s+/).filter((c) => {
+    if (!c) return false;
+    if (c.startsWith('_ng') || c.startsWith('ng-')) return false;
+    if (/^[a-z0-9]{8,}$/.test(c)) return false;   // hashed CSS-in-JS
+    return true;
+  });
+  return classes.slice(0, 3).join('.');
+}
+
+/** Cheap CSS-path builder for a taught element — walks up 4 ancestors
+ *  keeping any tag with an id or a class signature. */
+function _cssPath(el, maxDepth = 4) {
+  const parts = [];
+  let cur = el;
+  for (let i = 0; i < maxDepth && cur && cur.nodeType === 1; i++) {
+    let seg = cur.tagName.toLowerCase();
+    if (cur.id) { seg += `#${cur.id}`; parts.unshift(seg); break; }
+    const sig = _classSignature(cur);
+    if (sig) seg += '.' + sig;
+    parts.unshift(seg);
+    cur = cur.parentElement;
+  }
+  return parts.join(' > ');
+}
+
 const DEAL_ROW_SELECTOR = [
   '.deals-list .deals-item',
   '[class*="closed-deals"] [class*="item"]',
@@ -166,6 +227,38 @@ function _parseDealRow(row) {
 
     // ---- WIN / LOSS — try multiple strategies, in order ----
     let isWin = null;
+
+    // Strategy 0 — Iter 148: taught class signatures win over every
+    // heuristic. If the user has clicked "Teach WIN row" once, we know
+    // the exact classes PO puts on winning rows for their layout.
+    try {
+      const taughtWin = _gmGet(TEACH_GM_KEYS.win);
+      const taughtLoss = _gmGet(TEACH_GM_KEYS.loss);
+      const rowCls = String(row.className || '').split(/\s+/);
+      if (taughtWin) {
+        const tokens = taughtWin.split('.').filter(Boolean);
+        // Check the row's class list AND its descendants — some PO layouts
+        // put the win/loss marker on a nested span not the row itself.
+        const rowHas = tokens.every((t) => rowCls.includes(t));
+        let descendantHas = false;
+        if (!rowHas) {
+          try { descendantHas = !!row.querySelector('.' + tokens.join('.')); }
+          catch (_e) { /* invalid selector */ }
+        }
+        if (rowHas || descendantHas) isWin = true;
+      }
+      if (isWin === null && taughtLoss) {
+        const tokens = taughtLoss.split('.').filter(Boolean);
+        const rowHas = tokens.every((t) => rowCls.includes(t));
+        let descendantHas = false;
+        if (!rowHas) {
+          try { descendantHas = !!row.querySelector('.' + tokens.join('.')); }
+          catch (_e) { /* invalid selector */ }
+        }
+        if (rowHas || descendantHas) isWin = false;
+      }
+    } catch (_e) { /* never let taught-parse throw */ }
+
     // Strategy A: explicit +/- sign on a payout number
     const signed = nums.filter((x) => x.sign);
     if (signed.length) {
@@ -254,6 +347,12 @@ class TradeResultWatcher {
     try {
       if (typeof window !== 'undefined') {
         window.__aiEliteDealDiag = () => this._diag();
+        // Iter 148 — teach helpers on window for power users
+        window.__aiEliteTeachWin = (cb) => this.startTeach('win', cb);
+        window.__aiEliteTeachLoss = (cb) => this.startTeach('loss', cb);
+        window.__aiEliteTeachDealContainer = (cb) => this.startTeach('container', cb);
+        window.__aiEliteClearTeach = (kind) => this.clearTaught(kind);
+        window.__aiEliteGetTaught = () => this.getTaught();
       }
     } catch (_e) { /* ignore */ }
     success('[ResultWatcher] enabled — multi-trade queue with wide-net fallback');
@@ -340,8 +439,26 @@ class TradeResultWatcher {
 
   _scanNewRows() {
     let rows;
-    try { rows = Array.from(document.querySelectorAll(DEAL_ROW_SELECTOR)); }
-    catch (_e) { rows = []; }
+    // Iter 148 — taught deal-container has TOP priority. When the user has
+    // clicked "Teach Container" once, we know exactly which node holds
+    // deal rows on THEIR PO layout — no heuristic scan needed.
+    const taughtContainer = _gmGet(TEACH_GM_KEYS.container);
+    if (taughtContainer) {
+      try {
+        const container = document.querySelector(taughtContainer);
+        if (container) {
+          // Direct children first — the deal-row layer is almost always
+          // a direct child pattern. Fall back to `[class]` descendants
+          // when there are none (accordions, virtualised lists).
+          rows = Array.from(container.children || []);
+          if (!rows.length) rows = Array.from(container.querySelectorAll('[class]'));
+        }
+      } catch (_e) { /* invalid taught selector */ }
+    }
+    if (!rows) {
+      try { rows = Array.from(document.querySelectorAll(DEAL_ROW_SELECTOR)); }
+      catch (_e) { rows = []; }
+    }
     // Iter 144 — CSS selectors returned nothing? Fall back to a full-DOM
     // heuristic sweep. The moment ANY row parses, we log the winning
     // element so a future selector list update targets it precisely.
@@ -469,6 +586,9 @@ class TradeResultWatcher {
       css_matches: cssRows.length,
       widenet_matches: wideRows.length,
       balance_now: _readBalance(),
+      // Iter 148 — surface taught markers so the diag output makes it
+      // obvious whether the user has completed the teach flow.
+      taught: this.getTaught(),
       sample_css: sample(cssRows),
       sample_widenet: sample(wideRows),
     };
@@ -501,6 +621,70 @@ class TradeResultWatcher {
       deadline: a.deadline,
       remaining_ms: Math.max(0, a.deadline - Date.now()),
     }));
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Iter 148 — Point-to-teach fallback for win/loss detection
+  // ─────────────────────────────────────────────────────────────────────
+
+  /** Start a click-capture; next element the user clicks gets stored under
+   *  the appropriate GM key. Kind must be one of 'win' | 'loss' | 'container'.
+   *  `onDone` receives { success, kind, selector, classSig }. */
+  startTeach(kind, onDone) {
+    if (!TEACH_GM_KEYS[kind]) {
+      onDone?.({ success: false, error: `unknown teach kind "${kind}"` });
+      return;
+    }
+    info(`[teach] click a resolved ${kind.toUpperCase()} element in your PO deal history (within 30 s)`);
+    const handler = (ev) => {
+      ev.preventDefault(); ev.stopPropagation();
+      document.removeEventListener('click', handler, true);
+      let el = ev.target;
+      // Walk up to find the enclosing row-ish element for win/loss (not for container)
+      if (kind !== 'container') {
+        let cur = el, hops = 0;
+        while (cur && hops < 6 && cur.tagName !== 'BODY') {
+          const txt = (cur.textContent || '').replace(/\s+/g, ' ');
+          if (txt.length > 8 && txt.length < 400) { el = cur; break; }
+          cur = cur.parentElement; hops++;
+        }
+      }
+      const classSig = _classSignature(el);
+      const path = _cssPath(el);
+      // Store the class signature for win/loss (used in _parseDealRow) and
+      // the full CSS path for the container.
+      const val = kind === 'container' ? path : classSig || path;
+      if (!val) {
+        onDone?.({ success: false, error: 'element has no distinguishing classes' });
+        return;
+      }
+      _gmSet(TEACH_GM_KEYS[kind], val);
+      success(`[teach] saved ${kind} → ${val}`);
+      onDone?.({ success: true, kind, selector: val, classSig, path });
+    };
+    document.addEventListener('click', handler, true);
+    setTimeout(() => document.removeEventListener('click', handler, true), 30_000);
+  }
+
+  /** Wipe one taught marker (or all when kind omitted). */
+  clearTaught(kind) {
+    if (!kind) {
+      Object.values(TEACH_GM_KEYS).forEach(_gmDel);
+      log('[teach] cleared ALL taught markers');
+      return;
+    }
+    if (!TEACH_GM_KEYS[kind]) return;
+    _gmDel(TEACH_GM_KEYS[kind]);
+    log(`[teach] cleared ${kind}`);
+  }
+
+  /** Current taught markers snapshot for the UI. */
+  getTaught() {
+    return {
+      win: _gmGet(TEACH_GM_KEYS.win),
+      loss: _gmGet(TEACH_GM_KEYS.loss),
+      container: _gmGet(TEACH_GM_KEYS.container),
+    };
   }
 }
 

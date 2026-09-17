@@ -13,7 +13,14 @@ SRC_PANEL = Path("/app/tampermonkey-src/src/ui/panel.js")
 def _read(p: Path) -> str:
     if not p.exists():
         pytest.skip(f"file missing: {p}")
-    return p.read_text(encoding="utf-8")
+    return p.read_text()
+
+
+def _semver_ge(a: str, b: str) -> bool:
+    """Compare dotted-int versions — no pre-release handling needed here."""
+    aa = tuple(int(x) for x in a.split("."))
+    bb = tuple(int(x) for x in b.split("."))
+    return aa >= bb
 
 
 # ---------------------------------------------------------------------------
@@ -82,7 +89,7 @@ def test_panel_drag_from_anywhere():
 def test_bundle_version_bumped():
     src = _read(BUNDLE)
     m = re.search(r"//\s*@version\s+(\d+\.\d+\.\d+)", src)
-    assert m and m.group(1) == "8.151.0", f"expected 8.151.0, got {m and m.group(1)}"
+    assert m and _semver_ge(m.group(1), "8.151.0"), f"expected >= 8.151.0, got {m and m.group(1)}"
 
 
 def test_bundle_has_side_resize_testids():

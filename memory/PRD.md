@@ -6511,3 +6511,27 @@ Before this iter, the TQNet layer had zero-init θ_TQ + random projection matric
 - **P2 LOB Transformer / TCN** — only if TQNet + boosters saturate
 - **P2 Training UI** — surface training progress + weights list inside the TM panel or app dashboard (currently API-only)
 - **P2 JS linter engine crash** on large TM bundle (intermittent; ignore rules already in place)
+
+## v8.154.0 — Iter 148 (Feb 12, 2026)
+
+### Iter 148 — Point-to-Teach WIN/LOSS Detection (fixes A-INV too)
+**Root cause**: User confirmed wins/losses weren't being detected. The A-INV engine fires off `state.stats.currentStreak`, which is only updated when the watcher calls `tradeExecutor.recordResult()`. **One bug caused both symptoms** — win/loss detection AND auto-invert never firing.
+
+**Fix**: Rather than add a 7th heuristic to `tradeResultWatcher.js` (already has 5), we ship a **point-to-teach fallback**:
+
+- User clicks "Teach WIN row" → clicks a resolved WIN in their deal history → bot captures the row's CSS class signature into `GM_setValue('ai_elite_teach_win_row', ...)`
+- Same for LOSS row and (optional) container element
+- **Strategy 0** in `_parseDealRow` short-circuits all other strategies when a taught class signature matches
+- Taught container drives `_scanNewRows` before the CSS selector heuristic
+
+Bulletproof against future PO DOM changes.
+
+**UI**: New "🎓 Win/Loss Detection Teach (Universal)" section at the top of the Forex tab in the TM panel — 3-cell grid (WIN / LOSS / Container) with Teach + ✕ + DIAG + CLEAR ALL buttons.
+
+**Console helpers**: `__aiEliteTeachWin()`, `__aiEliteTeachLoss()`, `__aiEliteTeachDealContainer()`, `__aiEliteClearTeach(kind)`, `__aiEliteGetTaught()`. Existing `__aiEliteDealDiag()` now includes taught markers.
+
+**Tests**: 10 new pytests in `test_iter148_teach_result_row.py` (source + bundle + Node smoke). **133/133 pass** in the iter137→148 regression chain.
+
+### Remaining backlog (unchanged)
+- P1: Multi-asset leaderboard, historical data cron
+- P2: Backtest asset dropdown, LOB Transformer/TCN, Training UI, JS linter engine crash

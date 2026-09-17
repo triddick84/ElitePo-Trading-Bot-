@@ -47,10 +47,16 @@ def test_source_scan_records_last_scan():
     assert "resolved_this_tick" in s
 
 
+def _semver_ge(a: str, b: str) -> bool:
+    aa = tuple(int(x) for x in a.split("."))
+    bb = tuple(int(x) for x in b.split("."))
+    return aa >= bb
+
+
 def test_bundle_version_bumped():
     s = _r(BUNDLE)
     m = re.search(r"//\s*@version\s+(\d+\.\d+\.\d+)", s)
-    assert m and m.group(1) == "8.151.0"
+    assert m and _semver_ge(m.group(1), "8.151.0")
 
 
 def test_bundle_has_diag_and_delta_markers():
