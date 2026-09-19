@@ -94,29 +94,51 @@ def _candles_to_df(candles: List[Candle]) -> pd.DataFrame:
 
 async def _load_candles_from_db(asset: str, timeframe: str, limit: int) -> pd.DataFrame:
     """Best-effort candle loader — 5s uses `otc_candles_5s`, everything else
-    falls back to `historical_candles`."""
+    falls back to `historical_candles`.
+
+    Iter 149: if the target rows are stale or missing, we call the market
+    data ingester's `ensure_fresh` to auto-heal before returning. This
+    means the confluence gate / TQNet / auto-scan see live data even when
+    the DB was empty at boot.
+    """
     import server  # late import to avoid circular init
     db = getattr(server, "db", None)
     if db is None:
         return pd.DataFrame()
-    if timeframe == "5s":
-        cur = db.otc_candles_5s.find({"symbol": asset}).sort("timestamp", -1).limit(limit)
-    else:
-        cur = db.historical_candles.find(
-            {"asset": asset, "timeframe": timeframe}
-        ).sort("timestamp", -1).limit(limit)
-    rows = await cur.to_list(length=limit)
-    if not rows:
-        return pd.DataFrame()
-    rows = list(reversed(rows))  # oldest first
-    df = pd.DataFrame(rows)
-    # normalise column names
-    for col in ("open", "high", "low", "close"):
-        if col not in df.columns:
+
+    async def _query() -> pd.DataFrame:
+        if timeframe == "5s":
+            cur = db.otc_candles_5s.find({"symbol": asset}).sort("timestamp", -1).limit(limit)
+        else:
+            cur = db.historical_candles.find(
+                {"asset": asset, "timeframe": timeframe}
+            ).sort("timestamp", -1).limit(limit)
+        rows = await cur.to_list(length=limit)
+        if not rows:
             return pd.DataFrame()
-    if "volume" not in df.columns:
-        df["volume"] = 0.0
-    return df[["open", "high", "low", "close", "volume"]].astype(float)
+        rows = list(reversed(rows))  # oldest first
+        df = pd.DataFrame(rows)
+        for col in ("open", "high", "low", "close"):
+            if col not in df.columns:
+                return pd.DataFrame()
+        if "volume" not in df.columns:
+            df["volume"] = 0.0
+        return df[["open", "high", "low", "close", "volume"]].astype(float)
+
+    df = await _query()
+
+    # Iter 149 — auto-heal for non-5s timeframes when data is missing or too small
+    if timeframe != "5s" and (df.empty or len(df) < 30):
+        try:
+            from market_data_ingester import ingester
+            if ingester.db is None:
+                ingester.bind_db(db)
+            await ingester.ensure_fresh(asset, timeframe, limit=max(limit, 200))
+            df = await _query()
+        except Exception:
+            pass  # never let auto-heal break the caller
+
+    return df
 
 
 # ---------------------------------------------------------------------------

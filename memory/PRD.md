@@ -6535,3 +6535,53 @@ Bulletproof against future PO DOM changes.
 ### Remaining backlog (unchanged)
 - P1: Multi-asset leaderboard, historical data cron
 - P2: Backtest asset dropdown, LOB Transformer/TCN, Training UI, JS linter engine crash
+
+## v8.155.0 backend — Iter 149 (Feb 12, 2026)
+
+### Iter 149 — Market Data Pipeline Overhaul + 3 Silent Bugs Killed
+**User asked to audit: "Make sure all AI models are receiving real-time market data" + "Run through complete generation of a trade".**
+
+**Audit revealed 3 silent bugs poisoning every signal for months:**
+
+1. **RF Audit was multiplying `ml:tqnet` (and any ml:* source) by 0.0** because a stale `rf_audit` row from Sept 11 flagged EURUSD_OTC as `weight=0.0` due to a yfinance data availability issue. FIX: `_rf_audit_multiplier` now scopes to `ml:rf` only (its original intended target).
+
+2. **Broken unique index** — `historical_candles.symbol_1_timeframe_1_timestamp_-1` with 2,627 legacy `symbol=null` rows blocked every ingester upsert with `DuplicateKeyError`. FIX: dropped old index + wiped null rows; replaced with `asset_1_timeframe_1_timestamp_-1`.
+
+3. **`_load_candles_from_db` returned empty on cold cache** — no provider was being called on a schedule to keep 1m/5m/15m data warm. All ML/confluence/TQNet ran on empty dataframes.
+
+**Iter 149 shipped:**
+- `backend/market_data_ingester.py` — Twelvedata primary (forex + OTC), Oanda for majors, yfinance backup. Per-asset provider chain, coalescing lock, background refresh loop rate-limited to Twelvedata's 8/min free tier.
+- Auto-heal in `_load_candles_from_db` calls `ingester.ensure_fresh` when data is missing/stale — every downstream consumer (confluence, TQNet, auto-scan, Forex bridge) benefits transparently.
+- Cache poisoning guard: freshness cache tracks `db_rows`; refuses cache-hit when persist failed silently.
+- New routes: `GET /api/market-data/status|providers/health`, `POST /api/market-data/ensure-fresh|backfill`, `GET /api/signals/trace` (full pipeline audit tool).
+
+**E2E validation**: USDJPY_OTC 1m now fires a real PUT signal (score=0.89, 2 sources agreeing) with 200 rows of fresh candles. `historical_candles` now has 2,302 rows across 5 assets × 3 TFs (was 2 assets × 1 TF).
+
+### Tests
+146/146 across iter137→149 (13 new in `test_iter149_market_data_pipeline.py`).
+
+### Remaining backlog
+- P1: Multi-asset leaderboard, TQNet auto-retrain scheduler, panel toggle for Forex poller
+- P2: Backtest asset dropdown, LOB Transformer, JS linter engine crash on bundle
+
+## v8.155.0 — Iter 150 (Feb 12, 2026) — User Fix Pack
+
+User reported 5 items. All 5 shipped in one iter:
+
+1. **TM chart-type selector for signal generation** — Manual Chart Type dropdown now persists selection to `GM_setValue('manualChartType')`; `fetchSignal()` attaches `?chart_type=X` to every `/api/signals/latest` request so backend generates signals for the chart the user is actually viewing.
+
+2. **Telegram bot invert toggle** — `TelegramBotService.invert_enabled` flips CALL↔PUT before formatting the outgoing message. Routes: `GET/POST /api/telegram/invert` and `POST /api/telegram/invert/toggle`. Message shows `↺ INVERTED` marker when flipped.
+
+3. **AI Models "same output every time"** — root cause: `/api/ml-training/run-optimization` is a deterministic aggregation of `backtest_results`. Added `GET /api/ml-training/optimization-data-version` so the UI can surface *why* recommendations aren't changing (data hasn't changed → run new backtests).
+
+4. **ML Lab retrain hang fix** — Phase 2 (`training_maximized_ml_v3`) was stuck forever due to `asyncio.to_thread(lambda: asyncio.run(...))` deadlock. Rewrote all 4 phases (maximized_ml/improved_ml/lstm_gru/ppo_rl) to await coroutines directly, wrapped each in `run_phase_with_timeout` (120s ML, 180s LSTM/PPO). Live E2E: Phase 2 now completes in ~107s (was ∞).
+
+5. **Risk Guard → TM bridge** — new backend `GET /api/riskguard/tampermonkey/config` returns per-trade amount + confidence tiers. New TM `trading/riskGuardBridge.js` fires on master-toggle → ON; pushes settings into `tradeExecutor.setBaseAmount()` + `state._stakeTiersConfig`. Same Risk Guard rules the user configured in the web app now apply to trades placed by the TM script — no manual re-config.
+
+### Tests
+156/156 across iter137→150 (10 new in `test_iter150_fixpack.py`).
+
+### Remaining backlog
+- P1 Multi-asset leaderboard
+- P1 TQNet auto-retrain scheduler on the now-flowing historical_candles
+- P2 Backtest asset dropdown, LOB Transformer, JS linter engine crash

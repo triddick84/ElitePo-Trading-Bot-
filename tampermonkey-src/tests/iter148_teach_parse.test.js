@@ -71,7 +71,7 @@ const bundle = fs.readFileSync(bundlePath, 'utf8');
 
 // Sanity checks on the bundle itself
 const checks = [
-  { name: 'version 8.154.0 present',          re: /8\.154\.0/ },
+  { name: 'version >= 8.154.0 present',        re: /8\.15[4-9]\.\d+|8\.[2-9]\d\.\d+|8\.1[6-9]\d\.\d+/ },
   { name: 'startTeach method present',        re: /startTeach\s*\(/ },
   { name: 'TEACH_GM_KEYS win key present',    re: /ai_elite_teach_win_row/ },
   { name: 'TEACH_GM_KEYS loss key present',   re: /ai_elite_teach_loss_row/ },

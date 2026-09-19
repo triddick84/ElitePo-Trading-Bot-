@@ -1645,6 +1645,9 @@ export function createPanel() {
             <div class="${P}stripcell" id="${P}strip51s" title="Seconds Number Strategy toggle — fires at a fixed second of every 1m candle"><span class="${P}stripled"></span><span>SNS</span></div>
             <div class="${P}stripcell" id="${P}stripcycle"><span class="${P}stripled"></span><span>CYCLE</span></div>
           </div>
+          <div id="${P}detectHealth" data-testid="detect-health" title="Trade outcome detection health. Turns red when trades time out without a WIN/LOSS being recorded — click to open the teach flow." style="display:none;margin:4px 0;padding:6px 10px;background:#450a0a;border:1px solid #7f1d1d;border-radius:4px;color:#fca5a5;font-size:10px;line-height:1.4;cursor:pointer;">
+            <b>⚠️ Win/Loss detection unhealthy</b> — <span id="${P}detectHealthMsg">click to teach the WIN/LOSS row markers</span>
+          </div>
           <div class="${P}timerow" id="${P}timerow" data-testid="live-candle-timer" title="Live PO candle countdown and Seconds Number Strategy trigger status. Works on any chart timeframe.">
             <div style="display:flex;align-items:center;gap:8px;">
               <span style="font-size:${mobile ? 9 : 10}px;color:#64748b;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;">LIVE</span>
@@ -2070,16 +2073,20 @@ export function createPanel() {
           </div>
 
           <div class="${P}section" data-testid="fx-teach-section" title="Point-to-teach MT5 controls. Click a Teach button then click the matching element inside PO's web-MT5 iframe — the CSS selector is saved locally and used for every future order.">
-            <div class="${P}sectionttl">MT5 Point-to-Teach Selectors</div>
+            <div class="${P}sectionttl">MT5 Point-to-Teach Selectors <span id="${P}fxTeachProgress" data-testid="fx-teach-progress" style="font-size:10px;color:#22d3ee;font-weight:600;margin-left:6px;">0/6 taught</span></div>
+            <div id="${P}fxIframeWarn" data-testid="fx-iframe-warn" style="display:none;margin-bottom:8px;padding:6px 8px;background:#450a0a;border:1px solid #7f1d1d;border-radius:4px;color:#fca5a5;font-size:10px;line-height:1.4;">
+              ⚠️ MT5 iframe is <b>cross-origin</b> — the browser is blocking DOM injection. Open MT5 as a top-level tab (not embedded) to use point-to-teach, or run PO in the same origin as MT5.
+            </div>
             <div style="font-size:10px;color:#94a3b8;margin-bottom:8px;">
-              Click <b>Teach</b>, then within 30 s click the corresponding MT5 control (input field or button). The CSS selector is saved to GM storage.
+              Click <b>Teach</b>, then within 30 s click the corresponding MT5 control (input field or button). The CSS selector is saved to GM storage. Use <b>DRY RUN</b> to smoke-test lot/SL/TP fills without placing a real order.
             </div>
             <div id="${P}fxTeachGrid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;"></div>
-            <div style="display:flex;gap:6px;margin-top:8px;">
-              <button id="${P}fxDiagBtn" data-testid="fx-diagnose-btn" class="${P}btn" style="flex:1;font-size:11px;">◉ DIAGNOSE</button>
-              <button id="${P}fxClearAllBtn" data-testid="fx-clear-all-btn" class="${P}btn" style="flex:1;font-size:11px;background:#7c2d12;">✕ CLEAR ALL</button>
+            <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+              <button id="${P}fxDryRunBtn" data-testid="fx-dryrun-btn" class="${P}btn" style="flex:1;min-width:120px;font-size:11px;background:#1e3a8a;">🧪 DRY RUN</button>
+              <button id="${P}fxDiagBtn" data-testid="fx-diagnose-btn" class="${P}btn" style="flex:1;min-width:110px;font-size:11px;">◉ DIAGNOSE</button>
+              <button id="${P}fxClearAllBtn" data-testid="fx-clear-all-btn" class="${P}btn" style="flex:1;min-width:110px;font-size:11px;background:#7c2d12;">✕ CLEAR ALL</button>
             </div>
-            <pre id="${P}fxDiagOut" data-testid="fx-diag-output" style="margin-top:8px;padding:6px;background:#0b1220;border:1px solid #1e293b;border-radius:4px;font-size:9px;color:#94a3b8;max-height:120px;overflow:auto;white-space:pre-wrap;display:none;"></pre>
+            <pre id="${P}fxDiagOut" data-testid="fx-diag-output" style="margin-top:8px;padding:6px;background:#0b1220;border:1px solid #1e293b;border-radius:4px;font-size:9px;color:#94a3b8;max-height:160px;overflow:auto;white-space:pre-wrap;display:none;"></pre>
           </div>
 
           <div class="${P}section" data-testid="fx-help-section">
@@ -2261,7 +2268,7 @@ function _initForexTab() {
   const _refreshStats = async () => {
     // Local counters (placed/rejected/picked, running flag)
     const local = forexOrderPoller.getStats();
-    const setTxt = (id, val) => { const el = q(id); if (el) el.textContent = String(val); };
+    const setTxt = (id, val) => { const el = q(id); if (id !== null && q(id)) q(id).textContent = String(val); };
     setTxt('fxStatPicked', local.picked || 0);
     setTxt('fxStatPlaced', local.placed || 0);
     setTxt('fxStatRejected', local.rejected || 0);
@@ -2270,6 +2277,12 @@ function _initForexTab() {
       const qs = await apiGet('/forex/orders/queue-stats');
       if (qs && typeof qs.pending === 'number') setTxt('fxStatPending', qs.pending);
     } catch (_e) { /* backend offline — leave "–" */ }
+    // Iter 151 — Re-verify taught selectors so ✓/✗ badges reflect the
+    // *current* MT5 iframe state (user may open/close MT5 mid-session).
+    try {
+      if (typeof _renderVerify === 'function') _renderVerify();
+      if (typeof _renderIframeWarn === 'function') _renderIframeWarn();
+    } catch (_e) { /* forward-refs before grid mount */ }
   };
   if (_fxRefreshTimer) clearInterval(_fxRefreshTimer);
   _fxRefreshTimer = setInterval(_refreshStats, 3000);
@@ -2281,7 +2294,10 @@ function _initForexTab() {
     const cell = document.createElement('div');
     cell.style.cssText = 'display:flex;flex-direction:column;gap:3px;padding:6px;background:#0f172a;border:1px solid #1e293b;border-radius:4px;';
     cell.innerHTML = `
-      <div style="font-size:10px;color:#cbd5e1;font-weight:600;">${c.label}</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;">
+        <div style="font-size:10px;color:#cbd5e1;font-weight:600;">${c.label}</div>
+        <span id="${P}fxTeachBadge_${c.key}" data-testid="fx-teach-badge-${c.key}" style="font-size:9px;padding:1px 5px;border-radius:8px;background:#334155;color:#94a3b8;">–</span>
+      </div>
       <div id="${P}fxTeachSel_${c.key}" data-testid="fx-teach-sel-${c.key}" style="font-size:9px;color:#64748b;word-break:break-all;min-height:12px;">not taught</div>
       <div style="display:flex;gap:4px;">
         <button id="${P}fxTeachBtn_${c.key}" data-testid="fx-teach-btn-${c.key}" class="${P}btn" style="flex:1;font-size:10px;padding:4px 6px;">Teach</button>
@@ -2290,6 +2306,43 @@ function _initForexTab() {
     `;
     grid.appendChild(cell);
   });
+
+  // Iter 151 — Cross-origin warning banner (only when iframe is unreachable).
+  const _renderIframeWarn = () => {
+    const warn = q('fxIframeWarn');
+    if (!warn) return;
+    try {
+      const diag = mt5Adapter.diagnose();
+      warn.style.display = (diag && diag.doc_kind === 'cross-origin') ? 'block' : 'none';
+    } catch (_e) { warn.style.display = 'none'; }
+  };
+
+  // Iter 151 — Verify badges + progress counter.
+  const _renderVerify = () => {
+    let taughtCount = 0;
+    let verify = {};
+    try { verify = mt5Adapter.verifyAll(); } catch (_e) { verify = {}; }
+    _MT5_CONTROLS.forEach((c) => {
+      const badge = q(`fxTeachBadge_${c.key}`);
+      if (!badge) return;
+      const v = verify[c.key] || { found: false };
+      if (v.found) {
+        badge.textContent = v.taught ? '✓ taught' : '✓ auto';
+        badge.style.background = v.taught ? '#166534' : '#0e7490';
+        badge.style.color = '#ecfeff';
+        if (v.taught) taughtCount++;
+      } else {
+        badge.textContent = '✗';
+        badge.style.background = '#7f1d1d';
+        badge.style.color = '#fecaca';
+      }
+    });
+    const prog = q('fxTeachProgress');
+    if (prog) {
+      prog.textContent = `${taughtCount}/${_MT5_CONTROLS.length} taught`;
+      prog.style.color = taughtCount === _MT5_CONTROLS.length ? '#22c55e' : '#22d3ee';
+    }
+  };
 
   const _renderTaught = () => {
     _MT5_CONTROLS.forEach((c) => {
@@ -2304,6 +2357,8 @@ function _initForexTab() {
       sel.textContent = val ? val : 'not taught';
       sel.style.color = val ? '#22d3ee' : '#64748b';
     });
+    _renderVerify();
+    _renderIframeWarn();
   };
   _renderTaught();
 
@@ -2337,6 +2392,40 @@ function _initForexTab() {
       if (diagOut) {
         diagOut.style.display = 'block';
         diagOut.textContent = JSON.stringify(out, null, 2);
+      }
+      _renderIframeWarn();
+    });
+  }
+
+  // ---- Iter 151 — Dry run (fills lot/SL/TP, never clicks BUY/SELL)
+  const dryBtn = q('fxDryRunBtn');
+  if (dryBtn) {
+    dryBtn.addEventListener('click', async () => {
+      dryBtn.disabled = true;
+      const orig = dryBtn.textContent;
+      dryBtn.textContent = '… running';
+      try {
+        const res = await mt5Adapter.dryRun({ lots: 0.01 });
+        if (diagOut) {
+          diagOut.style.display = 'block';
+          diagOut.textContent = JSON.stringify(res, null, 2);
+        }
+        dryBtn.textContent = res.ok ? '✓ DRY RUN OK' : '✗ FAILED';
+        dryBtn.style.background = res.ok ? '#166534' : '#7f1d1d';
+      } catch (e) {
+        dryBtn.textContent = '✗ ERROR';
+        dryBtn.style.background = '#7f1d1d';
+        if (diagOut) {
+          diagOut.style.display = 'block';
+          diagOut.textContent = `dry-run error: ${e.message}`;
+        }
+      } finally {
+        _renderVerify();
+        setTimeout(() => {
+          dryBtn.textContent = orig;
+          dryBtn.style.background = '#1e3a8a';
+          dryBtn.disabled = false;
+        }, 2500);
       }
     });
   }
@@ -2840,6 +2929,14 @@ export function initPanelEvents(callbacks = {}) {
     setBtn('cycle', target, callbacks.onCycleToggle);
     renderMaster();
     callbacks.onMasterToggle?.(target);
+
+    // Iter 150 — On start-of-session, pull Risk Guard config from the
+    // backend and push per-trade amount + confidence tiers into the
+    // trading engine. Same rules the user set on the web-app Risk Guard
+    // page — no manual re-config in the TM panel.
+    if (target === true) {
+      callbacks.onSessionStart?.();
+    }
   };
 
   if (masterBtn) masterBtn.addEventListener('click', handleMasterTap);
@@ -3136,6 +3233,34 @@ export function updateStatsDisplay() {
   }
 
   if (stepEl) stepEl.textContent = String(state.moneyManagement.currentStep);
+
+  // Iter 151b — Win/Loss detection health indicator. Turns visible when
+  // any trade has timed out without a matched deal row. Clicking jumps
+  // to the Forex tab so the user can teach WIN/LOSS row markers.
+  try {
+    const el = q('detectHealth');
+    if (el) {
+      const st = tradeResultWatcher.getStats();
+      if (st && st.enabled && st.timeoutCount > 0) {
+        el.style.display = 'block';
+        const msg = q('detectHealthMsg');
+        if (msg) {
+          msg.textContent = `${st.timeoutCount} trade${st.timeoutCount === 1 ? '' : 's'} timed out. Click here to teach the WIN/LOSS row markers.`;
+        }
+        if (!el._eb_bound) {
+          el._eb_bound = true;
+          el.addEventListener('click', () => {
+            try {
+              const forexTab = document.querySelector(`.${P}tabbtn[data-tab="forex"]`);
+              if (forexTab) forexTab.click();
+            } catch (_e) { /* ignore */ }
+          });
+        }
+      } else {
+        el.style.display = 'none';
+      }
+    }
+  } catch (_e) { /* never let the health indicator crash stats display */ }
 }
 
 export function updateInvertDisplay(isInverted, reason) {

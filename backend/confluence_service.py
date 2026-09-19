@@ -79,8 +79,24 @@ def _base_weight_for(source: str) -> float:
 def _rf_audit_multiplier(source: str, asset: Optional[str], timeframe: Optional[str]) -> float:
     """For ml/rf signals, multiply the base weight by the RF Audit weight
     (Iter 135). Defaults to 1.0 when the audit is unavailable or the source
-    family isn't ML."""
-    if not source or not source.lower().startswith("ml"):
+    family isn't ML.
+
+    Iter 149 — SILENT BUG FIX. The RF audit was designed for the specific
+    RandomForest model shipped in Iter 135 (source = "ml:rf"). It was
+    accidentally applied to EVERY ml:* source via `startswith("ml")`,
+    including `ml:tqnet` (Iter 146). When a legacy yfinance probe failed
+    to fetch training data, rf_audit persisted `weight=0.0` for those
+    (asset, timeframe) pairs — silently zeroing every ML contribution to
+    confluence for months.
+
+    We now scope the RF audit to `ml:rf` only. `ml:tqnet` (and any future
+    ML source we add) uses its base weight without the audit multiplier.
+    """
+    if not source:
+        return 1.0
+    s = source.lower()
+    # Only the original RF ensemble gets the RF-audit multiplier
+    if not (s == "ml:rf" or s == "ml" or s.startswith("ml:rf:")):
         return 1.0
     if not asset or not timeframe:
         return 1.0

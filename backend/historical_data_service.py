@@ -30,11 +30,15 @@ data_imports = db['data_imports']
 backtest_results = db['backtest_results']
 
 # Create indexes for efficient queries
+# Iter 149 — Legacy `symbol_1_timeframe_1_timestamp_-1` unique index was
+# blocking every ingester upsert (records used `asset` field, not
+# `symbol`, so every insert had `symbol=null` → duplicate-key collision
+# against stale null-symbol rows). Rebuilt on the current `asset` schema.
 historical_candles.create_index([
-    ("symbol", ASCENDING),
+    ("asset", ASCENDING),
     ("timeframe", ASCENDING),
     ("timestamp", DESCENDING)
-], unique=True)
+], unique=True, name="asset_1_timeframe_1_timestamp_-1")
 
 historical_candles.create_index([("timestamp", DESCENDING)])
 historical_candles.create_index([("source", ASCENDING)])

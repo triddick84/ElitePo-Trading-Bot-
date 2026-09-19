@@ -281,101 +281,93 @@ async def clean_retrain_all_models(background_tasks: BackgroundTasks):
             # Phase 2: Retrain Maximized ML v3.0
             _retrain_status["phase"] = "training_maximized_ml_v3"
             _retrain_status["progress"] = 20
-            
-            try:
-                if maximized_ai_ml is not None:
-                    result = await asyncio.to_thread(
-                        lambda: asyncio.run(maximized_ai_ml.train_from_oanda(
-                            enhanced_oanda,
-                            symbols=['EUR_USD', 'GBP_USD', 'USD_JPY', 'AUD_USD', 'EUR_JPY'],
-                            candle_count=2000,
-                            timeframes=['S5', 'S15', 'S30', 'M1']
-                        ))
-                    )
-                    _retrain_status["results"]["maximized_ml"] = {"success": True, "result": "trained"}
-                    logger.info(f"Maximized ML retrained")
-                else:
-                    _retrain_status["results"]["maximized_ml"] = {"skipped": True}
-            except Exception as e:
-                _retrain_status["results"]["maximized_ml"] = {"error": str(e)}
-                logger.error(f"Maximized ML retrain error: {e}")
-            
+
+            # Iter 150 — per-phase 120 s timeout so a hung train_from_oanda
+            # (Phase 2 could stall indefinitely before this fix) doesn't
+            # freeze the entire retrain pipeline. See routes/iter150_fixpack.py.
+            from routes.iter150_fixpack import run_phase_with_timeout
+
+            async def _phase2():
+                if maximized_ai_ml is None:
+                    return "skipped"
+                # asyncio.run inside asyncio.to_thread can deadlock the event loop
+                # in some environments. Call the training coroutine directly.
+                return await maximized_ai_ml.train_from_oanda(
+                    enhanced_oanda,
+                    symbols=['EUR_USD', 'GBP_USD', 'USD_JPY', 'AUD_USD', 'EUR_JPY'],
+                    candle_count=2000,
+                    timeframes=['S5', 'S15', 'S30', 'M1'],
+                )
+
+            _retrain_status["results"]["maximized_ml"] = await run_phase_with_timeout(
+                _phase2(), phase_name="training_maximized_ml_v3", timeout_s=120
+            )
+
             _retrain_status["progress"] = 45
-            
+
             # Phase 3: Retrain Improved ML v2.0
             _retrain_status["phase"] = "training_improved_ml_v2"
-            
-            try:
-                if improved_ai_ml is not None:
-                    result = await asyncio.to_thread(
-                        lambda: asyncio.run(improved_ai_ml.train_from_oanda(
-                            enhanced_oanda,
-                            symbols=['EUR_USD', 'GBP_USD', 'USD_JPY'],
-                            candle_count=2000,
-                            timeframes=['S5', 'S15', 'S30', 'M1']
-                        ))
-                    )
-                    _retrain_status["results"]["improved_ml"] = {"success": True, "result": "trained"}
-                    logger.info(f"Improved ML retrained")
-                else:
-                    _retrain_status["results"]["improved_ml"] = {"skipped": True}
-            except Exception as e:
-                _retrain_status["results"]["improved_ml"] = {"error": str(e)}
-                logger.error(f"Improved ML retrain error: {e}")
+
+            async def _phase3():
+                if improved_ai_ml is None:
+                    return "skipped"
+                return await improved_ai_ml.train_from_oanda(
+                    enhanced_oanda,
+                    symbols=['EUR_USD', 'GBP_USD', 'USD_JPY'],
+                    candle_count=2000,
+                    timeframes=['S5', 'S15', 'S30', 'M1'],
+                )
+
+            _retrain_status["results"]["improved_ml"] = await run_phase_with_timeout(
+                _phase3(), phase_name="training_improved_ml_v2", timeout_s=120
+            )
             
             _retrain_status["progress"] = 65
-            
+
             # Phase 4: Retrain LSTM/GRU
             _retrain_status["phase"] = "training_lstm_gru"
-            
-            try:
-                if lstm_gru_system is not None:
-                    df = enhanced_oanda.get_candles('EUR_USD', 'M1', 2000)
-                    if df is not None and len(df) >= 100:
-                        candles = [{'open': float(r['open']), 'high': float(r['high']),
-                                    'low': float(r['low']), 'close': float(r['close']),
-                                    'volume': float(r.get('volume', 0))}
-                                   for _, r in df.iterrows()]
-                        result = await asyncio.to_thread(lstm_gru_system.train, candles, 30)
-                        _retrain_status["results"]["lstm_gru"] = {"success": True, "result": str(result)[:200]}
-                        logger.info(f"LSTM/GRU retrained")
-                    else:
-                        _retrain_status["results"]["lstm_gru"] = {"error": "Insufficient data"}
-                else:
-                    _retrain_status["results"]["lstm_gru"] = {"skipped": True}
-            except Exception as e:
-                _retrain_status["results"]["lstm_gru"] = {"error": str(e)}
-                logger.error(f"LSTM/GRU retrain error: {e}")
-            
+
+            async def _phase4():
+                if lstm_gru_system is None:
+                    return "skipped"
+                df = enhanced_oanda.get_candles('EUR_USD', 'M1', 2000)
+                if df is None or len(df) < 100:
+                    raise RuntimeError("insufficient candle data")
+                candles = [{'open': float(r['open']), 'high': float(r['high']),
+                            'low': float(r['low']), 'close': float(r['close']),
+                            'volume': float(r.get('volume', 0))}
+                           for _, r in df.iterrows()]
+                return await asyncio.to_thread(lstm_gru_system.train, candles, 30)
+
+            _retrain_status["results"]["lstm_gru"] = await run_phase_with_timeout(
+                _phase4(), phase_name="training_lstm_gru", timeout_s=180
+            )
+
             _retrain_status["progress"] = 85
-            
+
             # Phase 5: Retrain PPO RL
             _retrain_status["phase"] = "training_ppo_rl"
-            
-            try:
-                if ppo_agent is not None:
-                    from lstm_gru_system import FeatureEngine
-                    df = enhanced_oanda.get_candles('EUR_USD', 'M1', 2000)
-                    if df is not None and len(df) >= 100:
-                        candles = [{'open': float(r['open']), 'high': float(r['high']),
-                                    'low': float(r['low']), 'close': float(r['close']),
-                                    'volume': float(r.get('volume', 0))}
-                                   for _, r in df.iterrows()]
-                        features = FeatureEngine.compute(candles)
-                        if features is not None:
-                            closes = np.array([float(c['close']) for c in candles])
-                            result = await asyncio.to_thread(ppo_agent.train, features, closes, 10)
-                            _retrain_status["results"]["ppo_rl"] = {"success": True, "result": str(result)[:200]}
-                            logger.info(f"PPO RL retrained")
-                        else:
-                            _retrain_status["results"]["ppo_rl"] = {"error": "Feature computation failed"}
-                    else:
-                        _retrain_status["results"]["ppo_rl"] = {"error": "Insufficient data"}
-                else:
-                    _retrain_status["results"]["ppo_rl"] = {"skipped": True}
-            except Exception as e:
-                _retrain_status["results"]["ppo_rl"] = {"error": str(e)}
-                logger.error(f"PPO RL retrain error: {e}")
+
+            async def _phase5():
+                if ppo_agent is None:
+                    return "skipped"
+                from lstm_gru_system import FeatureEngine
+                df = enhanced_oanda.get_candles('EUR_USD', 'M1', 2000)
+                if df is None or len(df) < 100:
+                    raise RuntimeError("insufficient candle data")
+                candles = [{'open': float(r['open']), 'high': float(r['high']),
+                            'low': float(r['low']), 'close': float(r['close']),
+                            'volume': float(r.get('volume', 0))}
+                           for _, r in df.iterrows()]
+                features = FeatureEngine.compute(candles)
+                if features is None:
+                    raise RuntimeError("feature computation failed")
+                closes = np.array([float(c['close']) for c in candles])
+                return await asyncio.to_thread(ppo_agent.train, features, closes, 10)
+
+            _retrain_status["results"]["ppo_rl"] = await run_phase_with_timeout(
+                _phase5(), phase_name="training_ppo_rl", timeout_s=180
+            )
             
             # Done
             _retrain_status["phase"] = "complete"

@@ -268,6 +268,10 @@ class Mt5Adapter {
   /**
    * Point-to-teach: user clicks the control they want the adapter to use,
    * we store the CSS selector under GM (survives reloads).
+   *
+   * Iter 151 — adds a hover-highlight overlay so the user visually sees
+   * which element they're about to teach. Overlay is torn down as soon as
+   * the click lands (or the 30-second timeout fires).
    */
   startTeach(control, onDone) {
     if (!SELECTORS[control]) {
@@ -276,10 +280,47 @@ class Mt5Adapter {
       return;
     }
     info(`[mt5-teach] click the MT5 element you want to use for "${control}"`);
+
+    // Hover reticle so the user visually sees what they will teach. The
+    // reticle is a fixed-position outline that follows the currently-hovered
+    // element. Cleaned up in _finish().
+    let reticle = null;
+    try {
+      reticle = document.createElement('div');
+      reticle.setAttribute('data-ai-elite-teach-reticle', control);
+      reticle.style.cssText = [
+        'position:fixed', 'pointer-events:none', 'z-index:2147483647',
+        'border:2px solid #f59e0b', 'background:rgba(245,158,11,0.12)',
+        'border-radius:3px', 'transition:all 60ms linear',
+        'box-shadow:0 0 0 2px rgba(245,158,11,0.35)',
+        'top:-9999px', 'left:-9999px', 'width:0', 'height:0',
+      ].join(';');
+      document.body.appendChild(reticle);
+    } catch (_e) { reticle = null; }
+
+    const onMove = (ev) => {
+      try {
+        const t = ev.target;
+        if (!t || !t.getBoundingClientRect || !reticle) return;
+        const r = t.getBoundingClientRect();
+        if (r.width < 1 || r.height < 1) return;
+        reticle.style.top = `${r.top}px`;
+        reticle.style.left = `${r.left}px`;
+        reticle.style.width = `${r.width}px`;
+        reticle.style.height = `${r.height}px`;
+      } catch (_e) { /* ignore */ }
+    };
+
+    const _finish = () => {
+      document.removeEventListener('click', handler, true);
+      document.removeEventListener('mouseover', onMove, true);
+      try { reticle && reticle.remove(); } catch (_e) { /* ignore */ }
+    };
+
     const handler = (ev) => {
       ev.preventDefault(); ev.stopPropagation();
       const el = ev.target;
-      if (!el) return;
+      if (!el) { _finish(); return; }
       // Prefer id, then a stable data-testid, then class chain.
       let selector = null;
       if (el.id) selector = `#${el.id}`;
@@ -293,14 +334,14 @@ class Mt5Adapter {
         if (typeof GM_setValue === 'function') GM_setValue(GM_PREFIX + control, selector);
         else window.localStorage.setItem(GM_PREFIX + control, selector);
       } catch (_e) { /* ignore */ }
-      document.removeEventListener('click', handler, true);
+      _finish();
       log(`[mt5-teach] saved selector for "${control}": ${selector}`);
       onDone?.({ success: true, control, selector });
     };
+
+    document.addEventListener('mouseover', onMove, true);
     document.addEventListener('click', handler, true);
-    setTimeout(() => {
-      document.removeEventListener('click', handler, true);
-    }, 30_000);
+    setTimeout(_finish, 30_000);
   }
 
   clearTaught(control) {
@@ -310,6 +351,95 @@ class Mt5Adapter {
       log(`[mt5-teach] cleared ${control}`);
     } catch (_e) { /* ignore */ }
   }
+
+  /**
+   * Iter 151 — Verify a single control resolves right now (taught → fallback).
+   * Used by the panel to show ✓/✗ badges next to each selector.
+   */
+  verify(control) {
+    if (!SELECTORS[control]) return { found: false, reason: 'unknown_control' };
+    const { doc, kind } = _mt5Doc();
+    if (!doc) return { found: false, reason: `doc_${kind}`, doc_kind: kind };
+    const r = _resolve(doc, control);
+    if (!r) return { found: false, reason: 'no_match', doc_kind: kind };
+    return {
+      found: true,
+      source: r.source,
+      taught: r.source.startsWith('taught:'),
+      tag: r.el.tagName,
+      doc_kind: kind,
+    };
+  }
+
+  /** Iter 151 — Verify every control, returns { symbol_search: {...}, ... }. */
+  verifyAll() {
+    const out = {};
+    for (const key of Object.keys(SELECTORS)) {
+      if (key === 'iframe') continue;
+      out[key] = this.verify(key);
+    }
+    return out;
+  }
+
+  /**
+   * Iter 151 — Dry run: fill lot/SL/TP fields to prove selectors work
+   * WITHOUT clicking BUY or SELL. Never places a real order. Used by the
+   * panel's "Dry Run" button so users can smoke-test their taught
+   * selectors safely.
+   *
+   * @param {{ symbol?: string, lots?: number, sl?: number, tp?: number }} order
+   * @returns {Promise<{ ok: boolean, reason: string, matches: object }>}
+   */
+  async dryRun(order = {}) {
+    const { doc, kind, origin } = _mt5Doc();
+    if (!doc) {
+      return {
+        ok: false,
+        reason: 'mt5_iframe_cross_origin',
+        matches: { doc_kind: kind, iframe_src: origin?.src || null },
+      };
+    }
+    const matches = { doc_kind: kind, dry_run: true };
+    // Symbol (best-effort, non-fatal)
+    try {
+      const symbol = String(order.symbol || '').toUpperCase();
+      const search = _resolve(doc, 'symbol_search');
+      if (search && symbol) {
+        _setInputValue(search.el, symbol);
+        matches.symbol_search = search.source;
+      } else if (!search) {
+        matches.symbol_search = 'not_found';
+      }
+    } catch (_e) { /* non-fatal */ }
+    // Lot — required
+    const lotRes = _resolve(doc, 'lot_input');
+    if (!lotRes) return { ok: false, reason: 'lot_input_not_found', matches };
+    _setInputValue(lotRes.el, order.lots ?? 0.01);
+    matches.lot_input = lotRes.source;
+    // SL / TP optional
+    if (order.sl != null) {
+      const slRes = _resolve(doc, 'sl_input');
+      if (slRes) { _setInputValue(slRes.el, order.sl); matches.sl_input = slRes.source; }
+      else matches.sl_input = 'not_found';
+    }
+    if (order.tp != null) {
+      const tpRes = _resolve(doc, 'tp_input');
+      if (tpRes) { _setInputValue(tpRes.el, order.tp); matches.tp_input = tpRes.source; }
+      else matches.tp_input = 'not_found';
+    }
+    // Only *resolve* buy/sell buttons — never click.
+    const buyRes = _resolve(doc, 'buy_btn');
+    const sellRes = _resolve(doc, 'sell_btn');
+    matches.buy_btn = buyRes ? buyRes.source : 'not_found';
+    matches.sell_btn = sellRes ? sellRes.source : 'not_found';
+    const allBtns = !!(buyRes && sellRes);
+    log(`[mt5] dry-run ${allBtns ? 'OK' : 'partial'} — lot ✓${matches.buy_btn === 'not_found' ? ', BUY ✗' : ''}${matches.sell_btn === 'not_found' ? ', SELL ✗' : ''}`);
+    return {
+      ok: allBtns,
+      reason: allBtns ? 'dry_run_ok' : 'buy_or_sell_missing',
+      matches,
+    };
+  }
 }
 
 export const mt5Adapter = new Mt5Adapter();
@@ -318,6 +448,8 @@ export const mt5Adapter = new Mt5Adapter();
 try {
   window.__aiEliteMt5Diag = () => mt5Adapter.diagnose();
   window.__aiEliteMt5Teach = (control, cb) => mt5Adapter.startTeach(control, cb);
+  window.__aiEliteMt5Verify = () => mt5Adapter.verifyAll();
+  window.__aiEliteMt5DryRun = (o) => mt5Adapter.dryRun(o || {});
 } catch (_e) { /* ignore */ }
 
 export default mt5Adapter;

@@ -535,7 +535,31 @@ class TradeResultWatcher {
     // Belt-and-suspenders: rescan deal rows in case a mutation was missed
     this._scanNewRows();
 
-    // Timeout expired arms
+    // Iter 151b — EARLY balance-delta resolution. Previously we only used
+    // balance-delta at the arm's deadline (expiry + 4 s safety buffer),
+    // meaning users saw NO win/loss for 4 s minimum after every trade,
+    // even when the balance had already moved. Now: as soon as expiry
+    // has elapsed AND the queue has exactly one un-resolved arm, resolve
+    // on the first cent of balance change. Safe because with a single
+    // arm there's no other trade whose stake/payout could conflate the
+    // delta.
+    const unresolved = this.armedQueue.filter((a) => !a.resolved);
+    if (unresolved.length === 1) {
+      const arm = unresolved[0];
+      const expiryMs = (Number(arm.trade.expirySeconds) || 5) * 1000;
+      const expiryPassed = now > (arm.armedAt + expiryMs);
+      if (expiryPassed && arm.balanceAtArm != null) {
+        const bal = _readBalance();
+        if (bal != null && Math.abs(bal - arm.balanceAtArm) >= 0.01) {
+          const isWin = bal > arm.balanceAtArm;
+          log(`[ResultWatcher] early balance-delta resolve: ${arm.trade.direction} ${arm.trade.asset} · $${arm.balanceAtArm.toFixed(2)} → $${bal.toFixed(2)}`);
+          this._resolve(arm, isWin, 'balance-delta-early');
+          this.armedQueue = this.armedQueue.filter((a) => !a.resolved);
+        }
+      }
+    }
+
+    // Timeout expired arms (kept as the last-ditch resolver)
     const still = [];
     for (const arm of this.armedQueue) {
       if (arm.resolved) continue;
@@ -553,7 +577,14 @@ class TradeResultWatcher {
             continue;
           }
         }
-        warn(`[ResultWatcher] timeout: ${arm.trade.direction} ${arm.trade.asset} — no deal row matched`);
+        // Iter 151b — extra-loud timeout log so the user knows to run the
+        // teach flow. Includes selector match counts to make the fix path
+        // obvious.
+        warn(
+          `[ResultWatcher] TIMEOUT — no outcome for ${arm.trade.direction} ${arm.trade.asset}. ` +
+          `Run __aiEliteDealDiag() in DevTools OR use the "Win/Loss Detection Teach" section in the panel's Forex tab.`
+        );
+        this._timeoutCount = (this._timeoutCount || 0) + 1;
         if (ABANDON_AFTER_TIMEOUT) {
           this._resolve(arm, false, 'timeout-loss');
         }
@@ -562,6 +593,13 @@ class TradeResultWatcher {
       still.push(arm);
     }
     this.armedQueue = still;
+
+    // Iter 151b — bound seenRows so it can't grow unbounded during long
+    // sessions (PO recycles rows; stale ids stay forever otherwise).
+    if (this.seenRows.size > 500) {
+      const arr = Array.from(this.seenRows);
+      this.seenRows = new Set(arr.slice(-250));
+    }
   }
 
   /** Iter 144 — Diagnostic snapshot for `window.__aiEliteDealDiag()`.
@@ -684,6 +722,24 @@ class TradeResultWatcher {
       win: _gmGet(TEACH_GM_KEYS.win),
       loss: _gmGet(TEACH_GM_KEYS.loss),
       container: _gmGet(TEACH_GM_KEYS.container),
+    };
+  }
+
+  /**
+   * Iter 151b — Watcher health snapshot for the UI. Used by the panel to
+   * surface a "🔴 detection unhealthy — please teach" indicator when
+   * repeated timeouts happen.
+   */
+  getStats() {
+    const queueLen = this.armedQueue.filter((a) => !a.resolved).length;
+    const timeoutCount = this._timeoutCount || 0;
+    return {
+      enabled: !!this.enabled,
+      queueLength: queueLen,
+      timeoutCount,
+      seenRowsSize: this.seenRows.size,
+      // "healthy" ⇔ enabled and never timed out in this session
+      healthy: !!this.enabled && timeoutCount === 0,
     };
   }
 }

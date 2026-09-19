@@ -18,6 +18,7 @@ import { liveTickPoster } from './trading/liveTickPoster.js';
 import { livePriceTracker } from './trading/livePriceTracker.js';
 import { favoritesCycle } from './trading/favoritesCycle.js';
 import { chartTypeSwitcher } from './trading/chartTypeSwitcher.js';
+import { riskGuardBridge } from './trading/riskGuardBridge.js';
 import { appSignalPoller } from './trading/appSignalPoller.js';
 import { networkLatencyPoller } from './trading/networkLatencyPoller.js';
 import { heartbeatReporter } from './trading/heartbeatReporter.js';
@@ -366,6 +367,16 @@ class EliteTradingBot {
       // Anything else → immediately ask chartTypeSwitcher to switch PO's chart.
       onChartTypeManualChange: (value) => {
         state._chartTypeManual = value || 'auto';
+        // Iter 150 — persist to GM key so fetchSignal() can attach it to
+        // every signal request as `?chart_type=...`. Backend uses it to
+        // filter signals for the actual chart the user is trading on.
+        try {
+          if (typeof GM_setValue === 'function') {
+            GM_setValue('manualChartType', value || 'auto');
+          } else {
+            window.localStorage.setItem('manualChartType', value || 'auto');
+          }
+        } catch (_e) { /* ignore */ }
         try {
           if (value && value !== 'auto') {
             chartTypeSwitcher.ensure(value).catch((e) => {
@@ -472,6 +483,21 @@ class EliteTradingBot {
           favoritesCycle.stop();
         }
         saveState();
+      },
+
+      // Iter 150 — On master-toggle → ON, pull Risk Guard config from
+      // backend and apply per-trade amount + confidence-tiered stakes
+      // to the trade executor. Zero manual re-configuration in the TM
+      // panel — everything comes from the web app's Risk Guard page.
+      onSessionStart: async () => {
+        try {
+          const r = await riskGuardBridge.syncNow('default');
+          if (r.ok) {
+            info(`[session-start] Risk Guard applied — $${r.applied.per_trade_amount}/trade, ${r.applied.tiers_count} tiers`);
+          } else {
+            warn(`[session-start] Risk Guard sync failed: ${r.error} — using previous settings`);
+          }
+        } catch (e) { warn(`[session-start] sync threw: ${e.message}`); }
       },
 
       onTeachFavorites: () => {

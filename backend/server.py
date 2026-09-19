@@ -4271,6 +4271,11 @@ from routes.confluence_routes import router as confluence_router
 from routes.smart_money_routes import router as smart_money_router
 from routes.forex_routes import router as forex_router
 from routes.tqnet_routes import router as tqnet_router
+from routes.market_data_routes import (
+    router as market_data_router,
+    signals_router as signals_trace_router,
+)
+from routes.iter150_fixpack import router as iter150_router
 
 api_router.include_router(strategies_router)
 api_router.include_router(signals_router)
@@ -4301,6 +4306,9 @@ api_router.include_router(confluence_router)
 api_router.include_router(smart_money_router)
 api_router.include_router(forex_router)
 api_router.include_router(tqnet_router)
+api_router.include_router(market_data_router)
+api_router.include_router(signals_trace_router)
+api_router.include_router(iter150_router)
 
 app.include_router(api_router)
 
@@ -4387,6 +4395,17 @@ async def startup_event():
                 logger.info(f"💱 Forex engine ready · surface={cfg.execution_surface.value} · enabled={cfg.enabled}")
             except Exception as e:
                 logger.warning(f"Forex engine bootstrap skipped: {e}")
+
+            # Iter 149 — bind + boot the multi-provider market data ingester
+            try:
+                from market_data_ingester import (
+                    ingester, background_refresh_loop,
+                )
+                ingester.bind_db(db)
+                asyncio.create_task(background_refresh_loop())
+                logger.info("📈 Market data ingester bound + background refresh loop started")
+            except Exception as e:
+                logger.warning(f"Market data ingester bootstrap skipped: {e}")
 
             # Iter 126 — Start Telegram bot (bidirectional signals)
             try:

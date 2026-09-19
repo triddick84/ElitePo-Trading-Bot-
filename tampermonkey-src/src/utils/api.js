@@ -89,7 +89,18 @@ export async function post(endpoint, data = {}) {
  */
 export async function fetchSignal(symbol = null) {
   try {
+    // Iter 150 — include the user's manual chart-type preference so the
+    // backend can filter/route signals for the actual chart the user is
+    // trading on (japanese_candles / heikin_ashi / line / bar / area).
+    let chartType = null;
+    try {
+      chartType = (typeof GM_getValue === 'function')
+        ? GM_getValue('manualChartType', null)
+        : window.localStorage.getItem('manualChartType');
+    } catch (_e) { /* ignore */ }
     const params = symbol ? { symbol } : {};
+    if (chartType && chartType !== 'auto') params.chart_type = chartType;
+
     // Iter 56c: capture client-side RTT so the poller can attribute network
     // overhead vs server processing in latency reports.
     const t0 = performance.now();

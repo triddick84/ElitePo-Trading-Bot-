@@ -78,6 +78,8 @@ class TelegramBotService:
         self.demo_mode = True
         self.trade_amount = 1.0
         self.http_client = None
+        # Iter 150 — signal invert toggle (flips CALL↔PUT before sending)
+        self.invert_enabled = False
         self._command_handlers: Dict[str, Callable] = {}
         self._signal_callback = None
         self._last_update_id = 0
@@ -141,10 +143,29 @@ class TelegramBotService:
             return {'success': False, 'error': str(e)}
     
     async def send_signal(self, signal: TradingSignal, chat_id: str = None) -> Dict:
-        """Send trading signal notification to Telegram - optimized for manual trading"""
+        """Send trading signal notification to Telegram - optimized for manual trading.
+
+        Iter 150 — if `TelegramBotService.invert_enabled` is True, the direction
+        is flipped (CALL↔PUT) before the message is formatted. Toggle via
+        `POST /api/telegram/invert`. This lets the user auto-flip signals
+        that consistently underperform.
+        """
         try:
+            # Iter 150 — apply invert-signals toggle if enabled
+            direction = signal.direction
+            inverted = False
+            if getattr(self, "invert_enabled", False):
+                if direction in ("CALL", "BUY"):
+                    direction = "PUT"
+                    inverted = True
+                elif direction in ("PUT", "SELL"):
+                    direction = "CALL"
+                    inverted = True
+
             # Format signal message for MANUAL TRADING
-            direction_emoji = "🟢 📈 CALL (UP)" if signal.direction in ['CALL', 'BUY'] else "🔴 📉 PUT (DOWN)"
+            direction_emoji = "🟢 📈 CALL (UP)" if direction in ['CALL', 'BUY'] else "🔴 📉 PUT (DOWN)"
+            if inverted:
+                direction_emoji += " ↺ INVERTED"
             confidence_stars = "⭐" * min(int(signal.confidence / 20), 5)
             
             # Calculate urgency
@@ -164,7 +185,7 @@ class TelegramBotService:
 1. Open Pocket Option
 2. Select <code>{signal.symbol.replace('_otc', '').replace('_regular', '')}</code>
 3. Set expiry to <code>{signal.expiration_seconds}s</code>
-4. Click <b>{'⬆️ UP/CALL' if signal.direction in ['CALL', 'BUY'] else '⬇️ DOWN/PUT'}</b>
+4. Click <b>{'⬆️ UP/CALL' if direction in ['CALL', 'BUY'] else '⬇️ DOWN/PUT'}</b>
 
 💡 Strategy: <code>{signal.strategy}</code>
 
