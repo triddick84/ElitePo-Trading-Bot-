@@ -254,6 +254,89 @@ async def get_backtest_assets_universe():
     }
 
 
+@router.get("/backtest/assets-with-data")
+async def get_backtest_assets_with_data():
+    """
+    Iter 152 — Return only the assets that actually have candles in the
+    `historical_candles` collection. Used by the AssetPicker's "Only with
+    data" filter so users can't kick off a backtest against a symbol the
+    DB has zero rows for (kills silent empty backtests and typo-based
+    empty runs).
+
+    Response schema:
+      {
+        "success": True,
+        "available": ["EURUSD", "GBPUSD-OTC", ...],   # ASCII-uppercase asset names
+        "counts": { "EURUSD": 12345, "GBPUSD-OTC": 500, ... },
+        "timeframes": { "EURUSD": ["M1", "M5"], ... },   # optional per-asset TF list
+        "total_assets": N,
+        "total_candles": M,
+      }
+
+    We aggregate on `asset` (not `symbol`, matching market_data_ingester's
+    schema). Empty response ({available: []}) is returned when the DB is
+    unavailable so the UI can gracefully degrade rather than crash.
+    """
+    if db is None:
+        return {
+            "success": True,
+            "available": [],
+            "counts": {},
+            "timeframes": {},
+            "total_assets": 0,
+            "total_candles": 0,
+            "note": "database unavailable",
+        }
+
+    try:
+        # Single aggregation pass — group by (asset, timeframe), then flatten
+        # into per-asset counts and a per-asset timeframe list.
+        pipeline = [
+            {"$group": {
+                "_id": {"asset": "$asset", "timeframe": "$timeframe"},
+                "count": {"$sum": 1},
+            }},
+            {"$group": {
+                "_id": "$_id.asset",
+                "count": {"$sum": "$count"},
+                "timeframes": {"$addToSet": "$_id.timeframe"},
+            }},
+        ]
+        cursor = db.historical_candles.aggregate(pipeline, allowDiskUse=True)
+        counts: Dict[str, int] = {}
+        timeframes: Dict[str, List[str]] = {}
+        total_candles = 0
+        async for row in cursor:
+            raw = row.get("_id") or ""
+            if not raw:
+                continue
+            asset = str(raw).upper().strip()
+            counts[asset] = int(row.get("count") or 0)
+            tfs = row.get("timeframes") or []
+            timeframes[asset] = sorted([str(t) for t in tfs if t])
+            total_candles += counts[asset]
+        available = sorted(counts.keys())
+        return {
+            "success": True,
+            "available": available,
+            "counts": counts,
+            "timeframes": timeframes,
+            "total_assets": len(available),
+            "total_candles": total_candles,
+        }
+    except Exception as e:
+        logger.warning(f"[assets-with-data] aggregation failed: {e}")
+        return {
+            "success": False,
+            "available": [],
+            "counts": {},
+            "timeframes": {},
+            "total_assets": 0,
+            "total_candles": 0,
+            "error": str(e),
+        }
+
+
 
 
 

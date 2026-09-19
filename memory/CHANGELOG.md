@@ -1,5 +1,22 @@
 # Changelog
 
+## Iter 152 — Feb 20, 2026 — Backtest Asset Picker: "Only With Data" Filter
+
+Kills typo-based / empty backtests by only exposing symbols that actually have candles in `historical_candles`.
+
+### Backend
+- **`GET /api/backtest/assets-with-data`** — new endpoint. Aggregates `historical_candles` by `(asset, timeframe)`, flattens to per-asset counts and timeframe lists. Returns `{ success, available[], counts{}, timeframes{}, total_assets, total_candles }`. Gracefully degrades (`success: true, available: []`) when the DB is unreachable or the aggregation fails — the UI filter simply becomes unavailable rather than crashing the picker.
+
+### Frontend (`shared/AssetPicker.jsx`)
+- **"Only with data (N)" toggle button** next to the search box. Filters the entire class tree to just the symbols the DB has candles for. Auto-disabled when `total_assets == 0` so users aren't confused by an empty picker.
+- **Per-symbol candle count badge** — small emerald pill showing `12k` / `500` next to each symbol that has data, with a tooltip showing the exact count. Nothing shown for zero-data symbols (keeps the tree clean).
+- Fetch batches with `Promise.all` on mount; with-data endpoint failure is caught silently so the picker still works if only the universe endpoint is available.
+
+### Tests
+- 8 new pytests in `test_iter152_asset_picker_data_filter.py` covering: endpoint success path, empty DB, no-DB graceful degrade, aggregation-error graceful degrade, and 4 source-level assertions on the frontend picker wiring.
+- Iter15x regression: **39/39 passing**.
+
+
 ## v8.157.0 — Feb 20, 2026 — Iter 151 + 151b: MT5 Teach UX + Win/Loss Detection Hardening
 
 ### Iter 151 — MT5 Point-to-Teach UI Expansion

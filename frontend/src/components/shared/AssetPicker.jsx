@@ -63,15 +63,23 @@ export const AssetPicker = ({
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
   const [collapsed, setCollapsed] = useState({});   // class-id → boolean
+  // Iter 152 — Only-with-data filter. When ON, only surface symbols that
+  // have actual candles in historical_candles. Prevents typo-based / empty
+  // backtests. Loaded on mount from /api/backtest/assets-with-data.
+  const [onlyWithData, setOnlyWithData] = useState(false);
+  const [dataAssets, setDataAssets] = useState({ set: new Set(), counts: {}, total: 0 });
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         setLoading(true);
-        const r = await axios.get(`${API_URL}/api/backtest/assets-universe`);
+        const [uniRes, dataRes] = await Promise.all([
+          axios.get(`${API_URL}/api/backtest/assets-universe`),
+          axios.get(`${API_URL}/api/backtest/assets-with-data`).catch(() => ({ data: null })),
+        ]);
         if (cancelled) return;
-        const all = r.data?.classes || [];
+        const all = uniRes.data?.classes || [];
         const filtered = restrictToMarket === 'regular'
           ? all.filter(c => !c.id.endsWith('_otc'))
           : restrictToMarket === 'otc'
@@ -84,6 +92,15 @@ export const AssetPicker = ({
         const init = {};
         filtered.forEach(c => { init[c.id] = shouldCollapse; });
         setCollapsed(init);
+        // Absorb the with-data list (fail silently — filter just stays empty).
+        if (dataRes && dataRes.data && dataRes.data.success) {
+          const avail = dataRes.data.available || [];
+          setDataAssets({
+            set: new Set(avail.map(a => String(a).toUpperCase())),
+            counts: dataRes.data.counts || {},
+            total: dataRes.data.total_assets || avail.length,
+          });
+        }
         setError(null);
       } catch (e) {
         if (!cancelled) setError(e.message || 'Failed to load asset universe');
@@ -122,12 +139,26 @@ export const AssetPicker = ({
   }, [value]);
 
   const filteredClasses = useMemo(() => {
-    if (!search.trim()) return classes;
-    const q = search.trim().toUpperCase();
-    return classes
-      .map(c => ({ ...c, symbols: (c.symbols || []).filter(s => s.toUpperCase().includes(q)) }))
-      .filter(c => c.symbols.length > 0);
-  }, [classes, search]);
+    let out = classes;
+    // Iter 152 — filter out symbols with zero candles in the DB when the
+    // "Only with data" toggle is ON. Applied BEFORE search so counts stay
+    // consistent.
+    if (onlyWithData && dataAssets.set.size > 0) {
+      out = out
+        .map(c => ({
+          ...c,
+          symbols: (c.symbols || []).filter(s => dataAssets.set.has(String(s).toUpperCase())),
+        }))
+        .filter(c => c.symbols.length > 0);
+    }
+    if (search.trim()) {
+      const q = search.trim().toUpperCase();
+      out = out
+        .map(c => ({ ...c, symbols: (c.symbols || []).filter(s => s.toUpperCase().includes(q)) }))
+        .filter(c => c.symbols.length > 0);
+    }
+    return out;
+  }, [classes, search, onlyWithData, dataAssets]);
 
   // Actions ------------------------------------------------------------------
   const setNext = (next) => onChange && onChange([...new Set(next)]);
@@ -293,14 +324,34 @@ export const AssetPicker = ({
         </div>
 
         {/* Search */}
-        <div className="mt-3">
+        <div className="mt-3 flex gap-2 items-center flex-wrap">
           <Input
             data-testid={`${testIdPrefix}-search`}
             placeholder="Search symbols (e.g. EURUSD, BTC, XAU)…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="bg-slate-900/60 border-slate-700 text-slate-200 placeholder:text-slate-500"
+            className="bg-slate-900/60 border-slate-700 text-slate-200 placeholder:text-slate-500 flex-1 min-w-[220px]"
           />
+          {/* Iter 152 — Only-with-data filter */}
+          <Button
+            data-testid={`${testIdPrefix}-only-with-data`}
+            size="sm"
+            variant="outline"
+            onClick={() => setOnlyWithData(v => !v)}
+            disabled={dataAssets.set.size === 0}
+            title={
+              dataAssets.set.size === 0
+                ? 'No historical candles found in DB yet — filter unavailable'
+                : 'Only show symbols that already have candles in historical_candles (kills empty backtests)'
+            }
+            className={
+              onlyWithData
+                ? 'border-emerald-500/70 bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30'
+                : 'border-slate-500/50 text-slate-300 hover:bg-slate-500/20'
+            }
+          >
+            {onlyWithData ? '✓ ' : ''}Only with data ({dataAssets.total})
+          </Button>
         </div>
       </CardHeader>
 
@@ -362,11 +413,13 @@ export const AssetPicker = ({
                 <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1">
                   {(cls.symbols || []).map(sym => {
                     const selected = selectedSet.has(sym);
+                    const candleCount = dataAssets.counts[String(sym).toUpperCase()] || 0;
+                    const hasData = candleCount > 0;
                     return (
                       <label
                         key={sym}
                         data-testid={`${testIdPrefix}-symbol-${sym}`}
-                        className={`flex items-center gap-2 p-1.5 rounded cursor-pointer text-xs transition-colors ${
+                        className={`flex items-center gap-1.5 p-1.5 rounded cursor-pointer text-xs transition-colors ${
                           selected
                             ? isOtc
                               ? 'bg-green-500/25 text-green-200'
@@ -379,7 +432,16 @@ export const AssetPicker = ({
                           onCheckedChange={() => toggleOne(sym)}
                           data-testid={`${testIdPrefix}-symbol-${sym}-checkbox`}
                         />
-                        <span className="truncate">{sym}</span>
+                        <span className="truncate flex-1">{sym}</span>
+                        {hasData && (
+                          <span
+                            data-testid={`${testIdPrefix}-symbol-${sym}-candles`}
+                            className="text-[9px] font-mono px-1 py-0.5 rounded bg-emerald-500/25 text-emerald-200 shrink-0"
+                            title={`${candleCount.toLocaleString()} candles in DB`}
+                          >
+                            {candleCount >= 1000 ? `${Math.round(candleCount / 1000)}k` : candleCount}
+                          </span>
+                        )}
                       </label>
                     );
                   })}
