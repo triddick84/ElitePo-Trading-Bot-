@@ -135,15 +135,47 @@ async def optimization_data_version() -> Dict[str, Any]:
 # can hang indefinitely because `train_from_oanda` isn't timeboxed. We add
 # a helper that any caller can use to wrap a coroutine with a hard timeout
 # so the entire retrain never stalls.
+#
+# Iter 153 (Feb 20, 2026) — Critical: `train_from_oanda` is declared `async`
+# but its body is 100 % synchronous CPU-bound work (sklearn training,
+# `cross_val_score`, feature-extraction loops). Because it never yields to
+# the event loop:
+#   1. `asyncio.wait_for` cannot cancel it — no yield = no cancellation.
+#   2. The main event loop is fully blocked, so `/api/ml/retrain-status`
+#      polls stall and the UI hangs on "retraining" until the whole
+#      pipeline finishes (often minutes) or the browser gives up.
+# We now offload each phase into a worker thread with its OWN event loop
+# via `asyncio.to_thread`, so the main loop stays responsive AND `wait_for`
+# on the thread future works correctly.
+
+def _drive_coroutine_in_thread(coro):
+    """Run a coroutine to completion in a fresh event loop. Called from
+    inside `asyncio.to_thread`, so it executes in a worker thread — the
+    main event loop stays free to serve status polls."""
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        try:
+            loop.close()
+        except Exception:
+            pass
+
 
 async def run_phase_with_timeout(coro, phase_name: str,
                                  timeout_s: int = 90) -> Dict[str, Any]:
     """Run `coro` (a coroutine) with a hard time limit. Returns a status dict
     the retrain loop can persist directly to `_retrain_status["results"]`.
+
+    The coroutine is driven in a worker thread — see the module docstring
+    above for why this matters for CPU-bound "async" bodies.
     """
     started = datetime.now(timezone.utc)
     try:
-        result = await asyncio.wait_for(coro, timeout=timeout_s)
+        result = await asyncio.wait_for(
+            asyncio.to_thread(_drive_coroutine_in_thread, coro),
+            timeout=timeout_s,
+        )
         return {
             "success": True,
             "phase": phase_name,

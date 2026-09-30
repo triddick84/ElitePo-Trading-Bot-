@@ -1,5 +1,24 @@
 # Changelog
 
+## Iter 153 — Feb 20, 2026 — Clean Retrain Hang Fix (event-loop unblocking)
+
+### User report
+> The clean retrain in the application is not working properly it just stays saying retraining until it times out.
+
+### Root cause
+`maximized_ai_ml.train_from_oanda()` (and the Improved v2 twin) are declared `async` but their bodies do 100 % synchronous CPU-bound work — sklearn `cross_val_score`, `TimeSeriesSplit` walk-forward CV, feature-extraction loops. **Never a single `await`.** Two consequences:
+
+1. `asyncio.wait_for` cannot cancel them — no yield = no cancellation opportunity. The iter 150 timeout wrapper was a no-op against this class of coroutine.
+2. The main event loop is fully blocked for the entire training run, so `/api/ml/retrain-status` polls stall and the UI hangs on "retraining" until either the whole pipeline finishes (minutes) or the browser gives up.
+
+### Fix
+`run_phase_with_timeout` now drives each phase coroutine **inside a worker thread with its own event loop** via `asyncio.to_thread(_drive_coroutine_in_thread, coro)`. Main loop stays responsive AND `wait_for` on the thread future actually enforces timeouts.
+
+- New helper `_drive_coroutine_in_thread(coro)` — spins a fresh loop, runs to completion, closes it.
+- 5 new pytests in `test_iter153_retrain_offload.py`, including the smoking-gun test that pins a CPU-bound "async" body under a phase and asserts the main loop still ticks heartbeats concurrently (would fail under old impl).
+- Existing iter150 tests all still pass — hung-phase timeout, exception propagation, normal completion.
+
+
 ## Iter 152 — Feb 20, 2026 — Backtest Asset Picker: "Only With Data" Filter
 
 Kills typo-based / empty backtests by only exposing symbols that actually have candles in `historical_candles`.
