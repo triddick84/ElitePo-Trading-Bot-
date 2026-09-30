@@ -4347,8 +4347,43 @@ async def startup_event():
     """
     Startup event - load configuration in background task to avoid blocking server startup
     This prevents nginx health checks from failing during initialization
+
+    Iter 154 (Feb 2026) — Production login timeout fix.
+    -------------------------------------------------------
+    In prod the FastAPI process runs at a 500 m CPU ceiling and the pod
+    was saturated by heavy in-process background work (yfinance scraping,
+    ml_accuracy_tuner, flexible_crossover scans across dozens of pairs,
+    OANDA polling that 401s in a hot loop, sentiment/regime refreshes).
+    Even with `to_thread` offloads, threadpool + CPU pressure prevented
+    /api/auth/login from ever completing → the UI showed "Connection
+    error / timeout".
+
+    Environment gates so a redeploy can disable heavy loops without a
+    code change:
+        DISABLE_BG_LOOPS               "1"|"true"|"all" → disable ALL loops below
+        DISABLE_BG_LOOPS               csv → disable specific loops by name
+          Names:  market_data_ingester, ai_learning_scheduler,
+                  retrain_scheduler, sentiment_loop, network_latency_probe,
+                  signal_prewarm, auto_scan, telegram_bot
+    Defaults preserve behavior for preview (all loops ON).
     """
     global app_initialized
+
+    # --- Iter 154 — background-loop gates ---------------------------------
+    _bg_raw = str(os.environ.get("DISABLE_BG_LOOPS", "")).strip().lower()
+    _disable_all = _bg_raw in ("1", "true", "yes", "all")
+    _disabled_names = set() if _disable_all else {
+        s.strip() for s in _bg_raw.split(",") if s.strip()
+    }
+
+    def _bg_enabled(name: str) -> bool:
+        if _disable_all:
+            logger.info(f"[bg-gate] SKIPPING '{name}' — DISABLE_BG_LOOPS=all")
+            return False
+        if name in _disabled_names:
+            logger.info(f"[bg-gate] SKIPPING '{name}' — listed in DISABLE_BG_LOOPS")
+            return False
+        return True
     
     async def initialize_app():
         """Background initialization task"""
@@ -4402,17 +4437,21 @@ async def startup_event():
                     ingester, background_refresh_loop,
                 )
                 ingester.bind_db(db)
-                asyncio.create_task(background_refresh_loop())
-                logger.info("📈 Market data ingester bound + background refresh loop started")
+                if _bg_enabled("market_data_ingester"):
+                    asyncio.create_task(background_refresh_loop())
+                    logger.info("📈 Market data ingester bound + background refresh loop started")
+                else:
+                    logger.info("📈 Market data ingester BOUND (refresh loop disabled by DISABLE_BG_LOOPS)")
             except Exception as e:
                 logger.warning(f"Market data ingester bootstrap skipped: {e}")
 
             # Iter 126 — Start Telegram bot (bidirectional signals)
-            try:
-                from telegram_service import start_telegram_bot
-                await start_telegram_bot()
-            except Exception as e:
-                logger.warning(f"Telegram bot startup skipped: {e}")
+            if _bg_enabled("telegram_bot"):
+                try:
+                    from telegram_service import start_telegram_bot
+                    await start_telegram_bot()
+                except Exception as e:
+                    logger.warning(f"Telegram bot startup skipped: {e}")
             # Iter 97 — grandfather any users that pre-date the admin-approval
             # feature so they don't get locked out on first boot after upgrade.
             try:
@@ -4488,20 +4527,37 @@ async def startup_event():
             # that pre-computes signals for actively-polled (asset, tf) combos
             # so `/signals/latest` can return in ~5-30 ms instead of
             # 300-1500 ms when the DB is stale.
-            try:
-                from signal_prewarm_service import start_background_refresher
-                start_background_refresher()
-                logger.info("[SignalPrewarm] background refresher started")
-            except Exception as _pwe:
-                logger.warning("[SignalPrewarm] refresher failed to start: %s", _pwe)
+            if _bg_enabled("signal_prewarm"):
+                try:
+                    from signal_prewarm_service import start_background_refresher
+                    start_background_refresher()
+                    logger.info("[SignalPrewarm] background refresher started")
+                except Exception as _pwe:
+                    logger.warning("[SignalPrewarm] refresher failed to start: %s", _pwe)
+            else:
+                logger.info("[SignalPrewarm] refresher SKIPPED (DISABLE_BG_LOOPS)")
 
             # Iter 112 — Auto-Scan & Route: bind DB + restore persisted config
             # so the loop auto-resumes when the user had it toggled ON.
+            # Iter 154 — When DISABLE_BG_LOOPS includes 'auto_scan', we still
+            # bind the DB (endpoints keep working) but force enabled=False so
+            # the scan loop never auto-starts on prod boot.
             try:
                 from auto_scan_service import auto_scan_service
                 auto_scan_service.bind_db(db)
-                await auto_scan_service.load_persisted_config()
-                logger.info("[AutoScan] bound to DB and config restored")
+                if _bg_enabled("auto_scan"):
+                    await auto_scan_service.load_persisted_config()
+                    logger.info("[AutoScan] bound to DB and config restored")
+                else:
+                    # Force-disable the auto-resume; the user can still call
+                    # /api/auto-scan/start manually from the UI.
+                    try:
+                        cur = auto_scan_service.get_config()
+                        cur["enabled"] = False
+                        await auto_scan_service.set_config(cur)
+                    except Exception:
+                        pass
+                    logger.info("[AutoScan] bound (auto-resume DISABLED by DISABLE_BG_LOOPS)")
             except Exception as _ase:
                 logger.warning("[AutoScan] init failed: %s", _ase)
 
@@ -4633,7 +4689,8 @@ async def startup_event():
             # Wait 1 hour before next cycle
             await asyncio.sleep(3600)
     
-    asyncio.create_task(ai_learning_scheduler())
+    if _bg_enabled("ai_learning_scheduler"):
+        asyncio.create_task(ai_learning_scheduler())
 
     # Auto-Retrain Scheduler — auto-start (Iter 58, Apr 25, 2026)
     async def start_retrain_scheduler():
@@ -4647,7 +4704,8 @@ async def startup_event():
         except Exception as e:
             logger.error(f"Failed to start auto-retrain scheduler: {e}")
 
-    asyncio.create_task(start_retrain_scheduler())
+    if _bg_enabled("retrain_scheduler"):
+        asyncio.create_task(start_retrain_scheduler())
 
     # Iter 62 — Sentiment background loop (RSS + Emergent LLM scoring every 15 min)
     async def start_sentiment_loop():
@@ -4659,7 +4717,8 @@ async def startup_event():
         except Exception as e:
             logger.error(f"Failed to start sentiment loop: {e}")
 
-    asyncio.create_task(start_sentiment_loop())
+    if _bg_enabled("sentiment_loop"):
+        asyncio.create_task(start_sentiment_loop())
 
     # Iter 103 — Network latency probe (TCP-RTT to Pocket Option hosts)
     async def start_network_latency_probe():
@@ -4671,7 +4730,8 @@ async def startup_event():
         except Exception as e:
             logger.error(f"Failed to start network latency probe: {e}")
 
-    asyncio.create_task(start_network_latency_probe())
+    if _bg_enabled("network_latency_probe"):
+        asyncio.create_task(start_network_latency_probe())
 
     # Return immediately so server can start accepting health checks
     logger.info("⚡ Server startup complete - initialization running in background")

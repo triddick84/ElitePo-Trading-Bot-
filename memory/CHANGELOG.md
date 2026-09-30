@@ -1,5 +1,44 @@
 # Changelog
 
+## Iter 154 — Feb 20, 2026 — Production Login Timeout Fix (`DISABLE_BG_LOOPS` gate)
+
+### User report
+> The development published application is having issues logging in — just spins and never logs in, times out with connection error.
+
+### RCA (from deployer agent, live prod inspection)
+Not a secrets / JWT / Mongo / URL / CORS bug. Env vars all present, seed admin seeded, DB bound. Actual cause: **the entire `/api/*` surface times out at 15 s** because the FastAPI process is saturated by heavy in-process background work at the tier_1 500 m CPU ceiling:
+- yfinance scraping with `chrome136` impersonation errors
+- `ml_accuracy_tuner` continuous loop
+- `flexible_crossover_strategy` scanning across dozens of pairs every ~16 s
+- OANDA polling that 401s in a hot loop
+- Sentiment + regime refresh loops
+The main event-loop is starved → `/api/auth/login` never completes → browser gives up with "Connection error".
+
+### Fix
+`server.py::startup_event` now reads a **`DISABLE_BG_LOOPS`** env var and guards every heavy background loop behind a `_bg_enabled(name)` helper. Preview default (unset) keeps everything running; on prod the operator flips it to `all` or a CSV to shed load without a code change.
+
+**Guarded loops** (all in `server.py`):
+- `market_data_ingester` — yfinance/OANDA polling refresh (DB binding still runs so REST reads keep working)
+- `ai_learning_scheduler` — hourly AI learning cycle
+- `retrain_scheduler` — auto-retrain 90 s post-boot
+- `sentiment_loop` — 15-min sentiment refresh
+- `network_latency_probe` — TCP-RTT probe
+- `signal_prewarm` — signal pre-generation buffer
+- `auto_scan` — flexible_crossover scans (bind_db still runs; persisted `enabled=True` is forced to False so the scan loop doesn't auto-resume)
+- `telegram_bot` — bidirectional Telegram bot
+
+### Deploy instructions for the user
+1. In the Emergent Deployment Panel → Secrets, add: `DISABLE_BG_LOOPS=all` (or a CSV of specific names).
+2. Redeploy so startup re-reads the env.
+3. Log in with the seed admin `seedtest@elitepo.com` / `SeedPass123!` — should now respond in <1 s.
+4. Once login is verified, selectively re-enable loops one at a time (e.g. `DISABLE_BG_LOOPS=market_data_ingester,auto_scan`) to identify the specific offender for future hardening.
+5. **Note**: `testuser` / `test123` exists only in preview DB, NOT prod — use seed admin credentials on prod.
+
+### Tests
+- 15 new pytests in `test_iter154_bg_loop_gate.py` covering env parsing, all 8 loop guards, docstring completeness, and per-loop bind-vs-loop separation.
+- 60/60 iter15x regression passing.
+
+
 ## Iter 153 — Feb 20, 2026 — Clean Retrain Hang Fix (event-loop unblocking)
 
 ### User report
